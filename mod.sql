@@ -1,2 +1,2 @@
 -- [@ANCHOR: t:x]
-CREATE VIEW v AS SELECT a FROM t; -- c
+CREATE VIEW v AS SELECT b FROM t; -- c
