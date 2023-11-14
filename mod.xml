@@ -1,0 +1,4 @@
+<odoo>
+<!-- [@ANCHOR: t:x] -->
+<record id="a" model="m"><field name="v">2</field></record>
+</odoo>
