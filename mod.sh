@@ -1,4 +1,4 @@
 # [@ANCHOR: t:x]
 foo() {
-  echo "$1" # say
+  echo "$2" # say
 }
