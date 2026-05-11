@@ -65,7 +65,7 @@ def get_odoo_client(logger, config):
                 if dbs:
                     db = dbs[0]
         except Exception as e:
-            import logging  # noqa: E402
+            import logging
 
             logging.getLogger(__name__).warning("An error occurred: %s", e)
     if not db:
@@ -100,7 +100,6 @@ def ensure_executable(cmd_name):
 
 
 def verify_and_install_dependencies(client, checks):
-    # [@ANCHOR: daemon_verify_dependencies]
     type_to_cmd = {
         "dns": "dig",
         "snmp": "snmpget",
@@ -145,7 +144,7 @@ def verify_and_install_dependencies(client, checks):
                         logger.warning(f"Provision failed: {err_msg}")
                 except Exception as e:
                     logger.warning(f"RPC unavailable, waiting... ({e})")
-                time.sleep(10)  # audit-ignore-sleep  # fmt: skip
+                time.sleep(10)
 
             if not success:
                 msg = f"FATAL: Missing dependency '{cmd}'. Halting."
@@ -162,7 +161,7 @@ def verify_and_install_dependencies(client, checks):
                         },
                     )
                 except Exception as e:
-                    import logging  # noqa: E402
+                    import logging
 
                     logging.getLogger(__name__).warning("An error occurred: %s", e)
                 sys.exit(1)
@@ -184,7 +183,7 @@ def is_in_maintenance(check):
             if start <= now <= end:
                 return True
         except Exception as e:
-            import logging  # noqa: E402
+            import logging
 
             logging.getLogger(__name__).warning("An error occurred: %s", e)
     return False
@@ -225,7 +224,6 @@ def fallback_notify(source, msg, severity):
 
 
 def report(client, source, msg, severity="high"):
-    # [@ANCHOR: daemon_report_incident]
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url:
         try:
@@ -241,7 +239,7 @@ def report(client, source, msg, severity="high"):
             with urllib.request.urlopen(req, timeout=5):
                 pass
         except Exception as e:
-            import logging  # noqa: E402
+            import logging
 
             logging.getLogger(__name__).warning("An error occurred: %s", e)
 
@@ -265,7 +263,6 @@ def auto_resolve(client, source):
 
 
 def execute_check(check, client=None):
-    # [@ANCHOR: daemon_execute_check]
     ctype = check.get("type")
     target = parse_env(check.get("target", ""))
 
@@ -307,7 +304,7 @@ def execute_check(check, client=None):
             return False, f"Load check failed: {e}"
 
     elif ctype == "ftp":
-        import ftplib  # noqa: E402
+        import ftplib
 
         port = int(parse_env(check.get("port", 21)))
         user = parse_env(check.get("user", ""))
@@ -324,7 +321,7 @@ def execute_check(check, client=None):
             return False, f"FTP check failed: {e}"
 
     elif ctype == "imap":
-        import imaplib  # noqa: E402
+        import imaplib
 
         port = int(parse_env(check.get("port", 143)))
         user = parse_env(check.get("user", ""))
@@ -342,7 +339,7 @@ def execute_check(check, client=None):
             return False, f"IMAP check failed: {e}"
 
     elif ctype == "pop3":
-        import poplib  # noqa: E402
+        import poplib
 
         port = int(parse_env(check.get("port", 110)))
         user = parse_env(check.get("user", ""))
@@ -366,7 +363,7 @@ def execute_check(check, client=None):
         password = parse_env(check.get("password", ""))
         dbname = parse_env(check.get("dbname", ""))
         try:
-            import pymysql  # noqa: E402
+            import pymysql
 
             conn = pymysql.connect(
                 host=target,
@@ -389,7 +386,7 @@ def execute_check(check, client=None):
     elif ctype == "ldap":
         port = int(parse_env(check.get("port", 389)))
         try:
-            import ldap3  # noqa: E402
+            import ldap3
 
             server = ldap3.Server(
                 target, port=port, get_info=ldap3.ALL, connect_timeout=5
@@ -403,7 +400,7 @@ def execute_check(check, client=None):
     elif ctype == "ntp":
         port = int(parse_env(check.get("port", 123)))
         try:
-            import ntplib  # noqa: E402
+            import ntplib
 
             client_ntp = ntplib.NTPClient()
             response = client_ntp.request(target, version=3, timeout=5)
@@ -542,7 +539,7 @@ def execute_check(check, client=None):
         port = int(parse_env(check.get("port", 6379)))
         password = parse_env(check.get("password", ""))
         try:
-            import redis as redis_lib  # noqa: E402
+            import redis as redis_lib
 
             r = redis_lib.Redis(
                 host=target, port=port, password=password or None, socket_timeout=2
@@ -566,8 +563,7 @@ def execute_check(check, client=None):
             return False, f"RabbitMQ connection failed: {e}"
 
     elif ctype == "xmlrpc":
-        # Keep XML-RPC for external arbitrary target checks defined by users
-        import xmlrpc.client  # noqa: E402
+        import xmlrpc.client
 
         method = parse_env(check.get("rpc_method", ""))
         params_str = parse_env(check.get("rpc_params", "[]"))
@@ -575,7 +571,6 @@ def execute_check(check, client=None):
         try:
             params = json.loads(params_str) if params_str else []
             proxy = xmlrpc.client.ServerProxy(target)
-            # Prevent calling magic methods or internal attributes
             if method.startswith("_"):
                 return False, f"Illegal RPC method: {method}"
             res = getattr(proxy, method)(*params)
@@ -679,7 +674,7 @@ def execute_check(check, client=None):
         if not script:
             return False, "Synthetic script path missing"
         try:
-            import shlex  # noqa: E402
+            import shlex
 
             res = subprocess.run(
                 shlex.split(script),
@@ -1122,19 +1117,19 @@ def polling_thread(client, check):
 
     jitter = secrets.SystemRandom().uniform(0, interval)
     logger.info(f"[{name}] Applying startup jitter: sleeping for {jitter:.1f}s")
-    time.sleep(jitter)  # audit-ignore-sleep  # fmt: skip
+    time.sleep(jitter)
 
     while True:
         THREAD_HEARTBEATS[name] = time.time()
         parent = check.get("parent")
 
         if is_in_maintenance(check):
-            time.sleep(interval)  # audit-ignore-sleep  # fmt: skip
+            time.sleep(interval)
             continue
 
         if parent and parent in FAILING_CHECKS:
             logger.debug(f"[{name}] Suppressed due to parent '{parent}' failure.")
-            time.sleep(interval)  # audit-ignore-sleep  # fmt: skip
+            time.sleep(interval)
             continue
 
         success, msg = execute_check(check, client)
@@ -1161,7 +1156,7 @@ def polling_thread(client, check):
             clean_loops += 1
             if clean_loops == 3:
                 auto_resolve(client, name)
-        time.sleep(interval)  # audit-ignore-sleep  # fmt: skip
+        time.sleep(interval)
 
 
 def log_tail_thread(client, check):
@@ -1196,7 +1191,7 @@ def log_tail_thread(client, check):
             if f:
                 line = f.readline()
                 if not line:
-                    time.sleep(1)  # audit-ignore-sleep  # fmt: skip
+                    time.sleep(1)
                     continue
                 if regex_str and re.search(regex_str, line, re.IGNORECASE):
                     if time.time() - thread_start_time < grace:
@@ -1206,9 +1201,9 @@ def log_tail_thread(client, check):
                     else:
                         report(client, name, line.strip(), "critical")
             else:
-                time.sleep(1)  # audit-ignore-sleep  # fmt: skip
+                time.sleep(1)
         except FileNotFoundError:
-            time.sleep(5)  # audit-ignore-sleep  # fmt: skip
+            time.sleep(5)
             continue
 
 
@@ -1246,7 +1241,7 @@ if __name__ == "__main__":
     futures = []
 
     def log_anomaly_proxy(cl):
-        import redis as redis_lib  # noqa: E402
+        import redis as redis_lib
 
         r = redis_lib.Redis(
             host=os.getenv("REDIS_HOST") or "redis",
@@ -1266,10 +1261,10 @@ if __name__ == "__main__":
                         payload["severity"],
                     )
             except Exception as e:
-                import logging  # noqa: E402
+                import logging
 
                 logging.getLogger(__name__).warning("An error occurred: %s", e)
-                time.sleep(1)  # audit-ignore-sleep  # fmt: skip
+                time.sleep(1)
 
     futures.append(executor.submit(log_anomaly_proxy, client))
 
@@ -1280,9 +1275,8 @@ if __name__ == "__main__":
             futures.append(executor.submit(polling_thread, client, check))
 
     try:
-        # [@ANCHOR: daemon_main_loop]
         while True:
-            time.sleep(10)  # audit-ignore-sleep  # fmt: skip
+            time.sleep(10)
             now = time.time()
             for t_name, last_beat in THREAD_HEARTBEATS.items():
                 timeout = THREAD_TIMEOUTS.get(t_name, 300)

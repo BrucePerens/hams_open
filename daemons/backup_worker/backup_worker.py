@@ -112,10 +112,8 @@ def execute_job(ch, method, properties, body):
         elif engine == "restore_drill":
             cmd = [payload.get("script")]
         elif engine == "restore_cmd":
-            # Direct command passed from wizard
             cmd = payload.get("cmd_args", [])
             if "kopia" in cmd:
-                 # Ensure restore directory exists for Kopia
                  restore_dir = payload.get("snapshot_id", "default")
                  os.makedirs(f"/var/lib/odoo/backups/restore_{restore_dir}", exist_ok=True)
 
@@ -159,7 +157,6 @@ def execute_job(ch, method, properties, body):
             if engine in ("kopia", "pgbackrest", "restore_cmd"):
                 _json2_call("backup.config", "action_sync_snapshots", ids=[config_id])
             elif engine == "sync_snapshots":
-                # If we just synced, we need to process the data
                 try:
                     data = json.loads(log_buffer.split("\nProcess exited")[0])
                     _json2_call("backup.config", "_process_snapshot_data", ids=[config_id], data=data, engine=config.get("engine"))
@@ -203,10 +200,10 @@ def main():
             channel.start_consuming()
         except pika.exceptions.AMQPConnectionError:
             logger.warning("RabbitMQ offline. Retrying in 5s...")
-            time.sleep(5)  # audit-ignore-sleep  # fmt: skip
+            time.sleep(5)
         except Exception as e:
             logger.error(f"RabbitMQ consumer crash: {e}. Restarting...")
-            time.sleep(5)  # audit-ignore-sleep  # fmt: skip
+            time.sleep(5)
 
 
 if __name__ == "__main__":

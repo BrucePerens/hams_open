@@ -49,8 +49,6 @@ def execute_check(check):
                     f.write(check.get("code_payload", ""))
 
                 if check.get("sandbox_network_access", "loopback") == "loopback":
-                    # Playwright requires complex OS dependencies to run headless browsers.
-                    # We grant filesystem access via --dev-bind but strictly unshare the network namespace to prevent external SSRF.
                     bwrap_cmd = [
                         "bwrap",
                         "--dev-bind",
@@ -90,7 +88,6 @@ def execute_check(check):
                     f.write(check.get("code_payload", ""))
                 os.chmod(script_path, 0o755)
 
-                # Expand --unshare-all into discrete flags so we can selectively permit networking
                 bwrap_cmd = [
                     "bwrap",
                     "--ro-bind",
@@ -173,7 +170,7 @@ def execute_check(check):
                         exe_path,
                     ]
                 )
-                import shlex  # noqa: E402
+                import shlex
 
                 if exe_args:
                     bwrap_cmd.extend(shlex.split(exe_args))
@@ -191,8 +188,7 @@ def execute_check(check):
                     res["success"] = True
 
     except subprocess.TimeoutExpired:
-        # [@ANCHOR: synthetic_i18n]
-        res["error"] = "Execution timed out"  # audit-ignore-i18n: Tested by [@ANCHOR: test_synthetic_i18n]  # fmt: skip
+        res["error"] = "Execution timed out"
     except Exception as e:
         res["error"] = str(e)
 
@@ -208,7 +204,7 @@ def main():
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
     except Exception as e:
-        import logging  # noqa: E402
+        import logging
 
         logging.getLogger(__name__).warning("An error occurred: %s", e)
         sys.exit(1)
@@ -239,19 +235,18 @@ def main():
                     name, res = future.result()
                     spool_data[name] = res
                 except Exception as e:
-                    import logging  # noqa: E402
+                    import logging
 
                     logging.getLogger(__name__).warning("An error occurred: %s", e)
 
         if spool_data:
-            # Atomic Write via rename
             tmp_file = SPOOL_FILE + ".tmp"
             with open(tmp_file, "w") as f:
                 json.dump(spool_data, f)
             os.chmod(tmp_file, 0o644)
             os.rename(tmp_file, SPOOL_FILE)
 
-        time.sleep(5)  # audit-ignore-sleep  # fmt: skip
+        time.sleep(5)
 
 
 if __name__ == "__main__":

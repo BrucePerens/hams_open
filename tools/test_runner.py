@@ -17,7 +17,6 @@ import socket
 import subprocess
 import sys
 import tempfile
-import threading # noqa: F401
 import time
 import concurrent.futures
 from psycopg2.errors import UndefinedTable
@@ -25,7 +24,7 @@ from psycopg2 import sql
 
 # Import the centralized infrastructure blueprint
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-import infrastructure  # noqa: E402
+import infrastructure
 
 
 def load_ignore_file(filepath):
@@ -185,11 +184,18 @@ class FailureExtractor:
             self.capturing = False
             self.current_block = []
 
+        # Group blocks by test context to accurately count unique test failures
+        grouped_blocks = {}
+        for context, block in self.captured_blocks:
+            if context not in grouped_blocks:
+                grouped_blocks[context] = []
+            grouped_blocks[context].extend(block)
+
         out_dir = os.path.dirname(self.output_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
-        num_failures = len(self.captured_blocks)
+        num_failures = len(grouped_blocks)
 
         with open(self.output_path, "w", encoding="utf-8") as out:
             out.write("=== EXTRACTED TEST FAILURES & ERRORS ===\n")
@@ -224,7 +230,7 @@ class FailureExtractor:
 
                 out.write("*" * 80 + "\n")
 
-                for context, block in self.captured_blocks:
+                for context, block in grouped_blocks.items():
                     if not block:
                         continue
                     out.write("\n" + "=" * 80 + "\n")
@@ -1118,6 +1124,7 @@ def main():
                 save_db_cache(args.db, cache_file, mod_string)
 
             print("[*] Executing Test Suite...")
+            standard_tags = test_tags + ",-integration"
             cmd = get_python_test_cmd() + [
                 odoo_bin,
                 "--addons-path",
@@ -1129,7 +1136,7 @@ def main():
                 mod_string,
                 "--test-enable",
                 "--test-tags",
-                test_tags,
+                standard_tags,
                 "--stop-after-init",
                 "--workers=0",
                 "--max-cron-threads=0",
@@ -1183,6 +1190,47 @@ def main():
 
             if final_rc == 0:
                 print("[*] Executing Test Suite in Integration Mode...")
+
+                # --- ORCHESTRATE INTEGRATION DAEMONS ---
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(("", 0))
+                    free_port = s.getsockname()[1]
+
+                print(f"[*] Starting background Odoo on port {free_port} for integration daemons...")
+                odoo_proc = subprocess.Popen(
+                    [
+                        venv_python, odoo_bin, "--addons-path", addons_path,
+                        "-d", args.db, "--workers=0", "--max-cron-threads=0",
+                        "--http-port", str(free_port), "--http-interface", "localhost",
+                        "--log-level=warn",
+                    ],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+
+                for _ in range(30):
+                    if is_odoo_running(free_port):
+                        break
+                    time.sleep(1)
+
+                daemon_env = os.environ.copy()
+                daemon_env["ODOO_URL"] = f"http://localhost:{free_port}"
+                daemon_env["DB_NAME"] = args.db
+                daemon_env["ODOO_USER"] = "admin"
+                daemon_env["ODOO_PASSWORD"] = "admin"
+
+                d_procs = []
+                daemon_scripts = [
+                    os.path.join(base_dir, "distributed_redis_cache/daemons/cache_manager.py"),
+                    os.path.join(base_dir, "daemons/backup_worker/backup_worker.py")
+                ]
+                for ds in daemon_scripts:
+                    if os.path.exists(ds):
+                        p = subprocess.Popen([venv_python, ds], env=daemon_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        d_procs.append(p)
+
+                integration_tags = test_tags + ",-standard"
+
                 test_cmd = get_python_test_cmd("_integration") + [
                     odoo_bin,
                     "--addons-path",
@@ -1193,16 +1241,24 @@ def main():
                     mod_string,
                     "--test-enable",
                     "--test-tags",
-                    test_tags,
+                    integration_tags,
                     "--stop-after-init",
                     "--workers=0",
                     "--max-cron-threads=0",
                     "--http-interface",
                     "localhost",
                 ]
-                rc_odoo = run_cmd(test_cmd, extractor)
+                rc_odoo = run_cmd(test_cmd, extractor, env=daemon_env)
                 if rc_odoo != 0:
                     final_rc = rc_odoo
+
+                print("[*] Tearing down integration daemons...")
+                for p in d_procs:
+                    p.terminate()
+                try:
+                    os.killpg(os.getpgid(odoo_proc.pid), signal.SIGKILL)
+                except Exception:
+                    pass
 
         elif args.mode == "individual":
             check_linters(venv_python, base_dir, ignore_filepath)

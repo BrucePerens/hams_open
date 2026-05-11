@@ -33,18 +33,19 @@ registry.category("web_tour.tours").add("binary_install_tour", {
             run: 'edit tourbin',
         },
         {
-            content: "Force JS event emission to prevent URL validation races from the edit helper",
+            content: "Provide a valid downloadable URL pointing to the test controller",
             trigger: 'div[name="url"] input',
             run: () => {
                 const input = document.querySelector('div[name="url"] input');
-                input.value = '[https://example.com/tourbin](https://example.com/tourbin)';
+                input.value = document.location.origin + '/test/dummy_bin';
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             },
         },
         {
+            content: "Provide the exact SHA256 hash for the string '1234'",
             trigger: 'div[name="checksum"] input',
-            run: 'edit tourhash',
+            run: 'edit 03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
         },
         {
             content: "Click away to commit text fields before auto-save",

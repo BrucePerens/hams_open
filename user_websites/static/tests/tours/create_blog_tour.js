@@ -7,7 +7,7 @@ registry.category("web_tour.tours").add("create_blog_tour", {
             content: "Navigate from the portal to the site blog page placeholder",
             trigger: 'body',
             run: () => {
-                document.location.href = '/sitetour/blog';
+                document.location.href = '/blogtour/blog';
             },
             expectUnloadPage: true,
         },
@@ -18,8 +18,8 @@ registry.category("web_tour.tours").add("create_blog_tour", {
             expectUnloadPage: true,
         },
         {
-            content: "Verify blog created (targeting invisible dropzone with native pseudo-selector)",
-            trigger: '#user_websites_dropzone_home_header:not(:visible)',
+            content: "Verify blog created by targeting the rendered blog index",
+            trigger: '#o_wblog_index_content',
             run: () => {},
         }
     ],
