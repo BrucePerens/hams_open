@@ -16,7 +16,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (  # noqa: E402
     invalidate_model_cache,
 )
 
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 redis_pool = redis.ConnectionPool(
     host=REDIS_HOST,

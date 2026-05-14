@@ -15,7 +15,6 @@ import pager_synthetic_spooler  # noqa: E402
 class TestSyntheticSpooler(unittest.TestCase):
 
     def test_00_i18n_headless_audit(self):
-        # [@ANCHOR: test_synthetic_i18n]
         # Tests [@ANCHOR: synthetic_i18n]
         self.assertTrue(True, "Safely suppresses headless API translation warnings")
 

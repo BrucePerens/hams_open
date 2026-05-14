@@ -135,7 +135,7 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
         website_a = Website.get_current_website()
 
         # Simulate a secondary website environment
-        Website.create({"name": "Secondary Website", "domain": "localhost:8070"})
+        Website.create({"name": "Secondary Website", "domain": "odoo:8070"})
 
         self.authenticate(self.user_empty.login, self.user_empty.login)
 

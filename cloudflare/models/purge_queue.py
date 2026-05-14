@@ -43,7 +43,7 @@ class CloudflarePurgeQueue(models.Model):
         else:
             base_url = (
                 self.env["zero_sudo.security.utils"]
-                ._get_system_param("web.base.url", "https://localhost")
+                ._get_system_param("web.base.url", "https://odoo")
                 .rstrip("/")
             )
 

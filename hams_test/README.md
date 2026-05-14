@@ -74,7 +74,24 @@ Tours MUST use schema-compliant selectors to deterministically handle race condi
 2. **Secondary:** Structural IDs (`#wrap`, `.o_form_sheet`).
 3. **Fallback:** Dedicated namespaced CSS classes starting with `o_tour_` (e.g., `.o_tour_create_site_btn`).
 
-### State & Execution Control
+### State & Execution Control & `TourUtils`
+To reduce boilerplate and strictly enforce architecture, use the centralized macros in `TourUtils` (import from `@hams_test/js/tour_utils`).
+
+* **`...TourUtils.safeSave()`:** Automatically handles "Dirty Form" resolutions by clicking away to force `blur`, clicking the save button, and waiting for the success notification RPC resolution.
+* **`TourUtils.bypassDialogs()`:** Intercepts and squashes native `window.alert` or `window.confirm` dialogs that would otherwise permanently hang the headless browser thread.
+* **`TourUtils.mockExternalRequests(urlPattern, mockResponse)`:** Mocks external frontend XHR/fetch queries (like Turnstile) to prevent network-latency flappiness.
 * **The Page Unload Protocol:** When a step triggers a raw `<form>` submission or hard redirect, you **MUST** explicitly declare `expectUnloadPage: true` on that step and use Odoo's native `run: 'click'` helper.
-* **The "Dirty Form" Rule:** Object buttons MUST be hidden on unsaved records (`invisible="not id"`). Include a neutral "click away" step (e.g., targeting `.o_form_sheet`) to force `blur`/commit before clicking the save button `.o_form_button_save`. Wait for `.o_notification:contains("Success")` to confirm the RPC resolved before ending the tour.
 * **Deterministic Input Simulation:** For strictly validated inputs (e.g., URLs, emails), bypass the `edit` helper. Manually inject the string and dispatch events to force synchronous evaluation.
+
+---
+
+## 4. Tour Failure Diagnostics (The Skeleton Dump)
+If a tour times out or an assertion fails, the `tour_failure_dump.js` interceptor will automatically trigger. To protect LLM context windows, it mathematically condenses the raw HTML into an **Interactable DOM Skeleton**.
+* Generic `<div class="col-md-6">` tags are aggressively pruned.
+* Only the active interactive surface (buttons, inputs, links, modals, notifications, and elements with `name` or `o_tour_` classes) is dumped.
+* The dump also prepends the active `window.location.hash` and a ledger of any pending/hung RPC network requests to aid in diagnosing backend blockages.
+
+---
+
+## 5. Orphaned Tour Class Audits
+To prevent CSS bloat, the AST Burn List linter (`check_burn_list.py`) automatically extracts any class starting with `o_tour_` from backend XML views and cross-references it against all JavaScript tour files. If an `o_tour_` class is found in the DOM but never targeted by a test runner, the CI/CD pipeline will fail, mandating the removal of the dead code.

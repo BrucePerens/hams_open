@@ -24,18 +24,23 @@ def find_anchors_in_docs(root_dir):
     pattern = re.compile(r"\[@ANCHOR:\s*([a-zA-Z0-9_:]+)\s*\]")
 
     for root, _, files in os.walk(root_dir):
-        if "docs" not in root.split(os.sep):
-            continue
+        is_docs_dir = "docs" in root.split(os.sep)
 
         for file in files:
             if file == "LLM_LINTER_GUIDE.md":
                 continue
-            if file.endswith((".md", ".html", ".py")):
+
+            is_readme = file.lower() == "readme.md"
+            is_doc_file = is_docs_dir and file.endswith((".md", ".html", ".py"))
+
+            if is_readme or is_doc_file:
                 full_path = os.path.join(root, file)
                 mod = get_module(full_path)
                 is_contract = False
 
-                if "modules" in root.split(os.sep) and (
+                if is_readme:
+                    is_contract = True
+                elif "modules" in root.split(os.sep) and (
                     file.endswith(".md") or file.endswith(".py")
                 ):
                     is_contract = True
@@ -127,9 +132,8 @@ def find_anchors_in_code(root_dir):
                 continue
 
             is_code = file.endswith((".py", ".js", ".xml", ".html"))
-            is_readme = file.lower() == "readme.md"
 
-            if is_code or is_readme:
+            if is_code:
                 full_path = os.path.join(root, file)
                 try:
                     with open(full_path, "r", encoding="utf-8") as f:

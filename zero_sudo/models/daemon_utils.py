@@ -52,7 +52,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                         return True
             except Exception:
                 pass
-            time.sleep(interval)
+            time.sleep(interval)  # audit-ignore-sleep
 
         error_msg = _("Daemon health check failed for %s after %s seconds.") % (url, timeout)
         _logger.error(error_msg)

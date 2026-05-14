@@ -2,6 +2,60 @@
 
 const originalConsoleError = console.error;
 
+// 1. Maintain a ledger of unresolved network requests to diagnose backend hangs
+window._pendingRPCs = new Set();
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    const url = typeof args[0] === 'string' ? args[0] : (args[0] ? args[0].url : 'unknown');
+    window._pendingRPCs.add(url);
+    try {
+        return await originalFetch.apply(this, args);
+    } finally {
+        window._pendingRPCs.delete(url);
+    }
+};
+
+const originalXHR = window.XMLHttpRequest.prototype.open;
+window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    this.addEventListener('loadend', () => window._pendingRPCs.delete(url));
+    this.addEventListener('error', () => window._pendingRPCs.delete(url));
+    this.addEventListener('abort', () => window._pendingRPCs.delete(url));
+    window._pendingRPCs.add(url);
+    return originalXHR.call(this, method, url, ...rest);
+};
+
+// 2. Condense the DOM into an "Interactable Skeleton" to protect LLM token limits
+function buildInteractableSkeleton(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent.trim();
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+    // Mathematically prune structurally invisible trees
+    if (node.classList && (node.classList.contains('d-none') || node.classList.contains('o_hidden'))) return "";
+
+    // Identify semantic components critical for tour triggers
+    let isImportant = ['BUTTON', 'INPUT', 'A', 'SELECT', 'TEXTAREA'].includes(node.tagName) ||
+        node.hasAttribute('name') || node.hasAttribute('id') || node.hasAttribute('data-menu-xmlid') ||
+        (node.classList && Array.from(node.classList).some(c => c.startsWith('o_tour_') || c === 'o_notification' || c === 'modal'));
+
+    let childrenText = Array.from(node.childNodes).map(buildInteractableSkeleton).filter(Boolean).join(' ');
+
+    if (isImportant) {
+        let attrs = [];
+        ['name', 'id', 'data-menu-xmlid', 'type', 'placeholder', 'value'].forEach(a => {
+            if (node.hasAttribute(a)) attrs.push(`${a}="${node.getAttribute(a)}"`);
+        });
+        if (node.classList) {
+            // Strip layout/utility classes, keep semantic identifiers
+            let cls = Array.from(node.classList).filter(c => c.startsWith('o_') || c === 'btn' || c.startsWith('btn-')).join(' ');
+            if (cls) attrs.push(`class="${cls}"`);
+        }
+        let tag = node.tagName.toLowerCase();
+        let content = childrenText.length > 80 ? childrenText.substring(0, 80) + '...' : childrenText;
+        return `\n<${tag} ${attrs.join(' ')}>${content}</${tag}>`;
+    }
+    return childrenText;
+}
+
 console.error = function (...args) {
     originalConsoleError.apply(console, args);
 
@@ -11,19 +65,18 @@ console.error = function (...args) {
         return '';
     }).join(' ');
 
-    // Intercept standard Odoo Legacy and HOOT test failures
     if (!window._domDumped && (msg.includes('TIMEOUT') || msg.includes('FAILED:') || msg.includes('AssertionError'))) {
-        window._domDumped = true; // Prevent spamming the log with multiple dumps from a single failure
+        window._domDumped = true;
         try {
-            const clone = document.body.cloneNode(true);
+            let rpcList = Array.from(window._pendingRPCs).join(', ') || 'None';
+            let currentHash = document.location.hash || document.location.pathname;
 
-            // Strip out noise: non-visible structural tags, SVGs, and framework-hidden elements
-            const elementsToRemove = clone.querySelectorAll('script, style, link, meta, noscript, svg, path, iframe, .d-none, .o_hidden');
-            elementsToRemove.forEach(el => el.remove());
+            let stateHeader = `\n========== UI STATE SUMMARY ==========\nURL/Hash: ${currentHash}\nPending RPCs: ${rpcList}\n======================================\n`;
+            let skeleton = buildInteractableSkeleton(document.body).replace(/\s{2,}/g, ' ');
 
-            originalConsoleError.call(console, "\n========== VISIBLE DOM DUMP ==========\n" + clone.innerHTML + "\n======================================\n");
+            originalConsoleError.call(console, stateHeader + "\n========== INTERACTABLE DOM SKELETON ==========\n" + skeleton + "\n===============================================\n");
         } catch (e) {
-            originalConsoleError.call(console, "Failed to dump DOM: " + e.toString());
+            originalConsoleError.call(console, "Failed to dump DOM skeleton: " + e.toString());
         }
     }
 };

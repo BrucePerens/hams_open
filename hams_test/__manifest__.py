@@ -22,6 +22,7 @@
     ],
     "assets": {
         "web.assets_tests": [
+            "hams_test/static/src/js/tour_utils.js",
             "hams_test/static/src/js/tour_failure_dump.js",
             "hams_test/static/src/js/tours/**/*",
         ],

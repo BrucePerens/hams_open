@@ -374,7 +374,7 @@ def check_linters(venv_python, base_dir, ignore_filepath):
 
     print("[*] Scanning documentation and codebase for Semantic Anchors...")
     anchor_script = os.path.join(base_dir, "tools", "verify_anchors.py")
-    res_anchor = subprocess.run([venv_python, anchor_script, "manual_library"])
+    res_anchor = subprocess.run([venv_python, anchor_script, base_dir])
     if res_anchor.returncode != 0:
         print(
             "🛑 Halting due to linter/anchor violations. Please review the output above."
@@ -382,42 +382,40 @@ def check_linters(venv_python, base_dir, ignore_filepath):
         sys.exit(1)
 
 
-def run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns):
+def run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns, target_modules):
     """Executes the standalone unit tests for background daemons."""
     print("[*] Executing Standalone Daemon Tests...")
-    daemons_dir = os.path.join(base_dir, "daemons")
-    if not os.path.exists(daemons_dir):
-        print("    No daemons directory found. Skipping.")
-        return 0
-
     final_rc = 0
-    for item in sorted(os.listdir(daemons_dir)):
-        daemon_path = os.path.join(daemons_dir, item)
-        if is_ignored(daemon_path, ignore_patterns):
+    for mod in target_modules:
+        daemon_dir = os.path.join(base_dir, mod, "daemon")
+        if not os.path.exists(daemon_dir):
+            daemon_dir = os.path.join(base_dir, mod, "daemons")
+        if not os.path.exists(daemon_dir):
             continue
-        if os.path.isdir(daemon_path):
-            has_tests = any(
-                f.startswith("test_") and f.endswith(".py")
-                for f in os.listdir(daemon_path)
-            )
-            if has_tests:
-                print("\n[*] ----------------------------------------------------")
-                print("[*] Testing Daemon: {}".format(item))
-                print("[*] ----------------------------------------------------")
-                if extractor:
-                    extractor.set_context("Daemon Tests / {}".format(item))
-                cmd = [
-                    venv_python,
-                    "-m",
-                    "unittest",
-                    "discover",
-                    "-p",
-                    "test_*.py",
-                    "-v",
-                ]
-                rc = run_cmd(cmd, extractor, cwd=daemon_path)
-                if rc != 0:
-                    final_rc = rc
+        if is_ignored(daemon_dir, ignore_patterns):
+            continue
+        has_tests = any(
+            f.startswith("test_") and f.endswith(".py")
+            for f in os.listdir(daemon_dir)
+        )
+        if has_tests:
+            print("\n[*] ----------------------------------------------------")
+            print("[*] Testing Daemon: {}".format(mod))
+            print("[*] ----------------------------------------------------")
+            if extractor:
+                extractor.set_context("Daemon Tests / {}".format(mod))
+            cmd = [
+                venv_python,
+                "-m",
+                "unittest",
+                "discover",
+                "-p",
+                "test_*.py",
+                "-v",
+            ]
+            rc = run_cmd(cmd, extractor, cwd=daemon_dir)
+            if rc != 0:
+                final_rc = rc
 
     return final_rc
 
@@ -1090,7 +1088,7 @@ def main():
         if args.mode == "standard":
             check_linters(venv_python, base_dir, ignore_filepath)
             final_rc = run_daemon_tests(
-                venv_python, base_dir, extractor, ignore_patterns
+                venv_python, base_dir, extractor, ignore_patterns, target_modules
             )
             if final_rc != 0:
                 print(
@@ -1150,7 +1148,7 @@ def main():
         elif args.mode == "integration":
             check_linters(venv_python, base_dir, ignore_filepath)
             final_rc = run_daemon_tests(
-                venv_python, base_dir, extractor, ignore_patterns
+                venv_python, base_dir, extractor, ignore_patterns, target_modules
             )
             if final_rc != 0:
                 print(
@@ -1220,10 +1218,16 @@ def main():
                 daemon_env["ODOO_PASSWORD"] = "admin"
 
                 d_procs = []
-                daemon_scripts = [
-                    os.path.join(base_dir, "distributed_redis_cache/daemons/cache_manager.py"),
-                    os.path.join(base_dir, "daemons/backup_worker/backup_worker.py")
-                ]
+                daemon_scripts = []
+                for mod in target_modules:
+                    daemon_dir = os.path.join(base_dir, mod, "daemon")
+                    if not os.path.exists(daemon_dir):
+                        daemon_dir = os.path.join(base_dir, mod, "daemons")
+                    if os.path.exists(daemon_dir):
+                        for f in os.listdir(daemon_dir):
+                            if f.endswith(".py") and not f.startswith("test_") and not f.startswith("__"):
+                                daemon_scripts.append(os.path.join(daemon_dir, f))
+
                 for ds in daemon_scripts:
                     if os.path.exists(ds):
                         p = subprocess.Popen([venv_python, ds], env=daemon_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1531,49 +1535,52 @@ def main():
                     os.killpg(os.getpgid(odoo_proc.pid), signal.SIGKILL)
                     sys.exit(1)
 
-                def discover_test_daemons(base_dir):
+                def discover_test_daemons(base_dir, target_modules):
                     daemons = []
-                    daemons_dir = os.path.join(base_dir, "daemons")
-                    if not os.path.exists(daemons_dir):
-                        return daemons
-
-                    for root, _, files in os.walk(daemons_dir):
-                        if "__pycache__" in root or "tests" in root:
+                    for mod in target_modules:
+                        daemon_dir = os.path.join(base_dir, mod, "daemon")
+                        if not os.path.exists(daemon_dir):
+                            daemon_dir = os.path.join(base_dir, mod, "daemons")
+                        if not os.path.exists(daemon_dir):
                             continue
-                        for f in sorted(files):
-                            if (
-                                f.endswith(".py")
-                                and not f.startswith("test_")
-                                and not f.startswith("__")
-                                and f != "hams_config.py"
-                            ):
-                                full_path = os.path.join(root, f)
-                                try:
-                                    with open(
-                                        full_path, "r", encoding="utf-8"
-                                    ) as script_file:
-                                        content = script_file.read()
-                                        if "__name__" in content and (
-                                            '"__main__"' in content
-                                            or "'__main__'" in content
-                                        ):
-                                            rel_path = os.path.relpath(
-                                                full_path, base_dir
-                                            )
-                                            daemon_name = os.path.basename(root)
-                                            args_list = [rel_path]
-                                            if daemon_name == "ncvec_sync":
-                                                ncvec_url = "https://raw.githubusercontent.com/Ham-Radio-Prep/ncvec/master/Element_2_Technician.txt"
-                                                args_list.extend(["--url", ncvec_url])
-                                            daemons.append((daemon_name, args_list))
-                                except Exception as e:
-                                    logging.getLogger('tools.test_runner').warning(
-                                        "An error occurred: %s", e
-                                    )
-                                    pass
+
+                        for root, _, files in os.walk(daemon_dir):
+                            if "__pycache__" in root or "tests" in root:
+                                continue
+                            for f in sorted(files):
+                                if (
+                                    f.endswith(".py")
+                                    and not f.startswith("test_")
+                                    and not f.startswith("__")
+                                    and f != "hams_config.py"
+                                ):
+                                    full_path = os.path.join(root, f)
+                                    try:
+                                        with open(
+                                            full_path, "r", encoding="utf-8"
+                                        ) as script_file:
+                                            content = script_file.read()
+                                            if "__name__" in content and (
+                                                '"__main__"' in content
+                                                or "'__main__'" in content
+                                            ):
+                                                rel_path = os.path.relpath(
+                                                    full_path, base_dir
+                                                )
+                                                daemon_name = os.path.basename(root)
+                                                args_list = [rel_path]
+                                                if daemon_name == "ncvec_sync":
+                                                    ncvec_url = "https://raw.githubusercontent.com/Ham-Radio-Prep/ncvec/master/Element_2_Technician.txt"
+                                                    args_list.extend(["--url", ncvec_url])
+                                                daemons.append((daemon_name, args_list))
+                                    except Exception as e:
+                                        logging.getLogger('tools.test_runner').warning(
+                                            "An error occurred: %s", e
+                                        )
+                                        pass
                     return daemons
 
-                d_list = discover_test_daemons(base_dir)
+                d_list = discover_test_daemons(base_dir, target_modules)
 
                 if args.daemon:
                     d_list = [d for d in d_list if args.daemon in d[0]]

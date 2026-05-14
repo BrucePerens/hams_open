@@ -106,9 +106,9 @@ GENERAL_ERROR_RULES = [
         "CRITICAL TEST ISOLATION: Tests must not make real external HTTP requests. Mock the network call (e.g., via unittest.mock.patch).",
     ),
     (
-        r"\.py$",
-        re.compile(r"127\.0\.0\.1"),
-        "CRITICAL NETWORK HARDCODING: local loop-back prohibited, use a name that can be resolved using Docker or /etc/hosts .",
+        r"^(?!.*(?:/|^)tools/).*\.py$",
+        re.compile(r"(127\.0\.0\.1|localhost)"),
+        "CRITICAL NETWORK HARDCODING: 'localhost' and '127.0.0.1' are prohibited. In containerized environments, these resolve to the container's internal loopback, NOT the target service. Use Docker DNS names (e.g., 'odoo', 'redis').",
     ),
     (
         r"test_.*\.py$",
@@ -1825,6 +1825,38 @@ def main():
 
         if not matched:
             print(f"  ❌ ERROR: Tour Asset Registration Trap. Tour file '{os.path.relpath(tour_path, target_dir)}' is not matched by any glob pattern in 'assets' of its __manifest__.py.")
+            total_errors += 1
+
+    # Audit Orphaned o_tour_ classes and Dangling Tour Targets (Bidirectional Audit)
+    xml_tour_classes = set()
+    js_tour_targets = set()
+    xml_content_all = ""
+    js_content_all = ""
+    for root, dirs, files in os.walk(target_dir):
+        if "node_modules" in root or "venv" in root: continue
+        for file in files:
+            filepath = os.path.join(root, file)
+            if file.endswith('.xml'):
+                try:
+                    content = open(filepath, 'r', encoding='utf-8').read()
+                    xml_tour_classes.update(re.findall(r'o_tour_[a-zA-Z0-9_-]+', content))
+                    xml_content_all += content
+                except Exception: pass
+            elif file.endswith('.js'):
+                try:
+                    content = open(filepath, 'r', encoding='utf-8').read()
+                    js_tour_targets.update(re.findall(r'o_tour_[a-zA-Z0-9_-]+', content))
+                    js_content_all += content
+                except Exception: pass
+
+    for cls in xml_tour_classes:
+        if cls not in js_content_all:
+            print(f"  ❌ ERROR: Orphaned Tour Class: '{cls}' found in XML but never targeted in any JS tour. Remove dead code.")
+            total_errors += 1
+
+    for target in js_tour_targets:
+        if target not in xml_content_all:
+            print(f"  ❌ ERROR: Dangling Tour Target: '{target}' found in a JS tour but missing from all backend XML views. Tour will fatally timeout.")
             total_errors += 1
 
     if total_errors > 0 or total_warnings > 0:

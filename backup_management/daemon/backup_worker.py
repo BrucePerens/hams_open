@@ -13,12 +13,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("backup_worker")
 
-ODOO_URL = os.environ.get("ODOO_URL", "http://127.0.0.1:8069").rstrip("/")
+ODOO_URL = os.environ.get("ODOO_URL", "http://odoo:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
 ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "127.0.0.1")
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")
 

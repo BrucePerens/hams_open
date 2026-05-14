@@ -5,7 +5,7 @@ from odoo.http import request
 from odoo.tests import HttpCase, tagged
 
 class BinaryDownloaderTestController(http.Controller):
-    @http.route('/test/dummy_bin', type='http', auth='none', csrf=False, cors='*')
+    @http.route('/test/dummy_bin', type='http', auth='none')
     def download_dummy_bin(self, **kwargs):
         # Serves a basic 4-byte payload (b"1234") for the UI tour to download
         # The SHA256 hash for "1234" is 03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4

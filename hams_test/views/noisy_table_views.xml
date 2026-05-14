@@ -6,7 +6,7 @@
         <field name="model">test_real_transaction.noisy_table</field>
         <field name="arch" type="xml">
             <list string="Noisy Tables">
-                <field name="name" class="o_tour_trigger_noisy_table_name"/>
+                <field name="name"/>
                 <field name="active"/>
             </list>
         </field>
@@ -24,7 +24,7 @@
                     <widget name="web_ribbon" title="Archived" bg_color="bg-danger" invisible="active"/>
                     <group>
                         <group>
-                            <field name="name" class="o_tour_trigger_noisy_table_name_form"/>
+                            <field name="name"/>
                             <field name="active" invisible="1"/>
                         </group>
                     </group>
@@ -38,7 +38,7 @@
         <field name="res_model">test_real_transaction.noisy_table</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face o_tour_trigger_noisy_table_action">
+            <p class="o_view_nocontent_smiling_face">
                 Add a new noisy table
             </p>
             <p>

@@ -40,7 +40,7 @@ class TestBinaryManifest(TransactionCase):
 
         if INTEGRATION_MODE:
             # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
-            base_url = os.environ.get("ODOO_URL", "http://localhost:8069")
+            base_url = os.environ.get("ODOO_URL", "http://odoo:8069")
             url = f"{base_url}/test/dummy_bin"
             chksum = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
         else:
