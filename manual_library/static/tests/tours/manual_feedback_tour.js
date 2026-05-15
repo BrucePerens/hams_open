@@ -2,7 +2,7 @@
 import { registry } from "@web/core/registry";
 
 // Tests [@ANCHOR: story_manual_feedback]
-// [@ANCHOR: test_tour_manual_feedback]
+// Tests [@ANCHOR: test_tour_manual_feedback]
 // Tests [@ANCHOR: controller_manual_feedback]
 registry.category("web_tour.tours").add("manual_feedback_tour", {
     steps: () => [
