@@ -25,8 +25,19 @@ class TestCompliancePages(TransactionCase):
         for url in urls:
             self.assertIn(url, found_urls, f"Page for {url} should exist.")
 
+        # Non-Destructive Mandate check:
+        # Only check our own pages if they are NOT shadowed by custom ones.
         for page in pages:
-            self.assertTrue(page.is_published, f"Page for {page.url} should be published.")
+            if page.view_id.key.startswith("compliance.compliance_"):
+                # If there's another page for the same URL that isn't ours,
+                # our page should be UNPUBLISHED. Otherwise it should be published.
+                other_page = pages.filtered(lambda p: p.url == page.url and not p.view_id.key.startswith("compliance.compliance_"))
+                if other_page:
+                    self.assertFalse(page.is_published, f"Boilerplate page for {page.url} should be unpublished because a custom one exists.")
+                else:
+                    self.assertTrue(page.is_published, f"Boilerplate page for {page.url} should be published since no custom one exists.")
+            else:
+                self.assertTrue(page.is_published, f"Custom page for {page.url} should be published.")
 
 @tagged("post_install", "-at_install")
 class TestCompliancePagesHttp(HttpCase):

@@ -1,6 +1,7 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
 
+// # Verified by [@ANCHOR: test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {
     url: "/",
     steps: () => [

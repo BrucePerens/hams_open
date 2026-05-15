@@ -14,10 +14,12 @@ Alice is worried about legal compliance but doesn't have the budget for a lawyer
    - **Cookie Policy** (`/cookie-policy`) [@ANCHOR: compliance_cookie_policy_template]
    - **Terms of Service** (`/terms`) [@ANCHOR: compliance_terms_of_service_template]
 4. Alice visits her website and sees these links already active and populated with relevant content that covers her use of Odoo features.
-5. She can now focus on her business, knowing she has basic legal coverage.
+5. If she already has a custom page, the module detects it and unpublishes its own boilerplate to avoid duplication.
+6. She can now focus on her business, knowing she has basic legal coverage.
 
 ## Verification
 - Verified by [@ANCHOR: test_compliance_views]
 - Verified by [@ANCHOR: test_compliance_pages_presence]
 - Verified by [@ANCHOR: test_compliance_pages_content]
 - Verified by [@ANCHOR: test_compliance_ui_tour]
+- Verified by [@ANCHOR: test_compliance_non_destructive_mandate]
