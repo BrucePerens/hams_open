@@ -17,7 +17,7 @@
         "distributed_redis_cache",
     ],
     "external_dependencies": {
-        "python": ["redis", "psutil"],
+        "python": ["redis", "psutil", "ntplib", "pymysql", "ldap3"],
     },
     "data": [
         "data/cron.xml",

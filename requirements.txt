@@ -6,11 +6,14 @@ flake8
 Flask
 Flask-CORS
 google-genai
+ldap3
 lxml
+ntplib
 passlib
 pika
 psutil
 psycopg2-binary
+pymysql
 pyserial
 PyYAML
 redis==5.0.1
