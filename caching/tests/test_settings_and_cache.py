@@ -6,6 +6,7 @@ from lxml import etree
 class TestSettingsAndCache(HttpCase):
 
     def test_01_quota_config_updates_sw(self):
+        # [@ANCHOR: test_settings_and_cache_01]
         # Tests [@ANCHOR: caching_quota_calculation]
         # Tests [@ANCHOR: caching_fs_scan_logic]
         """
