@@ -13,6 +13,11 @@
         "data/cron.xml",
         "views/registry_views.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "daemon_key_manager/static/src/js/tours/daemon_key_manager_tour.js",
+        ],
+    },
     "knowledge_docs": [
         {
             "name": "Daemon Key Manager Documentation",

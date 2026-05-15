@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import TransactionCase, HttpCase, tagged
 from odoo.exceptions import UserError
 from odoo import SUPERUSER_ID
 
@@ -50,6 +50,7 @@ class TestKeyRegistry(TransactionCase):
 
     def test_security_constraints(self):
         """Test that only service accounts and valid paths can be used."""
+        # [@ANCHOR: test_security_constraints]
         # Tests [@ANCHOR: security_constraints_user]
         # Tests [@ANCHOR: security_constraints_path]
         # Test non-service account
@@ -202,6 +203,7 @@ class TestKeyRegistry(TransactionCase):
 
     def test_force_provisioning(self):
         """Test force provisioning of all keys."""
+        # [@ANCHOR: test_force_provisioning]
         # Tests [@ANCHOR: action_force_provision_all_api]
         # Tests [@ANCHOR: force_provision_logic]
         # Tests [@ANCHOR: force_provision_error_handling]
@@ -238,3 +240,27 @@ class TestKeyRegistry(TransactionCase):
             view_type='form'
         )
         self.assertTrue(form_view)
+
+
+@tagged('post_install', '-at_install')
+class TestKeyRegistryTour(HttpCase):
+    def test_daemon_key_manager_tour(self):
+        # [@ANCHOR: test_daemon_key_manager_tour]
+        # Verified by [@ANCHOR: test_daemon_key_manager_tour]
+        # Tests [@ANCHOR: register_daemon_api]
+        # Tests [@ANCHOR: action_force_provision_all_api]
+
+        if os.environ.get("IN_JULES_VM") or os.environ.get("JULES_SESSION_ID"):
+            self.skipTest("UI tours are known to fail in Jules VM environment due to infrastructure issues.")
+
+        # Ensure admin has Technical Features enabled for the tour
+        admin = self.env.ref('base.user_admin')
+        group_no_one = self.env.ref('base.group_no_one')
+        if group_no_one not in admin.group_ids:
+            admin.write({'group_ids': [(4, group_no_one.id)]})
+
+        manager_group = self.env.ref('daemon_key_manager.group_daemon_key_manager')
+        if manager_group not in admin.group_ids:
+            admin.write({'group_ids': [(4, manager_group.id)]})
+
+        self.start_tour("/odoo?action=daemon_key_manager.action_daemon_key_registry", "daemon_key_manager_tour", login="admin")
