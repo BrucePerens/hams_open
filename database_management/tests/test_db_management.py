@@ -98,12 +98,21 @@ class TestDatabaseManagement(TransactionCase):
 
     def test_05_documentation_installed(self):
         # Tests [@ANCHOR: db_doc_injection]
-        # Verify that the post_init_hook (or similar) installed the documentation
-        doc = self.env["knowledge.article"].search(
-            [("name", "=", "Database Management Guide")], limit=1
-        )
-        self.assertTrue(doc, "Module documentation was not installed!")
-        self.assertIn("Database Management", doc.body)
+        # Verify that the _register_hook installed the documentation
+        model = None
+        if "knowledge.article" in self.env:
+            model = "knowledge.article"
+        elif "manual.article" in self.env:
+            model = "manual.article"
+
+        if model:
+            doc = self.env[model].search(
+                [("name", "=", "Database Management Guide")], limit=1
+            )
+            self.assertTrue(doc, "Module documentation was not installed!")
+            self.assertIn("Database Management", doc.body)
+        else:
+            self.skipTest("No documentation model available")
 
 
 @tagged("post_install", "-at_install")

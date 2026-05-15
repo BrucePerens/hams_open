@@ -4,6 +4,71 @@ from odoo.exceptions import UserError
 from psycopg2 import sql
 
 
+class DatabasePgSettingHook(models.AbstractModel):
+    # [@ANCHOR: db_doc_injection]
+    # Tests [@ANCHOR: db_doc_injection]
+    _name = "database.pg.setting.hook"
+    _description = "PostgreSQL Configuration Hook"
+
+    def _register_hook(self):
+        # Tested by [@ANCHOR: test_05_documentation_installed]
+        super()._register_hook()
+        if not hasattr(self.env.registry, "_database_management_docs_checked"):
+            self.env.registry._database_management_docs_checked = True
+            self._bootstrap_database_management_docs()
+
+    def _bootstrap_database_management_docs(self):
+        # burn-ignore-sudo: ADR-0055 soft-dependency documentation bootstrap
+        utils = self.env["zero_sudo.security.utils"]
+        article_model = None
+        if "knowledge.article" in self.env:
+            article_model = "knowledge.article"
+        elif "manual.article" in self.env:
+            article_model = "manual.article"
+
+        if not article_model:
+            return
+
+        # Use the service account for documentation installation
+        try:
+            env_svc = utils._get_service_env(
+                "database_management.user_database_management_service"
+            )
+        except Exception:
+            return
+
+        Article = env_svc[article_model]
+
+        # Load the documentation from the module
+        try:
+            with tools.file_open("database_management/data/documentation.html", "r") as f:
+                body = f.read()
+        except Exception:
+            return
+
+        name = "Database Management Guide"
+        vals = {
+            "name": name,
+            "body": body,
+        }
+
+        model_fields = self.env[article_model]._fields
+        if "is_published" in model_fields:
+            vals["is_published"] = True
+        if "category" in model_fields:
+            vals["category"] = "workspace"
+        if "internal_permission" in model_fields:
+            vals["internal_permission"] = "read"
+        if "icon" in model_fields:
+            vals["icon"] = "🛢"
+
+        existing = Article.search([("name", "=", name)], limit=1)
+        if existing:
+            existing.write(vals)
+        else:
+            Article.create(vals)
+
+
 class DatabasePgSetting(models.Model):
     # [@ANCHOR: db_settings_audit]
     # Tests [@ANCHOR: db_settings_audit]
@@ -59,6 +124,11 @@ class PgOptimizeWizard(models.TransientModel):
         if self.ram_gb <= 0 or self.cpu_cores <= 0:
             raise UserError(_("RAM and CPU must be greater than zero."))
 
+        # micro-privilege: Use service account for ALTER SYSTEM
+        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+            "database_management.user_database_management_service"
+        )
+
         # Standard DBA Tuning Algorithms
         shared_buffers_mb = int((self.ram_gb * 1024) * 0.25)
         effective_cache_mb = int((self.ram_gb * 1024) * 0.75)
@@ -85,9 +155,9 @@ class PgOptimizeWizard(models.TransientModel):
             query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
                 sql.Identifier(param), sql.Literal(val)
             )
-            self.env.cr.execute(query)
+            env_svc.cr.execute(query)
 
-        self.env.cr.execute("SELECT pg_reload_conf()")
+        env_svc.cr.execute("SELECT pg_reload_conf()")
 
         return {
             "type": "ir.actions.client",
