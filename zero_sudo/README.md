@@ -102,6 +102,7 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * **Coherent Cache Signaling** `[@ANCHOR: story_cache_signaling]`: Ensuring cache consistency across multiple Odoo workers using Postgres NOTIFY. [Read Story](docs/stories/zero_sudo/cache_signaling.md)
 * **Deterministic Hashing** `[@ANCHOR: story_deterministic_hash]`: Generation of stable integer hashes for PostgreSQL advisory locks. [Read Story](docs/stories/zero_sudo/deterministic_hashing.md)
 * **Python VENV Management** `[@ANCHOR: story_venv_management]`: How administrators can trigger updates of system Python dependencies safely. [Read Story](docs/stories/zero_sudo/venv_management.md)
+* **Centralized Documentation Bootstrap** `[@ANCHOR: story_zero_sudo_doc_installer]`: How documentation is centrally installed across the platform. [Read Story](docs/stories/zero_sudo/documentation_bootstrap.md)
 
 ### Journeys
 * **Service Account Lifecycle** `[@ANCHOR: journey_service_account_lifecycle]`: The end-to-end flow of a service account from provisioning to secure execution. [Read Journey](docs/journeys/zero_sudo/service_account_lifecycle.md)

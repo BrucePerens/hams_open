@@ -136,12 +136,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
 
     @api.model
-    def _get_system_param(self, key, default=None):
-        # [@ANCHOR: get_system_param]
-        # Verified by [@ANCHOR: test_01_mechanical_secret_block_enforcement]
-        # Tests [@ANCHOR: story_parameter_whitelisting]
-        # THE MECHANICAL SECRET BLOCK
-        PARAM_WHITELIST = [
+    def _get_param_whitelist(self):
+        """Returns the list of system parameters allowed to be read/written via Zero-Sudo."""
+        return [
             "web.base.url",
             "cloudflare.last_static_mtime",
             "user_websites.company_abuse_email",
@@ -154,12 +151,20 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "user_websites_seo.docs_installed",
         ]
 
+    @api.model
+    def _get_system_param(self, key, default=None):
+        # [@ANCHOR: get_system_param]
+        # Verified by [@ANCHOR: test_01_mechanical_secret_block_enforcement]
+        # Tests [@ANCHOR: story_parameter_whitelisting]
+        # THE MECHANICAL SECRET BLOCK
+        whitelist = self._get_param_whitelist()
+
         banned_substrings = [
             "secret", "key", "password", "token", "auth", "crypt", "cert",
         ]
         lower_key = key.lower()
 
-        if key not in PARAM_WHITELIST:
+        if key not in whitelist:
             if any(banned in lower_key for banned in banned_substrings):
                 raise AccessError(
                     _(
@@ -180,25 +185,14 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @api.model
     def _set_system_param(self, key, value):
         # [@ANCHOR: set_system_param]
-        PARAM_WHITELIST = [
-            "web.base.url",
-            "cloudflare.last_static_mtime",
-            "user_websites.company_abuse_email",
-            "user_websites.max_sites_per_user",
-            "user_websites.enable_blog_comments",
-            "caching.safe_quota_mb",
-            "caching.invalidation_version",
-            "user_websites.global_website_page_limit",
-            "user_websites.last_digest_id",
-            "user_websites_seo.docs_installed",
-        ]
+        whitelist = self._get_param_whitelist()
 
         banned_substrings = [
             "secret", "key", "password", "token", "auth", "crypt", "cert",
         ]
         lower_key = key.lower()
 
-        if key not in PARAM_WHITELIST:
+        if key not in whitelist:
             if any(banned in lower_key for banned in banned_substrings):
                 raise AccessError(
                     _(

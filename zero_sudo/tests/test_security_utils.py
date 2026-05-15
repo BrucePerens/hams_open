@@ -262,7 +262,9 @@ class TestSecurityUtils(TransactionCase):
 
         # Scenario 2: Missing binary, no manifest available (should raise UserError)
         mock_which.return_value = None
-        with patch.dict(self.env.registry.models, clear=False):
+        # We use patch.dict to avoid 'res.users' KeyError during translation lookup
+        with patch.dict(self.env.registry.models, clear=False) as mock_models:
+            mock_models.pop('binary.manifest', None)
             with self.assertRaises(UserError) as cm:
                 utils._ensure_executable("missing_bin", pkg_name="apt-pkg-missing")
             self.assertIn("Missing dependency", str(cm.exception))
@@ -271,11 +273,13 @@ class TestSecurityUtils(TransactionCase):
         # Scenario 3: Fallback dynamically invokes the manifest downloader module
         mock_manifest = MagicMock()
         mock_manifest.ensure_executable.return_value = "/var/lib/odoo/hams_bin/kopia"
-        mock_env = {"binary.manifest": mock_manifest}
+        mock_env = MagicMock()
+        # Mocking __getitem__ to handle 'binary.manifest'
+        mock_env.__getitem__.side_effect = lambda k: mock_manifest if k == "binary.manifest" else None
 
-        with patch.object(utils, "_get_service_env", return_value=mock_env):
-            # Intercept "binary.manifest in self.env" check to return True
-            with patch.object(self.env, "__contains__", return_value=True):
+        with patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env):
+            # Use patch.dict to make "binary.manifest in self.env" return True
+            with patch.dict(self.env.registry.models, {"binary.manifest": MagicMock()}, clear=False):
                 res = utils._ensure_executable("kopia", svc_xml_id="zero_sudo.mail_service_internal")
                 self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
                 mock_manifest.ensure_executable.assert_called_once_with("kopia")
