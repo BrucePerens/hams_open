@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import logging
+import threading
 from odoo import http, tools
 from odoo.http import request
 from odoo.modules.module import get_module_path
@@ -10,9 +11,11 @@ _logger = logging.getLogger(__name__)
 class ServiceWorkerController(http.Controller):
 
     _fs_cache = None
+    _fs_lock = threading.Lock()
 
     def _get_fs_stats(self):
         # [@ANCHOR: caching_fs_scan_logic]
+        # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
         Scans the 'static/' directories of all installed modules.
         Returns a tuple: (latest_mtime, file_sizes).
@@ -21,42 +24,47 @@ class ServiceWorkerController(http.Controller):
         if type(self)._fs_cache:
             return type(self)._fs_cache
 
-        max_mtime = 0.0
-        file_sizes = []
+        with type(self)._fs_lock:
+            if type(self)._fs_cache:
+                return type(self)._fs_cache
 
-        # Raw SQL to get installed modules quickly without ORM/sudo overhead.
-        # This only retrieves module names that are already public knowledge
-        # and is required to calculate the SW footprint before it is served.
-        request.env.cr.execute(
-            "SELECT name FROM ir_module_module WHERE state = 'installed'"
-        )
-        installed_modules = [row[0] for row in request.env.cr.fetchall()]
+            max_mtime = 0.0
+            file_sizes = []
 
-        for module_name in installed_modules:
-            mod_path = get_module_path(module_name)
-            if not mod_path:
-                continue
+            # Raw SQL to get installed modules quickly without ORM/sudo overhead.
+            # This only retrieves module names that are already public knowledge
+            # and is required to calculate the SW footprint before it is served.
+            request.env.cr.execute(
+                "SELECT name FROM ir_module_module WHERE state = 'installed'"
+            )
+            installed_modules = [row[0] for row in request.env.cr.fetchall()]
 
-            static_path = os.path.join(mod_path, "static")
-            if os.path.exists(static_path):
-                for root, dirs, files in os.walk(static_path):
-                    for file in files:
-                        filepath = os.path.join(root, file)
-                        try:
-                            mtime = os.path.getmtime(filepath)
-                            if mtime > max_mtime:
-                                max_mtime = mtime
-                            file_sizes.append(os.path.getsize(filepath))
-                        except OSError as e:
-                            _logger.warning("Could not access file %s: %s", filepath, e)
+            for module_name in installed_modules:
+                mod_path = get_module_path(module_name)
+                if not mod_path:
+                    continue
 
-        file_sizes.sort(reverse=True)
-        res = (max_mtime, file_sizes)
-        type(self)._fs_cache = res
-        return res
+                static_path = os.path.join(mod_path, "static")
+                if os.path.exists(static_path):
+                    for root, dirs, files in os.walk(static_path):
+                        for file in files:
+                            filepath = os.path.join(root, file)
+                            try:
+                                mtime = os.path.getmtime(filepath)
+                                if mtime > max_mtime:
+                                    max_mtime = mtime
+                                file_sizes.append(os.path.getsize(filepath))
+                            except OSError as e:
+                                _logger.warning("Could not access file %s: %s", filepath, e)
+
+            file_sizes.sort(reverse=True)
+            res = (max_mtime, file_sizes)
+            type(self)._fs_cache = res
+            return res
 
     def _get_global_static_info(self):
         # [@ANCHOR: caching_quota_calculation]
+        # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
         Returns a tuple: (latest_mtime_string, dynamic_max_file_size_string).
         Calculates the safe dynamic max file size based on configurable quota.
@@ -94,6 +102,7 @@ class ServiceWorkerController(http.Controller):
     @http.route("/sw.js", type="http", auth="public", sitemap=False)
     def service_worker(self):
         # [@ANCHOR: caching_sw_serve_route]
+        # Verified by [@ANCHOR: test_service_worker_01]
         """
         Serves the Service Worker script from the root scope.
         Dynamically injects the latest filesystem mtime (for cache invalidation)
