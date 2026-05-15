@@ -14,7 +14,7 @@
     ],
     "knowledge_docs": [
         {
-            "name": "Testing Infrastructure Guide",
+            "name": "Real Transaction Testing Facility Guide",
             "path": "data/documentation.html",
             "icon": "🧪",
             "category": "workspace"

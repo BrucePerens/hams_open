@@ -8,4 +8,4 @@ The module implements a documentation bootstrap mechanism ([@ANCHOR: documentati
 ## Flexible Documentation Support
 As a developer, I want my module to support both the community `manual_library` and the enterprise `knowledge` modules for documentation storage, so that the module remains versatile.
 
-The documentation injection logic ([@ANCHOR: documentation_injection]) dynamically checks for the presence of the `knowledge.article` API. If found, it installs the module's guide using a secure service account context, ensuring compatibility across different Odoo editions.
+The documentation injection logic ([@ANCHOR: documentation_injection]) dynamically checks for the presence of the `knowledge.article` API. If found, it installs the module's guide using a secure service account context ([@ANCHOR: user_real_transaction_service]), ensuring compatibility across different Odoo editions.

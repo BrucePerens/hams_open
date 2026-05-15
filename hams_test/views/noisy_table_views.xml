@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- burn-ignore-tour -->
     <record id="view_noisy_table_list" model="ir.ui.view">
         <field name="name">test_real_transaction.noisy_table.list</field>
         <field name="model">test_real_transaction.noisy_table</field>
         <field name="arch" type="xml">
+            <!-- Verified by [@ANCHOR: test_noisy_table_tour] -->
             <list string="Noisy Tables">
                 <field name="name"/>
                 <field name="active"/>
@@ -12,11 +12,11 @@
         </field>
     </record>
 
-    <!-- burn-ignore-tour -->
     <record id="view_noisy_table_form" model="ir.ui.view">
         <field name="name">test_real_transaction.noisy_table.form</field>
         <field name="model">test_real_transaction.noisy_table</field>
         <field name="arch" type="xml">
+            <!-- Verified by [@ANCHOR: test_noisy_table_tour] -->
             <form string="Noisy Table">
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -47,6 +47,7 @@
         </field>
     </record>
 
+    <!-- [@ANCHOR: UX_NOISY_TABLE_MANAGEMENT] -->
     <menuitem id="menu_noisy_table"
               name="Noisy Tables"
               parent="base.menu_custom"

@@ -4,6 +4,7 @@ import { registry } from "@web/core/registry";
 registry.category("web_tour.tours").add("test_real_transaction_tour", {
     url: "/web",
     steps: () => [
+        // # Verified by [@ANCHOR: test_noisy_table_tour]
         {
             trigger: '[data-menu-xmlid="base.menu_administration"]',
             content: "Open Settings",
