@@ -6,6 +6,7 @@ from odoo.tests.common import HttpCase, tagged
 class TestServiceWorkerFetch(HttpCase):
 
     def test_01_sw_fetch_presence(self):
+        # [@ANCHOR: test_sw_fetch_01]
         # Tests [@ANCHOR: caching_sw_fetch_interceptor]
         """Verify the fetch interceptor is present in the Service Worker source."""
         response = self.url_open("/sw.js")

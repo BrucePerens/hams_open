@@ -7,6 +7,7 @@ from lxml import etree
 class TestServiceWorker(HttpCase):
 
     def test_01_sw_headers(self):
+        # [@ANCHOR: test_service_worker_01]
         # Tests [@ANCHOR: caching_sw_serve_route]
         """
         Verify that the /sw.js route serves the JavaScript file
