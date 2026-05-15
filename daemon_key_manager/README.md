@@ -59,7 +59,7 @@ self.env['daemon.key.registry'].register_daemon(daemon_name, user_xml_id, env_fi
     * `env_file_path` (str): Absolute file path to the desired protected output directory. You MUST use the standard directory convention (e.g., `"/var/lib/odoo/daemon_keys/pager_duty.env"`).
     * **Behavior:** Safely generates a new API key via `zero_sudo` utilities, writes it to the designated file with strict OS-level `0600` sandboxing, and schedules it for automated 60-day rotation. **The key is generated synchronously during this exact database transaction.**
 
-* **`action_force_provision_all()`** [@ANCHOR: action_force_provision_all]:
+* **`action_force_provision_all()`** [@ANCHOR: action_force_provision_all_api]:
     * **Behavior:** Synchronously iterates through all registered daemons, purges legacy keys, and securely provisions fresh keys to disk.
     * **Use Case:** Designed to be executed programmatically via `odoo-bin shell` during CI/CD bootstrapping sequences. This resolves start-up race conditions where headless containers boot and check for `.env` keys faster than Odoo's automated cron pipeline cycles.
     * **Example Execution:**
