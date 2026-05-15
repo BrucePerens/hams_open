@@ -1,6 +1,7 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
 
+// # Verified by [@ANCHOR: test_helpdesk_operator_tour]
 registry.category("web_tour.tours").add("helpdesk_operator_tour", {
     url: "/web",
     steps: () => [

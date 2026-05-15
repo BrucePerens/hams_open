@@ -11,6 +11,7 @@ class ShiftHandoffWizard(models.TransientModel):
 
     def action_confirm_handoff(self):
         # [@ANCHOR: helpdesk_handoff_execution]
+        # Verified by [@ANCHOR: test_02_shift_handoff_wizard]
         self.ensure_one()
 
         self.ticket_id.write({"user_id": self.new_user_id.id})

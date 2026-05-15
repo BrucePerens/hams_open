@@ -5,6 +5,7 @@ class TestHelpdeskTours(HttpCase):
 
     def test_01_helpdesk_operator_tour(self):
         """Simulates an operator logging in, viewing their shift, and executing a handoff."""
+        # [@ANCHOR: test_helpdesk_operator_tour]
         # Note: In a real CI environment, we ensure the 'admin' user has helpdesk manager rights.
         self.start_tour("/web", "helpdesk_operator_tour", login="admin")
 

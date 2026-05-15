@@ -37,5 +37,13 @@
             <field name="domain_force">[('partner_id', '=', user.partner_id.id)]</field>
             <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
         </record>
+
+        <!-- Helpdesk Service Account for automated tasks -->
+        <record id="user_helpdesk_service" model="res.users">
+            <field name="name">Helpdesk Service Account</field>
+            <field name="login">helpdesk_service_internal</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager')])]"/>
+        </record>
     </data>
 </odoo>
