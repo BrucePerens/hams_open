@@ -190,7 +190,6 @@ def execute_check(check):
                     res["success"] = True
 
     except subprocess.TimeoutExpired:
-        # [@ANCHOR: test_synthetic_i18n]
         res["error"] = "Execution timed out"
     except Exception as e:
         res["error"] = str(e)

@@ -42,18 +42,30 @@ This skips the APT operations and starts testing immediately, seamlessly connect
 You can append standard test runner arguments alongside this flag:
 
 ```bash
-IN_JULES_VM=1 python3 tools/test_runner.py -m individual -u user_websites --already-provisioned
 IN_JULES_VM=1 python3 tools/test_runner.py -m integration --already-provisioned
 ```
 
-## 3. Testing a Single Odoo Module
+## 3. Targeting Specific Modules (-u flag)
 
-To test a single Odoo module specifically without running the entire suite, use the `-m individual` flag combined with `-u <module_name>`.
+By default, the test runner executes against all local modules. To restrict the testing scope to a single module (which saves significant time), use the `-u <module_name>` flag.
 
-For example, to test the `user_websites` module:
+This flag works globally across **all** execution modes (`standard`, `integration`, `individual`, `xml`, `downloads`).
 
+**Examples:**
+
+Run the standard test suite but ONLY for the `user_websites` module:
 ```bash
-IN_JULES_VM=1 python3 tools/test_runner.py -m individual -u user_websites --already-provisioned
+IN_JULES_VM=1 python3 tools/test_runner.py -u user_websites --already-provisioned
+```
+
+Run integration tests specifically for `pager_duty`:
+```bash
+IN_JULES_VM=1 python3 tools/test_runner.py -m integration -u pager_duty --already-provisioned
+```
+
+Run the highly isolated individual test mode for `zero_sudo`:
+```bash
+IN_JULES_VM=1 python3 tools/test_runner.py -m individual -u zero_sudo --already-provisioned
 ```
 
 ## Note on Python Execution

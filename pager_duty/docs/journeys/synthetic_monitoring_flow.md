@@ -17,5 +17,5 @@ This journey describes the execution of complex, multi-step browser-like journey
 
 ## 4. Reporting
 - **Success:** If the exit code is 0, the check is marked healthy.
-- **Failure:** If the script fails, an error message is generated (e.g., "Execution timed out" [@ANCHOR: test_synthetic_i18n]).
+- **Failure:** If the script fails, an error message is generated (e.g., "Execution timed out").
 - **Alerting:** The failure is reported back to Odoo, triggering the standard incident lifecycle if necessary.

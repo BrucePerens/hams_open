@@ -79,19 +79,14 @@ def _process_file_for_anchors(
 ):
     mod = get_module(full_path)
     for line in content.splitlines():
-        matches = list(pattern.finditer(line))
-        if not matches:
-            continue
-
-        prefix = line[:matches[0].start()].strip()
-
-        for match in matches:
+        for match in pattern.finditer(line):
             anchor_name = match.group(1)
             if ":" in anchor_name:
                 invalid_format.append((mod, anchor_name, full_path))
                 continue
 
             anchor = f"{mod}:{anchor_name}"
+            prefix = line[: match.start()].strip()
             if prefix.endswith("Tests"):
                 tests_links.setdefault(full_path, []).append(anchor)
                 tests_links_set.add(anchor)
@@ -184,6 +179,14 @@ def _report_duplicates(duplicates):
         print("\n[!] CI/CD FAILURE: Duplicate Semantic Anchors detected:")
         for mod, name, p1, p2 in duplicates:
             print(f"    - Duplicate Anchor: {mod} {name} (in {p1} and {p2})")
+            print(f"      [!] DIAGNOSTIC: Base anchor '[@ANCHOR: {name}]' defined multiple times.")
+            if name.startswith("test_"):
+                print("          Did you use a 'test_' prefix for a base anchor by mistake?")
+                print("          To link a test to a feature, use '# Tests [@ANCHOR: feature_name]'.")
+            else:
+                print(f"          Did you accidentally place '# Tests [@ANCHOR: {name}]' inside a")
+                print("          multiline docstring (\"\"\")? The parser evaluates docstrings as base anchors.")
+                print("          Test bindings MUST be standard '#' comments.")
         return True
     return False
 
@@ -254,12 +257,16 @@ def _report_bidirectional_orphans(
         for anchor in orphaned_source:
             mod, name = anchor.split(':', 1)
             print(f"    - Missing Test Link for Source: {mod} {name}")
+            print(f"      [!] DIAGNOSTIC: Add '# Tests [@ANCHOR: {name}]' to the relevant test file.")
         has_errors = True
     if orphaned_tests:
         print("\n[!] CI/CD FAILURE: ADR-0054 Bidirectional Violation (Test missing Source):")
         for anchor in orphaned_tests:
             mod, name = anchor.split(':', 1)
             print(f"    - Missing Source Link for Test: {mod} {name}")
+            print(f"      [!] DIAGNOSTIC: No source file contains '[@ANCHOR: {name.replace('test_', '')}]' (or similar).")
+            print("          Ensure the source code defines the feature, and the test links to it using")
+            print("          '# Tests [@ANCHOR: feature_name]'. Do not use the test's name as a base anchor.")
         has_errors = True
     return has_errors, source_anchors
 

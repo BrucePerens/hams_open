@@ -39,7 +39,7 @@
 
     <h2>6. Fail-Safes &amp; Self-Healing</h2>
     <p>Checks can be configured with a <strong>Startup Grace Period</strong> (e.g., 120 seconds) to prevent false-positive alerts while Odoo is initially booting. If Odoo crashes entirely, the daemon utilizes an <strong>Airgapped SMTP Fallback</strong> and Discord/Slack Webhooks to bypass the ERP and alert the administrator directly.</p>
-    <p>Furthermore, the daemon features a self-healing dependency scanner. For example, if it is instructed to test a Zero Trust tunnel but the <code>cloudflared</code> binary is missing from the system, it will automatically download the static binary from GitHub and continue execution without requiring manual intervention. <code>[@ANCHOR: synthetic_i18n]</code> <code>[@ANCHOR: test_synthetic_i18n]</code></p>
+    <p>Furthermore, the daemon features a self-healing dependency scanner. For example, if it is instructed to test a Zero Trust tunnel but the <code>cloudflared</code> binary is missing from the system, it will automatically download the static binary from GitHub and continue execution without requiring manual intervention. <code>[@ANCHOR: synthetic_i18n]</code></p>
 
     <h2>7. Log Analysis &amp; SRE Forensics</h2>
     <p>The module includes a chrooted Log Analyzer daemon that tails system logs in real-time. Administrators can define regex patterns to detect anomalies like filesystem corruption or kernel panics. The system also features a Splunk-like interactive search UI, allowing for rapid forensics across distributed log files directly from the Odoo backend. <code>[@ANCHOR: test_log_analyzer_views]</code> <code>[@ANCHOR: test_log_api_i18n]</code></p>
@@ -53,4 +53,3 @@
         <li><strong>Analytics:</strong> Incident records automatically track Mean Time To Acknowledge (MTTA) and Mean Time To Resolve (MTTR) metrics for operational review. <code>[@ANCHOR: action_acknowledge_incident]</code> <code>[@ANCHOR: pager_board_data]</code> <code>[@ANCHOR: test_pager_board_url]</code></li>
     </ul>
 </div>
-
