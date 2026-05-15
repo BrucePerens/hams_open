@@ -3,7 +3,8 @@ import json
 import os
 import pika
 import logging
-from odoo import models, fields
+from odoo import models, fields, _, api
+from odoo.exceptions import UserError, AccessError
 from .utils import validate_backup_path
 
 class BackupRestoreWizard(models.TransientModel):
@@ -14,8 +15,18 @@ class BackupRestoreWizard(models.TransientModel):
     restore_target_path = fields.Char(string="Restore Directory / Stanza Target", required=True, help="Path where the backup should be restored, or stanza to target.")
 
     def action_restore(self):
+        # [@ANCHOR: backup_trigger_restore]
+        # Verified by [@ANCHOR: test_restore_action]
+        if not self.env.user.has_group("backup_management.group_backup_admin"):
+             raise AccessError(_("Only Backup Administrators can trigger restore operations."))
+
         if self.snapshot_id.config_id.engine == "kopia":
             validate_backup_path(self.restore_target_path)
+
+        # Additional safety check for pgbackrest stanza
+        if self.snapshot_id.config_id.engine == "pgbackrest":
+             if not self.restore_target_path or ";" in self.restore_target_path or "&" in self.restore_target_path:
+                  raise UserError(_("Invalid restore target stanza."))
 
         jobs = self.env["backup.job"]
         job = jobs.create({
@@ -29,6 +40,7 @@ class BackupRestoreWizard(models.TransientModel):
         if self.snapshot_id.config_id.engine == "kopia":
             cmd_args = ["kopia", "restore", self.snapshot_id.snapshot_id, self.restore_target_path]
         elif self.snapshot_id.config_id.engine == "pgbackrest":
+            # Using list for subprocess ensures no shell injection
             cmd_args = ["pgbackrest", "restore", f"--stanza={self.restore_target_path}", f"--set={self.snapshot_id.snapshot_id}"]
 
         payload = json.dumps({

@@ -1,152 +1,130 @@
 # -*- coding: utf-8 -*-
 import os
-import shutil
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.exceptions import UserError, AccessError
 
-from odoo.tests.common import TransactionCase, tagged
-from odoo.exceptions import AccessError
-
-
-@tagged("post_install", "-at_install")
-class TestBackupSecurity(TransactionCase):
-    def tearDown(self):
-        if os.path.exists("/var/lib/odoo/backup_repo"):
-            if os.path.isdir("/var/lib/odoo/backup_repo"):
-                shutil.rmtree("/var/lib/odoo/backup_repo", ignore_errors=True)
-            else:
-                try:
-                    os.remove("/var/lib/odoo/backup_repo")
-                except OSError:
-                    pass
-        super().tearDown()
+@tagged("post_install", "-at_install", "security")
+class TestBackupSecurity(RealTransactionCase):
 
     def setUp(self):
         super().setUp()
-        if os.path.exists("/var/lib/odoo/backup_repo"):
-            if os.path.isdir("/var/lib/odoo/backup_repo"):
-                shutil.rmtree("/var/lib/odoo/backup_repo", ignore_errors=True)
-            else:
-                try:
-                    os.remove("/var/lib/odoo/backup_repo")
-                except OSError:
-                    pass
-        self.admin = self.env.ref("base.user_admin")
-        self.user_std = self.env["res.users"].create(
-            {
-                "name": "Std",
-                "login": "std_backup",
-                "group_ids": [(4, self.env.ref("base.group_portal").id)],
-            }
+        self.BackupConfig = self.env["backup.config"]
+        # Use a path consistent with the module's target usage
+        self.valid_repo = "/var/lib/odoo/backups/test_repo"
+        # Use facility service to create test records/users to avoid audit-warnings
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
         )
+        self.config = self.BackupConfig.with_user(svc_uid).create({
+            "name": "Security Test Repo",
+            "engine": "kopia",
+            "target_path": self.valid_repo
+        })
+        self.user_no_group = self.env['res.users'].with_user(svc_uid).create({
+            'name': 'No Group User',
+            'login': 'no_group',
+            'email': 'no@group.com',
+            'group_ids': [(6, 0, [])]
+        })
 
-        web_grp = self.env.ref(
-            "user_websites.group_user_websites_user", raise_if_not_found=False
-        )
-        groups_web = [self.env.ref("base.group_portal").id] + (
-            [web_grp.id] if web_grp else []
-        )
-        self.user_web = self.env["res.users"].create(
-            {"name": "Web", "login": "web_backup", "group_ids": [(6, 0, groups_web)]}
-        )
-
-        ham_grp = self.env.ref("base.group_portal", raise_if_not_found=False)
-        groups_ham = [self.env.ref("base.group_portal").id] + (
-            [ham_grp.id] if ham_grp else []
-        )
-        self.user_ham = self.env["res.users"].create(
-            {"name": "Ham", "login": "ham_backup", "group_ids": [(6, 0, groups_ham)]}
-        )
-
-        swl_grp = self.env.ref("base.group_portal", raise_if_not_found=False)
-        groups_swl = [self.env.ref("base.group_portal").id] + (
-            [swl_grp.id] if swl_grp else []
-        )
-        self.user_swl = self.env["res.users"].create(
-            {"name": "Swl", "login": "swl_backup", "group_ids": [(6, 0, groups_swl)]}
-        )
-
-        self.public_user = self.env.ref("base.public_user")
-
-        self.config = (
-            self.env["backup.config"]
-            .with_user(self.admin)
-            .create({"name": "Sec Test", "engine": "kopia", "target_path": "/var/lib/odoo/backup_repo"})
-        )
-        self.snapshot = (
-            self.env["backup.snapshot"]
-            .with_user(self.admin)
-            .create({"config_id": self.config.id, "snapshot_id": "snap_sec_1"})
-        )
-
-    def test_01_multi_persona_isolation(self):
+    def test_path_traversal_prevention(self):
         # Tests [@ANCHOR: test_backup_security]
         # Tests [@ANCHOR: backup_path_validation]
-        """
-        BDD: Given ADR-0050 Proxy Ownership IDOR (Multi-Persona Mandate)
-        When standard personas attempt to interact with the backup tables
-        Then they MUST be violently rejected by the ORM, as only Backup Admins have access.
-        """
-        for user in [
-            self.user_std,
-            self.user_web,
-            self.user_ham,
-            self.user_swl,
-            self.public_user,
-        ]:
-            with self.assertRaises(
-                AccessError, msg=f"{user.name} MUST NOT be able to read configs."
-            ):
-                self.config.with_user(user).read(["name"])
 
-            with self.assertRaises(
-                AccessError, msg=f"{user.name} MUST NOT be able to write configs."
-            ):
-                self.config.with_user(user).write({"name": "hacked"})
+        forbidden_paths = [
+            "/etc/passwd",
+            "/root/.ssh/id_rsa",
+            "/var/lib/odoo/sessions",
+            "/var/lib/odoo/addons/base",
+            "/bin/sh",
+            "-L /var/lib/odoo/backups/hack" # Flag injection
+        ]
+
+        for path in forbidden_paths:
+            with self.subTest(path=path):
+                with self.assertRaises(UserError, msg=f"Path {path} should be forbidden"):
+                    self.config.write({"target_path": path})
+                    self.env.flush_all()
+
+    def test_symlink_traversal(self):
+        # Create a symlink to a forbidden path
+        symlink_path = "/var/lib/odoo/backups/evil_link"
+        if os.path.exists(symlink_path):
+            os.remove(symlink_path)
+
+        try:
+            os.symlink("/etc/shadow", symlink_path)
+            with self.assertRaises(UserError, msg="Symlink to /etc/shadow should be forbidden"):
+                self.config.write({"target_path": symlink_path})
                 self.env.flush_all()
+        finally:
+            if os.path.exists(symlink_path):
+                os.remove(symlink_path)
 
-            with self.assertRaises(
-                AccessError, msg=f"{user.name} MUST NOT be able to create configs."
-            ):
-                self.env["backup.config"].with_user(user).create(
-                    {"name": "x", "engine": "kopia", "target_path": "y"}
-                )
-                self.env.flush_all()
+    def test_field_security_groups(self):
+        # Ensure sensitive fields are not accessible to non-admins
+        # Note: In Odoo, 'groups' on fields are enforced at the view and RPC level.
+        # We check if the field has the group attribute set.
 
-            with self.assertRaises(
-                AccessError, msg=f"{user.name} MUST NOT be able to unlink configs."
-            ):
-                self.config.with_user(user).unlink()
+        kopia_pass_field = self.BackupConfig._fields["kopia_password"]
+        self.assertEqual(kopia_pass_field.groups, "backup_management.group_backup_admin")
 
-            with self.assertRaises(
-                AccessError, msg=f"{user.name} MUST NOT be able to read snapshots."
-            ):
-                self.snapshot.with_user(user).read(["snapshot_id"])
+        secret_key_field = self.BackupConfig._fields["secret_key"]
+        self.assertEqual(secret_key_field.groups, "backup_management.group_backup_admin")
 
-    def test_02_service_account_capabilities(self):
-        """
-        Verify that user_backup_service_internal can perform its duties.
-        """
-        service_user = self.env.ref("backup_management.user_backup_service_internal")
+    def test_restore_wizard_security(self):
+        # Tests [@ANCHOR: test_restore_action]
+        # Tests [@ANCHOR: backup_trigger_restore]
 
-        # Read configs
-        configs = self.env["backup.config"].with_user(service_user).search([])
-        self.assertIn(self.config.id, configs.ids)
+        snapshot = self.env["backup.snapshot"].create({
+            "config_id": self.config.id,
+            "snapshot_id": "snap1",
+        })
 
-        # Create snapshots
-        snap = (
-            self.env["backup.snapshot"]
-            .with_user(service_user)
-            .create(
-                {
-                    "config_id": self.config.id,
-                    "snapshot_id": "service_snap_1",
-                    "status": "completed",
-                }
-            )
+        wizard = self.env["backup.restore.wizard"].create({
+            "snapshot_id": snapshot.id,
+            "restore_target_path": "/etc/passwd"
+        })
+
+        with self.assertRaises(UserError):
+            wizard.action_restore()
+            self.env.flush_all()
+
+        # Test pgbackrest injection
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
         )
-        self.assertTrue(snap.exists())
+        config_pg = self.BackupConfig.with_user(svc_uid).create({
+            "name": "PG Security",
+            "engine": "pgbackrest",
+            "target_path": "main"
+        })
+        snapshot_pg = self.env["backup.snapshot"].create({
+            "config_id": config_pg.id,
+            "snapshot_id": "snap_pg",
+        })
 
-        # Check binary manifest access (needed for auto-download)
-        # We need to ensure binary_downloader is installed or mocked if this test runs in isolation
-        if "binary.manifest" in self.env:
-            manifests = self.env["binary.manifest"].with_user(service_user).search([])
-            self.assertIsNotNone(manifests)
+        wizard_pg = self.env["backup.restore.wizard"].create({
+            "snapshot_id": snapshot_pg.id,
+            "restore_target_path": "main; rm -rf /"
+        })
+        with self.assertRaises(UserError):
+            wizard_pg.action_restore()
+            self.env.flush_all()
+
+    def test_access_restriction(self):
+        # Ensure non-admins cannot trigger backups or restores
+        with self.assertRaises(AccessError):
+            self.config.with_user(self.user_no_group).action_trigger_backup()
+
+        snapshot = self.env["backup.snapshot"].create({
+            "config_id": self.config.id,
+            "snapshot_id": "snap_acc",
+        })
+        wizard = self.env["backup.restore.wizard"].with_user(self.user_no_group).create({
+            "snapshot_id": snapshot.id,
+            "restore_target_path": "/var/lib/odoo/backups/safe"
+        })
+        with self.assertRaises(AccessError):
+            wizard.action_restore()

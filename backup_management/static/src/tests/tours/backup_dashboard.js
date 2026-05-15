@@ -35,7 +35,7 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: "Enter name",
         },
         {
-            trigger: 'div[name="engine"] input.o_select_menu_toggler',
+            trigger: 'div[name="engine"] .o_select_menu_toggler',
             content: "Open engine dropdown",
             run: 'click',
         },
@@ -46,7 +46,7 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
         },
         {
             trigger: 'div[name="target_path"] input, input[id="target_path"]',
-            run: "edit /var/lib/odoo/tour_repo",
+            run: "edit /var/lib/odoo/backups/tour_repo",
             content: "Enter target path",
         },
         {
@@ -61,3 +61,5 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
         }
     ],
 });
+
+// # Verified by [@ANCHOR: test_tour_execution]

@@ -197,3 +197,36 @@ class TestBackupManagement(RealTransactionCase):
         self.config_pg.action_trigger_backup()
         jobs = self.env["backup.job"].search([("config_id", "in", [self.config_kopia.id, self.config_pg.id])])
         self.assertEqual(len(jobs), 2)
+
+    def test_12_documentation_installation(self):
+        # Tests [@ANCHOR: test_backup_docs]
+        # Tests [@ANCHOR: backup_doc_injection]
+
+        # Manually trigger the hook logic for testing if needed,
+        # or just check if it was installed (it should be since registry is ready)
+        doc_model = False
+        if "knowledge.article" in self.env:
+            doc_model = "knowledge.article"
+        elif "manual.article" in self.env:
+            doc_model = "manual.article"
+
+        if doc_model:
+             article = self.env[doc_model].search([('name', '=', 'Backup Management')], limit=1)
+             self.assertTrue(article.exists(), "Backup documentation should be installed")
+             self.assertIn("Backup Management Facility", article.body)
+
+    def test_13_restore_action(self):
+        # Tests [@ANCHOR: test_restore_action]
+        # Tests [@ANCHOR: backup_trigger_restore]
+        snap = self.env["backup.snapshot"].create({
+            "config_id": self.config_kopia.id,
+            "snapshot_id": "snap_rest",
+        })
+        wizard = self.env["backup.restore.wizard"].create({
+            "snapshot_id": snap.id,
+            "restore_target_path": "/var/lib/odoo/backups/restore_target"
+        })
+        res = wizard.action_restore()
+        self.assertEqual(res.get("res_model"), "backup.job")
+        job = self.env["backup.job"].browse(res.get("res_id"))
+        self.assertEqual(job.config_id, self.config_kopia)

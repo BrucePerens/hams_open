@@ -3,14 +3,15 @@
     <hr/>
     <p>This module implements the <strong>Best-in-Class Hybrid Architecture</strong> for system and database backups. It orchestrates <strong>Kopia</strong> for file/system backups and <strong>pgBackRest</strong> for PostgreSQL continuous WAL archiving.</p>
     <h2>1. Self-Healing Deployment</h2>
-    <p>Odoo expects the <code>kopia</code> and <code>pgbackrest</code> packages to be installed at the host OS layer. If an administrator fails to install Kopia during provisioning, the application will automatically perform a Just-In-Time (JIT) download of the static Kopia binary from GitHub, placing it safely into the Odoo datastore to guarantee operation.</p>
+    <p>Odoo expects the <code>kopia</code> and <code>pgbackrest</code> packages to be installed at the host OS layer. If an administrator fails to install Kopia during provisioning, the application will automatically perform a Just-In-Time (JIT) download of the static Kopia binary from GitHub, placing it safely into the Odoo datastore to guarantee operation. Documentation is automatically bootstrapped during module registration. [@ANCHOR: backup_doc_injection]</p>
     <h2>2. Configurations &amp; Orchestration</h2>
     <p>Navigate to <em>Backups &gt; Configurations</em>. You can define targets, storage backend credentials (S3/B2), and retention policies for both Kopia and pgBackRest. If using Kopia, enter your repository password here; it will be symmetrically encrypted at rest.</p>
     <p>You may also actively trigger backups or push new retention policies directly to the underlying storage engines via the action buttons in the configuration header.</p>
     <h2>2. Synchronization</h2>
     <p>An automated hourly cron job interrogates the underlying CLI tools (<code>kopia snapshot list</code> and <code>pgbackrest info</code>) to fetch the latest backup metadata and populate the Snapshots table. [@ANCHOR: UX_BACKUP_SYNC]</p>
     <h2>3. Restoration Assistance</h2>
-    <p>Because restoration is highly destructive, it must be performed by a DBA via the CLI. Navigate to any Snapshot record to view and copy the exact generated restoration command for that specific point in time.</p>
+    <p>Because restoration can be destructive, the system provides a controlled Restore Wizard. Navigate to any Snapshot record to trigger a restoration to a specific target path. [@ANCHOR: backup_trigger_restore]</p>
+    <p>Alternatively, navigate to any Snapshot record to view and copy the exact generated restoration command for that specific point in time.</p>
 
     <h2>4. Pager Duty Synergy &amp; Stale Backups</h2>
     <p>This module features native synergy with the <strong>Pager Duty</strong> SRE suite. If an underlying backup engine fails to execute, or if the system detects that a configuration hasn't produced a new successful snapshot in over 26 hours, it will automatically open a <em>Critical</em> incident, ensuring the on-call administrator is immediately paged.</p>

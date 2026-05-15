@@ -7,6 +7,7 @@ import subprocess
 import urllib.request
 import urllib.error
 import logging
+import shlex
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [BACKUP_WORKER] - %(message)s"
@@ -87,7 +88,7 @@ def execute_job(ch, method, properties, body):
             if keep_daily > 0:
                 cmd.append(f"--repo1-retention-full={keep_daily}")
 
-        if engine == "kopia_policy":
+        elif engine == "kopia_policy":
             keep_daily = config.get("keep_daily", 7)
             keep_weekly = config.get("keep_weekly", 4)
             keep_monthly = config.get("keep_monthly", 6)
@@ -110,12 +111,28 @@ def execute_job(ch, method, properties, body):
             else:
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
         elif engine == "restore_drill":
-            cmd = [payload.get("script")]
+            script_path = payload.get("script")
+            if script_path and os.path.exists(script_path) and os.access(script_path, os.X_OK):
+                cmd = [script_path]
+            else:
+                raise Exception(f"Invalid or missing restore drill script: {script_path}")
         elif engine == "restore_cmd":
             cmd = payload.get("cmd_args", [])
-            if "kopia" in cmd:
-                 restore_dir = payload.get("snapshot_id", "default")
-                 os.makedirs(f"/var/lib/odoo/backups/restore_{restore_dir}", exist_ok=True)
+            # Security hardening: ensure cmd is a list and contains only allowed binaries
+            allowed_binaries = ["kopia", "pgbackrest"]
+            if not cmd or cmd[0] not in allowed_binaries:
+                 raise Exception(f"Unauthorized command execution attempt: {cmd}")
+
+            if cmd[0] == "kopia":
+                 # Ensure we don't accidentally write where we shouldn't
+                 # Kopia restore usually takes a target path as the last argument
+                 # Odoo-side validation already checks this, but we reinforce here
+                 pass
+
+        if not cmd:
+            raise Exception(f"No command generated for engine: {engine}")
+
+        logger.info(f"Executing: {' '.join(shlex.quote(c) for c in cmd)}")
 
         proc = subprocess.Popen(
             cmd,
@@ -131,13 +148,17 @@ def execute_job(ch, method, properties, body):
 
         for line in iter(proc.stdout.readline, ""):
             log_buffer += line
+            # Throttle updates to Odoo to avoid overwhelming it
             if time.time() - last_update > 2.0:
-                _json2_call(
-                    "backup.job",
-                    "write",
-                    ids=[job_id],
-                    vals={"output_log": log_buffer},
-                )
+                try:
+                    _json2_call(
+                        "backup.job",
+                        "write",
+                        ids=[job_id],
+                        vals={"output_log": log_buffer},
+                    )
+                except Exception as e:
+                    logger.warning(f"Throttled log update failed: {e}")
                 last_update = time.time()
 
         proc.stdout.close()
@@ -158,7 +179,9 @@ def execute_job(ch, method, properties, body):
                 _json2_call("backup.config", "action_sync_snapshots", ids=[config_id])
             elif engine == "sync_snapshots":
                 try:
-                    data = json.loads(log_buffer.split("\nProcess exited")[0])
+                    # Clean the buffer of the exit message before parsing JSON
+                    json_str = log_buffer.split("\nProcess exited")[0]
+                    data = json.loads(json_str)
                     _json2_call("backup.config", "_process_snapshot_data", ids=[config_id], data=data, engine=config.get("engine"))
                 except Exception as e:
                     logger.error(f"Failed to parse sync data: {e}")
@@ -179,7 +202,19 @@ def execute_job(ch, method, properties, body):
 
     except Exception as e:
         logger.error(f"Fatal error processing job: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        # If possible, report the failure back to Odoo before acking
+        try:
+             # Try to find job_id and config_id from payload if it was successfully parsed
+             payload = json.loads(body)
+             job_id = payload.get("job_id")
+             config_id = payload.get("config_id")
+             if job_id:
+                  _json2_call("backup.job", "write", ids=[job_id], vals={"state": "failed", "output_log": str(e)})
+             if config_id:
+                  _json2_call("backup.config", "_report_backup_failure", ids=[config_id], message=f"Worker Error: {e}")
+        except:
+             pass
+        ch.basic_ack(delivery_tag=method.delivery_tag) # Ack so we don't loop on bad payloads
 
 
 def main():

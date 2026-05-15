@@ -7,7 +7,7 @@ import shutil
 import pika
 import odoo
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, AccessError
 from .utils import validate_backup_path
 
 from cryptography.fernet import Fernet
@@ -33,11 +33,12 @@ class BackupConfig(models.Model):
         help="Triggers a Pager Duty alert if a new snapshot is smaller than this.",
     )
 
-    kopia_password_crypt = fields.Char(string="Encrypted Kopia Password")
+    kopia_password_crypt = fields.Char(string="Encrypted Kopia Password", groups="backup_management.group_backup_admin")
     kopia_password = fields.Char(
         string="Kopia Password",
         compute="_compute_kopia_password",
         inverse="_inverse_kopia_password",
+        groups="backup_management.group_backup_admin"
     )
 
     storage_type = fields.Selection(
@@ -47,12 +48,13 @@ class BackupConfig(models.Model):
     )
     bucket_name = fields.Char(string="Bucket Name")
     endpoint_url = fields.Char(string="Endpoint URL")
-    access_key = fields.Char(string="Access Key")
-    secret_key_crypt = fields.Char(string="Encrypted Secret Key")
+    access_key = fields.Char(string="Access Key", groups="backup_management.group_backup_admin")
+    secret_key_crypt = fields.Char(string="Encrypted Secret Key", groups="backup_management.group_backup_admin")
     secret_key = fields.Char(
         string="Secret Key",
         compute="_compute_secret_key",
         inverse="_inverse_secret_key",
+        groups="backup_management.group_backup_admin"
     )
 
     keep_daily = fields.Integer(string="Keep Daily", default=7)
@@ -97,54 +99,36 @@ class BackupConfig(models.Model):
             return Fernet(key.encode("utf-8"))
         return None
 
+    def _crypt_field(self, value, decrypt=False):
+        f = self._get_fernet()
+        if not f or not value:
+            return False
+        try:
+            if decrypt:
+                return f.decrypt(value.encode("utf-8")).decode("utf-8")
+            else:
+                return f.encrypt(value.encode("utf-8")).decode("utf-8")
+        except Exception as e:
+            logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
+            return "***ERROR***" if decrypt else False
+
     @api.depends("kopia_password_crypt")
     def _compute_kopia_password(self):
-        f = self._get_fernet()
         for rec in self:
-            if rec.kopia_password_crypt and f:
-                try:
-                    rec.kopia_password = f.decrypt(
-                        rec.kopia_password_crypt.encode("utf-8")
-                    ).decode("utf-8")
-                except Exception as e:
-                    logging.getLogger(__name__).warning("An error occurred: %s", e)
-            else:
-                rec.kopia_password = False
+            rec.kopia_password = rec._crypt_field(rec.kopia_password_crypt, decrypt=True)
 
     def _inverse_kopia_password(self):
-        f = self._get_fernet()
         for rec in self:
-            if rec.kopia_password and f:
-                rec.kopia_password_crypt = f.encrypt(
-                    rec.kopia_password.encode("utf-8")
-                ).decode("utf-8")
-            else:
-                rec.kopia_password_crypt = False
+            rec.kopia_password_crypt = rec._crypt_field(rec.kopia_password)
 
     @api.depends("secret_key_crypt")
     def _compute_secret_key(self):
-        f = self._get_fernet()
         for rec in self:
-            if rec.secret_key_crypt and f:
-                try:
-                    rec.secret_key = f.decrypt(
-                        rec.secret_key_crypt.encode("utf-8")
-                    ).decode("utf-8")
-                except Exception as e:
-                    logging.getLogger(__name__).warning("An error occurred: %s", e)
-                    rec.secret_key = "***DECRYPT_FAILED***"
-            else:
-                rec.secret_key = False
+            rec.secret_key = rec._crypt_field(rec.secret_key_crypt, decrypt=True)
 
     def _inverse_secret_key(self):
-        f = self._get_fernet()
         for rec in self:
-            if rec.secret_key and f:
-                rec.secret_key_crypt = f.encrypt(rec.secret_key.encode("utf-8")).decode(
-                    "utf-8"
-                )
-            else:
-                rec.secret_key_crypt = False
+            rec.secret_key_crypt = rec._crypt_field(rec.secret_key)
 
     @api.constrains("target_path", "restore_drill_script", "engine", "storage_type")
     def _check_security_paths(self):
@@ -192,6 +176,9 @@ class BackupConfig(models.Model):
         """
         Internal helper to offload tasks to the RabbitMQ Bastion.
         """
+        if not self.env.user.has_group("backup_management.group_backup_admin"):
+             raise AccessError(_("Only Backup Administrators can trigger backup operations."))
+
         jobs = self.env["backup.job"]
         created_jobs = []
 
@@ -413,3 +400,40 @@ class BackupConfig(models.Model):
                 )
                 if delta_drill > (7 * 24 * 60 * 60):  # 7 Days
                     conf._execute_restore_drill()
+
+    def _register_hook(self):
+        # [@ANCHOR: backup_doc_injection]
+        # Verified by [@ANCHOR: test_backup_docs]
+        if self.env.registry.ready:
+            try:
+                # Soft-dependency documentation bootstrap (ADR-0055)
+                # Supports both knowledge.foundations and manual_library
+                doc_model = False
+                if "knowledge.article" in self.env:
+                    doc_model = "knowledge.article"
+                elif "manual.article" in self.env:
+                    doc_model = "manual.article"
+
+                if doc_model:
+                    # check if already exists
+                    existing = self.env[doc_model].search([('name', '=', 'Backup Management')], limit=1)
+                    if not existing:
+                         # Use facility service to bypass SUDO and Zero-Sudo constraints
+                         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                             "zero_sudo.odoo_facility_service_internal"
+                         )
+                         doc_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'documentation.html')
+                         if os.path.exists(doc_path):
+                             with open(doc_path, 'r') as f:
+                                 content = f.read()
+
+                             vals = {
+                                 'name': 'Backup Management',
+                                 'body': content,
+                             }
+                             if doc_model == 'knowledge.article':
+                                 vals['category'] = 'workspace'
+
+                             self.env[doc_model].with_user(svc_uid).create(vals)
+            except Exception as e:
+                logging.getLogger(__name__).warning("Failed to bootstrap backup documentation: %s", e)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 
 
 class BackupSnapshot(models.Model):
@@ -24,6 +24,7 @@ class BackupSnapshot(models.Model):
         "Snapshot IDs must be unique per configuration!",
     )
 
+    @api.depends("snapshot_id", "config_id.engine", "config_id.target_path")
     def _compute_restore_command(self):
         # [@ANCHOR: backup_restore_command]
         # Verified by [@ANCHOR: test_restore_command_computation]

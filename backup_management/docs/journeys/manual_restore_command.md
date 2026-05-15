@@ -1,8 +1,8 @@
-# Journey: Manual Restore Command Generation
+# Manual Restore Command
 
-This journey describes how an operator uses Odoo to generate the correct CLI command for a manual restore.
+While automated restores are supported, the system provides pre-generated CLI commands for emergency manual use.
 
-1. **Identify Snapshot**: The operator navigates to **Ham Admin > Backups > Snapshots** and finds the desired point-in-time recovery.
-2. **View Details**: They open the snapshot record.
-3. **Copy Command**: The "Restore Command" field `[@ANCHOR: backup_restore_command]` contains the pre-formatted CLI command (e.g., `kopia restore <snapshot_id> <target>`).
-4. **Execution**: The operator copies this command and executes it on the target server's terminal for maximum safety and control.
+1. **Navigate**: Go to a specific Snapshot record.
+2. **View Command**: The "Restore Command" field `[@ANCHOR: backup_restore_command]` contains the pre-formatted CLI command (e.g., `kopia restore <snapshot_id> <target>`).
+3. **Execution**: The SRE can copy this command and execute it directly on the database host.
+4. **Automated Restore**: Users can also use the Restore Wizard to trigger an automated restoration. `[@ANCHOR: backup_trigger_restore]`

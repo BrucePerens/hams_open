@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 import json
 import unittest
+import sys
+import os
 from unittest.mock import MagicMock, patch
 
-import backup_worker
-from odoo.tests.common import tagged
+# Manifest ensures pika is present
+import pika
 
-@tagged("standard", "post_install", "-at_install")
+# Add current dir to path to import backup_worker
+sys.path.append(os.path.dirname(__file__))
+import backup_worker
+
 class TestBackupWorker(unittest.TestCase):
     @patch("backup_worker._json2_call")
     @patch("backup_worker.subprocess.Popen")
@@ -158,14 +163,14 @@ class TestBackupWorker(unittest.TestCase):
             "job_id": 5,
             "config_id": 14,
             "engine": "restore_cmd",
-            "cmd_args": ["kopia", "restore", "snap1", "/var/lib/odoo/restore"],
+            "cmd_args": ["kopia", "restore", "snap1", "/var/lib/odoo/backups/restore_1"],
             "snapshot_id": "snap1"
         })
 
         backup_worker.execute_job(mock_ch, mock_method, None, body)
 
         args = mock_popen.call_args[0][0]
-        self.assertEqual(args, ["kopia", "restore", "snap1", "/var/lib/odoo/restore"])
+        self.assertEqual(args, ["kopia", "restore", "snap1", "/var/lib/odoo/backups/restore_1"])
 
 if __name__ == "__main__":
     unittest.main()
