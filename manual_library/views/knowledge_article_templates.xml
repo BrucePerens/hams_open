@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="sidebar_article_recursive" name="Sidebar Recursive"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="sidebar_article_recursive" name="Sidebar Recursive"> <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
         <li class="nav-item">
             <a t-attf-href="#{nav_article.website_url}"
                t-attf-class="nav-link #{'active fw-bold' if (article and article.id == nav_article.id) else 'text-dark'}"
@@ -21,7 +21,7 @@
         </li>
     </template>
 
-    <template id="manual_sidebar" name="Manual Sidebar Component"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="manual_sidebar" name="Manual Sidebar Component"> <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
         <form action="/manual/search" method="GET" class="mb-4">
             <div class="input-group">
                 <input type="text" name="search" class="form-control" placeholder="Search manuals..." t-att-value="search_term" aria-label="Search manuals"/>
@@ -66,7 +66,7 @@
         </t>
     </template>
 
-    <template id="article_template" name="Manual Article"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="article_template" name="Manual Article"> <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
         <t t-call="website.layout">
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container-fluid pt-4 pb-5">
@@ -132,7 +132,7 @@
         </t>
     </template>
 
-    <template id="search_results_template" name="Manual Search Results"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="search_results_template" name="Manual Search Results"> <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
         <t t-call="website.layout">
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container-fluid pt-4 pb-5">

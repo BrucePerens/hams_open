@@ -53,6 +53,7 @@ class ManualLibraryController(http.Controller):
         shared_articles = root_articles.filtered(
             lambda a: a.internal_permission == "none"
             and request.env.user in a.member_ids
+            and a not in private_articles
         )
 
         # 3. If no specific article is requested, default to the first available root article
@@ -86,7 +87,7 @@ class ManualLibraryController(http.Controller):
                 "shared_articles": shared_articles,
                 "private_articles": private_articles,
                 "search_term": "",
-                "is_internal_user": request.env.user.has_group("base.group_portal"),
+                "is_internal_user": request.env.user.has_group("base.group_user"),
             },
         )
 
@@ -120,6 +121,7 @@ class ManualLibraryController(http.Controller):
         shared_articles = root_articles.filtered(
             lambda a: a.internal_permission == "none"
             and request.env.user in a.member_ids
+            and a not in private_articles
         )
 
         return request.render(
@@ -130,7 +132,7 @@ class ManualLibraryController(http.Controller):
                 "workspace_articles": workspace_articles,
                 "shared_articles": shared_articles,
                 "private_articles": private_articles,
-                "is_internal_user": request.env.user.has_group("base.group_portal"),
+                "is_internal_user": request.env.user.has_group("base.group_user"),
             },
         )
 

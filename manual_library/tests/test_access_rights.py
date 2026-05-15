@@ -184,6 +184,25 @@ class TestManualAccessRights(TransactionCase):
         with self.assertRaises(AccessError):
             _ = my_private_article.with_user(self.other_internal_user).name
 
+    def test_08_owner_unpublished_visibility(self):
+        """Owners must be able to see their own articles even if they are NOT published."""
+        unpublished_owned = self.env["knowledge.article"].create({
+            "name": "My Secret Draft",
+            "is_published": False,
+        })
+        self.env.cr.execute(
+            "UPDATE knowledge_article SET create_uid = %s WHERE id = %s",
+            (self.internal_user.id, unpublished_owned.id),
+        )
+        unpublished_owned.invalidate_recordset()
+
+        # Should be readable by owner
+        try:
+            name = unpublished_owned.with_user(self.internal_user).name
+            self.assertEqual(name, "My Secret Draft")
+        except AccessError:
+            self.fail("Owner must be able to see their own unpublished articles.")
+
     def test_07_shared_article_access(self):
         """Users explicitly added to member_ids should be able to access private shared articles."""
         shared_article = self.env["knowledge.article"].create(

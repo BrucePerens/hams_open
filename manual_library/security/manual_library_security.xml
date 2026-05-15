@@ -44,7 +44,7 @@
         <record id="knowledge_article_internal_read_rule" model="ir.rule">
             <field name="name">Knowledge Article Internal Read</field>
             <field name="model_id" ref="model_knowledge_article"/>
-            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="groups" eval="[(4, ref('base.group_portal')), (4, ref('base.group_user'))]"/>
             <field name="domain_force">['|', '|', ('internal_permission', '!=', 'none'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
