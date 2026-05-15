@@ -72,6 +72,7 @@ class RealTransactionCase(HttpCase):
 
         # 3. Instrument ORM Creation
         # [@ANCHOR: orm_instrumentation]
+        # Verified by [@ANCHOR: test_orm_instrumentation]
         def tracking_create(model_self, *args, **kwargs):
             records = _original_create(model_self, *args, **kwargs)
             if records:
@@ -92,6 +93,7 @@ class RealTransactionCase(HttpCase):
 
         # 2. Automated ORM Cleanup (Multiple passes for Foreign Key cascades)
         # [@ANCHOR: automated_cleanup]
+        # Verified by [@ANCHOR: test_automated_cleanup]
         for attempt in range(3):
             pending_deletes = False
             for model_name, ids in list(self._tracked_records.items()):
@@ -127,6 +129,7 @@ class RealTransactionCase(HttpCase):
 
         # 3. Verify No Leaks (Ignoring noisy system logging/chatter tables)
         # [@ANCHOR: leak_verification]
+        # Verified by [@ANCHOR: test_leak_verification]
         leaks = []
         noisy_tables = set()
         if "test_real_transaction.noisy_table" in self.env:

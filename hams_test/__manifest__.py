@@ -12,9 +12,13 @@
         "data/noisy_table_data.xml",
         "views/noisy_table_views.xml",
     ],
+    # [@ANCHOR: documentation_bootstrap]
+    # [@ANCHOR: documentation_injection]
+    # Verified by [@ANCHOR: test_documentation_bootstrap]
+    # Verified by [@ANCHOR: test_documentation_injection]
     "knowledge_docs": [
         {
-            "name": "Testing Infrastructure Guide",
+            "name": "Real Transaction Testing Facility Guide",
             "path": "data/documentation.html",
             "icon": "🧪",
             "category": "workspace"

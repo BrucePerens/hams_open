@@ -13,6 +13,7 @@
         </record>
 
         <!-- Service Account for Documentation and Background Tasks -->
+        <!-- [@ANCHOR: user_real_transaction_service] -->
         <record id="user_real_transaction_service" model="res.users">
             <field name="name">Real Transaction Service Account</field>
             <field name="login">user_real_transaction_service</field>

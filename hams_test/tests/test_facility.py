@@ -10,6 +10,7 @@ class TestRealTransactionFacility(RealTransactionCase):
     # Tests [@ANCHOR: orm_instrumentation]
     # Tests [@ANCHOR: automated_cleanup]
     # Tests [@ANCHOR: leak_verification]
+    # Tests [@ANCHOR: user_real_transaction_service]
 
     def test_00_cursor_hijacking_and_snapshot(self):
         # [@ANCHOR: test_cursor_hijacking]

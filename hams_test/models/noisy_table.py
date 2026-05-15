@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 
 class NoisyTable(models.Model):
     _name = 'test_real_transaction.noisy_table'
