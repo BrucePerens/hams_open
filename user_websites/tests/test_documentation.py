@@ -21,12 +21,9 @@ class TestDocumentation(odoo.tests.common.HttpCase):
         )
 
     def test_01_documentation_hook_file_read(self):
-        # [@ANCHOR: test_01_documentation_hook_file_read]
-        # Tests [@ANCHOR: documentation_bootstrap]
         """
-        Explicitly verify that the documentation bootstrap mechanism (via _register_hook
-        and post_init_hook) correctly utilizes file_open to read the HTML
-        documentation from the disk.
+        Explicitly verify that the post_init_hook correctly utilizes file_open
+        to read the HTML documentation from the disk.
         """
         if "knowledge.article" not in self.env:
             raise unittest.SkipTest(

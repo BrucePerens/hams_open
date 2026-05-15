@@ -121,7 +121,7 @@ class ResUsers(models.Model):
         help="Maximum number of pages this user can create. If 0, the global limit is used.",
     )
 
-    privacy_show_in_directory = fields.Boolean(
+    privacy_show_in_directory = fields.Boolean(index=True,
         string="Show in Public Directory",
         help="If checked, a link to this user's website will appear in the public community directory.",
         default=False,
@@ -159,15 +159,6 @@ class ResUsers(models.Model):
     appeal_ids = fields.One2many(
         "content.violation.appeal", "user_id", string="Moderation Appeals"
     )
-
-    @api.model
-    def _register_hook(self):
-        # [@ANCHOR: documentation_bootstrap]
-        # Verified by [@ANCHOR: test_01_documentation_hook_file_read]
-        # ADR-0055: Soft-dependency documentation bootstrap
-        if hasattr(self.env["ir.module.module"], "_bootstrap_knowledge_docs"):
-            self.env["ir.module.module"]._bootstrap_knowledge_docs()
-        return super()._register_hook()
 
     # --- Odoo 19 Constraint Syntax ---
     _website_slug_unique = models.Constraint(
