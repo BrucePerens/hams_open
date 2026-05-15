@@ -12,8 +12,9 @@ if not hasattr(shutil, "_orig_which"):
     )
 
 from odoo.tests.common import tagged
-from odoo.addons.test_real_transaction.tests.real_transaction import RealTransactionCase
+from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
 from unittest.mock import patch
+from odoo.exceptions import UserError
 
 
 @tagged("post_install", "-at_install")
@@ -154,7 +155,6 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_08e_security_path_validation(self):
         # Tests path validation added for security
-        from odoo.exceptions import UserError  # noqa: E402
         with self.assertRaises(UserError):
             self.config_kopia.write({"target_path": "/etc/shadow"})
             self.env.flush_all()

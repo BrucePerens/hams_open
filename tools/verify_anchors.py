@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import re
+import sys
+import logging
 
 def get_module(path):
     abs_path = os.path.abspath(path)
@@ -319,7 +321,6 @@ def _report_missing_ux_docs(code_anchors, user_manual_anchors):
 
 def main():
     print("[*] Scanning documentation and codebase for Semantic Anchors...")
-    import sys  # noqa: E402
 
     args = sys.argv[1:]
     if not args:
@@ -382,8 +383,6 @@ def main():
                                 continue
                             user_manual_anchors.add(f"{mod}:{anchor_name}")
                 except Exception as e:
-                    import logging  # noqa: E402
-
                     logging.getLogger(__name__).warning("An error occurred: %s", e)
                     pass
 

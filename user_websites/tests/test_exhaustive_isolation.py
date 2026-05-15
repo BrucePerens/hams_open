@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 import odoo.tests
+import logging
 from odoo.exceptions import AccessError
+
+_logger = logging.getLogger(__name__)
 
 
 @odoo.tests.common.tagged("post_install", "-at_install")
@@ -217,12 +220,10 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
                 "CRITICAL SSTI VULNERABILITY: Malicious QWeb evaluated successfully and leaked database records!",
             )
         except Exception as e:
-            import logging  # noqa: E402
-
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            _logger.warning("An error occurred: %s", e)
             # If the rendering engine crashes entirely due to the illegal syntax (e.g. QWebException),
             # that is also considered a successful defense against extraction.
-            logging.getLogger(__name__).info('QWeb rendering exception caught as expected.')
+            _logger.info('QWeb rendering exception caught as expected.')
 
     def test_05_blog_post_cross_tenant_mutation(self):
         """

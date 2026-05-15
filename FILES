@@ -427,7 +427,6 @@ tools/auto_inject_view_audits.py
 tools/binary_manifest.json
 tools/build_relay_packages.py
 tools/check_bot_compliance.py
-tools/clean_noqa.py
 tools/copy_to_hams_private.sh
 tools/create_task_workspace.py
 tools/flush_pycache.sh

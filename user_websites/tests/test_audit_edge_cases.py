@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
+from unittest.mock import patch, MagicMock
 
 
 @odoo.tests.common.tagged("post_install", "-at_install")
@@ -159,8 +160,6 @@ class TestAuditEdgeCases(odoo.tests.common.TransactionCase):
         self.env["res.users"]._get_user_id_by_slug("cacheuser")
 
         # 2. Verify 0 queries on hit
-        from unittest.mock import patch  # noqa: E402
-
         with patch.object(
             self.env.cr, "execute", wraps=self.env.cr.execute
         ) as mock_execute:
@@ -198,8 +197,6 @@ class TestAuditEdgeCases(odoo.tests.common.TransactionCase):
         self.env["user.websites.group"]._get_group_id_by_slug("cachegroup")
 
         # 2. Verify 0 queries on hit
-        from unittest.mock import patch  # noqa: E402
-
         with patch.object(
             self.env.cr, "execute", wraps=self.env.cr.execute
         ) as mock_execute:
@@ -231,8 +228,6 @@ class TestAuditEdgeCases(odoo.tests.common.TransactionCase):
         Then it MUST update the Postgres records, delete the processed keys,
         and call _trigger() to schedule the next batch (ADR-0022).
         """
-        from unittest.mock import patch, MagicMock  # noqa: E402
-
         page = self.env["website.page"].create(
             {
                 "url": f"/{self.test_user.website_slug}/redis-flush-test",
@@ -302,8 +297,6 @@ class TestAuditEdgeCases(odoo.tests.common.TransactionCase):
         self.env["website.page"]._get_page_id_by_url(page.url, website_id)
 
         # 2. Verify 0 queries on hit
-        from unittest.mock import patch  # noqa: E402
-
         with patch.object(
             self.env.cr, "execute", wraps=self.env.cr.execute
         ) as mock_execute:
@@ -312,8 +305,6 @@ class TestAuditEdgeCases(odoo.tests.common.TransactionCase):
                 self.assertNotIn("website_page", call[0][0])
 
         # 3. Trigger Invalidation (Verify the targeted NOTIFY logic doesn't crash)
-        from unittest.mock import patch  # noqa: E402
-
         with patch.object(self.env.cr, "execute") as mock_execute:
             page.write({"website_published": False})
 

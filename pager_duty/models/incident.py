@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import datetime
-from odoo import models, fields, api, _
 import os
 import logging
+import redis
+from odoo import models, fields, api, _
 
 _logger = logging.getLogger(__name__)
-import redis  # noqa: E402
 
 redis_host = os.getenv("REDIS_HOST") or "redis"
 redis_port = int(os.getenv("REDIS_PORT") or "6379")

@@ -4,6 +4,7 @@ import odoo.tests
 import secrets
 import os
 import logging
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -74,8 +75,6 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
         """Helper method to isolate ORM operations from the AST loop depth counter."""
         _logger.info(f"[*] === Starting Simulation Step {i + 1} / {iterations} ===")
         user = secrets.choice(self.users)
-
-        import time  # noqa: E402
 
         def track(op_name, func, *args, **kwargs):
             start = time.time()

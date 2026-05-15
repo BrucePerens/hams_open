@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import unittest
-import sys
-import os
 from unittest.mock import AsyncMock
-
 from odoo.tests.common import tagged
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import cache_manager  # noqa: E402
+import cache_manager
 
 
 @tagged("standard", "post_install", "-at_install")

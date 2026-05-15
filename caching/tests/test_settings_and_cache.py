@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import HttpCase, tagged
+from lxml import etree
 
 @tagged("post_install", "-at_install")
 class TestSettingsAndCache(HttpCase):
@@ -68,7 +69,6 @@ class TestSettingsAndCache(HttpCase):
         # [@ANCHOR: test_xpath_rendering_caching_settings]
         # Tests [@ANCHOR: xpath_rendering_caching_settings]
         """Verify the Caching settings are injected into the website configuration view."""
-        from lxml import etree  # noqa: E402
 
         view = self.env.ref("website.res_config_settings_view_form")
         arch = view.with_context(lang=None)._get_combined_arch()

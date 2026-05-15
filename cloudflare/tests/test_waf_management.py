@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from unittest.mock import patch, MagicMock  # noqa: F401
+from unittest.mock import patch
 from odoo.tests.common import TransactionCase, tagged
 from odoo.exceptions import UserError
 

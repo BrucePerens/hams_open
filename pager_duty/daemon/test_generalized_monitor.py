@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-import unittest
-import sys
-import os
 import datetime
+import json
+import os
+import socket
+import time
+import unittest
 from unittest.mock import patch, MagicMock
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import generalized_monitor  # noqa: E402
+import generalized_monitor
 
 
 class TestMonitorExhaustive(unittest.TestCase):
@@ -122,8 +123,6 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertTrue(success)
 
         # Test Total Failure
-        import socket  # noqa: E402
-
         mock_gethost.side_effect = socket.gaierror("NXDOMAIN")
         success, msg = generalized_monitor.execute_check(
             {"type": "dns", "target": "example.com"}
@@ -495,63 +494,62 @@ class TestMonitorExhaustive(unittest.TestCase):
         success, msg = generalized_monitor.execute_check(
             {"type": "load", "critical": 1}
         )
-        self.assertFalse(success)
+        self.assertFalse(success, msg)
         self.assertIn("exceeds", msg)
 
         success, msg = generalized_monitor.execute_check(
             {"type": "load", "critical": 5}
         )
-        self.assertTrue(success)
+        self.assertTrue(success, msg)
 
         # FTP
-        with patch("ftplib.FTP") as mock_ftp:
+        with patch("generalized_monitor.ftplib.FTP") as mock_ftp:
             mock_inst = MagicMock()
             mock_ftp.return_value.__enter__.return_value = mock_inst
             success, msg = generalized_monitor.execute_check(
                 {"type": "ftp", "target": "odoo"}
             )
-            self.assertTrue(success)
+            self.assertTrue(success, msg)
             mock_inst.login.assert_called()
 
         # IMAP
-        with patch("imaplib.IMAP4") as mock_imap:
+        with patch("generalized_monitor.imaplib.IMAP4") as mock_imap:
             mock_inst = MagicMock()
             mock_imap.return_value = mock_inst
             success, msg = generalized_monitor.execute_check(
                 {"type": "imap", "target": "odoo"}
             )
-            self.assertTrue(success)
+            self.assertTrue(success, msg)
             mock_inst.logout.assert_called()
 
         # POP3
-        with patch("poplib.POP3") as mock_pop3:
+        with patch("generalized_monitor.poplib.POP3") as mock_pop3:
             mock_inst = MagicMock()
             mock_pop3.return_value = mock_inst
             success, msg = generalized_monitor.execute_check(
                 {"type": "pop3", "target": "odoo"}
             )
-            self.assertTrue(success)
+            self.assertTrue(success, msg)
             mock_inst.quit.assert_called()
 
         # MySQL / MariaDB
-        with patch.dict("sys.modules", {"pymysql": MagicMock()}):
-            import pymysql  # noqa: E402
-
+        with patch("generalized_monitor.pymysql") as mock_pymysql:
             mock_conn = MagicMock()
-            pymysql.connect.return_value = mock_conn
+            mock_pymysql.connect.return_value = mock_conn
             mock_cur = MagicMock()
             mock_conn.cursor.return_value.__enter__.return_value = mock_cur
             mock_cur.fetchone.return_value = [1]
             success, msg = generalized_monitor.execute_check(
                 {"type": "mysql", "target": "odoo"}
             )
-            self.assertTrue(success)
+            self.assertTrue(success, msg)
             mock_cur.execute.assert_called_with("SELECT 1;")
 
         # LDAP (Fallback)
-        with patch("ldap3.Connection") as mock_ldap_conn:
+        with patch("generalized_monitor.ldap3") as mock_ldap3:
             mock_inst = MagicMock()
-            mock_ldap_conn.return_value = mock_inst
+            mock_ldap3.Server.return_value = MagicMock()
+            mock_ldap3.Connection.return_value = mock_inst
             success, msg = generalized_monitor.execute_check(
                 {"type": "ldap", "target": "odoo"}
             )
@@ -559,20 +557,19 @@ class TestMonitorExhaustive(unittest.TestCase):
             mock_inst.unbind.assert_called()
 
         # NTP (Fallback)
-        with patch("ntplib.NTPClient") as mock_ntp:
+        with patch("generalized_monitor.ntplib") as mock_ntplib:
             mock_inst = MagicMock()
-            mock_ntp.return_value = mock_inst
+            mock_ntplib.NTPClient.return_value = mock_inst
             mock_inst.request.return_value.offset = 0.1
             success, msg = generalized_monitor.execute_check(
                 {"type": "ntp", "target": "odoo"}
             )
-            self.assertTrue(success)
+            self.assertTrue(success, msg)
 
         # SNMP
         with patch("generalized_monitor.shutil.which", return_value="/bin/mock"):
             with patch("generalized_monitor.subprocess.run") as mock_run_snmp:
-                mock_run_snmp.return_value.returncode = 0
-                mock_run_snmp.return_value.stdout = "Timeout"
+                mock_run_snmp.return_value = MagicMock(returncode=0, stdout="Timeout", stderr="")
                 success, msg = generalized_monitor.execute_check(
                     {
                         "type": "snmp",
@@ -581,9 +578,9 @@ class TestMonitorExhaustive(unittest.TestCase):
                         "expect": "OK",
                     }
                 )
-                self.assertFalse(success)
+                self.assertFalse(success, msg)
 
-                mock_run_snmp.return_value.stdout = "OK"
+                mock_run_snmp.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
                 success, msg = generalized_monitor.execute_check(
                     {
                         "type": "snmp",
@@ -592,7 +589,7 @@ class TestMonitorExhaustive(unittest.TestCase):
                         "expect": "OK",
                     }
                 )
-                self.assertTrue(success)
+                self.assertTrue(success, msg)
 
     @patch("generalized_monitor.os.path.exists")
     @patch("generalized_monitor.os.path.getmtime")
@@ -600,9 +597,6 @@ class TestMonitorExhaustive(unittest.TestCase):
     def test_15_synthetic_spool_reads(self, mock_open, mock_mtime, mock_exists):
         # Tests [@ANCHOR: daemon_main_loop]
         """Verify generalized_monitor correctly reads the airgapped synthetic spool JSON."""
-        import json  # noqa: E402
-        import time  # noqa: E402
-
         mock_exists.return_value = True
         mock_mtime.return_value = time.time() - 10  # Fresh
 

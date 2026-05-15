@@ -2,6 +2,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 import os
+from ..utils.cloudflare_api import delete_cfd_tunnel, list_cfd_tunnels
 
 
 class CloudflareTunnel(models.Model):
@@ -29,7 +30,6 @@ class CloudflareTunnel(models.Model):
             if not token or not account_id:
                 raise UserError(_("Missing Cloudflare API Token or Account ID for the website."))
 
-            from ..utils.cloudflare_api import delete_cfd_tunnel  # noqa: E402
 
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
@@ -56,8 +56,6 @@ class CloudflareTunnel(models.Model):
 
             if not token or not account_id:
                 continue
-
-            from ..utils.cloudflare_api import list_cfd_tunnels  # noqa: E402
 
             tunnels = list_cfd_tunnels(account_id, token)
             for t in tunnels:

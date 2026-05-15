@@ -7,7 +7,11 @@ import xml.etree.ElementTree as ET
 import json
 import ast
 import difflib
-
+import tempfile
+import importlib
+import urllib.parse
+import shutil
+import check_burn_list
 
 def _cluster_indices(indices, max_gap):
     """
@@ -33,8 +37,6 @@ def lint_file_content(filepath, content):
     post_errors = []
     warnings = []
     ext = os.path.splitext(filepath)[1].lower()
-
-    import tempfile
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_filepath = os.path.join(tmpdir, filepath)
@@ -79,12 +81,8 @@ def lint_file_content(filepath, content):
 
         # 5. check_burn_list
         if ext in (".py", ".xml", ".js", ".csv"):
-            linter_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check_burn_list.py")
-            if os.path.exists(linter_path):
-                sys.path.insert(0, os.path.dirname(linter_path))
+            if check_burn_list:
                 try:
-                    import check_burn_list
-                    import importlib
                     importlib.reload(check_burn_list)  # Ensure clean state
                     check_burn_list.FOUND_TEST_CONTENTS = {}
                     check_burn_list.REQUIRE_TEST_VERIFICATION = []
@@ -96,8 +94,6 @@ def lint_file_content(filepath, content):
                         warnings.append(f"[WARN] check_burn_list.py warning: {w.replace(tmp_filepath, filepath)}")
                 except Exception as e:
                     warnings.append(f"[WARN] Failed to execute custom linter: {e}")
-                finally:
-                    sys.path.pop(0)
 
     return post_errors, warnings
 
@@ -196,12 +192,12 @@ def check_ai_foibles(payload, filepath=""):
             pass
 
     foibles = [
-        r"#" + r"\s*\.\.\.\s*rest of",
-        r"//" + r"\s*\.\.\.\s*rest of",
-        r"<!" + r"--\s*\.\.\.\s*rest of",
-        r"#" + r"\s*Code unchanged",
-        r"//" + r"\s*Code unchanged",
-        r"#" + r"\s*\.\.\.\s*existing code\s*\.\.\.",
+        r"#\s*\.\.\.\s*rest of",
+        r"//\s*\.\.\.\s*rest of",
+        r"<!--\s*\.\.\.\s*rest of",
+        r"#\s*Code unchanged",
+        r"//\s*Code unchanged",
+        r"#\s*\.\.\.\s*existing code\s*\.\.\.",
     ]
     for f in foibles:
         if re.search(f, text_to_check, re.IGNORECASE):
@@ -345,8 +341,6 @@ def smart_replace(original_text, start_idx, end_idx, replace_text, filepath=""):
 
         if filepath.endswith(".py"):
             try:
-                import ast
-
                 ast.parse(new_text)
                 return new_text
             except SyntaxError:
@@ -618,7 +612,7 @@ def fuzzy_markdown_replace(original_text, search_text, replace_text, filepath=""
             best_ratio = ratio
             best_indices = [i]
         elif ratio == best_ratio and ratio > 0:
-            best_indices.append(i)
+             best_indices.append(i)
 
     if best_ratio > 0.90:
         clusters = _cluster_indices(best_indices, search_len)
@@ -921,13 +915,20 @@ def extract_parcel(raw_text):
         if terminator in payload:
             payload = payload.split(terminator)[0]
 
-        import urllib.parse
-
         payload = urllib.parse.unquote(payload)
 
-        if filepath.endswith((".py", ".sh", ".conf")):
+        if filepath.endswith((".py", ".sh", ".conf", ".yaml", ".json", ".xml", ".csv", ".md")):
+            # 1. Fix standard or escaped markdown links wrapping URLs: https://a.com or \"https://a.com"\
             payload = re.sub(
-                r"(?:https?://)?\[[^\]]*\]\((https?://[^)]+)\)", r"\1", payload
+                r'\\?\[\s*(["\']?)\s*(https?://[^\]"\'\s]+)\s*\1\s*\\?\]\s*\\?\(\s*(https?://[^)\s]+)\s*\\?\)',
+                r'\1\2\1',
+                payload
+            )
+            # 2. Fix the https://a.com mangling
+            payload = re.sub(
+                r"(https?://)?\[([^\]]+)\]\([^)]*https?://[^)]+\)",
+                lambda m: (m.group(1) or "") + m.group(2),
+                payload
             )
 
         try:
@@ -963,8 +964,6 @@ def extract_parcel(raw_text):
             op_text = "operation" if count == 1 else "operations"
             print(f"✅ Extracted: {fp} ({count} {op_text})")
 
-    import shutil
-
     failed_files = []
     shortened_files = []
     python_files_changed = False
@@ -984,7 +983,7 @@ def extract_parcel(raw_text):
 
         target_dir = os.path.dirname(filepath)
         if target_dir:
-            os.makedirs(target_dir, exist_ok=True)
+             os.makedirs(target_dir, exist_ok=True)
 
         if os.path.exists(filepath):
             try:
@@ -1032,7 +1031,7 @@ def extract_parcel(raw_text):
                     if not task["new_filepath"]:
                         raise ValueError("Rename requires 'New-Path: <target>'")
                     if not os.path.exists(filepath):
-                        raise FileNotFoundError(
+                         raise FileNotFoundError(
                             f"Cannot rename missing file: {filepath}"
                         )
                     renamed_to = task["new_filepath"]
@@ -1093,11 +1092,11 @@ def extract_parcel(raw_text):
                                 )
                             if new_text is None:
                                 new_text = whitespace_agnostic_replace(
-                                    current_text, search_text, replace_text, filepath
+                                 current_text, search_text, replace_text, filepath
                                 )
-                        elif filepath.endswith(".md"):
-                            new_text = fuzzy_line_replace(
-                                current_text, search_text, replace_text, filepath
+                            elif filepath.endswith(".md"):
+                                new_text = fuzzy_line_replace(
+                                 current_text, search_text, replace_text, filepath
                             )
                             if new_text is None:
                                 new_text = semantic_markdown_replace(
@@ -1105,10 +1104,10 @@ def extract_parcel(raw_text):
                                 )
                             if new_text is None:
                                 new_text = boundary_markdown_replace(
-                                    current_text, search_text, replace_text, filepath
+                                     current_text, search_text, replace_text, filepath
                                 )
                             if new_text is None:
-                                new_text = fuzzy_markdown_replace(
+                               new_text = fuzzy_markdown_replace(
                                     current_text, search_text, replace_text, filepath
                                 )
                             if new_text is None:
@@ -1117,11 +1116,11 @@ def extract_parcel(raw_text):
                                 )
                         elif filepath.endswith(".xml"):
                             new_text = fuzzy_line_replace(
-                                current_text, search_text, replace_text, filepath
+                                 current_text, search_text, replace_text, filepath
                             )
                             if new_text is None:
                                 new_text = semantic_xml_replace(
-                                    current_text, search_text, replace_text, filepath
+                                     current_text, search_text, replace_text, filepath
                                 )
                             if new_text is None:
                                 new_text = whitespace_agnostic_replace(
@@ -1130,7 +1129,7 @@ def extract_parcel(raw_text):
                         else:
                             new_text = fuzzy_line_replace(
                                 current_text, search_text, replace_text, filepath
-                            )
+                             )
                             if new_text is None:
                                 new_text = whitespace_agnostic_replace(
                                     current_text, search_text, replace_text, filepath

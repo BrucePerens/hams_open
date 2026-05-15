@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-15 04:57+0000\n"
-"PO-Revision-Date: 2026-05-15 04:57+0000\n"
+"POT-Creation-Date: 2026-05-15 09:34+0000\n"
+"PO-Revision-Date: 2026-05-15 09:34+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -25,15 +25,15 @@ msgstr ""
 msgid "Access Denied: Admins only."
 msgstr ""
 
-#: user_websites/models/blog_blog.py:76
+#: user_websites/models/blog_blog.py:75
 msgid "Access Denied: You do not have permission to modify this blog."
 msgstr ""
 
-#: user_websites/models/website_page.py:397
+#: user_websites/models/website_page.py:391
 msgid "Access Denied: You do not have permission to modify this page."
 msgstr ""
 
-#: user_websites/models/blog_post.py:155
+#: user_websites/models/blog_post.py:153
 msgid "Access Denied: You do not have permission to modify this post."
 msgstr ""
 
@@ -137,27 +137,27 @@ msgstr ""
 msgid "Failed to delete tunnel: %s"
 msgstr ""
 
-#: cloudflare/models/res_config_settings.py:50
+#: cloudflare/models/res_config_settings.py:51
 msgid "Failed to deploy WAF rules: %s"
 msgstr ""
 
-#: cloudflare/models/ip_ban.py:118
+#: cloudflare/models/ip_ban.py:115
 msgid "Failed to lift ban via Cloudflare API: %s"
 msgstr ""
 
-#: cloudflare/models/res_config_settings.py:78
+#: cloudflare/models/res_config_settings.py:79
 msgid "Failed to pull WAF rules: %s"
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:52
+#: cloudflare/models/purge_wizard.py:51
 msgid "Failed to purge everything from Cloudflare cache."
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:92
+#: cloudflare/models/purge_wizard.py:91
 msgid "Failed to purge specific Cache-Tags from Cloudflare cache."
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:76
+#: cloudflare/models/purge_wizard.py:75
 msgid "Failed to purge specific URLs from Cloudflare cache."
 msgstr ""
 
@@ -165,7 +165,7 @@ msgstr ""
 msgid "Failed to retrieve tunnel token: %s"
 msgstr ""
 
-#: cloudflare/models/zone_settings_wizard.py:84
+#: cloudflare/models/zone_settings_wizard.py:83
 msgid "Failed to update some settings:\n%s"
 msgstr ""
 
@@ -189,11 +189,11 @@ msgstr ""
 msgid "Invalid binary name."
 msgstr ""
 
-#: backup_management/models/backup_config.py:171
+#: backup_management/models/backup_config.py:172
 msgid "Kopia binary not found. Deferring to central generalized downloader..."
 msgstr ""
 
-#: backup_management/models/backup_config.py:184
+#: backup_management/models/backup_config.py:185
 msgid "Kopia successfully installed to %s"
 msgstr ""
 
@@ -201,11 +201,11 @@ msgstr ""
 msgid "Member %s not found in archive."
 msgstr ""
 
-#: cloudflare/models/tunnel.py:30
+#: cloudflare/models/tunnel.py:31
 msgid "Missing Cloudflare API Token or Account ID for the website."
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:34
+#: cloudflare/models/purge_wizard.py:35
 #: cloudflare/models/zone_settings_wizard.py:63
 msgid "Missing Cloudflare API Token or Zone ID for the selected website."
 msgstr ""
@@ -242,19 +242,19 @@ msgstr ""
 msgid "Optimizations Applied"
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:56
+#: cloudflare/models/purge_wizard.py:55
 msgid "Please provide items to purge."
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:46
+#: cloudflare/models/purge_wizard.py:45
 msgid "Purged everything from Cloudflare cache successfully."
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:86
+#: cloudflare/models/purge_wizard.py:85
 msgid "Purged specific Cache-Tags from Cloudflare cache successfully."
 msgstr ""
 
-#: cloudflare/models/purge_wizard.py:70
+#: cloudflare/models/purge_wizard.py:69
 msgid "Purged specific URLs from Cloudflare cache successfully."
 msgstr ""
 
@@ -348,13 +348,13 @@ msgid "Shift Handoff: %s"
 msgstr ""
 
 #: binary_downloader/models/binary_manifest.py:97
-#: cloudflare/models/purge_wizard.py:45
-#: cloudflare/models/purge_wizard.py:69
-#: cloudflare/models/purge_wizard.py:85
-#: cloudflare/models/res_config_settings.py:43
-#: cloudflare/models/res_config_settings.py:71
-#: cloudflare/models/tunnel.py:98
-#: cloudflare/models/zone_settings_wizard.py:90
+#: cloudflare/models/purge_wizard.py:44
+#: cloudflare/models/purge_wizard.py:68
+#: cloudflare/models/purge_wizard.py:84
+#: cloudflare/models/res_config_settings.py:44
+#: cloudflare/models/res_config_settings.py:72
+#: cloudflare/models/tunnel.py:96
+#: cloudflare/models/zone_settings_wizard.py:89
 #: distributed_redis_cache/models/distributed_cache_config.py:30
 msgid "Success"
 msgstr ""
@@ -393,7 +393,7 @@ msgstr ""
 msgid "The slug '%s' is reserved and cannot be used."
 msgstr ""
 
-#: user_websites/models/website_page.py:339
+#: user_websites/models/website_page.py:335
 msgid "This group has reached its limit of %s website pages."
 msgstr ""
 
@@ -409,7 +409,7 @@ msgstr ""
 msgid "Ticket Update: %s"
 msgstr ""
 
-#: cloudflare/models/tunnel.py:99
+#: cloudflare/models/tunnel.py:97
 msgid "Tunnels synced successfully."
 msgstr ""
 
@@ -418,7 +418,7 @@ msgstr ""
 msgid "Unable to generate a unique website slug after %s attempts."
 msgstr ""
 
-#: backup_management/models/backup_config.py:188
+#: backup_management/models/backup_config.py:189
 msgid "Unknown engine: %s"
 msgstr ""
 
@@ -462,7 +462,7 @@ msgstr ""
 msgid "You cannot create a record owned by another user."
 msgstr ""
 
-#: user_websites/controllers/main.py:685
+#: user_websites/controllers/main.py:686
 msgid "You cannot create posts for this user."
 msgstr ""
 
@@ -470,12 +470,12 @@ msgstr ""
 msgid "You cannot transfer ownership of a record to another user or group."
 msgstr ""
 
-#: user_websites/controllers/main.py:696
+#: user_websites/controllers/main.py:697
 msgid "You do not have permission to create posts for this group."
 msgstr ""
 
-#: user_websites/controllers/main.py:432
-#: user_websites/controllers/main.py:443
+#: user_websites/controllers/main.py:433
+#: user_websites/controllers/main.py:444
 msgid "You do not have permission to create this site."
 msgstr ""
 
@@ -483,7 +483,7 @@ msgstr ""
 msgid "You do not have sufficient permissions to install binaries."
 msgstr ""
 
-#: user_websites/models/website_page.py:294
+#: user_websites/models/website_page.py:290
 msgid "You have reached your limit of %s website pages."
 msgstr ""
 
@@ -491,7 +491,7 @@ msgstr ""
 msgid "You must assign an owner (user or group) when creating this record."
 msgstr ""
 
-#: cloudflare/models/res_config_settings.py:97
+#: cloudflare/models/res_config_settings.py:98
 msgid "You must provide both the Cloudflare API Token and Account ID to create a tunnel."
 msgstr ""
 
@@ -499,19 +499,19 @@ msgstr ""
 msgid "Your issue has been updated. New Status: %s"
 msgstr ""
 
-#: cloudflare/models/zone_settings_wizard.py:91
+#: cloudflare/models/zone_settings_wizard.py:90
 msgid "Zone settings updated successfully."
 msgstr ""
 
-#: backup_management/models/backup_config.py:165
+#: backup_management/models/backup_config.py:166
 msgid "pgBackRest is missing. It requires OS-level PostgreSQL dependencies and must be installed via your package manager (e.g., 'sudo apt-get install pgbackrest')."
 msgstr ""
 
-#: user_websites/models/res_users_moderation.py:180
+#: user_websites/models/res_users_moderation.py:179
 msgid "✅ **MODERATION ACTION:** You pardoned this user. The system lifted their suspension and reset their strike count to 0. (Note: Previously unpublished content remains unpublished until manually restored)."
 msgstr ""
 
-#: user_websites/models/res_users_moderation.py:165
+#: user_websites/models/res_users_moderation.py:164
 msgid "🚨 **AUTOMATED ACTION:** The system suspended this user for accumulating 3 or more violation strikes and unpublished their personal content."
 msgstr ""
 

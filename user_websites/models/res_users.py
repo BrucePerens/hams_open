@@ -8,6 +8,7 @@ specific to the user websites functionality.
 import time
 import os
 import odoo
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
@@ -87,7 +88,6 @@ def _async_unpublish_content(db_name, user_ids):
                 if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
         except Exception as e:
             env.cr.rollback()
-            import logging  # noqa: E402
 
             logging.getLogger(__name__).error(f"Background unpublish failed: {e}")
     finally:

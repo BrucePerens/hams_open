@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 import ast
 import odoo
+import time
 from odoo.tests.common import HttpCase, tagged
 
 
@@ -174,8 +175,6 @@ class TestSubscriptionsAndDigest(HttpCase):
         Ensure that malicious actors cannot spoof the unsubscription URL to
         force-remove other users from mailing lists.
         """
-        import time  # noqa: E402
-
         # Attempt an unsubscribe with a forged token
         fake_token = "1234abcd5678"
         current_ts = int(time.time())

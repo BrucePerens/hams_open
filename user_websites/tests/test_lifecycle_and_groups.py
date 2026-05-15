@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
+import logging
 from odoo.exceptions import ValidationError
+
+_logger = logging.getLogger(__name__)
 
 
 @odoo.tests.common.tagged("post_install", "-at_install")
@@ -95,9 +98,7 @@ class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
                 method="POST",
             )
         except Exception as e:
-            import logging  # noqa: E402
-
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
             [("url", "=", f"/{self.test_group.website_slug}/home")]
@@ -216,9 +217,7 @@ class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
                 method="POST",
             )
         except Exception as e:
-            import logging  # noqa: E402
-
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
             [("url", "=", f"/{self.test_group.website_slug}/home")]

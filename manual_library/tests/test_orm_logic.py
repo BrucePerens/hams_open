@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import TransactionCase, tagged
 from odoo.exceptions import ValidationError
-from psycopg2.errors import ForeignKeyViolation  # noqa: F401
+from psycopg2.errors import ForeignKeyViolation
 from odoo.tools import mute_logger
 
 
@@ -72,7 +72,6 @@ class TestManualORMLogic(TransactionCase):
         Verify that parent articles cannot be deleted if they have children,
         due to the ondelete='restrict' configuration.
         """
-        with self.assertRaises(
-            Exception, msg="Cannot delete a parent article that has children."
-        ):
-            self.article_a.unlink()
+        with self.assertRaises(ForeignKeyViolation):
+            with self.env.cr.savepoint():
+                self.article_a.unlink()

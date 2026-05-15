@@ -23,8 +23,7 @@ from psycopg2.errors import UndefinedTable
 from psycopg2 import sql
 
 # Import the centralized infrastructure blueprint
-sys.path.append(os.path.join(os.path.dirname(__file__)))
-import infrastructure  # noqa: E402
+import infrastructure
 
 
 def load_ignore_file(filepath):

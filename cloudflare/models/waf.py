@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
+from odoo.http import request
 
 
 class CloudflareWAF(models.AbstractModel):
@@ -17,7 +18,6 @@ class CloudflareWAF(models.AbstractModel):
         website_id=None,
     ):
         if not website_id:
-            from odoo.http import request  # noqa: E402
 
             try:
                 if request and getattr(request, "website", False):

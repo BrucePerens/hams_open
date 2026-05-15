@@ -10,6 +10,7 @@ from odoo.addons.distributed_redis_cache.models.ir_http import (
     _invalidation_queue,
     _listener_lock,
 )
+from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache, distributed_cache, _local_cache, _get_hash
 
 
 @tagged("standard", "post_install", "-at_install")
@@ -115,8 +116,6 @@ class TestDistributedCacheStandard(HttpCase):
         """
         Verify that invalidate_model_cache uses SCAN instead of KEYS.
         """
-        from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache  # noqa: E402
-
         with patch("odoo.addons.distributed_redis_cache.redis_cache.redis_pool", MagicMock()), \
              patch("odoo.addons.distributed_redis_cache.redis_cache.redis") as mock_redis:
             mock_redis_client = MagicMock()
@@ -133,8 +132,6 @@ class TestDistributedCacheStandard(HttpCase):
         """
         Verify the @distributed_cache decorator falls back to local cache when Redis fails.
         """
-        from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, _local_cache  # noqa: E402
-
         class MockModel:
             def __init__(self, env):
                 self.env = env
@@ -167,8 +164,6 @@ class TestDistributedCacheStandard(HttpCase):
         """
         Verify that cache keys are generated deterministically.
         """
-        from odoo.addons.distributed_redis_cache.redis_cache import _get_hash  # noqa: E402
-
         h1 = _get_hash(1, 2, a=3)
         h2 = _get_hash(1, 2, a=3)
         self.assertEqual(h1, h2)

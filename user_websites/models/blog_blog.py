@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo import models, api, _
-
+from odoo.exceptions import AccessError
 
 class BlogBlog(models.Model):
     _name = "blog.blog"
@@ -70,7 +70,6 @@ class BlogBlog(models.Model):
                         in member_map.get(blog.user_websites_group_id.id, set())
                     )
                     if not is_owner and not is_group_member:
-                        from odoo.exceptions import AccessError  # noqa: E402
 
                         raise AccessError(
                             _(

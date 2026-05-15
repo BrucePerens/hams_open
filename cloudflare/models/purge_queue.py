@@ -3,6 +3,7 @@ import time
 import os
 import logging
 from odoo import models, fields, api, tools
+from odoo.http import request
 from ..utils.cloudflare_api import purge_urls, purge_tags
 
 _logger = logging.getLogger(__name__)
@@ -26,8 +27,6 @@ class CloudflarePurgeQueue(models.Model):
         # [@ANCHOR: enqueue_urls_base_url]
         # Verified by [@ANCHOR: test_purge_queue_base_url_sudo]
         if not website_id:
-            from odoo.http import request  # noqa: E402
-
             try:
                 if getattr(request, "website", False):
                     website_id = request.website.id
@@ -71,8 +70,6 @@ class CloudflarePurgeQueue(models.Model):
         # [@ANCHOR: cf_enqueue_tags_api]
         # Verified by [@ANCHOR: test_purge_queue_tags_processing]
         if not website_id:
-            from odoo.http import request  # noqa: E402
-
             try:
                 if getattr(request, "website", False):
                     website_id = request.website.id

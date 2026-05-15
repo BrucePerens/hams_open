@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
+import json
+import os
+import pika
+import logging
 from odoo import models, fields
+from .utils import validate_backup_path
 
 class BackupRestoreWizard(models.TransientModel):
     _name = "backup.restore.wizard"
@@ -9,7 +14,6 @@ class BackupRestoreWizard(models.TransientModel):
     restore_target_path = fields.Char(string="Restore Directory / Stanza Target", required=True, help="Path where the backup should be restored, or stanza to target.")
 
     def action_restore(self):
-        from .utils import validate_backup_path  # noqa: E402
         if self.snapshot_id.config_id.engine == "kopia":
             validate_backup_path(self.restore_target_path)
 
@@ -26,11 +30,6 @@ class BackupRestoreWizard(models.TransientModel):
             cmd_args = ["kopia", "restore", self.snapshot_id.snapshot_id, self.restore_target_path]
         elif self.snapshot_id.config_id.engine == "pgbackrest":
             cmd_args = ["pgbackrest", "restore", f"--stanza={self.restore_target_path}", f"--set={self.snapshot_id.snapshot_id}"]
-
-        import json  # noqa: E402
-        import os  # noqa: E402
-        import pika  # noqa: E402
-        import logging  # noqa: E402
 
         payload = json.dumps({
             "job_id": job.id,

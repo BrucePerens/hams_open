@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
+import logging
 
+_logger = logging.getLogger(__name__)
 
 @odoo.tests.common.tagged("post_install", "-at_install")
 class TestBlogPostOwnership(odoo.tests.common.HttpCase):
@@ -120,9 +122,7 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
                 method="POST",
             )
         except Exception as e:
-            import logging  # noqa: E402
-
-            logging.getLogger(__name__).debug("Expected error on public blog creation: %s", e)
+            _logger.debug("Expected error on public blog creation: %s", e)
 
         public_created_post = self.env["blog.post"].search(
             [

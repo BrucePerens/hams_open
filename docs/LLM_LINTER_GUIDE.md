@@ -70,7 +70,7 @@ If testing background loop functions, you MUST conditionally bypass commits usin
 
 * **Top of File Requirement:** All Python imports MUST be at the top of the file. The linters enforce Flake8 rule `E402`.
 * **Local Imports Banned:** Local imports (imports inside functions, methods, or classes) are completely banned.
-* **Circular Dependency Bypass:** In the rare case a local import is mathematically required to resolve a circular dependency, you MUST append `# noqa: E402` to the import line to bypass the linter.
+* **Circular Dependency Bypass:** The use of `# noqa` to bypass local import restrictions or any other linter rules is strictly forbidden. Refactor architecture to avoid circular dependencies instead of using inline imports.
 
 ## 3. 🐍 Python Odoo 19 Core Deprecations & Formatting
 
@@ -98,9 +98,10 @@ Legacy `groups_id` and `users` strings are hard-blocked.
 use a name that can be resolved using Docker or `/etc/hosts` .
 * **Thread Blocking:** `time.sleep()` in main application code is banned..
 If used in a background daemon for rate-limiting, it MUST be appended with `# audit-ignore-sleep`.
-* *** **Thread Spawning:** `threading.Thread` is banned as a DoS vector. Use `concurrent.futures.ThreadPoolExecutor`.
+* **Thread Spawning:** `threading.Thread` is banned as a DoS vector. Use `concurrent.futures.ThreadPoolExecutor`.
 * *** **Import Error Evasion:** Wrapping imports in `try...except ImportError` blocks is strictly forbidden (ADR-0073).
 You MUST declare dependencies in `__manifest__.py` and let the system fail-fast.
+* **Hallucinatory sys.path Manipulation:** You MUST NOT use `sys.path.append` or `sys.path.insert` to resolve sibling imports using `..` or to redundantly append the script directory (using `__file__`). Python naturally resolves local imports. Isolated background daemons are the only permitted exception.
 </python_standards>
 
 ---

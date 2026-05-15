@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
+from odoo.http import request
 from ..utils.cloudflare_api import verify_turnstile
 
 
@@ -11,7 +12,6 @@ class CloudflareTurnstile(models.AbstractModel):
     def verify_token(self, token, remote_ip=None, website_id=None):
         # [@ANCHOR: cf_turnstile_verify]
         if not website_id:
-            from odoo.http import request  # noqa: E402
 
             try:
                 if getattr(request, "website", False):

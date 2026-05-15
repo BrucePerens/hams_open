@@ -3,6 +3,7 @@ import os
 import time
 from odoo import models, fields, _
 from odoo.exceptions import UserError
+from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token
 
 
 class ResConfigSettings(models.TransientModel):
@@ -99,7 +100,6 @@ class ResConfigSettings(models.TransientModel):
                 )
             )
 
-        from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token  # noqa: E402
 
         tunnel_name = f"odoo-edge-tunnel-{int(time.time())}"
 

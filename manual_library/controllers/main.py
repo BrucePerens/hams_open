@@ -3,6 +3,10 @@ from odoo import http
 from odoo.http import request
 from odoo.exceptions import AccessError
 import werkzeug.exceptions
+import logging
+from werkzeug.urls import url_parse
+
+_logger = logging.getLogger(__name__)
 
 
 class ManualLibraryController(http.Controller):
@@ -69,9 +73,7 @@ class ManualLibraryController(http.Controller):
             article.check_access("read")
             _ = article.name
         except Exception as e:
-            import logging  # noqa: E402
-
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            _logger.warning("An error occurred: %s", e)
             raise werkzeug.exceptions.NotFound()
 
         # 6. Render standard QWeb response
@@ -165,15 +167,13 @@ class ManualLibraryController(http.Controller):
                         (article.id,),
                     )
         except Exception as e:
-            import logging  # noqa: E402
-
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            _logger.warning("An error occurred: %s", e)
             # Silently fail on bad input to prevent brute-force discovery
             pass
 
         # Protect against open redirects by enforcing local paths
         referer = request.httprequest.referrer or "/manual"
-        parsed_referrer = werkzeug.urls.url_parse(referer)
+        parsed_referrer = url_parse(referer)
         safe_redirect = (
             parsed_referrer.path if parsed_referrer.path.startswith("/") else "/manual"
         )

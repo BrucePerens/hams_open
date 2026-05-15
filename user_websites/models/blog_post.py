@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo import models, fields, api, _
+from odoo.exceptions import AccessError
 import time
 import hashlib
 import hmac
@@ -50,8 +51,6 @@ class BlogPost(models.Model):
                     list(tags)
                 )
             except Exception as e:
-                import logging  # noqa: E402
-
                 if type(e).__name__ == "AccessError" and "Service Account" in str(e):
                     logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
                 else:
@@ -149,7 +148,6 @@ class BlogPost(models.Model):
                         in member_map.get(post.user_websites_group_id.id, set())
                     )
                     if not is_owner and not is_group_member:
-                        from odoo.exceptions import AccessError  # noqa: E402
 
                         raise AccessError(
                             _(

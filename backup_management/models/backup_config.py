@@ -5,6 +5,7 @@ import os
 import datetime
 import shutil
 import pika
+import odoo
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from .utils import validate_backup_path
@@ -217,7 +218,6 @@ class BackupConfig(models.Model):
             payload = json.dumps(payload_dict)
 
             def publish_task(msg=payload):
-                import odoo  # noqa: E402
                 if odoo.tools.config.get("test_enable"):
                     return
                 try:
@@ -413,4 +413,3 @@ class BackupConfig(models.Model):
                 )
                 if delta_drill > (7 * 24 * 60 * 60):  # 7 Days
                     conf._execute_restore_drill()
-

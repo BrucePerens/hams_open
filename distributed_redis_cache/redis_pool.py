@@ -2,10 +2,9 @@
 # Copyright © Bruce Perens K6BP. AGPL-3.0.
 import os
 import logging
+import redis
 
 _logger = logging.getLogger(__name__)
-
-import redis  # noqa: E402
 
 # [@ANCHOR: redis_connection_pool]
 redis_host = os.getenv("REDIS_HOST") or "redis"

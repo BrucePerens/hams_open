@@ -5,17 +5,15 @@ from . import models
 from .hooks import post_init_hook
 
 import odoo
+from odoo.modules.registry import Registry
+from odoo.addons.distributed_redis_cache.redis_cache import _local_cache
 
 # Hook into Odoo's registry cache clearing to ensure our local fallback cache
 # stays synchronized during test rollbacks and global clear events.
-from odoo.modules.registry import Registry
-
 _original_clear_cache = Registry.clear_cache
 
 
 def _new_clear_cache(self, *args, **kwargs):
-    from odoo.addons.distributed_redis_cache.redis_cache import _local_cache  # noqa: E402
-
     _local_cache.clear()
     return _original_clear_cache(self, *args, **kwargs)
 
@@ -30,8 +28,6 @@ if odoo.tools.config.get("test_enable"):
     _orig_tearDown = odoo.tests.common.BaseCase.tearDown
 
     def _new_tearDown(self):
-        from odoo.addons.distributed_redis_cache.redis_cache import _local_cache  # noqa: E402
-
         _local_cache.clear()
         return _orig_tearDown(self)
 

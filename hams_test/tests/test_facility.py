@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.test_real_transaction.tests.real_transaction import RealTransactionCase
+from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")

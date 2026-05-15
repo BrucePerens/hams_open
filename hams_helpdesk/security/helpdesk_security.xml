@@ -1,14 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
+        <record model="res.groups.privilege" id="privilege_helpdesk">
+            <field name="name">Helpdesk Access</field>
+            <field name="category_id" ref="base.module_category_operations_helpdesk"/>
+        </record>
+
         <record id="group_helpdesk_user" model="res.groups">
             <field name="name">Helpdesk User</field>
-            <field name="privilege_id" ref="base.module_category_operations_helpdesk"/>
+            <field name="privilege_id" ref="privilege_helpdesk"/>
         </record>
 
         <record id="group_helpdesk_manager" model="res.groups">
             <field name="name">Helpdesk Manager</field>
-            <field name="privilege_id" ref="base.module_category_operations_helpdesk"/>
+            <field name="privilege_id" ref="privilege_helpdesk"/>
             <field name="implied_ids" eval="[(4, ref('group_helpdesk_user'))]"/>
         </record>
 

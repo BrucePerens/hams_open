@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, _
 from odoo.exceptions import UserError
+from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 
 class CloudflarePurgeWizard(models.TransientModel):
     _name = "cloudflare.purge.wizard"
@@ -32,8 +33,6 @@ class CloudflarePurgeWizard(models.TransientModel):
         token, zone_id = self.website_id._get_cloudflare_credentials()
         if not token or not zone_id:
             raise UserError(_("Missing Cloudflare API Token or Zone ID for the selected website."))
-
-        from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags  # noqa: E402
 
         if self.purge_type == "everything":
             success = purge_everything(token, zone_id)

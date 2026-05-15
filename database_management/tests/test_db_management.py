@@ -2,6 +2,8 @@
 import odoo.tests
 from odoo.tests.common import TransactionCase, tagged
 from unittest.mock import patch, MagicMock
+from odoo.exceptions import UserError
+import subprocess
 
 
 @tagged("post_install", "-at_install")
@@ -25,9 +27,6 @@ class TestDatabaseManagement(TransactionCase):
     @patch("shutil.which")
     @patch("subprocess.run")
     def test_01b_vacuum_analyze_failures(self, mock_run, mock_which):
-        from odoo.exceptions import UserError  # noqa: E402
-        import subprocess  # noqa: E402
-
         stat = self.env["database.table.stat"].search(
             [("table_name", "=", "res_users")], limit=1
         )
@@ -60,8 +59,6 @@ class TestDatabaseManagement(TransactionCase):
 
     def test_03_db_index_stats(self):
         # Tests [@ANCHOR: db_index_stats]
-        from unittest.mock import patch  # noqa: E402
-
         with patch.object(
             type(self.env["database.table.stat"]), "search"
         ) as mock_search:

@@ -91,6 +91,16 @@ def parse_odoo_xml(content):
 
 GENERAL_ERROR_RULES = [
     (
+        r"\.py$",
+        re.compile(r"sys\.path\.append\(os\.path\.abspath\(os\.path\.join\(os\.path\.dirname\(__file__\),\s*['\"]\.\.['\"]"),
+        "CRITICAL HALLUCINATION: Unnecessary sys.path.append with '..'. Local modules and daemons should resolve sibling imports natively.",
+    ),
+    (
+        r"^(?!.*daemons?/|.*parcel_extract\.py).*\.py$",
+        re.compile(r"sys\.path\.(append|insert)\([^)]*__file__[^)]*\)"),
+        "CRITICAL HALLUCINATION: Redundant sys.path manipulation. Python automatically resolves imports from the script's directory.",
+    ),
+    (
         r"\.js$",
         re.compile(r"\.bindPopup\(\s*`|\.innerHTML\s*=\s*`"),
         "JS DOM XSS: Template literal passed to bindPopup or innerHTML.",
@@ -615,12 +625,10 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
         def visit_Import(self, node):
 
             if getattr(self, 'current_method', None):
-                line_content = self.lines[node.lineno - 1] if node.lineno <= len(self.lines) else ""
-                if "noqa: E402" not in line_content:
-                    self.add_error(
-                        node.lineno,
-                        "LOCAL IMPORT: Imports inside functions/methods are forbidden unless they bypass circular dependencies with '# noqa: E402'."
-                    )
+                self.add_error(
+                    node.lineno,
+                    "LOCAL IMPORT: Imports inside functions/methods are strictly forbidden."
+                )
 
             for alias in node.names:
                 if alias.name == "pickle":
@@ -642,16 +650,13 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         "CRITICAL AI FAILURE: Wrapping imports in try/except ImportError is forbidden. Use manifest external_dependencies.",
                     )
             self.generic_visit(node)
-
         def visit_ImportFrom(self, node):
 
             if getattr(self, 'current_method', None):
-                line_content = self.lines[node.lineno - 1] if node.lineno <= len(self.lines) else ""
-                if "noqa: E402" not in line_content:
-                    self.add_error(
-                        node.lineno,
-                        "LOCAL IMPORT: Imports inside functions/methods are forbidden unless they bypass circular dependencies with '# noqa: E402'."
-                    )
+                self.add_error(
+                    node.lineno,
+                    "LOCAL IMPORT: Imports inside functions/methods are strictly forbidden."
+                )
 
             if node.module == "pickle":
                 self.add_error(
@@ -1306,17 +1311,16 @@ def scan_file(filepath, is_odoo_module=False):
                             warnings_found.append(
                                 f"Line {node.lineno}: [%AUDIT] ACCESSIBILITY (WCAG): Empty \x3c{node.tag}\x3e tag lacks 'string', 'title', or 'aria-label'."
                             )
-                if node.tag == "field" and node.attrs.get("name") in (
-                    "category_id",
-                    "users",
-                    "groups_id",
-                ):
+                if node.tag == "field":
                     record_anc = next(
                         (anc for anc in node.get_ancestors() if anc.tag == "record"),
                         None,
                     )
                     model = record_anc.attrs.get("model") if record_anc else None
                     field_name = node.attrs.get("name")
+                    ref_val = str(node.attrs.get("ref", ""))
+                    eval_val = str(node.attrs.get("eval", ""))
+
                     if model == "res.groups" and field_name == "users":
                         errors_found.append(
                             f"Line {node.lineno}: CRITICAL BIAS TRAP: use user_ids."
@@ -1325,10 +1329,74 @@ def scan_file(filepath, is_odoo_module=False):
                         errors_found.append(
                             f"Line {node.lineno}: CRITICAL SECURITY CATEGORY: category_id is banned for res.groups. Use privilege_id."
                         )
+                    if model == "res.groups" and field_name == "privilege_id":
+                        if "base.module_category_" in ref_val:
+                            errors_found.append(
+                                f"Line {node.lineno}: CRITICAL SECURITY PRIVILEGE: 'privilege_id' cannot reference standard Odoo categories like '{ref_val}'. It must point to a 'res.groups.privilege' record."
+                            )
                     if model == "res.users" and field_name == "groups_id":
                         errors_found.append(
                             f"Line {node.lineno}: CRITICAL BIAS TRAP: groups_id is banned for res.users. Use group_ids."
                         )
+
+                    # Inappropriate Data Assignment Traps
+                    if field_name in ("user_id", "user_ids"):
+                        if "base.group_" in ref_val or "base.group_" in eval_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a group to a user field '{field_name}'.")
+                        if "base.partner_" in ref_val or "base.partner_" in eval_val or "base.main_partner" in ref_val or "base.main_partner" in eval_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a partner to a user field '{field_name}'.")
+
+                    if field_name in ("group_id", "group_ids", "groups"):
+                        if "base.user_" in ref_val or "base.user_" in eval_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a user to a group field '{field_name}'.")
+                        if "base.module_category_" in ref_val or "base.module_category_" in eval_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a module category to a group field '{field_name}'.")
+
+                    if field_name in ("company_id", "company_ids"):
+                        if "base.user_" in ref_val or "base.user_" in eval_val or "base.group_" in ref_val or "base.group_" in eval_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a user or group to a company field '{field_name}'.")
+
+                    if field_name in ("partner_id", "partner_ids"):
+                        if "base.user_" in ref_val or "base.user_" in eval_val or "base.group_" in ref_val or "base.group_" in eval_val or "base.module_category_" in ref_val or "base.module_category_" in eval_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a user, group, or category to a partner field '{field_name}'.")
+
+                    if field_name == "model_id":
+                        if "base.group_" in ref_val or "base.user_" in ref_val or "base.module_category_" in ref_val or "base.partner_" in ref_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a non-model reference to a 'model_id' field '{field_name}'.")
+
+                    if field_name in ("active", "sequence", "is_published", "color", "priority"):
+                        if ref_val:
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Using 'ref' on primitive/boolean/integer field '{field_name}'. Use 'eval' or node text instead.")
+
+                        if model == "ir.cron" and field_name == "user_id":
+                            if "base.user_root" in ref_val or "base.user_admin" in ref_val or "base.user_root" in eval_val or "base.user_admin" in eval_val:
+                                errors_found.append(f"Line {node.lineno}: CRITICAL ZERO-SUDO VIOLATION: ir.cron cannot be assigned to base.user_root or base.user_admin. You MUST use a dedicated service account.")
+
+                        if field_name.endswith("_ids") and eval_val:
+                            eval_stripped = eval_val.replace(" ", "")
+                            if eval_stripped.startswith("[") and not eval_stripped.startswith("[(6,") and not eval_stripped.startswith("[(4,") and not eval_stripped.startswith("[(5,"):
+                                errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a raw list to an x2many field '{field_name}'. You MUST use Odoo ORM commands (e.g., [(6, 0, [...])]).")
+
+                        if ref_val and ref_val.isdigit():
+                            errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: 'ref' attribute must be an XML ID string, not a hardcoded numeric ID '{ref_val}'.")
+
+                        if eval_val and any(bad in eval_val for bad in ("__import__", "exec(", "eval(")):
+                            errors_found.append(f"Line {node.lineno}: CRITICAL SECURITY: Dangerous built-in execution detected in 'eval' expression.")
+
+                        if model == "ir.actions.act_window" and field_name == "type":
+                            node_text = node.text.strip() if node.text else ""
+                            if node_text and node_text != "ir.actions.act_window":
+                                errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: 'type' for ir.actions.act_window must be 'ir.actions.act_window'.")
+
+                        if field_name in ("employee_id", "employee_ids"):
+                            if "base.user_" in ref_val or "base.user_" in eval_val:
+                                errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Assigning a user to an employee field '{field_name}'.")
+
+                    if node.tag == "record":
+                        model_name = node.attrs.get("model", "")
+                        if "_" in model_name and "." not in model_name:
+                            if model_name.startswith(("res_", "ir_", "account_", "mail_", "website_", "crm_", "sale_")):
+                                errors_found.append(f"Line {node.lineno}: CRITICAL TYPE MISMATCH: Odoo models use dots, not underscores. Found '{model_name}'. Did you mean '{model_name.replace('_', '.', 1)}'?")
 
                 for k, v in node.attrs.items():
                     v_str = str(v)
@@ -1439,6 +1507,11 @@ def scan_file(filepath, is_odoo_module=False):
             continue
         if filename.endswith(".xml") and stripped.startswith("\x3c!--"):
             continue
+
+        if "noqa" in line.lower():
+            errors_found.append(
+                f"Line {line_num}: CRITICAL LINTER EVASION: Use of 'noqa' is strictly forbidden.\n      Code: `{stripped}`"
+            )
 
         if "burn-ignore" in line and not any(
             allowed in line

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import HttpCase, tagged
+from lxml import etree
 
 
 @tagged("post_install", "-at_install")
@@ -41,7 +42,6 @@ class TestServiceWorker(HttpCase):
         # [@ANCHOR: test_xpath_rendering_caching_layout]
         # Tests [@ANCHOR: xpath_rendering_caching_layout]
         """Verify the Service Worker script injects into the layout head."""
-        from lxml import etree  # noqa: E402
 
         view = self.env.ref("website.layout")
         arch = view.with_context(lang=None)._get_combined_arch()

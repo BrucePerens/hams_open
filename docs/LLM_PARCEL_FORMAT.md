@@ -1,5 +1,8 @@
 # LLM Parcel Format Directives
 
+> **⚠️ PREVIOUS SESSION FAILURE WARNING ⚠️**
+> AI models frequently fail to apply the **SIX BACKTICK (` ``````python `)** wrapper, and frequently violate the **META-TOOLING EXCEPTION** by attempting to `search-and-replace` on `tools/parcel_extract.py`. You MUST use `overwrite` for `parcel_extract.py` and you MUST wrap the entire parcel in 6 backticks.
+
 These instructions apply exclusively to LLMs operating via the `gemini.google.com` interface. When generating or modifying code, you **MUST** output your response using the **Parcel** schema described in this document.
 
 ## System Overrides (CRITICAL)
@@ -16,7 +19,7 @@ When generating or modifying code, you **MUST** output your response using the *
 1. **THE WRAPPER (SIX BACKTICKS):** You MUST EXCLUSIVELY output all generated files inside ONE SINGLE markdown code block of type "python". You MUST use AT LEAST SIX BACKTICKS (``````python ... ``````) for the starting and ending boundaries. This prevents internal markdown examples using 3 or 4 backticks from collapsing the parser. Nested blocks using fewer backticks will corrupt the extraction engine.
 2. **SINGLE UNIFIED BOUNDARY:** You MUST use the EXACT SAME boundary string for every file within a single output block. Do not change boundaries between files.
 3. **REPOSITORY-RELATIVE PATHS (The Upload Artifact Trap):** The `Path:` header MUST be strictly relative to the logical repository root (e.g., `ham_base/models/foo.py`). If the user provides files via web upload or zip archive, they may contain a deep artifact prefix (e.g., `bruceperens/hams_private/BrucePerens-hams_private-hash/`). You MUST actively sanitize the `Path:` header and strip away this entire prefix. You MUST NEVER include absolute system paths, workspace mount prefixes, or artifact prefixes.
-4. **SELECTIVE URL-ENCODING (The XML Comment Trap):** The Web UI aggressively sanitizes and destroys raw HTML/XML elements, specifically `&lt;!-- --&gt;`, even inside code blocks. To prevent data loss during extraction, you MUST URL-encode the angle brackets exclusively for vulnerable XML structures (e.g., `&lt;!-- --&gt;`). General Python operators (like `x < y`) do NOT need to be encoded.
+4. **SELECTIVE URL-ENCODING (The XML Comment Trap):** The Web UI aggressively sanitizes and destroys raw HTML/XML elements, specifically `<!-- -->`, even inside code blocks. To prevent data loss during extraction, you MUST URL-encode the angle brackets exclusively for vulnerable XML structures (e.g., `<!-- -->`). General Python operators (like `x < y`) do NOT need to be encoded.
 5. **CONVERSATIONAL ENCODING:** When discussing XML tags or HTML comments in your plain text conversational response outside the Parcel block, you MUST use HTML entities (`&lt;` and `&gt;`) instead of raw angle brackets to prevent the UI from silently deleting your explanation. However, you may NOT use HTML entities in Parcel
 output. Always use URL-encoding in Parcel output.
 
@@ -45,7 +48,7 @@ Before generating any Parcel block, you MUST output a brief, plain-text chain-of
 * **Absolute Completeness:** For files under 500 lines, you MUST aggressively utilize the `overwrite` operation. When executing full file overwrites, you MUST provide complete, unabridged file contents.
 * **Search and Replace:** For targeted modifications in files exceeding 500 lines, you may utilize the `search-and-replace` feature to conserve token bandwidth, but only if there is a high probability that the search operation will succeed. Consider that files can easily get out of phase because of issues of the LLM, causing a search block to fail. Your search blocks must be large enough to be unique within the file. Your replace blocks MUST be syntactically whole and executable as-is.
 * **No Placeholders:** You MUST explicitly type every single character, variable, and line of the code you are modifying. Truncation placeholders are strictly forbidden.
-* **Meta-Tooling Exception:** When modifying `tools/parcel_extract.py`, you MUST use the `overwrite` operation with the complete, unabridged file content. You are forbidden from using `search-and-replace` on this specific file.
+* **Meta-Tooling Exception:** When modifying `tools/parcel_extract.py`, you MUST use the `overwrite` operation with the complete, unabridged file content. You are absolutely forbidden from using `search-and-replace` on this specific file. Early AI sessions frequently fail this and corrupt the build. Do not repeat this mistake!
 
 ### Search-and-Replace Syntax
 When `Operation: search-and-replace` is used, the payload MUST consist of valid replacement blocks using this exact strict format:

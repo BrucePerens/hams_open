@@ -1,14 +1,8 @@
 # -*- coding: utf-8 -*-
 import unittest
 from unittest.mock import patch, MagicMock
-import sys
-import os
-
 from odoo.tests.common import tagged
-
-# Append the daemon directory to path to import the spooler
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import pager_synthetic_spooler  # noqa: E402
+import pager_synthetic_spooler
 
 
 @tagged("standard", "post_install", "-at_install")

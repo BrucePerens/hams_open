@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from unittest.mock import patch, MagicMock
 from odoo.tests.common import TransactionCase, tagged
+from odoo.addons.cloudflare.utils.cloudflare_api import purge_urls, purge_tags
 
 
 @tagged("post_install", "-at_install")
@@ -108,7 +109,6 @@ class TestCloudflareAPIs(TransactionCase):
     def test_04_purge_urls(self, mock_post):
         # [@ANCHOR: test_purge_urls_api]
         # # Verified by [@ANCHOR: test_purge_urls_api]
-        from odoo.addons.cloudflare.utils.cloudflare_api import purge_urls  # noqa: E402
 
         # Case 1: Missing credentials
         self.assertFalse(purge_urls(["https://a.com"], None, "zone1"))
@@ -151,7 +151,6 @@ class TestCloudflareAPIs(TransactionCase):
     def test_05_purge_tags(self, mock_post):
         # [@ANCHOR: test_purge_tags_api]
         # # Verified by [@ANCHOR: test_purge_tags_api]
-        from odoo.addons.cloudflare.utils.cloudflare_api import purge_tags  # noqa: E402
 
         # Case 1: Missing credentials
         self.assertFalse(purge_tags(["tag1"], None, "zone1"))

@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import TransactionCase
-from odoo.http import request, Response # noqa: F401
-from unittest.mock import patch, MagicMock # noqa: F401
-
-# Import the controller to test the method directly
+from odoo.http import Response
+from unittest.mock import patch
 from odoo.addons.user_websites_seo.controllers.main import UserWebsitesSEOController
 
 class TestSEOController(TransactionCase):

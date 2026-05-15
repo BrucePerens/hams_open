@@ -3,6 +3,7 @@ import odoo
 from odoo import models, fields, api, _
 from .res_users import _async_unpublish_content
 import json
+from concurrent.futures import ThreadPoolExecutor
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
     invalidate_model_cache,
@@ -110,8 +111,6 @@ class ResUsersModeration(models.Model):
         user_ids = self.ids
 
         if not odoo.tools.config.get("test_enable"):
-            from concurrent.futures import ThreadPoolExecutor  # noqa: E402
-
             db_name = self.env.cr.dbname
             # Fire and forget safely without unbounded thread growth
             ThreadPoolExecutor(max_workers=2).submit(

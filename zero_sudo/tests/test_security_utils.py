@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import TransactionCase, tagged
 from odoo.exceptions import AccessError, UserError
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
+import subprocess
+import os
+import odoo
 
 
 @tagged("post_install", "-at_install")
@@ -172,7 +175,6 @@ class TestSecurityUtils(TransactionCase):
         self.assertTrue(utils._update_python_venv())
 
         # Test 3: subprocess fails
-        import subprocess  # noqa: E402
         mock_run.side_effect = subprocess.CalledProcessError(1, "cmd", stderr="pip error")
         with self.assertRaises(UserError) as cm:
             utils._update_python_venv()
@@ -190,9 +192,6 @@ class TestSecurityUtils(TransactionCase):
         # Tests [@ANCHOR: get_crypto_secret]
         """Test the cryptographic secret retrieval hierarchy."""
         utils = self.env["zero_sudo.security.utils"]
-        import os  # noqa: E402
-        import odoo  # noqa: E402
-        from unittest.mock import patch, mock_open  # noqa: E402
 
         # 1. Test environment variable resolution
         with patch.dict(os.environ, {"HAMS_CRYPTO_KEY": "test_env_key"}):

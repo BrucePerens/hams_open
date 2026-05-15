@@ -24,14 +24,13 @@ class TestPurgeQueue(TransactionCase):
         mock_post.return_value = mock_response
 
         QueueModel = self.env["cloudflare.purge.queue"]
-        vals = [
-            {
+        vals = []
+        for i in range(310):
+            vals.append({
                 "target_item": f"https://example.com/page-{i}",
                 "purge_type": "url",
                 "website_id": self.website.id,
-            }
-            for i in range(310)
-        ]
+            })
         QueueModel.create(vals)
         self.assertEqual(QueueModel.search_count([]), 310)
 
@@ -84,7 +83,10 @@ class TestPurgeQueue(TransactionCase):
 
         # Read the domain via the related website_id as the service account
         try:
-            domain = queue_item.with_user(svc_uid).website_id.domain  # noqa: F841
+            # We explicitly access the domain attribute to verify read ACLs.
+            # We wrap it in str() to ensure it's evaluated, but discard the assignment
+            # to satisfy both the test intent and flake8 static analysis (F841).
+            str(queue_item.with_user(svc_uid).website_id.domain)
             self.assertTrue(True)
         except Exception as e:
             self.fail(f"Service account lacks ACLs to read website_id domain: {e}")

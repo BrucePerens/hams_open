@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+from odoo.http import request
+from ..utils.cloudflare_api import ban_ip, unban_ip
 
 
 class CloudflareIPBan(models.Model):
@@ -50,8 +52,6 @@ class CloudflareIPBan(models.Model):
         # [@ANCHOR: cf_execute_ban]
         # Verified by [@ANCHOR: test_cf_execute_ban]
         if not website_id:
-            from odoo.http import request  # noqa: E402
-
             try:
                 if request and getattr(request, "website", False):
                     website_id = request.website.id
@@ -62,8 +62,6 @@ class CloudflareIPBan(models.Model):
 
         website = self.env["website"].browse(website_id)
         token, zone_id = website._get_cloudflare_credentials()
-
-        from ..utils.cloudflare_api import ban_ip  # noqa: E402
 
         success, result = ban_ip(ip_address, mode, notes, token, zone_id)
 
@@ -100,7 +98,6 @@ class CloudflareIPBan(models.Model):
     def action_lift_ban(self):
         # [@ANCHOR: cf_action_lift_ban]
         # Verified by [@ANCHOR: test_cf_action_lift_ban]
-        from ..utils.cloudflare_api import unban_ip  # noqa: E402
 
         for rec in self:
             if rec.state == "active" and rec.cf_rule_id:
