@@ -68,6 +68,7 @@ class DatabaseTableStat(models.Model):
                     shell=False,
                 )
                 if res.returncode != 0:
+                    _logger.error("Vacuum failed for %s: %s", rec.table_name, res.stderr)
                     raise UserError(
                         _("Vacuum failed for %s: %s") % (rec.table_name, res.stderr)
                     )
@@ -174,9 +175,14 @@ class DatabaseActivity(models.Model):
     def action_terminate_backend(self):
         # [@ANCHOR: db_terminate_backend]
         # Tests [@ANCHOR: db_terminate_backend]
+        # micro-privilege: Use service account for termination
+        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+            "database_management.user_database_management_service"
+        )
+
         for rec in self:
             # Parameterized execution protects against SQL injection
-            self.env.cr.execute("SELECT pg_terminate_backend(%s)", (rec.pid,))
+            env_svc.cr.execute("SELECT pg_terminate_backend(%s)", (rec.pid,))
         return True
 
 

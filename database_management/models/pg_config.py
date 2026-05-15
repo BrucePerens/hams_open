@@ -59,6 +59,13 @@ class PgOptimizeWizard(models.TransientModel):
         if self.ram_gb <= 0 or self.cpu_cores <= 0:
             raise UserError(_("RAM and CPU must be greater than zero."))
 
+        # micro-privilege: Use service account cursor for sensitive operations
+        utils = self.env["zero_sudo.security.utils"]
+        svc_uid = utils._get_service_uid(
+            "database_management.user_database_management_service"
+        )
+        cr_svc = self.env.cr.with_user(svc_uid) if hasattr(self.env.cr, "with_user") else self.env.cr
+
         # Standard DBA Tuning Algorithms
         shared_buffers_mb = int((self.ram_gb * 1024) * 0.25)
         effective_cache_mb = int((self.ram_gb * 1024) * 0.75)
@@ -85,9 +92,9 @@ class PgOptimizeWizard(models.TransientModel):
             query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
                 sql.Identifier(param), sql.Literal(val)
             )
-            self.env.cr.execute(query)
+            cr_svc.execute(query)
 
-        self.env.cr.execute("SELECT pg_reload_conf()")
+        cr_svc.execute("SELECT pg_reload_conf()")
 
         return {
             "type": "ir.actions.client",
