@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- burn-ignore-tour -->
+    <template id="portal_my_home_menu_helpdesk" name="Portal layout : helpdesk menu entries" inherit_id="portal.portal_breadcrumbs" priority="20">
+        <!-- audit-ignore-xpath: Render proven in test_02_helpdesk_portal_tour -->
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'ticket' or ticket" class="breadcrumb-item">
+                <a t-if="ticket" t-attf-href="/my/tickets?{{ keep_query() }}">Tickets</a>
+                <t t-else="">Tickets</t>
+            </li>
+            <li t-if="ticket" class="breadcrumb-item active">
+                <t t-out="ticket.name"/>
+            </li>
+        </xpath>
+    </template>
+
+    <!-- burn-ignore-tour -->
+    <template id="portal_my_home_helpdesk" name="Show Tickets" inherit_id="portal.portal_my_home" priority="20">
+        <!-- audit-ignore-xpath: Render proven in test_02_helpdesk_portal_tour -->
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
+            <t t-call="portal.portal_docs_entry">
+                <t t-set="title">Helpdesk Tickets</t>
+                <t t-set="url" t-value="'/my/tickets'"/>
+                <t t-set="placeholder_count" t-value="'ticket_count'"/>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- burn-ignore-tour -->
+    <template id="portal_my_tickets" name="My Tickets">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+            <t t-call="portal.portal_searchbar"/>
+            <t t-if="not tickets">
+                <p>There are currently no tickets for your account.</p>
+            </t>
+            <t t-if="tickets" t-call="portal.portal_table">
+                <thead>
+                    <tr class="active">
+                        <th>Ticket #</th>
+                        <th>Title</th>
+                        <th>Stage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr t-foreach="tickets" t-as="t">
+                        <td><a t-attf-href="/my/ticket/#{t.id}"><t t-out="t.id"/></a></td>
+                        <td><a t-attf-href="/my/ticket/#{t.id}"><t t-out="t.name"/></a></td>
+                        <td><span class="badge rounded-pill text-bg-info"><t t-out="t.stage"/></span></td>
+                    </tr>
+                </tbody>
+            </t>
+        </t>
+    </template>
+
+    <!-- burn-ignore-tour -->
+    <template id="portal_ticket_detail" name="Ticket Detail">
+        <t t-call="portal.portal_layout">
+            <div id="optional_classes" class="container">
+                <div class="card mt-3">
+                    <div class="card-header bg-light">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h3><span t-field="ticket.name"/></h3>
+                                <p class="text-muted mb-0">Status: <span t-field="ticket.stage"/></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div t-field="ticket.description"/>
+                    </div>
+                </div>
+
+                <div class="mt-5">
+                    <h4>Communication History</h4>
+                    <t t-call="portal.message_thread">
+                        <t t-set="object" t-value="ticket"/>
+                    </t>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

@@ -17,7 +17,7 @@ Upon installation, it:
         "website",
         "portal",
         "zero_sudo",
-        "test_tours",
+        "hams_test",
     ],
     "data": [
         "security/security_data.xml",

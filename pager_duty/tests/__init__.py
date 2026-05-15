@@ -6,3 +6,4 @@ from . import test_pager_security
 from . import test_incident_edge_cases
 from . import test_schedule_edge_cases
 from . import test_board_edge_cases
+from . import test_helpdesk_adapter

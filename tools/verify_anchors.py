@@ -79,14 +79,19 @@ def _process_file_for_anchors(
 ):
     mod = get_module(full_path)
     for line in content.splitlines():
-        for match in pattern.finditer(line):
+        matches = list(pattern.finditer(line))
+        if not matches:
+            continue
+
+        prefix = line[:matches[0].start()].strip()
+
+        for match in matches:
             anchor_name = match.group(1)
             if ":" in anchor_name:
                 invalid_format.append((mod, anchor_name, full_path))
                 continue
 
             anchor = f"{mod}:{anchor_name}"
-            prefix = line[: match.start()].strip()
             if prefix.endswith("Tests"):
                 tests_links.setdefault(full_path, []).append(anchor)
                 tests_links_set.add(anchor)

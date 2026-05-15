@@ -21,8 +21,19 @@ fi
 
 # 0. Pre-Flight Dependency Checks
 TARGET_MODULES="${1:-}"
-if [ -n "$TARGET_MODULES" ]; then
+if [ -z "$TARGET_MODULES" ]; then
+    # Auto-discover all local modules if no specific target is provided
+    MOD_ARRAY=()
+    for d in "$DIR"/*/; do
+        if [ -f "${d}__manifest__.py" ]; then
+            MOD_ARRAY+=("$(basename "$d")")
+        fi
+    done
+else
     IFS=',' read -ra MOD_ARRAY <<< "$TARGET_MODULES"
+fi
+
+if [ ${#MOD_ARRAY[@]} -gt 0 ]; then
     for MOD in "${MOD_ARRAY[@]}"; do
         if [ -f "$DIR/$MOD/__manifest__.py" ]; then
             MOD_PATH="$DIR/$MOD"

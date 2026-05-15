@@ -114,3 +114,26 @@ For detailed narratives and end-to-end workflows, refer to the following:
 
 ## 6. Testing Mandate
 If you create a new plugin, you **MUST** update `daemons/pager_duty/test_generalized_monitor.py` with an isolated, aggressively mocked test verifying its successful parsing and failure states. Headless APIs and synthetic execution layers safely suppress i18n translation requirements during tests. [@ANCHOR: synthetic_i18n]
+
+---
+
+## 7. Helpdesk Adapter API
+The Pager Duty module integrates with Helpdesk modules agnostically using an Adapter pattern.
+* **Adapter Implementation (`[@ANCHOR: pd_helpdesk_adapter]`)**: Intercepts incident creation, dynamically resolves the configured helpdesk model, and creates a unified tracking ticket. It incorporates a direct SMTP fallback if the target module is unreachable.
+
+---
+
+## 8. Developer API: On-Duty Queries
+The Pager Duty module exposes a native API allowing other Odoo modules (like Helpdesk or Maintenance) to seamlessly query for the currently active on-call responder. This enables unified notification routing and avoids duplicate schedule logic.
+
+**API Endpoint:** `self.env["calendar.event"].get_current_on_duty_admin()`
+* **Returns:** `res.users` recordset (limit 1) if an active Pager Duty shift exists at `fields.Datetime.now()`, otherwise `False`.
+* **Example Usage:**
+  ```python
+  on_duty_user = False
+  if hasattr(self.env["calendar.event"], "get_current_on_duty_admin"):
+      on_duty_user = self.env["calendar.event"].sudo().get_current_on_duty_admin()
+      if on_duty_user:
+          # Route ticket or notification to on_duty_user.partner_id
+          pass
+  ```

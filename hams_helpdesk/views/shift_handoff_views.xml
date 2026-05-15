@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- burn-ignore-tour -->
+    <record id="view_hams_helpdesk_shift_handoff_form" model="ir.ui.view">
+        <field name="name">hams_helpdesk.shift_handoff.form</field>
+        <field name="model">hams_helpdesk.shift_handoff</field>
+        <field name="arch" type="xml">
+            <form string="Shift Handoff">
+                <sheet>
+                    <group>
+                        <field name="ticket_id" readonly="1"/>
+                        <field name="old_user_id"/>
+                        <field name="new_user_id" options="{'no_create': True}"/>
+                    </group>
+                    <group>
+                        <field name="handoff_notes" placeholder="Detail the current status, pending actions, and any relevant context for the next operator..."/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button string="Confirm Handoff" type="object" name="action_confirm_handoff" class="btn-primary" data-hotkey="q"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="z"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

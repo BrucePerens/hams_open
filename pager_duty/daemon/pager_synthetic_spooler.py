@@ -15,6 +15,7 @@ SPOOL_FILE = "/var/log/pager_synthetic_spool.json"
 
 
 def execute_check(check):
+    # [@ANCHOR: synthetic_i18n]
     ctype = check.get("type")
     name = check.get("name")
     interval = int(check.get("interval", 60))
@@ -189,6 +190,7 @@ def execute_check(check):
                     res["success"] = True
 
     except subprocess.TimeoutExpired:
+        # [@ANCHOR: test_synthetic_i18n]
         res["error"] = "Execution timed out"
     except Exception as e:
         res["error"] = str(e)

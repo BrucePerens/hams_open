@@ -24,7 +24,7 @@ from psycopg2 import sql
 
 # Import the centralized infrastructure blueprint
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-import infrastructure
+import infrastructure  # noqa: E402
 
 
 def load_ignore_file(filepath):
@@ -1054,7 +1054,7 @@ def main():
         ignore_patterns = load_ignore_file(ignore_filepath)
 
         if args.module:
-            target_modules = [args.module]
+            target_modules = [m.strip() for m in args.module.split(",")]
         else:
             target_modules = get_local_modules(base_dir, ignore_patterns)
 

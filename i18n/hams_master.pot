@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-14 22:59+0000\n"
-"PO-Revision-Date: 2026-05-14 22:59+0000\n"
+"POT-Creation-Date: 2026-05-15 03:40+0000\n"
+"PO-Revision-Date: 2026-05-15 03:40+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -61,7 +61,7 @@ msgstr ""
 msgid "Auto-install of %s is only supported on Linux x86_64. Please install manually."
 msgstr ""
 
-#: pager_duty/models/incident.py:178
+#: pager_duty/models/incident.py:183
 msgid "Auto-resolved by NOC monitor recovery sequence."
 msgstr ""
 
@@ -121,6 +121,10 @@ msgstr ""
 msgid "Export Successful"
 msgstr ""
 
+#: hams_helpdesk/models/helpdesk_ticket.py:99
+msgid "FYI: A new issue was logged shortly before your shift begins."
+msgstr ""
+
 #: binary_downloader/models/binary_manifest.py:232
 msgid "Failed to auto-install %s: %s"
 msgstr ""
@@ -163,6 +167,10 @@ msgstr ""
 
 #: cloudflare/models/zone_settings_wizard.py:84
 msgid "Failed to update some settings:\n%s"
+msgstr ""
+
+#: hams_helpdesk/models/helpdesk_ticket.py:79
+msgid "Helpdesk Ticket #%s assigned to you."
 msgstr ""
 
 #: pager_duty/models/pager_check.py:337
@@ -210,7 +218,11 @@ msgstr ""
 msgid "Missing dependency: '%s'. Please install via OS package manager (e.g., 'apt-get install %s')."
 msgstr ""
 
-#: pager_duty/models/incident.py:155
+#: hams_helpdesk/models/helpdesk_ticket.py:89
+msgid "New Helpdesk Ticket"
+msgstr ""
+
+#: pager_duty/models/incident.py:160
 msgid "New Incident Created"
 msgstr ""
 
@@ -331,6 +343,10 @@ msgstr ""
 msgid "Security Alert: Writing to system directory '%s' is forbidden."
 msgstr ""
 
+#: hams_helpdesk/models/shift_handoff.py:27
+msgid "Shift Handoff: %s"
+msgstr ""
+
 #: binary_downloader/models/binary_manifest.py:97
 #: cloudflare/models/purge_wizard.py:45
 #: cloudflare/models/purge_wizard.py:69
@@ -381,6 +397,18 @@ msgstr ""
 msgid "This group has reached its limit of %s website pages."
 msgstr ""
 
+#: hams_helpdesk/models/helpdesk_ticket.py:90
+msgid "Ticket %s requires your attention."
+msgstr ""
+
+#: hams_helpdesk/models/helpdesk_ticket.py:81
+msgid "Ticket Assigned: %s"
+msgstr ""
+
+#: hams_helpdesk/models/helpdesk_ticket.py:121
+msgid "Ticket Update: %s"
+msgstr ""
+
 #: cloudflare/models/tunnel.py:99
 msgid "Tunnels synced successfully."
 msgstr ""
@@ -392,6 +420,10 @@ msgstr ""
 
 #: backup_management/models/backup_config.py:188
 msgid "Unknown engine: %s"
+msgstr ""
+
+#: hams_helpdesk/models/helpdesk_ticket.py:101
+msgid "Upcoming Shift CC: %s"
 msgstr ""
 
 #: zero_sudo/models/security_utils.py:259
@@ -463,6 +495,10 @@ msgstr ""
 msgid "You must provide both the Cloudflare API Token and Account ID to create a tunnel."
 msgstr ""
 
+#: hams_helpdesk/models/helpdesk_ticket.py:119
+msgid "Your issue has been updated. New Status: %s"
+msgstr ""
+
 #: cloudflare/models/zone_settings_wizard.py:91
 msgid "Zone settings updated successfully."
 msgstr ""
@@ -481,5 +517,9 @@ msgstr ""
 
 #: pager_duty/models/incident.py:112
 msgid "🚨 ESCALATION: Incident open for > 15 minutes!"
+msgstr ""
+
+#: pager_duty/models/incident_ticket_adapter.py:110
+msgid "🚨 PAGER DUTY FALLBACK: %s"
 msgstr ""
 

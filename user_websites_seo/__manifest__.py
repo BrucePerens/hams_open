@@ -12,7 +12,7 @@
         "website",
         "user_websites",
         "zero_sudo",
-        "test_tours",
+        "hams_test",
     ],
     "data": [
         "views/res_users_views.xml",

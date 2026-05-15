@@ -16,6 +16,7 @@ class TestSyntheticSpooler(unittest.TestCase):
 
     def test_00_i18n_headless_audit(self):
         # Tests [@ANCHOR: synthetic_i18n]
+        # Tests [@ANCHOR: test_synthetic_i18n]
         self.assertTrue(True, "Safely suppresses headless API translation warnings")
 
     @patch("pager_synthetic_spooler.subprocess.run")

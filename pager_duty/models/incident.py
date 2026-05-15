@@ -148,7 +148,12 @@ class PagerIncident(models.Model):
 
         incident = IncidentModel.create(vals)
         on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
-        if on_duty_user:
+
+        # Suppress native pager notifications if helpdesk integration is active
+        # to prevent duplicate alerting (Helpdesk will handle the page).
+        use_helpdesk = self.env["ir.config_parameter"].get_param("pager_duty.helpdesk_model")
+
+        if on_duty_user and not use_helpdesk:
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "zero_sudo.mail_service_internal"
             )
