@@ -20,6 +20,24 @@ This is the core security cop for our Odoo ecosystem. It enforces our strict **Z
 This module acts as the foundational security layer for the entire ecosystem. It implements the platform's strict **Zero-Sudo Architecture** (ADR-0002) and **Service Account Web Isolation** (ADR-0005).
 </system_role>
 
+<architecture>
+## Core Architecture
+
+The module utilizes several key patterns to secure the system:
+1.  **Service Account Pattern**: High-privilege operations are offloaded to dedicated `res.users` records flagged with `is_service_account=True`.
+2.  **Centralized Security Utilities**: The `zero_sudo.security.utils` model provides cached methods for secure UID retrieval, system parameter whitelisting, and deterministic hashing.
+3.  **Web Isolation Interceptor**: A controller override on `web_login` that uses raw SQL to check and block interactive logins for service accounts.
+4.  **Automated Documentation Bootstrap**: An inheritance of `ir.module.module` that centrally manages the installation of HTML documentation from module manifests.
+</architecture>
+
+<security_design>
+## Security Design (ADR-0002, ADR-0005)
+
+-   **Anti-IDOR & Privilege Escalation**: The `_get_service_uid` method performs direct SQL lookups and strictly rejects any service account with global administrative groups (`base.group_system`, `base.group_erp_manager`).
+-   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce a hardcoded `PARAM_WHITELIST` and block keys matching cryptographic patterns (e.g., "secret", "token") to prevent SSTI exfiltration.
+-   **Coherent Cache Signaling**: Uses PostgreSQL `NOTIFY` (`pg_notify`) to synchronize in-memory caches across distributed worker nodes.
+</security_design>
+
 ---
 
 <migration_instructions>
@@ -96,31 +114,56 @@ When a daemon or unprivileged user strictly requires native ERP framework intera
 For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
-* **Secure Privilege Escalation** `[@ANCHOR: story_secure_escalation]`: Narrative on how developers securely escalate privileges using service accounts instead of `.sudo()`. [Read Story](docs/stories/zero_sudo/secure_escalation.md)
-* **Blocking Service Account Login** `[@ANCHOR: story_login_blocking]`: How the system prevents service accounts from accessing the interactive web interface. [Read Story](docs/stories/zero_sudo/login_blocking.md)
-* **Parameter Whitelisting** `[@ANCHOR: story_parameter_whitelisting]`: Protection of sensitive system parameters from unauthorized access. [Read Story](docs/stories/zero_sudo/parameter_whitelisting.md)
-* **Coherent Cache Signaling** `[@ANCHOR: story_cache_signaling]`: Ensuring cache consistency across multiple Odoo workers using Postgres NOTIFY. [Read Story](docs/stories/zero_sudo/cache_signaling.md)
-* **Deterministic Hashing** `[@ANCHOR: story_deterministic_hash]`: Generation of stable integer hashes for PostgreSQL advisory locks. [Read Story](docs/stories/zero_sudo/deterministic_hashing.md)
-* **Python VENV Management** `[@ANCHOR: story_venv_management]`: How administrators can trigger updates of system Python dependencies safely. [Read Story](docs/stories/zero_sudo/venv_management.md)
-* **Centralized Documentation Bootstrap** `[@ANCHOR: story_zero_sudo_doc_installer]`: How documentation is centrally installed across the platform. [Read Story](docs/stories/zero_sudo/documentation_bootstrap.md)
+* **Secure Privilege Escalation** `[@ANCHOR: story_secure_escalation]`: Narrative on how developers securely escalate privileges using service accounts instead of `.sudo()`. [Read Story](zero_sudo/docs/stories/secure_escalation.md)
+* **Blocking Service Account Login** `[@ANCHOR: story_login_blocking]`: How the system prevents service accounts from accessing the interactive web interface. [Read Story](zero_sudo/docs/stories/login_blocking.md)
+* **Parameter Whitelisting** `[@ANCHOR: story_parameter_whitelisting]`: Protection of sensitive system parameters from unauthorized access. [Read Story](zero_sudo/docs/stories/parameter_whitelisting.md)
+* **Coherent Cache Signaling** `[@ANCHOR: story_cache_signaling]`: Ensuring cache consistency across multiple Odoo workers using Postgres NOTIFY. [Read Story](zero_sudo/docs/stories/cache_signaling.md)
+* **Deterministic Hashing** `[@ANCHOR: story_deterministic_hash]`: Generation of stable integer hashes for PostgreSQL advisory locks. [Read Story](zero_sudo/docs/stories/deterministic_hashing.md)
+* **Python VENV Management** `[@ANCHOR: story_venv_management]`: How administrators can trigger updates of system Python dependencies safely. [Read Story](zero_sudo/docs/stories/venv_management.md)
+* **Centralized Documentation Bootstrap** `[@ANCHOR: story_zero_sudo_doc_installer]`: How documentation is centrally installed across the platform. [Read Story](zero_sudo/docs/stories/documentation_bootstrap.md)
 
 ### Journeys
-* **Service Account Lifecycle** `[@ANCHOR: journey_service_account_lifecycle]`: The end-to-end flow of a service account from provisioning to secure execution. [Read Journey](docs/journeys/zero_sudo/service_account_lifecycle.md)
-* **Securing Configuration Parameters** `[@ANCHOR: journey_securing_configuration]`: The workflow for safely integrating and accessing new configuration parameters. [Read Journey](docs/journeys/zero_sudo/securing_configuration.md)
+* **Service Account Lifecycle** `[@ANCHOR: journey_service_account_lifecycle]`: The end-to-end flow of a service account from provisioning to secure execution. [Read Journey](zero_sudo/docs/journeys/service_account_lifecycle.md)
+* **Securing Configuration Parameters** `[@ANCHOR: journey_securing_configuration]`: The workflow for safely integrating and accessing new configuration parameters. [Read Journey](zero_sudo/docs/journeys/securing_configuration.md)
 </stories_and_journeys>
 
 ---
 
+<python_api>
+## 6. Python API Reference (`zero_sudo.security.utils`)
+
+This `AbstractModel` is the only approved way to escalate privileges for system-level operations.
+
+#### `_get_service_uid(xml_id)` `[@ANCHOR: get_service_uid]`
+Safely retrieves the database ID of a Service Account without requiring inline `.sudo()`. The result is RAM-cached for extreme performance.
+* **Arguments:** `xml_id` (str): The external ID of the service account (e.g., `'your_module.your_service_account'`).
+* **Returns:** `int` (The User ID).
+
+#### `_get_deterministic_hash(input_string)` `[@ANCHOR: deterministic_hash]`
+Generates a high-speed, cryptographically deterministic 32-bit integer hash. MUST be used instead of Python's native `hash()` for `pg_advisory_xact_lock`.
+* **Arguments:** `input_string` (str): The unique string to hash.
+* **Returns:** `int` (A 32-bit integer safe for Postgres).
+
+#### `_get_system_param(key, default=None)` `[@ANCHOR: get_system_param]`
+Safely retrieves a whitelisted system configuration parameter.
+* **Arguments:** `key` (str): The configuration parameter key.
+* **Returns:** `str` or the default value.
+
+#### `_notify_cache_invalidation(model_name, key_value)` `[@ANCHOR: coherent_cache_signal]`
+Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
+* **Arguments:** `model_name` (str): The Odoo model. `key_value` (str): The unique identifier.
+
+#### `_update_python_venv()` `[@ANCHOR: update_python_venv]`
+Triggers `pip install` for module dependencies (restricted to Administrators).
+
+#### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
+Retrieves the root cryptographic key from environment or local file, bypassing DB.
+</python_api>
+
+---
+
 <additional_features>
-## 5. Additional Utilities
-
-### Deterministic Hashing
-* **Function:** `_get_deterministic_hash` `[@ANCHOR: deterministic_hash]`
-* **Use Case:** Generating stable integer hashes for PostgreSQL advisory locks.
-
-### VENV Management
-* **Function:** `_update_python_venv` `[@ANCHOR: update_python_venv]`
-* **Use Case:** Triggering `pip install` for module dependencies (restricted to Administrators).
+## 7. Additional Utilities
 
 ### Web Login Security
 * **Field:** `is_service_account` `[@ANCHOR: is_service_account_field]` on `res.users`.
@@ -128,7 +171,8 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * **Security Check:** Performs direct SQL check `[@ANCHOR: web_login_interceptor_check]` for isolation.
 * **Effect:** Prevents interactive web logins for any user flagged as a service account.
 </additional_features>
-## 6. Automated Document Installation Facility
+
+## 8. Automated Document Installation Facility
 The `zero_sudo` module provides a centralized facility to inject standalone HTML documentation into the `knowledge.article` or `manual.article` APIs. This structurally eliminates the need to maintain fragile ad-hoc `post_init_hook` scripts in every downstream module.
 
 **How to use it:**
@@ -144,4 +188,4 @@ The `zero_sudo` module provides a centralized facility to inject standalone HTML
         }
     ],
 ```
-3. The `zero_sudo` registry hook (`_register_hook`) will automatically deploy it when the registry is fully loaded, ensuring idempotency via an injected system parameter containing the SHA-256 hash of the payload. **DO NOT** create custom hooks for documentation moving forward.
+3. The `zero_sudo` registry hook (`_register_hook`) will automatically deploy it when the registry is fully loaded.

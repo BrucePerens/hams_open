@@ -13,9 +13,9 @@
         </field>
     </record>
 
-    <record id="view_users_tree_zero_sudo" model="ir.ui.view">
+    <record id="view_users_list_zero_sudo" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_res_users_views] --> <!-- burn-ignore-tour -->
-        <field name="name">res.users.tree.zero_sudo</field>
+        <field name="name">res.users.list.zero_sudo</field>
         <field name="model">res.users</field>
         <field name="inherit_id" ref="base.view_users_tree"/>
         <field name="arch" type="xml">
