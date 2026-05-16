@@ -21,7 +21,6 @@ class TestDocumentation(odoo.tests.common.HttpCase):
         )
 
     def test_01_documentation_hook_file_read(self):
-        # [@ANCHOR: test_01_documentation_hook_file_read]
         # Tests [@ANCHOR: documentation_bootstrap]
         """
         Explicitly verify that the documentation bootstrap mechanism (via _register_hook

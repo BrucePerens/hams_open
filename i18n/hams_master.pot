@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-16 16:07+0000\n"
-"PO-Revision-Date: 2026-05-16 16:07+0000\n"
+"POT-Creation-Date: 2026-05-16 16:30+0000\n"
+"PO-Revision-Date: 2026-05-16 16:30+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -57,7 +57,7 @@ msgstr ""
 msgid "Appeal rejected. The user remains suspended."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:151
+#: binary_downloader/models/binary_manifest.py:135
 msgid "Auto-install of %s is only supported on Linux x86_64. Please install manually."
 msgstr ""
 
@@ -69,7 +69,7 @@ msgstr ""
 msgid "Autodiscovery Complete"
 msgstr ""
 
-#: distributed_redis_cache/models/distributed_cache_config.py:31
+#: distributed_redis_cache/models/distributed_cache_config.py:23
 msgid "Cache invalidated for model %s"
 msgstr ""
 
@@ -121,7 +121,7 @@ msgstr ""
 msgid "Export Successful"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:255
+#: binary_downloader/models/binary_manifest.py:239
 msgid "Failed to auto-install %s: %s"
 msgstr ""
 
@@ -181,7 +181,7 @@ msgstr ""
 msgid "Invalid XML ID format: %s"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:126
+#: binary_downloader/models/binary_manifest.py:110
 msgid "Invalid binary name."
 msgstr ""
 
@@ -201,7 +201,7 @@ msgstr ""
 msgid "Kopia successfully installed to %s"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:243
+#: binary_downloader/models/binary_manifest.py:227
 msgid "Member %s not found in archive."
 msgstr ""
 
@@ -214,7 +214,7 @@ msgstr ""
 msgid "Missing Cloudflare API Token or Zone ID for the selected website."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:143
+#: binary_downloader/models/binary_manifest.py:127
 msgid "Missing dependency: '%s'. Please configure it in Settings -> Technical -> Binary Manifests or install via OS package manager."
 msgstr ""
 
@@ -246,7 +246,7 @@ msgstr ""
 msgid "Only administrators can update the Python environment."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:40
+#: binary_downloader/models/binary_manifest.py:39
 msgid "Only http:// and https:// URLs are allowed for security reasons."
 msgstr ""
 
@@ -278,32 +278,24 @@ msgstr ""
 msgid "RAM and CPU must be greater than zero."
 msgstr ""
 
-#: distributed_redis_cache/models/distributed_cache_config.py:57
+#: distributed_redis_cache/models/distributed_cache_config.py:49
 msgid "Redis Status"
 msgstr ""
 
-#: distributed_redis_cache/models/distributed_cache_config.py:50
+#: distributed_redis_cache/models/distributed_cache_config.py:42
 msgid "Redis connection failed: %s"
 msgstr ""
 
-#: distributed_redis_cache/models/distributed_cache_config.py:47
+#: distributed_redis_cache/models/distributed_cache_config.py:39
 msgid "Redis connection is healthy."
 msgstr ""
 
-#: distributed_redis_cache/models/distributed_cache_config.py:40
+#: distributed_redis_cache/models/distributed_cache_config.py:32
 msgid "Redis connection is not configured or unavailable. Local fallback cache is active."
 msgstr ""
 
 #: zero_sudo/models/security_utils.py:242
 msgid "Requirements file not found at %s"
-msgstr ""
-
-#: binary_downloader/models/binary_manifest.py:95
-msgid "SHA-256 checksum must be a hexadecimal string."
-msgstr ""
-
-#: binary_downloader/models/binary_manifest.py:91
-msgid "SHA-256 checksum must be exactly 64 characters."
 msgstr ""
 
 #: pager_duty/models/pager_check.py:637
@@ -314,11 +306,11 @@ msgstr ""
 msgid "Security Alert: '%s' is a human user, not a Service Account. Privilege escalation denied."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:211
+#: binary_downloader/models/binary_manifest.py:195
 msgid "Security Alert: Checksum mismatch for downloaded %s binary."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:229
+#: binary_downloader/models/binary_manifest.py:213
 msgid "Security Alert: Links are not allowed in the archive."
 msgstr ""
 
@@ -347,7 +339,7 @@ msgstr ""
 msgid "Security Alert: Service Account is disabled."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:238
+#: binary_downloader/models/binary_manifest.py:222
 msgid "Security Alert: Tar slip attempt detected."
 msgstr ""
 
@@ -371,7 +363,7 @@ msgstr ""
 msgid "Shift Handoff: %s"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:114
+#: binary_downloader/models/binary_manifest.py:98
 #: cloudflare/models/purge_wizard.py:44
 #: cloudflare/models/purge_wizard.py:68
 #: cloudflare/models/purge_wizard.py:84
@@ -379,11 +371,11 @@ msgstr ""
 #: cloudflare/models/res_config_settings.py:72
 #: cloudflare/models/tunnel.py:96
 #: cloudflare/models/zone_settings_wizard.py:89
-#: distributed_redis_cache/models/distributed_cache_config.py:30
+#: distributed_redis_cache/models/distributed_cache_config.py:22
 msgid "Success"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:115
+#: binary_downloader/models/binary_manifest.py:99
 msgid "Successfully installed %s."
 msgstr ""
 
@@ -400,7 +392,7 @@ msgstr ""
 msgid "The Website Slug must be unique and valid."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:61
+#: binary_downloader/models/binary_manifest.py:60
 msgid "The binary name cannot contain slashes or backslashes."
 msgstr ""
 
@@ -503,7 +495,7 @@ msgstr ""
 msgid "You do not have permission to create this site."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:103
+#: binary_downloader/models/binary_manifest.py:91
 msgid "You do not have sufficient permissions to install binaries."
 msgstr ""
 

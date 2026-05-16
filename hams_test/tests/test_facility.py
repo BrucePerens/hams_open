@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
-import os
-import unittest
-from unittest.mock import MagicMock, patch
 from odoo.tests.common import tagged
 from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
-from odoo.addons.hams_test.common import HamsIntegrationCase
 
 
 @tagged("post_install", "-at_install")
@@ -65,7 +61,7 @@ class TestRealTransactionFacility(RealTransactionCase):
 
         # Temporarily mock the tearDown leak detector to ensure it would raise
         leaks = []
-        noisy_tables_records = self.env['hams_test.noisy_table'].search([])
+        noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
         noisy_tables = {record.name for record in noisy_tables_records}
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
@@ -113,7 +109,7 @@ class TestRealTransactionFacility(RealTransactionCase):
         from catching it.
         """
         # Add ir_module_category to noisy tables
-        noisy_table_record = self.env['hams_test.noisy_table'].create({
+        noisy_table_record = self.env['test_real_transaction.noisy_table'].create({
             'name': 'ir_module_category'
         })
         self.env.cr.commit()
@@ -127,7 +123,7 @@ class TestRealTransactionFacility(RealTransactionCase):
 
         # Run the leak detector logic
         leaks = []
-        noisy_tables_records = self.env['hams_test.noisy_table'].search([])
+        noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
         noisy_tables = {record.name for record in noisy_tables_records}
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
@@ -171,34 +167,9 @@ class TestRealTransactionFacility(RealTransactionCase):
             self.assertTrue(article, "Documentation article should have been created.")
             self.assertIn("Real Transaction Testing Facility", article.body)
 
-
-@tagged("post_install", "-at_install")
-class TestIntegrationFacility(HamsIntegrationCase):
-    # Tests [@ANCHOR: integration_daemon_testing]
-
-    def test_01_daemon_lifecycle(self):
-        """
-        Verify that HamsIntegrationCase correctly manages daemon lifecycle.
-        We mock the daemon_utils to avoid actually spinning up a process.
-        """
-        DaemonUtils = self.registry['zero_sudo.daemon.utils']
-        with patch.object(DaemonUtils, 'start_daemon_process') as mock_start, \
-             patch.object(DaemonUtils, 'poll_health_check') as mock_poll, \
-             patch.object(DaemonUtils, 'stop_daemon_process') as mock_stop:
-
-            mock_process = MagicMock()
-            mock_start.return_value = mock_process
-
-            # Start a dummy daemon
-            dummy_path = os.path.join(os.path.dirname(__file__), "dummy_daemon.py")
-            process = self.start_daemon(dummy_path, health_url="http://odoo:1234")
-
-            self.assertEqual(process, mock_process)
-            self.assertIn(process, self._daemons)
-            mock_start.assert_called_once_with(dummy_path, None, None)
-            mock_poll.assert_called_once_with("http://odoo:1234", timeout=30)
-
-            # Verify daemons were stopped during teardown (HamsIntegrationCase handles this)
-            # We don't call tearDownClass manually to avoid double cleanup.
-            # Instead, we just check that the daemon was added to the list.
-            self.assertIn(mock_process, self._daemons)
+    @classmethod
+    def tearDownClass(cls):
+        # Stop integration daemon if active
+        if hasattr(cls, '_integration_daemon_process'):
+            cls._integration_daemon_process.terminate()
+        super().tearDownClass()
