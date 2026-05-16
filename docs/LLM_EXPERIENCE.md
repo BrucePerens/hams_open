@@ -121,3 +121,6 @@ session.
 ### The Tour URL Initialization Race Condition
 * **The Trap:** Starting a tour by having the first step execute `document.location.href = ...` with `expectUnloadPage: true` often causes a race condition where the Odoo tour runner tries to execute the next step before the redirect completes.
 * **The Solution:** Always use the native `url: "/your_path"` property in the tour definition block (`registry.category("web_tour.tours").add(..., { url: "...", steps: [...] })`).
+## 34. The `prefetch_fields=False` ORM Trap (KeyError: 'record')
+**The Trap:** Appending `.with_context(prefetch_fields=False)` to record creation (`.create()`) methods or using it on transient models without `mail.thread` crashes the Odoo 17+ ORM. It prevents Odoo from allocating the `'record'` key in the `data_list` dictionary during the `RETURNING id` phase of the bulk SQL insert, resulting in a fatal `KeyError: 'record'` inside `odoo/orm/models.py`.
+**The Solution:** You MUST NOT use `prefetch_fields=False` to bypass access errors. Use `.with_context(mail_notrack=True)` exclusively for headless background mutations on core identity records, and entirely remove context modifications from utility models without chatter.

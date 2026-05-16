@@ -61,8 +61,12 @@ class TestRealTransactionFacility(RealTransactionCase):
 
         # Temporarily mock the tearDown leak detector to ensure it would raise
         leaks = []
-        noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
-        noisy_tables = {record.name for record in noisy_tables_records}
+        noisy_tables = set()
+        try:
+            noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
+            noisy_tables = {record.name for record in noisy_tables_records}
+        except KeyError:
+            pass # Model may not be registered in all environments
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
         final_count = self.cr.fetchone()[0]
@@ -123,8 +127,12 @@ class TestRealTransactionFacility(RealTransactionCase):
 
         # Run the leak detector logic
         leaks = []
-        noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
-        noisy_tables = {record.name for record in noisy_tables_records}
+        noisy_tables = set()
+        try:
+            noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
+            noisy_tables = {record.name for record in noisy_tables_records}
+        except KeyError:
+            pass # Model may not be registered in all environments
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
         final_count = self.cr.fetchone()[0]

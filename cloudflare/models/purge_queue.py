@@ -60,10 +60,7 @@ class CloudflarePurgeQueue(models.Model):
             )
 
         if create_vals:
-            # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.purge.queue"].with_context(
-                mail_notrack=True, prefetch_fields=False
-            ).create(create_vals)
+            self.env["cloudflare.purge.queue"].create(create_vals)
 
     @api.model
     def enqueue_tags(self, tags, website_id=None):
@@ -84,10 +81,7 @@ class CloudflarePurgeQueue(models.Model):
             if t
         ]
         if create_vals:
-            # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.purge.queue"].with_context(
-                mail_notrack=True, prefetch_fields=False
-            ).create(create_vals)
+            self.env["cloudflare.purge.queue"].create(create_vals)
 
     @api.model
     def process_queue(self):
@@ -121,28 +115,16 @@ class CloudflarePurgeQueue(models.Model):
             if url_records:
                 if not purge_urls(url_records.mapped("target_item"), token, zone_id):
                     success = False
-                    # ADR-0001: Headless Mutation Context
-                    url_records.with_context(
-                        mail_notrack=True, prefetch_fields=False
-                    ).write({"state": "failed"})
+                    url_records.write({"state": "failed"})
                 else:
-                    # ADR-0001: Headless Mutation Context
-                    url_records.with_context(
-                        mail_notrack=True, prefetch_fields=False
-                    ).unlink()
+                    url_records.unlink()
 
             if tag_records:
                 if not purge_tags(tag_records.mapped("target_item"), token, zone_id):
                     success = False
-                    # ADR-0001: Headless Mutation Context
-                    tag_records.with_context(
-                        mail_notrack=True, prefetch_fields=False
-                    ).write({"state": "failed"})
+                    tag_records.write({"state": "failed"})
                 else:
-                    # ADR-0001: Headless Mutation Context
-                    tag_records.with_context(
-                        mail_notrack=True, prefetch_fields=False
-                    ).unlink()
+                    tag_records.unlink()
 
             if not success:
                 if not tools.config.get("test_enable"):
@@ -157,7 +139,7 @@ class CloudflarePurgeQueue(models.Model):
                 break
 
             if not os.environ.get("HAMS_DISABLE_SLEEPS"):
-                time.sleep(0.5) # audit-ignore-sleep: Rate limiting  # fmt: skip
+                time.sleep(0.5)  # audit-ignore-sleep: Rate limiting  # fmt: skip
 
         if batches_processed >= max_batches:
             cron = self.env.ref(

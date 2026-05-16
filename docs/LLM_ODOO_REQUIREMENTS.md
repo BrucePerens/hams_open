@@ -49,7 +49,7 @@ You MUST utilize one of the following native idioms:
 Prefix methods with `_` to block RPC.
 * **Service Account Pattern:** Create an isolated `res.groups` with no human members, and a dedicated internal `res.users` (`is_service_account="True"`).
 Execute logic using `.with_user(svc_uid)`.
-    * **ORM Cascade Bypass:** Append `.with_context(mail_notrack=True, prefetch_fields=False)` to prevent `AccessError` on chatter logs when Service Accounts mutate core identity records.
+    * **ORM Cascade Bypass:** Append `.with_context(mail_notrack=True)` to prevent `AccessError` on chatter logs when Service Accounts mutate core identity records. **🚨 CRITICAL TRAP:** NEVER use `prefetch_fields=False` during `.create()` operations or on models without chatter, as it causes a fatal `KeyError: 'record'` in Odoo 17+ ORM caching.
 * **Public Guest User:** Grant `perm_create=1` to `base.group_public` for unauthenticated data submission.
 * **Impersonation:** Shift environment context: `request.env['target.model'].with_user(user).create(...)`.
 * **Login As:** Swap `request.session.uid` directly in HTTP controller, preceded by a `message_post` audit log.
