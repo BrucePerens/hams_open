@@ -18,7 +18,7 @@ The module implements a reactive ticketing system where assignment is driven by 
 </architecture>
 
 <security_design>
-- **Zero-Sudo Compliance**: No `.sudo()` calls are allowed. All privilege elevations must use service accounts.
+- **Zero-Sudo Compliance**: No `.sudo()` calls are allowed. All privilege elevations must use service accounts (`hams_helpdesk.user_helpdesk_service` or `pager_duty.user_pager_service_internal`) via `zero_sudo`.
 - **Micro-Privilege**: Uses `res.groups.privilege` to define granular access.
 - **Portal Isolation**: Portal users are strictly limited via record rules to their own `partner_id`.
 </security_design>
@@ -40,20 +40,14 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
 
 ## Stories and Journeys
 
-### Ticket Lifecycle Management
+### Ticket Lifecycle Management ([@ANCHOR: helpdesk_ticket_lifecycle])
 **Goal**: Efficiently track and resolve system issues while maintaining a clear audit trail.
 1.  **Incoming Request**: A new ticket is created, either manually or via automated incident detection.
 2.  **Automated Routing**: The system identifies the currently on-duty administrator (`[@ANCHOR: helpdesk_ticket_creation]`) and assigns the ticket.
-3.  **Progression**: The operator moves the ticket through stages: New -> In Progress -> Resolved -> Closed (`[@ANCHOR: helpdesk_ticket_lifecycle]`).
+3.  **Progression**: The operator moves the ticket through stages: New -> In Progress -> Resolved -> Closed.
 4.  **Customer Communication**: Every stage change triggers an automated update to the reporter.
 
-### Shift Handoff Protocol
-**Goal**: Ensure seamless continuity of operations when operators rotate shifts.
-1.  **Initiation**: The outgoing operator selects "Shift Handoff" on an active ticket (`[@ANCHOR: helpdesk_shift_handoff]`).
-2.  **Context Capture**: A wizard appears requiring the selection of the next assignee and detailed handoff notes.
-3.  **Execution**: Upon confirmation, the system atomicaly updates ownership and logs a briefing (`[@ANCHOR: helpdesk_handoff_execution]`).
-
-### Incident Resolution Journey
+### Incident Resolution Journey ([@ANCHOR: journey_incident_resolution])
 **Goal**: Complete the lifecycle of a critical incident from detection to resolution.
 1.  **Detection**: System monitor detects a service failure.
 2.  **Creation**: A Helpdesk ticket is created.
@@ -61,3 +55,9 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
 4.  **Investigation**: SRE updates stage to "In Progress".
 5.  **Resolution**: SRE fixes the issue, updates stage to "Resolved".
 6.  **Closure**: After verification, the ticket is moved to "Closed".
+
+### Shift Handoff Protocol ([@ANCHOR: journey_shift_handoff])
+**Goal**: Ensure seamless continuity of operations when operators rotate shifts.
+1.  **Initiation**: The outgoing operator selects "Shift Handoff" on an active ticket (`[@ANCHOR: helpdesk_shift_handoff]`).
+2.  **Context Capture**: A wizard appears requiring the selection of the next assignee and detailed handoff notes.
+3.  **Execution**: Upon confirmation, the system atomically updates ownership and logs a briefing (`[@ANCHOR: helpdesk_handoff_execution]`).

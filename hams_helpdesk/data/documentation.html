@@ -1,4 +1,17 @@
 <div class="hams-doc-section">
     <h1>Hams Helpdesk</h1>
     <p>Hams Helpdesk provides Zero-Sudo compliant ticketing and issue tracking. It deeply integrates with the PagerDuty module via an agnostic Adapter API, allowing automated ticket creation and calendar event scheduling during system incidents.</p>
+
+    <h2>Zero-Sudo Architecture</h2>
+    <p>This module strictly adheres to the Zero-Sudo mandate. Background operations, automated routing, and notifications are performed using dedicated service accounts:</p>
+    <ul>
+        <li><strong>Helpdesk Service Account:</strong> (<code>hams_helpdesk.user_helpdesk_service</code>) Handles ticket assignments, notifications, and handoff execution.</li>
+        <li><strong>PagerDuty Service Account:</strong> (<code>pager_duty.user_pager_service_internal</code>) Used to safely query on-duty status from the calendar.</li>
+    </ul>
+
+    <h2>Ticket Lifecycle</h2>
+    <p>Tickets progress through stages: <strong>New</strong>, <strong>In Progress</strong>, <strong>Resolved</strong>, and <strong>Closed</strong>. Transitioning a ticket automatically notifies the reporting customer.</p>
+
+    <h2>Formal Shift Handoff</h2>
+    <p>Continuity is maintained via a formal handoff wizard. Operators are required to provide detailed briefing notes when transferring ownership, ensuring the next shift has all the necessary context to proceed with resolution.</p>
 </div>

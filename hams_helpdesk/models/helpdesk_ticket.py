@@ -54,43 +54,68 @@ class HelpdeskTicket(models.Model):
         # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
         tickets = super().create(vals_list)
 
-        # PagerDuty API Integration: Resolve on-duty personnel
-        on_duty_user = False
+        # Execute automated routing and notifications using service accounts to ensure Zero-Sudo compliance
+        tickets._automated_routing_and_notification()
 
-        # Use service account to search calendar events to ensure full visibility without sudo()
+        return tickets
+
+    def _automated_routing_and_notification(self):
+        """
+        Internal automation handler for ticket assignment and notifications.
+        Wraps background logic in service account contexts to bypass portal/user restrictions.
+        """
+        if not self:
+            return
+
+        utils = self.env["zero_sudo.security.utils"]
+
+        # 1. Resolve On-Duty Admin via PagerDuty (if available)
+        on_duty_user_id = False
+        upcoming_partner_ids = []
+
+        # Use service account if available, otherwise fallback to current env (e.g. during tests or if pager_duty not installed)
+        Calendar = self.env["calendar.event"]
         try:
-            env_svc = self.env["zero_sudo.security.utils"]._get_service_env("pager_duty.user_pager_service_internal")
-            Calendar = env_svc["calendar.event"]
+            pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
+            Calendar = pager_env["calendar.event"]
         except Exception:
-            Calendar = self.env["calendar.event"]
+            pass
 
         if hasattr(Calendar, "get_current_on_duty_admin"):
-            on_duty_user = Calendar.get_current_on_duty_admin()
+            on_duty_admin = Calendar.get_current_on_duty_admin()
+            if on_duty_admin:
+                on_duty_user_id = on_duty_admin.id
 
         # Discover upcoming shifts (within 30 minutes)
-        now = fields.Datetime.now()
-        thirty_mins = now + datetime.timedelta(minutes=30)
-        upcoming_users = self.env["res.users"]
         if "is_pager_duty" in Calendar._fields:
+            now = fields.Datetime.now()
+            thirty_mins = now + datetime.timedelta(minutes=30)
             upcoming_shifts = Calendar.search([
                 ("is_pager_duty", "=", True),
                 ("start", ">", now),
                 ("start", "<=", thirty_mins),
             ], limit=100)
-            upcoming_users = upcoming_shifts.mapped("user_id")
+            upcoming_partner_ids = upcoming_shifts.mapped("user_id.partner_id.id")
 
-        for ticket in tickets:
-            if on_duty_user and not ticket.user_id:
-                ticket.user_id = on_duty_user.id
+        # 2. Apply assignments and send notifications via Helpdesk Service Account
+        try:
+            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        except Exception:
+            hd_env = self.env
+
+        for ticket in self.with_env(hd_env):
+            # Assignment
+            if on_duty_user_id and not ticket.user_id:
+                ticket.user_id = on_duty_user_id
 
             if ticket.user_id:
-                # 1. Email Notification
+                # Email Notification
                 ticket.message_post(
                     body=_("Helpdesk Ticket #%s assigned to you.") % ticket.id,
                     partner_ids=[ticket.user_id.partner_id.id],
                     subject=_("Ticket Assigned: %s") % ticket.name
                 )
-                # 2. Toast Notification via Odoo Bus
+                # Bus Toast
                 self.env["bus.bus"]._sendone(
                     ticket.user_id.partner_id,
                     "simple_notification",
@@ -101,22 +126,22 @@ class HelpdeskTicket(models.Model):
                     }
                 )
 
-            # Pre-Shift CC Logic (Silent notification)
-            for up_user in upcoming_users:
-                if up_user != ticket.user_id:
-                    ticket.message_subscribe(partner_ids=[up_user.partner_id.id])
+            # Pre-Shift Awareness (CC upcoming admins)
+            if upcoming_partner_ids:
+                current_assignee_pid = ticket.user_id.partner_id.id if ticket.user_id else False
+                cc_pids = [pid for pid in upcoming_partner_ids if pid != current_assignee_pid]
+                if cc_pids:
+                    ticket.message_subscribe(partner_ids=cc_pids)
                     ticket.message_post(
-                        body=_("FYI: A new issue was logged shortly before your shift begins."),
-                        partner_ids=[up_user.partner_id.id],
-                        subject=_("Upcoming Shift CC: %s") % ticket.name,
-                        subtype_xmlid="mail.mt_note"  # Prevents actual paging
+                        body=_("Upcoming shift awareness: A new ticket was created near your shift start."),
+                        partner_ids=cc_pids,
+                        subject=_("Shift CC: %s") % ticket.name,
+                        subtype_xmlid="mail.mt_note"
                     )
 
-            # Ensure customer is subscribed for mail-back loop
+            # Ensure customer is subscribed
             if ticket.partner_id:
                 ticket.message_subscribe(partner_ids=[ticket.partner_id.id])
-
-        return tickets
 
     def write(self, vals):
         res = super().write(vals)

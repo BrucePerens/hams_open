@@ -24,6 +24,30 @@
             "path": "data/documentation.html",
             "icon": "🎫",
             "category": "technical",
+        },
+        {
+            "name": "Story: Helpdesk Ticket Lifecycle",
+            "path": "docs/stories/helpdesk_ticket_lifecycle.md",
+            "icon": "🔄",
+            "category": "technical",
+        },
+        {
+            "name": "Story: Helpdesk Ticket Creation",
+            "path": "docs/stories/helpdesk_ticket_creation.md",
+            "icon": "🆕",
+            "category": "technical",
+        },
+        {
+            "name": "Journey: Incident Resolution",
+            "path": "docs/journeys/incident_resolution.md",
+            "icon": "🛠️",
+            "category": "technical",
+        },
+        {
+            "name": "Journey: Shift Handoff Protocol",
+            "path": "docs/journeys/shift_handoff_protocol.md",
+            "icon": "🤝",
+            "category": "technical",
         }
     ],
     "installable": True,
