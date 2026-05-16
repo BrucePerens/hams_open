@@ -160,15 +160,6 @@ class ResUsers(models.Model):
         "content.violation.appeal", "user_id", string="Moderation Appeals"
     )
 
-    @api.model
-    def _register_hook(self):
-        # [@ANCHOR: documentation_bootstrap]
-        # Verified by [@ANCHOR: test_01_documentation_hook_file_read]
-        # ADR-0055: Soft-dependency documentation bootstrap
-        if hasattr(self.env["ir.module.module"], "_bootstrap_knowledge_docs"):
-            self.env["ir.module.module"]._bootstrap_knowledge_docs()
-        return super()._register_hook()
-
     # --- Odoo 19 Constraint Syntax ---
     _website_slug_unique = models.Constraint(
         "UNIQUE(website_slug)", "The Website Slug must be unique!"
