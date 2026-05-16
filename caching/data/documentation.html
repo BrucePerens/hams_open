@@ -7,11 +7,12 @@
 
     <h2>2. Integration Rules</h2>
     <ul>
-        <li><strong>Automatic Caching:</strong> Assets placed in your module's <code>static/</code> directory are cached automatically.</li>
-        <li><strong>No Competing Workers:</strong> DO NOT attempt to register another Service Worker.</li>
-        <li><strong>WebSockets:</strong> <code>ws://</code> and <code>wss://</code> protocols are hardcoded to bypass the proxy.</li>
-        <li><strong>Dynamic Large File Prohibition:</strong> The worker mathematically calculates an active quota limit (approx 35MB). Heavy media MUST route via <code>/web/image</code> or <code>/web/content</code> to prevent the cache from ejecting critical UI bundles.</li>
+        <li><strong>Automatic Caching:</strong> Assets placed in your module's <code>static/</code> directory are cached automatically. This includes JavaScript, CSS, and images.</li>
+        <li><strong>No Competing Workers:</strong> DO NOT attempt to register another Service Worker. The browser only allows one worker per scope.</li>
+        <li><strong>WebSockets:</strong> <code>ws://</code> and <code>wss://</code> protocols are hardcoded to bypass the proxy to ensure real-time communication is not interrupted.</li>
+        <li><strong>Dynamic Large File Prohibition:</strong> The worker mathematically calculates an active quota limit (default 35MB). Heavy media MUST route via <code>/web/image</code> or <code>/web/content</code> as these routes are explicitly bypassed.</li>
         <li><strong>Layout Injection:</strong> The service worker registration script is injected globally into the frontend <code>website.layout</code>.</li>
+        <li><strong>Zero-Sudo Architecture:</strong> The module uses micro-privilege service accounts (<code>caching.user_caching_service</code>) for administrative tasks like system parameter access and filesystem scanning, adhering to strict security protocols.</li>
     </ul>
 
     <h2>3. Configuration</h2>
@@ -23,4 +24,5 @@
 
     <h2>4. Technical Details</h2>
     <p>The Service Worker intercepts requests matching <code>/web/assets/</code> and <code>/*/static/</code>. It uses a Cache-First strategy for these assets, falling back to the network and then caching the result if it's within the size limit.</p>
+    <p>Cache invalidation is handled by an <code>mtime</code>-based versioning scheme. The <code>/sw.js</code> route dynamically injects the latest filesystem modification time from the server's <code>static/</code> directories, forcing the browser to update the Service Worker whenever assets change.</p>
 </section>

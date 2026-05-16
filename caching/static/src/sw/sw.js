@@ -54,7 +54,11 @@ self.addEventListener('fetch', (event) => {
 
                     const responseToCache = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseToCache);
+                        cache.put(request, responseToCache).catch(err => {
+                            console.error(`[Caching SW] Failed to cache ${request.url}:`, err);
+                        });
+                    }).catch(err => {
+                        console.error(`[Caching SW] Failed to open cache ${CACHE_NAME}:`, err);
                     });
                     return networkResponse;
                 });
