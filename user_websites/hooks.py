@@ -5,6 +5,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 def post_init_hook(env):
+    # [@ANCHOR: documentation_bootstrap]
     """
     Hook executed upon module installation.
     """

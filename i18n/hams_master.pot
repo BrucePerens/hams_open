@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-16 15:20+0000\n"
-"PO-Revision-Date: 2026-05-16 15:20+0000\n"
+"POT-Creation-Date: 2026-05-16 16:07+0000\n"
+"PO-Revision-Date: 2026-05-16 16:07+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -57,7 +57,7 @@ msgstr ""
 msgid "Appeal rejected. The user remains suspended."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:136
+#: binary_downloader/models/binary_manifest.py:151
 msgid "Auto-install of %s is only supported on Linux x86_64. Please install manually."
 msgstr ""
 
@@ -101,7 +101,7 @@ msgstr ""
 msgid "Database checks updated from JSON file."
 msgstr ""
 
-#: hams_test/tests/real_transaction.py:186
+#: hams_test/tests/real_transaction.py:193
 msgid "Database pollution detected! Auto-cleanup failed or raw SQL was used. Leaked records: %s"
 msgstr ""
 
@@ -113,7 +113,7 @@ msgstr ""
 msgid "Error executing vacuumdb: %s"
 msgstr ""
 
-#: manual_library/models/knowledge_article.py:74
+#: manual_library/models/knowledge_article.py:75
 msgid "Error! You cannot create recursive articles."
 msgstr ""
 
@@ -121,11 +121,7 @@ msgstr ""
 msgid "Export Successful"
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:109
-msgid "FYI: A new issue was logged shortly before your shift begins."
-msgstr ""
-
-#: binary_downloader/models/binary_manifest.py:240
+#: binary_downloader/models/binary_manifest.py:255
 msgid "Failed to auto-install %s: %s"
 msgstr ""
 
@@ -169,7 +165,7 @@ msgstr ""
 msgid "Failed to update some settings:\n%s"
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:89
+#: hams_helpdesk/models/helpdesk_ticket.py:114
 msgid "Helpdesk Ticket #%s assigned to you."
 msgstr ""
 
@@ -185,7 +181,7 @@ msgstr ""
 msgid "Invalid XML ID format: %s"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:111
+#: binary_downloader/models/binary_manifest.py:126
 msgid "Invalid binary name."
 msgstr ""
 
@@ -205,7 +201,7 @@ msgstr ""
 msgid "Kopia successfully installed to %s"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:228
+#: binary_downloader/models/binary_manifest.py:243
 msgid "Member %s not found in archive."
 msgstr ""
 
@@ -218,7 +214,7 @@ msgstr ""
 msgid "Missing Cloudflare API Token or Zone ID for the selected website."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:128
+#: binary_downloader/models/binary_manifest.py:143
 msgid "Missing dependency: '%s'. Please configure it in Settings -> Technical -> Binary Manifests or install via OS package manager."
 msgstr ""
 
@@ -226,7 +222,7 @@ msgstr ""
 msgid "Missing dependency: '%s'. Please install via OS package manager (e.g., 'apt-get install %s')."
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:99
+#: hams_helpdesk/models/helpdesk_ticket.py:124
 msgid "New Helpdesk Ticket"
 msgstr ""
 
@@ -302,6 +298,14 @@ msgstr ""
 msgid "Requirements file not found at %s"
 msgstr ""
 
+#: binary_downloader/models/binary_manifest.py:95
+msgid "SHA-256 checksum must be a hexadecimal string."
+msgstr ""
+
+#: binary_downloader/models/binary_manifest.py:91
+msgid "SHA-256 checksum must be exactly 64 characters."
+msgstr ""
+
 #: pager_duty/models/pager_check.py:637
 msgid "Scanned the system and injected optimal monitoring checks. Daemon configuration updated."
 msgstr ""
@@ -310,11 +314,11 @@ msgstr ""
 msgid "Security Alert: '%s' is a human user, not a Service Account. Privilege escalation denied."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:196
+#: binary_downloader/models/binary_manifest.py:211
 msgid "Security Alert: Checksum mismatch for downloaded %s binary."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:214
+#: binary_downloader/models/binary_manifest.py:229
 msgid "Security Alert: Links are not allowed in the archive."
 msgstr ""
 
@@ -343,7 +347,7 @@ msgstr ""
 msgid "Security Alert: Service Account is disabled."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:223
+#: binary_downloader/models/binary_manifest.py:238
 msgid "Security Alert: Tar slip attempt detected."
 msgstr ""
 
@@ -359,11 +363,15 @@ msgstr ""
 msgid "Security Alert: Writing to system directory '%s' is forbidden."
 msgstr ""
 
-#: hams_helpdesk/models/shift_handoff.py:28
+#: hams_helpdesk/models/helpdesk_ticket.py:138
+msgid "Shift CC: %s"
+msgstr ""
+
+#: hams_helpdesk/models/shift_handoff.py:36
 msgid "Shift Handoff: %s"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:99
+#: binary_downloader/models/binary_manifest.py:114
 #: cloudflare/models/purge_wizard.py:44
 #: cloudflare/models/purge_wizard.py:68
 #: cloudflare/models/purge_wizard.py:84
@@ -375,7 +383,7 @@ msgstr ""
 msgid "Success"
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:100
+#: binary_downloader/models/binary_manifest.py:115
 msgid "Successfully installed %s."
 msgstr ""
 
@@ -388,7 +396,7 @@ msgstr ""
 msgid "The Group Website Slug must be unique and valid."
 msgstr ""
 
-#: user_websites/models/res_users.py:334
+#: user_websites/models/res_users.py:325
 msgid "The Website Slug must be unique and valid."
 msgstr ""
 
@@ -404,7 +412,7 @@ msgstr ""
 msgid "The selected user must be a service account."
 msgstr ""
 
-#: user_websites/models/res_users.py:187
+#: user_websites/models/res_users.py:178
 #: user_websites/models/user_websites_groups.py:92
 msgid "The slug '%s' is reserved and cannot be used."
 msgstr ""
@@ -413,15 +421,15 @@ msgstr ""
 msgid "This group has reached its limit of %s website pages."
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:100
+#: hams_helpdesk/models/helpdesk_ticket.py:125
 msgid "Ticket %s requires your attention."
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:91
+#: hams_helpdesk/models/helpdesk_ticket.py:116
 msgid "Ticket Assigned: %s"
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:131
+#: hams_helpdesk/models/helpdesk_ticket.py:156
 msgid "Ticket Update: %s"
 msgstr ""
 
@@ -429,7 +437,7 @@ msgstr ""
 msgid "Tunnels synced successfully."
 msgstr ""
 
-#: user_websites/models/res_users.py:210
+#: user_websites/models/res_users.py:201
 #: user_websites/models/user_websites_groups.py:129
 msgid "Unable to generate a unique website slug after %s attempts."
 msgstr ""
@@ -438,8 +446,8 @@ msgstr ""
 msgid "Unknown engine: %s"
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:111
-msgid "Upcoming Shift CC: %s"
+#: hams_helpdesk/models/helpdesk_ticket.py:136
+msgid "Upcoming shift awareness: A new ticket was created near your shift start."
 msgstr ""
 
 #: zero_sudo/models/security_utils.py:254
@@ -495,7 +503,7 @@ msgstr ""
 msgid "You do not have permission to create this site."
 msgstr ""
 
-#: binary_downloader/models/binary_manifest.py:92
+#: binary_downloader/models/binary_manifest.py:103
 msgid "You do not have sufficient permissions to install binaries."
 msgstr ""
 
@@ -511,7 +519,7 @@ msgstr ""
 msgid "You must provide both the Cloudflare API Token and Account ID to create a tunnel."
 msgstr ""
 
-#: hams_helpdesk/models/helpdesk_ticket.py:129
+#: hams_helpdesk/models/helpdesk_ticket.py:154
 msgid "Your issue has been updated. New Status: %s"
 msgstr ""
 

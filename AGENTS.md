@@ -32,6 +32,12 @@ For example: gemini.google.com and jules.google.com.
 * **Architectural Adherence Policy:** You MUST respect the architectural intent of our linters and extractors by fixing the underlying logic of triggered rules. Ensure that code remains structurally sound and aligned with platform security mandates.
 
 * **Guardrail Preservation Mandate:** You MUST NEVER remove linter bypass tags (e.g., `# burn-ignore-...`, `audit-ignore-...`), semantic anchors, or any other code-correctness or AI-failure-detection facility unless explicitly directed by the human user.
+
+* **The Flake8 Purge Mandate (Anti-Amnesia):**
+  When refactoring or modifying imports, you MUST mentally execute a "Dead Import Purge". Do not leave unused imports behind (e.g., `os`, `unittest`, `stat`). Flake8 will block the build. Similarly, do not assign variables and leave them unused (e.g., `result = func()`).
+
+* **The Anchor Parity Mandate (Anti-Drift):**
+  Before submitting a patch, you MUST verify bidirectional anchor parity. If you create a test claiming `# Tests [@ANCHOR: feature_x]`, you MUST ensure that `[@ANCHOR: feature_x]` physically exists in the core architectural source file it is testing. Tests cannot link to non-existent source features.
 </persona_and_boundaries>
 
 <project_overview>
