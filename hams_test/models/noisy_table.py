@@ -2,7 +2,7 @@
 from odoo import models, fields
 
 class NoisyTable(models.Model):
-    _name = 'test_real_transaction.noisy_table'
+    _name = 'hams_test.noisy_table'
     _description = 'Noisy Table'
 
     name = fields.Char(string='Table Name', required=True, help='Name of the PostgreSQL table to ignore in leak detection.')

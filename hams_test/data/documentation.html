@@ -42,3 +42,11 @@ class MyAdvancedTest(RealTransactionCase):
 
 <h2>Management Interface</h2>
 <p>Administrators can manage the facility through the <strong>Noisy Tables</strong> interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]). Noisy tables are explicitly excluded from the leak detection check, which is useful for system logging tables or tables managed by background processes during the test execution.</p>
+
+<h2>Integration Testing with Daemons</h2>
+<p>The <code>HamsIntegrationCase</code> ([@ANCHOR: integration_daemon_testing]) facility provides an automated execution wrapper to spin up external Python daemons (e.g., Pager Duty Spoolers, Redis Cache Managers) and run real HTTP/XML-RPC requests against them during the test phase.</p>
+
+<ul>
+    <li><strong>Lifecycle Management:</strong> It utilizes Python's <code>subprocess</code> to boot daemons in <code>setUpClass()</code> and guarantees zombie processes are SIGKILL'd in <code>tearDownClass()</code>.</li>
+    <li><strong>Health Polling:</strong> It automatically polls the daemon's port/endpoint until a <code>200 OK</code> is returned, preventing race conditions where test requests fire before the daemon binds to the socket.</li>
+</ul>

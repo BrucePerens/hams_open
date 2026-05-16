@@ -108,6 +108,12 @@ The module implements three primary testing facilities:
 
 It also includes a **Noisy Table Management** interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]) to allow administrators to whitelist tables from leak detection.
 
+## 7. Integration Testing with Daemons
+
+The `HamsIntegrationCase` class ([@ANCHOR: integration_daemon_testing]) simplifies testing of Odoo modules that interact with external Python daemons. It provides:
+- **Lifecycle Management**: Automatically starts and stops daemons defined in tests.
+- **Health Polling**: Waits for a daemon to be ready before proceeding with the test.
+
 ### Security Design
 - **Service Accounts**: Utilizes `user_real_transaction_service` ([@ANCHOR: user_real_transaction_service]) for background tasks and documentation injection.
 - **Zero-Sudo Compliance**: Strictly avoids `.sudo()` by leveraging the `zero_sudo` security utilities and micro-privilege service accounts.

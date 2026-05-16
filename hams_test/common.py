@@ -5,6 +5,7 @@ from odoo.tests.common import HttpCase
 _logger = logging.getLogger(__name__)
 
 class HamsIntegrationCase(HttpCase):
+    # [@ANCHOR: integration_daemon_testing]
     """
     Base class for heavy I/O integration tests.
     Automatically starts and stops required external daemons.

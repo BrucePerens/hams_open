@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="view_noisy_table_list" model="ir.ui.view">
-        <field name="name">test_real_transaction.noisy_table.list</field>
-        <field name="model">test_real_transaction.noisy_table</field>
+        <field name="name">hams_test.noisy_table.list</field>
+        <field name="model">hams_test.noisy_table</field>
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_noisy_table_tour] -->
             <list string="Noisy Tables">
@@ -13,8 +13,8 @@
     </record>
 
     <record id="view_noisy_table_form" model="ir.ui.view">
-        <field name="name">test_real_transaction.noisy_table.form</field>
-        <field name="model">test_real_transaction.noisy_table</field>
+        <field name="name">hams_test.noisy_table.form</field>
+        <field name="model">hams_test.noisy_table</field>
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_noisy_table_tour] -->
             <form string="Noisy Table">
@@ -35,7 +35,7 @@
 
     <record id="action_noisy_table" model="ir.actions.act_window">
         <field name="name">Noisy Tables</field>
-        <field name="res_model">test_real_transaction.noisy_table</field>
+        <field name="res_model">hams_test.noisy_table</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">

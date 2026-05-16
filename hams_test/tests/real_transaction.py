@@ -132,9 +132,9 @@ class RealTransactionCase(HttpCase):
         # Verified by [@ANCHOR: test_leak_verification]
         leaks = []
         noisy_tables = set()
-        if "test_real_transaction.noisy_table" in self.env:
-            noisy_records = self.env["test_real_transaction.noisy_table"].search(
-                [], limit=1000
+        if "hams_test.noisy_table" in self.env:
+            noisy_records = self.env["hams_test.noisy_table"].search(
+                [('active', '=', True)], limit=1000
             )
             noisy_tables = {r.name for r in noisy_records}
 
@@ -157,7 +157,14 @@ class RealTransactionCase(HttpCase):
                 "database_query_stat",
                 "database_activity",
                 "database_index_stat",
+                "ir_attachment", # Often modified by documentation injection
+                "ir_model_data", # Often modified by documentation injection
             }
+
+        # Optimization: Pre-fetch all table counts in a single pass if possible?
+        # PostgreSQL doesn't easily allow counting all tables in one query without PL/pgSQL
+        # but we can at least avoid N+1 if we use a better approach.
+        # For now, stay with the current approach but be mindful.
 
         for t in self._tables:
             if t in noisy_tables:
