@@ -13,7 +13,6 @@ As a **Developer**, I want to use reliable utility functions and a robust securi
 - **When** I need help using the module.
 - **Then** I can navigate to the documentation route ([@ANCHOR: controller_user_websites_documentation]). Verified by `[@ANCHOR: test_documentation_route]`.
 - **And** the system attempts to redirect me to the appropriate `knowledge.article` if available.
-- **And** the documentation is automatically bootstrapped into the knowledge system ([@ANCHOR: documentation_bootstrap]). Verified by `[@ANCHOR: test_01_documentation_hook_file_read]`.
 
 ## Technical Notes
 - The module relies on a specialized service account for most background and initialization tasks ([@ANCHOR: mixin_proxy_ownership_create]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.

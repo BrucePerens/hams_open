@@ -102,7 +102,8 @@ class IrHttp(models.AbstractModel):
 
             for m in models_to_clear:
                 if m and isinstance(m, str) and m in request.env:
-                    invalidate_model_cache(request.env, m)
+                    # Pass local_only=True to prevent infinite pub/sub loops
+                    invalidate_model_cache(request.env, m, local_only=True)
                     info_msg = """Cache cleared for model: %s"""
                     _logger.info(info_msg, m)
 

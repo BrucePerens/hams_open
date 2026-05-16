@@ -1,33 +1,13 @@
 # 📟 Pager Duty & Generalized Monitoring (`pager_duty`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Copyright © Bruce Perens K6BP. AGPL-3.0.*
 
-The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) suite designed to keep your Odoo infrastructure running smoothly. It provides active monitoring, intelligent alerting, and automated incident management.
-
-## 🌟 What It Does
-
-* **Active System Monitoring:** Continuously checks the health of your web workers, background daemons, databases, and network connections.
-* **Smart Alerting:** Routes alerts to the right person at the right time based on calendar schedules, preventing alert fatigue and ensuring critical issues are addressed.
-* **Automated Escalation:** If an incident isn't acknowledged promptly, it escalates to wider groups or management.
-* **Incident Analytics:** Tracks Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR) to help teams improve their response processes.
-
-## 🛠️ How to Set It Up
-
-1. Drop the `pager_duty` folder into your Odoo `addons` directory.
-2. Ensure required Python dependencies (like `redis` and `asyncpg`) are installed.
-3. Install the module from the Odoo Apps menu.
-4. Access the **SRE Dashboard** to configure monitoring targets and define on-call schedules.
+**Context:** Technical documentation strictly for LLMs and Integrators.
 
 ---
 
-# Technical Documentation
-
-<system_role>
-**Context:** Technical documentation strictly for LLMs and Integrators.
-</system_role>
-
 ## 1. Overview & Architecture
-The Pager Duty module uses a **CQRS Architecture**: Odoo acts purely as the configuration control plane (`pager.check`), while a standalone Python daemon (`generalized_monitor.py`) handles the execution loop and state holding outside the WSGI workers.
+The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) suite. It uses a **CQRS Architecture**: Odoo acts purely as the configuration control plane (`pager.check`), while a standalone Python daemon (`generalized_monitor.py`) handles the execution loop and state holding outside the WSGI workers.
 
 ### Key Architectural Features:
 * **Zero-Sudo RPC:** The daemon pushes incidents to Odoo using the `pager_service_internal` micro-account. This triggers automated notifications [@ANCHOR: test_pager_notification] and implements Redis TTLs to prevent alert spam [@ANCHOR: report_incident_rate_limit].
@@ -114,26 +94,3 @@ For detailed narratives and end-to-end workflows, refer to the following:
 
 ## 6. Testing Mandate
 If you create a new plugin, you **MUST** update `daemons/pager_duty/test_generalized_monitor.py` with an isolated, aggressively mocked test verifying its successful parsing and failure states. Headless APIs and synthetic execution layers safely suppress i18n translation requirements during tests. [@ANCHOR: synthetic_i18n]
-
----
-
-## 7. Helpdesk Adapter API
-The Pager Duty module integrates with Helpdesk modules agnostically using an Adapter pattern.
-* **Adapter Implementation (`[@ANCHOR: pd_helpdesk_adapter]`)**: Intercepts incident creation, dynamically resolves the configured helpdesk model, and creates a unified tracking ticket. It incorporates a direct SMTP fallback if the target module is unreachable.
-
----
-
-## 8. Developer API: On-Duty Queries
-The Pager Duty module exposes a native API allowing other Odoo modules (like Helpdesk or Maintenance) to seamlessly query for the currently active on-call responder. This enables unified notification routing and avoids duplicate schedule logic.
-
-**API Endpoint:** `self.env["calendar.event"].get_current_on_duty_admin()`
-* **Returns:** `res.users` recordset (limit 1) if an active Pager Duty shift exists at `fields.Datetime.now()`, otherwise `False`.
-* **Example Usage:**
-  ```python
-  on_duty_user = False
-  if hasattr(self.env["calendar.event"], "get_current_on_duty_admin"):
-      on_duty_user = self.env["calendar.event"].sudo().get_current_on_duty_admin()
-      if on_duty_user:
-          # Route ticket or notification to on_duty_user.partner_id
-          pass
-  ```

@@ -1,19 +1,18 @@
-# Binary Downloader Module (`binary_downloader`)
+# 📦 Binary Downloader Module (`binary_downloader`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
-
-The **Binary Downloader** is a secure, database-backed orchestration module designed to provide static executable dependencies (e.g., `kopia`, `etcd`, `cloudflared`) to other Odoo subsystems. It avoids flat-file manifests to mitigate Arbitrary File Write vulnerabilities.
-
----
-
-# Technical Documentation
+*Copyright © Bruce Perens K6BP. AGPL-3.0.*
 
 <system_role>
 **Context:** Technical documentation strictly for LLMs and Integrators.
 </system_role>
 
+<architecture>
+## 1. Architecture
+The **Binary Downloader** is a secure, database-backed orchestration module designed to provide static executable dependencies (e.g., `kopia`, `etcd`, `cloudflared`) to other Odoo subsystems. It avoids flat-file manifests to mitigate Arbitrary File Write vulnerabilities.
+</architecture>
+
 <security_design>
-## 1. Security Design
+## 2. Security Design
 * **DB-Backed Manifests:** Download targets and cryptographic SHA-256 checksums are stored in the `binary.manifest` model.
 * **Least Privilege:** Executes downloads and installations under the dedicated `user_binary_downloader_service` service account.
 * **Integrity Enforcement:** Verifies SHA-256 hashes before moving binaries to the execution path (`hams_bin`).
@@ -21,7 +20,7 @@ The **Binary Downloader** is a secure, database-backed orchestration module desi
 </security_design>
 
 <api>
-## 2. API Reference
+## 3. API Reference
 
 ### `binary.manifest` model
 The primary interface for dependency resolution.
@@ -50,24 +49,23 @@ Triggers installation via the UI.
 </api>
 
 <usage>
-## 3. Usage Example
+## 4. Usage Example
 ```python
 bin_path = self.env["binary.manifest"].ensure_executable("kopia")
-# Verified by [@ANCHOR: test_binary_manifest_standard]
 subprocess.run([bin_path, "--version"], check=True)
 ```
 </usage>
 
 <stories_and_journeys>
-## 4. Architectural Stories & Journeys
+## 5. Architectural Stories & Journeys
 
 For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
-* [Binary Resolution](docs/stories/binary_resolution.md)
-* [UI Installation](docs/stories/ui_installation.md)
-* [Installation Status Check](docs/stories/is_installed_check.md)
+* [Binary Resolution](binary_downloader/docs/stories/binary_resolution.md)
+* [UI Installation](binary_downloader/docs/stories/ui_installation.md)
+* [Installation Status Check](binary_downloader/docs/stories/is_installed_check.md)
 
 ### Journeys
-* [Automated Provisioning Flow](docs/journeys/auto_provisioning_flow.md)
+* [Automated Provisioning Flow](binary_downloader/docs/journeys/auto_provisioning_flow.md)
 </stories_and_journeys>

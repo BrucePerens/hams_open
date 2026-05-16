@@ -1,42 +1,6 @@
-# Distributed Redis Cache (`distributed_redis_cache`)
+# ⚡ Distributed Redis Cache (`distributed_redis_cache`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
-
-Fine-grained distributed caching and phase coherence for horizontally scaled Odoo clusters.
-
-## Features
-- Distributed Redis-backed cache to replace/augment Odoo's local cache.
-- Prevents cache drift across multiple Odoo nodes.
-- Fail-open design: falls back to local memory if Redis is unavailable.
-- Fine-grained invalidation: only flushes specific models, not the entire cache.
-- Management UI for status checks and manual invalidation.
-- **Zero-Sudo Architecture**: Background operations execute with minimal privileges using dedicated service accounts.
-
-## Installation
-This module requires a Redis server.
-Ensure the `redis` and `asyncpg` Python packages are installed.
-
-## Configuration
-The following environment variables can be used to configure the Redis connection:
-- `REDIS_HOST`: Defaults to `redis` or `127.0.0.1`.
-- `REDIS_PORT`: Defaults to `6379`.
-- `REDIS_PASSWORD`: Optional Redis password.
-
-## Architecture
-- **Postgres NOTIFY**: Triggered when a model's cache needs invalidation.
-- **Cache Manager Daemon**: A standalone Python service that bridges Postgres NOTIFY to Redis Pub/Sub.
-- **Redis Pub/Sub**: Distributes invalidation signals to all Odoo workers.
-- **Middleware Interceptor**: Odoo workers check for signals in `ir.http` and flush local caches accordingly.
-
-## Security
-Built with the **Zero-Sudo** architecture. Operations are performed by dedicated service accounts with minimal privileges.
-
-## Documentation
-Comprehensive documentation is available via the **Manual Library** module after installation.
-
----
-
-# Technical Documentation
+*Copyright © Bruce Perens K6BP. AGPL-3.0.*
 
 <system_role>
 **Context:** Technical documentation strictly for LLMs and Integrators. Use this to build dependent modules without needing the source code.
@@ -61,12 +25,11 @@ If the Redis server crashes or the `redis` Python module is uninstalled, the cac
 ## 3. Application Programming Interface (API)
 
 ```python
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache, notify_model_invalidation
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 ```
 
 * **`@distributed_cache()`**: Use this decorator on `api.model` functions to automatically generate HMAC-SHA256 cache keys based on serialized arguments and write them to Redis with a 24h TTL.
-* **`invalidate_model_cache(env, model_name, local_only=False)`**: Use this to forcibly flush local WSGI memory. If `local_only` is False, it also attempts to delete keys from Redis.
-* **`notify_model_invalidation(env, model_name)`**: Use this to trigger a cross-worker invalidation signal via Postgres NOTIFY. [@ANCHOR: notify_model_invalidation_logic]
+* **`invalidate_model_cache(env, model_name)`**: Use this when overriding `.write()` or `.unlink()` to forcibly flush local WSGI memory before executing the `pg_notify` cross-worker alert.
 </api>
 
 <ui>
@@ -79,7 +42,6 @@ The module provides a UI to manage the cache and check Redis status.
 The daemon and Odoo worker can be configured via environment variables:
 * **`REDIS_HOST`**: Redis server hostname (default: `redis` or `127.0.0.1`).
 * **`REDIS_PORT`**: Redis server port (default: `6379`).
-* **`REDIS_PASSWORD`**: Redis server password.
 </config>
 
 <stories_and_journeys>
@@ -95,10 +57,4 @@ The daemon and Odoo worker can be configured via environment variables:
 * [Daemon Operations](distributed_redis_cache/docs/journeys/daemon_operations.md)
 * [Invalidation Pipeline](distributed_redis_cache/docs/journeys/invalidation_pipeline.md)
 * [Request Caching Lifecycle](distributed_redis_cache/docs/journeys/request_caching_lifecycle.md)
-
-### Installation
-* **Documentation Injection:** The module automatically provisions its documentation payload into the `knowledge.article` or `manual.article` API upon installation. [@ANCHOR: doc_inject_distributed_redis_cache]
-
-### Zero-Sudo
-* **Micro-Privilege Service Account:** The module uses `cache_manager_sys` for daemon operations. [@ANCHOR: story_zero_sudo_cache_manager]
 </stories_and_journeys>

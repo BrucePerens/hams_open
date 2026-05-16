@@ -2,7 +2,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
-from backup_management.daemon.backup_worker import BackupWorker, execute_kopia_command
+# Sibling import: Natively supported by Python without sys.path mutilation
+from backup_worker import BackupWorker, execute_kopia_command
 
 
 class TestBackupWorker(unittest.TestCase):
@@ -17,7 +18,7 @@ class TestBackupWorker(unittest.TestCase):
         self.assertEqual(self.worker.config_file, self.config_file)
         self.assertEqual(self.worker.backup_dir, self.backup_dir)
 
-    @patch("backup_management.daemon.backup_worker.subprocess.Popen")
+    @patch("backup_worker.subprocess.Popen")
     def test_execute_kopia_command_success(self, mock_popen):
         mock_process = MagicMock()
         mock_process.communicate.return_value = (b'{"status": "success"}', b"")
@@ -27,7 +28,7 @@ class TestBackupWorker(unittest.TestCase):
         result = execute_kopia_command(["kopia", "snapshot", "create", "/var/lib/odoo"])
         self.assertEqual(result, '{"status": "success"}')
 
-    @patch("backup_management.daemon.backup_worker.subprocess.Popen")
+    @patch("backup_worker.subprocess.Popen")
     def test_execute_kopia_command_failure(self, mock_popen):
         mock_process = MagicMock()
         mock_process.communicate.return_value = (b"", b"Error message")
@@ -37,8 +38,8 @@ class TestBackupWorker(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             execute_kopia_command(["kopia", "snapshot", "create", "/var/lib/odoo"])
 
-    @patch("backup_management.daemon.backup_worker.BackupWorker._load_config")
-    @patch("backup_management.daemon.backup_worker.execute_kopia_command")
+    @patch("backup_worker.BackupWorker._load_config")
+    @patch("backup_worker.execute_kopia_command")
     def test_run_backup_job(self, mock_execute, mock_load_config):
         mock_load_config.return_value = {"jobs": [{"id": 1, "path": "/var/lib/odoo/data"}]}
         mock_execute.return_value = '{"snapshot_id": "12345"}'
