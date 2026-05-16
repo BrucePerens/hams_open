@@ -12,7 +12,7 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         },
         {
             content: "Click the SEO Metadata notebook tab injected by our module",
-            trigger: '*:contains("SEO Metadata")',
+            trigger: 'a[name="user_websites_seo_settings"]',
             run: 'click',
         },
         {

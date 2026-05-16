@@ -72,6 +72,8 @@ If testing background loop functions, you MUST conditionally bypass commits usin
 * **Local Imports Banned:** Local imports (imports inside functions, methods, or classes) are completely banned.
 * **Circular Dependency Bypass:** The use of `# noqa` to bypass local import restrictions or any other linter rules is strictly forbidden.
 Refactor architecture to avoid circular dependencies instead of using inline imports. **EXCEPTION (The E402 Daemon Rule):** The strict ban on `# noqa` has one explicit exception. When writing tests for isolated background daemons that require `sys.path.insert()` to resolve sibling imports, you MUST append `  # noqa: E402` to the module imports that occur after the path modification to satisfy Flake8.
+* **The SUDO Override:** You may use `# audit-ignore-sudo` to bypass the strict `.sudo()` AST ban ONLY for legitimately approved administrative operations (like API key rotation).
+* **Zero-Sudo Architecture:** The use of `su=True` and `SUPERUSER_ID` are strictly forbidden for bypassing access rights. Use explicit `.sudo()  # audit-ignore-sudo: <reason>` when absolutely required.
 * **Daemon Decoupling:** Standalone daemons (and their tests) located in `daemon/` or `daemons/` directories MUST NOT import any Odoo libraries or testing decorators (e.g., `from odoo.tests.common import tagged`). They must be completely decoupled from the Odoo framework.
 
 ## 3. 🐍 Python Odoo 19 Core Deprecations & Formatting

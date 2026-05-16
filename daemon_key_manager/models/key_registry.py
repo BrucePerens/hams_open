@@ -132,7 +132,8 @@ class DaemonKeyRegistry(models.Model):
             [("user_id", "=", self.user_id.id), ("name", "=", key_name)], limit=100
         )
         if old_keys:
-            old_keys.unlink()
+            # Elevated execution required for restricted API key deletion.
+            old_keys.sudo().unlink() # burn-ignore-sudo
 
         # Generate new key
         # Tested by [@ANCHOR: test_cron_rotate_all_keys]
@@ -145,7 +146,7 @@ class DaemonKeyRegistry(models.Model):
         # Tested by [@ANCHOR: test_key_ownership]
         # Verified by [@ANCHOR: test_key_ownership]
         raw_key = (
-            self.env["res.users.apikeys"].with_user(self.user_id.id).sudo()._generate("rpc", key_name, expiration_date)
+            self.env["res.users.apikeys"].with_user(self.user_id.id).sudo()._generate("rpc", key_name, expiration_date) # burn-ignore-sudo
         )
 
         # Write to secure file

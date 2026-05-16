@@ -17,8 +17,8 @@ class TestSEOUI(HttpCase):
                         6,
                         0,
                         [
-                            # MUST be an Internal User to access /web and view backend res.users form
-                            self.env.ref("base.group_user").id,
+                            # Test record is a portal user; admin account navigates the backend tour
+                            self.env.ref("base.group_portal").id,
                             self.env.ref("user_websites.group_user_websites_user").id,
                         ],
                     )

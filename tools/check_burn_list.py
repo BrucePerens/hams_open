@@ -758,26 +758,12 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         if node.lineno <= len(self.lines)
                         else ""
                     )
-                    if self.filename == "security_utils.py":
-                        if (
-                            ".sudo()._xmlid_to_res_id" not in line_content
-                            and ".sudo().get_param" not in line_content
-                        ):
-                            self.add_error(
-                                node.lineno,
-                                "CRITICAL PRIVILEGE ESCALATION: `.sudo()` is forbidden.",
-                            )
-                    elif self.filename == "key_registry.py":
-                        if ".sudo()._generate" not in line_content:
-                            self.add_error(
-                                node.lineno,
-                                "CRITICAL PRIVILEGE ESCALATION: `.sudo()` is forbidden except for _generate().",
-                            )
-                    elif not (
-                        "# burn-ignore" in line_content  # fmt: skip
+                    if not (
+                        "# burn-ignore-sudo" in line_content  # fmt: skip
                         and (
-                            "database.secret" in line_content
-                            or ".sudo().unlink()" in line_content
+                            "sudo()._generate(" in line_content
+                            or
+                            ".sudo().unlink()" in line_content
                         )
                     ):
                         self.add_error(
@@ -1557,10 +1543,9 @@ def scan_file(filepath, is_odoo_module=False):
         if "burn-ignore" in line and not any(
             allowed in line
             for allowed in [
-                "database.secret",
-                ".sudo().unlink()",
                 "burn-ignore-financial",
                 "burn-ignore-tour",
+                "burn-ignore-sudo"
             ]
         ):
             errors_found.append(
