@@ -3,8 +3,8 @@
 import json
 import logging
 import threading
-import concurrent.futures
 import atexit
+from concurrent.futures import ThreadPoolExecutor
 import time
 import sys
 
@@ -25,21 +25,15 @@ _logger = logging.getLogger(__name__)
 _invalidation_queue = set()
 _listener_started = False
 _listener_lock = threading.Lock()
-_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+# Use a bounded ThreadPoolExecutor as per architectural mandates to prevent DOS.
+BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="distributed_cache_listener")
 
 
-def _stop_listener():
+def _redis_listener_thread_loop():
     global _listener_started
-    _listener_started = False
-    _executor.shutdown(wait=False)
-
-
-atexit.register(_stop_listener)
-
-
-def _redis_listener_thread():
-    global _listener_started
+    _logger.info("Starting Redis Distributed Cache Listener Thread...")
     if not redis or not redis_pool:
+        _listener_started = False
         return
     try:
         r_client = redis.Redis(
@@ -73,6 +67,16 @@ def _redis_listener_thread():
     finally:
         with _listener_lock:
             _listener_started = False
+        _logger.info("Redis Distributed Cache Listener Thread stopped.")
+
+
+def _stop_listener():
+    global _listener_started
+    _listener_started = False
+    BACKGROUND_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+
+
+atexit.register(_stop_listener)
 
 
 class IrHttp(models.AbstractModel):
@@ -86,16 +90,17 @@ class IrHttp(models.AbstractModel):
         """
         global _listener_started
 
-        test_mode = tools.config.get("test_enable")
-        is_test_cr = getattr(request.env.registry, "test_cr", False)
-        in_args = any("test_runner.py" in a for a in sys.argv)
-
-        if not (test_mode or is_test_cr or in_args):
-            if not _listener_started:
+        # Ensure the background thread is spawned once per WSGI worker boot.
+        # CRITICAL: Skip during database initialization, tests, or shutdown modes to avoid hanging processes.
+        # This allows tools/test_runner.py to rebuild the database without being blocked by background threads.
+        if not _listener_started and not tools.config.get("test_enable") and not tools.config.get("init") and not tools.config.get("stop_after_init"):
+            # Only start if we are in a real request context with a database,
+            # which usually doesn't happen during pure DB initialization/module loading.
+            if request and getattr(request, 'db', False):
                 with _listener_lock:
                     if not _listener_started:
-                        _executor.submit(_redis_listener_thread)
                         _listener_started = True
+                        BACKGROUND_EXECUTOR.submit(_redis_listener_thread_loop)
 
         if _invalidation_queue:
             with _listener_lock:
@@ -104,8 +109,7 @@ class IrHttp(models.AbstractModel):
 
             for m in models_to_clear:
                 if m and isinstance(m, str) and m in request.env:
-                    invalidate_model_cache(request.env, m)
-                    info_msg = """Cache cleared for model: %s"""
-                    _logger.info(info_msg, m)
+                    invalidate_model_cache(request.env, m, local_only=True)
+                    _logger.info("Distributed cache cleared for model: %s", m)
 
         return super()._authenticate(endpoint)
