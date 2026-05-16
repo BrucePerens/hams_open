@@ -19,7 +19,7 @@ def mock_if_standard(target, **kwargs):
 @tagged("post_install", "-at_install", "integration" if INTEGRATION_MODE else "standard")
 class TestBinaryManifest(TransactionCase):
     # [@ANCHOR: test_binary_manifest_standard]
-    # Verified by [@ANCHOR: test_binary_manifest_standard]
+    # Tested by [@ANCHOR: test_binary_manifest_standard]
 
     def tearDown(self):
         for path in ["/var/lib/odoo/hams_bin/fake", "/var/lib/odoo/hams_bin/testbin"]:
@@ -47,7 +47,7 @@ class TestBinaryManifest(TransactionCase):
             chksum = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
         else:
             url = "http://example.com/testbin"
-            chksum = "0" * 64
+            chksum = "fakehash"
 
         self.manifest = self.env["binary.manifest"].create(
             {
@@ -125,7 +125,7 @@ class TestBinaryManifest(TransactionCase):
 
         with patch("hashlib.sha256") as mock_sha256:
             mock_hasher = MagicMock()
-            mock_hasher.hexdigest.return_value = "0" * 64
+            mock_hasher.hexdigest.return_value = "fakehash"
             mock_sha256.return_value = mock_hasher
             mock_open.return_value.__enter__.return_value.read.side_effect = [b"chunk", b""]
 
@@ -178,7 +178,6 @@ class TestBinaryManifest(TransactionCase):
 
     @mock_if_standard("odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable")
     def test_07_action_install(self, mock_ensure=None):
-        # [@ANCHOR: test_binary_manifest_action_install]
         # Tests [@ANCHOR: binary_action_install]
         if INTEGRATION_MODE:
             # We expect actual physical download execution to complete cleanly
@@ -197,7 +196,7 @@ class TestBinaryManifest(TransactionCase):
             self.env["binary.manifest"].create({
                 "name": "../badbin",
                 "url": "http://example.com/badbin",
-                "checksum": "0" * 64,
+                "checksum": "fakehash",
                 "archive_type": "binary",
             })
             self.env.flush_all()
@@ -212,7 +211,7 @@ class TestBinaryManifest(TransactionCase):
             self.env["binary.manifest"].create({
                 "name": "badurl",
                 "url": "file:///etc/passwd",
-                "checksum": "0" * 64,
+                "checksum": "fakehash",
                 "archive_type": "binary",
             })
             self.env.flush_all()
@@ -238,7 +237,7 @@ class TestBinaryManifest(TransactionCase):
         self.env["binary.manifest"].create({
             "name": "slippy",
             "url": "http://example.com/slippy.tar.gz",
-            "checksum": "1" * 64,
+            "checksum": "fakehash_tar",
             "archive_type": "tar.gz",
             "extract_member": "slippy"
         })
@@ -256,7 +255,7 @@ class TestBinaryManifest(TransactionCase):
              patch("tarfile.open") as mock_tar_open:
 
             mock_hasher = MagicMock()
-            mock_hasher.hexdigest.return_value = "1" * 64
+            mock_hasher.hexdigest.return_value = "fakehash_tar"
             mock_sha256.return_value = mock_hasher
             mock_open.return_value.__enter__.return_value.read.side_effect = [b"data", b""]
 
@@ -306,7 +305,7 @@ class TestBinaryManifest(TransactionCase):
         self.env["binary.manifest"].create({
             "name": "symlinkbin",
             "url": "http://example.com/symlink.tar.gz",
-            "checksum": "2" * 64,
+            "checksum": "fakehash_sym",
             "archive_type": "tar.gz",
             "extract_member": "symlinkbin"
         })
@@ -324,7 +323,7 @@ class TestBinaryManifest(TransactionCase):
              patch("tarfile.open") as mock_tar_open:
 
             mock_hasher = MagicMock()
-            mock_hasher.hexdigest.return_value = "2" * 64
+            mock_hasher.hexdigest.return_value = "fakehash_sym"
             mock_sha256.return_value = mock_hasher
             mock_open.return_value.__enter__.return_value.read.side_effect = [b"data", b""]
 
