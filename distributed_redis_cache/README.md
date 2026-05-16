@@ -10,6 +10,7 @@ Fine-grained distributed caching and phase coherence for horizontally scaled Odo
 - Fail-open design: falls back to local memory if Redis is unavailable.
 - Fine-grained invalidation: only flushes specific models, not the entire cache.
 - Management UI for status checks and manual invalidation.
+- **Zero-Sudo Architecture**: Background operations execute with minimal privileges using dedicated service accounts.
 
 ## Installation
 This module requires a Redis server.
@@ -19,6 +20,7 @@ Ensure the `redis` and `asyncpg` Python packages are installed.
 The following environment variables can be used to configure the Redis connection:
 - `REDIS_HOST`: Defaults to `redis` or `127.0.0.1`.
 - `REDIS_PORT`: Defaults to `6379`.
+- `REDIS_PASSWORD`: Optional Redis password.
 
 ## Architecture
 - **Postgres NOTIFY**: Triggered when a model's cache needs invalidation.
@@ -59,11 +61,12 @@ If the Redis server crashes or the `redis` Python module is uninstalled, the cac
 ## 3. Application Programming Interface (API)
 
 ```python
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache, notify_model_invalidation
 ```
 
 * **`@distributed_cache()`**: Use this decorator on `api.model` functions to automatically generate HMAC-SHA256 cache keys based on serialized arguments and write them to Redis with a 24h TTL.
-* **`invalidate_model_cache(env, model_name)`**: Use this when overriding `.write()` or `.unlink()` to forcibly flush local WSGI memory before executing the `pg_notify` cross-worker alert.
+* **`invalidate_model_cache(env, model_name, local_only=False)`**: Use this to forcibly flush local WSGI memory. If `local_only` is False, it also attempts to delete keys from Redis.
+* **`notify_model_invalidation(env, model_name)`**: Use this to trigger a cross-worker invalidation signal via Postgres NOTIFY. [@ANCHOR: notify_model_invalidation_logic]
 </api>
 
 <ui>
@@ -95,4 +98,7 @@ The daemon and Odoo worker can be configured via environment variables:
 
 ### Installation
 * **Documentation Injection:** The module automatically provisions its documentation payload into the `knowledge.article` or `manual.article` API upon installation. [@ANCHOR: doc_inject_distributed_redis_cache]
+
+### Zero-Sudo
+* **Micro-Privilege Service Account:** The module uses `cache_manager_sys` for daemon operations. [@ANCHOR: story_zero_sudo_cache_manager]
 </stories_and_journeys>

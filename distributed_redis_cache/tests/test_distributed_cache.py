@@ -10,7 +10,13 @@ from odoo.addons.distributed_redis_cache.models.ir_http import (
     _invalidation_queue,
     _listener_lock,
 )
-from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache, distributed_cache, _local_cache, _get_hash
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    invalidate_model_cache,
+    distributed_cache,
+    _local_cache,
+    _get_hash,
+    notify_model_invalidation,
+)
 
 
 @tagged("standard", "post_install", "-at_install")
@@ -57,7 +63,7 @@ class TestDistributedCacheStandard(HttpCase):
                 mock_req_inst.env.__getitem__.return_value = self.env["res.users"]
 
                 self.env["ir.http"]._authenticate(mock_endpoint)
-                mock_invalidate.assert_called_with(mock_req_inst.env, "res.users")
+                mock_invalidate.assert_called_with(mock_req_inst.env, "res.users", local_only=True)
 
     def test_02_redis_interceptor_fails_open_standard(self):
         """
@@ -175,6 +181,27 @@ class TestDistributedCacheStandard(HttpCase):
         h4 = _get_hash(self.env.user)
         h5 = _get_hash(self.env.user)
         self.assertEqual(h4, h5)
+
+        # Test complex serialization
+        h6 = _get_hash([1, 2], {"c": 3, "b": 4})
+        h7 = _get_hash([1, 2], {"b": 4, "c": 3})
+        self.assertEqual(h6, h7)
+
+    def test_08_notify_model_invalidation_logic(self):
+        # Tests [@ANCHOR: notify_model_invalidation_logic]
+        """
+        Verify that notify_model_invalidation calls invalidate_model_cache and pg_notify.
+        """
+        with patch("odoo.addons.distributed_redis_cache.redis_cache.invalidate_model_cache") as mock_invalidate, \
+             patch.object(self.env.cr, 'execute') as mock_execute:
+            notify_model_invalidation(self.env, "res.users")
+
+            mock_invalidate.assert_called_once_with(self.env, "res.users", local_only=False)
+            mock_execute.assert_called_once()
+            args, _ = mock_execute.call_args
+            self.assertEqual(args[0], "SELECT pg_notify(%s, %s)")
+            self.assertEqual(args[1][0], "distributed_cache_invalidation")
+            self.assertIn('"model": "res.users"', args[1][1])
 
 
 @tagged("integration", "post_install", "-at_install")

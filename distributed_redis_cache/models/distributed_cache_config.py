@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, _
-from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
+from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
-import json
 
 class DistributedCacheConfig(models.TransientModel):
     _name = 'distributed.cache.config'
@@ -15,14 +14,7 @@ class DistributedCacheConfig(models.TransientModel):
         self.ensure_one()
         if self.model_id:
             model_name = self.model_id.model
-            # Security: Ensure model exists before notification
-            if model_name not in self.env:
-                 return
-            invalidate_model_cache(self.env, model_name)
-            payload = json.dumps({"model": model_name})
-            self.env.cr.execute(
-                "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
-            )
+            notify_model_invalidation(self.env, model_name)
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',

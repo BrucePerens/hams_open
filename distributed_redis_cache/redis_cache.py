@@ -23,12 +23,17 @@ def _get_hash(*args, **kwargs):
             return f"{obj._name}({','.join(map(str, sorted_ids))})"
         if isinstance(obj, (datetime.date, datetime.datetime)):
             return obj.isoformat()
+        if isinstance(obj, (list, tuple)):
+            return [_serialize(i) for i in obj]
+        if isinstance(obj, dict):
+            return {str(k): _serialize(v) for k, v in sorted(obj.items())}
         return str(obj)
 
     serialized_args = [_serialize(a) for a in args]
     serialized_kwargs = {k: _serialize(v) for k, v in sorted(kwargs.items())}
 
-    arg_str = repr(serialized_args) + repr(serialized_kwargs)
+    # Use json.dumps with sort_keys for absolute stability across workers
+    arg_str = json.dumps([serialized_args, serialized_kwargs], sort_keys=True)
     return hashlib.sha256(arg_str.encode("utf-8")).hexdigest()
 
 
@@ -92,7 +97,7 @@ def distributed_cache():
     return decorator
 
 
-def invalidate_model_cache(env, model_name):
+def invalidate_model_cache(env, model_name, local_only=False):
     # [@ANCHOR: invalidate_model_cache_logic]
     """
     Invalidates all fine-grained cache entries for a specific model
@@ -101,25 +106,44 @@ def invalidate_model_cache(env, model_name):
     dbname = env.cr.dbname
     prefix = f"{dbname}:distributed_cache:{model_name}:*"
 
-    use_redis = bool(redis and redis_pool)
-    if use_redis:
-        try:
-            r = redis.Redis(connection_pool=redis_pool)
-            # Use SCAN instead of KEYS for production safety
-            keys = []
-            for key in r.scan_iter(match=prefix, count=1000):
-                keys.append(key)
-            if keys:
-                r.delete(*keys)
-        except Exception as e:
-            _logger.debug("Redis cache invalidation failed: %s", e)
-            use_redis = False
+    if not local_only:
+        use_redis = bool(redis and redis_pool)
+        if use_redis:
+            try:
+                r = redis.Redis(connection_pool=redis_pool)
+                # Use SCAN instead of KEYS for production safety
+                keys = []
+                for key in r.scan_iter(match=prefix, count=1000):
+                    keys.append(key)
+                if keys:
+                    r.delete(*keys)
+            except Exception as e:
+                _logger.debug("Redis cache invalidation failed: %s", e)
 
-    if not use_redis:
-        keys_to_delete = [
-            k
-            for k in _local_cache.keys()
-            if k.startswith(f"{dbname}:distributed_cache:{model_name}:")
-        ]
-        for k in keys_to_delete:
-            del _local_cache[k]
+    # Always clear local fallback cache for this process to ensure consistency
+    keys_to_delete = [
+        k
+        for k in _local_cache.keys()
+        if k.startswith(f"{dbname}:distributed_cache:{model_name}:")
+    ]
+    for k in keys_to_delete:
+        _local_cache.pop(k, None)
+
+
+def notify_model_invalidation(env, model_name):
+    # [@ANCHOR: notify_model_invalidation_logic]
+    """
+    Triggers a cross-worker invalidation signal via PostgreSQL NOTIFY.
+    """
+    # Security: Validate model name
+    if model_name not in env:
+        return
+
+    # 1. Invalidate locally and in Redis
+    invalidate_model_cache(env, model_name, local_only=False)
+
+    # 2. Notify all other workers via Postgres -> Daemon -> Redis Pub/Sub
+    payload = json.dumps({"model": model_name})
+    env.cr.execute(
+        "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
+    )
