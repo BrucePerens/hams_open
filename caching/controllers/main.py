@@ -31,13 +31,19 @@ class ServiceWorkerController(http.Controller):
             max_mtime = 0.0
             file_sizes = []
 
-            # Raw SQL to get installed modules quickly without ORM/sudo overhead.
+            # STRICT ZERO-SUDO COMPLIANCE: Escalate to micro-privilege service account
+            # to retrieve the list of installed modules without using .sudo().
+            # Tested by [@ANCHOR: test_caching_zero_sudo_scan]
+            svc_uid = request.env['zero_sudo.security.utils']._get_service_uid('caching.user_caching_service')
+            env_svc = request.env(user=svc_uid)
+
+            # Raw SQL to get installed modules quickly.
             # This only retrieves module names that are already public knowledge
             # and is required to calculate the SW footprint before it is served.
-            request.env.cr.execute(
+            env_svc.cr.execute(
                 "SELECT name FROM ir_module_module WHERE state = 'installed'"
             )
-            installed_modules = [row[0] for row in request.env.cr.fetchall()]
+            installed_modules = [row[0] for row in env_svc.cr.fetchall()]
 
             for module_name in installed_modules:
                 mod_path = get_module_path(module_name)

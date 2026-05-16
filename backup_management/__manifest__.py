@@ -29,7 +29,7 @@
             "icon": "💾",
             "category": "workspace"
         }
-    ],
+    ],  # [@ANCHOR: backup_doc_injection]
     "assets": {
         "web.assets_backend": [
             "backup_management/static/src/components/board/board.js",

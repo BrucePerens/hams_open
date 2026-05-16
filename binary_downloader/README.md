@@ -53,6 +53,7 @@ Triggers installation via the UI.
 ## 3. Usage Example
 ```python
 bin_path = self.env["binary.manifest"].ensure_executable("kopia")
+# Verified by [@ANCHOR: test_binary_manifest_standard]
 subprocess.run([bin_path, "--version"], check=True)
 ```
 </usage>

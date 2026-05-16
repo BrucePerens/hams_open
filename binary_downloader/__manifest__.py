@@ -24,7 +24,6 @@
             "binary_downloader/static/tests/**/*",
         ],
     },
-    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
     "license": "AGPL-3",

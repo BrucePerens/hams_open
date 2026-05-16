@@ -47,25 +47,37 @@ A non-interactive configuration module that enforces baseline regulatory complia
 * [Compliance Setup Journey](./docs/journeys/compliance_setup_journey.md) `[@ANCHOR: journey_compliance_setup]`
 
 ## 2. Enforcement Details
-* Programmatically enables the Odoo `website` native `cookies_bar` boolean. `[@ANCHOR: compliance_post_init_cookie_bar]`
-* Provisions AGPL-3 compatible legal pages (`/privacy`, `/cookie-policy`, `/terms`) safely via `noupdate="1"` XML records.
+* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean. `[@ANCHOR: compliance_post_init_cookie_bar]`
+* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records.
     * Privacy Policy Template `[@ANCHOR: compliance_privacy_policy_template]`
     * Cookie Policy Template `[@ANCHOR: compliance_cookie_policy_template]`
     * Terms of Service Template `[@ANCHOR: compliance_terms_of_service_template]`
-* **CRITICAL:** Custom modules MUST NOT implement custom cookie banners. They must utilize the core framework's consent state.
+* **Non-Destructive Mandate:** If a page already exists at one of the target URLs, the module's boilerplate is unpublished to avoid duplication. `[@ANCHOR: test_compliance_non_destructive_mandate]`
+* **Editability Mandate:** Legal pages are standard `website.page` records, allowing administrators to use the Odoo website builder for customization.
+
+## 3. API & Integration
+### Standardized Routes
+Dependent modules requiring legal links MUST use:
+* `/privacy` : Privacy Policy
+* `/cookie-policy` : Cookie Policy
+* `/terms` : Terms of Service
+
+### Integration Rules
+1. **Do Not Build Custom Banners:** Rely entirely on Odoo's native `website.cookies_bar`.
+2. **Tracking Scripts:** Any third-party JavaScript tracking MUST hook into the Odoo consent state.
 </enforcement_details>
 
 <security_architecture>
-## 3. Security & Zero-Sudo
+## 4. Security & Zero-Sudo
 This module adheres to **ADR-0002 (Zero-Sudo)** and **ADR-0005 (Service Account Web Isolation)**.
 
 * **Micro-Privilege Account:** Automated post-install configuration is executed via the `compliance.user_compliance_service` service account.
 * **ACLs:** The service account is granted minimal read/write access to `website`, `website.page`, and `ir.ui.view` models.
 * **Impersonation:** Escalation is handled via `env.with_user(svc_uid)` instead of `.sudo()` for core operations.
 
-## 4. Documentation Installation
+## 5. Documentation Installation
 This module implements a **soft dependency** on documentation providers (`manual_library` or Odoo Enterprise `knowledge`).
 
-* **Mechanism:** Documentation is automatically provisioned during the final registry reload by the central engine. `[@ANCHOR: zero_sudo_doc_installer]`
+* **Mechanism:** Documentation is automatically provisioned during the final registry reload by the central engine (`_bootstrap_knowledge_docs` in `zero_sudo`). `[@ANCHOR: zero_sudo_doc_installer]`
 * **Article Title:** "Site Owner's Guide to Regulatory Compliance"
 </security_architecture>

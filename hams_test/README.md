@@ -74,6 +74,17 @@ Tours MUST use schema-compliant selectors to deterministically handle race condi
 2. **Secondary:** Structural IDs (`#wrap`, `.o_form_sheet`).
 3. **Fallback:** Dedicated namespaced CSS classes starting with `o_tour_` (e.g., `.o_tour_create_site_btn`).
 
+### Common Environmental Traps & Solutions (CRITICAL FOR AI AGENTS)
+When developing tours in Odoo 19, you **MUST** navigate several strict environmental traps:
+
+* **The Modal "Below a Modal" Trap:** Odoo's engine actively blocks clicks on background elements. A generic selector like `.btn-primary` will often match the background form instead of the active modal. You MUST scope your selectors to the active dialog (e.g., `.modal.show button[name='confirm_method']` or `.o_dialog button[name='...']`) and include a preliminary step to wait for the modal animation to finish rendering.
+* **The Text Wrapping Trap:** You MUST NEVER use `a:contains(...)` or `button:contains(...)`. Odoo 19 frequently wraps internal button text in nested `<span>` tags, which instantly breaks these selectors. You MUST use `*:contains(...)` or target explicit attributes like `[data-menu-xmlid=...]`.
+* **The Dropdown Trap:** Native `<select>` elements are deprecated in backend form views. Odoo 19 uses `.o_select_menu`. You MUST use two separate tour steps for dropdowns: one to click the dropdown container, and a subsequent step to click the `.o_select_menu_item`.
+* **The Initialization Race Condition:** You MUST NEVER start a tour by having the first step manually execute `document.location.href = ...`. This causes severe race conditions. You MUST initialize the tour using the native `url: "/path"` property within the tour definition block.
+* **The `expectUnloadPage` Trap:** You MUST NOT set `expectUnloadPage: true` on steps where navigation is conditional or when triggering an OWL soft-route (client action). If the page does not execute a hard browser reload, the Odoo test runner will fatally timeout after 20,000ms.
+* **The Save Button Crash (Dirty Forms):** You MUST NEVER manually click the save button (`.o_form_button_save`) and immediately end the tour or navigate away. This leaves a dirty form view open, causing asynchronous network requests that corrupt subsequent tests. You MUST spread the `...TourUtils.safeSave()` macro into your step array to force a DOM blur and wait for the `.o_form_button_create` state.
+* **Asset Registration Silent Failures:** Ensure your JavaScript tour files are actually loading. They MUST be explicitly declared in the module's `__manifest__.py` under the `assets` dictionary within the `web.assets_tests` key.
+
 ### State & Execution Control & `TourUtils`
 To reduce boilerplate and strictly enforce architecture, use the centralized macros in `TourUtils` (import from `@hams_test/js/tour_utils`).
 
@@ -107,6 +118,12 @@ The module implements three primary testing facilities:
 3. **UI Tour Governance**: Defines standards for JavaScript-based UI tours and provides `TourUtils` for robust frontend testing.
 
 It also includes a **Noisy Table Management** interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]) to allow administrators to whitelist tables from leak detection.
+
+## 7. Integration Testing with Daemons
+
+The `HamsIntegrationCase` class ([@ANCHOR: integration_daemon_testing]) simplifies testing of Odoo modules that interact with external Python daemons. It provides:
+- **Lifecycle Management**: Automatically starts and stops daemons defined in tests.
+- **Health Polling**: Waits for a daemon to be ready before proceeding with the test.
 
 ### Security Design
 - **Service Accounts**: Utilizes `user_real_transaction_service` ([@ANCHOR: user_real_transaction_service]) for background tasks and documentation injection.

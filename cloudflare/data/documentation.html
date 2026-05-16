@@ -1,0 +1,25 @@
+<div class="knowledge_doc">
+    <h1>☁️ Cloudflare Edge Orchestration (<code>cloudflare</code>)</h1>
+    <p><em>Copyright © Bruce Perens K6BP. AGPL-3.0.</em></p>
+    <p><strong>Context:</strong> Technical documentation strictly for LLMs and Integrators.</p>
+
+    <h2>1. Overview</h2>
+    <p>Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPTCHA verification to offload CPU from the Python WSGI workers.</p>
+
+    <h2>2. API Interfaces</h2>
+    <ul>
+        <li><strong>WAF IP Banning:</strong> <code>env['cloudflare.waf'].ban_ip(...)</code> dynamically injects firewall rules <code>[@ANCHOR: cf_execute_ban]</code>. Automatically lifts expired bans via <code>[@ANCHOR: cf_action_lift_ban]</code>.</li>
+        <li><strong>Cache Purging:</strong> <code>env['cloudflare.purge.queue'].enqueue_tags(...)</code>. Processes asynchronous cache invalidation queues via cron <code>[@ANCHOR: ir_cron_process_cf_purge_queue]</code>. Base URLs are accurately resolved and injected via <code>[@ANCHOR: enqueue_urls_base_url]</code>.</li>
+        <li><strong>Turnstile API:</strong> <code>env['cloudflare.turnstile'].verify_token(...)</code> securely evaluates CAPTCHA handshakes against the API.</li>
+        <li><strong>Edge Context:</strong> <code>env['cloudflare.utils'].get_request_context()</code> (Extracts trusted IP/Geodata).</li>
+        <li><strong>Tunnel Setup:</strong> Wizard dynamically generates the <code>cloudflared</code> execution token command for edge network bridging <code>[@ANCHOR: cf_tunnel_setup]</code>.</li>
+        <li><strong>Tunnel Management:</strong> Modules can sync existing tunnels <code>[@ANCHOR: cf_sync_tunnels]</code> and delete them <code>[@ANCHOR: cf_delete_tunnel]</code>.</li>
+    </ul>
+
+    <h2>3. Automated Subsystems</h2>
+    <ul>
+        <li>Injects <code>Cloudflare-CDN-Cache-Control</code> headers natively via <code>ir.http._post_dispatch</code>.</li>
+        <li>Scans module <code>static/</code> folders on boot and automatically invalidates the CDN edge via cache tags if file modifications are detected.</li>
+        <li><strong>Settings View Injection:</strong> Extends standard Odoo config settings to securely accept Cloudflare API tokens <code>[@ANCHOR: xpath_rendering_cf_settings]</code>.</li>
+    </ul>
+</div>

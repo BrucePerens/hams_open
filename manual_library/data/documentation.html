@@ -31,4 +31,5 @@
     <li><strong>WCAG 2.1 AA (Accessibility):</strong> The dynamically generated frontend Table of Contents (TOC) and hierarchical sidebar use proper semantic HTML nesting (<code>&lt;nav&gt;</code>, <code>&lt;ul&gt;</code>, <code>&lt;li&gt;</code>). Interactive search forms and dropdown buttons include explicit <code>aria-label</code> attributes for screen readers.</li>
     <li><strong>Clean-Room Implementation (Legal Compliance):</strong> The module legally complies with the Abstraction-Filtration-Comparison test to provide API interoperability. It does not contain any literal or non-literal copied code, logic, or proprietary UI designs from Odoo Enterprise.</li>
     <li><strong>Frontend Framework Compliance:</strong> Adheres to modern Odoo 19 standards by strictly utilizing Vanilla JS and standard OWL concepts for the TOC generation, completely avoiding deprecated jQuery dependencies.</li>
+    <li><strong>Zero-Sudo &amp; Micro-Privilege:</strong> Operates with minimum privilege, utilizing dedicated service accounts like <code>manual_library_sys</code> for automated tasks, ensuring no <code>sudo()</code> usage across the module.</li>
 </ul>

@@ -157,15 +157,18 @@ class ManualLibraryController(http.Controller):
             # Fetch without sudo() first to ensure the user actually has Read access to the article
             article = request.env["knowledge.article"].browse(int(article_id))
             if article.exists():
-                # Utilize raw SQL to ensure absolute atomic increments and prevent 'Lost Update' race conditions
+                # Enforce access check to prevent voting on articles the user can't read
+                article.check_access("read")
+                # Utilize raw SQL to ensure absolute atomic increments and prevent 'Lost Update' race conditions.
+                # Identifiers are hardcoded for security as they are not user-controlled.
                 if is_helpful == "1":
                     request.env.cr.execute(
-                        "UPDATE knowledge_article SET helpful_count = COALESCE(helpful_count, 0) + 1 WHERE id = %s",
+                        'UPDATE "knowledge_article" SET "helpful_count" = COALESCE("helpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
                 else:
                     request.env.cr.execute(
-                        "UPDATE knowledge_article SET unhelpful_count = COALESCE(unhelpful_count, 0) + 1 WHERE id = %s",
+                        'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
         except Exception as e:

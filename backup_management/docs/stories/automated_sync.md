@@ -1,4 +1,4 @@
-# Automated Backup Sync
+# Automated Backup Sync [@ANCHOR: story_automated_sync]
 
 The system maintains a synchronized view of offsite backup states through a polling mechanism.
 

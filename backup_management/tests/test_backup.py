@@ -200,7 +200,6 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(len(jobs), 2)
 
     def test_12_documentation_installation(self):
-        # Tests [@ANCHOR: test_backup_docs]
         # Tests [@ANCHOR: backup_doc_injection]
 
         # Manually trigger the hook logic for testing if needed,

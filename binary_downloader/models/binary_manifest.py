@@ -83,15 +83,30 @@ class BinaryManifest(models.Model):
             else:
                 record.is_installed = False
 
+    @api.constrains('checksum')
+    def _check_checksum_format(self):
+        for record in self:
+            if record.checksum:
+                if len(record.checksum) != 64:
+                    raise ValidationError(_("SHA-256 checksum must be exactly 64 characters."))
+                try:
+                    int(record.checksum, 16)
+                except ValueError:
+                    raise ValidationError(_("SHA-256 checksum must be a hexadecimal string."))
+
     def action_install(self):
         # [@ANCHOR: binary_action_install]
-        # Verified by [@ANCHOR: test_binary_manifest_standard]
+        # Verified by [@ANCHOR: test_binary_manifest_action_install]
         self.ensure_one()
         # Security: ensure only users with appropriate groups can trigger this
         if not (self.env.user.has_group('binary_downloader.group_binary_downloader_manager') or self.env.is_admin()):
             raise UserError(_("You do not have sufficient permissions to install binaries."))
 
-        self.ensure_executable(self.name)
+        # Use service account strictly for the installation process to ensure Zero-Sudo compliance.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "binary_downloader.user_binary_downloader_service"
+        )
+        self.with_user(svc_uid).ensure_executable(self.name)
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -143,7 +158,7 @@ class BinaryManifest(models.Model):
         bin_dir = os.path.join(data_dir, "hams_bin")
 
         os.makedirs(bin_dir, exist_ok=True)
-        os.chmod(bin_dir, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+        os.chmod(bin_dir, 0o750)
 
         target_bin = os.path.join(bin_dir, cmd_name)
 
@@ -154,7 +169,7 @@ class BinaryManifest(models.Model):
                 for chunk in iter(lambda: f.read(4096), b""):
                     hasher.update(chunk)
             if hasher.hexdigest() == manifest_record.checksum:
-                os.chmod(target_bin, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+                os.chmod(target_bin, 0o750)
                 return target_bin
             else:
                 _logger.info("Checksum mismatch for %s, re-downloading...", cmd_name)
@@ -169,7 +184,7 @@ class BinaryManifest(models.Model):
             # Ethical Crawling: Use HEAD requests to evaluate ETags before downloading
             req.method = "HEAD"
             try:
-                with urllib.request.urlopen(req) as head_resp:
+                with urllib.request.urlopen(req, timeout=30) as head_resp:
                     _logger.info("HEAD successful, ETag: %s", head_resp.getheader("ETag"))
             except Exception as e:
                 _logger.warning("HEAD request failed or unsupported: %s", e)
@@ -180,7 +195,7 @@ class BinaryManifest(models.Model):
                 manifest_record.url,
                 headers={"User-Agent": "OdooBinaryDownloader/1.0"}
             )
-            with urllib.request.urlopen(get_req) as response:
+            with urllib.request.urlopen(get_req, timeout=300) as response:
                 with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
                     shutil.copyfileobj(response, tmp)
 
@@ -229,7 +244,7 @@ class BinaryManifest(models.Model):
             else:
                 shutil.copy2(tmp.name, target_bin)
 
-            os.chmod(target_bin, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+            os.chmod(target_bin, 0o750)
             if os.path.exists(tmp.name):
                 os.unlink(tmp.name)
             return target_bin

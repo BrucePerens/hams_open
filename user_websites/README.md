@@ -13,6 +13,7 @@ This Odoo 19 module lets users build their own personal or group websites and bl
 * **Community Directory:** A public list where users can show off their sites (if they choose to opt-in).
 * **Built-in Moderation:** Every page has a "Report Violation" button. If users post bad content, admins can review it, hand out strikes, and automatically suspend accounts that break the rules.
 * **Page Limits:** Stop spam by setting limits on how many pages a single user can create.
+* **GDPR Compliance:** Built-in Data Portability (Export) and Right to Erasure (Delete) features for user-generated content.
 
 ## 🛠️ Installation
 
@@ -54,6 +55,7 @@ We used a few neat tricks to make this secure and fast:
 The `user_websites` module enables decentralized content creation. It employs the **Proxy Ownership Pattern**: standard Odoo users cannot create `ir.ui.view` or `website.page` records due to core security. The module securely circumvents this by assigning an `owner_user_id`, evaluating custom Record Rules against it, and escalating privileges via a dedicated Service Account (`.with_user(svc_uid)`) strictly for the database write.
 * **Ownership Validation:** Safely asserted by mixin create `[@ANCHOR: mixin_proxy_ownership_create]` and write `[@ANCHOR: mixin_proxy_ownership_write]` methods. Explicitly verified by `[@ANCHOR: test_mixin_ownership_validation]`.
 * **Tenant Isolation:** Enforced via strict record rules verified by `[@ANCHOR: test_tenant_view_isolation]` and ACL overhead elimination to prevent log spam `[@ANCHOR: test_acl_overhead_loop_elimination]`.
+* **Lazy JIT Provisioning:** Websites and Blogs do not exist upon user creation. They are provisioned Just-In-Time when the owner visits their slug root and triggers a POST request to `create_site`. This ensures explicit user consent to publish.
 </core_patterns>
 
 ---
@@ -121,6 +123,8 @@ If your dependent module (e.g., `cloudflare`, `custom_dns`) needs to programmati
 ### Programmatic Setup & Hooks
 **The Secure Cached Resolver Pattern (ADR-0066)**: The `user_websites` module offers high-performance `@tools.ormcache` resolvers for cross-module use. ALWAYS use these instead of `.search()` in frontend controllers to prevent database exhaustion. Callers **MUST** pass their own `override_svc_uid` to execute the database search under their own service account's context instead of relying on the default System Provisioner, preventing cross-module access rule failures due to the privilege deprecation mentioned above.
 * **`res.users._get_user_id_by_slug(slug, override_svc_uid=None)`**: Resolves a user's slug to their User ID.
+* **`res.users.action_suspend_user_websites()`**: Forcefully unpublishes user content (moderation).
+* **`res.users.action_pardon_user_websites()`**: Restores user content after appeal.
 * **`user.websites.group._get_group_id_by_slug(slug, override_svc_uid=None)`**: Resolves a group's slug to its Group ID.
 * **`website.page._get_page_id_by_url(url, website_id, override_svc_uid=None)`**: Resolves a page URL to its Page ID.
 * **`user_websites.owned.mixin`**: Inherit this in your custom models (e.g., `custom.portfolio`) to instantly inherit the Proxy Ownership security rules via `self._check_proxy_ownership_write(vals)`.

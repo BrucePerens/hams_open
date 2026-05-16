@@ -28,6 +28,10 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
         "views/knowledge_article_views.xml",
         "views/knowledge_article_templates.xml",
     ],
+    "knowledge_docs": [
+        {"path": "README.md", "name": "Developer Guide", "icon": "🛠️"},
+        {"path": "data/documentation.html", "name": "User Manual", "icon": "📖"},
+    ],
     "assets": {
         "web.assets_frontend": [
             "manual_library/static/src/js/manual_toc.js",

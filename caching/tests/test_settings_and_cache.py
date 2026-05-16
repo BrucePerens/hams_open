@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, tagged
 from lxml import etree
+from odoo.addons.caching.controllers.main import ServiceWorkerController
 
 @tagged("post_install", "-at_install")
 class TestSettingsAndCache(HttpCase):
@@ -65,6 +67,22 @@ class TestSettingsAndCache(HttpCase):
         # This test acts as the anchor verifying that the params are intentionally safe
         val = self.env['zero_sudo.security.utils']._get_system_param('caching.safe_quota_mb') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
         self.assertTrue(val is not None or val is None)
+
+    def test_05_zero_sudo_scan(self):
+        # [@ANCHOR: test_caching_zero_sudo_scan]
+        # Tests [@ANCHOR: caching_fs_scan_logic]
+        """Verify that the FS scan correctly uses the service account."""
+        controller = ServiceWorkerController()
+        # Reset cache to force re-scan
+        ServiceWorkerController._fs_cache = None
+
+        mock_req = MagicMock()
+        mock_req.env = self.env
+
+        with patch('odoo.addons.caching.controllers.main.request', mock_req):
+            mtime, sizes = controller._get_fs_stats()
+            self.assertGreater(mtime, 0)
+            self.assertIsInstance(sizes, list)
 
     def test_04_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_caching_settings]

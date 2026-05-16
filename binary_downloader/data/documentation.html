@@ -24,4 +24,7 @@
         Other modules can safely request a dependency by invoking the central method:
     </p>
     <pre><code>bin_path = self.env["binary.manifest"].ensure_executable("kopia")</code></pre>
+    <p>
+        The module uses the <code>user_binary_downloader_service</code> service account for all resolution and download operations, ensuring strict <strong>Zero-Sudo</strong> compliance.
+    </p>
 </div>

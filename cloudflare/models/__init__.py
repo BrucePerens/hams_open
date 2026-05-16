@@ -14,3 +14,4 @@ from . import tunnel_wizard
 from . import purge_wizard
 from . import zone_settings_wizard
 from . import tunnel
+from . import content_hooks

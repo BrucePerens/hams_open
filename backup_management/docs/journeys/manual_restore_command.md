@@ -1,4 +1,4 @@
-# Manual Restore Command
+# Manual Restore Command [@ANCHOR: journey_manual_restore_command]
 
 While automated restores are supported, the system provides pre-generated CLI commands for emergency manual use.
 

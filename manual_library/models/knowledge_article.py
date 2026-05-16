@@ -53,13 +53,14 @@ class KnowledgeArticle(models.Model):
     )
 
     # --- Custom Implementation Fields ---
-    helpful_count = fields.Integer(string="Helpful Votes", default=0)
-    unhelpful_count = fields.Integer(string="Unhelpful Votes", default=0)
+    helpful_count = fields.Integer(string="Helpful Votes", default=0, readonly=True)
+    unhelpful_count = fields.Integer(string="Unhelpful Votes", default=0, readonly=True)
 
     _name_parent_uniq = models.Constraint(
         "UNIQUE(name, parent_id)",
         "Article titles must be unique within the same parent folder!",
     )
+
     # NOTE: We rely on the ORM's required=True for the 'name' field because it is a translate=True (JSONB) column.
     # Applying a Postgres TRIM() CHECK constraint to JSONB causes an initialization crash.
 

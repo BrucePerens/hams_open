@@ -1,4 +1,4 @@
-# Story: Secure Path Validation
+# Story: Secure Path Validation [@ANCHOR: story_secure_path_validation]
 
 This story describes the security measures taken to ensure backup operations cannot be used to access unauthorized system files.
 

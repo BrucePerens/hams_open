@@ -5,7 +5,7 @@
     "category": "Website",
     "version": "1.3",
     "license": "AGPL-3",
-    "depends": ["base", "zero_sudo", "website", "hams_test"],
+    "depends": ["base", "zero_sudo", "website", "hams_test", "website_blog", "website_sale"],
     "data": [
         "security/security_data.xml",
         "security/ir.model.access.csv",
@@ -23,7 +23,7 @@
     "knowledge_docs": [
         {
             "name": "Cloudflare Edge Orchestration Documentation",
-            "path": "data/documentation.md",
+            "path": "data/documentation.html",
             "icon": "☁️",
             "category": "workspace"
         }

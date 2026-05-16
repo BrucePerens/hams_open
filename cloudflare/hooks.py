@@ -11,7 +11,7 @@ def post_init_hook(env):
     _logger.info("Initializing Cloudflare Edge Orchestration...")
 
     # Execute Zero-Sudo invocation of the config manager
-    env_svc = env["zero_sudo.security.utils"]._get_service_env(
-        "cloudflare.user_cloudflare_waf"
-    )
-    env_svc["cloudflare.config.manager"].initialize_cloudflare_state()
+    # ADR-0055: Use service accounts for initialization
+    utils = env["zero_sudo.security.utils"]
+    svc_uid = utils._get_service_uid("cloudflare.user_cloudflare_waf")
+    env["cloudflare.config.manager"].with_user(svc_uid).initialize_cloudflare_state()
