@@ -40,7 +40,7 @@ class TestPagerIncidentStandard(TransactionCase):
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
-        # [@ANCHOR: test_pager_notification]
+        # Tests [@ANCHOR: test_pager_notification]
         vals = {
             "source": "test_daemon_2",
             "severity": "critical",

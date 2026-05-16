@@ -132,7 +132,11 @@ The Pager Duty module exposes a native API allowing other Odoo modules (like Hel
   ```python
   on_duty_user = False
   if hasattr(self.env["calendar.event"], "get_current_on_duty_admin"):
-      on_duty_user = self.env["calendar.event"].sudo().get_current_on_duty_admin()
+      try:
+          svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+      except Exception:
+          svc_uid = self.env.uid
+      on_duty_user = self.env["calendar.event"].with_user(svc_uid).get_current_on_duty_admin()
       if on_duty_user:
           # Route ticket or notification to on_duty_user.partner_id
           pass

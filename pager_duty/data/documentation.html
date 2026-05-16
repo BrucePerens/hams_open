@@ -52,4 +52,7 @@
         <li><strong>Multi-Tier Escalation:</strong> A background cron job constantly evaluates open incidents. If a critical incident remains unacknowledged for over 15 minutes, it automatically escalates the alert directly to the entire administrative group, bypassing the scheduled shift. <code>[@ANCHOR: test_pager_escalation]</code></li>
         <li><strong>Analytics:</strong> Incident records automatically track Mean Time To Acknowledge (MTTA) and Mean Time To Resolve (MTTR) metrics for operational review. <code>[@ANCHOR: action_acknowledge_incident]</code> <code>[@ANCHOR: pager_board_data]</code> <code>[@ANCHOR: test_pager_board_url]</code></li>
     </ul>
+
+    <h2>9. Helpdesk Integration</h2>
+    <p>The Pager Duty module can automatically dispatch tickets to internal Helpdesk systems. This is managed via an Adapter pattern that dynamically resolves the target model (e.g., <code>hams_helpdesk.ticket</code>) and creates a unified tracking record. If the target system is unreachable, it automatically triggers a <strong>Direct SMTP Fallback</strong> to ensure the alert is never lost. <code>[@ANCHOR: pd_helpdesk_adapter]</code></p>
 </div>

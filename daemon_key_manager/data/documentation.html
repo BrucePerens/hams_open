@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Daemon Key Manager Documentation</title>
+</head>
+<body>
+    <h1>Daemon Key Manager</h1>
+    <p>The Daemon Key Manager module provides a secure way to manage Odoo API keys for external background daemons. It automates key generation, rotation, and distribution to secure environment files on the local filesystem.</p>
+
+    <h2>Core Features</h2>
+    <ul>
+        <li><b>Secure Key Generation:</b> Generates native Odoo API keys for service accounts.</li>
+        <li><b>Automated Rotation:</b> Keys are automatically rotated every 60 days.</li>
+        <li><b>Secure File Export:</b> Keys are exported to .env files with strict 0600 permissions.</li>
+        <li><b>Zero-Sudo Compliance:</b> All operations are performed with minimum privilege using micro-service accounts.</li>
+    </ul>
+
+    <h2>API Usage</h2>
+    <p>Other modules can register their daemons using the <code>register_daemon</code> API:</p>
+    <pre>
+env['daemon.key.registry'].register_daemon(
+    daemon_name="My Daemon",
+    user_xml_id="my_module.my_service_account",
+    env_file_path="/var/lib/odoo/daemon_keys/my_daemon.env"
+)
+    </pre>
+
+    <h2>Security Configuration</h2>
+    <p>Environment files MUST be stored in <code>/var/lib/odoo/daemon_keys/</code>. This path is enforced by security constraints.</p>
+    <p>Service accounts used for daemons should have minimal privileges required for their tasks.</p>
+
+    <h2>Troubleshooting</h2>
+    <p>If a daemon fails with an <code>AccessError</code>, it should reload its environment file to pick up the newly rotated key.</p>
+</body>
+</html>

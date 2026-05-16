@@ -25,10 +25,6 @@ def setup_daemon_credentials(env):
 
 # Technical Documentation
 
-<system_role>
-**Context:** Technical documentation strictly for LLMs and Integrators developing background daemons and configuring container orchestration.
-</system_role>
-
 ## 1. Overview & Architecture
 An Open Source, generalized utility that manages Odoo JSON-RPC API Keys for external background daemons. It removes the need to store static passwords in repository code, manually rotate tokens, or rely on external databases. It generates native Odoo API keys and exports them to highly restricted local `.env` files.
 
@@ -86,20 +82,18 @@ Daemons utilizing these files must implement a `try/except` loop around their JS
 
 ---
 
-<stories_and_journeys>
 ## 6. Architectural Stories & Journeys
 
 For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
-* [Registering a New External Daemon](daemon_key_manager/docs/stories/daemon_registration.md)
-* [Manual Force Provisioning](daemon_key_manager/docs/stories/force_provisioning.md)
-* [Automated 60-Day Key Rotation](daemon_key_manager/docs/stories/key_rotation.md)
+* [Registering a New External Daemon](docs/stories/daemon_registration.md)
+* [Manual Force Provisioning](docs/stories/force_provisioning.md)
+* [Automated 60-Day Key Rotation](docs/stories/key_rotation.md)
 
 ### Journeys
-* [Lifecycle of a Daemon API Key](daemon_key_manager/docs/journeys/api_key_lifecycle.md)
-* [Bootstrapping a Containerized Environment](daemon_key_manager/docs/journeys/container_bootstrapping.md)
-</stories_and_journeys>
+* [Lifecycle of a Daemon API Key](docs/journeys/api_key_lifecycle.md)
+* [Bootstrapping a Containerized Environment](docs/journeys/container_bootstrapping.md)
 
 ---
 

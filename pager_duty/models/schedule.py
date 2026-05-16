@@ -9,6 +9,7 @@ class PagerSchedule(models.Model):
 
     @api.model
     def get_current_on_duty_admin(self):
+        # [@ANCHOR: test_pager_notification]
         now = fields.Datetime.now()
         domain = [
             ("is_pager_duty", "=", True),

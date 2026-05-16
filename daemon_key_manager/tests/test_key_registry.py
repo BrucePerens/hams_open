@@ -55,7 +55,7 @@ class TestKeyRegistry(TransactionCase):
         # Tests [@ANCHOR: security_constraints_path]
         # Test non-service account
         with self.assertRaises(UserError):
-            self.registry_model.create({
+            self.env["daemon.key.registry"].create({
                 'name': 'Test Daemon',
                 'user_id': self.regular_user.id,
                 'env_file_path': self.test_env_paths[0],
@@ -64,7 +64,7 @@ class TestKeyRegistry(TransactionCase):
 
         # Test invalid path
         with self.assertRaises(UserError):
-            self.registry_model.create({
+            self.env["daemon.key.registry"].create({
                 'name': 'Test Daemon Path',
                 'user_id': self.service_user.id,
                 'env_file_path': '/home/jules/test.env',
@@ -90,7 +90,7 @@ class TestKeyRegistry(TransactionCase):
 
         # Attempting to use the symlink should fail because os.path.realpath resolves it to /etc/passwd
         with self.assertRaises(UserError) as cm:
-            self.registry_model.create({
+            self.env["daemon.key.registry"].create({
                 'name': 'Symlink Attack',
                 'user_id': self.service_user.id,
                 'env_file_path': symlink_path,
@@ -129,10 +129,10 @@ class TestKeyRegistry(TransactionCase):
         env_file_path = "/var/lib/odoo/daemon_keys/api_test.env"
         self.test_env_paths.append(env_file_path)
 
-        result = self.registry_model.register_daemon(daemon_name, user_xml_id, env_file_path)
+        result = self.env["daemon.key.registry"].register_daemon(daemon_name, user_xml_id, env_file_path)
         self.assertTrue(result)
 
-        registry = self.registry_model.search([('name', '=', daemon_name)])
+        registry = self.env["daemon.key.registry"].search([('name', '=', daemon_name)])
         self.assertTrue(registry)
         self.assertEqual(registry.env_file_path, env_file_path)
         self.assertTrue(os.path.exists(env_file_path))
@@ -147,9 +147,14 @@ class TestKeyRegistry(TransactionCase):
             model = "manual.article"
 
         if model:
+            _logger.info("Verifying documentation installation for model %s", model)
+            # Trigger manual bootstrap as we removed it from hooks
+            self.env["ir.module.module"]._bootstrap_knowledge_docs()
+
             article = self.env[model].search([('name', '=', 'Daemon Key Manager Documentation')], limit=1)
             self.assertTrue(article, "Documentation article not found")
             self.assertIn("Daemon Key Manager", article.body)
+            _logger.info("Documentation found and verified.")
         else:
             self.skipTest("No documentation model available")
 
@@ -161,14 +166,14 @@ class TestKeyRegistry(TransactionCase):
         # Tests [@ANCHOR: revoke_old_keys_logic]
         # Tests [@ANCHOR: generate_new_key_logic]
         # Create a mock daemon
-        registry = self.registry_model.create({
+        registry = self.env["daemon.key.registry"].create({
             'name': 'Cron Test Daemon',
             'user_id': self.service_user.id,
             'env_file_path': self.test_env_paths[1],
         })
 
         # Test cron execution wrapper
-        self.registry_model._cron_rotate_all_keys()
+        self.env["daemon.key.registry"]._cron_rotate_all_keys()
 
         # Call the actual trigger to fulfill the test anchor requirement
         self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys")._trigger()
@@ -184,7 +189,7 @@ class TestKeyRegistry(TransactionCase):
             'login': 'test_ownership_svc',
             'is_service_account': True,
         })
-        registry = self.registry_model.create({
+        registry = self.env["daemon.key.registry"].create({
             'name': 'Ownership Test Daemon',
             'user_id': service_user.id,
             'env_file_path': self.test_env_paths[2],
@@ -211,7 +216,7 @@ class TestKeyRegistry(TransactionCase):
         env_file_path = "/var/lib/odoo/daemon_keys/force_provision.env"
         self.test_env_paths.append(env_file_path)
 
-        self.registry_model.create({
+        self.env["daemon.key.registry"].create({
             'name': daemon_name,
             'user_id': self.service_user.id,
             'env_file_path': env_file_path,
@@ -221,7 +226,7 @@ class TestKeyRegistry(TransactionCase):
         if os.path.exists(env_file_path):
             os.remove(env_file_path)
 
-        self.registry_model.action_force_provision_all()
+        self.env["daemon.key.registry"].action_force_provision_all()
         self.assertTrue(os.path.exists(env_file_path))
 
     def test_ui_rendering(self):

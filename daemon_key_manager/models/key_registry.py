@@ -58,14 +58,6 @@ class DaemonKeyRegistry(models.Model):
                 )
 
     @api.model
-    def _register_hook(self):
-        # Tested by [@ANCHOR: test_documentation_installed]
-        # audit-ignore-sudo: ADR-0055 soft-dependency documentation bootstrap
-        if "ir.module.module" in self.env:
-            self.env["ir.module.module"]._bootstrap_knowledge_docs()
-        return super()._register_hook()
-
-    @api.model
     def register_daemon(self, daemon_name, user_xml_id, env_file_path):
         """
         API for other modules to request a bearer token/API key for their daemon.
@@ -79,9 +71,7 @@ class DaemonKeyRegistry(models.Model):
         user = self.env["res.users"].browse(svc_uid)
 
         # [@ANCHOR: register_daemon_logic]
-        registry = self.env["daemon.key.registry"].search(
-            [("name", "=", daemon_name)], limit=1
-        )
+        registry = self.env["daemon.key.registry"].search([("name", "=", daemon_name)], limit=1)
         if not registry:
             registry = self.env["daemon.key.registry"].create(
                 {
@@ -142,10 +132,7 @@ class DaemonKeyRegistry(models.Model):
             [("user_id", "=", self.user_id.id), ("name", "=", key_name)], limit=100
         )
         if old_keys:
-            self.env.cr.execute(
-                "DELETE FROM res_users_apikeys WHERE id IN %s",
-                (tuple(old_keys.ids),)
-            )
+            old_keys.unlink()
 
         # Generate new key
         # Tested by [@ANCHOR: test_cron_rotate_all_keys]

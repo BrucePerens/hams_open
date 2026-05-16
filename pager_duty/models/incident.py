@@ -151,7 +151,10 @@ class PagerIncident(models.Model):
 
         # Suppress native pager notifications if helpdesk integration is active
         # to prevent duplicate alerting (Helpdesk will handle the page).
-        use_helpdesk = self.env["ir.config_parameter"].get_param("pager_duty.helpdesk_model")
+        try:
+            use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param("pager_duty.helpdesk_model")
+        except Exception:
+            use_helpdesk = False
 
         if on_duty_user and not use_helpdesk:
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(

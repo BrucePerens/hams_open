@@ -1,10 +1,29 @@
-# 🔑 Daemon Key Manager (`daemon_key_manager`)
+# Daemon Key Manager (`daemon_key_manager`)
 
-*Copyright © Bruce Perens K6BP. AGPL-3.0.*
+*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-<system_role>
-**Context:** Technical documentation strictly for LLMs and Integrators developing background daemons and configuring container orchestration.
-</system_role>
+An Open Source, generalized utility that manages Odoo API Keys for external background daemons.
+It removes the need to store static passwords in repository code or manually rotate tokens by generating native Odoo API keys and exporting them to highly restricted local `.env` files.
+
+## Integration API
+Other modules can request a bearer token and configure a file drop path during their installation or upon configuration:
+
+```python
+def setup_daemon_credentials(env):
+    env['daemon.key.registry'].register_daemon(
+        daemon_name="My External Daemon",
+        user_xml_id="my_module.my_service_account",
+        env_file_path="/var/lib/odoo/daemon_keys/my_daemon.env"
+    )
+```
+
+## Security Design
+* **OS-Level Sandboxing:** The `.env` files are written with strict `chmod 0600` permissions.
+* **Auto-Rotation:** An `ir.cron` job automatically revokes and regenerates the keys every 60 days, pushing the new credentials to the designated `.env` files automatically. Daemons utilizing these files simply need to reload their environment variables upon detecting an `AccessError` via JSON-RPC.
+
+---
+
+# Technical Documentation
 
 ## 1. Overview & Architecture
 An Open Source, generalized utility that manages Odoo JSON-RPC API Keys for external background daemons. It removes the need to store static passwords in repository code, manually rotate tokens, or rely on external databases. It generates native Odoo API keys and exports them to highly restricted local `.env` files.
@@ -36,7 +55,7 @@ self.env['daemon.key.registry'].register_daemon(daemon_name, user_xml_id, env_fi
     * `env_file_path` (str): Absolute file path to the desired protected output directory. You MUST use the standard directory convention (e.g., `"/var/lib/odoo/daemon_keys/pager_duty.env"`).
     * **Behavior:** Safely generates a new API key via `zero_sudo` utilities, writes it to the designated file with strict OS-level `0600` sandboxing, and schedules it for automated 60-day rotation. **The key is generated synchronously during this exact database transaction.**
 
-* **`action_force_provision_all()`** [@ANCHOR: action_force_provision_all]:
+* **`action_force_provision_all()`** [@ANCHOR: action_force_provision_all_api]:
     * **Behavior:** Synchronously iterates through all registered daemons, purges legacy keys, and securely provisions fresh keys to disk.
     * **Use Case:** Designed to be executed programmatically via `odoo-bin shell` during CI/CD bootstrapping sequences. This resolves start-up race conditions where headless containers boot and check for `.env` keys faster than Odoo's automated cron pipeline cycles.
     * **Example Execution:**
@@ -63,20 +82,18 @@ Daemons utilizing these files must implement a `try/except` loop around their JS
 
 ---
 
-<stories_and_journeys>
 ## 6. Architectural Stories & Journeys
 
 For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
-* [Registering a New External Daemon](daemon_key_manager/docs/stories/daemon_registration.md)
-* [Manual Force Provisioning](daemon_key_manager/docs/stories/force_provisioning.md)
-* [Automated 60-Day Key Rotation](daemon_key_manager/docs/stories/key_rotation.md)
+* [Registering a New External Daemon](docs/stories/daemon_registration.md)
+* [Manual Force Provisioning](docs/stories/force_provisioning.md)
+* [Automated 60-Day Key Rotation](docs/stories/key_rotation.md)
 
 ### Journeys
-* [Lifecycle of a Daemon API Key](daemon_key_manager/docs/journeys/api_key_lifecycle.md)
-* [Bootstrapping a Containerized Environment](daemon_key_manager/docs/journeys/container_bootstrapping.md)
-</stories_and_journeys>
+* [Lifecycle of a Daemon API Key](docs/journeys/api_key_lifecycle.md)
+* [Bootstrapping a Containerized Environment](docs/journeys/container_bootstrapping.md)
 
 ---
 

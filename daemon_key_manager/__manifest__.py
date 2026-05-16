@@ -6,7 +6,6 @@
     "author": "Bruce Perens K6BP",
     "license": "AGPL-3",
     "depends": ["base", "zero_sudo"],
-    "post_init_hook": "post_init_hook",
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
@@ -21,7 +20,7 @@
     "knowledge_docs": [
         {
             "name": "Daemon Key Manager Documentation",
-            "path": "README.md",
+            "path": "data/documentation.html",
             "icon": "🔑",
             "category": "workspace"
         }
