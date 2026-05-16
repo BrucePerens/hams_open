@@ -1,6 +1,7 @@
 /** @odoo-module **/
 // # Verified by [@ANCHOR: test_binary_install_tour]
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@hams_test/js/tour_utils";
 
 registry.category("web_tour.tours").add("binary_install_tour", {
     url: "/web",
@@ -53,11 +54,7 @@ registry.category("web_tour.tours").add("binary_install_tour", {
             trigger: '.o_form_sheet',
             run: 'click',
         },
-        {
-            content: "Explicitly save the record to decouple input from RPC execution and unhide the action button",
-            trigger: '.o_form_button_save',
-            run: 'click',
-        },
+        TourUtils.safeSave(),
         {
             content: "Click Install Now using immutable name attribute",
             trigger: 'button[name="action_install"]',
