@@ -1,4 +1,4 @@
-# Journey: Backup Configuration and First Sync
+# Journey: Backup Configuration and First Sync [@ANCHOR: journey_backup_config_sync]
 
 This journey walks through the initial setup of a backup target and its first metadata synchronization.
 

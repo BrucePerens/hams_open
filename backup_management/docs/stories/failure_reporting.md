@@ -1,4 +1,4 @@
-# Story: Failure Reporting
+# Story: Failure Reporting [@ANCHOR: story_failure_reporting]
 
 This story describes how the system alerts operators when backup operations fail or snapshots become stale.
 

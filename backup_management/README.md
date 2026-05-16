@@ -31,14 +31,14 @@ Implements a Hybrid Architecture for unified backup management.
 For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
-* [Automated Synchronization](docs/stories/automated_sync.md)
-* [Failure Reporting](docs/stories/failure_reporting.md)
-* [Policy Application](docs/stories/policy_application.md)
-* [Secure Path Validation](docs/stories/secure_path_validation.md)
+* [Automated Synchronization](docs/stories/automated_sync.md) `[@ANCHOR: story_automated_sync]`
+* [Failure Reporting](docs/stories/failure_reporting.md) `[@ANCHOR: story_failure_reporting]`
+* [Policy Application](docs/stories/policy_application.md) `[@ANCHOR: story_policy_application]`
+* [Secure Path Validation](docs/stories/secure_path_validation.md) `[@ANCHOR: story_secure_path_validation]`
 
 ### Journeys
-* [Backup Configuration and First Sync](docs/journeys/backup_config_sync.md)
-* [Manual Restore Command Generation](docs/journeys/manual_restore_command.md)
+* [Backup Configuration and First Sync](docs/journeys/backup_config_sync.md) `[@ANCHOR: journey_backup_config_sync]`
+* [Manual Restore Command Generation](docs/journeys/manual_restore_command.md) `[@ANCHOR: journey_manual_restore_command]`
 
 ## Testing & Verification
 * **Cron Reliability:** Scheduled syncing functions are validated by `[@ANCHOR: test_backup_cron]`.

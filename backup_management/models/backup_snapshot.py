@@ -12,7 +12,7 @@ class BackupSnapshot(models.Model):
     )
     snapshot_id = fields.Char(string="Snapshot ID / Label", required=True)
     start_time = fields.Datetime(string="Start Time")
-    size_bytes = fields.Integer(string="Size (Bytes)")
+    size_bytes = fields.Float(string="Size (Bytes)")
     status = fields.Char(string="Status")
 
     restore_command = fields.Char(

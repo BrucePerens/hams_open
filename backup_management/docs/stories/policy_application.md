@@ -1,4 +1,4 @@
-# Story: Policy Application
+# Story: Policy Application [@ANCHOR: story_policy_application]
 
 This story describes how retention policies are applied to backup engines from within Odoo.
 

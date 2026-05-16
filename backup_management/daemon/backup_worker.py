@@ -180,11 +180,27 @@ def execute_job(ch, method, properties, body):
             elif engine == "sync_snapshots":
                 try:
                     # Clean the buffer of the exit message before parsing JSON
-                    json_str = log_buffer.split("\nProcess exited")[0]
+                    # We look for the last valid JSON block if possible, or just the whole buffer before the exit message
+                    parts = log_buffer.split("\nProcess exited")
+                    json_str = parts[0].strip()
+                    # Kopia might output some info before JSON if not careful, though --json should be clean.
+                    # Let's try to find the START of the JSON array or object.
+                    # We look for the first [ or { that precedes the end of the string.
+                    start_idx_arr = json_str.find("[")
+                    start_idx_obj = json_str.find("{")
+                    if start_idx_arr != -1 and start_idx_obj != -1:
+                         start_idx = min(start_idx_arr, start_idx_obj)
+                    else:
+                         start_idx = max(start_idx_arr, start_idx_obj)
+
+                    if start_idx != -1:
+                         json_str = json_str[start_idx:]
+
                     data = json.loads(json_str)
                     _json2_call("backup.config", "_process_snapshot_data", ids=[config_id], data=data, engine=config.get("engine"))
                 except Exception as e:
                     logger.error(f"Failed to parse sync data: {e}")
+                    _json2_call("backup.config", "_report_backup_failure", ids=[config_id], message=f"Sync Parse Error: {e}")
             elif engine == "restore_drill":
                 _json2_call("backup.config", "write", ids=[config_id], vals={"last_drill_time": time.strftime("%Y-%m-%d %H:%M:%S")})
 
