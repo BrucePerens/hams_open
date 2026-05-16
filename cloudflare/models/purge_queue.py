@@ -60,7 +60,8 @@ class CloudflarePurgeQueue(models.Model):
             )
 
         if create_vals:
-            self.env["cloudflare.purge.queue"].create(create_vals)
+            # Safely override the poisoned upstream key without destroying the entire context
+            self.env["cloudflare.purge.queue"].with_context(prefetch_fields=True).create(create_vals)
 
     @api.model
     def enqueue_tags(self, tags, website_id=None):
@@ -81,7 +82,8 @@ class CloudflarePurgeQueue(models.Model):
             if t
         ]
         if create_vals:
-            self.env["cloudflare.purge.queue"].create(create_vals)
+            # Safely override the poisoned upstream key without destroying the entire context
+            self.env["cloudflare.purge.queue"].with_context(prefetch_fields=True).create(create_vals)
 
     @api.model
     def process_queue(self):
@@ -147,6 +149,3 @@ class CloudflarePurgeQueue(models.Model):
             )
             if cron:
                 cron._trigger()
-
-    # Removed dynamic _apply_cloudflare_patch and _register_hook to strictly rely on
-    # content_hooks.py standard inheritance. This prevents double-execution and OOM/N+1 scaling bugs.

@@ -17,7 +17,8 @@ class TestSEOUI(HttpCase):
                         6,
                         0,
                         [
-                            self.env.ref("base.group_portal").id,
+                            # MUST be an Internal User to access /web and view backend res.users form
+                            self.env.ref("base.group_user").id,
                             self.env.ref("user_websites.group_user_websites_user").id,
                         ],
                     )
@@ -33,5 +34,5 @@ class TestSEOUI(HttpCase):
         if "user.websites.group" in self.env:
             self.env["user.websites.group"].get_view(view_type="form")
 
-        # Start the tour with the authenticated context on the universally stable base portal URL
-        self.start_tour("/my", "user_websites_seo_tour", login=self.user_test.login)
+        # Start the tour with the authenticated context on the backend URL
+        self.start_tour("/web", "user_websites_seo_tour", login=self.user_test.login)

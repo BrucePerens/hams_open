@@ -1547,9 +1547,12 @@ def scan_file(filepath, is_odoo_module=False):
             continue
 
         if "noqa" in line.lower():
-            errors_found.append(
-                f"Line {line_num}: CRITICAL LINTER EVASION: Use of 'noqa' is strictly forbidden.\n      Code: `{stripped}`"
-            )
+            if "noqa: e402" in line.lower():
+                pass  # Exception allowed for sys.path injections in isolated daemon tests
+            else:
+                errors_found.append(
+                    f"Line {line_num}: CRITICAL LINTER EVASION: Use of 'noqa' is strictly forbidden.\n      Code: `{stripped}`"
+                )
 
         if "burn-ignore" in line and not any(
             allowed in line

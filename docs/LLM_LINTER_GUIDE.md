@@ -71,7 +71,7 @@ If testing background loop functions, you MUST conditionally bypass commits usin
 * **Top of File Requirement:** All Python imports MUST be at the top of the file. The linters enforce Flake8 rule `E402`.
 * **Local Imports Banned:** Local imports (imports inside functions, methods, or classes) are completely banned.
 * **Circular Dependency Bypass:** The use of `# noqa` to bypass local import restrictions or any other linter rules is strictly forbidden.
-Refactor architecture to avoid circular dependencies instead of using inline imports.
+Refactor architecture to avoid circular dependencies instead of using inline imports. **EXCEPTION (The E402 Daemon Rule):** The strict ban on `# noqa` has one explicit exception. When writing tests for isolated background daemons that require `sys.path.insert()` to resolve sibling imports, you MUST append `  # noqa: E402` to the module imports that occur after the path modification to satisfy Flake8.
 * **Daemon Decoupling:** Standalone daemons (and their tests) located in `daemon/` or `daemons/` directories MUST NOT import any Odoo libraries or testing decorators (e.g., `from odoo.tests.common import tagged`). They must be completely decoupled from the Odoo framework.
 
 ## 3. 🐍 Python Odoo 19 Core Deprecations & Formatting

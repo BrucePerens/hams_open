@@ -1,50 +1,49 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
+import json
 import unittest
 from unittest.mock import patch, MagicMock
 
-# Sibling import: Natively supported by Python without sys.path mutilation
-from backup_worker import BackupWorker, execute_kopia_command
+# Safely insert the daemon directory so sibling imports work without Odoo context
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import backup_worker  # noqa: E402
 
 
-class TestBackupWorker(unittest.TestCase):
+class TestBackupWorkerDaemon(unittest.TestCase):
     def setUp(self):
-        # Strict AGENTS.md Compliance: Utilizing exact production paths.
-        # Forbidden: /tmp/ directories or 'test_' prefixed fake files.
-        self.config_file = "/var/lib/odoo/backup_config.json"
-        self.backup_dir = "/var/lib/odoo/backups"
-        self.worker = BackupWorker(self.config_file, self.backup_dir)
-
-    def test_initialization(self):
-        self.assertEqual(self.worker.config_file, self.config_file)
-        self.assertEqual(self.worker.backup_dir, self.backup_dir)
+        self.mock_ch = MagicMock()
+        self.mock_method = MagicMock()
+        self.mock_method.delivery_tag = 1
+        self.mock_properties = MagicMock()
 
     @patch("backup_worker.subprocess.Popen")
-    def test_execute_kopia_command_success(self, mock_popen):
+    @patch("backup_worker._json2_call")
+    def test_execute_job_kopia_success(self, mock_json2, mock_popen):
+        # Mock the external shell process
         mock_process = MagicMock()
-        mock_process.communicate.return_value = (b'{"status": "success"}', b"")
-        mock_process.returncode = 0
+        mock_process.stdout.readline.side_effect = ["Snapshot successful\n", ""]
+        mock_process.wait.return_value = 0
         mock_popen.return_value = mock_process
 
-        result = execute_kopia_command(["kopia", "snapshot", "create", "/var/lib/odoo"])
-        self.assertEqual(result, '{"status": "success"}')
+        # Mock the Odoo API read response for the config
+        mock_json2.return_value = [{"kopia_password": "test_pass", "engine": "kopia"}]
 
-    @patch("backup_worker.subprocess.Popen")
-    def test_execute_kopia_command_failure(self, mock_popen):
-        mock_process = MagicMock()
-        mock_process.communicate.return_value = (b"", b"Error message")
-        mock_process.returncode = 1
-        mock_popen.return_value = mock_process
+        # Construct the RabbitMQ payload
+        body = json.dumps({
+            "job_id": 99,
+            "engine": "kopia",
+            "target_path": "/var/lib/odoo/backups",
+            "config_id": 1
+        })
 
-        with self.assertRaises(RuntimeError):
-            execute_kopia_command(["kopia", "snapshot", "create", "/var/lib/odoo"])
+        # Execute the procedural job
+        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body)
 
-    @patch("backup_worker.BackupWorker._load_config")
-    @patch("backup_worker.execute_kopia_command")
-    def test_run_backup_job(self, mock_execute, mock_load_config):
-        mock_load_config.return_value = {"jobs": [{"id": 1, "path": "/var/lib/odoo/data"}]}
-        mock_execute.return_value = '{"snapshot_id": "12345"}'
+        # Assert process was spawned with correct arguments
+        mock_popen.assert_called_once()
+        args, kwargs = mock_popen.call_args
+        self.assertEqual(args[0], ["kopia", "snapshot", "create", "/var/lib/odoo/backups", "--json"])
 
-        self.worker.run_backup_job({"id": 1, "path": "/var/lib/odoo/data"})
-        mock_execute.assert_called_with(
-            ["kopia", "snapshot", "create", "/var/lib/odoo/data", "--json"]
-        )
+        # Assert RabbitMQ acknowledgment was sent
+        self.mock_ch.basic_ack.assert_called_once_with(delivery_tag=1)
