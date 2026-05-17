@@ -117,7 +117,7 @@ class CloudflareConfigManager(models.AbstractModel):
                 )
                 # ADR-0001: Headless Mutation Context
                 self.env["cloudflare.config.backup"].with_context(
-                    mail_notrack=True, prefetch_fields=False
+                    mail_notrack=True
                 ).create(
                     {
                         "name": f"Pre-Odoo Backup ({website.name})",
@@ -133,7 +133,7 @@ class CloudflareConfigManager(models.AbstractModel):
                 vals["website_id"] = website.id
                 # ADR-0001: Headless Mutation Context
                 self.env["cloudflare.waf.rule"].with_context(
-                    mail_notrack=True, prefetch_fields=False
+                    mail_notrack=True
                 ).create(vals)
 
             self.action_push_waf_rules(website_id=website.id)
@@ -158,7 +158,7 @@ class CloudflareConfigManager(models.AbstractModel):
 
         # ADR-0001: Headless Mutation Context
         self.env["cloudflare.waf.rule"].with_context(
-            mail_notrack=True, prefetch_fields=False
+            mail_notrack=True
         ).search(
             [("website_id", "=", website.id)], limit=1000
         ).unlink()
@@ -167,7 +167,7 @@ class CloudflareConfigManager(models.AbstractModel):
         for i, r in enumerate(rules):
             # ADR-0001: Headless Mutation Context
             self.env["cloudflare.waf.rule"].with_context(
-                mail_notrack=True, prefetch_fields=False
+                mail_notrack=True
             ).create(
                 {
                     "sequence": (i + 1) * 10,

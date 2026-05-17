@@ -1,25 +1,46 @@
 <div class="knowledge_doc">
     <h1>☁️ Cloudflare Edge Orchestration (<code>cloudflare</code>)</h1>
-    <p><em>Copyright © Bruce Perens K6BP. AGPL-3.0.</em></p>
-    <p><strong>Context:</strong> Technical documentation strictly for LLMs and Integrators.</p>
+    <p>The Cloudflare Edge Orchestration module acts as a command center for your Cloudflare CDN and Web Application Firewall (WAF). It automates caching, security, and connectivity between your Odoo server and Cloudflare's global network.</p>
 
-    <h2>1. Overview</h2>
-    <p>Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPTCHA verification to offload CPU from the Python WSGI workers.</p>
-
-    <h2>2. API Interfaces</h2>
+    <h2>1. Configuration</h2>
+    <p>To start using this module, you need to provide your Cloudflare credentials. Go to <strong>Settings > Website > Cloudflare Edge</strong>.</p>
     <ul>
-        <li><strong>WAF IP Banning:</strong> <code>env['cloudflare.waf'].ban_ip(...)</code> dynamically injects firewall rules <code>[@ANCHOR: cf_execute_ban]</code>. Automatically lifts expired bans via <code>[@ANCHOR: cf_action_lift_ban]</code>.</li>
-        <li><strong>Cache Purging:</strong> <code>env['cloudflare.purge.queue'].enqueue_tags(...)</code>. Processes asynchronous cache invalidation queues via cron <code>[@ANCHOR: ir_cron_process_cf_purge_queue]</code>. Base URLs are accurately resolved and injected via <code>[@ANCHOR: enqueue_urls_base_url]</code>.</li>
-        <li><strong>Turnstile API:</strong> <code>env['cloudflare.turnstile'].verify_token(...)</code> securely evaluates CAPTCHA handshakes against the API.</li>
-        <li><strong>Edge Context:</strong> <code>env['cloudflare.utils'].get_request_context()</code> (Extracts trusted IP/Geodata).</li>
-        <li><strong>Tunnel Setup:</strong> Wizard dynamically generates the <code>cloudflared</code> execution token command for edge network bridging <code>[@ANCHOR: cf_tunnel_setup]</code>.</li>
-        <li><strong>Tunnel Management:</strong> Modules can sync existing tunnels <code>[@ANCHOR: cf_sync_tunnels]</code> and delete them <code>[@ANCHOR: cf_delete_tunnel]</code>.</li>
+        <li><strong>CF API Token:</strong> A token created in the Cloudflare dashboard with permissions for <em>Zone.Cache Purge</em>, <em>Zone.Firewall Services</em>, and optionally <em>Account.Cloudflare Tunnel</em>.</li>
+        <li><strong>CF Zone ID:</strong> The unique ID for your website domain in Cloudflare.</li>
+        <li><strong>CF Account ID:</strong> Your Cloudflare account ID (required if you want to use Tunnels).</li>
+        <li><strong>Turnstile Secret:</strong> The secret key for Cloudflare Turnstile if you use it for CAPTCHA protection.</li>
     </ul>
 
-    <h2>3. Automated Subsystems</h2>
+    <h2>2. Cache Management</h2>
+    <p>This module automatically handles caching to make your website faster.</p>
     <ul>
-        <li>Injects <code>Cloudflare-CDN-Cache-Control</code> headers natively via <code>ir.http._post_dispatch</code>.</li>
-        <li>Scans module <code>static/</code> folders on boot and automatically invalidates the CDN edge via cache tags if file modifications are detected.</li>
-        <li><strong>Settings View Injection:</strong> Extends standard Odoo config settings to securely accept Cloudflare API tokens <code>[@ANCHOR: xpath_rendering_cf_settings]</code>.</li>
+        <li><strong>Automatic Purging:</strong> When you update a website page, blog post, or product, the module tells Cloudflare to clear the old version from its cache so visitors see the latest content immediately.</li>
+        <li><strong>Static Asset Sync:</strong> Every time your Odoo server restarts, the module checks if any static files (like images or CSS) have changed. If they have, it clears them from the global cache.</li>
+        <li><strong>Manual Purge:</strong> You can manually clear the cache by going to <strong>Website > Configuration > Cloudflare > Purge Cache</strong>. You can choose to purge everything, specific web addresses (URLs), or specific "Cache-Tags".</li>
+    </ul>
+
+    <h2>3. Security & WAF</h2>
+    <p>Protect your site using the Cloudflare Web Application Firewall.</p>
+    <ul>
+        <li><strong>IP Banning:</strong> If a malicious user is detected, their IP can be banned. You can view and manage these bans under <strong>Website > Configuration > Cloudflare > IP Bans</strong>.</li>
+        <li><strong>Firewall Rules:</strong> You can manage advanced firewall rules directly from Odoo. Go to <strong>Website > Configuration > Cloudflare > WAF Rules</strong>. You can "Pull" existing rules from Cloudflare or "Push" your local Odoo rules to Cloudflare.</li>
+        <li><strong>Security Level:</strong> You can quickly adjust your site's security level (e.g., to "Under Attack" mode) using the <strong>Zone Settings</strong> wizard in the Cloudflare menu.</li>
+    </ul>
+
+    <h2>4. Cloudflare Tunnels</h2>
+    <p>Cloudflare Tunnels allow you to securely connect your Odoo server to the internet without opening any ports on your firewall.</p>
+    <ul>
+        <li><strong>Creating a Tunnel:</strong> In the Cloudflare settings, click <strong>Generate Tunnel Command</strong>. This will create a new tunnel in Cloudflare and give you a command to run on your server.</li>
+        <li><strong>Managing Tunnels:</strong> View and manage your active tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>. Use the <strong>Sync Tunnels</strong> button to update the list from Cloudflare.</li>
+    </ul>
+
+    <h2>5. Developer & API Info</h2>
+    <p>For developers, the module provides several anchors for integration:</p>
+    <ul>
+        <li><code>[@ANCHOR: cf_execute_ban]</code>: Logic for executing an IP ban.</li>
+        <li><code>[@ANCHOR: cf_action_lift_ban]</code>: Logic for lifting an IP ban.</li>
+        <li><code>[@ANCHOR: enqueue_urls_base_url]</code>: Logic for resolving URLs before purging.</li>
+        <li><code>[@ANCHOR: cf_tunnel_setup]</code>: Logic for tunnel provisioning.</li>
+        <li><code>[@ANCHOR: ir_http_post_dispatch_headers]</code>: Header injection logic.</li>
     </ul>
 </div>

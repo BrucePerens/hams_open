@@ -44,10 +44,18 @@ Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPT
 * **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers `[@ANCHOR: ir_http_post_dispatch_headers]` to control edge caching behavior.
 * **Settings View Injection:** Extends standard Odoo config settings to securely accept Cloudflare API tokens `[@ANCHOR: xpath_rendering_cf_settings]`.
 
+## 4. Zero-Sudo & Micro-Privilege Architecture
+This module strictly adheres to the Zero-Sudo architecture. All operations that require elevated privileges are performed using dedicated service accounts.
+* `cloudflare.user_cloudflare_purge`: Used for cache purging operations.
+* `cloudflare.user_cloudflare_waf`: Used for WAF management and IP banning.
+* `cloudflare.user_cloudflare_tunnel`: Used for tunnel management.
+
+**Performance Note:** In previous versions, `prefetch_fields=False` was used in `with_context` for headless mutations. This has been removed to avoid `KeyError` regressions in Odoo 19 and to ensure consistent ORM behavior, at the cost of slight prefetch cache overhead which is negligible for these infrequent operations.
+
 ---
 
 <stories_and_journeys>
-## 4. Architectural Stories & Journeys
+## 5. Architectural Stories & Journeys
 
 For detailed narratives and end-to-end workflows, refer to the following:
 
@@ -64,6 +72,7 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * [Infrastructure Provisioning](docs/journeys/infrastructure.md)
 * [Intelligent Traffic Handling](docs/journeys/traffic_handling.md)
 </stories_and_journeys>
+
 # Cloudflare Edge Orchestration (`cloudflare`) - API Reference
 
 ## Purpose

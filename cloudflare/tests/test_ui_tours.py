@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from unittest.mock import patch
 import odoo.tests
 
 
@@ -39,7 +40,20 @@ class TestCloudflareUITours(odoo.tests.HttpCase):
         self.authenticate(self.admin.login, self.admin.login)
         self.start_tour("/web", "cf_waf_rule_tour", login=self.admin.login)
 
-    def test_03_backend_views_rendering(self):
+    def test_03_purge_wizard_tour(self):
+        """Executes the JS tour for the Manual Cache Purge Wizard."""
+        # Seed credentials so the wizard doesn't crash
+        website = self.env["website"].get_current_website()
+        website.write({
+            "cloudflare_api_token": "fake_token",
+            "cloudflare_zone_id": "fake_zone"
+        })
+
+        self.authenticate(self.admin.login, self.admin.login)
+        with patch("odoo.addons.cloudflare.models.purge_wizard.purge_everything", return_value=True):
+            self.start_tour("/web", "cf_purge_wizard_tour", login=self.admin.login)
+
+    def test_04_backend_views_rendering(self):
         # [@ANCHOR: test_cf_backend_views_rendering]
         v1 = self.env["cloudflare.config.backup"].get_view(view_type="list")
         self.assertIn("create_date", v1["arch"])
