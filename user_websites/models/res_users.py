@@ -86,10 +86,12 @@ def _async_unpublish_content(db_name, user_ids):
                 if len(blogs) < 5000:
                     break
                 if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
-        except Exception as e: # audit-ignore-catch-all
+        except (odoo.exceptions.AccessError, odoo.exceptions.ValidationError) as e:
             env.cr.rollback()
-
-            logging.getLogger(__name__).exception(f"Background unpublish failed: {e}")
+            logging.getLogger(__name__).warning("Background unpublish business logic failure: %s", e)
+        except Exception: # audit-ignore-catch-all
+            env.cr.rollback()
+            logging.getLogger(__name__).exception("Fatal error during background unpublish")
     finally:
         cr.close()
 

@@ -14,6 +14,7 @@ This Odoo 19 module lets users build their own personal or group websites and bl
 * **Built-in Moderation:** Every page has a "Report Violation" button. If users post bad content, admins can review it, hand out strikes, and automatically suspend accounts that break the rules.
 * **Page Limits:** Stop spam by setting limits on how many pages a single user can create.
 * **GDPR Compliance:** Built-in Data Portability (Export) and Right to Erasure (Delete) features for user-generated content.
+* **Security-First Sanitization:** Automated neutralization of malicious code (SSTI/XSS) attempting to execute on user-managed pages.
 
 ## 🛠️ Installation
 
@@ -35,6 +36,7 @@ We used a few neat tricks to make this secure and fast:
 * **Just-In-Time Creation:** We don't waste database space creating empty blogs for users who never use them. The system only creates the website records the exact moment the user visits their URL for the first time.
 * **One Big Blog:** Instead of creating a thousand separate blog containers, everyone shares a single Odoo `blog.blog` record named "Community Blog". We just filter the posts so users only see their own stuff.
 * **Proxy Ownership:** Odoo normally only lets admins build web pages. We get around this securely. When a user creates a page, the system briefly logs in as a background Service Account to save the HTML to the database, but tags the user as the real "owner" so only they can edit it later.
+* **Security Shield:** The module includes an automated sanitization engine that intercepts and neutralizes XSS and SSTI attempts. If a user tries to inject malicious code, the system strips it, notifies administrators, and issues a strike.
 
 ---
 
@@ -77,6 +79,7 @@ The `user_websites` module enables decentralized content creation. It employs th
 
 ### Moderation Models
 * **`content.violation.report`**: Stores abuse reports. Originator is masked from the target owner. The system automatically generates a report and issues a strike if a user attempts to inject malicious SSTI/XSS payloads into their site architecture `[@ANCHOR: action_take_action_and_strike]`, tested by `[@ANCHOR: test_moderation_suspension]`. Admin spam is prevented via a daily digest cron (`ir_cron_notify_pending_reports` `[@ANCHOR: ir_cron_notify_pending_reports]`, `[@ANCHOR: cron_notify_pending_reports]`, verified by `[@ANCHOR: test_cron_pending_reports]`) and a session-guarded UI toast (`[@ANCHOR: toast_notifications_logic]`, `[@ANCHOR: admin_toast_logic]`, tested by `[@ANCHOR: test_tour_toast_notifications]`).
+* **Security Auto-Moderation**: The `website.page` model includes `_sanitize_user_arch` `[@ANCHOR: website_page_sanitize_arch]`, verified by `[@ANCHOR: test_website_page_sanitize_arch]`, which forcefully strips dangerous QWeb directives (`t-*`) and JS event handlers.
 * **`content.violation.appeal`**: Used by suspended users to petition for account restoration.
 </data_model>
 
