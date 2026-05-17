@@ -51,6 +51,7 @@ If you are an AI or developer working on downstream modules, you **MUST** perfor
    * **Change:** `self.env['custom.security.utils']._get_service_uid(...)`
    * **To:** `self.env['zero_sudo.security.utils']._get_service_uid(...)`
 4. **Service Account XML Provisioning:** You may safely continue to use `<field name="is_service_account" eval="True"/>` in your XML data files without crashing, as the structural field is natively defined by this module.
+5. **Context Management:** When using `_get_service_env`, note that `prefetch_fields=False` is no longer automatically applied to avoid performance regressions. If you require it for specific high-volume operations, you must apply it manually in your calling context.
 </migration_instructions>
 
 ---

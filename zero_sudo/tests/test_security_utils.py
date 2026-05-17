@@ -249,7 +249,6 @@ class TestSecurityUtils(TransactionCase):
 
         # ADR-0001: Ensure background context overrides exist to prevent nested cache faults
         self.assertTrue(env_svc.context.get("mail_notrack"))
-        self.assertFalse(env_svc.context.get("prefetch_fields"))
 
     @patch("shutil.which")
     def test_11_ensure_executable(self, mock_which):

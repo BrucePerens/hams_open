@@ -38,7 +38,7 @@ class Module(models.Model):
         # Context for creating documentation
         svc_uid = utils._get_service_uid(svc_account)
         Article = self.env[article_model_name].with_user(svc_uid).with_context(
-            mail_notrack=True, prefetch_fields=False
+            mail_notrack=True
         )
 
         # Context for reading the core ERP framework table

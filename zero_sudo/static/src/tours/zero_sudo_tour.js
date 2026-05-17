@@ -1,6 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@hams_test/js/tour_utils";
 
 registry.category("web_tour.tours").add("zero_sudo_tour", {
     // [@ANCHOR: zero_sudo_tour]
@@ -42,14 +43,6 @@ registry.category("web_tour.tours").add("zero_sudo_tour", {
             trigger: 'div[name="is_service_account"] input',
             run: 'click',
         },
-        {
-            trigger: '.o_form_button_save',
-            content: "Save the user",
-            run: 'click',
-        },
-        {
-            trigger: '.o_form_button_create',
-            run: () => {},
-        },
+        ...TourUtils.safeSave()
     ],
 });
