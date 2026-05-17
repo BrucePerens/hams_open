@@ -21,6 +21,7 @@ The module implements a reactive ticketing system where assignment is driven by 
 - **Zero-Sudo Compliance**: No `.sudo()` calls are allowed. All privilege elevations must use service accounts (`hams_helpdesk.user_helpdesk_service` or `pager_duty.user_pager_service_internal`) via `zero_sudo`.
 - **Micro-Privilege**: Uses `res.groups.privilege` to define granular access.
 - **Portal Isolation**: Portal users are strictly limited via record rules to their own `partner_id`.
+- **Fail-Fast Integrity**: The module is designed to fail fast if required service accounts are missing or misconfigured, preventing silent failures and ensuring operational reliability.
 </security_design>
 
 ## Technical Architecture & Anchors

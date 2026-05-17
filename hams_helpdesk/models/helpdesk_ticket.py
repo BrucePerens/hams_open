@@ -1,4 +1,5 @@
 from odoo import _, api, fields, models
+from odoo.exceptions import AccessError
 import datetime
 import logging
 
@@ -81,8 +82,9 @@ class HelpdeskTicket(models.Model):
         try:
             pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
             Calendar = pager_env["calendar.event"]
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Failed to resolve pager_duty env for shift awareness: %s", e)
+        except AccessError:
+            # PagerDuty service account might not be provisioned yet or module not installed.
+            # This is an optional integration, so we continue with standard env.
             pass
 
         if hasattr(Calendar, "get_current_on_duty_admin"):
@@ -102,11 +104,9 @@ class HelpdeskTicket(models.Model):
             upcoming_partner_ids = upcoming_shifts.mapped("user_id.partner_id.id")
 
         # 2. Apply assignments and send notifications via Helpdesk Service Account
-        try:
-            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Failed to resolve helpdesk service env for ticket routing: %s", e)
-            hd_env = self.env
+        # We explicitly do NOT catch all exceptions here to ensure that if the service
+        # account is misconfigured, we fail fast.
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
 
         for ticket in self.with_env(hd_env):
             # Assignment

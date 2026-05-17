@@ -18,13 +18,10 @@ class ShiftHandoffWizard(models.TransientModel):
         self.ensure_one()
 
         utils = self.env["zero_sudo.security.utils"]
-        try:
-            # Execute modification via service account to ensure audit trail and bypass possible write restrictions
-            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-            ticket = self.ticket_id.with_env(hd_env)
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Failed to resolve helpdesk service env for handoff execution: %s", e)
-            ticket = self.ticket_id
+        # Execute modification via service account to ensure audit trail and bypass possible write restrictions.
+        # We fail fast if the service account is not properly configured.
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        ticket = self.ticket_id.with_env(hd_env)
 
         ticket.write({"user_id": self.new_user_id.id})
 
