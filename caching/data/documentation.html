@@ -3,26 +3,30 @@
     <p><em>Copyright © Bruce Perens K6BP. AGPL-3.0.</em></p>
 
     <h2>1. Overview</h2>
-    <p>The Caching module implements a global, root-scoped Service Worker (<code>/sw.js</code>) that proxies and caches frontend assets locally in the browser to provide near-instant load times.</p>
+    <p>The Caching module speeds up your website by saving important files directly in your browser. This means that after the first time you visit, the website loads almost instantly because it doesn't have to download the same files again.</p>
 
-    <h2>2. Integration Rules</h2>
+    <h2>2. How it works</h2>
+    <p>When you visit the site, a "Service Worker" is installed in your browser. This is like a small assistant that remembers the website's design (its "assets").</p>
     <ul>
-        <li><strong>Automatic Caching:</strong> Assets placed in your module's <code>static/</code> directory are cached automatically. This includes JavaScript, CSS, and images.</li>
-        <li><strong>No Competing Workers:</strong> DO NOT attempt to register another Service Worker. The browser only allows one worker per scope.</li>
-        <li><strong>WebSockets:</strong> <code>ws://</code> and <code>wss://</code> protocols are hardcoded to bypass the proxy to ensure real-time communication is not interrupted.</li>
-        <li><strong>Dynamic Large File Prohibition:</strong> The worker mathematically calculates an active quota limit (default 35MB). Heavy media MUST route via <code>/web/image</code> or <code>/web/content</code> as these routes are explicitly bypassed.</li>
-        <li><strong>Layout Injection:</strong> The service worker registration script is injected globally into the frontend <code>website.layout</code>.</li>
-        <li><strong>Zero-Sudo Architecture:</strong> The module uses micro-privilege service accounts (<code>caching.user_caching_service</code>) for administrative tasks like system parameter access and filesystem scanning, adhering to strict security protocols.</li>
+        <li><strong>Smart Saving:</strong> It automatically saves JavaScript, CSS, and images used by the website.</li>
+        <li><strong>Fast Loading:</strong> Next time you visit, these files are loaded from your computer's storage instead of over the internet.</li>
+        <li><strong>Automatic Updates:</strong> If the website owner updates the design, your browser will automatically notice and update its saved files.</li>
     </ul>
 
-    <h2>3. Configuration</h2>
-    <p>Administrators can configure the caching behavior through the Website Settings:</p>
+    <h2>3. Important Safety Features</h2>
     <ul>
-        <li><strong>Safe Quota (MB):</strong> Configure the browser storage limit for the service worker.</li>
-        <li><strong>Force Cache Invalidation:</strong> Increment the version to force users' browsers to immediately wipe their cache.</li>
+        <li><strong>Storage Limit:</strong> Browsers only allow a certain amount of space for saved files. Our assistant calculates exactly how much space is safe and only saves the most important files. It skips very large files to prevent filling up your storage.</li>
+        <li><strong>Privacy & Security:</strong> It only saves public files needed to display the website. It never saves your personal information, login details, or private data.</li>
+        <li><strong>Real-time Communication:</strong> Chat and other live features are not affected and will continue to work perfectly.</li>
     </ul>
 
-    <h2>4. Technical Details</h2>
-    <p>The Service Worker intercepts requests matching <code>/web/assets/</code> and <code>/*/static/</code>. It uses a Cache-First strategy for these assets, falling back to the network and then caching the result if it's within the size limit.</p>
-    <p>Cache invalidation is handled by an <code>mtime</code>-based versioning scheme. The <code>/sw.js</code> route dynamically injects the latest filesystem modification time from the server's <code>static/</code> directories, forcing the browser to update the Service Worker whenever assets change.</p>
+    <h2>4. Administrator Controls</h2>
+    <p>Administrators can manage the Caching Service Worker from the <strong>Website Settings</strong> (Configuration &gt; Settings &gt; Website section):</p>
+    <ul>
+        <li><strong>Safe Quota (MB):</strong> Adjust the maximum total size of files the browser is allowed to save. If the website's assets exceed this, the module will automatically prioritize small, essential files and skip large ones.</li>
+        <li><strong>Cache Invalidation:</strong> If you have made changes to the website and want to ensure all users see the update immediately, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version and forces all browsers to clear their saved assets on their next visit.</li>
+    </ul>
+
+    <h2>5. Troubleshooting</h2>
+    <p>If the website looks strange after an update, it's possible that some old files are still being used. Although the module handles this automatically, an administrator can use the "Invalidate Cache Now" button described above to fix the issue globally.</p>
 </section>

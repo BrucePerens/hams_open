@@ -21,6 +21,10 @@ class ServiceWorkerController(http.Controller):
         Returns a tuple: (latest_mtime, file_sizes).
         Cached in RAM at the class level so the disk walk only executes once per worker lifecycle.
         """
+        # Gating for Jules VM stability during Odoo initialization
+        if tools.config.get('test_enable') and (tools.config.get('init') or tools.config.get('stop_after_init')) and not request.env.context.get('force_fs_scan'):
+            return (0.0, [])
+
         if type(self)._fs_cache:
             return type(self)._fs_cache
 
@@ -34,16 +38,13 @@ class ServiceWorkerController(http.Controller):
             # STRICT ZERO-SUDO COMPLIANCE: Escalate to micro-privilege service account
             # to retrieve the list of installed modules without using .sudo().
             # Tested by [@ANCHOR: test_caching_zero_sudo_scan]
-            svc_uid = request.env['zero_sudo.security.utils']._get_service_uid('caching.user_caching_service')
-            env_svc = request.env(user=svc_uid)
+            utils = request.env['zero_sudo.security.utils']
+            env_svc = utils._get_service_env('caching.user_caching_service')
 
-            # Raw SQL to get installed modules quickly.
-            # This only retrieves module names that are already public knowledge
-            # and is required to calculate the SW footprint before it is served.
-            env_svc.cr.execute(
-                "SELECT name FROM ir_module_module WHERE state = 'installed'"
-            )
-            installed_modules = [row[0] for row in env_svc.cr.fetchall()]
+            # Use ORM to get installed modules.
+            # This ensures consistent Zero-Sudo architecture.
+            # audit-ignore-unbounded-search: Small table, need all installed modules for full scan.
+            installed_modules = env_svc['ir.module.module'].search([('state', '=', 'installed')]).mapped('name')
 
             for module_name in installed_modules:
                 mod_path = get_module_path(module_name)

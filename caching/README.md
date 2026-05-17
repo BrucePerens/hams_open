@@ -46,12 +46,18 @@ Implements a global, root-scoped Service Worker (`/sw.js`) that proxies and cach
 * Assets placed in your module's `static/` directory are cached automatically.
 * **No Competing Workers:** DO NOT attempt to register another Service Worker.
 * **WebSockets:** `ws://` protocols are hardcoded to bypass the proxy.
-* **Dynamic Large File Prohibition:** The worker mathematically calculates an active quota limit (approx 35MB). Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
-* **Layout Injection:** The service worker registration script is injected globally into the frontend `website.layout` via XPath `[@ANCHOR: xpath_rendering_caching_layout]`.
+* **Dynamic Large File Prohibition**: The worker mathematically calculates an active quota limit (approx 35MB) [@ANCHOR: caching_quota_calculation]. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
+* **Layout Injection**: The service worker registration script is injected globally into the frontend `website.layout` via XPath [@ANCHOR: xpath_rendering_caching_layout].
 
-* **Settings Layout Injection**: The settings UI is injected into `website.layout` via XPath `[@ANCHOR: xpath_rendering_caching_settings]`.
+* **Settings Layout Injection**: The settings UI is injected into `website.layout` via XPath [@ANCHOR: xpath_rendering_caching_settings].
 
-## 3. Stories & Journeys
+## 3. Zero-Sudo Architecture
+This module strictly adheres to the Zero-Sudo architecture:
+- **Service Account**: `caching.user_caching_service` is used for background filesystem scans [@ANCHOR: caching_fs_scan_logic].
+- **System Parameters**: Configuration parameters are retrieved via `zero_sudo.security.utils` to avoid direct `ir.config_parameter` access.
+- **Whitelist**: `caching.safe_quota_mb` and `caching.invalidation_version` are whitelisted in `zero_sudo`.
+
+## 4. Stories & Journeys
 Detailed architectural narratives and process flows are documented in the `docs/` directory:
 
 ### Stories
@@ -62,3 +68,10 @@ Detailed architectural narratives and process flows are documented in the `docs/
 ### Journeys
 * [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: caching_sw_fetch_interceptor])
 * [Server Startup Scan](docs/journeys/server_startup_scan.md) ([@ANCHOR: caching_sw_serve_route])
+
+## 5. Testing
+Tests are located in the `tests/` directory and cover:
+- Service Worker delivery and headers [@ANCHOR: caching_sw_serve_route].
+- Quota calculation logic [@ANCHOR: caching_quota_calculation].
+- Cache invalidation triggers.
+- UI Tour for registration check [@ANCHOR: caching_sw_fetch_interceptor].

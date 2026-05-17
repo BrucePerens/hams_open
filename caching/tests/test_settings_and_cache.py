@@ -77,7 +77,7 @@ class TestSettingsAndCache(HttpCase):
         ServiceWorkerController._fs_cache = None
 
         mock_req = MagicMock()
-        mock_req.env = self.env
+        mock_req.env = self.env['res.users'].with_context(force_fs_scan=True).env
 
         with patch('odoo.addons.caching.controllers.main.request', mock_req):
             mtime, sizes = controller._get_fs_stats()
