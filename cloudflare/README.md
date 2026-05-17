@@ -11,6 +11,7 @@ This module acts as the command center for your Cloudflare CDN and Web Applicati
 * **Honeypot IP Banning:** If a malicious bot triggers a silent honeypot trap on your site, this module instantly talks to Cloudflare's API and bans their IP address at the network edge.
 * **Zero Trust Tunnels:** You can provision a new `cloudflared` tunnel directly from the settings menu. The module generates the tunnel via API and gives you the exact copy-paste command to run on your server.
 * **Turnstile Integration:** It provides a backend validator for Cloudflare's invisible Turnstile CAPTCHA to protect your public forms.
+* **Zone Settings Control:** Quickly adjust security levels, development mode, and cache TTL from within Odoo.
 
 ## 🛠️ How to Set It Up
 

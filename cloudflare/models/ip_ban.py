@@ -63,6 +63,21 @@ class CloudflareIPBan(models.Model):
         website = self.env["website"].browse(website_id)
         token, zone_id = website._get_cloudflare_credentials()
 
+        if not token or not zone_id:
+            # ADR-0001: Headless Mutation Context
+            self.env["cloudflare.ip.ban"].with_context(
+                mail_notrack=True
+            ).create(
+                {
+                    "ip_address": ip_address,
+                    "mode": mode,
+                    "notes": "Failed: Missing Cloudflare credentials.",
+                    "state": "failed",
+                    "website_id": website.id,
+                }
+            )
+            return False
+
         success, result = ban_ip(ip_address, mode, notes, token, zone_id)
 
         if success:

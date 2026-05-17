@@ -84,13 +84,9 @@ class TestPurgeQueue(TransactionCase):
         )
 
         # Read the domain via the related website_id as the service account
-        try:
-            # We explicitly access the domain attribute to verify read ACLs.
-            domain_val = str(queue_item.with_user(svc_uid).website_id.domain)
-            self.assertIsInstance(domain_val, str)
-        except Exception as e: # audit-ignore-catch-all
-            _logger.exception("ACL verification failed: %s", e)
-            self.fail(f"Service account lacks ACLs to read website_id domain: {e}")
+        # We explicitly access the domain attribute to verify read ACLs.
+        domain_val = str(queue_item.with_user(svc_uid).website_id.domain)
+        self.assertIsInstance(domain_val, str)
 
     @patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
     def test_04_purge_queue_tags_processing(self, mock_post):

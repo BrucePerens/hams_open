@@ -1,46 +1,64 @@
 <div class="knowledge_doc">
     <h1>☁️ Cloudflare Edge Orchestration (<code>cloudflare</code>)</h1>
-    <p>The Cloudflare Edge Orchestration module acts as a command center for your Cloudflare CDN and Web Application Firewall (WAF). It automates caching, security, and connectivity between your Odoo server and Cloudflare's global network.</p>
+    <p>The Cloudflare Edge Orchestration module acts as a command center for your Cloudflare CDN and Web Application Firewall (WAF). It automates caching, security, and connectivity between your Odoo server and Cloudflare's global network, offloading significant processing from your Odoo workers to Cloudflare's edge.</p>
 
     <h2>1. Configuration</h2>
-    <p>To start using this module, you need to provide your Cloudflare credentials. Go to <strong>Settings > Website > Cloudflare Edge</strong>.</p>
+    <p>To start using this module, you need to provide your Cloudflare credentials. Navigate to <strong>Settings > Website > Cloudflare Edge</strong>.</p>
     <ul>
-        <li><strong>CF API Token:</strong> A token created in the Cloudflare dashboard with permissions for <em>Zone.Cache Purge</em>, <em>Zone.Firewall Services</em>, and optionally <em>Account.Cloudflare Tunnel</em>.</li>
-        <li><strong>CF Zone ID:</strong> The unique ID for your website domain in Cloudflare.</li>
-        <li><strong>CF Account ID:</strong> Your Cloudflare account ID (required if you want to use Tunnels).</li>
-        <li><strong>Turnstile Secret:</strong> The secret key for Cloudflare Turnstile if you use it for CAPTCHA protection.</li>
+        <li><strong>CF API Token:</strong> A token created in your Cloudflare dashboard. It requires permissions for:
+            <ul>
+                <li><em>Zone.Cache Purge</em> (to clear cache)</li>
+                <li><em>Zone.Firewall Services</em> (to manage WAF and IP bans)</li>
+                <li><em>Account.Cloudflare Tunnel</em> (optional, if using Zero Trust Tunnels)</li>
+            </ul>
+        </li>
+        <li><strong>CF Zone ID:</strong> The unique identifier for your domain in Cloudflare, found on the domain's overview page.</li>
+        <li><strong>CF Account ID:</strong> Your Cloudflare account ID, required for provisioning Zero Trust Tunnels.</li>
+        <li><strong>Turnstile Secret:</strong> The secret key for Cloudflare Turnstile, used for backend verification of invisible CAPTCHAs.</li>
     </ul>
 
     <h2>2. Cache Management</h2>
-    <p>This module automatically handles caching to make your website faster.</p>
+    <p>This module ensures your website is blazing fast by aggressively caching content while providing smart invalidation.</p>
     <ul>
-        <li><strong>Automatic Purging:</strong> When you update a website page, blog post, or product, the module tells Cloudflare to clear the old version from its cache so visitors see the latest content immediately.</li>
-        <li><strong>Static Asset Sync:</strong> Every time your Odoo server restarts, the module checks if any static files (like images or CSS) have changed. If they have, it clears them from the global cache.</li>
-        <li><strong>Manual Purge:</strong> You can manually clear the cache by going to <strong>Website > Configuration > Cloudflare > Purge Cache</strong>. You can choose to purge everything, specific web addresses (URLs), or specific "Cache-Tags".</li>
+        <li><strong>Automatic Caching:</strong> Static assets (images, CSS, JS) are instructed to be cached for 1 year. Dynamic website pages are cached for 24 hours at the edge for public users.</li>
+        <li><strong>Proactive Invalidation:</strong> When a website page, blog post, or product is edited, Odoo automatically tells Cloudflare to purge that specific URL from the global cache.</li>
+        <li><strong>Static Asset Sync:</strong> On server boot, the module scans your Odoo installation for changed static files. If any are detected, it triggers a global purge for the <code>odoo-static-assets</code> tag.</li>
+        <li><strong>Manual Purge Wizard:</strong> Go to <strong>Website > Configuration > Cloudflare > Purge Cache</strong> to manually clear the cache.
+            <ul>
+                <li><strong>Purge Everything:</strong> Clears the entire cache for the zone.</li>
+                <li><strong>Purge Specific URLs:</strong> Provide relative paths (e.g., <code>/shop</code>) or full URLs.</li>
+                <li><strong>Purge Specific Cache-Tags:</strong> Use relational tags to purge groups of content.</li>
+            </ul>
+        </li>
     </ul>
 
-    <h2>3. Security & WAF</h2>
-    <p>Protect your site using the Cloudflare Web Application Firewall.</p>
+    <h2>3. Security & Web Application Firewall (WAF)</h2>
+    <p>Leverage Cloudflare's world-class security to protect your Odoo instance.</p>
     <ul>
-        <li><strong>IP Banning:</strong> If a malicious user is detected, their IP can be banned. You can view and manage these bans under <strong>Website > Configuration > Cloudflare > IP Bans</strong>.</li>
-        <li><strong>Firewall Rules:</strong> You can manage advanced firewall rules directly from Odoo. Go to <strong>Website > Configuration > Cloudflare > WAF Rules</strong>. You can "Pull" existing rules from Cloudflare or "Push" your local Odoo rules to Cloudflare.</li>
-        <li><strong>Security Level:</strong> You can quickly adjust your site's security level (e.g., to "Under Attack" mode) using the <strong>Zone Settings</strong> wizard in the Cloudflare menu.</li>
+        <li><strong>Automated IP Banning:</strong> Integrated with honeypots, this module can instantly ban malicious IPs at the Cloudflare edge. View and manage these under <strong>Website > Configuration > Cloudflare > IP Bans</strong>.</li>
+        <li><strong>WAF Rule Management:</strong> Manage Cloudflare Firewall rules directly from Odoo.
+            <ul>
+                <li><strong>Pull:</strong> Import your existing Cloudflare rules into Odoo for management.</li>
+                <li><strong>Push:</strong> Deploy your Odoo-defined rules to Cloudflare.</li>
+            </ul>
+            Go to <strong>Website > Configuration > Cloudflare > WAF Rules</strong> to manage these.
+        </li>
+        <li><strong>Zone Settings Wizard:</strong> Quickly adjust edge settings like <strong>Security Level</strong> (e.g., "Under Attack" mode), <strong>Development Mode</strong>, and <strong>Browser Cache TTL</strong>.</li>
     </ul>
 
-    <h2>4. Cloudflare Tunnels</h2>
-    <p>Cloudflare Tunnels allow you to securely connect your Odoo server to the internet without opening any ports on your firewall.</p>
+    <h2>4. Cloudflare Zero Trust Tunnels</h2>
+    <p>Securely expose your Odoo instance to the internet without opening any inbound ports on your firewall.</p>
     <ul>
-        <li><strong>Creating a Tunnel:</strong> In the Cloudflare settings, click <strong>Generate Tunnel Command</strong>. This will create a new tunnel in Cloudflare and give you a command to run on your server.</li>
-        <li><strong>Managing Tunnels:</strong> View and manage your active tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>. Use the <strong>Sync Tunnels</strong> button to update the list from Cloudflare.</li>
+        <li><strong>Provisioning:</strong> In Cloudflare settings, click <strong>Generate Tunnel Command</strong>. The module creates the tunnel via API and provides the exact <code>cloudflared</code> command to run on your host.</li>
+        <li><strong>Management:</strong> Track active tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>. Use <strong>Sync Tunnels</strong> to refresh the list from your Cloudflare account.</li>
     </ul>
 
-    <h2>5. Developer & API Info</h2>
-    <p>For developers, the module provides several anchors for integration:</p>
+    <h2>5. Integration for Developers</h2>
+    <p>The module provides a robust API for other modules to leverage Cloudflare capabilities:</p>
     <ul>
-        <li><code>[@ANCHOR: cf_execute_ban]</code>: Logic for executing an IP ban.</li>
-        <li><code>[@ANCHOR: cf_action_lift_ban]</code>: Logic for lifting an IP ban.</li>
-        <li><code>[@ANCHOR: enqueue_urls_base_url]</code>: Logic for resolving URLs before purging.</li>
-        <li><code>[@ANCHOR: cf_tunnel_setup]</code>: Logic for tunnel provisioning.</li>
-        <li><code>[@ANCHOR: ir_http_post_dispatch_headers]</code>: Header injection logic.</li>
+        <li><strong>IP Banning:</strong> <code>env['cloudflare.waf'].ban_ip(ip_address, notes="Reason")</code></li>
+        <li><strong>Cache Purging:</strong> <code>env['cloudflare.purge.queue'].enqueue_urls(['/path'])</code> or <code>enqueue_tags(['tag'])</code></li>
+        <li><strong>CAPTCHA Verification:</strong> <code>env['cloudflare.turnstile'].verify_token(token)</code></li>
+        <li><strong>Edge Context:</strong> <code>env['cloudflare.utils'].get_request_context()</code> returns geo-location and threat data from Cloudflare headers.</li>
     </ul>
 </div>
