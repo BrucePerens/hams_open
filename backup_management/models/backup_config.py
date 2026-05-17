@@ -95,9 +95,12 @@ class BackupConfig(models.Model):
 
     def _get_fernet(self):
         key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")
-        if key and Fernet:
+        if not key:
+            return None
+        try:
             return Fernet(key.encode("utf-8"))
-        return None
+        except (ValueError, TypeError):
+            return None
 
     def _crypt_field(self, value, decrypt=False):
         f = self._get_fernet()
@@ -371,6 +374,8 @@ class BackupConfig(models.Model):
                         )
 
         if creates:
+            # Sort by start_time to ensure we check the absolute latest if multiple are created
+            creates.sort(key=lambda x: x['start_time'], reverse=True)
             Snapshot.create(creates)
             if self.minimum_size_mb > 0:
                 for c in creates:

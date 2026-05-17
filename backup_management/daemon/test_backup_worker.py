@@ -47,3 +47,6 @@ class TestBackupWorkerDaemon(unittest.TestCase):
 
         # Assert RabbitMQ acknowledgment was sent
         self.mock_ch.basic_ack.assert_called_once_with(delivery_tag=1)
+
+if __name__ == "__main__":
+    unittest.main()

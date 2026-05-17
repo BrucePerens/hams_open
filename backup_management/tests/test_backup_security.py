@@ -48,6 +48,23 @@ class TestBackupSecurity(RealTransactionCase):
                     self.config.write({"target_path": path})
                     self.env.flush_all()
 
+    def test_metacharacter_prevention(self):
+        # Tests improved validation for metacharacters
+        malicious_paths = [
+            "/var/lib/odoo/backups/test; ls",
+            "/var/lib/odoo/backups/test&rm",
+            "/var/lib/odoo/backups/test|whoami",
+            "/var/lib/odoo/backups/test`id`",
+            "/var/lib/odoo/backups/test$(id)",
+            "/var/lib/odoo/backups/test\n/etc"
+        ]
+
+        for path in malicious_paths:
+            with self.subTest(path=path):
+                with self.assertRaises(UserError, msg=f"Path {path} containing metacharacters should be forbidden"):
+                    self.config.write({"target_path": path})
+                    self.env.flush_all()
+
     def test_symlink_traversal(self):
         # Create a symlink to a forbidden path
         symlink_path = "/var/lib/odoo/backups/evil_link"

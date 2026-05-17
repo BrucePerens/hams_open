@@ -19,4 +19,7 @@
 
     <h2>6. Snapshot Size Anomaly Detection</h2>
     <p>Administrators can configure a <strong>Minimum Expected Size (MB)</strong> on each backup configuration. When a new snapshot is ingested, the system compares its physical byte size against this threshold. If the snapshot is anomalously small (indicating a missing mount or failed filesystem read), the system immediately fires an SRE alert to prevent a false sense of security.</p>
+
+    <h2>7. Security Hardening</h2>
+    <p>The module implements strict path validation. Backup targets and restore paths are checked against a forbidden list of system directories (like <code>/etc</code>, <code>/root</code>, etc.) to prevent accidental overwriting of critical system files. Furthermore, shell metacharacters are strictly prohibited in any path configuration to prevent command injection vulnerabilities. All sensitive credentials, such as repository passwords and S3 secret keys, are encrypted at rest using industry-standard Fernet encryption.</p>
 </div>

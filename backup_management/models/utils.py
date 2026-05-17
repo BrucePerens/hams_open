@@ -13,8 +13,9 @@ def validate_backup_path(path):
         return
 
     # Resolve symlinks to check the actual target path
+    # We use normpath first then realpath
     try:
-        abs_path = os.path.realpath(path)
+        abs_path = os.path.realpath(os.path.normpath(path))
     except OSError as e:
         _logger.warning("Failed to resolve realpath for %s: %s", path, e)
         abs_path = os.path.abspath(path)
@@ -46,3 +47,8 @@ def validate_backup_path(path):
     # Prevent command injection via flags if path is used in CLI
     if path.startswith("-"):
         raise UserError(_("Invalid path: path cannot start with a hyphen."))
+
+    # Block shell metacharacters
+    metacharacters = [";", "&", "|", "`", "$", "(", ")", "<", ">", "*", "?", "[", "]", "{", "}", "\n"]
+    if any(char in path for char in metacharacters):
+        raise UserError(_("Invalid path: path contains illegal characters."))
