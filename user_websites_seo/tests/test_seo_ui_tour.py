@@ -36,7 +36,5 @@ class TestSEOUI(HttpCase):
         if "user.websites.group" in self.env:
             self.env["user.websites.group"].get_view(view_type="form")
 
-        # Stable Initialization: We start at the exact form route mapped natively, bypassing hash instability.
-        action = self.env.ref("base.action_res_users")
-        target_url = f"/web#id={self.user_test.id}&cids=1&menu_id={self.env.ref('base.menu_administration').id}&action={action.id}&model=res.users&view_type=form"
-        self.start_tour(target_url, "user_websites_seo_tour", login="admin")
+        # Start cleanly from the root to bypass fragile WebClient deep-linking redirects
+        self.start_tour("/odoo", "user_websites_seo_tour", login="admin")

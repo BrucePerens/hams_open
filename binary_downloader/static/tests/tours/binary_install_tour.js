@@ -4,22 +4,10 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@hams_test/js/tour_utils";
 
 registry.category("web_tour.tours").add("binary_install_tour", {
-    url: "/web",
+    url: "/odoo",
     steps: () => [
         {
             trigger: '.o_navbar_apps_menu button',
-            run: 'click',
-        },
-        {
-            trigger: '[data-menu-xmlid="base.menu_administration"]',
-            run: 'click',
-        },
-        {
-            trigger: '.o_settings_container, [data-menu-xmlid="base.menu_custom"], *:contains("Custom")',
-            run: () => {},
-        },
-        {
-            trigger: '[data-menu-xmlid="base.menu_custom"], *:contains("Custom")',
             run: 'click',
         },
         {

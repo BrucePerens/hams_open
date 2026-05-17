@@ -3,7 +3,7 @@ import { registry } from "@web/core/registry";
 
 // # Verified by [@ANCHOR: test_helpdesk_operator_tour]
 registry.category("web_tour.tours").add("helpdesk_operator_tour", {
-    url: "/web",
+    url: "/odoo",
     steps: () => [
         {
             trigger: '[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]',
@@ -18,7 +18,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         {
             trigger: 'div[name="name"] input',
             content: "Fill in the ticket subject",
-            run: "text Emergency Core Router Failure",
+            run: "edit Emergency Core Router Failure",
         },
         {
             trigger: '.o_form_button_save',
@@ -33,7 +33,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         {
             trigger: 'div[name="handoff_notes"] textarea',
             content: "Enter briefing notes for the next operator",
-            run: "text I have verified the power supply. Awaiting NOC confirmation.",
+            run: "edit I have verified the power supply. Awaiting NOC confirmation.",
         },
         {
             trigger: '.modal-footer button[name="action_confirm_handoff"]',

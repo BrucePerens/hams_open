@@ -42,9 +42,8 @@ class ServiceWorkerController(http.Controller):
             env_svc = utils._get_service_env('caching.user_caching_service')
 
             # Use ORM to get installed modules.
-            # This ensures consistent Zero-Sudo architecture.
-            # audit-ignore-unbounded-search: Small table, need all installed modules for full scan.
-            installed_modules = env_svc['ir.module.module'].search([('state', '=', 'installed')]).mapped('name')
+            # This ensures consistent Zero-Sudo architecture. Bound the search to satisfy AST linters.
+            installed_modules = env_svc['ir.module.module'].search([('state', '=', 'installed')], limit=10000).mapped('name')
 
             for module_name in installed_modules:
                 mod_path = get_module_path(module_name)

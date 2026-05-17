@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 from odoo.tests.common import HttpCase, tagged
 
 @tagged("post_install", "-at_install")

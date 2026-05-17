@@ -86,3 +86,14 @@ window.addEventListener('unhandledrejection', function(event) {
     let reason = event.reason ? (event.reason.stack || event.reason) : "Unknown Error";
     originalConsoleError.call(console, `\n========== UNHANDLED PROMISE REJECTION ==========\n${reason}\n=================================================\n`);
 });
+
+// 4. Detect illegal redirects to Discuss app (Odoo 19 fallback mechanism)
+setInterval(() => {
+    const url = document.location.pathname + document.location.hash + document.location.search;
+    if (url.includes('/discuss')) {
+        if (!window._discussAlarmTriggered) {
+            window._discussAlarmTriggered = true;
+            console.error("AssertionError: Tour illegally redirected to /odoo/discuss! This usually means the query parameter routing was malformed, hash routing was illegally used, or cids/menu_id were missing, causing Odoo to fallback to the default app.");
+        }
+    }
+}, 1000);

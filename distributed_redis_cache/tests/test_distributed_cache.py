@@ -249,6 +249,4 @@ class TestDistributedCacheIntegration(HamsIntegrationCase):
 class TestDistributedCacheTour(HttpCase):
     def test_distributed_cache_admin_tour(self):
         """Verify the cache management UI via tour."""
-        if os.environ.get("IN_JULES_VM"):
-            self.skipTest("Skipping UI tour in Jules VM environment due to UI instability.")
         self.start_tour("/odoo", "distributed_cache_admin_tour", login="admin")

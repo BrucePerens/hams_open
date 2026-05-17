@@ -29,6 +29,6 @@
             <field name="target">new</field>
         </record>
 
-        <menuitem id="menu_distributed_cache_root" name="Distributed Cache" parent="base.menu_custom" sequence="100" action="action_distributed_cache_config"/>
+        <menuitem id="menu_distributed_cache_root" name="Distributed Cache" sequence="100" action="action_distributed_cache_config"/>
     </data>
 </odoo>

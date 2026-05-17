@@ -255,9 +255,6 @@ class TestKeyRegistryTour(HttpCase):
         # Tests [@ANCHOR: register_daemon_api]
         # Tests [@ANCHOR: action_force_provision_all_api]
 
-        if os.environ.get("IN_JULES_VM") or os.environ.get("JULES_SESSION_ID"):
-            self.skipTest("UI tours are known to fail in Jules VM environment due to infrastructure issues.")
-
         # Ensure admin has Technical Features enabled for the tour
         admin = self.env.ref('base.user_admin')
         group_no_one = self.env.ref('base.group_no_one')

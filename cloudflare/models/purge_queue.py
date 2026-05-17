@@ -60,9 +60,7 @@ class CloudflarePurgeQueue(models.Model):
             )
 
         if create_vals:
-            # Total Context Annihilation to prevent Odoo ORM tracking tracebacks
-            sterile_env = self.env(context={})
-            sterile_env["cloudflare.purge.queue"].create(create_vals)
+            self.env["cloudflare.purge.queue"].create(create_vals)
 
     @api.model
     def enqueue_tags(self, tags, website_id=None):
@@ -83,8 +81,7 @@ class CloudflarePurgeQueue(models.Model):
             if t
         ]
         if create_vals:
-            sterile_env = self.env(context={})
-            sterile_env["cloudflare.purge.queue"].create(create_vals)
+            self.env["cloudflare.purge.queue"].create(create_vals)
 
     @api.model
     def process_queue(self):

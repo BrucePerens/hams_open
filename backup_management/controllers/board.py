@@ -10,5 +10,5 @@ class BackupBoard(http.Controller):
             "backup_management.action_backup_board_client", raise_if_not_found=False
         )
         if action:
-            return request.redirect(f"/web#action={action.id}")
-        return request.redirect("/web")
+            return request.redirect(f"/odoo?action={action.id}")
+        return request.redirect("/odoo")

@@ -29,7 +29,7 @@ _executor = None
 
 
 def _stop_listener():
-    global _listener_started, _executor
+    global _listener_started
     _listener_started = False
     if _executor:
         _executor.shutdown(wait=False)

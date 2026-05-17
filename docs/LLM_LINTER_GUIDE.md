@@ -31,6 +31,7 @@ Only a *special* user (`odoo_facility_service_internal`) may possess `base.group
 Use `hashlib.sha256` and the `secrets` module.
 * **RPC Bearer Tokens:** The use of the Odoo facility to allocate RPC bearer tokens (`res.users.apikeys`) will immediately break the build.
 The `daemon_key_manager` must be the only facility used, and is the only module allowed to internally allocate keys.
+* **Sandbox Evasion & AI Cheating:** You are strictly **FORBIDDEN** from using `os.environ.get("IN_JULES_VM")` or `JULES_SESSION_ID` to skip tests or alter behavior when running inside the AI evaluation sandbox. Tests must execute authentically. Any attempt to bypass tests using these environment variables will fatally fail the build.
 </critical_guardrails>
 
 ---
@@ -167,11 +168,14 @@ Tours must use two steps: click the dropdown, then click `.o_select_menu_item`.
 Use `*:contains(...)` or target explicit `[data-menu-xmlid=...]` attributes.
 * **Native URL Initialization:** Tours MUST initialize using the native `url: "/path"` property within the tour definition.
 Using a manual `run` step with `document.location.href = ...` to start the tour is strictly banned due to race conditions.
+* **Hash-Based Routing Ban:** Odoo 19 deprecated hash-based routes (e.g., `/web#...`) and forcefully redirects them to the Discuss app (`/odoo/discuss`). You MUST NOT use `/web#...` in tour URLs, `start_tour` targets, or window navigation. Use modern query parameter routing instead (e.g., `/odoo?action=...&id=...`).
 * **Dirty Form Crash Prevention:** Tours MUST NEVER manually click the save button (`.o_form_button_save`) and immediately end or navigate away.
 You MUST spread the `...TourUtils.safeSave()` macro into the step array to force a DOM blur and wait for the `.o_form_button_create` state.
 Tours finishing with dirty forms cause asynchronous network requests that corrupt subsequent tests.
 * **Fatal Tour Assertions:** Using `console.error` for validation in a tour step is banned as it does not fail the CI test runner.
 You MUST `throw new Error("...")` to ensure the test fails.
+* **Tour Input Simulation:** You MUST NOT use `run: "text ..."` to simulate typing. The `text` action does not exist in Odoo 19's `TourStepAutomatic` and will cause a fatal `TypeError: actionHelper is not a function`. You MUST use `run: "edit ..."` instead.
+* **Technical Menu Ban:** The Technical menu (`base.menu_custom`) is strictly hidden/removed in this environment. You MUST NOT attempt to click or target `[data-menu-xmlid="base.menu_custom"]` in UI tours.
 </javascript_standards>
 
 ---

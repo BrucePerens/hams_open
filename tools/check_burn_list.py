@@ -130,6 +130,11 @@ GENERAL_ERROR_RULES = [
         re.compile(r"['\"]/tmp(?:/|['\"])"),
         "CRITICAL TEST REALISM / PATHING: Hardcoding '/tmp' is forbidden. Tests must use the exact same paths as the production environment per AGENTS.md.",
     ),
+    (
+        r"test_.*\.py$",
+        re.compile(r"IN_JULES_VM|JULES_SESSION_ID"),
+        "CRITICAL AI CHEATING: Bypassing tests using Jules-specific environment variables is strictly forbidden.",
+    ),
 ]
 
 ODOO_ERROR_RULES = [
@@ -260,9 +265,34 @@ ODOO_ERROR_RULES = [
         "FRAGILE TOUR TRIGGER: 'a:contains()' and 'button:contains()' are brittle. Use '*:contains()' or '[data-menu-xmlid=...]' instead.",
     ),
     (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"run:\s*['\"`]text\b"),
+        "CRITICAL JS TOUR ACTION: 'text' is not a valid action in Odoo 19. Use 'edit' to simulate text input.",
+    ),
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"base\.menu_custom"),
+        "CRITICAL TOUR DEPRECATION: The Technical menu (base.menu_custom) is strictly hidden/removed in this environment. Do not target it in UI tours.",
+    ),
+    (
         r"\.py$",
         re.compile(r"env\[['\"]ir\.module\.module['\"]\]\.search\("),
         "CRITICAL FRAMEWORK ACL: Searching 'ir.module.module' directly fails without 'base.group_user'. You MUST inject the 'zero_sudo.odoo_facility_service_internal' context via .with_user().",
+    ),
+    (
+        r"\.(py|js)$",
+        re.compile(r"['\"]/web#.*?['\"]"),
+        "CRITICAL ROUTING DEPRECATION: Hash-based routing (/web#...) is deprecated and forcefully redirected in Odoo 19. Use query parameters (/odoo?...) instead.",
+    ),
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"run:\s*['\"`]text\b"),
+        "CRITICAL JS TOUR ACTION: 'text' is not a valid action in Odoo 19. Use 'edit' to simulate text input.",
+    ),
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"base\.menu_custom"),
+        "CRITICAL TOUR DEPRECATION: The Technical menu (base.menu_custom) is strictly hidden/removed in this environment. Do not target it in UI tours.",
     ),
 ]
 

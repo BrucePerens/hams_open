@@ -4,11 +4,32 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 
 // Verified by [@ANCHOR: test_seo_widget_tour]
 registry.category("web_tour.tours").add("user_websites_seo_tour", {
-    url: "/web",
+    url: "/odoo",
     steps: () => [
         {
-            content: "Wait for the backend framework to initialize",
-            trigger: '.o_home_menu_background, .o_form_sheet, .o_list_view',
+            trigger: '.o_navbar_apps_menu button',
+            content: "Open Apps Menu",
+            run: "click",
+        },
+        {
+            trigger: '[data-menu-xmlid="base.menu_administration"]',
+            content: "Open Settings",
+            run: "click",
+        },
+        {
+            trigger: 'button[data-menu-xmlid="base.menu_users"]',
+            content: "Open Users & Companies menu",
+            run: "click",
+        },
+        {
+            trigger: '[data-menu-xmlid="base.menu_action_res_users"]',
+            content: "Open Users",
+            run: "click",
+        },
+        {
+            trigger: 'td.o_data_cell:contains("SEO UI Test User")',
+            content: "Open User Form Directly (Bypass fragile search logic)",
+            run: "click",
         },
         {
             content: "Click the SEO Metadata notebook tab injected by our module",

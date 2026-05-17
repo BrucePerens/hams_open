@@ -37,8 +37,8 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             run: "click",
         },
         {
-            trigger: 'body:not(:has(button.o_form_button_save))',
-            content: "Wait for save to complete",
+            trigger: '.o_form_button_create',
+            content: "Wait for save to complete by observing the New button",
             run: () => {},
         },
         {

@@ -14,16 +14,6 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: "click",
         },
         {
-            trigger: '[data-menu-xmlid="base.menu_administration"]',
-            content: "Open Settings",
-            run: "click",
-        },
-        {
-            trigger: '[data-menu-xmlid="base.menu_custom"]',
-            content: "Open Technical menu",
-            run: "click",
-        },
-        {
             trigger: '[data-menu-xmlid="distributed_redis_cache.menu_distributed_cache_root"]',
             content: "Open Distributed Cache Manager",
             run: "click",
@@ -40,10 +30,10 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
         {
             trigger: '.o_field_widget[name="model_id"] input',
             content: "Select a model",
-            run: "fill res.users",
+            run: "edit res.users",
         },
         {
-            trigger: '.ui-autocomplete li:contains("res.users")',
+            trigger: '.ui-menu-item *:contains("res.users")',
             run: "click",
         },
         {

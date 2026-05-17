@@ -12,5 +12,5 @@ class PagerBoard(http.Controller):
             "pager_duty.action_pager_board_client", raise_if_not_found=False
         )
         if action:
-            return request.redirect(f"/web#action={action.id}")
-        return request.redirect("/web")
+            return request.redirect(f"/odoo?action={action.id}")
+        return request.redirect("/odoo")
