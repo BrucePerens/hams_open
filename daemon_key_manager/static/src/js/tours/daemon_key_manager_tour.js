@@ -37,6 +37,11 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             run: "click",
         },
         {
+            trigger: 'body:not(:has(button.o_form_button_save))',
+            content: "Wait for save to complete",
+            run: () => {},
+        },
+        {
             trigger: 'button[name="action_force_provision_all"]',
             content: "Force provision all keys",
             run: "click",
