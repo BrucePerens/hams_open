@@ -65,8 +65,13 @@ class WebsitePage(models.Model):
                     self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
                         list(tags)
                     )
-                except Exception as e: # audit-ignore-catch-all
-                    logging.getLogger(__name__).exception("An error occurred: %s", e)
+                except AccessError as e:
+                    if "Service Account" in str(e):
+                        logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
+                    else:
+                        logging.getLogger(__name__).exception("Access error during Cloudflare purge")
+                except Exception: # audit-ignore-catch-all
+                    logging.getLogger(__name__).exception("Fatal error during Cloudflare purge")
 
     @api.model
     def _sanitize_user_arch(self, arch_content):
@@ -122,8 +127,8 @@ class WebsitePage(models.Model):
                 [etree.tostring(child, encoding="unicode") for child in root]
             )
             return sanitized_content, was_modified
-        except Exception as e: # audit-ignore-catch-all
-            _logger.exception(f"Failed to sanitize user arch: {e}")
+        except Exception: # audit-ignore-catch-all
+            _logger.exception("Failed to sanitize user arch")
             return "<div>Sanitization Error</div>", True
 
     @api.model
@@ -539,10 +544,10 @@ class WebsitePage(models.Model):
 
                 if not odoo.tools.config.get("test_enable"):
                     self.env.cr.commit()
-            except Exception as e: # audit-ignore-catch-all
+            except Exception: # audit-ignore-catch-all
                 if not odoo.tools.config.get("test_enable"):
                     self.env.cr.rollback()
-                _logger.exception(f"Error updating PostgreSQL view counts: {e}")
+                _logger.exception("Error updating PostgreSQL view counts")
 
         if cursor != 0:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

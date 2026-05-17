@@ -45,6 +45,25 @@ def _async_redis_incr(db_name, page_id):
         _logger.error("Redis operation failed during view increment: %s", e)
 
 
+def _notify_gdpr_failure(env, user_id, error, error_details):
+    """Helper to notify admins of GDPR erasure failures."""
+    try:
+        # Notifications should fall back to superuser (env) if service account initialization failed
+        admin = env.ref("base.user_admin").with_context(active_test=False)
+        admin_uid = admin.id
+        admin.partner_id.activity_schedule(
+            "mail.mail_activity_data_todo",
+            user_id=admin_uid,
+            summary=f"FAILED GDPR Erasure for User ID {user_id}",
+            note=f"The background GDPR erasure process failed. Exception: {error}<br/><pre>{error_details}</pre>",
+        )
+        env.cr.commit()
+    except Exception: # audit-ignore-catch-all
+        _logger.critical(
+            "Failed to notify admin of GDPR erasure failure for user %s", user_id
+        )
+
+
 def _async_gdpr_erasure(db_name, user_id):
     """Deletes user data in the background so the web server doesn't freeze up during large GDPR requests."""
     registry = Registry(db_name)
@@ -74,25 +93,14 @@ def _async_gdpr_erasure(db_name, user_id):
                     }
                 )
                 env.cr.commit()
-        except Exception as e: # audit-ignore-catch-all
+        except (odoo.exceptions.AccessError, odoo.exceptions.ValidationError, odoo.exceptions.UserError) as e:
             env.cr.rollback()
-            _logger.exception(f"GDPR Erasure failed for user {user_id}: {e}")
-            try:
-                # Notifications should fall back to superuser (env) if service account initialization failed
-                admin = env.ref("base.user_admin").with_context(active_test=False)
-                admin_uid = admin.id
-                error_details = traceback.format_exc()
-                admin.partner_id.activity_schedule(
-                    "mail.mail_activity_data_todo",
-                    user_id=admin_uid,
-                    summary=f"FAILED GDPR Erasure for User ID {user_id}",
-                    note=f"The background GDPR erasure process failed. Exception: {e}<br/><pre>{error_details}</pre>",
-                )
-                env.cr.commit()
-            except Exception as inner_e: # audit-ignore-catch-all
-                _logger.critical(
-                    f"Failed to notify admin of GDPR erasure failure: {inner_e}"
-                )
+            _logger.warning("GDPR Erasure business logic failure for user %s: %s", user_id, e)
+            _notify_gdpr_failure(env, user_id, e, traceback.format_exc())
+        except Exception: # audit-ignore-catch-all
+            env.cr.rollback()
+            _logger.exception("Fatal system error during GDPR Erasure for user %s", user_id)
+            _notify_gdpr_failure(env, user_id, "System Error", traceback.format_exc())
     finally:
         cr.close()
 

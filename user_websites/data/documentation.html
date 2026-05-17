@@ -67,7 +67,7 @@
 <ul>
     <li><strong>Just-In-Time Provisioning:</strong> Website and blog records are only created when the user first visits their slug, ensuring no wasted database space for inactive users.</li>
     <li><strong>Zero-Sudo Design:</strong> The module uses restricted Service Accounts to perform background tasks like creating pages and unpublishing content, ensuring that no user ever has more power than they strictly need.</li>
-    <li><strong>Content Sanitization:</strong> All user-submitted HTML is strictly cleaned to prevent security issues like Cross-Site Scripting (XSS). Attempting to bypass these checks will automatically trigger a moderation strike.</li>
+    <li><strong>Automated Security Shield (XSS & SSTI Neutralization):</strong> To keep the platform safe, every page you build is automatically scanned by our security engine. If the system detects malicious code (like <code>&lt;script&gt;</code> tags or dangerous Odoo QWeb directives), it will automatically strip them out. <strong>Note:</strong> Attempting to bypass these security checks is a violation of our community rules and will result in an automatic moderation strike against your account.</li>
 </ul>
 
 <h4 class="mt-4">3.2. Extension Points (Dropzones)</h4>
