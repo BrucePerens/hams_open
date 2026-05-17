@@ -58,6 +58,8 @@ class BinaryManifest(models.Model):
         for record in self:
             if "/" in record.name or "\\" in record.name:
                 raise ValidationError(_("The binary name cannot contain slashes or backslashes."))
+            if record.name in (".", ".."):
+                raise ValidationError(_("The binary name cannot be '.' or '..'."))
 
     @api.depends('name')
     def _compute_is_installed(self):
@@ -106,8 +108,8 @@ class BinaryManifest(models.Model):
     def ensure_executable(self, cmd_name):
         # [@ANCHOR: binary_ensure_executable]
         # Verified by [@ANCHOR: test_binary_manifest_standard]
-        if "/" in cmd_name or "\\" in cmd_name:
-            raise ValidationError(_("Invalid binary name."))
+        if not cmd_name or "/" in cmd_name or "\\" in cmd_name or cmd_name in (".", ".."):
+            raise ValidationError(_("Invalid binary name: %s") % cmd_name)
 
         path = shutil.which(cmd_name)
         if path:
@@ -168,7 +170,7 @@ class BinaryManifest(models.Model):
             # Ethical Crawling: Use HEAD requests to evaluate ETags before downloading
             req.method = "HEAD"
             try:
-                with urllib.request.urlopen(req) as head_resp:
+                with urllib.request.urlopen(req, timeout=15) as head_resp:
                     _logger.info("HEAD successful, ETag: %s", head_resp.getheader("ETag"))
             except Exception as e:
                 _logger.warning("HEAD request failed or unsupported: %s", e)
@@ -179,59 +181,61 @@ class BinaryManifest(models.Model):
                 manifest_record.url,
                 headers={"User-Agent": "OdooBinaryDownloader/1.0"}
             )
-            with urllib.request.urlopen(get_req) as response:
-                with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
-                    shutil.copyfileobj(response, tmp)
+            tmp_path = None
+            try:
+                with urllib.request.urlopen(get_req, timeout=600) as response:
+                    with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
+                        tmp_path = tmp.name
+                        shutil.copyfileobj(response, tmp)
 
-            hasher = hashlib.sha256()
-            with open(tmp.name, "rb") as f:
-                for chunk in iter(lambda: f.read(4096), b""):
-                    hasher.update(chunk)
+                hasher = hashlib.sha256()
+                with open(tmp_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        hasher.update(chunk)
 
-            if hasher.hexdigest() != manifest_record.checksum:
-                if os.path.exists(tmp.name):
-                    os.unlink(tmp.name)
-                raise UserError(
-                    _("Security Alert: Checksum mismatch for downloaded %s binary.")
-                    % cmd_name
-                )
+                if hasher.hexdigest() != manifest_record.checksum:
+                    raise UserError(
+                        _("Security Alert: Checksum mismatch for downloaded %s binary.")
+                        % cmd_name
+                    )
 
-            if manifest_record.archive_type == "tar.gz":
-                with tarfile.open(tmp.name, "r:gz") as tar:
-                    found = False
-                    for member in tar.getmembers():
+                if manifest_record.archive_type == "tar.gz":
+                    with tarfile.open(tmp_path, "r:gz") as tar:
+                        found = False
                         extract_target = manifest_record.extract_member or cmd_name
-                        if (
-                            member.name.endswith(f"/{extract_target}")
-                            or member.name == extract_target
-                        ):
-                            # Ensure we don't extract anywhere else
-                            member.name = os.path.basename(cmd_name)
+                        for member in tar.getmembers():
+                            if (
+                                member.name.endswith(f"/{extract_target}")
+                                or member.name == extract_target
+                            ):
+                                # Ensure we don't extract anywhere else
+                                member.name = os.path.basename(cmd_name)
 
-                            # Deep link/symlink protection
-                            if member.islnk() or member.issym():
-                                raise UserError(_("Security Alert: Links are not allowed in the archive."))
+                                # Deep link/symlink protection
+                                if member.islnk() or member.issym():
+                                    raise UserError(_("Security Alert: Links are not allowed in the archive."))
 
-                            # Provide `data` filter if available in python version to prevent slip
-                            if hasattr(tarfile, 'data_filter'):
-                                tar.extract(member, path=bin_dir, filter='data')
-                            else:
-                                # Fallback for older python: manual path check
-                                target_path = os.path.abspath(os.path.join(bin_dir, member.name))
-                                if not target_path.startswith(os.path.abspath(bin_dir)):
-                                    raise UserError(_("Security Alert: Tar slip attempt detected."))
-                                tar.extract(member, path=bin_dir)
-                            found = True
-                            break
-                    if not found:
-                        raise UserError(_("Member %s not found in archive.") % extract_target)
-            else:
-                shutil.copy2(tmp.name, target_bin)
+                                # Provide `data` filter if available in python version to prevent slip
+                                if hasattr(tarfile, 'data_filter'):
+                                    tar.extract(member, path=bin_dir, filter='data')
+                                else:
+                                    # Fallback for older python: manual path check
+                                    target_path = os.path.abspath(os.path.join(bin_dir, member.name))
+                                    if not target_path.startswith(os.path.abspath(bin_dir)):
+                                        raise UserError(_("Security Alert: Tar slip attempt detected."))
+                                    tar.extract(member, path=bin_dir)
+                                found = True
+                                break
+                        if not found:
+                            raise UserError(_("Member %s not found in archive.") % extract_target)
+                else:
+                    shutil.copy2(tmp_path, target_bin)
 
-            os.chmod(target_bin, 0o750)
-            if os.path.exists(tmp.name):
-                os.unlink(tmp.name)
-            return target_bin
+                os.chmod(target_bin, 0o750)
+                return target_bin
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
         except (UserError, ValidationError):
             raise
         except Exception as e:

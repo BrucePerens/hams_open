@@ -1,30 +1,41 @@
 <div class="container">
     <h1>Binary Downloader Facility</h1>
     <p>
-        The <strong>Binary Downloader</strong> is a highly secure, database-backed orchestration module designed to provide static executable dependencies (such as <code>kopia</code>, <code>etcd</code>, and <code>cloudflared</code>) to other Odoo subsystems at runtime without exposing the underlying OS to Arbitrary File Write vulnerabilities.
+        The <strong>Binary Downloader</strong> is a secure system that provides technical dependencies (like <code>kopia</code> for backups or <code>cloudflared</code> for secure connections) to Odoo automatically. You won't usually need to interact with it directly, as other modules handle it behind the scenes.
     </p>
 
-    <h2 id="binary_security" data-trace="[@ANCHOR: UX_BINARY_INSTALL]">1. The Security Problem</h2>
+    <h2>1. What it Does</h2>
     <p>
-        Traditional dependency provisioners rely on flat JSON or YAML files stored on disk. If an attacker discovers a Directory Traversal or File Write vulnerability in another application, they could subtly alter the flat file to point the download URL to a malicious payload. When Odoo attempts to download the dependency, it installs and executes the malware as the Odoo service user.
+        Some Odoo features require special helper programs (binaries) to work. Instead of requiring you to manually install these on your server, the Binary Downloader can fetch them automatically from trusted sources, verify they haven't been tampered with, and make them available for Odoo to use.
     </p>
 
-    <h2 id="binary_resolution" data-trace="[@ANCHOR: binary_ensure_executable]">2. The DB-Backed Solution</h2>
+    <h2 id="how_to_use" data-trace="[@ANCHOR: UX_BINARY_INSTALL]">2. How to Use It</h2>
     <p>
-        This module eliminates flat-file manifests entirely. Download targets, cryptographic SHA-256 checksums, and extraction rules are stored securely within PostgreSQL via the <code>binary.manifest</code> model.
+        If a module requires a binary that isn't installed yet, you can manage it through the <strong>Binary Manifests</strong> menu:
+    </p>
+    <ol>
+        <li>Navigate to <strong>Settings -> Technical -> Binary Manifests</strong>.</li>
+        <li>You will see a list of required binaries and whether they are currently "Installed".</li>
+        <li>If a binary is not installed, you can click the <strong>Install</strong> button. Odoo will then download and set it up for you.</li>
+    </ol>
+
+    <h2 id="binary_security">3. Security and Safety</h2>
+    <p>
+        We take security very seriously. The Binary Downloader has several built-in protections:
     </p>
     <ul>
-        <li><strong>Strict Access Control:</strong> Only users belonging to the <code>base.group_system</code> (Administrators) can modify the manifest URLs or checksums.</li>
-        <li><strong>Cryptographic Enforcement:</strong> Before a downloaded binary is moved into the execution path (<code>hams_bin</code>), its SHA-256 hash is mathematically verified against the database record. Mismatches trigger an instant deletion and an abort.</li>
-        <li><strong>Permission Locking:</strong> Extracted binaries are strictly locked to <code>0o750</code> (rwxr-x---) to prevent horizontal privilege escalation from other OS users.</li>
+        <li><strong>Verification:</strong> Every file downloaded is checked against a unique digital "fingerprint" (SHA-256 checksum) stored in our database. If the file doesn't match perfectly, it is immediately deleted and not installed.</li>
+        <li><strong>Isolation:</strong> Binaries are kept in a specific, protected folder (<code>hams_bin</code>) where Odoo can run them, but they cannot easily interfere with the rest of your system.</li>
+        <li><strong>Restricted Access:</strong> Only administrators can change where binaries are downloaded from or what their fingerprints should be.</li>
     </ul>
 
-    <h2 id="binary_usage" data-trace="[@ANCHOR: binary_ensure_executable]">3. Usage</h2>
+    <h2>4. Troubleshooting</h2>
     <p>
-        Other modules can safely request a dependency by invoking the central method:
+        If an installation fails, it's usually for one of these reasons:
     </p>
-    <pre><code>bin_path = self.env["binary.manifest"].ensure_executable("kopia")</code></pre>
-    <p>
-        The module uses the <code>user_binary_downloader_service</code> service account for all resolution and download operations, ensuring strict <strong>Zero-Sudo</strong> compliance.
-    </p>
+    <ul>
+        <li><strong>No Internet Access:</strong> The server needs to be able to reach the download URL (usually GitHub).</li>
+        <li><strong>Unsupported System:</strong> Currently, automatic installation is specifically optimized for 64-bit Linux systems.</li>
+        <li><strong>Permissions:</strong> The Odoo service needs permission to write to its data directory to save the binaries.</li>
+    </ul>
 </div>

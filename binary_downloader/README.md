@@ -18,6 +18,8 @@ The **Binary Downloader** is a secure, database-backed orchestration module desi
 * **Least Privilege:** Executes downloads and installations under the dedicated `user_binary_downloader_service` service account.
 * **Integrity Enforcement:** Verifies SHA-256 hashes before moving binaries to the execution path (`hams_bin`).
 * **Tar Slip Protection:** Implements strict path validation and member name sanitization during archive extraction.
+* **Timeouts:** All network operations have strict timeouts (15s for HEAD, 600s for GET) to prevent resource exhaustion.
+* **Permissions:** Target directory and binaries are set to `0o750` to restrict access.
 </security_design>
 
 <api>
@@ -28,21 +30,22 @@ The primary interface for dependency resolution.
 
 #### `ensure_executable(cmd_name)`
 `[@ANCHOR: binary_ensure_executable]`
-Resolves and ensures a binary is available and executable.
+
+Resolves and ensures a binary is available and executable. Returns the absolute path to the binary.
 
 #### `_compute_is_installed()`
 `[@ANCHOR: binary_compute_installed]`
-Tracks whether a binary is available and executable.
+
+Tracks whether a binary is available in the system PATH or `hams_bin` and is executable.
 
 #### `action_install()`
 `[@ANCHOR: binary_action_install]`
+
 Triggers installation via the UI.
-* **Parameters:** `cmd_name` (string) - The name of the binary (e.g., "kopia").
-* **Returns:** `path` (string) - The absolute path to the verified executable.
+
 * **Logic:**
-    1. Checks if the binary is already in the system PATH.
-    2. If not, searches for a matching `binary.manifest` record.
-    3. Downloads, verifies checksum, and extracts/installs if necessary to `/var/lib/odoo/hams_bin/`.
+    1. Checks if the binary is already available.
+    2. If not, downloads, verifies checksum, and extracts/installs if necessary to `/var/lib/odoo/hams_bin/`.
 
 ### UI Components
 * **List View:** `view_binary_downloader_manifest_list` `[@ANCHOR: test_binary_manifest_views]`
@@ -71,3 +74,14 @@ For detailed narratives and end-to-end workflows, refer to the following:
 ### Journeys
 * [Automated Provisioning Flow](docs/journeys/auto_provisioning_flow.md)
 </stories_and_journeys>
+
+<semantic_anchors>
+## 5. Semantic Anchors
+- `[@ANCHOR: binary_ensure_executable]` - Core binary resolution method.
+- `[@ANCHOR: binary_compute_installed]` - Installation status computation.
+- `[@ANCHOR: binary_action_install]` - UI installation trigger.
+- `[@ANCHOR: UX_BINARY_INSTALL]` - UI elements for installation.
+- `[@ANCHOR: test_binary_manifest_standard]` - Standard unit tests.
+- `[@ANCHOR: test_binary_install_tour]` - UI tour for binary installation.
+- `[@ANCHOR: test_binary_manifest_views]` - View rendering tests.
+</semantic_anchors>
