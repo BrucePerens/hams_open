@@ -5,7 +5,7 @@
 This module is a lightweight domain extension for `user_websites`. It connects our shared blog architecture with Odoo's native frontend SEO engine.
 
 ## Technical Implementation
-* **Model Injection:** It fuses the `website.seo.metadata` mixin into the `res.users` and `user.websites.group` models.
+* **Model Injection:** It fuses the `website.seo.metadata` mixin into the `res.users` and `user.websites.group` models via `user.websites.seo.metadata.mixin`.
 * **Authorization:** It appends the SEO metadata fields to the `SELF_WRITEABLE_FIELDS` property. This allows standard users to save their customized Meta Title and Description via the frontend widget. [@ANCHOR: res_users_self_writeable_fields]
 * **Controller Interception:** It overrides the `/<slug>/blog` route. After the base controller prepares the data, this module injects the SEO-aware user or group record as the `main_object`, seamlessly activating the "Optimize SEO" UI menu for the blog owner while hiding it from guests. [@ANCHOR: controller_user_blog_index_seo_override]
 * **Documentation:** Automatically installs its guide into the Knowledge/Manual Library via the `knowledge_docs` manifest entry. This uses the `zero_sudo` automatic bootstrap mechanism. [@ANCHOR: soft_dependency_docs_installation]
@@ -27,7 +27,7 @@ This module is a lightweight domain extension for `user_websites`. It connects o
 * **Controller Interception:** Overrides the `/blog` route to inject the SEO-aware profile object into the QWeb context. Verified by `[@ANCHOR: test_controller_no_ssti_elevation]`.
 * **Secure Elevation:** Escalate strictly for the write operation using the domain service account for users `[@ANCHOR: res_users_seo_write_elevation]` and groups `[@ANCHOR: user_websites_group_seo_write_elevation]`.
 * **SSTI Protection:** The controller injects `main_object` into the QWeb context without elevating the recordset itself, ensuring that frontend templates cannot execute privileged operations.
-* **Soft Dependency Documentation:** The module uses the `zero_sudo` automated installer to dynamically install documentation if `knowledge.article` or `manual.article` is present.
+* **Soft Dependency Documentation:** The module uses the `zero_sudo` automated installer to dynamically install documentation if `knowledge.article` or `manual.article` is present. Verified by `[@ANCHOR: test_soft_dependency_docs_installation]`.
 
 ---
 
@@ -42,7 +42,6 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * [Seamless Documentation](user_websites_seo/docs/stories/seamless_documentation.md)
 
 ### Journeys
-* [Administrator Configures Module](user_websites_seo/docs/journeys/administrator_configures_module.md)
 * [User Optimizes Blog SEO](user_websites_seo/docs/journeys/user_optimizes_blog_seo.md)
 </stories_and_journeys>
 
@@ -54,5 +53,5 @@ For detailed narratives and end-to-end workflows, refer to the following:
 | `[@ANCHOR: res_users_seo_write_elevation]` | Elevated write for user SEO metadata. | `test_check_access_rule_res_users` |
 | `[@ANCHOR: user_websites_group_seo_write_elevation]` | Elevated write for group SEO metadata. | `test_check_access_rule_user_websites_group` |
 | `[@ANCHOR: controller_user_blog_index_seo_override]` | Controller override for SEO widget activation. | `test_controller_no_ssti_elevation` |
-| `[@ANCHOR: soft_dependency_docs_installation]` | Automatic documentation installation. | `test_post_init_hook_documentation` |
+| `[@ANCHOR: soft_dependency_docs_installation]` | Automatic documentation installation. | `test_soft_dependency_docs_installation` |
 | `[@ANCHOR: test_seo_widget_tour]` | UI tour for SEO optimization. | `test_seo_widget_tour` |

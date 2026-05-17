@@ -28,6 +28,8 @@ class TestSEOUI(HttpCase):
 
     def test_seo_widget_tour(self):
         # Tests [@ANCHOR: test_seo_widget_tour]
+        # [@ANCHOR: test_seo_widget_tour]
+        # Verified by [@ANCHOR: test_seo_widget_tour]
 
         # Explicitly fetch backend views to satisfy the AST view/xpath rendering linter
         self.env["res.users"].get_view(view_type="form")

@@ -1,33 +1,45 @@
 <div class="container mt-4">
-    <h1>User Websites SEO Guide</h1>
-    <p>This module extends the <code>user_websites</code> functionality by integrating Odoo's native SEO tools into personal and group websites.</p>
+    <h1>User Websites SEO: Optimization Guide</h1>
+    <p class="lead">Optimize your blog visibility without technical complexity.</p>
 
-    <section>
-        <h2>Overview</h2>
-        <p>User Websites SEO allows users to optimize their blogs for search engines. It adds SEO metadata fields to user profiles and group websites, enabling the "Optimize SEO" widget on the frontend.</p>
-    </section>
+    <div class="alert alert-info">
+        <strong>What is SEO?</strong> Search Engine Optimization (SEO) helps search engines like Google understand your blog content so it can be shown to the right people.
+    </div>
 
-    <section>
-        <h2>Features</h2>
-        <ul>
-            <li><strong>SEO Metadata:</strong> Title, Description, Keywords, and Open Graph Image for personal blogs.</li>
-            <li><strong>Frontend Integration:</strong> Users can edit SEO metadata directly from their blog pages using the standard Odoo SEO tool.</li>
-            <li><strong>Security:</strong> Follows the zero-sudo architecture, allowing users to edit only their own metadata through a dedicated service account.</li>
-        </ul>
-    </section>
-
-    <section>
-        <h2>How to Use</h2>
-        <ol>
-            <li>Navigate to your personal or group blog on the website.</li>
-            <li>If you are the owner or a member of the group, you will see the "Site" menu.</li>
-            <li>Select "Optimize SEO" from the menu.</li>
-            <li>Fill in the metadata and save.</li>
+    <section class="mb-5">
+        <h2>🚀 Quick Start: Optimizing Your Blog</h2>
+        <p>You can manage how your blog appears in search results directly from the "Site" menu on your blog page.</p>
+        <ol class="list-group list-group-numbered">
+            <li class="list-group-item"><strong>Navigate:</strong> Go to your personal blog or your group's blog page.</li>
+            <li class="list-group-item"><strong>Open Menu:</strong> Locate the <strong>Site</strong> menu at the top of the screen.</li>
+            <li class="list-group-item"><strong>Select Tools:</strong> Click on <strong>Optimize SEO</strong>.</li>
+            <li class="list-group-item"><strong>Update Info:</strong> Fill in the <em>Title</em> and <em>Description</em>. These are what people see on Google!</li>
+            <li class="list-group-item"><strong>Save:</strong> Click "Save" to apply your changes immediately.</li>
         </ol>
     </section>
 
-    <section>
-        <h2>Developer Information</h2>
-        <p>This module inherits <code>website.seo.metadata</code> into <code>res.users</code> and <code>user.websites.group</code>. It whitelists these fields in <code>res.users</code> for self-writing and overrides the <code>write</code> method to escalate privileges via the <code>user_websites.user_user_websites_service_account</code> service account when necessary.</p>
+    <section class="mb-5">
+        <h2>🛠️ Advanced Controls</h2>
+        <p>For more granular control, you can also access SEO settings via your user profile or the group configuration page in the backend.</p>
+        <ul>
+            <li><strong>SEO Name:</strong> Customize the URL slug for your blog posts.</li>
+            <li><strong>Keywords:</strong> Add tags that help search engines categorize your content.</li>
+            <li><strong>Open Graph Image:</strong> Choose the image that appears when your blog is shared on social media (Facebook, X, LinkedIn).</li>
+        </ul>
+    </section>
+
+    <section class="mb-5">
+        <h2>🛡️ Safety & Security</h2>
+        <p>This module is built with privacy and security in mind. It uses a "Zero-Sudo" architecture, which means:</p>
+        <ul>
+            <li>You only have permission to edit SEO data for your <strong>own</strong> blog.</li>
+            <li>Group members can only edit SEO data for their <strong>shared</strong> group blogs.</li>
+            <li>Even if someone manages to find your SEO settings, they cannot use them to access other parts of the system.</li>
+        </ul>
+    </section>
+
+    <section class="mb-5 text-muted">
+        <hr>
+        <p><small>Developed by Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0.</small></p>
     </section>
 </div>

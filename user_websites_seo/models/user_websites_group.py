@@ -5,31 +5,11 @@ from odoo.exceptions import AccessError
 
 class UserWebsitesGroupSEO(models.Model):
     _name = "user.websites.group"
-    _inherit = ["user.websites.group", "website.seo.metadata"]
+    _inherit = ["user.websites.group", "website.seo.metadata", "user.websites.seo.metadata.mixin"]
 
-    def write(self, vals):
-        seo_fields = {"website_meta_title", "website_meta_description", "website_meta_keywords", "website_meta_og_img", "seo_name"}
-        seo_vals = {k: v for k, v in vals.items() if k in seo_fields}
-        other_vals = {k: v for k, v in vals.items() if k not in seo_fields}
-
-        res = True
-        if other_vals:
-            # Let standard Odoo ACLs handle non-SEO writes natively
-            res = super(UserWebsitesGroupSEO, self).write(other_vals)
-
-        if seo_vals:
-            if self.env.su or self.env.user.has_group("user_websites.group_user_websites_administrator"):
-                res = res and super(UserWebsitesGroupSEO, self).write(seo_vals)
-            else:
-                if all(self.env.user.id in group.member_ids.ids for group in self):
-                    # [@ANCHOR: user_websites_group_seo_write_elevation]
-                    # Verified by [@ANCHOR: test_seo_widget_tour]
-                    # Verified by [@ANCHOR: test_check_access_rule_user_websites_group]
-                    # Escalate strictly for the write operation using the domain service account
-                    # ADR-0001: Use with_context(mail_notrack=True, prefetch_fields=False)
-                    svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("user_websites.user_user_websites_service_account")
-                    res = res and super(UserWebsitesGroupSEO, self.with_user(svc_uid).with_context(mail_notrack=True, prefetch_fields=False)).write(seo_vals)
-                else:
-                    raise AccessError(_("You can only modify SEO metadata for groups you are a member of."))
-
-        return res
+    def _check_seo_write_permission(self):
+        if not all(self.env.user.id in group.member_ids.ids for group in self):
+            # [@ANCHOR: user_websites_group_seo_write_elevation]
+            # Verified by [@ANCHOR: test_seo_widget_tour]
+            # Verified by [@ANCHOR: test_check_access_rule_user_websites_group]
+            raise AccessError(_("You can only modify SEO metadata for groups you are a member of."))
