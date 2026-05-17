@@ -91,11 +91,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_service_env(self, xml_id):
         """
         Returns a new Environment running strictly under the context of the specified
-        service account. Automatically disables tracking and prefetching per ADR-0001
-        and ADR-0064 to prevent ORM cascade Access Errors.
+        service account. Automatically disables tracking per ADR-0001
+        to prevent ORM cascade Access Errors.
         """
         uid = self._get_service_uid(xml_id)
-        return self.with_user(uid).with_context(mail_notrack=True, prefetch_fields=False).env
+        return self.with_user(uid).with_context(mail_notrack=True).env
 
     @api.model
     def _ensure_executable(self, cmd_name, svc_xml_id=None, pkg_name=None):
