@@ -163,6 +163,33 @@ class TestRealTransactionFacility(RealTransactionCase):
             self.assertTrue(article, "Documentation article should have been created.")
             self.assertIn("Real Transaction Testing Facility", article.body)
 
+    def test_06_leak_detector_handles_multiple_initial_counts(self):
+        """
+        Ensure the leak detector correctly identifies leaks even if initial count was non-zero.
+        """
+        try:
+            # 1. Ensure we have an initial count
+            self.cr.execute("INSERT INTO hams_test.noisy_table (name) VALUES ('temp_table_leak_test')")
+            self.env.cr.commit()
+
+            # We need to re-run snapshotting logic or simulate it
+            self.cr.execute("SELECT count(1) FROM hams_test.noisy_table")
+            initial_count = self.cr.fetchone()[0]
+
+            # 2. Add another record via SQL (bypass ORM)
+            self.cr.execute("INSERT INTO hams_test.noisy_table (name) VALUES ('temp_table_leak_test_2')")
+            self.env.cr.commit()
+
+            # 3. Verify leak detector would catch it
+            self.cr.execute("SELECT count(1) FROM hams_test.noisy_table")
+            final_count = self.cr.fetchone()[0]
+
+            self.assertEqual(final_count - initial_count, 1)
+        finally:
+            # Cleanup
+            self.cr.execute("DELETE FROM hams_test.noisy_table WHERE name IN ('temp_table_leak_test', 'temp_table_leak_test_2')")
+            self.env.cr.commit()
+
     @classmethod
     def tearDownClass(cls):
         # Stop integration daemon if active

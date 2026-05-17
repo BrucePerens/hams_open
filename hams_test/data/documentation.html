@@ -50,3 +50,6 @@ class MyAdvancedTest(RealTransactionCase):
     <li><strong>Lifecycle Management:</strong> It utilizes Python's <code>subprocess</code> to boot daemons in <code>setUpClass()</code> and guarantees zombie processes are SIGKILL'd in <code>tearDownClass()</code>.</li>
     <li><strong>Health Polling:</strong> It automatically polls the daemon's port/endpoint until a <code>200 OK</code> is returned, preventing race conditions where test requests fire before the daemon binds to the socket.</li>
 </ul>
+
+<h2>UI Tour Development</h2>
+<p>This module defines the standards for writing robust UI tours in Odoo 19. It provides <code>TourUtils</code> to handle common frontend testing challenges, such as modal animations and dirty forms. Tours are required for critical user journeys and complex views to ensure they function as expected from a user's perspective.</p>

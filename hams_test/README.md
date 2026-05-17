@@ -47,7 +47,7 @@ This facility provides an automated execution wrapper to spin up external Python
 
 ## 3. UI Tour Development Guide
 
-DOM-based tours are inherently brittle, so we bifurcate view testing into "Mandatory Tours" and "Justified Exceptions."
+This module provides governance and utilities for writing robust UI tours in Odoo 19.
 
 ### The "Gold Standard" (Mandatory Tours)
 A JavaScript UI Tour (`web_tour`) **MUST** be written for views meeting any of the following criteria:
@@ -65,7 +65,8 @@ The bypass tag is strictly reserved for scenarios where the ROI of a DOM tour is
 ### Tour Targeting & Selectors
 Tours MUST use schema-compliant selectors to deterministically handle race conditions.
 
-**BANNED TARGETS:** * `.col-md-6` and generic layout classes.
+**BANNED TARGETS:**
+* `.col-md-6` and generic layout classes.
 * `a:contains(...)`, `button:contains(...)`, `h1:contains(...)` (brittle translated strings).
 * `data-*` attributes (breaks backend XML schema validation).
 
@@ -84,15 +85,6 @@ When developing tours in Odoo 19, you **MUST** navigate several strict environme
 * **The `expectUnloadPage` Trap:** You MUST NOT set `expectUnloadPage: true` on steps where navigation is conditional or when triggering an OWL soft-route (client action). If the page does not execute a hard browser reload, the Odoo test runner will fatally timeout after 20,000ms.
 * **The Save Button Crash (Dirty Forms):** You MUST NEVER manually click the save button (`.o_form_button_save`) and immediately end the tour or navigate away. This leaves a dirty form view open, causing asynchronous network requests that corrupt subsequent tests. You MUST spread the `...TourUtils.safeSave()` macro into your step array to force a DOM blur and wait for the `.o_form_button_create` state.
 * **Asset Registration Silent Failures:** Ensure your JavaScript tour files are actually loading. They MUST be explicitly declared in the module's `__manifest__.py` under the `assets` dictionary within the `web.assets_tests` key.
-
-### State & Execution Control & `TourUtils`
-To reduce boilerplate and strictly enforce architecture, use the centralized macros in `TourUtils` (import from `@hams_test/js/tour_utils`).
-
-* **`...TourUtils.safeSave()`:** Automatically handles "Dirty Form" resolutions by clicking away to force `blur`, clicking the save button, and waiting for the success notification RPC resolution.
-* **`TourUtils.bypassDialogs()`:** Intercepts and squashes native `window.alert` or `window.confirm` dialogs that would otherwise permanently hang the headless browser thread.
-* **`TourUtils.mockExternalRequests(urlPattern, mockResponse)`:** Mocks external frontend XHR/fetch queries (like Turnstile) to prevent network-latency flappiness.
-* **The Page Unload Protocol:** When a step triggers a raw `<form>` submission or hard redirect, you **MUST** explicitly declare `expectUnloadPage: true` on that step and use Odoo's native `run: 'click'` helper.
-* **Deterministic Input Simulation:** For strictly validated inputs (e.g., URLs, emails), bypass the `edit` helper. Manually inject the string and dispatch events to force synchronous evaluation.
 
 ---
 
@@ -114,16 +106,10 @@ To prevent CSS bloat, the AST Burn List linter (`check_burn_list.py`) automatica
 ### Core Architecture
 The module implements three primary testing facilities:
 1. **Real Transaction Testing (`RealTransactionCase`)**: Bypasses Odoo's standard `TestCursor` to provide a real, committable database connection. It uses ORM instrumentation ([@ANCHOR: orm_instrumentation]) and mathematical table snapshots ([@ANCHOR: leak_snapshotting]) to ensure database integrity.
-2. **Integration Daemon Testing (`HamsIntegrationCase`)**: Provides a lifecycle management wrapper for external Python daemons, including automated health polling.
+2. **Integration Daemon Testing (`HamsIntegrationCase`)**: Provides a lifecycle management wrapper for external Python daemons, including automated health polling. ([@ANCHOR: integration_daemon_testing])
 3. **UI Tour Governance**: Defines standards for JavaScript-based UI tours and provides `TourUtils` for robust frontend testing.
 
 It also includes a **Noisy Table Management** interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]) to allow administrators to whitelist tables from leak detection.
-
-## 7. Integration Testing with Daemons
-
-The `HamsIntegrationCase` class ([@ANCHOR: integration_daemon_testing]) simplifies testing of Odoo modules that interact with external Python daemons. It provides:
-- **Lifecycle Management**: Automatically starts and stops daemons defined in tests.
-- **Health Polling**: Waits for a daemon to be ready before proceeding with the test.
 
 ### Security Design
 - **Service Accounts**: Utilizes `user_real_transaction_service` ([@ANCHOR: user_real_transaction_service]) for background tasks and documentation injection.
