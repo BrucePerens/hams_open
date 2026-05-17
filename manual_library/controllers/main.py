@@ -11,6 +11,26 @@ _logger = logging.getLogger(__name__)
 
 class ManualLibraryController(http.Controller):
 
+    def _get_sidebar_articles(self):
+        """Helper to fetch and group root articles for the sidebar."""
+        root_articles = request.env["knowledge.article"].search(
+            [("parent_id", "=", False)], limit=5000
+        )
+        workspace_articles = root_articles.filtered(
+            lambda a: a.internal_permission in ("read", "write")
+        )
+        private_articles = root_articles.filtered(
+            lambda a: a.internal_permission == "none"
+            and a.create_uid == request.env.user
+            and not a.member_ids
+        )
+        shared_articles = root_articles.filtered(
+            lambda a: a.internal_permission == "none"
+            and request.env.user in a.member_ids
+            and a not in private_articles
+        )
+        return workspace_articles, shared_articles, private_articles
+
     @http.route(
         ["/manual", "/manual/<string:article_slug>"],
         type="http",
@@ -37,27 +57,11 @@ class ManualLibraryController(http.Controller):
             except (ValueError, IndexError, AccessError):
                 raise werkzeug.exceptions.NotFound()
 
-        # 2. Fetch root articles for the sidebar navigation and group dynamically
-        root_articles = request.env["knowledge.article"].search(
-            [("parent_id", "=", False)], limit=5000
-        )
-
-        workspace_articles = root_articles.filtered(
-            lambda a: a.internal_permission in ("read", "write")
-        )
-        private_articles = root_articles.filtered(
-            lambda a: a.internal_permission == "none"
-            and a.create_uid == request.env.user
-            and not a.member_ids
-        )
-        shared_articles = root_articles.filtered(
-            lambda a: a.internal_permission == "none"
-            and request.env.user in a.member_ids
-            and a not in private_articles
-        )
+        # 2. Fetch root articles for the sidebar navigation
+        workspace_articles, shared_articles, private_articles = self._get_sidebar_articles()
 
         # 3. If no specific article is requested, default to the first available root article
-        if not article and root_articles:
+        if not article:
             if workspace_articles:
                 article = workspace_articles[0]
             elif shared_articles:
@@ -107,22 +111,7 @@ class ManualLibraryController(http.Controller):
         articles = request.env["knowledge.article"].search(domain, limit=1000)
 
         # Fetch and group root articles for the sidebar navigation
-        root_articles = request.env["knowledge.article"].search(
-            [("parent_id", "=", False)], limit=5000
-        )
-        workspace_articles = root_articles.filtered(
-            lambda a: a.internal_permission in ("read", "write")
-        )
-        private_articles = root_articles.filtered(
-            lambda a: a.internal_permission == "none"
-            and a.create_uid == request.env.user
-            and not a.member_ids
-        )
-        shared_articles = root_articles.filtered(
-            lambda a: a.internal_permission == "none"
-            and request.env.user in a.member_ids
-            and a not in private_articles
-        )
+        workspace_articles, shared_articles, private_articles = self._get_sidebar_articles()
 
         return request.render(
             "manual_library.search_results_template",
@@ -159,15 +148,22 @@ class ManualLibraryController(http.Controller):
             if article.exists():
                 # Enforce access check to prevent voting on articles the user can't read
                 article.check_access("read")
+
+                # Escalate to Service Account for atomic increment
+                svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(
+                    "manual_library.user_manual_library_service_account"
+                )
+                svc_env = request.env(user=svc_uid)
+
                 # Utilize raw SQL to ensure absolute atomic increments and prevent 'Lost Update' race conditions.
                 # Identifiers are hardcoded for security as they are not user-controlled.
                 if is_helpful == "1":
-                    request.env.cr.execute(
+                    svc_env.cr.execute(
                         'UPDATE "knowledge_article" SET "helpful_count" = COALESCE("helpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
                 else:
-                    request.env.cr.execute(
+                    svc_env.cr.execute(
                         'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
