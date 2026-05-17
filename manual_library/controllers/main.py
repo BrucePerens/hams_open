@@ -77,8 +77,7 @@ class ManualLibraryController(http.Controller):
         try:
             article.check_access("read")
             _ = article.name
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("An error occurred: %s", e)
+        except AccessError:
             raise werkzeug.exceptions.NotFound()
 
         # 6. Render standard QWeb response
@@ -167,9 +166,8 @@ class ManualLibraryController(http.Controller):
                         'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("An error occurred: %s", e)
-            # Silently fail on bad input to prevent brute-force discovery
+        except (ValueError, AccessError):
+            # Silently fail on bad input or unauthorized access to prevent brute-force discovery
             pass
 
         # Protect against open redirects by enforcing local paths

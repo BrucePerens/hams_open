@@ -113,7 +113,7 @@ class TestManualFeatures(odoo.tests.common.HttpCase):
         # Trigger bootstrap manually to ensure it runs during the test
         self.env['ir.module.module']._bootstrap_knowledge_docs()
 
-        article = self.env["knowledge.article"].search([("name", "=", "User Guide")])
+        article = self.env["knowledge.article"].search([("name", "=", "Manual Library: User Guide")])
         self.assertTrue(article.exists(), "User Guide article should have been installed.")
         self.assertIn("Manual Library User Guide", article.body)
         self.assertTrue(article.is_published)
