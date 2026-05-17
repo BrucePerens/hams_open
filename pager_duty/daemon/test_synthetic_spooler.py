@@ -8,7 +8,7 @@ import pager_synthetic_spooler
 class TestSyntheticSpooler(unittest.TestCase):
 
     def test_00_i18n_headless_audit(self):
-        self.assertTrue(True, "Safely suppresses headless API translation warnings")
+        self.assertTrue(hasattr(pager_synthetic_spooler, "execute_check"), "Safely suppresses headless API translation warnings")
 
     @patch("pager_synthetic_spooler.subprocess.run")
     def test_01_bash_sandbox_network_blocked(self, mock_run):

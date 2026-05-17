@@ -120,7 +120,7 @@ class TestHelpdeskCore(RealTransactionCase):
             self.assertTrue(article.exists(), "Documentation article MUST be created.")
             self.assertIn("Hams Helpdesk provides Zero-Sudo compliant ticketing", article.body)
         else:
-            self.assertTrue(True, "No article model present, skipping deep check.")
+            self.skipTest("No article model present, skipping deep check.")
 
     def test_04_stage_mailback_automation(self):
         """Verify that transitioning a ticket stage fires an automated mail-back to the subscribed customer."""

@@ -130,10 +130,12 @@ class TestPagerIncidentStandard(TransactionCase):
     def test_04_views_render(self):
         # [@ANCHOR: test_pager_view]
         if "pager.incident" in self.env:
-            self.env["pager.incident"].get_view(view_type="form")
-            self.env["pager.incident"].get_view(view_type="list")
-            self.env["calendar.event"].get_view(view_type="form")
-        self.assertTrue(True)
+            v1 = self.env["pager.incident"].get_view(view_type="form")
+            v2 = self.env["pager.incident"].get_view(view_type="list")
+            v3 = self.env["calendar.event"].get_view(view_type="form")
+            self.assertIn("arch", v1)
+            self.assertIn("arch", v2)
+            self.assertIn("arch", v3)
 
 
 @tagged("integration", "post_install", "-at_install")
@@ -167,7 +169,7 @@ class TestPagerIncidentIntegration(HamsIntegrationCase):
                 db=0,
             )
             r.delete("pager_rate_limit:test_daemon")
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred communicating with Redis: %s", e)
 
         # First request passes the cache check
@@ -192,7 +194,7 @@ class TestPagerIncidentIntegration(HamsIntegrationCase):
                 db=0,
             )
             r.delete("pager_rate_limit:test_daemon_2")
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred communicating with Redis: %s", e)
 
         incident_id = self.incident_model.report_incident(vals)

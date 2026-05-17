@@ -97,7 +97,7 @@ class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
@@ -216,7 +216,7 @@ class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(

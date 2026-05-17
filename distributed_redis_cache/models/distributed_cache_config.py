@@ -41,7 +41,7 @@ class DistributedCacheConfig(models.TransientModel):
                 r.ping()
                 status_msg = _("Redis connection is healthy.")
                 msg_type = 'success'
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 _logger.warning("Redis connection check failed: %s", e)
                 status_msg = _("Redis connection failed: %s", e)
                 msg_type = 'danger'

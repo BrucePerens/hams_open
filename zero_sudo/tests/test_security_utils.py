@@ -203,7 +203,7 @@ class TestSecurityUtils(TransactionCase):
                 self.assertEqual(utils._get_crypto_secret(), "test_file_key")
 
             # 3. Test configuration fallback
-            with patch("builtins.open", side_effect=Exception("File not found")):
+            with patch("builtins.open", side_effect=OSError("File not found")):
                 with patch.object(odoo.tools.config, "get", return_value="test_config_key"):
                     self.assertEqual(utils._get_crypto_secret(), "test_config_key")
 

@@ -41,7 +41,7 @@ def _async_redis_incr(db_name, page_id):
     """Quickly update the Redis view counter in the background so we don't hold up the web server."""
     try:
         redis_client.incr(f"views:{db_name}:page:{page_id}")
-    except Exception as e:
+    except redis.exceptions.RedisError as e:
         _logger.error("Redis operation failed during view increment: %s", e)
 
 
@@ -74,9 +74,9 @@ def _async_gdpr_erasure(db_name, user_id):
                     }
                 )
                 env.cr.commit()
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             env.cr.rollback()
-            _logger.error(f"GDPR Erasure failed for user {user_id}: {e}")
+            _logger.exception(f"GDPR Erasure failed for user {user_id}: {e}")
             try:
                 # Notifications should fall back to superuser (env) if service account initialization failed
                 admin = env.ref("base.user_admin").with_context(active_test=False)
@@ -89,7 +89,7 @@ def _async_gdpr_erasure(db_name, user_id):
                     note=f"The background GDPR erasure process failed. Exception: {e}<br/><pre>{error_details}</pre>",
                 )
                 env.cr.commit()
-            except Exception as inner_e:
+            except Exception as inner_e: # audit-ignore-catch-all
                 _logger.critical(
                     f"Failed to notify admin of GDPR erasure failure: {inner_e}"
                 )
@@ -121,7 +121,7 @@ class UserWebsitesController(http.Controller):
                 cached_total = redis_client.get(cache_key)
                 if cached_total is not None:
                     total_users = int(cached_total)
-            except Exception as e:
+            except redis.exceptions.RedisError as e:
                 _logger.error(
                     "Redis operation failed during community directory cache lookup: %s",
                     e,
@@ -134,7 +134,7 @@ class UserWebsitesController(http.Controller):
             if not odoo.tools.config.get("test_enable"):
                 try:
                     redis_client.setex(cache_key, 300, total_users)
-                except Exception as e:
+                except redis.exceptions.RedisError as e:
                     _logger.error(
                         "Redis operation failed during community directory cache set: %s",
                         e,

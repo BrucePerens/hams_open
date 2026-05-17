@@ -65,7 +65,7 @@ class Module(models.Model):
                 content_bytes = f.read()
                 content_hash = hashlib.sha256(content_bytes).hexdigest()
                 doc_body = content_bytes.decode('utf-8')
-        except Exception as e:
+        except OSError as e:
             _logger.error("Failed to load doc file %s for module %s: %s", path, module_name, e)
             return
 

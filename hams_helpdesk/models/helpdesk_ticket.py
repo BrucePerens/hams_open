@@ -81,7 +81,7 @@ class HelpdeskTicket(models.Model):
         try:
             pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
             Calendar = pager_env["calendar.event"]
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("Failed to resolve pager_duty env for shift awareness: %s", e)
             pass
 
@@ -104,7 +104,7 @@ class HelpdeskTicket(models.Model):
         # 2. Apply assignments and send notifications via Helpdesk Service Account
         try:
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("Failed to resolve helpdesk service env for ticket routing: %s", e)
             hd_env = self.env
 

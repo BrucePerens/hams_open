@@ -15,7 +15,7 @@ def validate_backup_path(path):
     # Resolve symlinks to check the actual target path
     try:
         abs_path = os.path.realpath(path)
-    except Exception as e:
+    except OSError as e:
         _logger.warning("Failed to resolve realpath for %s: %s", path, e)
         abs_path = os.path.abspath(path)
 

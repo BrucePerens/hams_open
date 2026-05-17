@@ -65,8 +65,8 @@ class WebsitePage(models.Model):
                     self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
                         list(tags)
                     )
-                except Exception as e:
-                    logging.getLogger(__name__).warning("An error occurred: %s", e)
+                except Exception as e: # audit-ignore-catch-all
+                    logging.getLogger(__name__).exception("An error occurred: %s", e)
 
     @api.model
     def _sanitize_user_arch(self, arch_content):
@@ -122,8 +122,8 @@ class WebsitePage(models.Model):
                 [etree.tostring(child, encoding="unicode") for child in root]
             )
             return sanitized_content, was_modified
-        except Exception as e:
-            _logger.error(f"Failed to sanitize user arch: {e}")
+        except Exception as e: # audit-ignore-catch-all
+            _logger.exception(f"Failed to sanitize user arch: {e}")
             return "<div>Sanitization Error</div>", True
 
     @api.model
@@ -496,7 +496,7 @@ class WebsitePage(models.Model):
             cursor, keys = redis_client.scan(
                 cursor=0, match=f"views:{db_name}:page:*", count=1000
             )
-        except Exception as e:
+        except redis.exceptions.RedisError as e:
             _logger.error(f"Failed to connect to Redis for view counter flush: {e}")
             return
 
@@ -539,10 +539,10 @@ class WebsitePage(models.Model):
 
                 if not odoo.tools.config.get("test_enable"):
                     self.env.cr.commit()
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 if not odoo.tools.config.get("test_enable"):
                     self.env.cr.rollback()
-                _logger.error(f"Error updating PostgreSQL view counts: {e}")
+                _logger.exception(f"Error updating PostgreSQL view counts: {e}")
 
         if cursor != 0:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

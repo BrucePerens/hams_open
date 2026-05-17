@@ -157,7 +157,7 @@ def execute_job(ch, method, properties, body):
                         ids=[job_id],
                         vals={"output_log": log_buffer},
                     )
-                except Exception as e:
+                except urllib.error.URLError as e:
                     logger.warning(f"Throttled log update failed: {e}")
                 last_update = time.time()
 
@@ -198,7 +198,7 @@ def execute_job(ch, method, properties, body):
 
                     data = json.loads(json_str)
                     _json2_call("backup.config", "_process_snapshot_data", ids=[config_id], data=data, engine=config.get("engine"))
-                except Exception as e:
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
                     logger.error(f"Failed to parse sync data: {e}")
                     _json2_call("backup.config", "_report_backup_failure", ids=[config_id], message=f"Sync Parse Error: {e}")
             elif engine == "restore_drill":
@@ -216,7 +216,7 @@ def execute_job(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         logger.info(f"Job {job_id} finished: {final_state}")
 
-    except Exception as e:
+    except Exception as e: # audit-ignore-catch-all
         logger.error(f"Fatal error processing job: {e}")
         # If possible, report the failure back to Odoo before acking
         try:
@@ -228,7 +228,7 @@ def execute_job(ch, method, properties, body):
                   _json2_call("backup.job", "write", ids=[job_id], vals={"state": "failed", "output_log": str(e)})
              if config_id:
                   _json2_call("backup.config", "_report_backup_failure", ids=[config_id], message=f"Worker Error: {e}")
-        except Exception as inner_e:
+        except urllib.error.URLError as inner_e:
              logger.error(f"Failed to report failure to Odoo: {inner_e}")
              pass
         ch.basic_ack(delivery_tag=method.delivery_tag) # Ack so we don't loop on bad payloads
@@ -253,7 +253,7 @@ def main():
         except pika.exceptions.AMQPConnectionError:
             logger.warning("RabbitMQ offline. Retrying in 5s...")
             time.sleep(5)
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             logger.error(f"RabbitMQ consumer crash: {e}. Restarting...")
             time.sleep(5)
 

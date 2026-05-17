@@ -115,7 +115,8 @@ If used in a background daemon for rate-limiting, it MUST be appended with `# au
 You MUST declare dependencies in `__manifest__.py` and let the system fail-fast.
 * **Hallucinatory sys.path Manipulation:** You MUST NOT use `sys.path.append` or `sys.path.insert` to resolve sibling imports using `..` or to redundantly append the script directory (using `__file__`).
 Python naturally resolves local imports. Isolated background daemons are the only permitted exception.
-* **Silent Failure Trap:** Using a bare `except:` or `except Exception:` block without calling a `logging` method (e.g. `_logger.error(...)`) is strictly forbidden. The AST linter will fatally reject catch-all blocks that silently swallow tracebacks and mask CI test failures.
+* **The AI Laziness Catch-All Trap:** Using a bare `except:` or `except Exception:` block is strictly forbidden and is flagged as AI laziness. You MUST target specific exceptions (e.g., `KeyError`, `ValueError`, `urllib.error.URLError`).
+* **Catch-All Exception Bypass:** If you are writing a top-level daemon loop or external RPC boundary where an operation must continue past failure, you MUST append the `# audit-ignore-catch-all` bypass tag to the except line. Furthermore, even with this bypass, the block MUST contain a `logging` method call (e.g. `_logger.exception(...)`) to prevent silently swallowed tracebacks.
 </python_standards>
 
 ---
@@ -193,6 +194,7 @@ The AST parser physically reads your test files to verify the assertions exist.
 
 | Audit Target | Bypass Tag | Required AST Assertion in Test |
 | :--- | :--- | :--- |
+| Catch-All Exceptions | `# audit-ignore-catch-all` | MUST ONLY be used where an operation must continue past failure, and MUST contain a logging call. |
 | `ir.cron` XML | `<!-- audit-ignore-cron: Tested by [@ANCHOR: example_name] -->` | The test MUST execute `_trigger()` to prove batching. |
 | `send_mail()` | `# audit-ignore-mail: Tested by [@ANCHOR: example_name]` | The test MUST execute `send_mail` or `message_post`. **CRITICAL TRAP:** The integer `res_id` passed to `send_mail(res_id)` MUST match an existing record of the exact model defined in the template's `model_id`. |
 | `.search()` | `# audit-ignore-search: Tested by [@ANCHOR: example_name]` | The test MUST pass `limit=` or utilize `patch.object(self.env.cr, 'execute')` to assert caching behavior. |

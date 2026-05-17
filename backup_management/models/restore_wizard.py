@@ -72,7 +72,7 @@ class BackupRestoreWizard(models.TransientModel):
                     properties=pika.BasicProperties(delivery_mode=2),
                 )
                 connection.close()
-            except Exception as e:
+            except pika.exceptions.AMQPError as e:
                 logging.getLogger(__name__).warning("An error occurred: %s", e)
 
         self.env.cr.postcommit.add(publish_task)

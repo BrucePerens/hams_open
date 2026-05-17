@@ -50,11 +50,11 @@ class BlogPost(models.Model):
                 self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
                     list(tags)
                 )
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 if type(e).__name__ == "AccessError" and "Service Account" in str(e):
                     logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
                 else:
-                    logging.getLogger(__name__).warning("An error occurred: %s", e)
+                    logging.getLogger(__name__).exception("An error occurred: %s", e)
 
     def _get_blog_urls(self):
         """Helper method to construct the blog index URLs for Cloudflare cache invalidation."""

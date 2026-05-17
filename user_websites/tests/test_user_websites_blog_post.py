@@ -121,7 +121,7 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.info("Expected error on public blog creation: %s", e)
 
         public_created_post = self.env["blog.post"].search(

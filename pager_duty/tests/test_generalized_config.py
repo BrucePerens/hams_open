@@ -88,6 +88,7 @@ class TestGeneralizedConfig(TransactionCase):
     def test_03_views_render(self):
         """Verify the new graphical configuration views render successfully."""
         # Tests [@ANCHOR: test_pager_view]
-        self.env["pager.check"].get_view(view_type="form")
-        self.env["pager.check"].get_view(view_type="list")
-        self.assertTrue(True)
+        v1 = self.env["pager.check"].get_view(view_type="form")
+        v2 = self.env["pager.check"].get_view(view_type="list")
+        self.assertIn("arch", v1)
+        self.assertIn("arch", v2)

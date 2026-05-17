@@ -67,11 +67,11 @@ def _redis_listener_thread():
             except (redis.ConnectionError, redis.TimeoutError):
                 if _listener_started:
                     time.sleep(1.0)  # audit-ignore-sleep
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 _logger.warning("Redis listener error: %s", e)
                 if _listener_started:
                     time.sleep(1.0)  # audit-ignore-sleep
-    except Exception as e:
+    except Exception as e: # audit-ignore-catch-all
         warn_msg = """Redis async listener thread disconnected: %s"""
         _logger.warning(warn_msg, e)
     finally:

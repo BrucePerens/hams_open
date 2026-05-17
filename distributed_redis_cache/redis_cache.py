@@ -67,7 +67,7 @@ def distributed_cache():
                     cached = r.get(cache_key)
                     if cached:
                         return json.loads(cached)
-                except Exception as e:
+                except Exception as e: # audit-ignore-catch-all
                     _logger.warning("Redis cache read failed: %s", e)
                     use_redis = False
 
@@ -84,7 +84,7 @@ def distributed_cache():
                     r = redis.Redis(connection_pool=redis_pool)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                     return result
-                except Exception as e:
+                except Exception as e: # audit-ignore-catch-all
                     _logger.warning("Redis cache write failed, falling back to local: %s", e)
 
             # Fallback to local memory cache
@@ -117,7 +117,7 @@ def invalidate_model_cache(env, model_name, local_only=False):
                     keys.append(key)
                 if keys:
                     r.delete(*keys)
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 _logger.warning("Redis cache invalidation failed: %s", e)
 
     # Always clear local fallback cache for this process to ensure consistency

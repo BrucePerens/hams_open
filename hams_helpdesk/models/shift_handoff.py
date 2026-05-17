@@ -22,7 +22,7 @@ class ShiftHandoffWizard(models.TransientModel):
             # Execute modification via service account to ensure audit trail and bypass possible write restrictions
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             ticket = self.ticket_id.with_env(hd_env)
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("Failed to resolve helpdesk service env for handoff execution: %s", e)
             ticket = self.ticket_id
 

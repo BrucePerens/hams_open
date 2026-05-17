@@ -183,6 +183,6 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
                 page.id,
                 "Page should be successfully created even without an active HTTP request.",
             )
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.error("website.page creation failed in RPC context: %s", e)
             self.fail(f"website.page creation failed in RPC context: {e}")

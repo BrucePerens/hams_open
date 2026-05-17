@@ -33,7 +33,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: "edit res.users",
         },
         {
-            trigger: '.ui-menu-item *:contains("res.users")',
+            trigger: '.dropdown-item:contains("res.users"), .ui-menu-item *:contains("res.users")',
             run: "click",
         },
         {
@@ -42,7 +42,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: "click",
         },
         {
-            trigger: '.o_notification_manager:contains("Success")',
+            trigger: '.toast-body:contains("Success"), .o_notification_manager *:contains("Success")',
             content: "Verify success message",
         }
     ]

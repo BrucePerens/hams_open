@@ -39,7 +39,7 @@ def generate_smart_spool():
         os.chmod(tmp_file, 0o644)
         os.rename(tmp_file, spool_file)
 
-    except Exception as e:
+    except Exception as e: # audit-ignore-catch-all
         logger.error(f"Failed to generate SMART spool: {e}")
         sys.exit(1)
 

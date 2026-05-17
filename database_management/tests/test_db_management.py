@@ -21,7 +21,6 @@ class TestDatabaseManagement(TransactionCase):
         )
         if stat:
             stat.action_vacuum_analyze()
-            self.assertTrue(True)
             mock_run.assert_called()
 
     @patch("shutil.which")
@@ -77,7 +76,7 @@ class TestDatabaseManagement(TransactionCase):
         act = self.env["database.activity"].search([], limit=1)
         if act:
             act.action_terminate_backend()
-        self.assertTrue(True)
+        self.assertIn("database.activity", self.env)
 
     def test_04_views(self):
         # [@ANCHOR: test_dba_view]

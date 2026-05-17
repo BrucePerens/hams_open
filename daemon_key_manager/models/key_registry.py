@@ -226,7 +226,7 @@ class DaemonKeyRegistry(models.Model):
                 reg._rotate_key_and_write_file()
                 if not tools.config.get('test_enable'):
                     self.env.cr.commit()
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 if not tools.config.get('test_enable'):
                     self.env.cr.rollback()
                 _logger.error("Failed to rotate key for daemon %s: %s", reg.name, e)

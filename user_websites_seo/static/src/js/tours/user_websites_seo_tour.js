@@ -27,6 +27,11 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
             run: "click",
         },
         {
+            trigger: '.o_facet_remove',
+            content: "Remove default Internal Users filter",
+            run: "click",
+        },
+        {
             trigger: 'td.o_data_cell:contains("SEO UI Test User")',
             content: "Open User Form Directly (Bypass fragile search logic)",
             run: "click",
@@ -38,11 +43,11 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         },
         {
             content: "Verify SEO Meta Title input exists",
-            trigger: 'div[name="website_meta_title"] input',
+            trigger: 'div[name="website_meta_title"] input:not(:visible)',
         },
         {
             content: "Verify SEO Meta Description input exists",
-            trigger: 'div[name="website_meta_description"] input',
+            trigger: 'div[name="website_meta_description"] textarea:not(:visible)',
         }
     ],
 });

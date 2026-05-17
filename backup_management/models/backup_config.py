@@ -108,7 +108,7 @@ class BackupConfig(models.Model):
                 return f.decrypt(value.encode("utf-8")).decode("utf-8")
             else:
                 return f.encrypt(value.encode("utf-8")).decode("utf-8")
-        except Exception as e:
+        except ValueError as e:
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
             return "***ERROR***" if decrypt else False
 
@@ -233,7 +233,7 @@ class BackupConfig(models.Model):
                         properties=pika.BasicProperties(delivery_mode=2),
                     )
                     connection.close()
-                except Exception as e:
+                except pika.exceptions.AMQPError as e:
                     logging.getLogger(__name__).warning("An error occurred: %s", e)
                     logging.getLogger(__name__).error(
                         "Failed to publish backup task to RMQ: %s", e
@@ -291,7 +291,7 @@ class BackupConfig(models.Model):
                         "description": message,
                     }
                 )
-            except Exception as e:
+            except (UserError, AccessError, ValueError) as e:
                 logging.getLogger(__name__).warning("An error occurred: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

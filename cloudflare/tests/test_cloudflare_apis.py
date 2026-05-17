@@ -136,7 +136,7 @@ class TestCloudflareAPIs(TransactionCase):
 
         # Case 5: API failure
         mock_post.reset_mock()
-        mock_response.raise_for_status.side_effect = Exception("API fail")
+        mock_post.side_effect = Exception("API fail")
         self.assertFalse(purge_urls(["https://a.com"], "tok1", "zone1"))
 
     @patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
@@ -177,5 +177,5 @@ class TestCloudflareAPIs(TransactionCase):
 
         # Case 5: API failure
         mock_post.reset_mock()
-        mock_response.raise_for_status.side_effect = Exception("API fail")
+        mock_post.side_effect = Exception("API fail")
         self.assertFalse(purge_tags(["tag1"], "tok1", "zone1"))

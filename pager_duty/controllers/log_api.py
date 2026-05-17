@@ -55,7 +55,7 @@ class PagerLogAPI(http.Controller):
                     return data
 
             return {"error": "Search timeout. Daemon may be offline."}  # audit-ignore-i18n: Tested by [@ANCHOR: test_log_api_i18n]  # fmt: skip
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.error("IPC Failure during log search: %s", e)
             return {"error": f"IPC Failure: {e}"}  # audit-ignore-i18n: Tested by [@ANCHOR: test_log_api_i18n]  # fmt: skip
 

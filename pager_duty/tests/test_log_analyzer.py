@@ -12,10 +12,8 @@ class TestLogAnalyzer(TransactionCase):
         v2 = self.env["pager.log.file"].get_view(view_type="list")
         self.assertIn("filepath", v2["arch"])
 
-        self.assertTrue(True)
-
     def test_02_headless_api_translation(self):
         # [@ANCHOR: test_log_api_i18n]
         # Tests [@ANCHOR: test_log_api_i18n]
-        self.env["pager.log.pattern"].search([], limit=1)
-        self.assertTrue(True)
+        recs = self.env["pager.log.pattern"].search([], limit=1)
+        self.assertIsNotNone(recs)

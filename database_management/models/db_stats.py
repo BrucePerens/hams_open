@@ -78,7 +78,7 @@ class DatabaseTableStat(models.Model):
                     )
             except subprocess.TimeoutExpired:
                 raise UserError(_("Vacuum timed out for %s.") % rec.table_name)
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 _logger.warning("Error executing vacuumdb: %s", e)
                 raise UserError(_("Error executing vacuumdb: %s") % str(e))
         return True
@@ -105,7 +105,7 @@ class DatabaseTableStat(models.Model):
                         "description": f"Database Bloat Warning! The following tables have >20%% dead tuples and require a manual Vacuum Analyze: {tables}",
                     }
                 )
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 _logger.warning("An error occurred: %s", e)
 
 

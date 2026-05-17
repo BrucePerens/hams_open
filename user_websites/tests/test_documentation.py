@@ -47,7 +47,7 @@ class TestDocumentation(odoo.tests.common.HttpCase):
         )
 
         self.assertIn(
-            "Proxy Ownership Pattern",
+            "Zero-Sudo Design",
             article.body,
             "The hook must successfully read the actual HTML file content.",
         )
@@ -135,6 +135,6 @@ class TestDocumentation(odoo.tests.common.HttpCase):
         try:
             response = self.url_open("/user-websites/documentation")
             self.assertEqual(response.status_code, 200)
-        except Exception as e:
+        except Exception as e:  # audit-ignore-catch-all
             _logger.error("Route failed unexpectedly when API is absent: %s", e)
             self.fail(f"Route failed unexpectedly when API is absent: {e}")

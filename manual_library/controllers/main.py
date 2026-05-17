@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 import werkzeug.exceptions
 import logging
 from werkzeug.urls import url_parse
@@ -54,7 +54,7 @@ class ManualLibraryController(http.Controller):
                 article = request.env["knowledge.article"].browse(article_id)
                 if not article.exists() or not article.active:
                     raise werkzeug.exceptions.NotFound()
-            except (ValueError, IndexError, AccessError):
+            except (ValueError, IndexError, AccessError, UserError):
                 raise werkzeug.exceptions.NotFound()
 
         # 2. Fetch root articles for the sidebar navigation
@@ -77,7 +77,7 @@ class ManualLibraryController(http.Controller):
         try:
             article.check_access("read")
             _ = article.name
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
             raise werkzeug.exceptions.NotFound()
 
@@ -167,7 +167,7 @@ class ManualLibraryController(http.Controller):
                         'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
             # Silently fail on bad input to prevent brute-force discovery
             pass

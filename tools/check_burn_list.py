@@ -91,6 +91,11 @@ def parse_odoo_xml(content):
 
 GENERAL_ERROR_RULES = [
     (
+        r"\.(py|js|xml)$",
+        re.compile(r"(?i)#\s*(TODO|FIXME|\.\.\.|insert logic|implement later)"),
+        "CRITICAL AI LAZINESS: Placeholders, TODOs, and elisions (...) are strictly forbidden. You must write complete, functional code.",
+    ),
+    (
         r"\.py$",
         re.compile(r"sys\.path\.append\(os\.path\.abspath\(os\.path\.join\(os\.path\.dirname\(__file__\),\s*['\"]\.\.['\"]"),
         "CRITICAL HALLUCINATION: Unnecessary sys.path.append with '..'. Local modules and daemons should resolve sibling imports natively.",
@@ -566,6 +571,10 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         )
 
         def visit_FunctionDef(self, node):
+            if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
+                if not self.filename.startswith("test_"):
+                    self.add_error(node.lineno, "CRITICAL AI LAZINESS: Empty functions using 'pass' are forbidden. Implement the logic or remove the method.")
+
             is_controller = any(
                 (
                     isinstance(dec, ast.Call)
@@ -684,6 +693,22 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                     self.add_error(node.lineno, "WEAK CRYPTO: Do not use 'random'.")
             self.generic_visit(node)
 
+        def visit_Expr(self, node):
+            if isinstance(node.value, ast.Constant) and node.value.value is Ellipsis:
+                self.add_error(node.lineno, "CRITICAL AI LAZINESS: Elision (...) is strictly forbidden. Write complete code.")
+            self.generic_visit(node)
+
+        def visit_Tuple(self, node):
+            if len(node.elts) == 3:
+                if isinstance(node.elts[0], ast.Constant) and node.elts[0].value == "id":
+                    if isinstance(node.elts[1], ast.Constant) and node.elts[1].value in ("=", "in"):
+                        if isinstance(node.elts[2], ast.Constant) and type(node.elts[2].value) is int:
+                            self.add_error(node.lineno, "CRITICAL AI LAZINESS: Hardcoded ID lookup ('id', '=', int). Use self.env.ref() or immutable string keys.")
+                        elif isinstance(node.elts[2], ast.List):
+                            if all(isinstance(elt, ast.Constant) and type(elt.value) is int for elt in node.elts[2].elts):
+                                self.add_error(node.lineno, "CRITICAL AI LAZINESS: Hardcoded ID lookup ('id', 'in', [int, ...]). Use self.env.ref() or immutable string keys.")
+            self.generic_visit(node)
+
         def visit_Try(self, node):
             for handler in node.handlers:
                 if (
@@ -696,15 +721,23 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                     )
                 is_catch_all = handler.type is None or (isinstance(handler.type, ast.Name) and handler.type.id == "Exception")
                 if is_catch_all:
-                    has_logging = any(
-                        isinstance(child, ast.Call) and getattr(child.func, "attr", "") in ("warning", "error", "critical", "exception", "info")
-                        for child in ast.walk(handler)
-                    )
-                    if not has_logging:
+                    handler_line = getattr(handler, "lineno", node.lineno)
+                    line_content = self.lines[handler_line - 1] if handler_line <= len(self.lines) else ""
+                    if "audit-ignore-catch-all" not in line_content:
                         self.add_error(
-                            node.lineno,
-                            "CRITICAL SILENT FAILURE: Catch-all exceptions (bare or Exception) must contain a logging call to prevent swallowed tracebacks.",
+                            handler_line,
+                            "CRITICAL EXCEPTION MASKING: Catch-all exceptions (bare or Exception) are forbidden. Target specific exceptions (e.g., KeyError, ValueError). Use # audit-ignore-catch-all ONLY where an operation must continue past failure.",
                         )
+                    else:
+                        has_logging = any(
+                            isinstance(child, ast.Call) and getattr(child.func, "attr", "") in ("warning", "error", "critical", "exception", "info")
+                            for child in ast.walk(handler)
+                        )
+                        if not has_logging:
+                            self.add_error(
+                                handler_line,
+                                "CRITICAL SILENT FAILURE: Even with audit-ignore-catch-all, the exception block must contain a logging call to prevent swallowed tracebacks.",
+                            )
             self.generic_visit(node)
         def visit_ImportFrom(self, node):
 
@@ -1066,6 +1099,22 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
             self._check_forbidden_functions(node)
             func_name = getattr(node.func, "id", getattr(node.func, "attr", ""))
             self._check_i18n_messages(node, func_name)
+
+            if isinstance(node.func, ast.Name) and node.func.id == "print":
+                if not ("tools/" in self.filename.replace("\\", "/")):
+                    self.add_error(node.lineno, "CRITICAL AI LAZINESS: Native print() is banned. Use logging (_logger.info, etc.) for centralized log aggregation.")
+
+            if func_name in ("assertTrue", "assertFalse"):
+                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, bool):
+                    if (func_name == "assertTrue" and node.args[0].value is True) or (func_name == "assertFalse" and node.args[0].value is False):
+                        self.add_error(node.lineno, f"CRITICAL AI LAZINESS: Hollow assertion {func_name}({node.args[0].value}) is banned. Assert against actual variables.")
+            elif func_name == "assertEqual" and len(node.args) == 2:
+                arg1, arg2 = node.args[0], node.args[1]
+                if type(arg1) == type(arg2):
+                    if isinstance(arg1, ast.Constant) and arg1.value == arg2.value:
+                        self.add_error(node.lineno, "CRITICAL AI LAZINESS: Hollow assertion (comparing identical literals) is banned.")
+                    elif isinstance(arg1, ast.Name) and arg1.id == arg2.id:
+                        self.add_error(node.lineno, "CRITICAL AI LAZINESS: Hollow assertion (comparing a variable to itself) is banned.")
 
             if getattr(node.func, "attr", getattr(node.func, "id", "")) == "env":
                 for kw in node.keywords:
@@ -1616,6 +1665,7 @@ def scan_file(filepath, is_odoo_module=False):
                 "audit-ignore-sleep",
                 "audit-ignore-view",
                 "audit-ignore-i18n",
+                "audit-ignore-catch-all",
             ]
             if not any(tag in line for tag in valid_audits):
                 errors_found.append(

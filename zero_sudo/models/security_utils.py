@@ -267,7 +267,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             try:
                 with open("/var/lib/odoo/hams_crypto.secret", "r") as f:
                     secret = f.read().strip()
-            except Exception as e:
+            except OSError as e:
                 _logger.warning("Failed to read crypto secret file: %s", e)
                 pass
         if not secret:

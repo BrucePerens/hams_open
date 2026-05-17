@@ -87,7 +87,7 @@ class RealTransactionCase(HttpCase):
         # preventing "concurrent update" deadlocks with background HTTP workers.
         try:
             self.env.cr.commit()
-        except Exception as e:
+        except Exception as e: # audit-ignore-catch-all
             _logger.warning("An error occurred during final commit in tearDown: %s", e)
             self.env.cr.rollback()
 
@@ -112,7 +112,7 @@ class RealTransactionCase(HttpCase):
                                 records.unlink()
                         # If we reach here, the unlink was successful
                         self._tracked_records[model_name] = set()
-                    except Exception as e:
+                    except Exception as e: # audit-ignore-catch-all
                         pending_deletes = True
                         if attempt == 2:
                             _logger.info(

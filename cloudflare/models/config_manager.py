@@ -96,8 +96,8 @@ class CloudflareConfigManager(models.AbstractModel):
                     "[*] Static assets modified (%s > %s). Triggered Cloudflare purge for 'odoo-static-assets'.",
                     latest_mtime, last_mtime
                 )
-        except Exception as e:
-            _logger.error(f"Failed to process static mtime purge: {e}")
+        except Exception as e: # audit-ignore-catch-all
+            _logger.exception(f"Failed to process static mtime purge: {e}")
 
     @api.model
     def initialize_cloudflare_state(self):

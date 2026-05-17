@@ -7,6 +7,7 @@ import shutil
 import tarfile
 import tempfile
 import urllib.request
+import urllib.error
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -172,7 +173,7 @@ class BinaryManifest(models.Model):
             try:
                 with urllib.request.urlopen(req, timeout=15) as head_resp:
                     _logger.info("HEAD successful, ETag: %s", head_resp.getheader("ETag"))
-            except Exception as e:
+            except urllib.error.URLError as e:
                 _logger.warning("HEAD request failed or unsupported: %s", e)
 
             # Create a fresh request for the actual download to prevent 400 Bad Request issues
@@ -238,6 +239,6 @@ class BinaryManifest(models.Model):
                     os.unlink(tmp_path)
         except (UserError, ValidationError):
             raise
-        except Exception as e:
+        except (urllib.error.URLError, OSError, tarfile.TarError) as e:
             _logger.exception("Failed to auto-install %s", cmd_name)
             raise UserError(_("Failed to auto-install %s: %s") % (cmd_name, str(e)))
