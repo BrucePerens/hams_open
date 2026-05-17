@@ -2,7 +2,7 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-Implements a centralized "single pane of glass" GUI in Odoo to orchestrate and monitor `kopia` and `pgBackRest` system backups.
+Implements a centralized "single pane of glass" GUI in Odoo to orchestrate and monitor `kopia` and `pgBackRest` system backups. This module is designed with a hybrid architecture, using Kopia for filesystem-level backups and pgBackRest for robust PostgreSQL WAL archiving.
 
 ---
 
@@ -16,8 +16,8 @@ Implements a Hybrid Architecture for unified backup management.
 * **Orchestration:** Capable of pushing execution commands (`kopia snapshot create`, `pgbackrest backup`) directly to the underlying daemons via RabbitMQ offloading `[@ANCHOR: backup_trigger_execution]`. Can generate automated restore drill commands `[@ANCHOR: backup_restore_command]`.
 
 ## Security & Operations
-* **Service Account:** Utilizes `user_backup_service_internal` for background synchronization.
-* **Encryption:** Kopia passwords are encrypted at rest using the system's `ODOO_BACKUP_CRYPTO_KEY` Fernet key via standard getter/setter properties.
+* **Service Account:** Utilizes `user_backup_service_internal` for background synchronization and audit-trailed operations.
+* **Encryption:** Kopia passwords and other sensitive keys are encrypted at rest using the system's `ODOO_BACKUP_CRYPTO_KEY` (or fallback `HAMS_CRYPTO_KEY`) Fernet key.
 * **Subprocess Execution:** Uses Python's `subprocess.run` to interrogate local CLIs.
 * **Pager Duty Synergy:** Employs a soft-dependency on `pager_duty`. If a CLI command fails or a backup snapshot becomes stale (no new snapshots in >26 hours), the module directly invokes `pager.incident.report_incident()` `[@ANCHOR: backup_pager_synergy]` using the `pager_service_internal` micro-account to instantly alert the on-call SRE.
 * **Size Anomaly Detection:** The config model evaluates newly ingested snapshots against `minimum_size_mb`. If an empty or suspiciously small snapshot is generated (e.g., missing Docker volume mounts), it escalates a critical alert.

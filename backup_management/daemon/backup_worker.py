@@ -24,6 +24,11 @@ RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")
 
 
+class OdooAPIError(Exception):
+    """Custom exception for Odoo JSON-2 API failures."""
+    pass
+
+
 def _json2_call(model, method_name, **kwargs):
     headers = {
         "Authorization": f"bearer {ODOO_PASS}",
@@ -38,15 +43,26 @@ def _json2_call(model, method_name, **kwargs):
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as response:
-            return json.loads(response.read().decode("utf-8"))
+            res_data = json.loads(response.read().decode("utf-8"))
+            if isinstance(res_data, dict) and res_data.get("error"):
+                raise OdooAPIError(f"Odoo Error: {res_data['error']}")
+            return res_data
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8")
-        raise Exception(f"JSON-2 API Error {e.code}: {err_body}")
+        raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}")
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
+        raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}")
 
 
 def execute_job(ch, method, properties, body):
     try:
-        payload = json.loads(body)
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode RabbitMQ message body: {e}")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            return
+
         job_id = payload.get("job_id")
         engine = payload.get("engine")
         target_path = payload.get("target_path")
@@ -216,22 +232,30 @@ def execute_job(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         logger.info(f"Job {job_id} finished: {final_state}")
 
-    except Exception as e: # audit-ignore-catch-all
-        logger.error(f"Fatal error processing job: {e}")
+    except (OdooAPIError, subprocess.SubprocessError, OSError, ValueError) as e:
+        logger.error(f"Expected error processing job: {type(e).__name__}: {e}")
         # If possible, report the failure back to Odoo before acking
         try:
-             # Try to find job_id and config_id from payload if it was successfully parsed
-             payload = json.loads(body)
-             job_id = payload.get("job_id")
-             config_id = payload.get("config_id")
-             if job_id:
-                  _json2_call("backup.job", "write", ids=[job_id], vals={"state": "failed", "output_log": str(e)})
-             if config_id:
-                  _json2_call("backup.config", "_report_backup_failure", ids=[config_id], message=f"Worker Error: {e}")
-        except urllib.error.URLError as inner_e:
-             logger.error(f"Failed to report failure to Odoo: {inner_e}")
-             pass
-        ch.basic_ack(delivery_tag=method.delivery_tag) # Ack so we don't loop on bad payloads
+            payload = json.loads(body)
+            job_id = payload.get("job_id")
+            config_id = payload.get("config_id")
+            if job_id:
+                _json2_call(
+                    "backup.job",
+                    "write",
+                    ids=[job_id],
+                    vals={"state": "failed", "output_log": f"Worker Error: {e}"},
+                )
+            if config_id:
+                _json2_call(
+                    "backup.config",
+                    "_report_backup_failure",
+                    ids=[config_id],
+                    message=f"Worker Error ({type(e).__name__}): {e}",
+                )
+        except (OdooAPIError, json.JSONDecodeError) as inner_e:
+            logger.error(f"Failed to report failure back to Odoo: {inner_e}")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def main():
@@ -253,9 +277,12 @@ def main():
         except pika.exceptions.AMQPConnectionError:
             logger.warning("RabbitMQ offline. Retrying in 5s...")
             time.sleep(5)
-        except Exception as e: # audit-ignore-catch-all
-            logger.error(f"RabbitMQ consumer crash: {e}. Restarting...")
+        except pika.exceptions.AMQPError as e:
+            logger.error(f"RabbitMQ protocol error: {e}. Restarting...")
             time.sleep(5)
+        except OdooAPIError as e:
+            logger.error(f"Fatal Odoo API error in main loop: {e}. Retrying in 10s...")
+            time.sleep(10)
 
 
 if __name__ == "__main__":
