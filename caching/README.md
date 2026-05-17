@@ -2,7 +2,7 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-This module speeds up the Odoo frontend by acting as a client-side CDN. It installs a global Service Worker that runs in the background of the user's browser.
+This module optimizes the Odoo frontend performance by implementing a client-side CDN via a global Service Worker. It significantly reduces page load times and server load by caching static assets directly in the user's browser.
 
 When a user loads a page, the Service Worker intercepts the requests for Odoo's JavaScript, CSS, and static module files. If the browser already has a copy of the file, it loads it instantly from the hard drive (0ms latency) without ever talking to the network.
 
@@ -19,11 +19,13 @@ As long as you place your Javascript, CSS, and UI icons inside your module's sta
 
 ## 🔄 Automated Cache Invalidation
 
-You do not need to manually bump version numbers or write complex QWeb query parameters to bust the cache when you update your static files (like logos, CSS, or JS).
+This module eliminates the need for manual version bumping or complex cache-busting query parameters.
 
-When the Odoo server boots up, this module automatically scans the `static/` directories of all installed modules to find the most recent file modification timestamp (`mtime`).
-
-It dynamically injects this timestamp into the `/sw.js` payload. If you modify a file and restart the Odoo server, the Service Worker's script signature changes. The next time a user visits the site, their browser will instantly detect the new Service Worker, install it, and purge the entire stale cache automatically.
+**Filesystem-Linked Invalidation:**
+- **Boot Scan:** During server startup, the module performs a comprehensive scan of all `static/` directories across all installed modules ([@ANCHOR: caching_fs_scan_logic]).
+- **MTime Tracking:** It identifies the latest modification timestamp (`mtime`) among all discovered assets.
+- **Dynamic SW Generation:** This timestamp is injected into the `/sw.js` payload, effectively versioning the Service Worker script itself.
+- **Automatic Refresh:** When any static file is modified and the server restarts, the Service Worker's signature changes. Browsers detect this update on the next visit, triggering a background installation of the new worker and an immediate purge of the stale cache.
 
 ## 🚨 The File-Size Caveat & Safety Valve
 
@@ -52,10 +54,11 @@ Implements a global, root-scoped Service Worker (`/sw.js`) that proxies and cach
 * **Settings Layout Injection**: The settings UI is injected into `website.layout` via XPath [@ANCHOR: xpath_rendering_caching_settings].
 
 ## 3. Zero-Sudo Architecture
-This module strictly adheres to the Zero-Sudo architecture:
-- **Service Account**: `caching.user_caching_service` is used for background filesystem scans [@ANCHOR: caching_fs_scan_logic].
-- **System Parameters**: Configuration parameters are retrieved via `zero_sudo.security.utils` to avoid direct `ir.config_parameter` access.
-- **Whitelist**: `caching.safe_quota_mb` and `caching.invalidation_version` are whitelisted in `zero_sudo`.
+This module is built with security as a primary concern, adhering strictly to the Zero-Sudo architecture:
+- **Micro-Privileged Service Account**: A dedicated service user `caching.user_caching_service` is utilized for the filesystem scan ([@ANCHOR: caching_fs_scan_logic]). This account has zero access to business data.
+- **Secure Parameter Access**: System parameters are retrieved through the `zero_sudo.security.utils` abstraction layer, preventing direct access to `ir.config_parameter` and maintaining strict audit trails.
+- **Configuration Whitelisting**: Only specifically approved parameters (`caching.safe_quota_mb`, `caching.invalidation_version`) are accessible to the caching service, preventing unauthorized configuration leakage.
+- **No Sudo Escalation**: All background operations run within the context of their assigned service accounts without ever requesting global administrative (`sudo`) privileges.
 
 ## 4. Stories & Journeys
 Detailed architectural narratives and process flows are documented in the `docs/` directory:
@@ -68,6 +71,7 @@ Detailed architectural narratives and process flows are documented in the `docs/
 ### Journeys
 * [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: caching_sw_fetch_interceptor])
 * [Server Startup Scan](docs/journeys/server_startup_scan.md) ([@ANCHOR: caching_sw_serve_route])
+* [Manual Invalidation](docs/journeys/manual_invalidation.md) ([@ANCHOR: test_caching_sudo_params])
 
 ## 5. Testing
 Tests are located in the `tests/` directory and cover:

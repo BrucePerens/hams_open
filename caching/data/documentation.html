@@ -3,7 +3,7 @@
     <p><em>Copyright © Bruce Perens K6BP. AGPL-3.0.</em></p>
 
     <h2>1. Overview</h2>
-    <p>The Caching module speeds up your website by saving important files directly in your browser. This means that after the first time you visit, the website loads almost instantly because it doesn't have to download the same files again.</p>
+    <p>The Caching module speeds up your website by saving important files directly in your browser. This means that after the first time you visit, the website loads almost instantly because it doesn't have to download the same files again. This module acts like a high-speed personal library for your web browser, keeping the most important parts of the website ready for use at a moment's notice.</p>
 
     <h2>2. How it works</h2>
     <p>When you visit the site, a "Service Worker" is installed in your browser. This is like a small assistant that remembers the website's design (its "assets").</p>
@@ -23,8 +23,8 @@
     <h2>4. Administrator Controls</h2>
     <p>Administrators can manage the Caching Service Worker from the <strong>Website Settings</strong> (Configuration &gt; Settings &gt; Website section):</p>
     <ul>
-        <li><strong>Safe Quota (MB):</strong> Adjust the maximum total size of files the browser is allowed to save. If the website's assets exceed this, the module will automatically prioritize small, essential files and skip large ones.</li>
-        <li><strong>Cache Invalidation:</strong> If you have made changes to the website and want to ensure all users see the update immediately, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version and forces all browsers to clear their saved assets on their next visit.</li>
+        <li><strong>Safe Quota (MB):</strong> Adjust the maximum total size of files the browser is allowed to save. If the website's assets exceed this, the module will automatically prioritize small, essential files and skip large ones. This prevents the website from taking up too much space on a visitor's device.</li>
+        <li><strong>Cache Invalidation:</strong> If you have made changes to the website and want to ensure all users see the update immediately, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version and forces all browsers to clear their saved assets on their next visit. This is useful after major updates to logos, colors, or website behavior.</li>
     </ul>
 
     <h2>5. Troubleshooting</h2>

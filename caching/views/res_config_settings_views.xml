@@ -16,7 +16,7 @@
                     <setting string="Force Cache Invalidation" help="Current Version:">
                         <field name="caching_invalidation_version" readonly="1"/>
                         <div class="mt8">
-                            <button name="action_force_cache_invalidation" type="object" string="Invalidate Cache Now" class="btn btn-primary" icon="fa-refresh"/>
+                            <button name="action_force_cache_invalidation" type="object" string="Invalidate Cache Now" class="btn btn-primary" icon="fa-refresh" title="Invalidate Cache Now"/>
                         </div>
                     </setting>
                 </block>

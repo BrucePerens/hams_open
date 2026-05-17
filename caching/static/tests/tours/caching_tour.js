@@ -21,15 +21,11 @@ registry.category("web_tour.tours").add("caching_service_worker_check", {
                             console.log('Service Worker found');
                             document.body.classList.add('sw-registered');
                         } else {
-                            console.error('No Service Worker found');
-                            // We don't fail immediately to allow the test to timeout gracefully
-                            // or provide more info. But in a real environment this is a failure.
-                            // In Jules VM it might be due to lack of HTTPS/localhost issues.
+                            throw new Error('No Service Worker found. Registration may have failed or was not initiated.');
                         }
                     });
                 } else {
-                    console.error('Service Worker not supported');
-                    document.body.classList.add('sw-unsupported');
+                    throw new Error('Service Worker is not supported by this browser environment.');
                 }
             },
         },
