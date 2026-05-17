@@ -5,43 +5,52 @@
 <hr class="mt-4 mb-4"/>
 
 <h2 class="mt-4">1. What is Manual Library?</h2>
-<p>The Manual Library is a place where you can create and organize all your company's instructions, guides, and notes. Think of it like a digital bookshelf where every book is a manual for your team or your customers.</p>
+<p>The Manual Library is a comprehensive documentation system for Odoo. It allows you to create, organize, and publish articles, guides, and SOPs (Standard Operating Procedures) in a hierarchical structure. It is designed to be fully compatible with the <code>knowledge.article</code> data model while remaining entirely open-source.</p>
 
-<h2 class="mt-4">2. Creating Your First Article</h2>
-<p>To start writing, follow these simple steps:</p>
+<h2 class="mt-4">2. Navigating the Manual</h2>
+<p>You can access the manual through the <strong>Manuals</strong> menu in Odoo or via the public website at <code>/manual</code>.</p>
+<ul>
+    <li><strong>Sidebar Navigation:</strong> On the left side of the screen, you will find a tree-view of all accessible articles. You can expand and collapse folders to find the documentation you need.</li>
+    <li><strong>Search:</strong> Use the search bar at the top of the manual page to find articles by title or content.</li>
+    <li><strong>Table of Contents (TOC):</strong> For longer articles, a dynamic Table of Contents is generated on the right side. Clicking on a heading in the TOC will jump you directly to that section.</li>
+</ul>
+
+<h2 class="mt-4">3. Creating and Editing Articles</h2>
+<p>To create or modify documentation, you must have the appropriate permissions:</p>
 <ol>
-    <li>Open the <strong>Manuals</strong> app from your Odoo home screen.</li>
-    <li>Click the <strong>New</strong> button at the top.</li>
-    <li>Give your article a <strong>Title</strong> (like "How to use the Coffee Machine").</li>
-    <li>In the <strong>Content</strong> tab, start typing your guide. You can use bold text, lists, and even add images.</li>
-    <li>Click <strong>Save</strong> when you're done.</li>
+    <li>Navigate to <strong>Manuals > Articles</strong> in the Odoo backend.</li>
+    <li>Click <strong>New</strong> to create a new article or select an existing one to edit.</li>
+    <li><strong>Title:</strong> Give your article a clear, descriptive title.</li>
+    <li><strong>Icon:</strong> You can add an emoji or icon class to help visually distinguish the article in the sidebar.</li>
+    <li><strong>Parent Article:</strong> Use this field to nest the article within a hierarchy. Leaving it blank makes it a root article.</li>
+    <li><strong>Body:</strong> Use the integrated rich-text editor to compose your content. You can use headings (H1, H2, etc.), which will be used to generate the Table of Contents.</li>
+    <li><strong>Sequence:</strong> Adjust the sequence number to change the order in which articles appear in the sidebar.</li>
 </ol>
 
-<h2 class="mt-4">3. Organizing with Folders (Hierarchy)</h2>
-<p>If you have many articles, you can nest them inside each other to stay organized. For example, you can have a "Staff Handbook" article that contains "Safety Rules" and "Vacation Policy" inside it.</p>
+<h2 class="mt-4">4. Permissions and Privacy</h2>
+<p>Manual Library offers flexible access control via the <strong>Internal Permission</strong> field:</p>
 <ul>
-    <li>When creating an article, use the <strong>Parent Article</strong> field to pick which article it should sit inside.</li>
+    <li><strong>Read Only:</strong> All internal users can view the article.</li>
+    <li><strong>Read &amp; Write:</strong> All internal users can view and edit the article.</li>
+    <li><strong>No Access (Private):</strong> The article is only visible to the creator and specifically invited members.</li>
 </ul>
+<p>To invite specific users to a private article, use the <strong>Shared Members</strong> list.</p>
 
-<h2 class="mt-4">4. Sharing and Privacy</h2>
-<p>You can control who sees each article using the <strong>Internal Permission</strong> setting:</p>
-<ul>
-    <li><strong>Read Only:</strong> Everyone in your company can read it, but only admins can change it.</li>
-    <li><strong>Read &amp; Write:</strong> Everyone in your company can read and edit it.</li>
-    <li><strong>No Access:</strong> Only you and the people you specifically invite can see it.</li>
-</ul>
-<p>If you want the whole world (including people not logged in) to see an article on your website, click the <strong>Is Published</strong> button at the top right of the article form.</p>
+<h2 class="mt-4">5. Publishing to the Web</h2>
+<p>By default, articles are only visible to logged-in Odoo users. To make an article available to the general public (unauthenticated users):</p>
+<ol>
+    <li>Open the article in the backend.</li>
+    <li>Click the <strong>Is Published</strong> toggle button in the top-right corner.</li>
+</ol>
+<p>Note: For a child article to be visible on the website, its parent articles should also be published or accessible.</p>
 
-<h2 class="mt-4">5. Viewing on the Website</h2>
-<p>Once an article is published, anyone can visit <code>/manual</code> on your website to read it. The website version includes:</p>
-<ul>
-    <li><strong>A Search Bar:</strong> To quickly find what you're looking for.</li>
-    <li><strong>Table of Contents:</strong> A handy list on the side that lets you jump to different sections of long articles.</li>
-    <li><strong>Feedback Buttons:</strong> Readers can click "Yes" or "No" to let you know if the article was helpful.</li>
-</ul>
+<h2 class="mt-4">6. Feedback and Quality Control</h2>
+<p>At the bottom of every article on the website, users can indicate whether they found the information helpful. This feedback is recorded anonymously and can be viewed by administrators in the backend to identify articles that may need improvement.</p>
 
-<h2 class="mt-4">6. Frequently Asked Questions</h2>
-<p><strong>Can I change the order of articles?</strong><br/>
-Yes! In the list view, you can drag and drop articles using the handle on the left to reorder them.</p>
-<p><strong>How do I add an icon to my article?</strong><br/>
-You can paste an emoji into the small box next to the article title in the editor to make it stand out in the menu.</p>
+<h2 class="mt-4">7. Frequently Asked Questions</h2>
+<p><strong>Q: Can I use images and videos in my articles?</strong><br/>
+A: Yes! The Odoo rich-text editor supports embedding images, videos, and links directly into the article body.</p>
+<p><strong>Q: What happens if I delete a parent article?</strong><br/>
+A: To protect your data, the system uses "Restrict" on deletion. You must first move or delete the child articles before you can delete the parent.</p>
+<p><strong>Q: Is there a limit to how deep the hierarchy can go?</strong><br/>
+A: There is no hard limit, but for the best user experience, we recommend keeping your structure organized and not overly deep.</p>

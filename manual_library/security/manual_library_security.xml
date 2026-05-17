@@ -44,6 +44,17 @@
             <field name="perm_unlink" eval="False"/>
         </record>
 
+        <record id="knowledge_article_internal_write_rule" model="ir.rule">
+            <field name="name">Knowledge Article Internal Write</field>
+            <field name="model_id" ref="model_knowledge_article"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+            <field name="domain_force">['|', '|', ('internal_permission', '=', 'write'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
         <record id="knowledge_article_public_read_rule" model="ir.rule">
             <field name="name">Knowledge Article Public Read</field>
             <field name="model_id" ref="model_knowledge_article"/>
