@@ -11,6 +11,7 @@ import concurrent.futures
 import shlex
 import logging
 
+logger = logging.getLogger(__name__)
 SPOOL_FILE = "/var/log/pager_synthetic_spool.json"
 
 
@@ -189,9 +190,11 @@ def execute_check(check):
                 else:
                     res["success"] = True
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        logger.warning("Execution timed out: %s", e)
         res["error"] = "Execution timed out"
     except Exception as e:
+        logger.warning("Execution error: %s", e)
         res["error"] = str(e)
 
     return name, res
@@ -206,7 +209,7 @@ def main():
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
     except Exception as e:
-        logging.getLogger(__name__).warning("An error occurred: %s", e)
+        logger.error("Failed to parse config: %s", e)
         sys.exit(1)
 
     checks = [
@@ -235,7 +238,7 @@ def main():
                     name, res = future.result()
                     spool_data[name] = res
                 except Exception as e:
-                    logging.getLogger(__name__).warning("An error occurred: %s", e)
+                    logger.warning("Future result extraction error: %s", e)
 
         if spool_data:
             tmp_file = SPOOL_FILE + ".tmp"

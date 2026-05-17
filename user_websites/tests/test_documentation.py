@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import unittest
+import logging
 import odoo.tests
 from odoo.addons.user_websites.hooks import post_init_hook
 
+_logger = logging.getLogger(__name__)
 
 @odoo.tests.common.tagged("post_install", "-at_install")
 class TestDocumentation(odoo.tests.common.HttpCase):
@@ -134,4 +136,5 @@ class TestDocumentation(odoo.tests.common.HttpCase):
             response = self.url_open("/user-websites/documentation")
             self.assertEqual(response.status_code, 200)
         except Exception as e:
+            _logger.error("Route failed unexpectedly when API is absent: %s", e)
             self.fail(f"Route failed unexpectedly when API is absent: {e}")

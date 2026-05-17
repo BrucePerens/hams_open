@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import logging
 from unittest.mock import patch, MagicMock
 from odoo.tests.common import TransactionCase, tagged
 
+_logger = logging.getLogger(__name__)
 
 @tagged("post_install", "-at_install")
 class TestPurgeQueue(TransactionCase):
@@ -89,6 +91,7 @@ class TestPurgeQueue(TransactionCase):
             str(queue_item.with_user(svc_uid).website_id.domain)
             self.assertTrue(True)
         except Exception as e:
+            _logger.error("ACL verification failed: %s", e)
             self.fail(f"Service account lacks ACLs to read website_id domain: {e}")
 
     @patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")

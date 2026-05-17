@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
 from odoo import models, fields, _
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
+
+_logger = logging.getLogger(__name__)
 
 class DistributedCacheConfig(models.TransientModel):
     _name = 'distributed.cache.config'
@@ -39,6 +42,7 @@ class DistributedCacheConfig(models.TransientModel):
                 status_msg = _("Redis connection is healthy.")
                 msg_type = 'success'
             except Exception as e:
+                _logger.warning("Redis connection check failed: %s", e)
                 status_msg = _("Redis connection failed: %s", e)
                 msg_type = 'danger'
 

@@ -122,7 +122,7 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
                 method="POST",
             )
         except Exception as e:
-            _logger.debug("Expected error on public blog creation: %s", e)
+            _logger.info("Expected error on public blog creation: %s", e)
 
         public_created_post = self.env["blog.post"].search(
             [

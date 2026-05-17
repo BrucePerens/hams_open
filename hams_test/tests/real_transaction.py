@@ -88,7 +88,7 @@ class RealTransactionCase(HttpCase):
         try:
             self.env.cr.commit()
         except Exception as e:
-            _logger.warning(_("An error occurred during final commit in tearDown: %s"), e)
+            _logger.warning("An error occurred during final commit in tearDown: %s", e)
             self.env.cr.rollback()
 
         # 2. Automated ORM Cleanup (Multiple passes for Foreign Key cascades)
@@ -115,7 +115,7 @@ class RealTransactionCase(HttpCase):
                     except Exception as e:
                         pending_deletes = True
                         if attempt == 2:
-                            _logger.debug(
+                            _logger.info(
                                 "Auto-cleanup deferred for %s %s: %s",
                                 model_name,
                                 ids,

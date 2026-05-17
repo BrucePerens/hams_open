@@ -126,6 +126,11 @@ GENERAL_ERROR_RULES = [
         "CRITICAL NETWORK HARDCODING: 'localhost' and '127.0.0.1' are prohibited. In containerized environments, these resolve to the container's internal loopback, NOT the target service. Use Docker DNS names (e.g., 'odoo', 'redis').",
     ),
     (
+        r"\.py$",
+        re.compile(r"\bdatetime\.datetime\.now\(\)|\bdatetime\.date\.today\(\)"),
+        "CRITICAL TIMEZONE BUG: Native datetime fetching bypasses Odoo's timezone context. Use 'odoo.fields.Datetime.now()' or 'odoo.fields.Date.context_today(self)'.",
+    ),
+    (
         r"test_.*\.py$",
         re.compile(r"['\"]/tmp(?:/|['\"])"),
         "CRITICAL TEST REALISM / PATHING: Hardcoding '/tmp' is forbidden. Tests must use the exact same paths as the production environment per AGENTS.md.",
@@ -207,6 +212,11 @@ ODOO_ERROR_RULES = [
         r"\.js$",
         re.compile(r'useService\s*\(\s*["\']company["\']\s*\)'),
         "useService('company') is deprecated in modern Odoo frontends.",
+    ),
+    (
+        r"\.js$",
+        re.compile(r'useService\s*\(\s*["\']rpc["\']\s*\)'),
+        "CRITICAL OWL DEPRECATION: The raw 'rpc' service is deprecated. Use 'useService(\"orm\")' instead, unless explicitly burning this rule for a non-ORM controller.",
     ),
     (
         r"\.(py|js)$",
@@ -684,6 +694,17 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         node.lineno,
                         "CRITICAL AI FAILURE: Wrapping imports in try/except ImportError is forbidden. Use manifest external_dependencies.",
                     )
+                is_catch_all = handler.type is None or (isinstance(handler.type, ast.Name) and handler.type.id == "Exception")
+                if is_catch_all:
+                    has_logging = any(
+                        isinstance(child, ast.Call) and getattr(child.func, "attr", "") in ("warning", "error", "critical", "exception", "info")
+                        for child in ast.walk(handler)
+                    )
+                    if not has_logging:
+                        self.add_error(
+                            node.lineno,
+                            "CRITICAL SILENT FAILURE: Catch-all exceptions (bare or Exception) must contain a logging call to prevent swallowed tracebacks.",
+                        )
             self.generic_visit(node)
         def visit_ImportFrom(self, node):
 
@@ -888,6 +909,10 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
             ):
                 is_cr_execute = True
 
+            if attr == "system" and getattr(node.func.value, "id", "") == "os":
+                self.add_error(
+                    node.lineno, "CRITICAL SECURITY: 'os.system' is banned due to shell injection vulnerabilities. Use 'subprocess.run' with array arguments."
+                )
             if attr in ("loads", "dumps") and getattr(node.func.value, "id", "") == "pickle":
                 self.add_error(
                     node.lineno, "CRITICAL RCE: The pickle module is vulnerable."

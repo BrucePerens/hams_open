@@ -79,6 +79,7 @@ class DatabaseTableStat(models.Model):
             except subprocess.TimeoutExpired:
                 raise UserError(_("Vacuum timed out for %s.") % rec.table_name)
             except Exception as e:
+                _logger.warning("Error executing vacuumdb: %s", e)
                 raise UserError(_("Error executing vacuumdb: %s") % str(e))
         return True
 

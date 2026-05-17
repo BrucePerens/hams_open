@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
+import logging
 
+_logger = logging.getLogger(__name__)
 
 @odoo.tests.common.tagged("post_install", "-at_install")
 class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
-
     def setUp(self):
         super(TestAdvancedEdgeCases, self).setUp()
 
@@ -183,4 +184,5 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
                 "Page should be successfully created even without an active HTTP request.",
             )
         except Exception as e:
+            _logger.error("website.page creation failed in RPC context: %s", e)
             self.fail(f"website.page creation failed in RPC context: {e}")

@@ -228,7 +228,8 @@ def execute_job(ch, method, properties, body):
                   _json2_call("backup.job", "write", ids=[job_id], vals={"state": "failed", "output_log": str(e)})
              if config_id:
                   _json2_call("backup.config", "_report_backup_failure", ids=[config_id], message=f"Worker Error: {e}")
-        except:
+        except Exception as inner_e:
+             logger.error(f"Failed to report failure to Odoo: {inner_e}")
              pass
         ch.basic_ack(delivery_tag=method.delivery_tag) # Ack so we don't loop on bad payloads
 

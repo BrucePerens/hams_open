@@ -228,6 +228,7 @@ class PagerCheck(models.Model):
             path = self.env["binary.manifest"].ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
         except Exception as e:
+            _logger.warning("Ensure executable failed: %s", e)
             return {"status": "error", "message": str(e)}
 
     @api.model
@@ -256,6 +257,7 @@ class PagerCheck(models.Model):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
+            _logger.error("JSON parse error: %s", e)
             raise UserError(_("Invalid JSON Format: %s") % str(e))
 
         self.env["pager.check"].search([], limit=1000).unlink()

@@ -50,8 +50,8 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                     if response.status == 200:
                         _logger.info("Health check %s passed.", url)
                         return True
-            except Exception:
-                pass
+            except Exception as e:
+                _logger.info("Health check polling exception: %s", e)
             time.sleep(interval)  # audit-ignore-sleep
 
         error_msg = _("Daemon health check failed for %s after %s seconds.") % (url, timeout)

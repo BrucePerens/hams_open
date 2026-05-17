@@ -24,6 +24,7 @@ You MUST use the **Service Account Pattern** (`with_user(svc_uid)`) or the **Pub
 * **Obfuscation is Caught:** The linter tracks `getattr(..., 'sudo')` and intermediate variable assignments.
 * **Environment Evasions:** Calling `env(su=True)` to forcefully escalate to root privileges natively is completely forbidden and will fail the build.
 * **Shell Injection:** `subprocess.run` MUST explicitly use `shell=False` and pass arguments as lists.
+* **`os.system()` RCE Vector:** The `os.system` function is strictly banned because it executes via a subshell and is vulnerable to string injection. You MUST use `subprocess.run` with `shell=False` and array arguments.
 * **Code Execution:** `eval()`, `exec()`, `pickle.loads/dumps`, and `yaml.load` are strictly banned. Use `ast.literal_eval()`, `odoo.tools.safe_eval()`, or `json`.
 * **Service Account Base Groups:** You MUST NOT grant `base.group_user` to domain-specific Service Accounts.
 Only a *special* user (`odoo_facility_service_internal`) may possess `base.group_user`, and it MUST only be assumed via `with_user()` when strictly necessary.
@@ -44,6 +45,7 @@ The AST linter defends PostgreSQL from lock exhaustion, OOM crashes, and SQL inj
 * The linter recursively traces and physically blocks string concatenation (`+`), `%` formatting, `.format()`, and `f-strings` applied to `cr.execute()`.
 * **Dynamic Schema Mandate:** If you must dynamically inject identifiers (like column names or table names), you are strictly **FORBIDDEN** from using f-strings.
 You MUST use the `psycopg2.sql` module.
+* **Timezone / Native Datetime Trap:** You MUST NOT use `datetime.datetime.now()` or `datetime.date.today()`. These bypass the ORM's timezone context and lead to subtle global data corruption. Force the use of `odoo.fields.Datetime.now()` and `odoo.fields.Date.context_today(self)`.
 * **N+1 Loops:** Calling `.search()`, `.search_count()`, or `.read_group()` inside a `for` loop is banned.
 You MUST pre-fetch data into memory-mapped dictionaries.
 * **Unbounded Searches:** Calling `.search()` without a `limit=` keyword argument is flagged as a potential Out-Of-Memory (OOM) vector.
@@ -113,6 +115,7 @@ If used in a background daemon for rate-limiting, it MUST be appended with `# au
 You MUST declare dependencies in `__manifest__.py` and let the system fail-fast.
 * **Hallucinatory sys.path Manipulation:** You MUST NOT use `sys.path.append` or `sys.path.insert` to resolve sibling imports using `..` or to redundantly append the script directory (using `__file__`).
 Python naturally resolves local imports. Isolated background daemons are the only permitted exception.
+* **Silent Failure Trap:** Using a bare `except:` or `except Exception:` block without calling a `logging` method (e.g. `_logger.error(...)`) is strictly forbidden. The AST linter will fatally reject catch-all blocks that silently swallow tracebacks and mask CI test failures.
 </python_standards>
 
 ---
@@ -160,6 +163,7 @@ You MUST use Vanilla JS or modern OWL components.
 * **DOM XSS:** Passing template literals (backtick strings) into `.innerHTML` or `.bindPopup` is flagged.
 Ensure all dynamic data injected into the DOM is sanitized.
 * **Deprecated Services:** `useService('company')` is banned.
+* **OWL `rpc` Service Deprecation:** The raw `useService('rpc')` method is banned in Odoo 19 frontend components. You MUST use `useService('orm')` which securely handles batching, caching, and model security, unless explicitly burning this rule for a custom controller.
 * **Tour Page Unloads (expectUnloadPage):** While `expectUnloadPage: true` is still used for hard browser reloads, you MUST NOT use it on steps where navigation is conditional (e.g., inside an `if` statement) or when triggering an OWL soft-route (client action).
 The Odoo test runner will fatally timeout after 20,000ms if the page does not actually unload.
 * **Tour Dropdown Selection:** Native `<select>` elements are deprecated in backend form views. Odoo 19 uses `.o_select_menu`.

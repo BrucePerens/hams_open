@@ -5,7 +5,7 @@ import { useService } from "@web/core/utils/hooks";
 
 export class LogViewer extends Component {
     setup() {
-        this.rpc = useService("rpc");
+        this.orm = useService("orm"); // Updated to conform to OWL deprecation mandate
         this.state = useState({
             files: [],
             selectedFile: "",
@@ -22,8 +22,13 @@ export class LogViewer extends Component {
 
     async fetchFiles() {
         try {
-            const res = await this.rpc("/api/v1/pager/logs/files", {});
-            this.state.files = res.files || [];
+            const res = await fetch("/api/v1/pager/logs/files", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ params: {} })
+            }).then(r => r.json());
+            const data = res.result || {};
+            this.state.files = data.files || [];
             if (this.state.files.length > 0) {
                 this.state.selectedFile = this.state.files[0];
             }
@@ -49,15 +54,22 @@ export class LogViewer extends Component {
         this.state.results = [];
 
         try {
-            const res = await this.rpc("/api/v1/pager/logs/search", {
-                file_path: this.state.selectedFile,
-                regex_query: this.state.regexQuery
-            });
+            const res = await fetch("/api/v1/pager/logs/search", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    params: {
+                        file_path: this.state.selectedFile,
+                        regex_query: this.state.regexQuery
+                    }
+                })
+            }).then(r => r.json());
+            const data = res.result || {};
 
-            if (res.error) {
-                this.state.error = res.error;
+            if (data.error) {
+                this.state.error = data.error;
             } else {
-                this.state.results = res.matches || [];
+                this.state.results = data.matches || [];
                 if (this.state.results.length === 0) {
                     this.state.error = "0 matches found.";
                 }

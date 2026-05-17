@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import json
+import logging
 import unittest.mock
 from unittest.mock import patch, MagicMock
 
@@ -18,6 +19,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
     notify_model_invalidation,
 )
 
+_logger = logging.getLogger(__name__)
 
 @tagged("standard", "post_install", "-at_install")
 class TestDistributedCacheStandard(HttpCase):
@@ -83,6 +85,7 @@ class TestDistributedCacheStandard(HttpCase):
                 self.env["ir.http"]._authenticate(mock_endpoint)
                 crashed = False
             except Exception as e:
+                _logger.warning("Interceptor failure caught: %s", e)
                 if str(e) == "Connection reset by peer":
                     crashed = True
                 else:

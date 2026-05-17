@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
+import logging
 from odoo.exceptions import UserError
 from odoo import _
+
+_logger = logging.getLogger(__name__)
 
 def validate_backup_path(path):
     # [@ANCHOR: backup_path_validation]
@@ -12,7 +15,8 @@ def validate_backup_path(path):
     # Resolve symlinks to check the actual target path
     try:
         abs_path = os.path.realpath(path)
-    except Exception:
+    except Exception as e:
+        _logger.warning("Failed to resolve realpath for %s: %s", path, e)
         abs_path = os.path.abspath(path)
 
     # Block sensitive system directories

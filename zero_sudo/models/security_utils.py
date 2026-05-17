@@ -4,9 +4,11 @@ import os
 import subprocess
 import sys
 import shutil
+import logging
 from odoo import models, api, tools, _
 from odoo.exceptions import AccessError, UserError
 
+_logger = logging.getLogger(__name__)
 
 class ZeroSudoSecurityUtils(models.AbstractModel):
     _name = "zero_sudo.security.utils"
@@ -265,7 +267,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             try:
                 with open("/var/lib/odoo/hams_crypto.secret", "r") as f:
                     secret = f.read().strip()
-            except Exception:
+            except Exception as e:
+                _logger.warning("Failed to read crypto secret file: %s", e)
                 pass
         if not secret:
             secret = tools.config.get("admin_passwd", "default_insecure_secret")

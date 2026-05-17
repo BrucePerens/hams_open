@@ -1,4 +1,7 @@
 from odoo import _, fields, models
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ShiftHandoffWizard(models.TransientModel):
     _name = "hams_helpdesk.shift_handoff"
@@ -19,7 +22,8 @@ class ShiftHandoffWizard(models.TransientModel):
             # Execute modification via service account to ensure audit trail and bypass possible write restrictions
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             ticket = self.ticket_id.with_env(hd_env)
-        except Exception:
+        except Exception as e:
+            _logger.warning("Failed to resolve helpdesk service env for handoff execution: %s", e)
             ticket = self.ticket_id
 
         ticket.write({"user_id": self.new_user_id.id})

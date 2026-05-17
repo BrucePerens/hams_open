@@ -2,11 +2,14 @@
 import json
 import uuid
 import os
+import logging
 from odoo import http, _
 from odoo.http import request
 from odoo.exceptions import AccessError
 
 import redis
+
+_logger = logging.getLogger(__name__)
 
 redis_host = os.getenv("REDIS_HOST") or "redis"
 redis_port = int(os.getenv("REDIS_PORT") or "6379")
@@ -53,6 +56,7 @@ class PagerLogAPI(http.Controller):
 
             return {"error": "Search timeout. Daemon may be offline."}  # audit-ignore-i18n: Tested by [@ANCHOR: test_log_api_i18n]  # fmt: skip
         except Exception as e:
+            _logger.error("IPC Failure during log search: %s", e)
             return {"error": f"IPC Failure: {e}"}  # audit-ignore-i18n: Tested by [@ANCHOR: test_log_api_i18n]  # fmt: skip
 
     @http.route("/api/v1/pager/logs/files", type="jsonrpc", auth="user")

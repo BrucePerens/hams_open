@@ -37,7 +37,8 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                 target_model = self.env["zero_sudo.security.utils"]._get_system_param(
                     "pager_duty.helpdesk_model", default="hams_helpdesk.ticket"
                 )
-            except Exception:
+            except Exception as e:
+                _logger.warning("Failed to retrieve system param for helpdesk model: %s", e)
                 target_model = "hams_helpdesk.ticket"
 
             assignee_id = False
@@ -65,7 +66,8 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                     hd_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                         "hams_helpdesk.user_helpdesk_service"
                     )
-                except Exception:
+                except Exception as e:
+                    _logger.warning("Failed to resolve hams_helpdesk service account: %s", e)
                     hd_uid = self.env.user.id
 
                 ticket = self.env[target_model].with_user(hd_uid).create(payload)
@@ -81,7 +83,8 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                             pd_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                                 "pager_duty.user_pager_service_internal"
                             )
-                        except Exception:
+                        except Exception as e:
+                            _logger.warning("Failed to resolve pager_duty service account for calendar event: %s", e)
                             pd_uid = self.env.user.id
 
                         self.env["calendar.event"].with_user(pd_uid).create({
@@ -109,7 +112,8 @@ class PagerDutyIncidentTicketAdapter(models.Model):
             pd_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "pager_duty.user_pager_service_internal"
             )
-        except Exception:
+        except Exception as e:
+            _logger.warning("Failed to resolve pager_duty service account for fallback: %s", e)
             pd_uid = self.env.user.id
 
         body = (

@@ -1,5 +1,8 @@
 from odoo import _, api, fields, models
 import datetime
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class HelpdeskTicket(models.Model):
     _name = "hams_helpdesk.ticket"
@@ -78,7 +81,8 @@ class HelpdeskTicket(models.Model):
         try:
             pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
             Calendar = pager_env["calendar.event"]
-        except Exception:
+        except Exception as e:
+            _logger.warning("Failed to resolve pager_duty env for shift awareness: %s", e)
             pass
 
         if hasattr(Calendar, "get_current_on_duty_admin"):
@@ -100,7 +104,8 @@ class HelpdeskTicket(models.Model):
         # 2. Apply assignments and send notifications via Helpdesk Service Account
         try:
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-        except Exception:
+        except Exception as e:
+            _logger.warning("Failed to resolve helpdesk service env for ticket routing: %s", e)
             hd_env = self.env
 
         for ticket in self.with_env(hd_env):

@@ -3,7 +3,9 @@ import subprocess
 import json
 import os
 import sys
+import logging
 
+logger = logging.getLogger(__name__)
 
 def generate_smart_spool():
     try:
@@ -23,8 +25,8 @@ def generate_smart_spool():
                 )
                 try:
                     out[name] = json.loads(health_res.stdout)
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as e:
+                    logger.warning("JSON decode error for SMART data: %s", e)
 
         # 3. Write to the read-only spool directory accessible by the main daemon
         spool_file = "/var/log/pager_smart_spool.json"
@@ -38,7 +40,7 @@ def generate_smart_spool():
         os.rename(tmp_file, spool_file)
 
     except Exception as e:
-        print(f"Failed to generate SMART spool: {e}", file=sys.stderr)
+        logger.error(f"Failed to generate SMART spool: {e}")
         sys.exit(1)
 
 

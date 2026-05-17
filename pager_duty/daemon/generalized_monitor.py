@@ -74,7 +74,7 @@ def get_odoo_client(logger, config):
                 if dbs:
                     db = dbs[0]
         except Exception as e:
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            logger.warning("Failed to query Odoo databases: %s", e)
     if not db:
         db = "odoo"
 
@@ -168,7 +168,7 @@ def verify_and_install_dependencies(client, checks):
                     },
                 )
             except Exception as e:
-                logging.getLogger(__name__).warning("An error occurred: %s", e)
+                logger.warning("Failed to report missing dependency incident via RPC: %s", e)
             sys.exit(1)
 
 
@@ -188,7 +188,7 @@ def is_in_maintenance(check):
             if start <= now <= end:
                 return True
         except Exception as e:
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            logger.warning("Maintenance time parse error: %s", e)
     return False
 
 
@@ -242,7 +242,7 @@ def report(client, source, msg, severity="high"):
             with urllib.request.urlopen(req, timeout=5):
                 pass
         except Exception as e:
-            logging.getLogger(__name__).warning("An error occurred: %s", e)
+            logger.warning("Webhook dispatch failed: %s", e)
 
     try:
         payload = {"source": source, "description": msg, "severity": severity}
@@ -275,6 +275,7 @@ def execute_check(check, client=None):
                 if pct > check.get("critical", 90):
                     return False, f"Disk space at {pct}% on {part}"
             except Exception as e:
+                logger.warning("Disk check failed: %s", e)
                 return False, f"Disk check failed for {part}: {e}"
         elif target == "memory":
             pct = psutil.virtual_memory().percent
@@ -302,6 +303,7 @@ def execute_check(check, client=None):
                 return False, f"Load average {load1:.2f} exceeds {crit}"
             return True, f"OK (Load: {load1:.2f})"
         except Exception as e:
+            logger.warning("Load check failed: %s", e)
             return False, f"Load check failed: {e}"
 
     elif ctype == "ftp":
@@ -317,6 +319,7 @@ def execute_check(check, client=None):
                     ftp.login()
             return True, "OK"
         except Exception as e:
+            logger.warning("FTP check failed: %s", e)
             return False, f"FTP check failed: {e}"
 
     elif ctype == "imap":
@@ -333,6 +336,7 @@ def execute_check(check, client=None):
             imap.logout()
             return True, "OK"
         except Exception as e:
+            logger.warning("IMAP check failed: %s", e)
             return False, f"IMAP check failed: {e}"
 
     elif ctype == "pop3":
@@ -350,6 +354,7 @@ def execute_check(check, client=None):
             pop.quit()
             return True, "OK"
         except Exception as e:
+            logger.warning("POP3 check failed: %s", e)
             return False, f"POP3 check failed: {e}"
 
     elif ctype == "mysql":
@@ -374,6 +379,7 @@ def execute_check(check, client=None):
                 conn.close()
             return True, "OK"
         except Exception as e:
+            logger.warning("MySQL check failed: %s", e)
             return False, f"MySQL/MariaDB check failed: {e}"
 
     elif ctype == "ldap":
@@ -386,6 +392,7 @@ def execute_check(check, client=None):
             conn.unbind()
             return True, "OK"
         except Exception as e:
+            logger.warning("LDAP check failed: %s", e)
             return False, f"LDAP check failed: {e}"
 
     elif ctype == "ntp":
@@ -395,6 +402,7 @@ def execute_check(check, client=None):
             response = client_ntp.request(target, version=3, timeout=5)
             return True, f"OK (Offset: {response.offset:.4f}s)"
         except Exception as e:
+            logger.warning("NTP check failed: %s", e)
             return False, f"NTP check failed: {e}"
 
     elif ctype == "snmp":
@@ -420,6 +428,7 @@ def execute_check(check, client=None):
                 return False, "SNMP payload mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("SNMP check failed: %s", e)
             return False, f"SNMP check error: {e}"
 
     elif ctype == "dns":
@@ -435,6 +444,7 @@ def execute_check(check, client=None):
             socket.gethostbyname(domain)
             return True, "OK"
         except Exception as e:
+            logger.warning("DNS check failed: %s", e)
             return False, f"DNS resolution failed: {e}"
 
     elif ctype == "http":
@@ -450,6 +460,7 @@ def execute_check(check, client=None):
                     return True, "OK"
                 return False, f"HTTP status {response.status}"
         except Exception as e:
+            logger.warning("HTTP check failed: %s", e)
             return False, f"HTTP check failed: {e}"
 
     elif ctype == "http3":
@@ -470,6 +481,7 @@ def execute_check(check, client=None):
                 return False, "HTTP/3 body mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("HTTP3 check failed: %s", e)
             return False, f"HTTP/3 check failed: {e}"
 
     elif ctype == "tcp":
@@ -494,6 +506,7 @@ def execute_check(check, client=None):
                         return False, "TCP payload mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("TCP check failed: %s", e)
             return False, f"TCP connection failed: {e}"
 
     elif ctype == "udp":
@@ -522,6 +535,7 @@ def execute_check(check, client=None):
                         return False, "UDP payload mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("UDP check failed: %s", e)
             return False, f"UDP connection failed: {e}"
 
     elif ctype == "redis":
@@ -535,6 +549,7 @@ def execute_check(check, client=None):
                 return True, "OK"
             return False, "Redis PING returned False"
         except Exception as e:
+            logger.warning("Redis check failed: %s", e)
             return False, f"Redis connection failed: {e}"
 
     elif ctype == "rabbitmq":
@@ -547,6 +562,7 @@ def execute_check(check, client=None):
                     return True, "OK"
                 return False, "RabbitMQ handshake mismatch"
         except Exception as e:
+            logger.warning("RabbitMQ check failed: %s", e)
             return False, f"RabbitMQ connection failed: {e}"
 
     elif ctype == "xmlrpc":
@@ -563,6 +579,7 @@ def execute_check(check, client=None):
                 return False, "XML-RPC output mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("XMLRPC check failed: %s", e)
             return False, f"XML-RPC check failed: {e}"
 
     elif ctype == "jsonrpc":
@@ -586,6 +603,7 @@ def execute_check(check, client=None):
                     return False, "JSON-RPC output mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("JSONRPC check failed: %s", e)
             return False, f"JSON-RPC check failed: {e}"
 
     elif ctype == "postgres" or ctype == "anomaly":
@@ -623,6 +641,7 @@ def execute_check(check, client=None):
                         )
                 return True, "OK"
             except Exception as e:
+                logger.warning("Postgres check failed: %s", e)
                 return False, f"PostgreSQL/Anomaly check failed: {e}"
             finally:
                 if conn:
@@ -634,6 +653,7 @@ def execute_check(check, client=None):
                 with socket.create_connection((target, port), timeout=2):
                     return True, "OK"
             except Exception as e:
+                logger.warning("Postgres socket check failed: %s", e)
                 return False, f"PostgreSQL socket fallback failed: {e}"
 
     elif ctype == "ssl":
@@ -652,6 +672,7 @@ def execute_check(check, client=None):
                         return False, f"SSL Cert expires in {days_left} days"
             return True, "OK"
         except Exception as e:
+            logger.warning("SSL check failed: %s", e)
             return False, f"SSL check failed: {e}"
 
     elif ctype == "synthetic":
@@ -673,6 +694,7 @@ def execute_check(check, client=None):
                 )
             return True, "OK"
         except Exception as e:
+            logger.warning("Synthetic check failed: %s", e)
             return False, f"Synthetic execution error: {e}"
 
     elif ctype == "certbot":
@@ -685,6 +707,7 @@ def execute_check(check, client=None):
                 if response.status != 200:
                     return False, f"Let's Encrypt API unreachable ({response.status})"
         except Exception as e:
+            logger.warning("Certbot check failed: %s", e)
             return False, f"Let's Encrypt API unreachable: {e}"
 
         domains = parse_env(check.get("target", ""))
@@ -730,6 +753,7 @@ def execute_check(check, client=None):
             except subprocess.TimeoutExpired:
                 return False, "Certbot dry-run timed out."
             except Exception as e:
+                logger.warning("Certbot renew check failed: %s", e)
                 return False, f"Certbot execution error: {e}"
 
         return True, "OK"
@@ -768,6 +792,7 @@ def execute_check(check, client=None):
                 return False, f"pg_dump pre-flight failed: {res.stderr[:100]}"
             return True, "OK"
         except Exception as e:
+            logger.warning("pg_dump check failed: %s", e)
             return False, f"pg_dump execution error: {e}"
 
     elif ctype == "nginx":
@@ -782,6 +807,7 @@ def execute_check(check, client=None):
                 return False, f"Nginx config error: {res.stderr[:100]}"
             return True, "OK"
         except Exception as e:
+            logger.warning("Nginx check failed: %s", e)
             return False, f"Nginx execution error: {e}"
 
     elif ctype == "logrotate":
@@ -797,6 +823,7 @@ def execute_check(check, client=None):
                 return False, f"Logrotate dry-run failed: {res.stderr[:100]}"
             return True, "OK"
         except Exception as e:
+            logger.warning("logrotate check failed: %s", e)
             return False, f"Logrotate execution error: {e}"
 
     elif ctype == "cloudflared":
@@ -816,6 +843,7 @@ def execute_check(check, client=None):
                 return False, f"Cloudflared tunnel info failed: {res.stderr[:100]}"
             return True, "OK"
         except Exception as e:
+            logger.warning("cloudflared check failed: %s", e)
             return False, f"Cloudflared execution error: {e}"
 
     elif ctype == "smtp_dryrun":
@@ -834,6 +862,7 @@ def execute_check(check, client=None):
                     server.login(user, password)
             return True, "OK"
         except Exception as e:
+            logger.warning("SMTP dryrun failed: %s", e)
             return False, f"SMTP dry-run failed: {e}"
 
     elif ctype == "icmp":
@@ -856,6 +885,7 @@ def execute_check(check, client=None):
                 )
             return True, "OK"
         except Exception as e:
+            logger.warning("ICMP check failed: %s", e)
             return False, f"ICMP execution error: {e}"
 
     elif ctype == "docker":
@@ -877,6 +907,7 @@ def execute_check(check, client=None):
                 return False, f"Docker container {target} is not running"
             return True, "OK"
         except Exception as e:
+            logger.warning("Docker check failed: %s", e)
             return False, f"Docker execution error: {e}"
 
     elif ctype == "memcached":
@@ -891,6 +922,7 @@ def execute_check(check, client=None):
                     return False, "Memcached stats mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("Memcached check failed: %s", e)
             return False, f"Memcached connection failed: {e}"
 
     elif ctype == "ssh":
@@ -904,6 +936,7 @@ def execute_check(check, client=None):
                     return False, "SSH protocol mismatch"
             return True, "OK"
         except Exception as e:
+            logger.warning("SSH check failed: %s", e)
             return False, f"SSH connection failed: {e}"
 
     elif ctype == "heartbeat":
@@ -921,6 +954,7 @@ def execute_check(check, client=None):
                 return True, "OK"
             return False, "Heartbeat missing"
         except Exception as e:
+            logger.warning("Heartbeat check failed: %s", e)
             return False, f"Heartbeat check failed: {e}"
 
     elif ctype == "smart":
@@ -960,6 +994,7 @@ def execute_check(check, client=None):
 
             return True, "OK"
         except Exception as e:
+            logger.warning("SMART check failed: %s", e)
             return False, f"SMART spool read error: {e}"
 
     elif ctype in ("playwright", "bash", "executable"):
@@ -991,6 +1026,7 @@ def execute_check(check, client=None):
                 return False, f"Execution Failed: {err[:200]}"
             return True, "OK"
         except Exception as e:
+            logger.warning("Synthetic script check failed: %s", e)
             return False, f"Synthetic spool read error: {e}"
 
     elif ctype == "file_absent":
@@ -1061,6 +1097,7 @@ def execute_check(check, client=None):
                     )
                 return True, "OK"
         except Exception as e:
+            logger.warning("Systemd check failed: %s", e)
             return False, f"Systemd execution error: {e}"
 
     return False, "Unknown check type"
@@ -1242,7 +1279,7 @@ if __name__ == "__main__":
                         payload["severity"],
                     )
             except Exception as e:
-                logging.getLogger(__name__).warning("An error occurred: %s", e)
+                logger.warning("Anomaly proxy loop error: %s", e)
                 time.sleep(1)
 
     futures.append(executor.submit(log_anomaly_proxy, client))
