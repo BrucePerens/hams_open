@@ -15,4 +15,4 @@ class TestComplianceUITour(HttpCase):
         # Tests [@ANCHOR: compliance_privacy_policy_template]
         # Tests [@ANCHOR: compliance_cookie_policy_template]
         # Tests [@ANCHOR: compliance_terms_of_service_template]
-        self.start_tour("/", "compliance_tour")
+        self.start_tour("/privacy?debug=1", "compliance_tour")
