@@ -1,35 +1,47 @@
-<h1 class="mb-4">Manual Library Documentation</h1>
+<h1 class="mb-4">Manual Library User Guide</h1>
 <p class="lead text-muted"><strong>Version:</strong> Odoo 19 Community<br/>
-<strong>Summary:</strong> A clean-room, open-source implementation of a hierarchical documentation and knowledge-base system for Odoo Community.</p>
+<strong>Summary:</strong> A powerful, easy-to-use knowledge base for your Odoo system.</p>
 
 <hr class="mt-4 mb-4"/>
 
-<h2 class="mt-4">1. System Overview</h2>
-<p>The Manual Library provides a drop-in replacement for the proprietary Odoo Enterprise <code>knowledge</code> module. It allows other modules to install and manage documentation via standard Odoo XML data loading without requiring an Enterprise license.</p>
-<ul>
-    <li><strong>Hierarchical Documentation:</strong> Organize articles in a nested tree structure for easy navigation.</li>
-    <li><strong>API Interoperability:</strong> Implements the core <code>knowledge.article</code> API so XML data files from other modules install seamlessly.</li>
-    <li><strong>Rich Text Editing:</strong> Utilizes Odoo's standard HTML editor for content creation.</li>
-</ul>
+<h2 class="mt-4">1. What is Manual Library?</h2>
+<p>The Manual Library is a place where you can create and organize all your company's instructions, guides, and notes. Think of it like a digital bookshelf where every book is a manual for your team or your customers.</p>
 
-<hr class="mt-4 mb-4"/>
-
-<h2 class="mt-4">2. Security &amp; Access Control</h2>
-<p>The module implements a granular three-tier access system:</p>
+<h2 class="mt-4">2. Creating Your First Article</h2>
+<p>To start writing, follow these simple steps:</p>
 <ol>
-    <li><strong>Manual Administrator:</strong> Full CRUD (Create, Read, Update, Delete) access to all articles and hierarchies.</li>
-    <li><strong>Internal User (Standard):</strong> Contextual read access to articles marked as 'workspace' or 'shared' based on internal permissions. Cannot mutate data.</li>
-    <li><strong>Public Guest:</strong> Contextual read access exclusively to articles where <code>is_published</code> is True. Strictly blocked from all mutation attempts.</li>
+    <li>Open the <strong>Manuals</strong> app from your Odoo home screen.</li>
+    <li>Click the <strong>New</strong> button at the top.</li>
+    <li>Give your article a <strong>Title</strong> (like "How to use the Coffee Machine").</li>
+    <li>In the <strong>Content</strong> tab, start typing your guide. You can use bold text, lists, and even add images.</li>
+    <li>Click <strong>Save</strong> when you're done.</li>
 </ol>
 
-<hr class="mt-4 mb-4"/>
-
-<h2 class="mt-4">3. Regulatory Compliance Statement</h2>
-<p><strong>How the <code>manual_library</code> module complies with regulations:</strong></p>
+<h2 class="mt-4">3. Organizing with Folders (Hierarchy)</h2>
+<p>If you have many articles, you can nest them inside each other to stay organized. For example, you can have a "Staff Handbook" article that contains "Safety Rules" and "Vacation Policy" inside it.</p>
 <ul>
-    <li><strong>GDPR (Data Minimization):</strong> The module operates purely on internal documentation and public guides. The frontend feedback system tracks "Helpful/Unhelpful" votes anonymously without logging Personally Identifiable Information (PII) or IP addresses.</li>
-    <li><strong>WCAG 2.1 AA (Accessibility):</strong> The dynamically generated frontend Table of Contents (TOC) and hierarchical sidebar use proper semantic HTML nesting (<code>&lt;nav&gt;</code>, <code>&lt;ul&gt;</code>, <code>&lt;li&gt;</code>). Interactive search forms and dropdown buttons include explicit <code>aria-label</code> attributes for screen readers.</li>
-    <li><strong>Clean-Room Implementation (Legal Compliance):</strong> The module legally complies with the Abstraction-Filtration-Comparison test to provide API interoperability. It does not contain any literal or non-literal copied code, logic, or proprietary UI designs from Odoo Enterprise.</li>
-    <li><strong>Frontend Framework Compliance:</strong> Adheres to modern Odoo 19 standards by strictly utilizing Vanilla JS and standard OWL concepts for the TOC generation, completely avoiding deprecated jQuery dependencies.</li>
-    <li><strong>Zero-Sudo &amp; Micro-Privilege:</strong> Operates with minimum privilege, utilizing dedicated service accounts like <code>manual_library_sys</code> for automated tasks, ensuring no <code>sudo()</code> usage across the module.</li>
+    <li>When creating an article, use the <strong>Parent Article</strong> field to pick which article it should sit inside.</li>
 </ul>
+
+<h2 class="mt-4">4. Sharing and Privacy</h2>
+<p>You can control who sees each article using the <strong>Internal Permission</strong> setting:</p>
+<ul>
+    <li><strong>Read Only:</strong> Everyone in your company can read it, but only admins can change it.</li>
+    <li><strong>Read &amp; Write:</strong> Everyone in your company can read and edit it.</li>
+    <li><strong>No Access:</strong> Only you and the people you specifically invite can see it.</li>
+</ul>
+<p>If you want the whole world (including people not logged in) to see an article on your website, click the <strong>Is Published</strong> button at the top right of the article form.</p>
+
+<h2 class="mt-4">5. Viewing on the Website</h2>
+<p>Once an article is published, anyone can visit <code>/manual</code> on your website to read it. The website version includes:</p>
+<ul>
+    <li><strong>A Search Bar:</strong> To quickly find what you're looking for.</li>
+    <li><strong>Table of Contents:</strong> A handy list on the side that lets you jump to different sections of long articles.</li>
+    <li><strong>Feedback Buttons:</strong> Readers can click "Yes" or "No" to let you know if the article was helpful.</li>
+</ul>
+
+<h2 class="mt-4">6. Frequently Asked Questions</h2>
+<p><strong>Can I change the order of articles?</strong><br/>
+Yes! In the list view, you can drag and drop articles using the handle on the left to reorder them.</p>
+<p><strong>How do I add an icon to my article?</strong><br/>
+You can paste an emoji into the small box next to the article title in the editor to make it stand out in the menu.</p>
