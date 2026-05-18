@@ -2,8 +2,10 @@
 import os
 import logging
 import datetime
+import binascii
 from odoo import models, fields, api, SUPERUSER_ID, tools, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError, AccessError
+from odoo.addons.base.models.res_users import KEY_CRYPT_CONTEXT, INDEX_SIZE  # fmt: skip
 
 _logger = logging.getLogger(__name__)
 
@@ -22,7 +24,10 @@ class DaemonKeyRegistry(models.Model):
     env_file_path = fields.Char(
         string="Environment File Path",
         required=True,
-        help="Absolute path to the protected output directory for this daemon's .env file.",
+        help="""
+        Absolute path to the protected output directory for this daemon's .env file.
+        Must start with /var/lib/odoo/daemon_keys/.
+        """,
     )
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
 
@@ -36,7 +41,7 @@ class DaemonKeyRegistry(models.Model):
         "The environment file path cannot be empty.",
     )
 
-    @api.constrains('user_id')
+    @api.constrains("user_id")
     def _check_user_is_service_account(self):
         # Tested by [@ANCHOR: test_security_constraints]
         # [@ANCHOR: security_constraints_user]
@@ -44,7 +49,7 @@ class DaemonKeyRegistry(models.Model):
             if not record.user_id.is_service_account:
                 raise UserError(_("The selected user must be a service account."))
 
-    @api.constrains('env_file_path')
+    @api.constrains("env_file_path")
     def _check_env_file_path(self):
         # Tested by [@ANCHOR: test_security_constraints]
         # [@ANCHOR: security_constraints_path]
@@ -55,12 +60,16 @@ class DaemonKeyRegistry(models.Model):
             # Ensure path is normalized and check for directory traversal
             path = os.path.normpath(record.env_file_path)
             if ".." in path.split(os.path.sep):
-                raise UserError(_("Security Alert: Directory traversal detected in path."))
+                raise UserError(
+                    _("Security Alert: Directory traversal detected in path.")
+                )
 
             real_path = os.path.realpath(path)
             if not real_path.startswith(mandatory_prefix):
                 raise UserError(
-                    _("Security Alert: The environment file path must start with '%s'. (Resolved path: %s)")
+                    _(
+                        "Security Alert: The environment file path must start with '%s'. (Resolved path: %s)"
+                    )
                     % (mandatory_prefix, real_path)
                 )
 
@@ -76,14 +85,20 @@ class DaemonKeyRegistry(models.Model):
         # [@ANCHOR: register_daemon_api]
 
         # Elevate to the internal service account to perform registration
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("daemon_key_manager.user_daemon_key_manager_service")
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
         self = self.with_user(svc_uid)
 
-        daemon_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(user_xml_id)
+        daemon_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            user_xml_id
+        )
         user = self.env["res.users"].browse(daemon_svc_uid)
 
         # [@ANCHOR: register_daemon_logic]
-        registry = self.env["daemon.key.registry"].search([("name", "=", daemon_name)], limit=1)
+        registry = self.env["daemon.key.registry"].search(
+            [("name", "=", daemon_name)], limit=1
+        )
         if not registry:
             registry = self.env["daemon.key.registry"].create(
                 {
@@ -103,13 +118,20 @@ class DaemonKeyRegistry(models.Model):
     def action_force_provision_all(self, *args, **kwargs):
         # Tested by [@ANCHOR: test_force_provisioning]
         # [@ANCHOR: action_force_provision_all_api]
+        # Verified by [@ANCHOR: test_unauthorized_access]
         """
         Synchronously provisions API keys for all registered daemons.
         Designed to be called via `odoo-bin shell` during systemd bootstrapping
         to prevent race conditions before daemon startup.
         """
+        # Ensure only authorized users can call this
+        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
+            raise AccessError(_("Only Daemon Key Managers can provision keys."))
+
         # Elevate to the internal service account
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("daemon_key_manager.user_daemon_key_manager_service")
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
         self = self.with_user(svc_uid)
 
         # [@ANCHOR: force_provision_logic]
@@ -121,14 +143,18 @@ class DaemonKeyRegistry(models.Model):
             except OSError:
                 # [@ANCHOR: force_provision_error_handling]
                 raise UserError(
-                    _("Cannot write key file for '%s' " "at '%s'. Check permissions.")
+                    _("Cannot write key file for '%s' at '%s'. Check permissions.")
                     % (reg.name, reg.env_file_path)
                 )
         return True
 
     def _rotate_key_and_write_file(self):
         # Tested by [@ANCHOR: test_force_provisioning]
+        # Verified by [@ANCHOR: test_unauthorized_access]
         self.ensure_one()
+
+        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
+            raise AccessError(_("Only Daemon Key Managers can rotate keys."))
 
         if self.user_id.id == SUPERUSER_ID:
             raise UserError(
@@ -144,16 +170,18 @@ class DaemonKeyRegistry(models.Model):
         # Tested by [@ANCHOR: test_cron_rotate_all_keys]
         # [@ANCHOR: revoke_old_keys_logic]
         # Tested by [@ANCHOR: test_key_ownership]
+        # Note: res.users.apikeys access is granted via ir.model.access.csv for our group
         old_keys = self.env["res.users.apikeys"].sudo().search( # burn-ignore-sudo
             [("user_id", "=", self.user_id.id), ("name", "=", key_name)], limit=100
         )
         if old_keys:
-            # Elevated execution required for restricted API key deletion.
             old_keys.sudo().unlink() # burn-ignore-sudo
 
         # Generate new key
         # Tested by [@ANCHOR: test_cron_rotate_all_keys]
         # [@ANCHOR: generate_new_key_logic]
+        # Tested by [@ANCHOR: test_key_ownership]
+        # Verified by [@ANCHOR: test_key_ownership]
         expiration_date = fields.Datetime.now() + datetime.timedelta(days=90)
 
         # Odoo enforces a strict expiration limit on API keys based on the user's groups.
@@ -161,8 +189,6 @@ class DaemonKeyRegistry(models.Model):
         # a 90-day key for the service account without exposing the entire ERP.
         # This bypasses the group-based duration checks while ensuring the key is still
         # correctly owned by the service account.
-        # Tested by [@ANCHOR: test_key_ownership]
-        # Verified by [@ANCHOR: test_key_ownership]
         raw_key = (
             self.env["res.users.apikeys"].with_user(self.user_id.id).sudo()._generate("rpc", key_name, expiration_date) # burn-ignore-sudo
         )
@@ -202,9 +228,8 @@ class DaemonKeyRegistry(models.Model):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write("# Auto-generated by daemon.key.registry\n")
-            f.write(f"ODOO_RPC_LOGIN={login}\n")
-            f.write(f"ODOO_RPC_KEY={key}\n")
-
+            f.write("ODOO_RPC_LOGIN=%s\n" % login)
+            f.write("ODOO_RPC_KEY=%s\n" % key)
 
     @api.model
     def _cron_rotate_all_keys(self):
@@ -214,7 +239,9 @@ class DaemonKeyRegistry(models.Model):
         """
         # Tested by [@ANCHOR: test_cron_rotate_all_keys]
         # [@ANCHOR: cron_rotation_logic]
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("daemon_key_manager.user_daemon_key_manager_service")
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
         self = self.with_user(svc_uid)
 
         threshold = fields.Datetime.now() - datetime.timedelta(days=59)
@@ -226,16 +253,21 @@ class DaemonKeyRegistry(models.Model):
         for reg in registries:
             try:
                 reg._rotate_key_and_write_file()
-                if not tools.config.get('test_enable'):
+                if not tools.config.get("test_enable"):
                     self.env.cr.commit()
-            except (OSError, UserError) as e:
-                if not tools.config.get('test_enable'):
+            except (OSError, UserError, ValidationError, AccessError) as e:
+                if not tools.config.get("test_enable"):
                     self.env.cr.rollback()
-                _logger.error("Managed failure rotating key for daemon %s: %s", reg.name, e)
-            except Exception: # audit-ignore-catch-all
-                if not tools.config.get('test_enable'):
+                _logger.error(
+                    "Managed failure rotating key for daemon %s: %s", reg.name, e
+                )
+            except Exception as e:  # audit-ignore-catch-all
+                if not tools.config.get("test_enable"):
                     self.env.cr.rollback()
-                _logger.exception("Unexpected AI Laziness: Uncaught exception during key rotation for %s", reg.name)
+                _logger.exception(
+                    "Unexpected AI Laziness during key rotation for %s",
+                    reg.name,
+                )
 
         if len(registries) == 10:
             self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys").sudo()._trigger() # burn-ignore-sudo
