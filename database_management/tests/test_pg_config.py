@@ -74,12 +74,35 @@ class TestPgConfig(RealTransactionCase):
         with self.assertRaises(UserError):
             wizard.action_apply_optimizations()
 
+    def test_02d_ha_wizard_validation_errors(self):
+        # Test invalid IP
+        wizard = (
+            self.env["pg.ha.wizard"]
+            .with_user(self.admin)
+            .create({"primary_ip": "invalid-ip", "secondary_ip": "10.0.0.2"})
+        )
+        with self.assertRaisesRegex(UserError, "Invalid Primary Node IP format"):
+            wizard.action_generate()
+
+        # Test short password
+        wizard2 = (
+            self.env["pg.ha.wizard"]
+            .with_user(self.admin)
+            .create({
+                "primary_ip": "10.0.0.1",
+                "secondary_ip": "10.0.0.2",
+                "replication_pass": "short"
+            })
+        )
+        with self.assertRaisesRegex(UserError, "Password must be at least 8 characters"):
+            wizard2.action_generate()
+
     @patch("shutil.which")
     def test_02b_ha_wizard_missing_binaries(self, mock_which):
         wizard = (
             self.env["pg.ha.wizard"]
             .with_user(self.admin)
-            .create({"primary_ip": "10.0.0.1"})
+            .create({"primary_ip": "10.0.0.1", "secondary_ip": "10.0.0.2"})
         )
 
         # Test missing patroni throws error
@@ -102,7 +125,7 @@ class TestPgConfig(RealTransactionCase):
         wizard = (
             self.env["pg.ha.wizard"]
             .with_user(self.admin)
-            .create({"primary_ip": "10.0.0.1"})
+            .create({"primary_ip": "10.0.0.1", "secondary_ip": "10.0.0.2"})
         )
         exe_path = wizard._get_executable("etcd")
 

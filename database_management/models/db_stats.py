@@ -4,7 +4,7 @@ import os
 import subprocess
 
 from odoo import models, fields, api, tools, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, AccessError
 
 _logger = logging.getLogger(__name__)
 
@@ -78,9 +78,9 @@ class DatabaseTableStat(models.Model):
                     )
             except subprocess.TimeoutExpired:
                 raise UserError(_("Vacuum timed out for %s.") % rec.table_name)
-            except Exception as e: # audit-ignore-catch-all
-                _logger.warning("Error executing vacuumdb: %s", e)
-                raise UserError(_("Error executing vacuumdb: %s") % str(e))
+            except (subprocess.CalledProcessError, OSError) as e:
+                _logger.exception("Error executing vacuumdb for table %s", rec.table_name)
+                raise UserError(_("Error executing vacuumdb for %s: %s") % (rec.table_name, str(e)))
         return True
 
     @api.model
@@ -105,8 +105,10 @@ class DatabaseTableStat(models.Model):
                         "description": f"Database Bloat Warning! The following tables have >20%% dead tuples and require a manual Vacuum Analyze: {tables}",
                     }
                 )
-            except Exception as e: # audit-ignore-catch-all
-                _logger.warning("An error occurred: %s", e)
+            except (AccessError, UserError) as e:
+                _logger.warning("Permission or configuration error reporting bloat incident: %s", e)
+            except Exception: # audit-ignore-catch-all
+                _logger.exception("Unexpected error reporting bloat incident to PagerDuty")
 
 
 class DatabaseQueryStat(models.Model):

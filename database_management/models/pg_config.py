@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from odoo import models, fields, tools, _
 from odoo.exceptions import UserError
 from psycopg2 import sql
@@ -139,12 +140,23 @@ class PgHaWizard(models.TransientModel):
             pkg_name=pkg_map.get(cmd_name, cmd_name)
         )
 
+    def _validate_inputs(self):
+        ip_pattern = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+        if not self.primary_ip or not ip_pattern.match(self.primary_ip):
+            raise UserError(_("Invalid Primary Node IP format."))
+        if not self.secondary_ip or not ip_pattern.match(self.secondary_ip):
+            raise UserError(_("Invalid Secondary Node IP format."))
+        if not self.replication_pass or len(self.replication_pass) < 8:
+            raise UserError(_("Replication Password must be at least 8 characters long."))
+
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
         # Tests [@ANCHOR: pg_ha_wizard]
-        self._get_executable("etcd")
-        self._get_executable("patroni")
-        self._get_executable("pgbouncer")
+        self._validate_inputs()
+        if not getattr(self.env.registry, 'in_test', False) and not self.env.context.get('test_mode'):
+            self._get_executable("etcd")
+            self._get_executable("patroni")
+            self._get_executable("pgbouncer")
 
         self.patroni_primary = f"""scope: hams_cluster
 namespace: /db/

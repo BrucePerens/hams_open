@@ -1,0 +1,54 @@
+<!-- # Verified by [@ANCHOR: db_doc_injection] -->
+<h1>Database Management System (DBA Toolkit)</h1>
+
+<p>The Database Management module provides a powerful set of tools designed for Site Reliability Engineers (SREs) and Database Administrators (DBAs) to monitor and optimize the Odoo PostgreSQL backend directly from the web interface.</p>
+
+<section>
+    <h2>Core Features</h2>
+    <ul>
+        <li><strong>Table Health &amp; Bloat Monitoring:</strong> Track real-time statistics on table size, live vs. dead tuples, and cache hit ratios.</li>
+        <li><strong>Index Usage Analysis:</strong> Identify unused or oversized indexes that may be slowing down write operations.</li>
+        <li><strong>Slow Query Tracking (APM):</strong> View the most time-consuming SQL queries to pinpoint performance bottlenecks in application code.</li>
+        <li><strong>Active Session Management:</strong> Monitor currently running database backends and safely terminate runaway or locked queries.</li>
+        <li><strong>PostgreSQL Tuning Wizard:</strong> Automatically calculate and apply optimal database settings based on your server's RAM and CPU resources.</li>
+        <li><strong>High Availability Orchestration:</strong> Generate production-ready configuration templates for Patroni and PgBouncer.</li>
+    </ul>
+</section>
+
+<section>
+    <h2>How to Use Table Health &amp; Bloat Tools</h2>
+    <p>Navigating to <strong>Database Health > Table Health &amp; Bloat</strong> allows you to see which tables are consuming excessive disk space due to "dead tuples" (records that have been deleted or updated but not yet physically removed).</p>
+    <ol>
+        <li>Identify tables with a high <strong>Dead %</strong> (typically over 20%).</li>
+        <li>Select the bloated tables using the checkboxes in the list view.</li>
+        <li>Click the <strong>Vacuum Analyze Selected</strong> button to trigger a manual cleanup. This process runs in the background and updates PostgreSQL statistics.</li>
+    </ol>
+    <p><em>Note: This module automatically integrates with PagerDuty to alert administrators if critical tables exceed safe bloat thresholds.</em></p>
+</section>
+
+<section>
+    <h2>Terminating Runaway Sessions</h2>
+    <p>If the system becomes unresponsive due to a locked process, go to <strong>Database Health > Active Sessions</strong>.</p>
+    <ol>
+        <li>Review the <strong>Duration</strong> and <strong>Query</strong> columns to find the offending process.</li>
+        <li>Select the session(s) you wish to stop.</li>
+        <li>Click <strong>Kill Selected Queries</strong>. You will be asked for confirmation before the <code>pg_terminate_backend</code> signal is sent.</li>
+    </ol>
+</section>
+
+<section>
+    <h2>Optimizing Performance</h2>
+    <p>The <strong>Optimization Wizard</strong> (under Configuration &amp; Tuning) simplifies PostgreSQL tuning:</p>
+    <ol>
+        <li>Enter your server's total RAM (in GB) and CPU core count.</li>
+        <li>Select your storage type (SSD is recommended for Odoo).</li>
+        <li>Click <strong>Calculate &amp; Apply Optimizations</strong>.</li>
+    </ol>
+    <p>The system will use industry-standard DBA algorithms to write new settings (like <code>shared_buffers</code> and <code>work_mem</code>) to your <code>postgresql.auto.conf</code> file and reload the configuration.</p>
+    <p><strong>Warning:</strong> Major memory changes require a manual restart of the PostgreSQL service to take full effect.</p>
+</section>
+
+<section>
+    <h2>Security and Access Control</h2>
+    <p>Because these tools interact directly with the database engine, access is restricted to <strong>System Administrators</strong>. All operations are performed using a dedicated micro-privilege service account to ensure the highest level of security and auditability.</p>
+</section>

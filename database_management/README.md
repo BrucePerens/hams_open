@@ -15,11 +15,12 @@ The `database_management` module provides a comprehensive DBA toolkit integrated
 *   **Stat Tracking:** Connects to native PostgreSQL stat views (`pg_stat_user_tables`, `pg_stat_activity`, `pg_statio_user_tables`, `pg_stat_statements`) to track bloat, cache hits, and slow queries `[@ANCHOR: db_index_stats]`.
 *   **Active Orchestration:** Exposes `pg_terminate_backend` `[@ANCHOR: db_terminate_backend]` and `VACUUM ANALYZE` `[@ANCHOR: vacuum_analyze]` commands to the GUI for immediate incident remediation.
 *   **Configuration & Tuning:** Evaluates `pg_settings` and provides wizards `[@ANCHOR: pg_optimize_wizard]` to dynamically write to `postgresql.auto.conf` via parameterized `ALTER SYSTEM` commands using the `psycopg2.sql` library.
-*   **HA Generation:** Orchestrates exact configuration templates `[@ANCHOR: pg_ha_wizard]` for Patroni and PgBouncer to facilitate horizontal scaling.
+*   **HA Generation:** Orchestrates exact configuration templates `[@ANCHOR: pg_ha_wizard]` for Patroni and PgBouncer to facilitate horizontal scaling. Includes strict input validation for IP addresses and security parameters.
 *   **Self-Healing Dependencies:** Automatically downloads the `etcd` binary from GitHub if missing when generating HA configurations. Detects and utilizes the OS `vacuumdb` binary via `subprocess` for autovacuum overrides, preventing transaction block errors in the ORM.
 *   **Dynamic Documentation:** Automatically installs documentation into `knowledge.article` if either `manual_library` or `knowledge` is present. This is handled via the `knowledge_docs` manifest facility and `zero_sudo` bootstrap.
 
 ## Security
+*   **Input Validation:** Strict regex-based validation for IP addresses and minimum complexity requirements for replication passwords in HA wizards.
 *   **Micro-Privileges:** All DBA operations must use the `user_database_management_service` service account when elevating privileges.
 *   **Zero-Sudo:** The module strictly avoids `.sudo()` and instead uses `_get_service_env()` or the service account cursor for secure privilege escalation.
 *   **Strict Access:** Access is strictly hard-locked to the `base.group_system` (System Administrator) role.
