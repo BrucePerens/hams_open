@@ -50,7 +50,7 @@ Odoo's headless browser tests can crash with "no translation language is detecte
 ### 8. Headless Browser Authentication Context & URL Anchoring
 Odoo's `HttpCase.start_tour()` spawns its headless browser in an unauthenticated public state by default. The standard Python `self.authenticate()` method ONLY authenticates the local `requests` session utilized for backend scraping, NOT the headless browser.
 * Tours executing authenticated flows MUST explicitly pass the `login` keyword argument directly to the tour execution command.
-* **CRITICAL URL ANCHORING:** When authenticating via `start_tour`, Odoo's default login routing may drop the user onto unpredictable views (like the Discuss app) instead of the expected view. You MUST explicitly provide the starting URL path as the first argument to `start_tour` (e.g., `self.start_tour("/web", "tour_name", login="admin")`) to guarantee a deterministic DOM state.
+* **CRITICAL URL ANCHORING:** When authenticating via `start_tour`, Odoo's default login routing may drop the user onto unpredictable views (like the Discuss app) instead of the expected view. You MUST explicitly provide the starting URL path as the first argument to `start_tour` (e.g., `self.start_tour("/odoo?debug=1", "tour_name", login="admin")`) to guarantee a deterministic DOM state. Note that Odoo 19 migrated the backend route from `/web` to `/odoo`.
 
 ### 9. Deterministic Input Simulation (Bypassing the `edit` helper)
 Odoo's tour `edit` helper simulates typing character-by-character. This can cause severe validation races (e.g., backend constraints triggering on partially typed strings like `htt` for a URL) if the framework auto-saves before the final DOM `blur` or `change` event fires.
