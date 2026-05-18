@@ -30,7 +30,7 @@ class UserWebsitesSEOController(UserWebsitesController):
         'Optimize SEO' frontend widget for the blog owner.
         """
         # Execute the base controller logic
-        response = super(UserWebsitesSEOController, self).user_blog_index(
+        response = super().user_blog_index(
             website_slug,
             tag=tag,
             search=search,

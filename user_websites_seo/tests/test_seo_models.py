@@ -99,3 +99,31 @@ class TestSEOModels(TransactionCase):
 
         self.assertTrue(doc, "Documentation article should have been created")
         self.assertIn("Optimization Guide", doc.body or "", "Documentation body should contain expected text")
+
+    def test_xpath_rendering_res_users(self):
+        # [@ANCHOR: test_xpath_rendering_res_users]
+        # Verified by [@ANCHOR: test_xpath_rendering_res_users]
+        """Prove that the SEO notebook page correctly renders in res.users."""
+        res = self.env["res.users"].get_view(
+            view_id=self.env.ref("base.view_users_form").id,
+            view_type="form"
+        )
+        self.assertIn(
+            'name="user_websites_seo_settings"',
+            res["arch"],
+            "The SEO notebook page must exist in the compiled res.users arch.",
+        )
+
+    def test_xpath_rendering_user_websites_group(self):
+        # [@ANCHOR: test_xpath_rendering_user_websites_group]
+        # Verified by [@ANCHOR: test_xpath_rendering_user_websites_group]
+        """Prove that the SEO notebook page correctly renders in user.websites.group."""
+        res = self.env["user.websites.group"].get_view(
+            view_id=self.env.ref("user_websites.view_user_websites_group_form").id,
+            view_type="form"
+        )
+        self.assertIn(
+            'name="group_seo_settings"',
+            res["arch"],
+            "The SEO notebook page must exist in the compiled user.websites.group arch.",
+        )

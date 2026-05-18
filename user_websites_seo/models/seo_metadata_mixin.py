@@ -30,11 +30,13 @@ class SEOMetadataMixin(models.AbstractModel):
         res = True
         if other_vals:
             # Let standard Odoo ACLs handle non-SEO writes natively
-            res = super(SEOMetadataMixin, self).write(other_vals)
+            res = super().write(other_vals)
 
         if seo_vals:
-            if self.env.su or self.env.user.has_group("user_websites.group_user_websites_administrator"):
-                res = res and super(SEOMetadataMixin, self).write(seo_vals)
+            if self.env.su or self.env.user.has_group(
+                "user_websites.group_user_websites_administrator"
+            ):
+                res = res and super().write(seo_vals)
             else:
                 self._check_seo_write_permission()
                 # Escalate strictly for the write operation using the domain service account
@@ -45,7 +47,7 @@ class SEOMetadataMixin(models.AbstractModel):
                 )
                 res = res and super(
                     SEOMetadataMixin,
-                    self.with_user(svc_uid).with_context(mail_notrack=True)
+                    self.with_user(svc_uid).with_context(mail_notrack=True),
                 ).write(seo_vals)
 
         return res
