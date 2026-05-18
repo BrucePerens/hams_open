@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import unittest.mock
+import redis
 from unittest.mock import patch, MagicMock
 
 from odoo.tests.common import tagged, HttpCase
@@ -78,24 +79,14 @@ class TestDistributedCacheStandard(HttpCase):
              patch("odoo.addons.distributed_redis_cache.models.ir_http.request", MagicMock()), \
              patch("odoo.addons.base.models.ir_http.IrHttp._authenticate", return_value=True):
 
-            mock_redis.Redis.side_effect = Exception("Connection reset by peer")
+            mock_redis.RedisError = redis.RedisError
+            mock_redis.Redis.side_effect = redis.RedisError("Connection reset by peer")
 
-            try:
-                mock_endpoint = MagicMock()
-                mock_endpoint.routing = {"auth": "none"}
-                self.env["ir.http"]._authenticate(mock_endpoint)
-                crashed = False
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Interceptor failure caught: %s", e)
-                if str(e) == "Connection reset by peer":
-                    crashed = True
-                else:
-                    crashed = False
-
-            self.assertFalse(
-                crashed,
-                "The Redis interceptor MUST fail-open and never crash the WSGI worker.",
-            )
+            mock_endpoint = MagicMock()
+            mock_endpoint.routing = {"auth": "none"}
+            # The Redis interceptor MUST fail-open and never crash the WSGI worker.
+            # If an exception is raised here, the test will fail.
+            self.env["ir.http"]._authenticate(mock_endpoint)
 
     def test_03_distributed_cache_ui(self):
         # Tests [@ANCHOR: distributed_cache_view]
@@ -161,9 +152,10 @@ class TestDistributedCacheStandard(HttpCase):
              patch("odoo.addons.distributed_redis_cache.redis_cache.redis") as mock_redis, \
              patch("odoo.tools.config", {"test_enable": False}): # Bypass test_enable check
 
+            mock_redis.RedisError = redis.RedisError
             mock_redis_client = MagicMock()
             mock_redis.Redis.return_value = mock_redis_client
-            mock_redis_client.get.side_effect = Exception("Redis Down")
+            mock_redis_client.get.side_effect = redis.RedisError("Redis Down")
 
             result = mock_obj.cached_method(21)
             self.assertEqual(result, 42)

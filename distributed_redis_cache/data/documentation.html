@@ -6,60 +6,33 @@
 </head>
 <body>
 <h1>Distributed Redis Cache</h1>
-<p>Fine-grained distributed caching and phase coherence for horizontally scaled Odoo clusters.</p>
+<p>This module helps keep your Odoo cluster fast and consistent by using Redis to share cached data between different Odoo servers. It ensures that when data changes on one server, all other servers are immediately notified to update their own caches.</p>
 
-<h2>Overview</h2>
-<p>Standard Odoo <code>@tools.ormcache</code> relies on a local worker registry cache, which can drift out of sync in horizontally scaled, multi-node environments. This module provides a fine-grained, distributed Redis-backed cache that enforces strict phase coherence across the entire cluster.</p>
-
-<h2>Architecture</h2>
-<p>The invalidation pipeline works as follows:</p>
+<h2>How it Works</h2>
+<p>Normally, Odoo keeps its own local cache on each server. If you have many servers, they can sometimes get out of sync. This module solves that by:</p>
 <ol>
-    <li>An Odoo worker mutates a cached model and fires a PostgreSQL <code>NOTIFY</code> on the <code>distributed_cache_invalidation</code> channel.</li>
-    <li>The standalone <code>cache_manager.py</code> daemon receives the <code>NOTIFY</code> and publishes the payload to the Redis <code>odoo_cache_invalidation_bus</code> pub/sub channel.</li>
-    <li>A background thread running inside every Odoo WSGI worker's <code>ir.http</code> middleware intercepts the Redis broadcast and instantly queues the model for local cache flushing before serving its next HTTP request.</li>
+    <li>Sending a signal through the database when data changes.</li>
+    <li>A background helper (the "Cache Manager") picks up this signal and tells Redis about it.</li>
+    <li>Redis broadcasts the message to every Odoo server in your cluster.</li>
+    <li>Each Odoo server receives the message and clears the specific part of its memory that was affected, ensuring the next time it needs that data, it gets the fresh version.</li>
 </ol>
 
-<h2>Zero-Sudo Architecture</h2>
-<p>Distributed Redis Cache strictly adheres to the <b>Zero-Sudo</b> principle. No <code>.sudo()</code> calls are used in the core caching logic or controllers. All background tasks and administrative operations are performed using dedicated service accounts with minimal privileges.</p>
+<h2>Using the Management UI</h2>
+<p>Administrators can manage the cache through the <b>Distributed Cache</b> menu.</p>
 <ul>
-    <li><b>Service Account:</b> <code>cache_manager_sys</code> is used by the standalone daemon to connect to PostgreSQL and listen for invalidation events.</li>
-    <li><b>Micro-Privilege:</b> UI access is controlled by the <code>Cache Manager</code> group, which is granted to specific administrators without requiring full Odoo <code>Settings</code> access.</li>
+    <li><b>Checking Status:</b> Click the "Check Redis Status" button to see if Odoo can successfully talk to the Redis server. If it's working, you'll see a green success message. If Redis is down, Odoo will automatically switch to its safe "Fail-Open" mode and continue working using its own local memory.</li>
+    <li><b>Manual Invalidation:</b> If you ever suspect that the cache is out of date, you can manually clear it for a specific type of data (a "Model"). Select the model (for example, "User") from the dropdown list and click "Invalidate Model Cache". This will clear that data from every server in your cluster immediately. [@ANCHOR: distributed_cache_view] [@ANCHOR: manual_cache_invalidation] [@ANCHOR: check_redis_status_logic]</li>
 </ul>
 
-<h2>Configuration</h2>
-<p>The following environment variables can be used to configure the Redis connection:</p>
+<h2>Security and Performance</h2>
 <ul>
-    <li><code>REDIS_HOST</code>: Redis server hostname (default: <code>redis</code> or <code>127.0.0.1</code>).</li>
-    <li><code>REDIS_PORT</code>: Redis server port (default: <code>6379</code>).</li>
-    <li><code>REDIS_PASSWORD</code>: Redis server password (optional).</li>
+    <li><b>Zero-Sudo:</b> The module is built to be secure and never uses "Superuser" powers unnecessarily. It uses a dedicated background account for its operations. [@ANCHOR: story_zero_sudo_cache_manager]</li>
+    <li><b>Smart Clearing:</b> Unlike standard Odoo which sometimes clears everything at once, this module only clears the specific data that changed. This keeps your system running fast even when many changes are happening.</li>
+    <li><b>Fail-Open:</b> If the Redis server has a problem, your Odoo site won't crash. It will just behave like a standard Odoo setup until Redis comes back online.</li>
 </ul>
-<p>For the daemon, these can also be placed in <code>/var/lib/odoo/daemon_keys/cache_manager.env</code>.</p>
 
-<h2>Usage</h2>
-<h3>Decorator</h3>
-<p>Use the <code>@distributed_cache()</code> decorator on <code>api.model</code> functions to automatically generate cache keys and write them to Redis with a 24h TTL. <!-- [@ANCHOR: distributed_cache_decorator] --></p>
-<pre>
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+<h2>For Developers</h2>
+<p>Developers can use the <code>@distributed_cache()</code> decorator to easily add this high-performance caching to their own custom modules. [@ANCHOR: distributed_cache_decorator] [@ANCHOR: notify_model_invalidation_logic] [@ANCHOR: doc_inject_distributed_redis_cache]</p>
 
-class MyModel(models.Model):
-    _name = 'my.model'
-
-    @distributed_cache()
-    def my_cached_method(self, arg1):
-        # ... logic ...
-        return result
-</pre>
-
-<h3>Manual Invalidation</h3>
-<p>Use <code>invalidate_model_cache(env, model_name)</code> to forcibly flush local WSGI memory. To trigger a cross-worker alert, use <code>notify_model_invalidation(env, model_name)</code>.</p>
-<!-- [@ANCHOR: notify_model_invalidation_logic] -->
-<!-- [@ANCHOR: manual_cache_invalidation] -->
-<!-- [@ANCHOR: check_redis_status_logic] -->
-
-<h2>Management UI</h2>
-<p>The module provides a dedicated UI to manage the cache and check Redis status. <!-- [@ANCHOR: distributed_cache_view] --></p>
-
-<h2>Fail-Open Resilience</h2>
-<p>If Redis is unavailable, the system automatically falls back to a local memory cache (<code>_local_cache</code>) to ensure continuous operation, albeit without cross-worker phase coherence.</p>
 </body>
 </html>

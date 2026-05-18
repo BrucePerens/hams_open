@@ -2,7 +2,6 @@
 <odoo>
     <data>
         <!-- [@ANCHOR: distributed_cache_view] -->
-        <!-- burn-ignore-tour -->
         <record id="view_distributed_cache_config_form" model="ir.ui.view">
             <field name="name">distributed.cache.config.form</field>
             <field name="model">distributed.cache.config</field>

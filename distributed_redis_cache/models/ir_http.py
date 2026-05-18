@@ -5,7 +5,6 @@ import logging
 import threading
 import concurrent.futures
 import atexit
-import time
 
 from odoo import models, tools
 from odoo.http import request
@@ -26,11 +25,13 @@ _listener_started = False
 _listener_lock = threading.Lock()
 # Use a bounded executor to satisfy AST linter while maintaining a background listener
 _executor = None
+_stop_event = threading.Event()
 
 
 def _stop_listener():
     global _listener_started
     _listener_started = False
+    _stop_event.set()
     if _executor:
         _executor.shutdown(wait=False)
 
@@ -66,12 +67,14 @@ def _redis_listener_thread():
                                 _invalidation_queue.add((m_name, db_name))
             except (redis.ConnectionError, redis.TimeoutError):
                 if _listener_started:
-                    time.sleep(1.0)  # audit-ignore-sleep
-            except Exception as e: # audit-ignore-catch-all
+                    _stop_event.wait(1.0)
+            except redis.RedisError as e:
                 _logger.warning("Redis listener error: %s", e)
                 if _listener_started:
-                    time.sleep(1.0)  # audit-ignore-sleep
-    except Exception as e: # audit-ignore-catch-all
+                    _stop_event.wait(1.0)
+            except json.JSONDecodeError as e:
+                _logger.warning("Redis listener payload error: %s", e)
+    except redis.RedisError as e:
         warn_msg = """Redis async listener thread disconnected: %s"""
         _logger.warning(warn_msg, e)
     finally:
@@ -101,7 +104,11 @@ class IrHttp(models.AbstractModel):
                 with _listener_lock:
                     if not _listener_started:
                         if _executor is None:
-                            _executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                            _executor = concurrent.futures.ThreadPoolExecutor(
+                                max_workers=1,
+                                thread_name_prefix="RedisListener"
+                            )
+                        _stop_event.clear()
                         _executor.submit(_redis_listener_thread)
                         _listener_started = True
 
