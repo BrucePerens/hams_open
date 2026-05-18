@@ -141,7 +141,7 @@ class TestManualRobustness(odoo.tests.common.HttpCase):
         csrf_anchor = '<input type="hidden" name="csrf_token" value="'
         csrf_token = res.text.partition(csrf_anchor)[2].partition('"')[0]
 
-        response = self.url_open(
+        self.url_open(
             "/manual/feedback",
             data={
                 "csrf_token": csrf_token,
@@ -158,7 +158,7 @@ class TestManualRobustness(odoo.tests.common.HttpCase):
     def test_07_portal_access(self):
         """Verify that portal users can see published articles but not internal ones."""
         published_article = self.article_active
-        portal_user = self.env["res.users"].create({
+        self.env["res.users"].create({
             "name": "Portal User",
             "login": "portal_user_robust",
             "password": "portal_user_robust",

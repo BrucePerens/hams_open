@@ -54,7 +54,6 @@
 
     <menuitem id="menu_binary_downloader_manifest"
               name="Binary Manifests"
-              parent="base.menu_administration"
               action="action_binary_downloader_manifest"
               sequence="150"/>
 </odoo>
