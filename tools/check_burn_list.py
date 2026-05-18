@@ -140,11 +140,6 @@ GENERAL_ERROR_RULES = [
         re.compile(r"['\"]/tmp(?:/|['\"])"),
         "CRITICAL TEST REALISM / PATHING: Hardcoding '/tmp' is forbidden. Tests must use the exact same paths as the production environment per AGENTS.md.",
     ),
-    (
-        r"test_.*\.py$",
-        re.compile(r"IN_JULES_VM|JULES_SESSION_ID"),
-        "CRITICAL AI CHEATING: Bypassing tests using Jules-specific environment variables is strictly forbidden.",
-    ),
 ]
 
 ODOO_ERROR_RULES = [

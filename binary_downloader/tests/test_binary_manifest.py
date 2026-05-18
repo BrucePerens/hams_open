@@ -154,7 +154,7 @@ class TestBinaryManifest(TransactionCase):
                     bin_dir = os.path.join(data_dir, "hams_bin")
                     mock_temp_inst.name = os.path.join(bin_dir, "fake")
                     mock_temp.return_value.__enter__.return_value = mock_temp_inst
-                    with patch("shutil.copy2") as mock_copy, patch("os.unlink"):
+                    with patch("shutil.copy2"), patch("os.unlink"):
                         path = self.env["binary.manifest"].ensure_executable("testbin")
                         self.assertTrue(path.endswith("testbin"))
                         self.assertTrue(mock_urlopen.called)
