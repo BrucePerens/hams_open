@@ -28,6 +28,7 @@ You MUST use the **Service Account Pattern** (`with_user(svc_uid)`) or the **Pub
 * **Code Execution:** `eval()`, `exec()`, `pickle.loads/dumps`, and `yaml.load` are strictly banned. Use `ast.literal_eval()`, `odoo.tools.safe_eval()`, or `json`.
 * **Service Account Base Groups:** You MUST NOT grant `base.group_user` to domain-specific Service Accounts.
 Only a *special* user (`odoo_facility_service_internal`) may possess `base.group_user`, and it MUST only be assumed via `with_user()` when strictly necessary.
+* **Background Task Identity (Cron/Daemons):** You MUST NOT use `self.env.user` or `self.env.uid` inside background methods (e.g., methods containing `cron`, `daemon`, or starting with `_run_`). During scheduled executions, this resolves to `__system__` (root) or the cron owner, bypassing access controls. You MUST manually resolve and elevate to a designated service account identity via `with_user()`.
 * **Weak Cryptography:** `md5`, `sha1`, and the `random` module are banned for security tokens.
 Use `hashlib.sha256` and the `secrets` module.
 * **RPC Bearer Tokens:** The use of the Odoo facility to allocate RPC bearer tokens (`res.users.apikeys`) will immediately break the build.
