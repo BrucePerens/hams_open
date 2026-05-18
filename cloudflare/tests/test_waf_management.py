@@ -63,6 +63,7 @@ class TestWafManagement(RealTransactionCase):
 
     @patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
     def test_03_cf_action_pull_waf_rules(self, mock_get_ruleset):
+        # Tests [@ANCHOR: cf_action_pull_waf_rules]
         self.env["cloudflare.waf.rule"].create(
             {
                 "name": "Old Rule",
@@ -100,6 +101,7 @@ class TestWafManagement(RealTransactionCase):
     @patch("odoo.addons.cloudflare.models.config_manager.update_zone_ruleset")
     @patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
     def test_04_cf_action_push_waf_rules(self, mock_get, mock_update, mock_create):
+        # Tests [@ANCHOR: cf_action_push_waf_rules]
         self.env["cloudflare.waf.rule"].search([]).unlink()
         self.env["cloudflare.waf.rule"].create(
             {
