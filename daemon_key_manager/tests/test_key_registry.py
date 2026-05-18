@@ -145,6 +145,7 @@ class TestKeyRegistry(TransactionCase):
 
     def test_documentation_installed(self):
         """Verify that documentation is installed in knowledge.article or manual.article."""
+        # # Tests [@ANCHOR: documentation_installed]
         # [@ANCHOR: test_documentation_installed]
         # Verified by [@ANCHOR: documentation_installed]
         model = None
