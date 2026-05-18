@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_pager_check_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_view] -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_view] -->
+    <record id="view_pager_check_list" model="ir.ui.view">
         <field name="name">pager.check.list</field>
         <field name="model">pager.check</field>
         <field name="arch" type="xml">
@@ -18,8 +19,9 @@
             </list>
         </field>
     </record>
+    <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_view] -->
 
-    <record id="view_pager_check_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_view] -->
+    <record id="view_pager_check_form" model="ir.ui.view">
         <field name="name">pager.check.form</field>
         <field name="model">pager.check</field>
         <field name="arch" type="xml">

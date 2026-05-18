@@ -11,8 +11,10 @@ def post_init_hook(env):
     if "pager.check" in env and not env["pager.check"].search_count([]):
         try:
             env["pager.check"]._run_autodiscovery()
+        except (RuntimeError, ValueError, AttributeError) as e:
+            _logger.warning("Configuration error during autodiscovery: %s", e)
         except Exception as e: # audit-ignore-catch-all
-            _logger.warning("An error occurred during autodiscovery: %s", e)
+            _logger.error("Unexpected error during autodiscovery: %s", e)
 
     # Register Daemons for Automated Key Vault Provisioning
     if "daemon.key.registry" in env:
@@ -22,5 +24,7 @@ def post_init_hook(env):
                 user_xml_id="pager_duty.user_pager_service_internal",
                 env_file_path="/var/lib/odoo/daemon_keys/pager_duty.env",
             )
+        except (ValueError, KeyError, AttributeError) as e:
+            _logger.warning("Configuration error during daemon registration: %s", e)
         except Exception as e: # audit-ignore-catch-all
-            _logger.warning("An error occurred during daemon registration: %s", e)
+            _logger.error("Unexpected error during daemon registration: %s", e)
