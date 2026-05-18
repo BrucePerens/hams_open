@@ -38,7 +38,7 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         },
         {
             content: "Click the SEO Metadata notebook tab injected by our module",
-            trigger: 'a.nav-link[name="user_websites_seo_settings"]',
+            trigger: '[name="user_websites_seo_settings"]',
             run: 'click',
         },
         {
@@ -58,7 +58,7 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         },
         {
             content: "Wait for save to complete",
-            trigger: '.o_form_saved, .o_form_readonly',
+            trigger: '.o_form_saved',
         }
     ],
 });

@@ -14,6 +14,7 @@ class ZeroSudoHome(Home):
         response = super().web_login(*args, **kw)
         if request.session.uid:
             # [@ANCHOR: web_login_interceptor_check]
+            # Verified by [@ANCHOR: test_web_login_interceptor_check]
             # SECURITY MANDATE: We use direct SQL instead of .sudo() or ORM calls to check the is_service_account flag.
             # This bypasses ACLs for the isolation check (ADR-0005) without triggering Zero-Sudo linter violations.
             # FUTURE DEVELOPERS: DO NOT CHANGE THIS TO .sudo(). Direct SQL is the intentional, audited pattern here.

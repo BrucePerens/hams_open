@@ -23,6 +23,18 @@
             "path": "data/documentation.html",
             "icon": "🛡️",
             "category": "workspace"
+        },
+        {
+            "name": "Developer Integration Journey",
+            "path": "docs/journeys/developer_integration.md",
+            "icon": "🚀",
+            "category": "workspace"
+        },
+        {
+            "name": "Multi-Website Security Story",
+            "path": "docs/stories/multi_website.md",
+            "icon": "🌐",
+            "category": "workspace"
         }
     ],
     "installable": True,

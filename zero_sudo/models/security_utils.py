@@ -41,6 +41,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         module, name = xml_id.split(".", 1)
 
         # STRICT ZERO-SUDO MANDATE: Resolve the ID using raw SQL to prevent any ORM/sudo bypasses
+        # [@ANCHOR: get_service_uid_sql_resolve]
+        # Verified by [@ANCHOR: test_get_service_uid_sql_resolve]
         self.env.cr.execute(
             "SELECT res_id FROM ir_model_data WHERE module = %s AND name = %s AND model = 'res.users'",
             (module, name)
@@ -53,6 +55,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         uid = res_id_row[0]
 
         # Verify the account is active AND is explicitly flagged as a service account
+        # [@ANCHOR: get_service_uid_sql_verify]
+        # Verified by [@ANCHOR: test_get_service_uid_sql_verify]
         self.env.cr.execute(
             "SELECT active, is_service_account FROM res_users WHERE id = %s", (uid,)
         )
@@ -70,6 +74,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         # THE MECHANICAL GOD-MODE BLOCK: Ensure the service account does not possess global administrative privileges.
         # This mathematically forces downstream modules to utilize the Micro-Service Account CSV pattern.
+        # [@ANCHOR: god_mode_block_sql]
+        # Verified by [@ANCHOR: test_god_mode_block_sql]
         self.env.cr.execute(
             """
             SELECT 1 FROM res_groups_users_rel rel
@@ -135,11 +141,15 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 # Standard PG_NOTIFY payload limit is 8000 bytes.
                 for i in range(0, len(payloads), 100):
                     chunk = payloads[i : i + 100]
+                    # [@ANCHOR: coherent_cache_signal_batch]
+                    # Verified by [@ANCHOR: test_coherent_cache_signal_batch]
                     self.env.cr.execute(
                         "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
                         ("cache_invalidation", chunk),
                     )
         elif key_value:
+            # [@ANCHOR: coherent_cache_signal_single]
+            # Verified by [@ANCHOR: test_coherent_cache_signal_single]
             self.env.cr.execute(
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
@@ -232,6 +242,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         env_svc = self._get_service_env("zero_sudo.odoo_facility_service_internal")
         KV = env_svc['zero_sudo.kv']
         # We use raw SQL for the existence check to avoid prefetch overhead in this high-frequency utility
+        # [@ANCHOR: set_kv_sql_check]
+        # Verified by [@ANCHOR: test_set_kv_sql_check]
         self.env.cr.execute("SELECT id FROM zero_sudo_kv WHERE key = %s", (key,))
         row = self.env.cr.fetchone()
         if row:
@@ -271,17 +283,23 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             raise UserError(_("VENV update failed:\n%s") % e.stderr)
 
     @api.model
+    @tools.ormcache()
     def _get_crypto_secret(self):
         # [@ANCHOR: get_crypto_secret]
+        # Verified by [@ANCHOR: test_get_crypto_secret]
         """
         Retrieves the cryptographic secret without requiring .sudo() or database access.
         Checks environment variables first, then a local file, and falls back to config.
+        RAM-cached for performance and to avoid redundant filesystem I/O.
         """
         secret = os.environ.get("HAMS_CRYPTO_KEY")
         if not secret:
             try:
-                with open("/var/lib/odoo/hams_crypto.secret", "r") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
-                    secret = f.read().strip()
+                # We check the file strictly if it exists to avoid repeated failed opens
+                secret_path = "/var/lib/odoo/hams_crypto.secret"
+                if os.path.exists(secret_path):
+                    with open(secret_path, "r") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
+                        secret = f.read().strip()
             except OSError as e:
                 _logger.warning("Failed to read crypto secret file: %s", e)
                 pass
