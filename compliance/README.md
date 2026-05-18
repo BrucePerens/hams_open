@@ -48,7 +48,7 @@ A non-interactive configuration module that enforces baseline regulatory complia
 
 ## 2. Enforcement Details
 * **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean. `[@ANCHOR: compliance_post_init_cookie_bar]`
-* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records.
+* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records. `[@ANCHOR: compliance_legal_pages_rendering]`
     * Privacy Policy Template `[@ANCHOR: compliance_privacy_policy_template]`
     * Cookie Policy Template `[@ANCHOR: compliance_cookie_policy_template]`
     * Terms of Service Template `[@ANCHOR: compliance_terms_of_service_template]`
