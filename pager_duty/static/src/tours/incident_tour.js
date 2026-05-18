@@ -32,12 +32,12 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: "edit Manual Test",
         },
         {
-            trigger: '.o_field_widget[name="severity"] .o_select_menu',
+            trigger: '.o_field_widget[name="severity"] .o_select_menu_toggler',
             content: "Open severity dropdown",
             run: "click",
         },
         {
-            trigger: '.o_select_menu_item:contains("High"), .o_select_menu_item:contains("high")',
+            trigger: '.o_select_menu_item span:contains("High"), .o_select_menu_item:contains("High")',
             content: "Select High severity",
             run: "click",
         },

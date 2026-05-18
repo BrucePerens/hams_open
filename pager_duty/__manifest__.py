@@ -16,6 +16,7 @@
         "zero_sudo",
         "distributed_redis_cache",
         "hams_test",
+        "hams_helpdesk",
     ],
     "external_dependencies": {
         "python": ["redis", "psutil", "ntplib", "pymysql", "ldap3"],

@@ -7,7 +7,7 @@ This journey tracks the flow of data from Odoo configuration to the standalone m
 - **Schema:** Data is stored in the `pager.check` model.
 
 ## 2. Sync to Daemon
-- **Wizard:** The admin runs the `pager.config.wizard` [@ANCHOR: generalized_pager_config].
+- **Wizard:** The admin uses the JSON configuration tools in Monitoring Checks [@ANCHOR: generalized_pager_config].
 - **Export:** `action_generate_yaml()` transforms ORM records into a YAML structure.
 - **Persistence:** The file is written to the daemon's local filesystem (e.g., `pager_duty/daemon/pager_config.yaml`).
 

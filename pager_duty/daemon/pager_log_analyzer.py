@@ -117,29 +117,57 @@ def tail_file(fp, compiled_patterns):
         f"Starting tail on {chroot_path} for {len(compiled_patterns)} patterns."
     )
 
+    cur_inode = None
+    f = None
     while True:
         try:
-            with open(chroot_path, "r") as f:
-                # Start from end of file
-                f.seek(0, 2)
-                while True:
-                    line = f.readline()
-                    if not line:
-                        time.sleep(0.5)  # audit-ignore-sleep  # fmt: skip
-                        continue
+            try:
+                st = os.stat(chroot_path)
+                new_inode = st.st_ino
+            except FileNotFoundError:
+                new_inode = None
 
-                    for pat in compiled_patterns:
-                        if len(pat["c_reg"].findall(line)) > 0:
-                            payload = {
-                                "source": f"Log Analyzer: {pat['name']}",
-                                "severity": pat["severity"],
-                                "description": line.strip(),
-                            }
-                            # Send to generalized monitor via Redis queue to proxy RPC safely
-                            r_client.lpush("pager_log_anomalies", json.dumps(payload))
-        except FileNotFoundError:
-            logger.debug(f"File {chroot_path} not found. Retrying...")
-            time.sleep(5)  # audit-ignore-sleep  # fmt: skip
+            if new_inode != cur_inode:
+                if f:
+                    f.close()
+                if new_inode is not None:
+                    try:
+                        f = open(chroot_path, "r")
+                        if cur_inode is not None:
+                            f.seek(0, 0)
+                        else:
+                            f.seek(0, 2)
+                        cur_inode = new_inode
+                        logger.info(f"Tailing log file {chroot_path} (inode: {cur_inode})")
+                    except IOError as e:
+                        logger.error(f"Failed to open {chroot_path}: {e}")
+                        f = None
+                        cur_inode = None
+                else:
+                    f = None
+                    cur_inode = None
+                    logger.debug(f"Log file {chroot_path} missing.")
+
+            if f:
+                line = f.readline()
+                if not line:
+                    time.sleep(0.5) # audit-ignore-sleep
+                    continue
+
+                for pat in compiled_patterns:
+                    if len(pat["c_reg"].findall(line)) > 0:
+                        payload = {
+                            "source": f"Log Analyzer: {pat['name']}",
+                            "severity": pat["severity"],
+                            "description": line.strip(),
+                        }
+                        # Send to generalized monitor via Redis queue to proxy RPC safely
+                        r_client.lpush("pager_log_anomalies", json.dumps(payload))
+            else:
+                time.sleep(5) # audit-ignore-sleep
+        except Exception as e: # audit-ignore-catch-all
+            logger.error(f"Error tailing {chroot_path}: {e}")
+            time.sleep(5) # audit-ignore-sleep
 
 
 # --- 5. Interactive Splunk UI Listener ---

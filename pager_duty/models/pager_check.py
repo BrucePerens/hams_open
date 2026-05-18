@@ -227,9 +227,12 @@ class PagerCheck(models.Model):
         try:
             path = self.env["binary.manifest"].ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Ensure executable failed: %s", e)
+        except (ValueError, FileNotFoundError, PermissionError) as e:
+            _logger.warning("Executable provisioning failed for %s: %s", cmd_name, e)
             return {"status": "error", "message": str(e)}
+        except Exception as e: # audit-ignore-catch-all
+            _logger.error("Unexpected error during executable provisioning for %s: %s", cmd_name, e)
+            return {"status": "error", "message": _("Internal server error.")}
 
     @api.model
     def check_heartbeat_rpc(self, hb_uuid, interval_sec):
@@ -256,9 +259,12 @@ class PagerCheck(models.Model):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except Exception as e: # audit-ignore-catch-all
-            _logger.error("JSON parse error: %s", e)
-            raise UserError(_("Invalid JSON Format: %s") % str(e))
+        except json.JSONDecodeError as e:
+            _logger.error("JSON parse error at %s: %s", path, e)
+            raise UserError(_("Invalid JSON Format in %s: %s") % (path, str(e)))
+        except IOError as e:
+            _logger.error("IO error reading %s: %s", path, e)
+            raise UserError(_("Failed to read configuration file: %s") % str(e))
 
         self.env["pager.check"].search([], limit=1000).unlink()
 
@@ -315,6 +321,8 @@ class PagerCheck(models.Model):
                     "sandbox_network_access": c.get(
                         "sandbox_network_access", "loopback"
                     ),
+                    "maintenance_start": c.get("maint_start"),
+                    "maintenance_end": c.get("maint_end"),
                 }
             )
 

@@ -110,7 +110,7 @@ class PagerIncident(models.Model):
         partners = pager_admin_group.user_ids.mapped("partner_id")
         for inc in incidents:
             msg_body = _("🚨 ESCALATION: Incident open for > 15 minutes!")
-            inc.with_user(mail_svc).message_post(body=msg_body, partner_ids=partners.ids)  # audit-ignore-mail: Tested by [@ANCHOR: test_pager_escalation]  # fmt: skip
+            inc.with_user(mail_svc).message_post(body=msg_body, partner_ids=partners.ids)   # fmt: skip
         incidents.write({"is_escalated": True})
 
     @api.model
@@ -125,8 +125,8 @@ class PagerIncident(models.Model):
                 if r_client.get(redis_key):
                     return False
                 r_client.setex(redis_key, 60, "1")
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("An error occurred: %s", e)
+            except (redis.exceptions.RedisError, Exception) as e:
+                _logger.warning("Redis rate limit check failed: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_service_internal"
@@ -153,8 +153,11 @@ class PagerIncident(models.Model):
         # to prevent duplicate alerting (Helpdesk will handle the page).
         try:
             use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param("pager_duty.helpdesk_model")
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Helpdesk integration check failed: %s", e)
+        except (ValueError, KeyError, AttributeError) as e:
+            _logger.warning("Helpdesk integration check failed (Config missing): %s", e)
+            use_helpdesk = False
+        except Exception as e: # audit-ignore-catch-all
+            _logger.error("Unexpected error during helpdesk integration check: %s", e)
             use_helpdesk = False
 
         if on_duty_user and not use_helpdesk:
@@ -163,7 +166,7 @@ class PagerIncident(models.Model):
             )
             msg_body = _("New Incident Created")
             partner_ids = [on_duty_user.partner_id.id]
-            incident.with_user(mail_svc).message_post(body=msg_body, partner_ids=partner_ids)  # audit-ignore-mail: Tested by [@ANCHOR: test_pager_notification]  # fmt: skip
+            incident.with_user(mail_svc).message_post(body=msg_body, partner_ids=partner_ids)   # fmt: skip
         return incident.id
 
     @api.model
@@ -186,7 +189,7 @@ class PagerIncident(models.Model):
             )
             msg_body = _("Auto-resolved by NOC monitor recovery sequence.")
             for incident in open_incidents:
-                incident.with_user(mail_svc).message_post(body=msg_body)  # audit-ignore-mail: Tested by [@ANCHOR: test_pager_notification]  # fmt: skip
+                incident.with_user(mail_svc).message_post(body=msg_body)   # fmt: skip
         return True
 
     @api.model_create_multi
