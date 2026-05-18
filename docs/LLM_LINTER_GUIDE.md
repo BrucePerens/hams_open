@@ -25,6 +25,7 @@ You MUST use the **Service Account Pattern** (`with_user(svc_uid)`) or the **Pub
 * **Environment Evasions:** Calling `env(su=True)` to forcefully escalate to root privileges natively is completely forbidden and will fail the build.
 * **Shell Injection:** `subprocess.run` MUST explicitly use `shell=False` and pass arguments as lists.
 * **`os.system()` RCE Vector:** The `os.system` function is strictly banned because it executes via a subshell and is vulnerable to string injection. You MUST use `subprocess.run` with `shell=False` and array arguments.
+* **Path Traversal Prevention (CWE-22):** RPC methods (`@api.model`) and HTTP controllers (`@http.route`) that perform filesystem operations (`open`, `os.open`, `os.remove`, etc.) MUST strictly sanitize user inputs. You must check for directory traversal attempts (e.g., `".." in path.split(os.path.sep)`) and validate against a mandatory base directory using `os.path.realpath`.
 * **Code Execution:** `eval()`, `exec()`, `pickle.loads/dumps`, and `yaml.load` are strictly banned. Use `ast.literal_eval()`, `odoo.tools.safe_eval()`, or `json`.
 * **Service Account Base Groups:** You MUST NOT grant `base.group_user` to domain-specific Service Accounts.
 Only a *special* user (`odoo_facility_service_internal`) may possess `base.group_user`, and it MUST only be assumed via `with_user()` when strictly necessary.
@@ -197,6 +198,7 @@ The AST parser physically reads your test files to verify the assertions exist.
 | Audit Target | Bypass Tag | Required AST Assertion in Test |
 | :--- | :--- | :--- |
 | Catch-All Exceptions | `# audit-ignore-catch-all` | MUST ONLY be used where an operation must continue past failure, and MUST contain a logging call. |
+| Path Traversal | `# audit-ignore-path` | The test MUST execute the RPC method with a directory traversal payload (e.g., `../etc/passwd`) and assert that it raises a `UserError` or `AccessError`. |
 | `ir.cron` XML | `<!-- audit-ignore-cron: Tested by [@ANCHOR: example_name] -->` | The test MUST execute `_trigger()` to prove batching. |
 | `send_mail()` | `# audit-ignore-mail: Tested by [@ANCHOR: example_name]` | The test MUST execute `send_mail` or `message_post`. **CRITICAL TRAP:** The integer `res_id` passed to `send_mail(res_id)` MUST match an existing record of the exact model defined in the template's `model_id`. |
 | `.search()` | `# audit-ignore-search: Tested by [@ANCHOR: example_name]` | The test MUST pass `limit=` or utilize `patch.object(self.env.cr, 'execute')` to assert caching behavior. |
