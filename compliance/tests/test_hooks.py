@@ -32,10 +32,9 @@ class TestComplianceHooks(TransactionCase):
             )
 
     def test_03_views_rendering(self):
+        """Verify that legal templates render correctly."""
         # [@ANCHOR: test_compliance_views]
-        # Tests [@ANCHOR: compliance_privacy_policy_template]
-        # Tests [@ANCHOR: compliance_cookie_policy_template]
-        # Tests [@ANCHOR: compliance_terms_of_service_template]
+        # Tests [@ANCHOR: compliance_legal_pages_rendering]
         # Tests [@ANCHOR: story_automatic_legal_pages]
         # Tests [@ANCHOR: journey_compliance_setup]
         self.env.ref("compliance.compliance_privacy_policy_template").with_context(
