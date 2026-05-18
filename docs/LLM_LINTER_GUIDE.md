@@ -25,9 +25,11 @@ You MUST use the **Service Account Pattern** (`with_user(svc_uid)`) or the **Pub
 * **Environment Evasions:** Calling `env(su=True)` to forcefully escalate to root privileges natively is completely forbidden and will fail the build.
 * **Shell Injection:** `subprocess.run` MUST explicitly use `shell=False` and pass arguments as lists.
 * **`os.system()` RCE Vector:** The `os.system` function is strictly banned because it executes via a subshell and is vulnerable to string injection. You MUST use `subprocess.run` with `shell=False` and array arguments.
+* **Path Traversal Prevention (CWE-22):** RPC methods (`@api.model`) and HTTP controllers (`@http.route`) that perform filesystem operations (`open`, `os.open`, `os.remove`, etc.) MUST strictly sanitize user inputs. You must check for directory traversal attempts (e.g., `".." in path.split(os.path.sep)`) and validate against a mandatory base directory using `os.path.realpath`.
 * **Code Execution:** `eval()`, `exec()`, `pickle.loads/dumps`, and `yaml.load` are strictly banned. Use `ast.literal_eval()`, `odoo.tools.safe_eval()`, or `json`.
 * **Service Account Base Groups:** You MUST NOT grant `base.group_user` to domain-specific Service Accounts.
 Only a *special* user (`odoo_facility_service_internal`) may possess `base.group_user`, and it MUST only be assumed via `with_user()` when strictly necessary.
+* **Background Task Identity (Cron/Daemons):** You MUST NOT use `self.env.user` or `self.env.uid` inside background methods (e.g., methods containing `cron`, `daemon`, or starting with `_run_`). During scheduled executions, this resolves to `__system__` (root) or the cron owner, bypassing access controls. You MUST manually resolve and elevate to a designated service account identity via `with_user()`.
 * **Weak Cryptography:** `md5`, `sha1`, and the `random` module are banned for security tokens.
 Use `hashlib.sha256` and the `secrets` module.
 * **RPC Bearer Tokens:** The use of the Odoo facility to allocate RPC bearer tokens (`res.users.apikeys`) will immediately break the build.
@@ -174,6 +176,7 @@ Use `*:contains(...)` or target explicit `[data-menu-xmlid=...]` attributes.
 * **Native URL Initialization:** Tours MUST initialize using the native `url: "/path"` property within the tour definition.
 Using a manual `run` step with `document.location.href = ...` to start the tour is strictly banned due to race conditions.
 * **Hash-Based Routing Ban:** Odoo 19 deprecated hash-based routes (e.g., `/web#...`) and forcefully redirects them to the Discuss app (`/odoo/discuss`). You MUST NOT use `/web#...` in tour URLs, `start_tour` targets, or window navigation. Use modern query parameter routing instead (e.g., `/odoo?action=...&id=...`).
+* **The /web/ Asset & Login Mandate:** While general routing has moved to `/odoo`, core static assets (`/web/assets/`), images (`/web/image`), and the authentication endpoint (`/web/login`) MUST remain under the `/web` path. You are strictly FORBIDDEN from refactoring these specific paths to `/odoo`. The Cloudflare and Caching modules rely on `/web/assets/` for edge caching. If necessary, use `# burn-ignore-route` to bypass linters for these valid exceptions.
 * **Dirty Form Crash Prevention:** Tours MUST NEVER manually click the save button (`.o_form_button_save`) and immediately end or navigate away.
 You MUST spread the `...TourUtils.safeSave()` macro into the step array to force a DOM blur and wait for the `.o_form_button_create` state.
 Tours finishing with dirty forms cause asynchronous network requests that corrupt subsequent tests.
@@ -195,6 +198,7 @@ The AST parser physically reads your test files to verify the assertions exist.
 | Audit Target | Bypass Tag | Required AST Assertion in Test |
 | :--- | :--- | :--- |
 | Catch-All Exceptions | `# audit-ignore-catch-all` | MUST ONLY be used where an operation must continue past failure, and MUST contain a logging call. |
+| Path Traversal | `# audit-ignore-path` | The test MUST execute the RPC method with a directory traversal payload (e.g., `../etc/passwd`) and assert that it raises a `UserError` or `AccessError`. |
 | `ir.cron` XML | `<!-- audit-ignore-cron: Tested by [@ANCHOR: example_name] -->` | The test MUST execute `_trigger()` to prove batching. |
 | `send_mail()` | `# audit-ignore-mail: Tested by [@ANCHOR: example_name]` | The test MUST execute `send_mail` or `message_post`. **CRITICAL TRAP:** The integer `res_id` passed to `send_mail(res_id)` MUST match an existing record of the exact model defined in the template's `model_id`. |
 | `.search()` | `# audit-ignore-search: Tested by [@ANCHOR: example_name]` | The test MUST pass `limit=` or utilize `patch.object(self.env.cr, 'execute')` to assert caching behavior. |
@@ -204,6 +208,7 @@ The AST parser physically reads your test files to verify the assertions exist.
 | `time.sleep()` | `# audit-ignore-sleep` | (Visual check only; indicates daemon rate-limiting). |
 | `ir.ui.view` | `<!-- audit-ignore-view: Tested by [@ANCHOR: example_name] -->` | MUST be placed on the EXACT same line as the `<record>` or `<template>` node. Test MUST execute `get_view` or `url_open`. |
 | I18N Strings | `# audit-ignore-i18n: Tested by [@ANCHOR: example_name]` | Safely ignore headless API translations (ADR-0065). |
+| Legacy Web Routes | `# burn-ignore-route` | Explicitly permits the use of native `/web` routing prefixes (like `/web/login` or `/web/assets`) instead of the Odoo 19 `/odoo` prefix in tests and controllers. |
 
 ### 🚨 Critical Formatting & Placement Rules for Bypasses
 1. **The Python Formatter (`# fmt: skip`) Trap:** The Black code formatter will wrap long lines and detach your inline linter comments, causing the AST linter to fail.

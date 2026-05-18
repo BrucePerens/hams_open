@@ -65,6 +65,7 @@ class CloudflarePurgeQueue(models.Model):
     @api.model
     def enqueue_tags(self, tags, website_id=None):
         # [@ANCHOR: cf_enqueue_tags_api]
+        # Verified by [@ANCHOR: test_purge_tags_api]
         # Verified by [@ANCHOR: test_purge_queue_tags_processing]
         if not website_id:
             try:

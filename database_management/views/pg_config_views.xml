@@ -52,9 +52,17 @@
                 <sheet>
                     <field name="state" invisible="1"/>
                     <group invisible="state == 'generated'">
-                        <field name="primary_ip"/>
-                        <field name="secondary_ip"/>
-                        <field name="replication_pass" password="True"/>
+                        <group>
+                            <field name="cluster_name"/>
+                            <field name="primary_ip"/>
+                            <field name="secondary_ip"/>
+                            <field name="etcd_hosts"/>
+                        </group>
+                        <group>
+                            <field name="replication_user"/>
+                            <field name="replication_pass" password="True"/>
+                            <field name="superuser_user"/>
+                        </group>
                     </group>
                     <notebook invisible="state == 'input'">
                         <page string="Primary Node (Patroni)">

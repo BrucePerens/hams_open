@@ -50,7 +50,12 @@ class Module(models.Model):
             if not manifest or 'knowledge_docs' not in manifest:
                 continue
 
-            for doc_info in manifest['knowledge_docs']:
+            knowledge_docs = manifest['knowledge_docs']
+            if not isinstance(knowledge_docs, list):
+                _logger.warning("knowledge_docs in module %s is not a list.", mod.name)
+                continue
+
+            for doc_info in knowledge_docs:
                 self._install_single_doc(utils, Article, mod.name, doc_info)
 
     @api.model

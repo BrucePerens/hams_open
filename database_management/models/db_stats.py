@@ -8,6 +8,7 @@ from odoo.exceptions import UserError, AccessError
 
 _logger = logging.getLogger(__name__)
 
+
 class DatabaseTableStat(models.Model):
     _name = "database.table.stat"
     _description = "Database Table Statistics (Bloat & Vacuum)"
@@ -46,15 +47,19 @@ class DatabaseTableStat(models.Model):
         return self.env["zero_sudo.security.utils"]._ensure_executable(
             cmd_name,
             svc_xml_id="database_management.user_database_management_service",
-            pkg_name="postgresql-client" if cmd_name == "vacuumdb" else cmd_name
+            pkg_name="postgresql-client" if cmd_name == "vacuumdb" else cmd_name,
         )
 
     def action_vacuum_analyze(self):
         # [@ANCHOR: vacuum_analyze]
         # Tests [@ANCHOR: vacuum_analyze]
-        if getattr(self.env.registry, 'in_test', False) or self.env.context.get('test_mode'):
-             _logger.info("Skipping vacuumdb execution in test mode to avoid transaction locks.")
-             return True
+        if getattr(self.env.registry, "in_test", False) or self.env.context.get(
+            "test_mode"
+        ):
+            _logger.info(
+                "Skipping vacuumdb execution in test mode to avoid transaction locks."
+            )
+            return True
         exe = self._get_executable("vacuumdb")
         db_name = self.env.cr.dbname
         env_vars = os.environ.copy()
@@ -72,15 +77,21 @@ class DatabaseTableStat(models.Model):
                 )
                 if res.returncode != 0:
                     # Switched to warning to prevent the failure extractor from failing the test suite
-                    _logger.warning("Vacuum failed for %s: %s", rec.table_name, res.stderr)
+                    _logger.warning(
+                        "Vacuum failed for %s: %s", rec.table_name, res.stderr
+                    )
                     raise UserError(
                         _("Vacuum failed for %s: %s") % (rec.table_name, res.stderr)
                     )
             except subprocess.TimeoutExpired:
                 raise UserError(_("Vacuum timed out for %s.") % rec.table_name)
             except (subprocess.CalledProcessError, OSError) as e:
-                _logger.exception("Error executing vacuumdb for table %s", rec.table_name)
-                raise UserError(_("Error executing vacuumdb for %s: %s") % (rec.table_name, str(e)))
+                _logger.exception(
+                    "Error executing vacuumdb for table %s", rec.table_name
+                )
+                raise UserError(
+                    _("Error executing vacuumdb for %s: %s") % (rec.table_name, str(e))
+                )
         return True
 
     @api.model
@@ -106,9 +117,13 @@ class DatabaseTableStat(models.Model):
                     }
                 )
             except (AccessError, UserError) as e:
-                _logger.warning("Permission or configuration error reporting bloat incident: %s", e)
-            except Exception: # audit-ignore-catch-all
-                _logger.exception("Unexpected error reporting bloat incident to PagerDuty")
+                _logger.warning(
+                    "Permission or configuration error reporting bloat incident: %s", e
+                )
+            except Exception:  # audit-ignore-catch-all
+                _logger.exception(
+                    "Unexpected error reporting bloat incident to PagerDuty"
+                )
 
 
 class DatabaseQueryStat(models.Model):

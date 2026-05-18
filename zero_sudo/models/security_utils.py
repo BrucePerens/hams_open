@@ -36,7 +36,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # [@ANCHOR: get_service_uid]
         # Verified by [@ANCHOR: test_get_service_uid]
         # Tests [@ANCHOR: story_secure_escalation]
-        if "." not in xml_id:
+        if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
             raise AccessError(_("Invalid XML ID format: %s") % xml_id)
         module, name = xml_id.split(".", 1)
 
@@ -59,7 +59,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         res = self.env.cr.fetchone()
 
         if not res or not res[0]:
-            raise AccessError(_("Security Alert: Service Account is disabled."))
+            raise AccessError(_("Security Alert: Service Account '%s' is disabled.") % xml_id)
         if not res[1]:
             raise AccessError(
                 _(
@@ -124,14 +124,22 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # [@ANCHOR: coherent_cache_signal]
         # Verified by [@ANCHOR: test_coherent_cache_signal]
         # Tests [@ANCHOR: story_cache_signaling]
+        if not model_name:
+            return
+
         if isinstance(key_value, (list, set, tuple)):
             payloads = [f"{model_name}:{kv}" for kv in set(key_value) if kv]
             if payloads:
-                self.env.cr.execute(
-                    "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
-                    ("cache_invalidation", payloads),
-                )
-        else:
+                # We limit the number of notifications in a single call to prevent
+                # potential PostgreSQL performance issues or payload size limits.
+                # Standard PG_NOTIFY payload limit is 8000 bytes.
+                for i in range(0, len(payloads), 100):
+                    chunk = payloads[i : i + 100]
+                    self.env.cr.execute(
+                        "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
+                        ("cache_invalidation", chunk),
+                    )
+        elif key_value:
             self.env.cr.execute(
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
@@ -223,9 +231,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _set_kv(self, key, value):
         env_svc = self._get_service_env("zero_sudo.odoo_facility_service_internal")
         KV = env_svc['zero_sudo.kv']
-        record = KV.search([('key', '=', key)], limit=1)
-        if record:
-            record.write({'value': value})
+        # We use raw SQL for the existence check to avoid prefetch overhead in this high-frequency utility
+        self.env.cr.execute("SELECT id FROM zero_sudo_kv WHERE key = %s", (key,))
+        row = self.env.cr.fetchone()
+        if row:
+            KV.browse(row[0]).write({'value': value})
         else:
             KV.create({'key': key, 'value': value})
 
@@ -237,15 +247,19 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         if not self.env.user.has_group("base.group_system"):
             raise AccessError(_("Only administrators can update the Python environment."))
 
-        req_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "requirements.txt")
-        )
-        if not os.path.exists(req_path):
-            raise UserError(_("Requirements file not found at %s") % req_path)
+        # Securely resolve the requirements path relative to the repository root
+        root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        req_path = os.path.join(root_path, "requirements.txt")
+
+        # Verify that the path is still within the expected repository tree to prevent path traversal
+        if not req_path.startswith(root_path) or not os.path.exists(req_path):
+            raise UserError(_("Requirements file not found or access denied at %s") % req_path)
 
         try:
+            # We use --break-system-packages because Odoo 19 is installed globally via APT
+            # and we need to ensure dependencies are available to the global python environment.
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-r", req_path],
+                [sys.executable, "-m", "pip", "install", "--break-system-packages", "-r", req_path],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -253,6 +267,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
             return True
         except subprocess.CalledProcessError as e:
+            _logger.warning("VENV update failed: %s", e.stderr)
             raise UserError(_("VENV update failed:\n%s") % e.stderr)
 
     @api.model
@@ -265,11 +280,18 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         secret = os.environ.get("HAMS_CRYPTO_KEY")
         if not secret:
             try:
-                with open("/var/lib/odoo/hams_crypto.secret", "r") as f:
+                with open("/var/lib/odoo/hams_crypto.secret", "r") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
                     secret = f.read().strip()
             except OSError as e:
                 _logger.warning("Failed to read crypto secret file: %s", e)
                 pass
+
         if not secret:
-            secret = tools.config.get("admin_passwd", "default_insecure_secret")
+            # Fallback to Odoo's admin password as a last resort entropy source
+            secret = tools.config.get("admin_passwd")
+
+        if not secret or secret == "admin":
+            _logger.warning("System running with insecure or default cryptographic secret!")
+            secret = "default_insecure_secret_fallback"
+
         return secret

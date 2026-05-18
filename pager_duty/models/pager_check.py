@@ -224,6 +224,8 @@ class PagerCheck(models.Model):
 
     @api.model
     def rpc_ensure_executable(self, cmd_name):
+        if not cmd_name or not isinstance(cmd_name, str) or "/" in cmd_name:
+            return {"status": "error", "message": _("Invalid command name.")}
         try:
             path = self.env["binary.manifest"].ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
@@ -635,7 +637,9 @@ class PagerCheck(models.Model):
 
         if new_checks:
             self.env["pager.check"].create(new_checks)
-            self.action_push_to_json()
+
+        # Always synchronize the JSON file after an autodiscovery run
+        self.action_push_to_json()
 
     def action_autodiscover(self):
         self._run_autodiscovery()

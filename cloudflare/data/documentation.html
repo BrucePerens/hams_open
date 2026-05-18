@@ -47,10 +47,16 @@
     </ul>
 
     <h2>4. Cloudflare Zero Trust Tunnels</h2>
-    <p>Securely expose your Odoo instance to the internet without opening any inbound ports on your firewall.</p>
+    <p>Securely expose your Odoo instance to the internet without opening any inbound ports on your firewall. This creates a secure, encrypted connection between your server and the Cloudflare edge.</p>
     <ul>
-        <li><strong>Provisioning:</strong> In Cloudflare settings, click <strong>Generate Tunnel Command</strong>. The module creates the tunnel via API and provides the exact <code>cloudflared</code> command to run on your host.</li>
-        <li><strong>Management:</strong> Track active tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>. Use <strong>Sync Tunnels</strong> to refresh the list from your Cloudflare account.</li>
+        <li><strong>Provisioning:</strong> In <strong>Settings > Website > Cloudflare Edge</strong>, click <strong>Generate Tunnel Command</strong>. The module creates a new tunnel in your Cloudflare account and provides you with the <code>cloudflared service install ...</code> command. Run this command on your Odoo server to activate the tunnel.</li>
+        <li><strong>Management:</strong> You can view and manage your active tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>.
+            <ul>
+                <li><strong>Sync Tunnels:</strong> Updates Odoo's local list of tunnels with what is currently active in your Cloudflare account.</li>
+                <li><strong>Health Status:</strong> Odoo tracks whether the tunnel is currently <em>healthy</em> or <em>inactive</em>.</li>
+                <li><strong>Deletion:</strong> You can delete a tunnel from within Odoo, which will also remove it from your Cloudflare account.</li>
+            </ul>
+        </li>
     </ul>
 
     <h2>5. Integration for Developers</h2>
@@ -60,5 +66,7 @@
         <li><strong>Cache Purging:</strong> <code>env['cloudflare.purge.queue'].enqueue_urls(['/path'])</code> or <code>enqueue_tags(['tag'])</code></li>
         <li><strong>CAPTCHA Verification:</strong> <code>env['cloudflare.turnstile'].verify_token(token)</code></li>
         <li><strong>Edge Context:</strong> <code>env['cloudflare.utils'].get_request_context()</code> returns geo-location and threat data from Cloudflare headers.</li>
+        <li><strong>WAF Management:</strong> <code>env['cloudflare.config.manager'].action_pull_waf_rules()</code> `[@ANCHOR: cf_action_pull_waf_rules]` and <code>action_push_waf_rules()</code> `[@ANCHOR: cf_action_push_waf_rules]`.</li>
+        <li><strong>Caching Bypass:</strong> Sensitive routes are excluded from edge caching `[@ANCHOR: cf_nocache_routes]`.</li>
     </ul>
 </div>

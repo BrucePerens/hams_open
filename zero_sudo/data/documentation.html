@@ -38,9 +38,9 @@
 
     <h2>Common Troubleshooting</h2>
     <ul>
-        <li><strong>Error: "Access Denied" (access_denied_service):</strong> If you see this error after trying to log in, it means the account you are using is flagged as a "Service Account." You must use a human user account to access the web interface.</li>
-        <li><strong>Missing Manuals:</strong> If documentation for a specific module is missing, ensure the module is fully installed and that it correctly utilizes the <code>knowledge_docs</code> manifest property. The documentation is updated automatically upon system startup or module upgrade.</li>
-        <li><strong>Parameter Access Errors:</strong> If an automated process fails because it cannot read a "System Parameter," it is likely because that parameter is not on the approved whitelist or it contains sensitive keywords (like "password" or "secret") that are blocked by the security core.</li>
+        <li><strong>Error: "Access Denied" (access_denied_service):</strong> If you see this error after trying to log in, it means the account you are using is flagged as a "Service Account." Service accounts are for background tasks only and cannot use the web interface. You must use a human user account to access the web interface.</li>
+        <li><strong>Missing Manuals:</strong> If documentation for a specific module is missing, ensure the module is fully installed and that it correctly utilizes the <code>knowledge_docs</code> manifest property in its configuration file. The documentation is updated automatically whenever the system starts or a module is upgraded.</li>
+        <li><strong>Parameter Access Errors:</strong> If an automated process fails because it cannot read a "System Parameter," it is likely because that parameter is not on the approved "safe list" or it contains sensitive keywords (like "password" or "secret") that are blocked for security reasons.</li>
     </ul>
 
     <h2>Technical Appendix</h2>

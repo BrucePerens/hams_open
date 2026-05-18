@@ -12,6 +12,7 @@ if not hasattr(shutil, "_orig_which"):
         None if cmd in ("kopia", "etcd") else shutil._orig_which(cmd, mode, path)
     )
 
+
 @tagged("post_install", "-at_install")
 class TestPgConfig(RealTransactionCase):
 
@@ -19,7 +20,9 @@ class TestPgConfig(RealTransactionCase):
         super().setUp()
         self.admin = self.env.ref("base.user_admin")
 
-    @patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid")
+    @patch(
+        "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid"
+    )
     def test_01_optimization_wizard(self, mock_get_uid):
         mock_get_uid.return_value = self.admin.id
         # Tests [@ANCHOR: pg_optimize_wizard]
@@ -46,15 +49,34 @@ class TestPgConfig(RealTransactionCase):
             # min(1024, 16GB * 0.05) = min(1024, 819) = 819MB
             # max(4, (16GB * 0.25) / 500) = max(4, 4096 / 500) = max(4, 8.19) = 8MB
 
-            calls = [call[0][0] for call in mock_execute.call_args_list if hasattr(call[0][0], 'as_string')]
+            calls = [
+                call[0][0]
+                for call in mock_execute.call_args_list
+                if hasattr(call[0][0], "as_string")
+            ]
             query_strings = [c.as_string(self.env.cr._obj) for c in calls]
 
-            self.assertTrue(any('SET "shared_buffers" = \'4096MB\'' in s for s in query_strings))
-            self.assertTrue(any('SET "effective_cache_size" = \'12288MB\'' in s for s in query_strings))
-            self.assertTrue(any('SET "maintenance_work_mem" = \'819MB\'' in s for s in query_strings))
-            self.assertTrue(any('SET "work_mem" = \'8MB\'' in s for s in query_strings))
-            self.assertTrue(any('SET "max_connections" = \'500\'' in s for s in query_strings))
-            self.assertTrue(any('SET "random_page_cost" = \'1.1\'' in s for s in query_strings))
+            self.assertTrue(
+                any("SET \"shared_buffers\" = '4096MB'" in s for s in query_strings)
+            )
+            self.assertTrue(
+                any(
+                    "SET \"effective_cache_size\" = '12288MB'" in s
+                    for s in query_strings
+                )
+            )
+            self.assertTrue(
+                any(
+                    "SET \"maintenance_work_mem\" = '819MB'" in s for s in query_strings
+                )
+            )
+            self.assertTrue(any("SET \"work_mem\" = '8MB'" in s for s in query_strings))
+            self.assertTrue(
+                any("SET \"max_connections\" = '500'" in s for s in query_strings)
+            )
+            self.assertTrue(
+                any("SET \"random_page_cost\" = '1.1'" in s for s in query_strings)
+            )
 
     @patch(
         "odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable",
@@ -113,13 +135,17 @@ class TestPgConfig(RealTransactionCase):
         wizard2 = (
             self.env["pg.ha.wizard"]
             .with_user(self.admin)
-            .create({
-                "primary_ip": "10.0.0.1",
-                "secondary_ip": "10.0.0.2",
-                "replication_pass": "short"
-            })
+            .create(
+                {
+                    "primary_ip": "10.0.0.1",
+                    "secondary_ip": "10.0.0.2",
+                    "replication_pass": "short",
+                }
+            )
         )
-        with self.assertRaisesRegex(UserError, "Password must be at least 8 characters"):
+        with self.assertRaisesRegex(
+            UserError, "Password must be at least 8 characters"
+        ):
             wizard2.action_generate()
 
     @patch("shutil.which")

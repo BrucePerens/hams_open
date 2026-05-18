@@ -155,10 +155,10 @@ Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
 * **Arguments:** `model_name` (str): The Odoo model. `key_value` (str): The unique identifier.
 
 #### `_update_python_venv()` `[@ANCHOR: update_python_venv]`
-Triggers `pip install` for module dependencies (restricted to Administrators).
+Triggers `pip install` for module dependencies (restricted to Administrators). It utilizes the `--break-system-packages` flag to ensure compatibility with global Odoo installations on Debian/Ubuntu systems.
 
 #### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
-Retrieves the root cryptographic key from environment or local file, bypassing DB.
+Retrieves the root cryptographic key from environment or local file, bypassing DB. This is the only approved way to access the master system secret without risking exposure via the database's `ir.config_parameter` table.
 </python_api>
 
 ---

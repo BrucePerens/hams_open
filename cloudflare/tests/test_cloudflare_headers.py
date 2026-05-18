@@ -63,6 +63,7 @@ class TestCloudflareHeaders(HttpCase):
             )
 
     def test_02_dynamic_route_no_store(self):
+        # Tests [@ANCHOR: cf_nocache_routes]
         """Verify dynamic and API routes explicitly forbid edge caching."""
         self.authenticate("cf_tester", "password123")
 

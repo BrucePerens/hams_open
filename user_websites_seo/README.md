@@ -6,9 +6,10 @@ This module is a lightweight domain extension for `user_websites`. It connects o
 
 ## Technical Implementation
 * **Model Injection:** It fuses the `website.seo.metadata` mixin into the `res.users` and `user.websites.group` models via `user.websites.seo.metadata.mixin`.
-* **Authorization:** It appends the SEO metadata fields to the `SELF_WRITEABLE_FIELDS` property. This allows standard users to save their customized Meta Title and Description via the frontend widget. [@ANCHOR: res_users_self_writeable_fields]
-* **Controller Interception:** It overrides the `/<slug>/blog` route. After the base controller prepares the data, this module injects the SEO-aware user or group record as the `main_object`, seamlessly activating the "Optimize SEO" UI menu for the blog owner while hiding it from guests. [@ANCHOR: controller_user_blog_index_seo_override]
-* **Documentation:** Automatically installs its guide into the Knowledge/Manual Library via the `knowledge_docs` manifest entry. This uses the `zero_sudo` automatic bootstrap mechanism. [@ANCHOR: soft_dependency_docs_installation]
+* **Authorization:** It appends the SEO metadata fields to the `SELF_WRITEABLE_FIELDS` property. This allows standard users to save their customized Meta Title and Description via the frontend widget. Verified by `[@ANCHOR: res_users_self_writeable_fields]`.
+* **Controller Interception:** It overrides the `/<slug>/blog` route. After the base controller prepares the data, this module injects the SEO-aware user or group record as the `main_object`, seamlessly activating the "Optimize SEO" UI menu for the blog owner while hiding it from guests. Verified by `[@ANCHOR: controller_user_blog_index_seo_override]`.
+* **Zero-Sudo Write Elevation:** The module uses a custom `write` method in its mixin to safely escalate privilege using the `user_websites.user_user_websites_service_account` service account when a user edits their own SEO metadata. This ensures that users do not need broad write permissions on their own `res.users` record or the `user.websites.group` record to manage SEO.
+* **Documentation:** Automatically installs its guide into the Knowledge/Manual Library via the `knowledge_docs` manifest entry. This uses the `zero_sudo` automatic bootstrap mechanism. Verified by `[@ANCHOR: soft_dependency_docs_installation]`.
 
 ---
 

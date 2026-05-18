@@ -17,10 +17,10 @@ The `hams_test` module solves this by providing: **`RealTransactionCase`**.
 You can safely call `self.env.cr.commit()` in your tests. This allows developers to write accurate tests for cross-worker cache invalidations (e.g., Redis pub/sub buses), background daemon polling, and lazy-loaded ORM relations.
 
 ### Automated ORM Tracking & Cleanup
-Because real commits permanently write to the database, the facility dynamically instruments Odoo's `BaseModel.create()` during `setUp()`. It tracks the ID of every record created via the ORM and automatically executes a hard-delete (`unlink()`) on all tracked records during `tearDown()`.
+Because real commits permanently write to the database, the facility dynamically instruments Odoo's `BaseModel.create()` during `setUp()`. It tracks the ID of every record created via the ORM and automatically executes a hard-delete (`unlink()`) on all tracked records during `tearDown()`. It uses a multi-pass approach (up to 5 attempts) to handle complex Foreign Key hierarchies.
 
 ### SQL Leak Detection
-To guarantee a pristine database, the facility takes a mathematical snapshot of the exact row count of every table in the `public` PostgreSQL schema before the test begins. During `tearDown()`, it recounts the tables. If your test leaked data, the test will immediately crash with an `AssertionError`.
+To guarantee a pristine database, the facility takes a mathematical snapshot of the exact row count of every table in the `public` PostgreSQL schema before the test begins. During `tearDown()`, it recounts the tables. If your test leaked data (e.g. via raw SQL `INSERT` without manual cleanup), the test will immediately crash with an `AssertionError`.
 
 **Usage Example:**
 ```python

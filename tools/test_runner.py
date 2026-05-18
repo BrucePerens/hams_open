@@ -20,6 +20,7 @@ import time
 import concurrent.futures
 import queue
 import threading
+import shutil
 
 # Import the centralized infrastructure blueprint
 import infrastructure
@@ -280,6 +281,8 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
         env["RMQ_USER"] = "guest"
     if "RMQ_PASS" not in env:
         env["RMQ_PASS"] = "guest"
+    if "ODOO_TEST_CHROME_ARGS" not in env:
+        env["ODOO_TEST_CHROME_ARGS"] = "--headless --no-sandbox --disable-dev-shm-usage"
 
     process = subprocess.Popen(
         cmd,
@@ -473,9 +476,14 @@ def rebuild_db(db_name):
     env = dict(os.environ)
     if "PGHOST" not in env and os.environ.get("HAMS_ISOLATED_NS") == "1":
         pass  # disabled
+
+    psql_cmd = shutil.which("psql") or "psql"
+    dropdb_cmd = shutil.which("dropdb") or "dropdb"
+    createdb_cmd = shutil.which("createdb") or "createdb"
+
     subprocess.run(
         [
-            "psql",
+            psql_cmd,
             "postgres",
             "-c",
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}';".format(
@@ -489,7 +497,7 @@ def rebuild_db(db_name):
     )
 
     subprocess.run(
-        ["dropdb", "--if-exists", "--force", db_name],
+        [dropdb_cmd, "--if-exists", "--force", db_name],
         check=False,
         stderr=subprocess.DEVNULL,
         env=env,
@@ -497,7 +505,7 @@ def rebuild_db(db_name):
     env = dict(os.environ)
     if "PGHOST" not in env and os.environ.get("HAMS_ISOLATED_NS") == "1":
         pass  # disabled
-    subprocess.run(["createdb", db_name], check=True, env=env)
+    subprocess.run([createdb_cmd, db_name], check=True, env=env)
 
 
 def check_and_restore_cache(db_name, mod_string):
@@ -596,8 +604,10 @@ def check_and_restore_cache(db_name, mod_string):
         env = dict(os.environ)
         if "PGHOST" not in env and os.environ.get("HAMS_ISOLATED_NS") == "1":
             pass  # disabled
+
+        pg_restore_cmd = shutil.which("pg_restore") or "pg_restore"
         res = subprocess.run(
-            ["pg_restore", "-d", db_name, "-O", "-x", "-j", "4", cache_file],
+            [pg_restore_cmd, "-d", db_name, "-O", "-x", "-j", "4", cache_file],
             capture_output=True,
             text=True,
         )
@@ -650,8 +660,9 @@ def save_db_cache(db_name, cache_file, mod_string):
 
     try:
         with open(cache_file, "wb") as f:
+            pg_dump_cmd = shutil.which("pg_dump") or "pg_dump"
             res = subprocess.run(
-                ["pg_dump", "-Fc", "-Z", "1", db_name], stdout=f, stderr=subprocess.PIPE, env=env
+                [pg_dump_cmd, "-Fc", "-Z", "1", db_name], stdout=f, stderr=subprocess.PIPE, env=env
             )
 
         if res.returncode == 0:
@@ -790,7 +801,7 @@ sleep 3
 
 export PYTHONDONTWRITEBYTECODE=1
 
-sudo -E -u odoo env PGHOST={pg_socket_dir} PYTHONDONTWRITEBYTECODE=1 HAMS_ISOLATED_NS=1 PYTHONWARNINGS="ignore::DeprecationWarning" HAMS_REAL_ERROR_LOG='{real_error_log}' "$@"
+sudo -E -u odoo env PGHOST={pg_socket_dir} PYTHONDONTWRITEBYTECODE=1 HAMS_ISOLATED_NS=1 PYTHONWARNINGS="ignore::DeprecationWarning" ODOO_TEST_CHROME_ARGS="--headless --no-sandbox --disable-dev-shm-usage" HAMS_REAL_ERROR_LOG='{real_error_log}' "$@"
 RET=$?
 su -s /bin/bash rabbitmq -c 'rabbitmqctl stop' >/dev/null 2>&1
 pkill -u redis redis-server >/dev/null 2>&1
@@ -856,6 +867,9 @@ def main():
     try:
         # Silence Odoo's core framework noise (Cybercrud Policy)
         os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+
+        if "ODOO_TEST_CHROME_ARGS" not in os.environ:
+            os.environ["ODOO_TEST_CHROME_ARGS"] = "--headless --no-sandbox --disable-dev-shm-usage"
 
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         os.environ["REPO_ROOT"] = base_dir
@@ -1043,9 +1057,10 @@ def main():
                 infrastructure.MANIFEST["apt_packages"] = old_apt
 
                 print("[*] Adding Odoo 19 repository and installing Odoo...")
-                _run_sudo_cmd("wget -O - https://nightly.odoo.com/odoo.key | gpg --dearmor -o /usr/share/keyrings/odoo-archive-keyring.gpg --yes")
+                _run_sudo_cmd("wget -O - https://nightly.odoo.com/odoo.key | gpg --dearmor -o /usr/share/keyrings/odoo-archive-keyring.gpg --yes || true")
                 _run_sudo_cmd('echo "deb [signed-by=/usr/share/keyrings/odoo-archive-keyring.gpg] http://nightly.odoo.com/19.0/nightly/deb/ ./" | tee /etc/apt/sources.list.d/odoo.list')
-                _run_sudo_cmd("apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y odoo python3-websocket jing postgresql-client chromium-browser python3-pip")
+                _run_sudo_cmd("apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y odoo python3-websocket jing postgresql-client python3-pip python3-pika python3-psutil python3-requests python3-cryptography python3-passlib python3-lxml")
+                _run_sudo_cmd("DEBIAN_FRONTEND=noninteractive apt-get install -y chromium || DEBIAN_FRONTEND=noninteractive apt-get install -y chromium-browser || true")
 
                 print("[*] Installing Python dependencies from requirements.txt...")
                 req_file = os.path.join(base_dir, "requirements.txt")
@@ -1615,8 +1630,9 @@ def main():
                     pg_env["PGPORT"] = str(db_port)
 
                 try:
+                    psql_cmd = shutil.which("psql") or "psql"
                     subprocess.run(
-                        ["psql", "-c", "SELECT 1;", args.db],
+                        [psql_cmd, "-c", "SELECT 1;", args.db],
                         env=pg_env,
                         check=True,
                         capture_output=True
@@ -1696,9 +1712,10 @@ def main():
                     counts = {}
                     for table in TABLES_TO_TRACK:
                             try:
+                                psql_cmd = shutil.which("psql") or "psql"
                                 q_str = "SELECT count(*) FROM {};".format(table)
                                 res = subprocess.run(
-                                    ["psql", "-t", "-A", "-c", q_str, args.db],
+                                    [psql_cmd, "-t", "-A", "-c", q_str, args.db],
                                     env=pg_env,
                                     capture_output=True,
                                     text=True

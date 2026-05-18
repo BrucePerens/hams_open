@@ -6,7 +6,15 @@
     "category": "Ham Radio",
     "license": "AGPL-3",
     "version": "1.0",
-    "depends": ["base", "mail", "zero_sudo", "binary_downloader", "pager_duty", "web_tour", "hams_test"],
+    "depends": [
+        "base",
+        "mail",
+        "zero_sudo",
+        "binary_downloader",
+        "pager_duty",
+        "web_tour",
+        "hams_test",
+    ],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
@@ -20,7 +28,7 @@
             "name": "Database Management Guide",
             "path": "data/documentation.html",
             "icon": "🛢",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "assets": {

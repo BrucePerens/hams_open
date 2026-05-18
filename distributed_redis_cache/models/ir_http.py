@@ -17,7 +17,6 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
     invalidate_model_cache,
 )
 
-
 _logger = logging.getLogger(__name__)
 
 _invalidation_queue = set()
@@ -44,17 +43,14 @@ def _redis_listener_thread():
     if not redis or not redis_pool:
         return
     try:
-        r_client = redis.Redis(
-            connection_pool=redis_pool, socket_timeout=2.0
-        )
+        r_client = redis.Redis(connection_pool=redis_pool, socket_timeout=2.0)
         pubsub = r_client.pubsub()
         pubsub.subscribe("odoo_cache_invalidation_bus")
 
         while _listener_started:
             try:
                 msg = pubsub.get_message(
-                    ignore_subscribe_messages=True,
-                    timeout=0.1
+                    ignore_subscribe_messages=True, timeout=0.1
                 )
                 if msg and msg.get("type") == "message":
                     data = msg.get("data")
@@ -99,14 +95,20 @@ class IrHttp(models.AbstractModel):
         stop_after_init = tools.config.get("stop_after_init")
         is_test_cr = getattr(request.env.registry, "test_cr", False)
 
-        if not (test_mode or init_mode or update_mode or stop_after_init or is_test_cr):
+        if not (
+            test_mode
+            or init_mode
+            or update_mode
+            or stop_after_init
+            or is_test_cr
+        ):
             if not _listener_started:
                 with _listener_lock:
                     if not _listener_started:
                         if _executor is None:
                             _executor = concurrent.futures.ThreadPoolExecutor(
                                 max_workers=1,
-                                thread_name_prefix="RedisListener"
+                                thread_name_prefix="RedisListener",
                             )
                         _stop_event.clear()
                         _executor.submit(_redis_listener_thread)

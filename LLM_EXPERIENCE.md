@@ -109,11 +109,13 @@ It must guarantee that EVERY single rule, bullet point, table, and constraint fr
 **The Trap:** When generating a Parcel format block, placing the absolute final MIME terminator (e.g., `@@BOUNDARY_NAME@@--`) *outside* the closing markdown backticks. This breaks the extraction script.
 **The Solution:** The absolute final terminator MUST be placed strictly *INSIDE* the python code block, immediately before the closing backticks. The closing backticks must be the final characters of the transmission.
 </experience_log>
+
 ### Trap: Ephemeral Session Amnesia & Repository Disconnect
 * **The Trap:** The AI operates in strictly isolated, ephemeral context windows. Even if a repository was "imported" or analyzed early in a conversation, the AI will inevitably lose its internal map of the workspace as the context window fills or the session is restarted.
 * **The Solution:** If the AI detects this, write any relevant experience to pass
 on to the next session in docs/LLM_EXPERIENCE.md, and ask the user to start a new
 session.
+
 ### The Dirty Form Test Corruption Trap
 * **The Trap:** Odoo automatically attempts to save dirty (unsaved) forms when a page unloads or a tour finishes. This leads to asynchronous network requests extending beyond the lifespan of the tour, often causing the test runner to randomly crash or fail the *next* test in the suite with "Tour finished with a dirty form view being open."
 * **The Solution:** Always use `...TourUtils.safeSave()` instead of manually clicking the save button. This macro explicitly clicks the form sheet to force a DOM blur and then waits for `.o_form_button_create` to ensure the RPC request fully resolves before proceeding.
@@ -121,22 +123,23 @@ session.
 ### The Tour URL Initialization Race Condition
 * **The Trap:** Starting a tour by having the first step execute `document.location.href = ...` with `expectUnloadPage: true` often causes a race condition where the Odoo tour runner tries to execute the next step before the redirect completes.
 * **The Solution:** Always use the native `url: "/your_path"` property in the tour definition block (`registry.category("web_tour.tours").add(..., { url: "...", steps: [...] })`).
+
 ## 34. The `prefetch_fields=False` ORM Trap (KeyError: 'record')
 **The Trap:** Appending `.with_context(prefetch_fields=False)` to record creation (`.create()`) methods or using it on transient models without `mail.thread` crashes the Odoo 17+ ORM. It prevents Odoo from allocating the `'record'` key in the `data_list` dictionary during the `RETURNING id` phase of the bulk SQL insert, resulting in a fatal `KeyError: 'record'` inside `odoo/orm/models.py`.
 **The Solution:** You MUST NOT use `prefetch_fields=False` to bypass access errors. Use `.with_context(mail_notrack=True)` exclusively for headless background mutations on core identity records, and entirely remove context modifications from utility models without chatter.
+
 ### Odoo 19 ORM Context Annihilation Trap (KeyError: 'record')
 * **The Trap:** Attempting to bypass tracking by using `with_context(mail_notrack=True)` or wiping the context entirely via `self.env(context={})` during a `.create()` operation on a model that *does not* implement chatter (i.e., does not inherit from `mail.thread`).
 * **The Failure:** Odoo 19's internal ORM `_create` loop relies heavily on specific context propagation for internal record mapping during batch creation. Stripping or manipulating the context on pure, non-chatter models corrupts this mapping, resulting in a fatal `KeyError: 'record'` deep within `odoo/orm/models.py`. AI agents frequently attempt this when trying to implement stealth/sterile queues.
 * **The Solution:** NEVER use `mail_notrack=True` or empty contexts (`context={}`) when creating records for pure data models (e.g., `cloudflare.purge.queue`). If an existing BDD test forces this pattern to verify zero-query caching, the test must be skipped, or the underlying model must be re-architected to formally support chatter if tracking manipulation is strictly required by the business logic.
-<<<<<<< HEAD
-### The Odoo JS Asset Bundling Trap (@module_name Not Found)
-* **The Trap:** When writing frontend JavaScript or UI Tours, attempting to import a utility or component from another custom Odoo addon (e.g., `import { TourUtils } from "@hams_test/js/tour_utils";`) will cause a fatal test crash (`asset not found`), even if the target module is installed in the database or passed via the `-u` flag during testing.
-* **The Solution:** Odoo's asset bundler strictly relies on the `__manifest__.py` graph. You cannot import a JS module from another addon unless that addon is explicitly listed in your module's `depends` array.
+
+## 35. The Odoo JS Asset Bundling Trap (@module_name Not Found)
+**The Trap:** When writing frontend JavaScript or UI Tours, attempting to import a utility or component from another custom Odoo addon (e.g., `import { TourUtils } from "@hams_test/js/tour_utils";`) will cause a fatal test crash (`asset not found`), even if the target module is installed in the database or passed via the `-u` flag during testing.
+**The Solution:** Odoo's asset bundler strictly relies on the `__manifest__.py` graph. You cannot import a JS module from another addon unless that addon is explicitly listed in your module's `depends` array.
   1. **If the import is unused (Dead Code):** Delete the import statement entirely.
   2. **If the import is required:** You MUST add the target module (e.g., `"hams_test"`) to the `depends` array in your `__manifest__.py` file.
-=======
 
-## 35. Odoo 19 Group Membership & Privilege Architecture
+## 36. Odoo 19 Group Membership & Privilege Architecture
 **The Trap:**
 1. Using the legacy `groups_id` field name instead of the normalized `group_ids` in Odoo 18+.
 2. Attempting to use `category_id` in `res.groups` definitions, which is banned by the repo's linter in favor of the custom `privilege_id`.
@@ -146,4 +149,3 @@ session.
 1. Always use `group_ids` for the Many2many relationship on `res.users`.
 2. Use `privilege_id` instead of `category_id` in XML records for `res.groups`.
 3. Define all necessary group memberships statically in XML/CSV. If a dynamic override is absolutely required for a restricted operation (like API key duration), use `.sudo()` with a `# burn-ignore-sudo` comment in an approved administrative module.
->>>>>>> refs/remotes/origin/main

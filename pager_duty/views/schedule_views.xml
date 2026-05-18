@@ -5,8 +5,8 @@
         <field name="name">calendar.event.form.inherit.pager</field>
         <field name="model">calendar.event</field>
         <field name="inherit_id" ref="calendar.view_calendar_event_form"/>
-            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_pager_view] -->
         <field name="arch" type="xml">
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_pager_view] -->
             <xpath expr="//field[@name='location']" position="after">
                 <field name="is_pager_duty"/>
             </xpath>

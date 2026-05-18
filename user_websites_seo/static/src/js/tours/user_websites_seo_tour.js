@@ -38,16 +38,27 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         },
         {
             content: "Click the SEO Metadata notebook tab injected by our module",
-            trigger: 'a[name="user_websites_seo_settings"]',
+            trigger: '*:contains("SEO Metadata")',
             run: 'click',
         },
         {
-            content: "Verify SEO Meta Title input exists",
+            content: "Input SEO Meta Title",
             trigger: 'div[name="website_meta_title"] input',
+            run: 'edit SEO Title',
         },
         {
-            content: "Verify SEO Meta Description input exists",
+            content: "Input SEO Meta Description",
             trigger: 'div[name="website_meta_description"] textarea',
+            run: 'edit SEO Description',
+        },
+        {
+            content: "Save the user record to ensure SEO fields are writeable",
+            trigger: '.o_form_button_save',
+            run: 'click',
+        },
+        {
+            content: "Wait for save to complete",
+            trigger: '.o_form_saved',
         }
     ],
 });

@@ -26,6 +26,7 @@ ENV_FILE = "/var/lib/odoo/daemon_keys/cache_manager.env"
 if os.path.exists(ENV_FILE):
     try:
         from dotenv import load_dotenv
+
         load_dotenv(ENV_FILE)
     except ImportError:
         logger.warning("python-dotenv not installed, skipping .env loading")
@@ -81,7 +82,11 @@ async def main():
     # 1. Connect to Redis
     try:
         redis_client = redis.Redis(
-            host=REDIS_HOST, port=REDIS_PORT, db=0, password=REDIS_PASS, decode_responses=True
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            db=0,
+            password=REDIS_PASS,
+            decode_responses=True,
         )
         await redis_client.ping()
         logger.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
@@ -108,7 +113,9 @@ async def main():
             logger.info("Daemon shutting down cleanly.")
             break
         except Exception as e:
-            logger.error(f"PostgreSQL connection dropped: {e}. Reconnecting in 5s...")
+            logger.error(
+                f"PostgreSQL connection dropped: {e}. Reconnecting in 5s..."
+            )
             await asyncio.sleep(5)
 
     if redis_client:

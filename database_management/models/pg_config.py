@@ -115,14 +115,29 @@ class PgHaWizard(models.TransientModel):
     _name = "pg.ha.wizard"
     _description = "High Availability Failover Wizard"
 
+    cluster_name = fields.Char(
+        string="Cluster Name", required=True, default="hams_cluster"
+    )
     primary_ip = fields.Char(
         string="Primary Node IP", required=True, default="10.0.0.1"
     )
     secondary_ip = fields.Char(
         string="Secondary Node IP", required=True, default="10.0.0.2"
     )
+    etcd_hosts = fields.Char(
+        string="Etcd Hosts",
+        required=True,
+        default="etcd:2379",
+        help="Comma-separated list of etcd hosts (e.g., 10.0.0.1:2379,10.0.0.2:2379)",
+    )
+    replication_user = fields.Char(
+        string="Replication User", required=True, default="replicator"
+    )
     replication_pass = fields.Char(
         string="Replication Password", required=True, default="SecureRepPass123!"
+    )
+    superuser_user = fields.Char(
+        string="Superuser Name", required=True, default="postgres"
     )
 
     state = fields.Selection(
@@ -137,7 +152,7 @@ class PgHaWizard(models.TransientModel):
         return self.env["zero_sudo.security.utils"]._ensure_executable(
             cmd_name,
             svc_xml_id="database_management.user_database_management_service",
-            pkg_name=pkg_map.get(cmd_name, cmd_name)
+            pkg_name=pkg_map.get(cmd_name, cmd_name),
         )
 
     def _validate_inputs(self):
@@ -147,25 +162,35 @@ class PgHaWizard(models.TransientModel):
         if not self.secondary_ip or not ip_pattern.match(self.secondary_ip):
             raise UserError(_("Invalid Secondary Node IP format."))
         if not self.replication_pass or len(self.replication_pass) < 8:
-            raise UserError(_("Replication Password must be at least 8 characters long."))
+            raise UserError(
+                _("Replication Password must be at least 8 characters long.")
+            )
 
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
         # Tests [@ANCHOR: pg_ha_wizard]
         self._validate_inputs()
-        if not getattr(self.env.registry, 'in_test', False) and not self.env.context.get('test_mode'):
+        if not getattr(
+            self.env.registry, "in_test", False
+        ) and not self.env.context.get("test_mode"):
             self._get_executable("etcd")
             self._get_executable("patroni")
             self._get_executable("pgbouncer")
 
-        self.patroni_primary = f"""scope: hams_cluster
+        etcd_config = (
+            "host: " + self.etcd_hosts
+            if "," not in self.etcd_hosts
+            else "hosts: [" + self.etcd_hosts + "]"
+        )
+
+        self.patroni_primary = f"""scope: {self.cluster_name}
 namespace: /db/
 name: node1
 restapi:
   listen: {self.primary_ip}:8008
   connect_address: {self.primary_ip}:8008
 etcd:
-  host: 127.0.0.1:2379
+  {etcd_config}
 bootstrap:
   dcs:
     ttl: 30
@@ -181,34 +206,34 @@ postgresql:
   data_dir: /var/lib/postgresql/data
   authentication:
     replication:
-      username: replicator
+      username: {self.replication_user}
       password: {self.replication_pass}
     superuser:
-      username: postgres
+      username: {self.superuser_user}
       password: {self.replication_pass}"""
 
-        self.patroni_secondary = f"""scope: hams_cluster
+        self.patroni_secondary = f"""scope: {self.cluster_name}
 namespace: /db/
 name: node2
 restapi:
   listen: {self.secondary_ip}:8008
   connect_address: {self.secondary_ip}:8008
 etcd:
-  host: 127.0.0.1:2379
+  {etcd_config}
 postgresql:
   listen: {self.secondary_ip}:5432
   connect_address: {self.secondary_ip}:5432
   data_dir: /var/lib/postgresql/data
   authentication:
     replication:
-      username: replicator
+      username: {self.replication_user}
       password: {self.replication_pass}
     superuser:
-      username: postgres
+      username: {self.superuser_user}
       password: {self.replication_pass}"""
 
-        self.pgbouncer_ini = """[databases]
-* = host=127.0.0.1 port=5432 auth_user=pgbouncer
+        self.pgbouncer_ini = f"""[databases]
+* = host={self.primary_ip} port=5432 auth_user=pgbouncer
 
 [pgbouncer]
 listen_port = 6432

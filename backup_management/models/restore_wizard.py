@@ -7,52 +7,81 @@ from odoo import models, fields, _, tools
 from odoo.exceptions import UserError, AccessError
 from .utils import validate_backup_path
 
+
 class BackupRestoreWizard(models.TransientModel):
     _name = "backup.restore.wizard"
     _description = "Backup Restore Wizard"
 
-    snapshot_id = fields.Many2one("backup.snapshot", string="Snapshot", required=True, readonly=True)
-    restore_target_path = fields.Char(string="Restore Directory / Stanza Target", required=True, help="Path where the backup should be restored, or stanza to target.")
+    snapshot_id = fields.Many2one(
+        "backup.snapshot", string="Snapshot", required=True, readonly=True
+    )
+    restore_target_path = fields.Char(
+        string="Restore Directory / Stanza Target",
+        required=True,
+        help="Path where the backup should be restored, or stanza to target.",
+    )
 
     def action_restore(self):
         # [@ANCHOR: backup_trigger_restore]
         # Verified by [@ANCHOR: test_restore_action]
         if not self.env.user.has_group("backup_management.group_backup_admin"):
-             raise AccessError(_("Only Backup Administrators can trigger restore operations."))
+            raise AccessError(
+                _("Only Backup Administrators can trigger restore operations.")
+            )
 
         if self.snapshot_id.config_id.engine == "kopia":
             validate_backup_path(self.restore_target_path)
 
         # Additional safety check for pgbackrest stanza
         if self.snapshot_id.config_id.engine == "pgbackrest":
-             if not self.restore_target_path or ";" in self.restore_target_path or "&" in self.restore_target_path:
-                  raise UserError(_("Invalid restore target stanza."))
+            if not self.restore_target_path:
+                raise UserError(_("Restore target stanza is required."))
+            validate_backup_path(self.restore_target_path)
 
-        jobs = self.env["backup.job"]
-        job = jobs.create({
-            "config_id": self.snapshot_id.config_id.id,
-            "job_type": self.snapshot_id.config_id.engine,
-            "state": "pending",
-            "output_log": "Restore queued in RabbitMQ...",
-        })
+        # Use Service ID for security & audit trails
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        jobs = self.env["backup.job"].with_user(svc_uid)
+        job = jobs.create(
+            {
+                "config_id": self.snapshot_id.config_id.id,
+                "job_type": self.snapshot_id.config_id.engine,
+                "state": "pending",
+                "output_log": "Restore queued in RabbitMQ...",
+            }
+        )
 
         cmd_args = []
         if self.snapshot_id.config_id.engine == "kopia":
-            cmd_args = ["kopia", "restore", self.snapshot_id.snapshot_id, self.restore_target_path]
+            cmd_args = [
+                "kopia",
+                "restore",
+                self.snapshot_id.snapshot_id,
+                self.restore_target_path,
+            ]
         elif self.snapshot_id.config_id.engine == "pgbackrest":
             # Using list for subprocess ensures no shell injection
-            cmd_args = ["pgbackrest", "restore", f"--stanza={self.restore_target_path}", f"--set={self.snapshot_id.snapshot_id}"]
+            cmd_args = [
+                "pgbackrest",
+                "restore",
+                f"--stanza={self.restore_target_path}",
+                f"--set={self.snapshot_id.snapshot_id}",
+            ]
 
-        payload = json.dumps({
-            "job_id": job.id,
-            "config_id": self.snapshot_id.config_id.id,
-            "engine": "restore_cmd",
-            "cmd_args": cmd_args,
-            "snapshot_id": self.snapshot_id.snapshot_id,
-        })
+        payload = json.dumps(
+            {
+                "job_id": job.id,
+                "config_id": self.snapshot_id.config_id.id,
+                "engine": "restore_cmd",
+                "cmd_args": cmd_args,
+                "snapshot_id": self.snapshot_id.snapshot_id,
+                "svc_uid": svc_uid,  # Pass svc_uid for worker to potentially use
+            }
+        )
 
         def publish_task(msg=payload):
-            if tools.config.get('test_enable'):
+            if tools.config.get("test_enable"):
                 return
             try:
                 rmq_host = os.environ.get("RMQ_HOST") or "rabbitmq"

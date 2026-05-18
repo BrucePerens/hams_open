@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 {
     "name": "Distributed Redis Cache",
-    "summary": "Fine-grained distributed caching and phase coherence for horizontally scaled Odoo clusters.",
+    "summary": "Fine-grained distributed caching for Odoo clusters.",
     "description": """
 Distributed Redis Cache
 =======================
-* Fine-grained distributed caching and phase-coherence for horizontally-scaled Odoo clusters.
-* Invalidates a single cached database when necessary, rather than all of them together (as Odoo's cache would do), providing a significant speed optimization.
+* Fine-grained distributed caching and phase-coherence.
+* Speed optimization by invalidating single databases.
 * Replaces Odoo's internal cache.
 * Includes a UI to manage the cache and check Redis status.
     """,
@@ -31,7 +31,7 @@ Distributed Redis Cache
             "name": "Distributed Redis Cache",
             "path": "data/documentation.html",
             "icon": "⚡",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "post_init_hook": "post_init_hook",

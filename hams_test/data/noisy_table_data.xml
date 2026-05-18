@@ -53,5 +53,11 @@
         <record id="noisy_table_database_index_stat" model="hams_test.noisy_table">
             <field name="name">database_index_stat</field>
         </record>
+        <record id="noisy_table_ir_attachment" model="hams_test.noisy_table">
+            <field name="name">ir_attachment</field>
+        </record>
+        <record id="noisy_table_ir_model_data" model="hams_test.noisy_table">
+            <field name="name">ir_model_data</field>
+        </record>
     </data>
 </odoo>

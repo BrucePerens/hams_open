@@ -2,7 +2,6 @@
 import json
 import uuid
 import os
-import time
 import logging
 from odoo import http, _
 from odoo.http import request

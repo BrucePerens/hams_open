@@ -24,8 +24,11 @@ class CloudflareUtils(models.AbstractModel):
         return {
             "ip": headers.get("CF-Connecting-IP") or request.httprequest.remote_addr,
             "country": headers.get("CF-IPCountry"),
+            "region": headers.get("CF-Region"),
             "city": headers.get("CF-IPCity"),
+            "postal_code": headers.get("CF-Postal-Code"),
             "longitude": headers.get("CF-IPLongitude"),
             "latitude": headers.get("CF-IPLatitude"),
             "threat_score": headers.get("CF-Threat-Score"),
+            "as_number": headers.get("CF-ASN"),
         }

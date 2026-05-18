@@ -34,7 +34,8 @@ class IrHttp(models.AbstractModel):
             return res
 
         # 2. Hardcoded Dynamic or API Routes (Zero caching)
-        if any(path.startswith(prefix) for prefix in ("/my/", "/web/", "/api/")): # burn-ignore-route
+        # [@ANCHOR: cf_nocache_routes]
+        if any(path.startswith(prefix) for prefix in ("/my/", "/web/", "/api/", "/shop/cart", "/shop/checkout", "/shop/confirm_order", "/helpdesk/")): # burn-ignore-route
             response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
             return res
 

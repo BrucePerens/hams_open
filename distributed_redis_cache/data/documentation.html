@@ -3,36 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <title>Distributed Redis Cache Documentation</title>
+<style>
+    body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+    h1 { color: #005599; border-bottom: 2px solid #005599; padding-bottom: 10px; }
+    h2 { color: #0077cc; margin-top: 30px; }
+    code { background-color: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+    .note { background-color: #e7f3fe; border-left: 6px solid #2196F3; padding: 10px; margin: 20px 0; }
+</style>
 </head>
 <body>
 <h1>Distributed Redis Cache</h1>
-<p>This module helps keep your Odoo cluster fast and consistent by using Redis to share cached data between different Odoo servers. It ensures that when data changes on one server, all other servers are immediately notified to update their own caches.</p>
+<p>The <b>Distributed Redis Cache</b> module provides a high-performance, horizontally scalable caching solution for Odoo cluster environments. It ensures that all Odoo servers in your cluster stay synchronized by sharing cache invalidation signals through Redis.</p>
 
-<h2>How it Works</h2>
-<p>Normally, Odoo keeps its own local cache on each server. If you have many servers, they can sometimes get out of sync. This module solves that by:</p>
+<h2>Overview</h2>
+<p>In a multi-server setup, standard Odoo servers keep their own local memory caches. When data is updated on one server, others might still serve old data. This module solves this "cache drift" by providing a central Redis-backed signaling system.</p>
+
+<h2>Core Functionality</h2>
 <ol>
-    <li>Sending a signal through the database when data changes.</li>
-    <li>A background helper (the "Cache Manager") picks up this signal and tells Redis about it.</li>
-    <li>Redis broadcasts the message to every Odoo server in your cluster.</li>
-    <li>Each Odoo server receives the message and clears the specific part of its memory that was affected, ensuring the next time it needs that data, it gets the fresh version.</li>
+    <li><b>Instant Synchronization:</b> Whenever a record is updated, the module sends a notification through the database.</li>
+    <li><b>Automated Distribution:</b> A background service (the <i>Cache Manager</i>) picks up these notifications and publishes them to Redis.</li>
+    <li><b>Cluster-Wide Invalidation:</b> All Odoo servers listening to Redis receive the signal and immediately clear the relevant parts of their local memory.</li>
 </ol>
 
-<h2>Using the Management UI</h2>
-<p>Administrators can manage the cache through the <b>Distributed Cache</b> menu.</p>
+<div class="note">
+    <strong>Smart Invalidation:</strong> Unlike standard Odoo, which may clear large portions of the cache at once, this module uses fine-grained invalidation to only flush specific models, keeping the rest of your system fast.
+</div>
+
+<h2>User Instructions</h2>
+
+<h3>Managing the Cache</h3>
+<p>Administrators can access the management interface via the <b>Distributed Cache</b> menu in the Odoo navbar.</p>
+
+<h4>Checking System Health</h4>
+<p>Use the <b>Check Redis Status</b> button to verify that Odoo can communicate with the Redis server.
 <ul>
-    <li><b>Checking Status:</b> Click the "Check Redis Status" button to see if Odoo can successfully talk to the Redis server. If it's working, you'll see a green success message. If Redis is down, Odoo will automatically switch to its safe "Fail-Open" mode and continue working using its own local memory.</li>
-    <li><b>Manual Invalidation:</b> If you ever suspect that the cache is out of date, you can manually clear it for a specific type of data (a "Model"). Select the model (for example, "User") from the dropdown list and click "Invalidate Model Cache". This will clear that data from every server in your cluster immediately. [@ANCHOR: distributed_cache_view] [@ANCHOR: manual_cache_invalidation] [@ANCHOR: check_redis_status_logic]</li>
+    <li>A <b>green success message</b> indicates a healthy connection.</li>
+    <li>A <b>red error message</b> means Redis is unreachable. In this case, the module automatically switches to "Fail-Open" mode, falling back to standard local caching to ensure your site stays online.</li>
+</ul>
+</p>
+
+<h4>Manual Cache Clearing</h4>
+<p>If you suspect that data is out of sync across your cluster, you can manually trigger a flush for a specific data type (a "Model"):</p>
+<ol>
+    <li>Select the <b>Model</b> (e.g., <code>User</code> or <code>Partner</code>) from the dropdown list.</li>
+    <li>Click <b>Invalidate Model Cache</b>.</li>
+    <li>Every server in the cluster will immediately clear its local cache for that specific model.</li>
+</ol>
+
+<h2>Technical Benefits</h2>
+<ul>
+    <li><b>Zero-Sudo Architecture:</b> Built for security, the module uses dedicated service accounts and minimal privileges.</li>
+    <li><b>Resilience:</b> Designed to be "Fail-Open," meaning your system will never crash due to a Redis outage; it will simply revert to standard Odoo behavior.</li>
+    <li><b>Efficiency:</b> Uses the <code>SCAN</code> command for Redis operations to ensure performance even with millions of cache keys.</li>
 </ul>
 
-<h2>Security and Performance</h2>
-<ul>
-    <li><b>Zero-Sudo:</b> The module is built to be secure and never uses "Superuser" powers unnecessarily. It uses a dedicated background account for its operations. [@ANCHOR: story_zero_sudo_cache_manager]</li>
-    <li><b>Smart Clearing:</b> Unlike standard Odoo which sometimes clears everything at once, this module only clears the specific data that changed. This keeps your system running fast even when many changes are happening.</li>
-    <li><b>Fail-Open:</b> If the Redis server has a problem, your Odoo site won't crash. It will just behave like a standard Odoo setup until Redis comes back online.</li>
-</ul>
+<div class="note">
+    <strong>Developer Tip:</strong> Use the <code>@distributed_cache()</code> decorator on your custom model methods to automatically benefit from cluster-wide caching.
+</div>
 
-<h2>For Developers</h2>
-<p>Developers can use the <code>@distributed_cache()</code> decorator to easily add this high-performance caching to their own custom modules. [@ANCHOR: distributed_cache_decorator] [@ANCHOR: notify_model_invalidation_logic] [@ANCHOR: doc_inject_distributed_redis_cache]</p>
+<!-- Semantic Anchors for System Integration -->
+<div style="display:none;">
+    [@ANCHOR: distributed_cache_view]
+    [@ANCHOR: manual_cache_invalidation]
+    [@ANCHOR: check_redis_status_logic]
+    [@ANCHOR: distributed_cache_decorator]
+    [@ANCHOR: notify_model_invalidation_logic]
+    [@ANCHOR: doc_inject_distributed_redis_cache]
+    [@ANCHOR: story_zero_sudo_cache_manager]
+</div>
 
 </body>
 </html>

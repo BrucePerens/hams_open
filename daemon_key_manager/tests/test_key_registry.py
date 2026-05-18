@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import datetime
 from odoo.tests import TransactionCase, HttpCase, tagged
 from odoo.exceptions import UserError, AccessError
-from odoo import SUPERUSER_ID, fields
+from odoo import SUPERUSER_ID
 
 _logger = logging.getLogger(__name__)
 
@@ -146,6 +145,7 @@ class TestKeyRegistry(TransactionCase):
 
     def test_documentation_installed(self):
         """Verify that documentation is installed in knowledge.article or manual.article."""
+        # # Tests [@ANCHOR: documentation_installed]
         # [@ANCHOR: test_documentation_installed]
         # Verified by [@ANCHOR: documentation_installed]
         model = None

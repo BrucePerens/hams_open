@@ -2,10 +2,8 @@
 import os
 import logging
 import datetime
-import binascii
 from odoo import models, fields, api, SUPERUSER_ID, tools, _
 from odoo.exceptions import UserError, ValidationError, AccessError
-from odoo.addons.base.models.res_users import KEY_CRYPT_CONTEXT, INDEX_SIZE  # fmt: skip
 
 _logger = logging.getLogger(__name__)
 
@@ -261,7 +259,7 @@ class DaemonKeyRegistry(models.Model):
                 _logger.error(
                     "Managed failure rotating key for daemon %s: %s", reg.name, e
                 )
-            except Exception as e:  # audit-ignore-catch-all
+            except Exception:  # audit-ignore-catch-all
                 if not tools.config.get("test_enable"):
                     self.env.cr.rollback()
                 _logger.exception(

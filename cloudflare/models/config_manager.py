@@ -140,6 +140,7 @@ class CloudflareConfigManager(models.AbstractModel):
 
     @api.model
     def action_pull_waf_rules(self, website_id=None):
+        # [@ANCHOR: cf_action_pull_waf_rules]
         website = (
             self.env["website"].browse(website_id)
             if website_id
@@ -185,6 +186,7 @@ class CloudflareConfigManager(models.AbstractModel):
 
     @api.model
     def action_push_waf_rules(self, website_id=None):
+        # [@ANCHOR: cf_action_push_waf_rules]
         website = (
             self.env["website"].browse(website_id)
             if website_id

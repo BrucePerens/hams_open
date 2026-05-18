@@ -368,6 +368,7 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         and "Data Integrity" in msg
                     )
                     or ("audit-ignore-i18n" in line_content and "I18N" in msg)
+                    or ("audit-ignore-path" in line_content and "PATH TRAVERSAL" in msg)
                 ):
                     return
             self.warnings.append((lineno, msg))
@@ -1105,6 +1106,13 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                 if not ("tools/" in getattr(self, "filepath", self.filename).replace("\\", "/")):
                     self.add_error(node.lineno, "CRITICAL AI LAZINESS: Native print() is banned. Use logging (_logger.info, etc.) for centralized log aggregation.")
 
+            if func_name == "open" or (isinstance(node.func, ast.Attribute) and getattr(node.func, "attr", "") in ("open", "remove", "unlink", "symlink") and getattr(node.func.value, "id", "") == "os"):
+                if self.in_http_controller or "model" in self.current_decorators:
+                    self.add_warning(
+                        node.lineno,
+                        "[%AUDIT] PATH TRAVERSAL: Ensure paths passed to filesystem operations in RPC/controller methods are strictly sanitized against directory traversal (e.g., checking for '..')."
+                    )
+
             if func_name in ("assertTrue", "assertFalse"):
                 if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, bool):
                     if (func_name == "assertTrue" and node.args[0].value is True) or (func_name == "assertFalse" and node.args[0].value is False):
@@ -1668,6 +1676,7 @@ def scan_file(filepath, is_odoo_module=False):
                 "audit-ignore-view",
                 "audit-ignore-i18n",
                 "audit-ignore-catch-all",
+                "audit-ignore-path",
             ]
             if not any(tag in line for tag in valid_audits):
                 errors_found.append(

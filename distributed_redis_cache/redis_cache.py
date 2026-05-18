@@ -28,6 +28,10 @@ def _get_hash(*args, **kwargs):
             return [_serialize(i) for i in obj]
         if isinstance(obj, dict):
             return {str(k): _serialize(v) for k, v in sorted(obj.items())}
+        if isinstance(obj, bytes):
+            return obj.hex()
+        if isinstance(obj, set):
+            return [_serialize(i) for i in sorted(list(obj))]
         return str(obj)
 
     serialized_args = [_serialize(a) for a in args]
@@ -51,9 +55,7 @@ def distributed_cache():
             dbname = self.env.cr.dbname
             model_name = self._name
             arg_hash = _get_hash(*args, **kwargs)
-            cache_key = (
-                f"{dbname}:distributed_cache:{model_name}:{func.__name__}:{arg_hash}"
-            )
+            cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}:{arg_hash}"
 
             use_redis = bool(redis and redis_pool)
 
@@ -86,7 +88,10 @@ def distributed_cache():
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                     return result
                 except (redis.RedisError, TypeError) as e:
-                    _logger.warning("Redis cache write failed, falling back to local: %s", e)
+                    _logger.warning(
+                        "Redis cache write failed, falling back to local: %s",
+                        e,
+                    )
 
             # Fallback to local memory cache
             _local_cache[cache_key] = result
@@ -113,9 +118,13 @@ def invalidate_model_cache(env, model_name, local_only=False):
             try:
                 r = redis.Redis(connection_pool=redis_pool)
                 # Use SCAN instead of KEYS for production safety
+                # Process in batches to avoid blocking Redis or consuming too much memory
                 keys = []
                 for key in r.scan_iter(match=prefix, count=1000):
                     keys.append(key)
+                    if len(keys) >= 1000:
+                        r.delete(*keys)
+                        keys = []
                 if keys:
                     r.delete(*keys)
             except redis.RedisError as e:

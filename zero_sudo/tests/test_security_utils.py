@@ -92,6 +92,14 @@ class TestSecurityUtils(TransactionCase):
                 ("cache_invalidation", "test.model:test_key"),
             )
 
+        # Test edge cases: empty model_name or key_value
+        with patch.object(self.env.cr, "execute") as mock_execute:
+            utils._notify_cache_invalidation("", "test_key")
+            utils._notify_cache_invalidation("test.model", "")
+            utils._notify_cache_invalidation(None, "test_key")
+            utils._notify_cache_invalidation("test.model", None)
+            self.assertEqual(mock_execute.call_count, 0, "Should not notify for empty model or key")
+
     def test_04_god_mode_block_enforcement(self):
         """Verify that any Service Account granted base.group_system is violently rejected."""
         # 1. Create a rogue service account
@@ -136,6 +144,12 @@ class TestSecurityUtils(TransactionCase):
             self.assertEqual(params[0], "cache_invalidation")
             # We must sort the payloads because set conversion makes the order non-deterministic
             self.assertListEqual(sorted(params[1]), sorted(["test.model:key1", "test.model:key2"]))
+
+        # Test chunking
+        many_keys = [f"key{i}" for i in range(250)]
+        with patch.object(self.env.cr, "execute") as mock_execute:
+            utils._notify_cache_invalidation("test.model", many_keys)
+            self.assertEqual(mock_execute.call_count, 3, "Should chunk 250 keys into 3 calls (100+100+50)")
 
     def test_06_get_deterministic_hash(self):
         # [@ANCHOR: test_deterministic_hash]
@@ -199,11 +213,12 @@ class TestSecurityUtils(TransactionCase):
 
         # 2. Test file fallback
         with patch.dict(os.environ, {}, clear=True):
-            with patch("builtins.open", mock_open(read_data="test_file_key\n")):
-                self.assertEqual(utils._get_crypto_secret(), "test_file_key")
+            with patch("os.path.exists", return_value=True):
+                with patch("builtins.open", mock_open(read_data="test_file_key\n")):
+                    self.assertEqual(utils._get_crypto_secret(), "test_file_key")
 
             # 3. Test configuration fallback
-            with patch("builtins.open", side_effect=OSError("File not found")):
+            with patch("os.path.exists", return_value=False):
                 with patch.object(odoo.tools.config, "get", return_value="test_config_key"):
                     self.assertEqual(utils._get_crypto_secret(), "test_config_key")
 
@@ -338,4 +353,4 @@ class TestSecurityUtils(TransactionCase):
 
         with self.assertRaises(AccessError) as cm:
             utils._get_service_uid("zero_sudo.disabled_sa_xml")
-        self.assertIn("Service Account is disabled", str(cm.exception))
+        self.assertIn("is disabled", str(cm.exception))

@@ -32,7 +32,7 @@ This module acts as the command center for your Cloudflare CDN and Web Applicati
 Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPTCHA verification to offload CPU from the Python WSGI workers.
 
 ## 2. API Interfaces
-* **WAF IP Banning:** `env['cloudflare.waf'].ban_ip(...)` dynamically injects firewall rules `[@ANCHOR: cf_execute_ban]`. Automatically lifts expired bans via `[@ANCHOR: cf_action_lift_ban]`.
+* **WAF IP Banning:** `env['cloudflare.waf'].ban_ip(...)` dynamically injects firewall rules `[@ANCHOR: cf_execute_ban]`. Automatically lifts expired bans via `[@ANCHOR: cf_action_lift_ban]`. Supports pulling `[@ANCHOR: cf_action_pull_waf_rules]` and pushing `[@ANCHOR: cf_action_push_waf_rules]` rulesets.
 * **Cache Purging:** `env['cloudflare.purge.queue'].enqueue_tags(...)`. Processes asynchronous cache invalidation queues via cron `[@ANCHOR: ir_cron_process_cf_purge_queue]`. Base URLs are accurately resolved and injected via `[@ANCHOR: enqueue_urls_base_url]`.
 * **Turnstile API:** `env['cloudflare.turnstile'].verify_token(...)` securely evaluates CAPTCHA handshakes against the API `[@ANCHOR: cf_turnstile_verify]`.
 * **Edge Context:** `env['cloudflare.utils'].get_request_context()` (Extracts trusted IP/Geodata) `[@ANCHOR: cf_get_request_context]`.
@@ -42,7 +42,7 @@ Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPT
 ## 3. Automated Subsystems
 * Injects `Cloudflare-CDN-Cache-Control` headers natively via `ir.http._post_dispatch`.
 * Scans module `static/` folders on boot and automatically invalidates the CDN edge via cache tags if file modifications are detected.
-* **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers `[@ANCHOR: ir_http_post_dispatch_headers]` to control edge caching behavior.
+* **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers `[@ANCHOR: ir_http_post_dispatch_headers]` to control edge caching behavior. Sensitive routes (e.g., checkout, helpdesk) are explicitly excluded from caching `[@ANCHOR: cf_nocache_routes]`.
 * **Settings View Injection:** Extends standard Odoo config settings to securely accept Cloudflare API tokens `[@ANCHOR: xpath_rendering_cf_settings]`.
 
 ## 4. Zero-Sudo & Micro-Privilege Architecture
@@ -61,17 +61,17 @@ This module strictly adheres to the Zero-Sudo architecture. All operations that 
 For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
-* [Asynchronous Cache Purging](docs/stories/cache_purging.md)
-* [Geo-Aware Request Context](docs/stories/request_context.md)
-* [Secure Edge Bridging via Tunnels](docs/stories/tunnels.md)
-* [CAPTCHA Verification with Turnstile](docs/stories/turnstile_verification.md)
-* [Automated WAF IP Banning](docs/stories/waf_banning.md)
+* [Asynchronous Cache Purging](docs/stories/cache_purging.md) `[@ANCHOR: story_cache_purging]`
+* [Geo-Aware Request Context](docs/stories/request_context.md) `[@ANCHOR: story_request_context]`
+* [Secure Edge Bridging via Tunnels](docs/stories/tunnels.md) `[@ANCHOR: story_tunnels]`
+* [CAPTCHA Verification with Turnstile](docs/stories/turnstile_verification.md) `[@ANCHOR: story_turnstile]`
+* [Automated WAF IP Banning](docs/stories/waf_banning.md) `[@ANCHOR: story_waf_banning]`
 
 ### Journeys
-* [High-Performance Content Invalidation](docs/journeys/content_invalidation.md)
-* [Managing Edge Security](docs/journeys/edge_security.md)
-* [Infrastructure Provisioning](docs/journeys/infrastructure.md)
-* [Intelligent Traffic Handling](docs/journeys/traffic_handling.md)
+* [High-Performance Content Invalidation](docs/journeys/content_invalidation.md) `[@ANCHOR: journey_content_invalidation]`
+* [Managing Edge Security](docs/journeys/edge_security.md) `[@ANCHOR: journey_edge_security]`
+* [Infrastructure Provisioning](docs/journeys/infrastructure.md) `[@ANCHOR: journey_infrastructure]`
+* [Intelligent Traffic Handling](docs/journeys/traffic_handling.md) `[@ANCHOR: journey_traffic_handling]`
 </stories_and_journeys>
 
 # Cloudflare Edge Orchestration (`cloudflare`) - API Reference
