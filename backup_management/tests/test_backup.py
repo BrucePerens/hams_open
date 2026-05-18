@@ -32,7 +32,13 @@ class TestBackupManagement(RealTransactionCase):
 
     def setUp(self):
         super().setUp()
-        self.env.user.write({'group_ids': [(4, self.env.ref('backup_management.group_backup_admin').id)]})
+        self.env.user.write(
+            {
+                "group_ids": [
+                    (4, self.env.ref("backup_management.group_backup_admin").id)
+                ]
+            }
+        )
         if os.path.exists("/var/lib/odoo/backup_repo"):
             if os.path.isdir("/var/lib/odoo/backup_repo"):
                 shutil.rmtree("/var/lib/odoo/backup_repo", ignore_errors=True)
@@ -43,7 +49,11 @@ class TestBackupManagement(RealTransactionCase):
                     pass
         self.admin = self.env.ref("base.user_admin")
         self.config_kopia = self.env["backup.config"].create(
-            {"name": "Test Kopia", "engine": "kopia", "target_path": "/var/lib/odoo/backup_repo"}
+            {
+                "name": "Test Kopia",
+                "engine": "kopia",
+                "target_path": "/var/lib/odoo/backup_repo",
+            }
         )
         self.config_pg = self.env["backup.config"].create(
             {"name": "Test PG", "engine": "pgbackrest", "target_path": "main"}
@@ -53,14 +63,18 @@ class TestBackupManagement(RealTransactionCase):
         # Tests [@ANCHOR: backup_sync_kopia]
         # Since we offloaded to RabbitMQ, we check if a job was created and task was queued.
         self.config_kopia.action_sync_snapshots()
-        job = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)], order="id desc", limit=1)
+        job = self.env["backup.job"].search(
+            [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
+        )
         self.assertTrue(job.exists())
         self.assertEqual(job.state, "pending")
 
     def test_02_sync_pgbackrest_triggered(self):
         # Tests [@ANCHOR: backup_sync_pgbackrest]
         self.config_pg.action_sync_snapshots()
-        job = self.env["backup.job"].search([("config_id", "=", self.config_pg.id)], order="id desc", limit=1)
+        job = self.env["backup.job"].search(
+            [("config_id", "=", self.config_pg.id)], order="id desc", limit=1
+        )
         self.assertTrue(job.exists())
         self.assertEqual(job.state, "pending")
 
@@ -130,7 +144,9 @@ class TestBackupManagement(RealTransactionCase):
         self.config_kopia.keep_daily = 7
         self.config_kopia.exclude_patterns = "*.log"
         self.config_kopia.action_apply_policies()
-        job = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)], order="id desc", limit=1)
+        job = self.env["backup.job"].search(
+            [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
+        )
         self.assertTrue(job.exists())
         self.assertEqual(job.state, "pending")
 
@@ -140,12 +156,15 @@ class TestBackupManagement(RealTransactionCase):
             days=8
         )
         self.env["backup.config"].cron_sync_all_backups()
-        job = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)], order="id desc", limit=1)
+        job = self.env["backup.job"].search(
+            [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
+        )
         self.assertTrue(job.exists())
         self.assertEqual(job.state, "pending")
 
     @patch(
-        "odoo.addons.backup_management.models.backup_config.BackupConfig._get_executable", return_value="/bin/kopia"
+        "odoo.addons.backup_management.models.backup_config.BackupConfig._get_executable",
+        return_value="/bin/kopia",
     )
     def test_08d_kopia_auto_download(self, mock_get_exe):
         # Tests [@ANCHOR: test_kopia_auto_download]
@@ -196,7 +215,9 @@ class TestBackupManagement(RealTransactionCase):
         # Tests [@ANCHOR: test_trigger_kopia_and_pgbackrest]
         self.config_kopia.action_trigger_backup()
         self.config_pg.action_trigger_backup()
-        jobs = self.env["backup.job"].search([("config_id", "in", [self.config_kopia.id, self.config_pg.id])])
+        jobs = self.env["backup.job"].search(
+            [("config_id", "in", [self.config_kopia.id, self.config_pg.id])]
+        )
         self.assertEqual(len(jobs), 2)
 
     def test_12_documentation_installation(self):
@@ -211,22 +232,30 @@ class TestBackupManagement(RealTransactionCase):
             doc_model = "manual.article"
 
         if doc_model:
-             article = self.env[doc_model].search([('name', '=', 'Backup Management')], limit=1)
-             self.assertTrue(article.exists(), "Backup documentation should be installed")
-             self.assertIn("Unified Backup Management Manual", article.body)
+            article = self.env[doc_model].search(
+                [("name", "=", "Backup Management")], limit=1
+            )
+            self.assertTrue(
+                article.exists(), "Backup documentation should be installed"
+            )
+            self.assertIn("Unified Backup Management Manual", article.body)
 
-    @patch('pika.BlockingConnection')
+    @patch("pika.BlockingConnection")
     def test_13_restore_action(self, mock_pika):
         # Tests [@ANCHOR: test_restore_action]
         # Tests [@ANCHOR: backup_trigger_restore]
-        snap = self.env["backup.snapshot"].create({
-            "config_id": self.config_kopia.id,
-            "snapshot_id": "snap_rest",
-        })
-        wizard = self.env["backup.restore.wizard"].create({
-            "snapshot_id": snap.id,
-            "restore_target_path": "/var/lib/odoo/backups/restore_target"
-        })
+        snap = self.env["backup.snapshot"].create(
+            {
+                "config_id": self.config_kopia.id,
+                "snapshot_id": "snap_rest",
+            }
+        )
+        wizard = self.env["backup.restore.wizard"].create(
+            {
+                "snapshot_id": snap.id,
+                "restore_target_path": "/var/lib/odoo/backups/restore_target",
+            }
+        )
         res = wizard.action_restore()
         self.assertEqual(res.get("res_model"), "backup.job")
         job = self.env["backup.job"].browse(res.get("res_id"))

@@ -33,12 +33,14 @@ class BackupConfig(models.Model):
         help="Triggers a Pager Duty alert if a new snapshot is smaller than this.",
     )
 
-    kopia_password_crypt = fields.Char(string="Encrypted Kopia Password", groups="backup_management.group_backup_admin")
+    kopia_password_crypt = fields.Char(
+        string="Encrypted Kopia Password", groups="backup_management.group_backup_admin"
+    )
     kopia_password = fields.Char(
         string="Kopia Password",
         compute="_compute_kopia_password",
         inverse="_inverse_kopia_password",
-        groups="backup_management.group_backup_admin"
+        groups="backup_management.group_backup_admin",
     )
 
     storage_type = fields.Selection(
@@ -49,13 +51,17 @@ class BackupConfig(models.Model):
     )
     bucket_name = fields.Char(string="Bucket Name")
     endpoint_url = fields.Char(string="Endpoint URL")
-    access_key = fields.Char(string="Access Key", groups="backup_management.group_backup_admin")
-    secret_key_crypt = fields.Char(string="Encrypted Secret Key", groups="backup_management.group_backup_admin")
+    access_key = fields.Char(
+        string="Access Key", groups="backup_management.group_backup_admin"
+    )
+    secret_key_crypt = fields.Char(
+        string="Encrypted Secret Key", groups="backup_management.group_backup_admin"
+    )
     secret_key = fields.Char(
         string="Secret Key",
         compute="_compute_secret_key",
         inverse="_inverse_secret_key",
-        groups="backup_management.group_backup_admin"
+        groups="backup_management.group_backup_admin",
     )
 
     keep_daily = fields.Integer(string="Keep Daily", default=7)
@@ -95,7 +101,9 @@ class BackupConfig(models.Model):
     )
 
     def _get_fernet(self):
-        key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")
+        key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get(
+            "HAMS_CRYPTO_KEY"
+        )
         if not key:
             return None
         try:
@@ -119,7 +127,9 @@ class BackupConfig(models.Model):
     @api.depends("kopia_password_crypt")
     def _compute_kopia_password(self):
         for rec in self:
-            rec.kopia_password = rec._crypt_field(rec.kopia_password_crypt, decrypt=True)
+            rec.kopia_password = rec._crypt_field(
+                rec.kopia_password_crypt, decrypt=True
+            )
 
     def _inverse_kopia_password(self):
         for rec in self:
@@ -141,10 +151,17 @@ class BackupConfig(models.Model):
                 validate_backup_path(rec.target_path)
 
             if rec.engine == "pgbackrest":
-                 # pgBackRest target_path is a stanza name, not a direct path.
-                 # Ensure no shell metacharacters in stanza name.
-                 if not rec.target_path or ";" in rec.target_path or "&" in rec.target_path or "|" in rec.target_path:
-                      raise UserError(_("Invalid pgBackRest stanza name: %s") % rec.target_path)
+                # pgBackRest target_path is a stanza name, not a direct path.
+                # Ensure no shell metacharacters in stanza name.
+                if (
+                    not rec.target_path
+                    or ";" in rec.target_path
+                    or "&" in rec.target_path
+                    or "|" in rec.target_path
+                ):
+                    raise UserError(
+                        _("Invalid pgBackRest stanza name: %s") % rec.target_path
+                    )
 
             if rec.restore_drill_script:
                 validate_backup_path(rec.restore_drill_script)
@@ -193,8 +210,12 @@ class BackupConfig(models.Model):
         """
         Internal helper to offload tasks to the RabbitMQ Bastion.
         """
-        if not self.env.su and not self.env.user.has_group("backup_management.group_backup_admin"):
-             raise AccessError(_("Only Backup Administrators can trigger backup operations."))
+        if not self.env.su and not self.env.user.has_group(
+            "backup_management.group_backup_admin"
+        ):
+            raise AccessError(
+                _("Only Backup Administrators can trigger backup operations.")
+            )
 
         jobs = self.env["backup.job"]
         created_jobs = []
@@ -203,7 +224,9 @@ class BackupConfig(models.Model):
             job = jobs.create(
                 {
                     "config_id": rec.id,
-                    "job_type": rec.engine if engine != "restore_cmd" else "kopia",  # map restore_cmd to engine for UI
+                    "job_type": (
+                        rec.engine if engine != "restore_cmd" else "kopia"
+                    ),  # map restore_cmd to engine for UI
                     "state": "pending",
                     "output_log": "Queued in RabbitMQ...",
                 }
@@ -215,6 +238,7 @@ class BackupConfig(models.Model):
                 "config_id": rec.id,
                 "engine": engine,
                 "target_path": rec.target_path,
+                "svc_uid": self.env.uid,
             }
             if payload_extra:
                 payload_dict.update(payload_extra)
@@ -264,25 +288,58 @@ class BackupConfig(models.Model):
         # [@ANCHOR: backup_trigger_execution]
         # Verified by [@ANCHOR: test_backup_orchestration]
         # Implements ADR-0071: Asynchronous Bastion Pattern
-        return self._publish_to_worker(self.engine)
+        # Use Service ID for security & audit trails
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        res = True
+        for rec in self:
+            if rec.engine == "kopia" and rec.storage_type == "local":
+                validate_backup_path(rec.target_path)
+            res = rec.with_user(svc_uid)._publish_to_worker(rec.engine)
+        return res
 
     def action_apply_policies(self):
         # [@ANCHOR: backup_apply_policies]
         # Verified by [@ANCHOR: test_apply_policies]
-        return self._publish_to_worker("kopia_policy")
+        # Use Service ID for security & audit trails
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        for rec in self:
+            if rec.engine == "kopia" and rec.storage_type == "local":
+                validate_backup_path(rec.target_path)
+            rec.with_user(svc_uid)._publish_to_worker("kopia_policy")
+        return True
 
     def action_sync_snapshots(self):
         # [@ANCHOR: UX_BACKUP_SYNC]
         # [@ANCHOR: backup_sync_kopia]
         # [@ANCHOR: backup_sync_pgbackrest]
         # Verified by [@ANCHOR: test_backup_cron]
-        return self._publish_to_worker("sync_snapshots")
+        # Use Service ID for security & audit trails
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        for rec in self:
+            if rec.engine == "kopia" and rec.storage_type == "local":
+                validate_backup_path(rec.target_path)
+            rec.with_user(svc_uid)._publish_to_worker("sync_snapshots")
+        return True
 
     def _execute_restore_drill(self):
         """
         Offloads the restore drill to the worker.
         """
-        return self._publish_to_worker("restore_drill", {"script": self.restore_drill_script})
+        if self.restore_drill_script:
+            validate_backup_path(self.restore_drill_script)
+        # Use Service ID for security & audit trails
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        return self.with_user(svc_uid)._publish_to_worker(
+            "restore_drill", {"script": self.restore_drill_script}
+        )
 
     def _report_backup_failure(self, message):
         # [@ANCHOR: backup_pager_synergy]
@@ -306,7 +363,9 @@ class BackupConfig(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "backup_management.user_backup_service_internal"
         )
-        self.with_user(svc_uid).message_post(body=message) # audit-ignore-mail: Tested by [@ANCHOR: backup_pager_synergy]  # fmt: skip
+        self.with_user(svc_uid).message_post(
+            body=message
+        )  # audit-ignore-mail: Tested by [@ANCHOR: backup_pager_synergy]  # fmt: skip
 
     @api.model
     def get_board_data(self):
@@ -324,11 +383,14 @@ class BackupConfig(models.Model):
             snap = snap_map.get(c["id"])
             if snap:
                 c["latest_snapshot"] = snap
-                delta = (
-                    (now - snap["start_time"]).total_seconds()
-                    if snap["start_time"]
-                    else 999999
-                )
+                if snap.get("start_time"):
+                    # Handle string or datetime
+                    start_time = snap["start_time"]
+                    if isinstance(start_time, str):
+                        start_time = fields.Datetime.to_datetime(start_time)
+                    delta = (now - start_time).total_seconds()
+                else:
+                    delta = 999999
                 c["is_stale"] = delta > (26 * 60 * 60)
             else:
                 c["latest_snapshot"] = False
@@ -381,7 +443,7 @@ class BackupConfig(models.Model):
 
         if creates:
             # Sort by start_time to ensure we check the absolute latest if multiple are created
-            creates.sort(key=lambda x: x['start_time'], reverse=True)
+            creates.sort(key=lambda x: x["start_time"], reverse=True)
             Snapshot.create(creates)
             if self.minimum_size_mb > 0:
                 for c in creates:
@@ -395,7 +457,11 @@ class BackupConfig(models.Model):
     def cron_sync_all_backups(self):
         # [@ANCHOR: cron_sync_all_backups]
         # Verified by [@ANCHOR: test_backup_cron]
-        configs = self.env["backup.config"].search([], limit=1000)
+        # Use Service ID for security & audit trails
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        configs = self.env["backup.config"].with_user(svc_uid).search([], limit=1000)
         now = fields.Datetime.now()
         for conf in configs:
             conf.action_sync_snapshots()

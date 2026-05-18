@@ -30,23 +30,30 @@ class TestBackupWorkerDaemon(unittest.TestCase):
         mock_json2.return_value = [{"kopia_password": "test_pass", "engine": "kopia"}]
 
         # Construct the RabbitMQ payload
-        body = json.dumps({
-            "job_id": 99,
-            "engine": "kopia",
-            "target_path": "/var/lib/odoo/backups",
-            "config_id": 1
-        })
+        body = json.dumps(
+            {
+                "job_id": 99,
+                "engine": "kopia",
+                "target_path": "/var/lib/odoo/backups",
+                "config_id": 1,
+            }
+        )
 
         # Execute the procedural job
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body)
+        backup_worker.execute_job(
+            self.mock_ch, self.mock_method, self.mock_properties, body
+        )
 
         # Assert process was spawned with correct arguments
         mock_popen.assert_called_once()
         args, kwargs = mock_popen.call_args
-        self.assertEqual(args[0], ["kopia", "snapshot", "create", "/var/lib/odoo/backups", "--json"])
+        self.assertEqual(
+            args[0], ["kopia", "snapshot", "create", "/var/lib/odoo/backups", "--json"]
+        )
 
         # Assert RabbitMQ acknowledgment was sent
         self.mock_ch.basic_ack.assert_called_once_with(delivery_tag=1)
+
 
 if __name__ == "__main__":
     unittest.main()

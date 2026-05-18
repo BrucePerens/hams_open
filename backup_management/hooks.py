@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 def post_init_hook(env):
     """
     Register daemon keys upon installation.

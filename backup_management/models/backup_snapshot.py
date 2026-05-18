@@ -29,10 +29,11 @@ class BackupSnapshot(models.Model):
         # [@ANCHOR: backup_restore_command]
         # Verified by [@ANCHOR: test_restore_command_computation]
         for rec in self:
+            if not rec.snapshot_id or not rec.config_id:
+                rec.restore_command = ""
+                continue
             if rec.config_id.engine == "kopia":
-                rec.restore_command = (
-                    f"kopia restore {rec.snapshot_id} /var/lib/odoo/backups/restore_{rec.snapshot_id}"
-                )
+                rec.restore_command = f"kopia restore {rec.snapshot_id} /var/lib/odoo/backups/restore_{rec.snapshot_id}"
             elif rec.config_id.engine == "pgbackrest":
                 rec.restore_command = f"pgbackrest restore --stanza={rec.config_id.target_path} --set={rec.snapshot_id}"
             else:
