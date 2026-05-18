@@ -280,11 +280,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         secret = os.environ.get("HAMS_CRYPTO_KEY")
         if not secret:
             try:
-                # Path is hardcoded and secure per ADR-0002
-                secret_file = "/var/lib/odoo/hams_crypto.secret"
-                if os.path.exists(secret_file):
-                    with open(secret_file, "r") as f:
-                        secret = f.read().strip()
+                with open("/var/lib/odoo/hams_crypto.secret", "r") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
+                    secret = f.read().strip()
             except OSError as e:
                 _logger.warning("Failed to read crypto secret file: %s", e)
                 pass
