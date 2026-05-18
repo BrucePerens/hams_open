@@ -102,7 +102,7 @@ class ManualLibraryController(http.Controller):
                 "shared_articles": shared_articles,
                 "private_articles": private_articles,
                 "search_term": "",
-                "is_internal_user": request.env.user.has_group("base.group_user"),
+                "is_internal_user": request.env.user.has_group("base.group_user") or request.env.user.has_group("base.group_portal"),
             },
         )
 
@@ -132,7 +132,7 @@ class ManualLibraryController(http.Controller):
                 "workspace_articles": workspace_articles,
                 "shared_articles": shared_articles,
                 "private_articles": private_articles,
-                "is_internal_user": request.env.user.has_group("base.group_user"),
+                "is_internal_user": request.env.user.has_group("base.group_user") or request.env.user.has_group("base.group_portal"),
             },
         )
 

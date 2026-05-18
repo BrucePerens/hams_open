@@ -11,13 +11,13 @@
 <p>There are two primary ways to interact with the Manual Library:</p>
 <ul>
     <li><strong>Internal Backend:</strong> Accessed via the <strong>Manuals</strong> app icon in the Odoo main menu. This is where administrators and contributors create and manage articles.</li>
-    <li><strong>Public Web Portal:</strong> Accessed at the <code>/manual</code> URL on your website. This provides a clean, reader-friendly interface for browsing published documentation.</li>
+    <li><strong>Public Web Portal:</strong> Accessed at the <code>/manual</code> URL on your website. This provides a clean, reader-friendly interface for browsing published documentation. Portal users and internal staff can also access unpublished internal documents if granted permission.</li>
 </ul>
 
 <h3>Sidebar and Tree View</h3>
 <p>On the left-hand side of the manual portal, a navigation sidebar displays the article hierarchy. Articles are categorized into three sections for logged-in users:</p>
 <ul>
-    <li><strong>Workspace:</strong> Articles shared with everyone in the organization.</li>
+    <li><strong>Workspace:</strong> Articles shared with everyone in the organization, including authenticated Portal users with read access.</li>
     <li><strong>Shared:</strong> Private articles that have been specifically shared with you or your department.</li>
     <li><strong>Private:</strong> Your personal drafts and notes that are not visible to others.</li>
 </ul>
@@ -42,9 +42,9 @@
 <h2 class="mt-4">4. Visibility and Access Control</h2>
 <p>Manual Library uses a granular permission system to ensure the right people see the right content. This is controlled by the <strong>Internal Permission</strong> field on each article:</p>
 <ul>
-    <li><strong>Read Only:</strong> Every internal user (staff) can see the article but cannot edit it.</li>
+    <li><strong>Read Only:</strong> Every internal user (staff) and authenticated Portal user can see the article but cannot edit it.</li>
     <li><strong>Read &amp; Write:</strong> Every internal user can see and edit the article. This is great for collaborative wikis.</li>
-    <li><strong>No Access:</strong> The article is hidden from everyone except the creator and people listed in the <strong>Shared Members</strong> tab.</li>
+    <li><strong>No Access:</strong> The article is hidden from everyone except the creator and people listed in the <strong>Shared Members</strong> tab. Both internal and portal users can be granted access here.</li>
 </ul>
 
 <h2 class="mt-4">5. Publishing to the Web</h2>

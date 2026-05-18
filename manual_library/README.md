@@ -14,7 +14,7 @@ Because it uses the exact same database structure (`knowledge.article`) as the E
 * **Enterprise Compatible:** You can load XML data files meant for the Enterprise Knowledge app, and they will work perfectly here.
 * **Rich Text Editor:** Use Odoo's standard editor to write guides, insert images, and format text.
 * **Public Web Portal:** Click "Publish" to instantly push your manuals to the public website (`/manual`). The system automatically builds a handy sidebar menu for visitors.
-* **Access Control:** Keep private admin notes hidden, share drafts with logged-in coworkers, or publish finalized guides to the public.
+* **Access Control:** Keep private admin notes hidden, share drafts with logged-in coworkers or portal customers, or publish finalized guides to the public.
 
 ## 🛠️ Installation
 
@@ -73,9 +73,10 @@ Uses a standard parent-child relationship for hierarchy. Inherits from `mail.thr
 <security>
 ## 4. Security and Access Rights
 * **Public Users:** Can only read articles where `is_published` is True.
-* **Internal Users (`base.group_user`):**
+* **Internal Users (`base.group_user`) and Portal Users (`base.group_portal`):**
     - Can read articles if `internal_permission` is not 'none'.
     - Can read their own articles or those shared with them via `member_ids`.
+* **Internal Users (`base.group_user`) Only:**
     - Can edit articles if `internal_permission` is 'write' or if they are the owner/member.
 * **Manual Administrators (`group_manual_manager`):** Full CRUD access to all articles.
 * **Service Account:** used for atomic feedback increments and automated doc installation.

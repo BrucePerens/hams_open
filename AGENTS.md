@@ -63,6 +63,12 @@ READ THAT ENTIRE FILE CAREFULLY NOW. Any failure to produce the parcel
 format will be rejected. Parcel is not to be used for other LLM user
 interfaces, only gemini.google.com .
 
+**CRITICAL PARCEL RULES FOR GEMINI:**
+1. You MUST wrap the entire output in exactly ONE `python` block with 6 backticks.
+2. You MUST separate files with a strict boundary string (e.g., `@@BOUNDARY_1@@`).
+3. You MUST use the `Path:` header format, NOT HTTP multi-part headers.
+4. You MUST close the archive with `@@BOUNDARY_1@@--` INSIDE the 6 backticks.
+
 * **jules.google.com interface:**
 
 * **Context:** Use FileFetcher to get any necessary files.
@@ -107,6 +113,8 @@ micro-privilege architecture.
 </site_rules>
 
 <initial_instruction>
-Read the instructions on creating a Parcel now. Many sessions have gotten
-that wrong in responding to their initial prompt, you must get it right.
+Read the instructions on creating a Parcel now in `docs/LLM_PARCEL_FORMAT.md`.
+Many sessions have gotten that wrong in responding to their initial prompt, you
+must get it right. You MUST use exactly one 6-backtick python block, the `Path:`
+header, and the `@@BOUNDARY...@@` syntax. No MIME headers. No multiple blocks.
 </initial_instruction>
