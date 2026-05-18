@@ -66,7 +66,7 @@
     <h2>Security Rules and Safety</h2>
     <p>To protect your data, this module follows strict safety rules:</p>
     <ul>
-        <li><b>Strict Locations:</b> All key files MUST be stored inside the <code>/var/lib/odoo/daemon_keys/</code> folder. The system will block any attempt to save keys in sensitive areas like your system's configuration folders.</li>
+        <li><b>Strict Locations:</b> All key files MUST be stored inside the <code>/var/lib/odoo/daemon_keys/</code> folder. The system will block any attempt to save keys in sensitive areas like your system's configuration folders, user home directories, or system logs.</li>
         <li><b>No "Superuser" Access:</b> You cannot create a key for the main "System" or "Admin" accounts. Keys are only for restricted "Service Accounts."</li>
         <li><b>File Protection:</b> When a key file is created, the system sets the permissions so that only the Odoo process can read or write it.</li>
     </ul>

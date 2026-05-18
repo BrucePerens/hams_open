@@ -169,6 +169,8 @@ class DaemonKeyRegistry(models.Model):
         # [@ANCHOR: revoke_old_keys_logic]
         # Tested by [@ANCHOR: test_key_ownership]
         # Note: res.users.apikeys access is granted via ir.model.access.csv for our group
+        # but the keys are owned by the service account, not the manager service.
+        # We need to sudo to search and unlink keys owned by other users.
         old_keys = self.env["res.users.apikeys"].sudo().search( # burn-ignore-sudo
             [("user_id", "=", self.user_id.id), ("name", "=", key_name)], limit=100
         )
@@ -207,7 +209,23 @@ class DaemonKeyRegistry(models.Model):
         # [@ANCHOR: write_secure_env_file_logic]
         path = os.path.realpath(path)
         # Sandbox check: Prevent writing to sensitive system directories
-        forbidden_prefixes = ["/etc", "/root", "/boot", "/sys", "/proc", "/dev"]
+        forbidden_prefixes = [
+            "/etc",
+            "/root",
+            "/boot",
+            "/sys",
+            "/proc",
+            "/dev",
+            "/home",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/lib",
+            "/lib64",
+            "/var/log",
+            "/var/mail",
+            "/var/spool",
+        ]
         if any(path.startswith(pref) for pref in forbidden_prefixes):
             raise UserError(
                 _("Security Alert: Writing to system directory '%s' is forbidden.")
@@ -259,12 +277,14 @@ class DaemonKeyRegistry(models.Model):
                 _logger.error(
                     "Managed failure rotating key for daemon %s: %s", reg.name, e
                 )
-            except Exception:  # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 if not tools.config.get("test_enable"):
                     self.env.cr.rollback()
-                _logger.exception(
-                    "Unexpected AI Laziness during key rotation for %s",
+                _logger.error(
+                    "Unexpected error during key rotation for daemon %s: %s",
                     reg.name,
+                    e,
+                    exc_info=True
                 )
 
         if len(registries) == 10:
