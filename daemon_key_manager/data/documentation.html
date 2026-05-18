@@ -41,17 +41,27 @@
     </ul>
 
     <h3>2. Refreshing Keys Manually</h3>
-    <p>Normally, the system handles everything. However, if you suspect a key might have been compromised, or if you've just moved your system to a new server, you can refresh the keys immediately.</p>
+    <p>Normally, the system handles everything automatically. However, if you suspect a key might have been compromised, or if you've just moved your system to a new server, you can refresh the keys immediately.</p>
     <ol>
         <li>Open the <b>Daemon Key Registry</b>.</li>
         <li>Open any individual record.</li>
         <li>Click the <b>"Force Provision All"</b> button at the top of the screen.</li>
-        <li>The system will immediately generate fresh keys for <i>every</i> daemon in the list and update their files on the disk.</li>
+        <li>The system will immediately generate fresh keys for <b>every</b> daemon in the list and update their files on the disk.</li>
     </ol>
 
     <div class="note">
         <b>Tip:</b> If an external program stops working after a refresh, it should be designed to "self-heal" by re-reading its configuration file. If it doesn't, you may need to restart that specific external program.
     </div>
+
+    <h3>3. Adding a New Connection Manually</h3>
+    <p>While most external programs register themselves automatically when their corresponding module is installed, you can add one manually:</p>
+    <ol>
+        <li>Click the <b>New</b> button in the Daemon Key Registry.</li>
+        <li><b>Daemon Name:</b> Give it a clear, unique name.</li>
+        <li><b>Service Account:</b> Choose the specialized Odoo user account this program will use. <i>Note: This user must be marked as a "Service Account" in the Users menu.</i></li>
+        <li><b>Environment File Path:</b> Enter the full path on the server where the key file should be saved. It must start with <code>/var/lib/odoo/daemon_keys/</code>.</li>
+        <li>Click <b>Save</b>. A new key will be generated and written to the file immediately.</li>
+    </ol>
 
     <h2>Security Rules and Safety</h2>
     <p>To protect your data, this module follows strict safety rules:</p>

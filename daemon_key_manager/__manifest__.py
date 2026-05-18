@@ -19,6 +19,7 @@
     },
     "knowledge_docs": [
         {
+            # [@ANCHOR: documentation_installed]
             "name": "Daemon Key Manager Documentation",
             "path": "data/documentation.html",
             "icon": "🔑",
