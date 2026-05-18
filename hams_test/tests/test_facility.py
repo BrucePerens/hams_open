@@ -62,11 +62,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         # Temporarily mock the tearDown leak detector to ensure it would raise
         leaks = []
         noisy_tables = set()
-        try:
-            noisy_tables_records = self.env['test_real_transaction.noisy_table'].search([])
+        if 'hams_test.noisy_table' in self.env:
+            noisy_tables_records = self.env['hams_test.noisy_table'].search([])
             noisy_tables = {record.name for record in noisy_tables_records}
-        except KeyError:
-            pass # Model may not be registered in all environments
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
         final_count = self.cr.fetchone()[0]
@@ -104,7 +102,7 @@ class TestRealTransactionFacility(RealTransactionCase):
 
         self.assertTrue(company.exists())
         self.assertTrue(user.exists())
-        # TearDown will now execute its 3-pass loop. If it fails to cascade,
+        # TearDown will now execute its 5-pass loop. If it fails to cascade,
         # the Leak Detector will catch it and fail the suite.
 
     def test_04_dynamic_noisy_tables(self):
@@ -112,16 +110,25 @@ class TestRealTransactionFacility(RealTransactionCase):
         Prove that adding a table to the noisy_table model prevents the leak detector
         from catching it.
         """
-        # Simulate a leak
+        # 1. Add table to noisy tables
+        noisy_table = self.env['hams_test.noisy_table'].create({
+            'name': 'ir_module_category'
+        })
+        self.env.cr.commit()
+
+        # 2. Simulate a leak
         self.cr.execute(
             "INSERT INTO ir_module_category (name) VALUES ('\"SQL Leak Test Noisy\"') RETURNING id"
         )
         leaked_id = self.cr.fetchone()[0]
         self.env.cr.commit()
 
-        # Run the leak detector logic
+        # 3. Run the leak detector logic
         leaks = []
-        noisy_tables = set(["ir_module_category"]) # Mock the set directly instead of relying on the transient model
+        noisy_records = self.env["hams_test.noisy_table"].search(
+            [('active', '=', True)], limit=1000
+        )
+        noisy_tables = {r.name for r in noisy_records}
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
         final_count = self.cr.fetchone()[0]
@@ -130,8 +137,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         if "ir_module_category" not in noisy_tables and final_count - initial_count != 0:
             leaks.append("ir_module_category")
 
-        # Clean up the leak AND the noisy table record to keep the DB clean for tearDown
+        # 4. Clean up the leak AND the noisy table record to keep the DB clean for tearDown
         self.cr.execute("DELETE FROM ir_module_category WHERE id = %s", (leaked_id,))
+        noisy_table.unlink()
         self.env.cr.commit()
 
         self.assertNotIn(

@@ -1,55 +1,31 @@
-<h1>Real Transaction Testing Facility (<code>test_real_transaction</code>)</h1>
+<h1>Hams Testing Infrastructure</h1>
 
-<p>In standard Odoo testing, <code>TransactionCase</code> wraps the entire test execution inside an uncommitted PostgreSQL <code>SAVEPOINT</code>. While this makes tests extremely fast and prevents database pollution, it creates an artificial environment. This environment fundamentally breaks the ORM's local memory cache for inverse relational fields (like <code>One2many</code> relationships). In production, these fields populate seamlessly because transactions actually commit; in <code>TransactionCase</code> tests, they evaluate as empty, leading to false negatives and architectural confusion.</p>
+<p>This module provides the core testing facilities for the repository, ensuring that our software is reliable, secure, and functions as expected in a production-like environment.</p>
 
-<p>The <code>test_real_transaction</code> module solves this by providing a drop-in replacement: <strong><code>RealTransactionCase</code></strong>.
-<strong>Because it inherits from Odoo's <code>HttpCase</code>, it natively supports full Werkzeug HTTP routing and testing utilities like <code>self.authenticate()</code> and <code>self.make_jsonrpc_request()</code>.</strong>
-It completely bypasses Odoo's test cursor wrapper, provisioning a real, committable PostgreSQL database connection that perfectly mirrors production behavior.</p>
+<h2>Real Transaction Testing</h2>
 
-<h2>Key Features</h2>
+<p>Most tests in Odoo are "pretend" tests—they don't actually save any data to the database permanently. While this is fast, it can sometimes hide bugs that only appear when data is truly saved.</p>
 
-<h3>True Database Commits</h3>
-<p>You can safely call <code>self.env.cr.commit()</code> in your tests. This allows developers to write accurate tests for cross-worker cache invalidations (e.g., Redis pub/sub buses), background daemon polling, and lazy-loaded ORM relations.</p>
+<p>Our <strong>Real Transaction Testing Facility</strong> allows developers to write tests that behave exactly like the real world. It saves data for real during the test, then carefully cleans it all up when the test is finished.</p>
 
-<h3>Automated ORM Tracking &amp; Cleanup</h3>
-<p>Because real commits permanently write to the database, leaving test data behind would severely pollute the environment. To prevent this, the facility dynamically instruments Odoo's <code>BaseModel.create()</code> during the <code>setUp()</code> phase. It tracks the ID of every record created via the ORM. During <code>tearDown()</code>, it automatically executes a hard-delete (<code>unlink()</code>) on all tracked records. It performs multiple cascade passes to handle complex foreign-key constraints gracefully.</p>
+<h3>Database Leak Protection</h3>
+<p>Because these tests save real data, we have to be very careful not to leave any "trash" behind in the database. The system automatically tracks every record created during a test and deletes it afterward. As an extra safety measure, it counts all the rows in every table before and after the test. If any extra rows are left over, the test fails, alerting the developer that something wasn't cleaned up properly.</p>
 
-<h3>SQL Leak Detection (The Safety Net)</h3>
-<p>To guarantee a pristine database, the facility takes a mathematical snapshot of the exact row count of every table in the <code>public</code> PostgreSQL schema before the test begins. During <code>tearDown()</code>, after the auto-cleanup completes, it recounts the tables. If your test leaked data (for example, by utilizing raw <code>cr.execute("INSERT...")</code> which bypasses the ORM tracker), the test will immediately crash with an <code>AssertionError</code> identifying the exact tables that were polluted.</p>
+<h3>Noisy Tables</h3>
+<p>Some tables in Odoo are naturally "noisy"—they get new data all the time from background processes (like system logs or internal message tracking). If the leak protector caught these, tests would fail for no reason.</p>
 
-<h2>Usage Guide</h2>
-
-<p>To use the facility, simply import <code>RealTransactionCase</code> and inherit from it instead of the standard <code>TransactionCase</code>. You do not need to write any manual cleanup code for standard ORM creations.</p>
-
-<pre><code>from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
-
-@tagged('post_install', '-at_install')
-class MyAdvancedTest(RealTransactionCase):
-    def test_01_real_commit_behavior(self):
-        # 1. Create a record normally. The facility secretly tracks its ID.
-        user = self.env['res.users'].create({'name': 'Test User'})
-
-        # # 2. Force a physical database write to populate ORM caches.
-        # self.env.cr.commit()
-
-        # # 3. The ORM will now evaluate complex inverse relationships accurately..
-        self.assertEqual(len(user.some_one2many_ids), 0)
-
-        # 4. No manual cleanup is required! The tearDown() method
-        # will auto-unlink the user and verify no tables leaked.
-</code></pre>
-
-<h2>Management Interface</h2>
-<p>Administrators can manage the facility through the <strong>Noisy Tables</strong> interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]). Noisy tables are explicitly excluded from the leak detection check, which is useful for system logging tables or tables managed by background processes during the test execution.</p>
-
-<h2>Integration Testing with Daemons</h2>
-<p>The <code>HamsIntegrationCase</code> ([@ANCHOR: integration_daemon_testing]) facility provides an automated execution wrapper to spin up external Python daemons (e.g., Pager Duty Spoolers, Redis Cache Managers) and run real HTTP/XML-RPC requests against them during the test phase.</p>
+<p>Administrators can manage which tables are ignored by the leak protector using the <strong>Noisy Tables</strong> interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]). You can find this under <strong>Settings > Technical > Database Structure > Noisy Tables</strong>.</p>
 
 <ul>
-    <li><strong>Lifecycle Management:</strong> It utilizes Python's <code>subprocess</code> to boot daemons in <code>setUpClass()</code> and guarantees zombie processes are SIGKILL'd in <code>tearDownClass()</code>.</li>
-    <li><strong>Health Polling:</strong> It automatically polls the daemon's port/endpoint until a <code>200 OK</code> is returned, preventing race conditions where test requests fire before the daemon binds to the socket.</li>
+    <li><strong>Table Name:</strong> The internal name of the database table to ignore (e.g., <code>ir_logging</code>).</li>
+    <li><strong>Active:</strong> If unchecked, the table will no longer be ignored, and the leak protector will start checking it again.</li>
+    <li>This management interface is crucial for ensuring tests pass without false positives ([@ANCHOR: test_noisy_table_tour]).</li>
 </ul>
 
-<h2>UI Tour Development</h2>
-<p>This module defines the standards for writing robust UI tours in Odoo 19. It provides <code>TourUtils</code> to handle common frontend testing challenges, such as modal animations and dirty forms. Tours are required for critical user journeys and complex views to ensure they function as expected from a user's perspective.</p>
+<h2>External Service Testing</h2>
+
+<p>Many of our modules talk to external services or run background processes (daemons). This module provides the tools to automatically start these services before a test begins and shut them down afterward. It also makes sure the service is actually "awake" and responding before the test starts sending it commands.</p>
+
+<h2>User Interface (UI) Tours</h2>
+
+<p>To make sure our screens and buttons work correctly for users, we use <strong>UI Tours</strong>. These are automated scripts that "drive" the web browser, clicking buttons and typing into forms just like a human would. This ensures that even the most complex parts of the interface remain easy to use and bug-free.</p>

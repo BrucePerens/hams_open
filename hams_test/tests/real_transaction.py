@@ -103,7 +103,7 @@ class RealTransactionCase(HttpCase):
         # 2. Automated ORM Cleanup (Multiple passes for Foreign Key cascades)
         # [@ANCHOR: automated_cleanup]
         # Verified by [@ANCHOR: test_automated_cleanup]
-        for attempt in range(3):
+        for attempt in range(5): # Increased to 5 passes for deep hierarchies
             pending_deletes = False
             for model_name, ids in list(self._tracked_records.items()):
                 if model_name in self.env and ids:
@@ -124,9 +124,9 @@ class RealTransactionCase(HttpCase):
                     except (psycopg2.IntegrityError, odoo.exceptions.AccessError, odoo.exceptions.UserError, odoo.exceptions.RedirectWarning, odoo.exceptions.ValidationError) as e:
                         # These are expected if records are still referenced or have access restrictions
                         pending_deletes = True
-                        if attempt == 2:
+                        if attempt == 4:
                             _logger.info(
-                                "Auto-cleanup deferred for %s %s: %s",
+                                "Auto-cleanup failed for %s %s after 5 attempts: %s",
                                 model_name,
                                 ids,
                                 e,
@@ -153,6 +153,7 @@ class RealTransactionCase(HttpCase):
             noisy_tables = {r.name for r in noisy_records}
 
         if not noisy_tables:
+            _logger.info("Using hardcoded fallback for noisy tables.")
             noisy_tables = {
                 "bus_bus",
                 "ir_logging",
@@ -171,14 +172,9 @@ class RealTransactionCase(HttpCase):
                 "database_query_stat",
                 "database_activity",
                 "database_index_stat",
-                "ir_attachment", # Often modified by documentation injection
-                "ir_model_data", # Often modified by documentation injection
+                "ir_attachment",
+                "ir_model_data",
             }
-
-        # Optimization: Pre-fetch all table counts in a single pass if possible?
-        # PostgreSQL doesn't easily allow counting all tables in one query without PL/pgSQL
-        # but we can at least avoid N+1 if we use a better approach.
-        # For now, stay with the current approach but be mindful.
 
         for t in self._tables:
             if t in noisy_tables:
