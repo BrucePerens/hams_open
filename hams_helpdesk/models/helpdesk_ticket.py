@@ -52,10 +52,21 @@ class HelpdeskTicket(models.Model):
         help="Linked calendar event for incident response or scheduled assistance.",
     )
 
+    website_id = fields.Many2one(
+        "website",
+        string="Website",
+        ondelete="restrict",
+        help="The website this ticket was created on.",
+    )
+
     @api.model_create_multi
     def create(self, vals_list):
         # [@ANCHOR: helpdesk_ticket_creation]
         # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+        for vals in vals_list:
+            if "website_id" not in vals and self.env.context.get("website_id"):
+                vals["website_id"] = self.env.context.get("website_id")
+
         tickets = super().create(vals_list)
 
         # Execute automated routing and notifications using service accounts to ensure Zero-Sudo compliance
