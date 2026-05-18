@@ -1046,7 +1046,14 @@ def main():
                 print("[*] Adding Odoo 19 repository and installing Odoo...")
                 _run_sudo_cmd("wget -O - https://nightly.odoo.com/odoo.key | gpg --dearmor -o /usr/share/keyrings/odoo-archive-keyring.gpg --yes")
                 _run_sudo_cmd('echo "deb [signed-by=/usr/share/keyrings/odoo-archive-keyring.gpg] http://nightly.odoo.com/19.0/nightly/deb/ ./" | tee /etc/apt/sources.list.d/odoo.list')
-                _run_sudo_cmd("apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y odoo python3-websocket jing postgresql-client")
+                _run_sudo_cmd("apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y odoo python3-websocket jing postgresql-client chromium-browser python3-pip")
+
+                print("[*] Installing Python dependencies from requirements.txt...")
+                req_file = os.path.join(base_dir, "requirements.txt")
+                if os.path.exists(req_file):
+                    _run_sudo_cmd(f"pip3 install --break-system-packages -r {req_file}")
+                else:
+                    print("⚠️ WARNING: requirements.txt not found, skipping Python dependency installation.")
 
                 print("[*] Configuring local PostgreSQL for test paths...")
                 pg_data_dir = "/opt/hams/pgdata"
