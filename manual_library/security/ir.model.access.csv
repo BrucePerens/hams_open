@@ -1,6 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_knowledge_article_admin,knowledge.article admin,model_knowledge_article,manual_library.group_manual_manager,1,1,1,1
-access_knowledge_article_internal,knowledge.article internal,model_knowledge_article,base.group_user,1,1,1,1
+access_knowledge_article_internal,knowledge.article internal,model_knowledge_article,base.group_user,1,0,0,0
 access_knowledge_article_user,knowledge.article user,model_knowledge_article,base.group_portal,1,0,0,0
 access_knowledge_article_public,knowledge.article public,model_knowledge_article,base.group_public,1,0,0,0
 access_knowledge_article_svc,knowledge.article svc,model_knowledge_article,manual_library.group_manual_library_service_account,1,1,1,1
