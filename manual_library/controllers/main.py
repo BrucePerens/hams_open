@@ -13,22 +13,30 @@ class ManualLibraryController(http.Controller):
 
     def _get_sidebar_articles(self):
         """Helper to fetch and group root articles for the sidebar."""
-        root_articles = request.env["knowledge.article"].search(
-            [("parent_id", "=", False)], limit=5000
+        # Domain-based search is more efficient than .filtered() for large datasets
+        base_domain = [("parent_id", "=", False)]
+
+        workspace_articles = request.env["knowledge.article"].search(
+            base_domain + [("internal_permission", "in", ("read", "write"))], limit=5000
         )
-        workspace_articles = root_articles.filtered(
-            lambda a: a.internal_permission in ("read", "write")
+
+        # Shared articles: permission is 'none' but user is in member_ids
+        shared_articles = request.env["knowledge.article"].search(
+            base_domain + [
+                ("internal_permission", "=", "none"),
+                ("member_ids", "in", [request.env.user.id])
+            ], limit=5000
         )
-        private_articles = root_articles.filtered(
-            lambda a: a.internal_permission == "none"
-            and a.create_uid == request.env.user
-            and not a.member_ids
+
+        # Private articles: permission is 'none', user is creator, and no other members
+        private_articles = request.env["knowledge.article"].search(
+            base_domain + [
+                ("internal_permission", "=", "none"),
+                ("create_uid", "=", request.env.user.id),
+                ("member_ids", "=", False)
+            ], limit=5000
         )
-        shared_articles = root_articles.filtered(
-            lambda a: a.internal_permission == "none"
-            and request.env.user in a.member_ids
-            and a not in private_articles
-        )
+
         return workspace_articles, shared_articles, private_articles
 
     @http.route(
@@ -80,7 +88,11 @@ class ManualLibraryController(http.Controller):
         except AccessError:
             raise werkzeug.exceptions.NotFound()
 
-        # 6. Render standard QWeb response
+        # 6. Canonical Redirect for SEO: ensure the slug matches current name
+        if article_slug and article.website_url != request.httprequest.path:
+            return request.redirect(article.website_url, code=301)
+
+        # 7. Render standard QWeb response
         return request.render(
             "manual_library.article_template",
             {
