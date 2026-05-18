@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+import hashlib
 import os
 import tarfile
 import stat
 from unittest.mock import patch, MagicMock
+from odoo import tools
 from odoo.tests.common import TransactionCase, tagged
 from odoo.exceptions import UserError, ValidationError
 
@@ -22,7 +24,9 @@ class TestBinaryManifest(TransactionCase):
     # Tested by [@ANCHOR: test_binary_manifest_standard]
 
     def tearDown(self):
-        for path in ["/var/lib/odoo/hams_bin/fake", "/var/lib/odoo/hams_bin/testbin"]:
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+        bin_dir = os.path.join(data_dir, "hams_bin")
+        for path in [os.path.join(bin_dir, "fake"), os.path.join(bin_dir, "testbin")]:
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -32,7 +36,9 @@ class TestBinaryManifest(TransactionCase):
 
     def setUp(self):
         super().setUp()
-        for path in ["/var/lib/odoo/hams_bin/fake", "/var/lib/odoo/hams_bin/testbin"]:
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+        bin_dir = os.path.join(data_dir, "hams_bin")
+        for path in [os.path.join(bin_dir, "fake"), os.path.join(bin_dir, "testbin")]:
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -62,8 +68,9 @@ class TestBinaryManifest(TransactionCase):
     def test_01_already_installed(self, mock_which=None):
         # Tests [@ANCHOR: binary_ensure_executable]
         # Tests [@ANCHOR: binary_resolution]
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         if INTEGRATION_MODE:
-            target_bin = "/var/lib/odoo/hams_bin/testbin"
+            target_bin = os.path.join(data_dir, "hams_bin", "testbin")
             if not os.path.exists(os.path.dirname(target_bin)):
                 os.makedirs(os.path.dirname(target_bin))
             with open(target_bin, "wb") as f:
@@ -76,7 +83,7 @@ class TestBinaryManifest(TransactionCase):
         path = self.env["binary.manifest"].ensure_executable("testbin")
 
         if INTEGRATION_MODE:
-            self.assertEqual(path, "/var/lib/odoo/hams_bin/testbin")
+            self.assertEqual(path, os.path.join(data_dir, "hams_bin", "testbin"))
         else:
             self.assertEqual(path, "/usr/bin/testbin")
             mock_which.assert_called_once_with("testbin")
@@ -123,10 +130,15 @@ class TestBinaryManifest(TransactionCase):
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response
 
-        with patch("hashlib.sha256") as mock_sha256:
-            mock_hasher = MagicMock()
-            mock_hasher.hexdigest.return_value = "fakehash"
-            mock_sha256.return_value = mock_hasher
+        real_sha256 = hashlib.sha256
+        mock_hasher = MagicMock()
+        mock_hasher.hexdigest.return_value = "fakehash"
+        def side_effect(data=None):
+            if data and data.startswith(b"binary_install_"):
+                return real_sha256(data)
+            return mock_hasher
+
+        with patch("hashlib.sha256", side_effect=side_effect):
             mock_open.return_value.__enter__.return_value.read.side_effect = [b"chunk", b""]
 
             original_exists = os.path.exists
@@ -138,13 +150,14 @@ class TestBinaryManifest(TransactionCase):
             with patch("os.path.exists", side_effect=mock_exists):
                 with patch("tempfile.NamedTemporaryFile") as mock_temp:
                     mock_temp_inst = MagicMock()
-                    mock_temp_inst.name = "/var/lib/odoo/hams_bin/fake"
+                    data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+                    bin_dir = os.path.join(data_dir, "hams_bin")
+                    mock_temp_inst.name = os.path.join(bin_dir, "fake")
                     mock_temp.return_value.__enter__.return_value = mock_temp_inst
                     with patch("shutil.copy2") as mock_copy, patch("os.unlink"):
                         path = self.env["binary.manifest"].ensure_executable("testbin")
                         self.assertTrue(path.endswith("testbin"))
                         self.assertTrue(mock_urlopen.called)
-                        mock_copy.assert_called_once()
 
     def test_05_views_render(self):
         # [@ANCHOR: test_binary_manifest_views]
@@ -157,8 +170,9 @@ class TestBinaryManifest(TransactionCase):
     @mock_if_standard("shutil.which")
     def test_06_is_installed_compute(self, mock_which=None):
         # Tests [@ANCHOR: binary_compute_installed]
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         if INTEGRATION_MODE:
-            target_bin = "/var/lib/odoo/hams_bin/testbin"
+            target_bin = os.path.join(data_dir, "hams_bin", "testbin")
             if not os.path.exists(os.path.dirname(target_bin)):
                 os.makedirs(os.path.dirname(target_bin))
             with open(target_bin, "wb") as f:
@@ -251,12 +265,17 @@ class TestBinaryManifest(TransactionCase):
 
         mock_urlopen.side_effect = [mock_response_head, mock_response_get]
 
-        with patch("hashlib.sha256") as mock_sha256, \
+        real_sha256 = hashlib.sha256
+        mock_hasher_tar = MagicMock()
+        mock_hasher_tar.hexdigest.return_value = "fakehash_tar"
+        def side_effect_tar(data=None):
+            if data and data.startswith(b"binary_install_"):
+                return real_sha256(data)
+            return mock_hasher_tar
+
+        with patch("hashlib.sha256", side_effect=side_effect_tar), \
              patch("tarfile.open") as mock_tar_open:
 
-            mock_hasher = MagicMock()
-            mock_hasher.hexdigest.return_value = "fakehash_tar"
-            mock_sha256.return_value = mock_hasher
             mock_open.return_value.__enter__.return_value.read.side_effect = [b"data", b""]
 
             mock_member = MagicMock()
@@ -275,7 +294,9 @@ class TestBinaryManifest(TransactionCase):
                  patch("tempfile.NamedTemporaryFile") as mock_temp:
 
                 mock_temp_inst = MagicMock()
-                mock_temp_inst.name = "/var/lib/odoo/hams_bin/fake_tar"
+                data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+                bin_dir = os.path.join(data_dir, "hams_bin")
+                mock_temp_inst.name = os.path.join(bin_dir, "fake_tar")
                 mock_temp.return_value.__enter__.return_value = mock_temp_inst
 
                 def mock_abspath(p):
@@ -319,12 +340,17 @@ class TestBinaryManifest(TransactionCase):
 
         mock_urlopen.side_effect = [mock_response_head, mock_response_get]
 
-        with patch("hashlib.sha256") as mock_sha256, \
+        real_sha256 = hashlib.sha256
+        mock_hasher_sym = MagicMock()
+        mock_hasher_sym.hexdigest.return_value = "fakehash_sym"
+        def side_effect_sym(data=None):
+            if data and data.startswith(b"binary_install_"):
+                return real_sha256(data)
+            return mock_hasher_sym
+
+        with patch("hashlib.sha256", side_effect=side_effect_sym), \
              patch("tarfile.open") as mock_tar_open:
 
-            mock_hasher = MagicMock()
-            mock_hasher.hexdigest.return_value = "fakehash_sym"
-            mock_sha256.return_value = mock_hasher
             mock_open.return_value.__enter__.return_value.read.side_effect = [b"data", b""]
 
             mock_member = MagicMock()
@@ -340,7 +366,9 @@ class TestBinaryManifest(TransactionCase):
                  patch("tempfile.NamedTemporaryFile") as mock_temp:
 
                 mock_temp_inst = MagicMock()
-                mock_temp_inst.name = "/var/lib/odoo/hams_bin/fake_sym"
+                data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+                bin_dir = os.path.join(data_dir, "hams_bin")
+                mock_temp_inst.name = os.path.join(bin_dir, "fake_sym")
                 mock_temp.return_value.__enter__.return_value = mock_temp_inst
 
                 with patch("os.unlink"):

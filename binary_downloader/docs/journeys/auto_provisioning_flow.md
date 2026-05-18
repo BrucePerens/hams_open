@@ -22,7 +22,7 @@ Binary Downloader checks the system. If `kopia` is not in the PATH, it looks up 
 - **Logic:** `ensure_executable` in `models/binary_manifest.py`.
 
 ### 3. Verification & Download
-If the local cache in `/var/lib/odoo/hams_bin/` is empty or invalid (checksum mismatch):
+If the local cache in `the Odoo data directory (e.g., /var/lib/odoo/hams_bin/)` is empty or invalid (checksum mismatch):
 1. Downloads the binary using `urllib.request`.
 2. Verifies SHA-256 integrity.
 3. Extracts if it's a tarball, applying Tar Slip protection.

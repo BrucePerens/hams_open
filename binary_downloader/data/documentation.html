@@ -1,41 +1,44 @@
 <div class="container">
     <h1>Binary Downloader Facility</h1>
     <p>
-        The <strong>Binary Downloader</strong> is a secure system that provides technical dependencies (like <code>kopia</code> for backups or <code>cloudflared</code> for secure connections) to Odoo automatically. You won't usually need to interact with it directly, as other modules handle it behind the scenes.
+        The <strong>Binary Downloader</strong> is a secure system that provides technical dependencies (helper programs) like <code>kopia</code> (for backups), <code>etcd</code> (for distributed configuration), or <code>cloudflared</code> (for secure tunnels) to Odoo automatically.
     </p>
 
-    <h2>1. What it Does</h2>
+    <h2>1. Purpose and Automation</h2>
     <p>
-        Some Odoo features require special helper programs (binaries) to work. Instead of requiring you to manually install these on your server, the Binary Downloader can fetch them automatically from trusted sources, verify they haven't been tampered with, and make them available for Odoo to use.
+        Modern Odoo deployments often rely on external high-performance tools written in languages like Go or Rust. Instead of requiring manual system administration to install these tools on the host server, the Binary Downloader automates the lifecycle of these dependencies.
+    </p>
+    <p>
+        When an Odoo module needs a specific program, it asks the Binary Downloader to "ensure" it is available. If the program is missing, it is downloaded, verified for integrity, and installed into a protected internal directory.
     </p>
 
-    <h2 id="how_to_use" data-trace="[@ANCHOR: UX_BINARY_INSTALL]">2. How to Use It</h2>
+    <h2 id="how_to_use" data-trace="[@ANCHOR: UX_BINARY_INSTALL]">2. Operating the Module</h2>
     <p>
-        If a module requires a binary that isn't installed yet, you can manage it through the <strong>Binary Manifests</strong> menu:
+        While most operations happen automatically, administrators can monitor and trigger installations manually:
     </p>
     <ol>
         <li>Navigate to <strong>Settings -> Technical -> Binary Manifests</strong>.</li>
-        <li>You will see a list of required binaries and whether they are currently "Installed".</li>
-        <li>If a binary is not installed, you can click the <strong>Install</strong> button. Odoo will then download and set it up for you.</li>
+        <li>Review the list of binaries. The <strong>Installed</strong> column indicates if the dependency is currently available on the system PATH or in Odoo's private binary directory (<code>hams_bin</code>).</li>
+        <li>To manually install or update a dependency, click the <strong>Install</strong> button on the list view, or open the record and click <strong>Install Now</strong>.</li>
+        <li>If an installation fails, a detailed notification will explain the cause (e.g., network error or checksum mismatch).</li>
     </ol>
 
-    <h2 id="binary_security">3. Security and Safety</h2>
+    <h2 id="binary_security">3. Security Architecture</h2>
     <p>
-        We take security very seriously. The Binary Downloader has several built-in protections:
+        Security is at the core of the Binary Downloader design:
     </p>
     <ul>
-        <li><strong>Verification:</strong> Every file downloaded is checked against a unique digital "fingerprint" (SHA-256 checksum) stored in our database. If the file doesn't match perfectly, it is immediately deleted and not installed.</li>
-        <li><strong>Isolation:</strong> Binaries are kept in a specific, protected folder (<code>hams_bin</code>) where Odoo can run them, but they cannot easily interfere with the rest of your system.</li>
-        <li><strong>Restricted Access:</strong> Only administrators can change where binaries are downloaded from or what their fingerprints should be.</li>
+        <li><strong>Cryptographic Verification:</strong> Every downloaded file is verified against a <strong>SHA-256 checksum</strong>. If the file's digital fingerprint doesn't match the expected value, the installation is aborted to protect against tampering.</li>
+        <li><strong>Advisory Locking:</strong> The system uses database-level locks to ensure that multiple Odoo workers don't try to install or update the same binary at the same time, preventing file corruption.</li>
+        <li><strong>Micro-Privilege:</strong> Downloads and installations are performed using a restricted service account (<code>binary_downloader_service</code>) to minimize system risk.</li>
+        <li><strong>Path Sanitization:</strong> Strict protections are in place to prevent "Tar Slip" vulnerabilities and unauthorized symbolic links when extracting archives.</li>
+        <li><strong>Isolation:</strong> Binaries are stored in a dedicated <code>hams_bin</code> folder within Odoo's data directory, kept separate from system-wide binaries.</li>
     </ul>
 
-    <h2>4. Troubleshooting</h2>
-    <p>
-        If an installation fails, it's usually for one of these reasons:
-    </p>
+    <h2>4. Troubleshooting Common Issues</h2>
     <ul>
-        <li><strong>No Internet Access:</strong> The server needs to be able to reach the download URL (usually GitHub).</li>
-        <li><strong>Unsupported System:</strong> Currently, automatic installation is specifically optimized for 64-bit Linux systems.</li>
-        <li><strong>Permissions:</strong> The Odoo service needs permission to write to its data directory to save the binaries.</li>
+        <li><strong>Checksum Failures:</strong> If you see a "Security Alert: Checksum mismatch", it means the file downloaded from the internet does not match the fingerprint in Odoo's database. This could be due to a corrupted download or a change in the remote file. Contact your technical support.</li>
+        <li><strong>System Architecture:</strong> Automatic installation is currently optimized for <strong>64-bit Linux (x86_64)</strong> systems. Other architectures may require manual installation via the system package manager.</li>
+        <li><strong>Network Connectivity:</strong> The Odoo server must have HTTPS access to the download URLs (e.g., <code>github.com</code>) to fetch the dependencies.</li>
     </ul>
 </div>

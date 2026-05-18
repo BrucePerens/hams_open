@@ -149,18 +149,25 @@ class BinaryManifest(models.Model):
 
         target_bin = os.path.join(bin_dir, cmd_name)
 
+        # Deterministic advisory lock to prevent concurrent downloads of the SAME binary
+        lock_id = self.env["zero_sudo.security.utils"]._get_deterministic_hash(f"binary_install_{cmd_name}")
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(%s)", (lock_id,))
+
         if os.path.exists(target_bin):
             # Checksum verification for existing binary
             hasher = hashlib.sha256()
-            with open(target_bin, "rb") as f:
-                for chunk in iter(lambda: f.read(4096), b""):
-                    hasher.update(chunk)
-            if hasher.hexdigest() == manifest_record.checksum:
-                os.chmod(target_bin, 0o750)
-                return target_bin
-            else:
-                _logger.info("Checksum mismatch for %s, re-downloading...", cmd_name)
-                os.unlink(target_bin)
+            try:
+                with open(target_bin, "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        hasher.update(chunk)
+                if hasher.hexdigest() == manifest_record.checksum:
+                    os.chmod(target_bin, 0o750)
+                    return target_bin
+                else:
+                    _logger.info("Checksum mismatch for %s, re-downloading...", cmd_name)
+                    os.unlink(target_bin)
+            except OSError as e:
+                _logger.warning("Failed to check existing binary %s: %s", target_bin, e)
 
         try:
             req = urllib.request.Request(
@@ -236,7 +243,10 @@ class BinaryManifest(models.Model):
                 return target_bin
             finally:
                 if tmp_path and os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
         except (UserError, ValidationError):
             raise
         except (urllib.error.URLError, OSError, tarfile.TarError) as e:
