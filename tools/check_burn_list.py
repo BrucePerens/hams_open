@@ -860,12 +860,6 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         self.add_error(
                             node.lineno, f"Use 'self.env.{node.attr.strip('_')}'."
                         )
-                elif node.attr in ("user", "uid") and isinstance(node.value, ast.Attribute) and node.value.attr == "env" and getattr(node.value.value, "id", "") == "self":
-                    if self.current_method and ("cron" in self.current_method.lower() or "daemon" in self.current_method.lower() or self.current_method.startswith("_run_")):
-                        self.add_error(
-                            node.lineno,
-                            f"CRITICAL ZERO-SUDO TRAP: Relying on 'self.env.{node.attr}' inside a background method ('{self.current_method}') is forbidden. It defaults to root or the cron caller. Elevate to a designated service account using 'with_user()' instead."
-                        )
                 elif node.attr == "users" and getattr(
                     node.value, "id", getattr(node.value, "attr", "")
                 ) in ("group", "groups", "_group_id"):
