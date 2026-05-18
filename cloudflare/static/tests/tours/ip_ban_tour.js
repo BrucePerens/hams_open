@@ -3,7 +3,7 @@ import { registry } from "@web/core/registry";
 
 // [@ANCHOR: test_tour_cf_ip_ban]
 registry.category("web_tour.tours").add("cf_ip_ban_tour", {
-    url: "/web",
+    url: "/odoo",
     steps: () => [
         {
             trigger: '.o_navbar_apps_menu button',

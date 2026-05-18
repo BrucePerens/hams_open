@@ -24,7 +24,7 @@ DEFAULT_WAF_RULES = [
         "sequence": 20,
         "name": "Protect Database Manager",
         "action": "block",
-        "expression": '(http.request.uri.path eq "/web/database/manager") or (http.request.uri.path eq "/web/database/selector")',
+        "expression": '(http.request.uri.path eq "/odoo/database/manager") or (http.request.uri.path eq "/odoo/database/selector")',
         "description": "SECURITY: Prevents public access to the Odoo database manager interface.",
     },
     {

@@ -27,5 +27,5 @@ class ZeroSudoHome(Home):
             if res and res[0]:
                 request.session.logout()
                 # Use query parameter to show error on login page after redirect
-                return request.redirect("/web/login?error=access_denied_service")
+                return request.redirect("/odoo/login?error=access_denied_service")
         return response

@@ -8,7 +8,7 @@ registry.category("web_tour.tours").add("zero_sudo_tour", {
     // Verified by [@ANCHOR: test_zero_sudo_tour]
     // Tests [@ANCHOR: story_login_blocking]
     // Tests [@ANCHOR: journey_service_account_lifecycle]
-    url: "/web",
+    url: "/odoo",
     steps: () => [
         {
             trigger: '.o_navbar_apps_menu button',

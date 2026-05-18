@@ -171,7 +171,7 @@ class UserWebsitesController(http.Controller):
 
     # --- 2. Abuse Reporting ---
     @http.route(
-        "/website/report_violation",
+        "/website/report_violation", # burn-ignore-route
         type="http",
         auth="public",
         methods=["POST"],
@@ -311,7 +311,7 @@ class UserWebsitesController(http.Controller):
 
                 # Retrieve avatar for OpenGraph og:image if available
                 ts = int(user.write_date.timestamp()) if user.write_date else 0
-                avatar_url = f"/web/image/res.users/{user.id}/avatar_128?unique={ts}"
+                avatar_url = f"/odoo/image/res.users/{user.id}/avatar_128?unique={ts}"
 
                 response = request.render(
                     page.view_id.id,
@@ -799,7 +799,7 @@ class UserWebsitesController(http.Controller):
 
     # --- 8. Moderation Appeals ---
     @http.route(
-        "/website/submit_appeal",
+        "/website/submit_appeal", # burn-ignore-route
         type="http",
         auth="user",
         methods=["POST"],
@@ -877,7 +877,7 @@ class UserWebsitesController(http.Controller):
         return request.redirect(f"{referrer}?subscribed=1")
 
     @http.route(
-        "/website/unsubscribe/<string:model_name>/<int:record_id>/<int:partner_id>/<int:timestamp>/<string:token>",
+        "/website/unsubscribe/<string:model_name>/<int:record_id>/<int:partner_id>/<int:timestamp>/<string:token>", # burn-ignore-route
         type="http",
         auth="public",
         website=True,
@@ -1043,4 +1043,4 @@ class UserWebsitesController(http.Controller):
             BACKGROUND_EXECUTOR.submit(_async_gdpr_erasure, db_name, user_id)
 
         request.session.logout()
-        return request.redirect("/web/login?erased=1")
+        return request.redirect("/odoo/login?erased=1")

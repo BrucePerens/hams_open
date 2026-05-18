@@ -67,7 +67,7 @@ class TestRobustnessAndBoundaries(odoo.tests.common.HttpCase):
         long_desc = "A" * 6000
 
         response = self.url_open(
-            "/website/report_violation",
+            "/website/report_violation", # burn-ignore-route
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": f"/{self.user_test.website_slug}/home",

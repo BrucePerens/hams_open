@@ -140,7 +140,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
         track(
             "User: Report Violation",
             self.url_open,
-            "/website/report_violation",
+            "/website/report_violation", # burn-ignore-route
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": f"/{other_user.website_slug}/home",
@@ -181,7 +181,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
             track(
                 "User: Submit Appeal",
                 self.url_open,
-                "/website/submit_appeal",
+                "/website/submit_appeal", # burn-ignore-route
                 data={
                     "csrf_token": odoo.http.Request.csrf_token(self),
                     "reason": "I am a simulation. Please pardon my simulated behavior.",

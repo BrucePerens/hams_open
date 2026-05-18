@@ -2,7 +2,7 @@
 import { registry } from "@web/core/registry";
 
 registry.category("web_tour.tours").add("cf_purge_wizard_tour", {
-    url: "/web",
+    url: "/odoo",
     steps: () => [
         {
             trigger: '.o_navbar_apps_menu button',

@@ -5,4 +5,4 @@ from odoo.tests import HttpCase, tagged
 class TestBackupTour(HttpCase):
     def test_backup_dashboard_tour(self):
         # Tests [@ANCHOR: test_tour_execution]
-        self.start_tour("/web", 'backup_dashboard_tour', login="admin")
+        self.start_tour("/odoo", 'backup_dashboard_tour', login="admin")

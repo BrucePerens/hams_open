@@ -27,4 +27,4 @@ class TestZeroSudoViews(HttpCase):
 
         if 'hams_test' not in installed_modules:
             self.skipTest("hams_test module not installed, skipping tour that depends on its utilities.")
-        self.start_tour("/web", "zero_sudo_tour", login="admin")
+        self.start_tour("/odoo", "zero_sudo_tour", login="admin")

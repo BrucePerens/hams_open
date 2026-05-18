@@ -116,7 +116,7 @@ class TestDocumentation(odoo.tests.common.HttpCase):
             "The redirect to the login page should resolve successfully.",
         )
         self.assertIn(
-            b"/web/login",
+            b"/odoo/login",
             response.url.encode(),
             "Unauthenticated guest users should be redirected to the login screen.",
         )

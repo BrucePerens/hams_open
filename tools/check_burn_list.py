@@ -295,6 +295,11 @@ ODOO_ERROR_RULES = [
         "CRITICAL ROUTING DEPRECATION: Hash-based routing (/web#...) is deprecated and forcefully redirected in Odoo 19. Use query parameters (/odoo?...) instead.",
     ),
     (
+        r"\.(py|js)$",
+        re.compile(r"['\"]/web.*?['\"]"),
+        "CRITICAL ROUTING DEPRECATION: /web is deprecated and forcefully redirected to /odoo in Odoo 19, losing the query parameters! Use /odoo instead.",
+    ),
+    (
         r"tour.*\.js$|.*_tour\.js$",
         re.compile(r"run:\s*['\"`]text\b"),
         "CRITICAL JS TOUR ACTION: 'text' is not a valid action in Odoo 19. Use 'edit' to simulate text input.",
@@ -1645,7 +1650,8 @@ def scan_file(filepath, is_odoo_module=False):
             for allowed in [
                 "burn-ignore-financial",
                 "burn-ignore-tour",
-                "burn-ignore-sudo"
+                "burn-ignore-sudo",
+                "burn-ignore-route"
             ]
         ):
             errors_found.append(

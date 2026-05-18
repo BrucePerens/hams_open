@@ -26,21 +26,21 @@ class TestZeroSudoControllers(HttpCase):
             'is_service_account': True,
         })
 
-        # 2. Attempt login via POST to /web/login
+        # 2. Attempt login via POST to /odoo/login
         # We fetch the login page first to get a session and CSRF token
-        response = self.url_open('/web/login')
+        response = self.url_open('/odoo/login')
         csrf_token = ''
 
         match = re.search(r'name="csrf_token"\s+value="([^"]+)"', response.text)
         if match:
             csrf_token = match.group(1)
 
-        response = self.url_open('/web/login', data={
+        response = self.url_open('/odoo/login', data={
             'login': login,
             'password': password,
             'csrf_token': csrf_token,
         })
 
         # 3. Check if we were redirected to login with error
-        self.assertIn('/web/login', response.url)
+        self.assertIn('/odoo/login', response.url)
         self.assertIn('error=access_denied_service', response.url)

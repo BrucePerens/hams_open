@@ -2,7 +2,7 @@
 import { registry } from "@web/core/registry";
 
 registry.category("web_tour.tours").add("db_management_slow_query_tour", { // # Verified by [@ANCHOR: test_db_slow_query_tour]
-    url: "/web",
+    url: "/odoo?debug=1",
     steps: () => [
         {
             trigger: '.o_navbar_apps_menu button',

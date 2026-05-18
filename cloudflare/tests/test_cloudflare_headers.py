@@ -28,7 +28,7 @@ class TestCloudflareHeaders(HttpCase):
         company_id = self.env.company.id
 
         # 1. Test Private Attachment (MUST NOT CACHE)
-        response_img = self.url_open(f"/web/image/res.company/{company_id}/logo")
+        response_img = self.url_open(f"/odoo/image/res.company/{company_id}/logo")
         self.assertEqual(response_img.status_code, 200)
         self.assertEqual(
             response_img.headers.get("Cloudflare-CDN-Cache-Control"),
@@ -51,7 +51,7 @@ class TestCloudflareHeaders(HttpCase):
         mock_response = Response()
         mock_request = type("MockRequest", (object,), {})()
         mock_request.httprequest = type("MockHttpRequest", (object,), {})()
-        mock_request.httprequest.path = "/web/assets/1/dummy.js"
+        mock_request.httprequest.path = "/odoo/assets/1/dummy.js"
 
         with patch("odoo.addons.cloudflare.models.ir_http.request", mock_request):
             res = DummyIrHttp._post_dispatch(mock_response)

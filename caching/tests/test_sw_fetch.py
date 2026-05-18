@@ -24,8 +24,8 @@ class TestServiceWorkerFetch(HttpCase):
             regex_str = match.group(1).strip('/')
             # Use Python's re to test the same regex
             pattern = re.compile(regex_str)
-            self.assertTrue(pattern.search("/web/assets/debug/web.assets_backend.js"))
-            self.assertTrue(pattern.search("/web/assets/12345/web.assets_frontend.css"))
+            self.assertTrue(pattern.search("/odoo/assets/debug/web.assets_backend.js"))
+            self.assertTrue(pattern.search("/odoo/assets/12345/web.assets_frontend.css"))
             self.assertTrue(pattern.search("/my_module/static/src/js/script.js"))
-            self.assertFalse(pattern.search("/web/image/123"))
+            self.assertFalse(pattern.search("/odoo/image/123"))
             self.assertFalse(pattern.search("/api/v1/data"))
