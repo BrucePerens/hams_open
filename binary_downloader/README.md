@@ -41,15 +41,21 @@ Tracks whether a binary is available in the system PATH or `hams_bin` and is exe
 #### `action_install()`
 `[@ANCHOR: binary_action_install]`
 
-Triggers installation via the UI.
+Triggers installation via the UI. Restricted to members of `Binary Downloader Manager` or Administrators.
 
 * **Logic:**
-    1. Checks if the binary is already available.
-    2. If not, downloads, verifies checksum, and extracts/installs if necessary to `/var/lib/odoo/hams_bin/`.
+    1. Checks if the binary is already available in the system PATH or the local `hams_bin` cache.
+    2. If not, it executes an ethical HEAD request to check for server availability and ETags.
+    3. Downloads the binary/archive to a temporary file within `hams_bin`.
+    4. Verifies the SHA-256 checksum of the downloaded file.
+    5. If it's a `.tar.gz`, it extracts the specified `extract_member` (or the binary name) into `hams_bin`.
+    6. Extraction includes strict Tar Slip protection, symlink/hardlink rejection, and file-type validation.
+    7. Sets file permissions to `0o750` for security.
 
 ### UI Components
 * **List View:** `view_binary_downloader_manifest_list` `[@ANCHOR: test_binary_manifest_views]`
 * **Form View:** `view_binary_downloader_manifest_form` `[@ANCHOR: test_binary_manifest_views]`
+* **Menu:** Located under **Settings -> Administration -> Binary Manifests**.
 </api>
 
 <usage>

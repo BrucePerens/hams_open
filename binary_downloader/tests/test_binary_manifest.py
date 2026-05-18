@@ -346,3 +346,56 @@ class TestBinaryManifest(TransactionCase):
                 with patch("os.unlink"):
                     with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
                         self.env["binary.manifest"].ensure_executable("symlinkbin")
+
+    @mock_if_standard("shutil.which", return_value=None)
+    @mock_if_standard("platform.system", return_value="Linux")
+    @mock_if_standard("platform.machine", return_value="x86_64")
+    @mock_if_standard("urllib.request.urlopen")
+    @mock_if_standard("odoo.addons.binary_downloader.models.binary_manifest.open", create=True)
+    def test_14_non_file_prevention(self, mock_open=None, mock_urlopen=None, mock_machine=None, mock_system=None, mock_which=None):
+        if INTEGRATION_MODE:
+            return
+
+        self.env["binary.manifest"].create({
+            "name": "dirbin",
+            "url": "http://example.com/dir.tar.gz",
+            "checksum": "fakehash_dir",
+            "archive_type": "tar.gz",
+            "extract_member": "dirbin"
+        })
+
+        mock_response_head = MagicMock()
+        mock_response_head.__enter__.return_value = mock_response_head
+        mock_response_get = MagicMock()
+        mock_response_get.read.side_effect = [b"data", b""]
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.side_effect = [mock_response_head, mock_response_get]
+
+        with patch("hashlib.sha256") as mock_sha256, \
+             patch("tarfile.open") as mock_tar_open:
+
+            mock_hasher = MagicMock()
+            mock_hasher.hexdigest.return_value = "fakehash_dir"
+            mock_sha256.return_value = mock_hasher
+            mock_open.return_value.__enter__.return_value.read.side_effect = [b"data", b""]
+
+            mock_member = MagicMock()
+            mock_member.name = "dirbin"
+            mock_member.islnk.return_value = False
+            mock_member.issym.return_value = False
+            mock_member.isfile.return_value = False  # Simulate a directory or other non-file
+
+            mock_tar = MagicMock()
+            mock_tar.getmembers.return_value = [mock_member]
+            mock_tar_open.return_value.__enter__.return_value = mock_tar
+
+            with patch("os.path.exists", return_value=False), \
+                 patch("tempfile.NamedTemporaryFile") as mock_temp:
+                mock_temp_inst = MagicMock()
+                mock_temp_inst.name = "/var/lib/odoo/hams_bin/fake_dir"
+                mock_temp.return_value.__enter__.return_value = mock_temp_inst
+
+                with patch("os.unlink"):
+                    with self.assertRaisesRegex(UserError, "Member dirbin not found in archive."):
+                        # It's "not found" because we only look for isfile()
+                        self.env["binary.manifest"].ensure_executable("dirbin")

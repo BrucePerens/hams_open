@@ -11,6 +11,10 @@ registry.category("web_tour.tours").add("binary_install_tour", {
             run: 'click',
         },
         {
+            trigger: '[data-menu-xmlid="base.menu_administration"]',
+            run: 'click',
+        },
+        {
             trigger: '[data-menu-xmlid="binary_downloader.menu_binary_downloader_manifest"], *:contains("Binary Manifests")',
             run: 'click',
         },

@@ -38,4 +38,6 @@ class TestBinaryDownloaderTour(HttpCase):
     @patch("odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable", return_value="/var/lib/odoo/hams_bin/tourbin")
     def test_binary_install_tour(self, mock_ensure):
         # Tested by [@ANCHOR: test_binary_install_tour]
-        self.start_tour("/web?debug=1", "binary_install_tour", login="admin")
+        # In Odoo 19, we must use /odoo instead of /web to avoid illegal redirections.
+        # Technical menu ?debug=1 is not provisioned in the test environment.
+        self.start_tour("/odoo", "binary_install_tour", login="admin")

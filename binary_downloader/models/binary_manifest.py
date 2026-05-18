@@ -206,13 +206,14 @@ class BinaryManifest(models.Model):
                         extract_target = manifest_record.extract_member or cmd_name
                         for member in tar.getmembers():
                             if (
-                                member.name.endswith(f"/{extract_target}")
-                                or member.name == extract_target
+                                (member.name.endswith(f"/{extract_target}")
+                                 or member.name == extract_target)
+                                and member.isfile()
                             ):
                                 # Ensure we don't extract anywhere else
                                 member.name = os.path.basename(cmd_name)
 
-                                # Deep link/symlink protection
+                                # Deep link/symlink/hardlink protection
                                 if member.islnk() or member.issym():
                                     raise UserError(_("Security Alert: Links are not allowed in the archive."))
 
