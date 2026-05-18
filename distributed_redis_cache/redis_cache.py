@@ -5,6 +5,7 @@ import logging
 import hashlib
 import datetime
 from functools import wraps
+import redis as redis_lib
 from odoo import models, tools
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 
@@ -67,8 +68,11 @@ def distributed_cache():
                     cached = r.get(cache_key)
                     if cached:
                         return json.loads(cached)
-                except Exception as e: # audit-ignore-catch-all
+                except (redis_lib.RedisError, json.JSONDecodeError) as e:
                     _logger.warning("Redis cache read failed: %s", e)
+                    use_redis = False
+                except Exception: # audit-ignore-catch-all
+                    _logger.exception("Unexpected error during Redis cache read")
                     use_redis = False
 
             if not use_redis:
@@ -84,8 +88,10 @@ def distributed_cache():
                     r = redis.Redis(connection_pool=redis_pool)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                     return result
-                except Exception as e: # audit-ignore-catch-all
+                except (redis_lib.RedisError, TypeError) as e:
                     _logger.warning("Redis cache write failed, falling back to local: %s", e)
+                except Exception: # audit-ignore-catch-all
+                    _logger.exception("Unexpected error during Redis cache write")
 
             # Fallback to local memory cache
             _local_cache[cache_key] = result
@@ -117,8 +123,10 @@ def invalidate_model_cache(env, model_name, local_only=False):
                     keys.append(key)
                 if keys:
                     r.delete(*keys)
-            except Exception as e: # audit-ignore-catch-all
+            except redis_lib.RedisError as e:
                 _logger.warning("Redis cache invalidation failed: %s", e)
+            except Exception: # audit-ignore-catch-all
+                _logger.exception("Unexpected error during Redis cache invalidation")
 
     # Always clear local fallback cache for this process to ensure consistency
     keys_to_delete = [
@@ -136,7 +144,8 @@ def notify_model_invalidation(env, model_name):
     Triggers a cross-worker invalidation signal via PostgreSQL NOTIFY.
     """
     # Security: Validate model name
-    if model_name not in env:
+    if not model_name or not isinstance(model_name, str) or model_name not in env:
+        _logger.warning("Attempted invalidation of non-existent model: %s", model_name)
         return
 
     dbname = env.cr.dbname

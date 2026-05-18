@@ -30,10 +30,11 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
         {
             trigger: '.o_field_widget[name="model_id"] input',
             content: "Select a model",
-            run: "edit res.users",
+            run: "edit Users",
         },
         {
-            trigger: '.dropdown-item:contains("res.users"), .ui-menu-item *:contains("res.users")',
+            trigger: '.o-autocomplete--dropdown-item:contains("Users"), .o-autocomplete--item:contains("Users"), .dropdown-item:contains("Users"), .ui-menu-item *:contains("Users")',
+            content: "Select Users from dropdown",
             run: "click",
         },
         {

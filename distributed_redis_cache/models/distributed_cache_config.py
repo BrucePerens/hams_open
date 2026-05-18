@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import redis as redis_lib
 from odoo import models, fields, _
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
@@ -10,7 +11,7 @@ class DistributedCacheConfig(models.TransientModel):
     _name = 'distributed.cache.config'
     _description = 'Distributed Cache Configuration'
 
-    model_id = fields.Many2one('ir.model', string="Model to Invalidate", help="Select a model to flush its specific cache.")
+    model_id = fields.Many2one('ir.model', string="Model to Invalidate", help="Select a model to flush its specific cache.", required=True)
 
     def action_invalidate_model_cache(self):
         # [@ANCHOR: manual_cache_invalidation]
@@ -41,9 +42,13 @@ class DistributedCacheConfig(models.TransientModel):
                 r.ping()
                 status_msg = _("Redis connection is healthy.")
                 msg_type = 'success'
-            except Exception as e: # audit-ignore-catch-all
+            except redis_lib.RedisError as e:
                 _logger.warning("Redis connection check failed: %s", e)
                 status_msg = _("Redis connection failed: %s", e)
+                msg_type = 'danger'
+            except Exception: # audit-ignore-catch-all
+                _logger.exception("Unexpected error during Redis connection check")
+                status_msg = _("An unexpected error occurred while checking Redis connection.")
                 msg_type = 'danger'
 
         return {

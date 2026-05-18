@@ -6,6 +6,7 @@ import threading
 import concurrent.futures
 import atexit
 import time
+import redis as redis_lib
 
 from odoo import models, tools
 from odoo.http import request
@@ -64,16 +65,20 @@ def _redis_listener_thread():
                         if m_name:
                             with _listener_lock:
                                 _invalidation_queue.add((m_name, db_name))
-            except (redis.ConnectionError, redis.TimeoutError):
+            except (redis_lib.ConnectionError, redis_lib.TimeoutError):
                 if _listener_started:
                     time.sleep(1.0)  # audit-ignore-sleep
-            except Exception as e: # audit-ignore-catch-all
-                _logger.warning("Redis listener error: %s", e)
+            except json.JSONDecodeError as e:
+                _logger.warning("Redis listener received invalid JSON: %s", e)
+            except Exception: # audit-ignore-catch-all
+                _logger.exception("Unexpected error in Redis listener loop")
                 if _listener_started:
                     time.sleep(1.0)  # audit-ignore-sleep
-    except Exception as e: # audit-ignore-catch-all
-        warn_msg = """Redis async listener thread disconnected: %s"""
+    except redis_lib.RedisError as e:
+        warn_msg = """Redis async listener thread disconnected due to Redis error: %s"""
         _logger.warning(warn_msg, e)
+    except Exception: # audit-ignore-catch-all
+        _logger.exception("Redis async listener thread crashed unexpectedly")
     finally:
         with _listener_lock:
             _listener_started = False

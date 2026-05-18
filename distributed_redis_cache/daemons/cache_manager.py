@@ -61,8 +61,10 @@ async def broadcast_to_redis(payload):
     try:
         await redis_client.publish(REDIS_CHANNEL, payload)
         logger.debug(f"Published invalidation to Redis: {payload}")
-    except Exception as e:
+    except redis.RedisError as e:
         logger.error(f"Redis publish failed: {e}")
+    except Exception:
+        logger.exception("Unexpected error during Redis publish")
 
 
 def postgres_notify_handler(connection, pid, channel, payload):
@@ -107,8 +109,11 @@ async def main():
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break
-        except Exception as e:
-            logger.error(f"PostgreSQL connection dropped: {e}. Reconnecting in 5s...")
+        except (asyncpg.PostgresError, OSError) as e:
+            logger.error(f"PostgreSQL connection error: {e}. Reconnecting in 5s...")
+            await asyncio.sleep(5)
+        except Exception:
+            logger.exception("Unexpected error in PostgreSQL listener loop. Reconnecting in 5s...")
             await asyncio.sleep(5)
 
     if redis_client:

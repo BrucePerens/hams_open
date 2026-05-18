@@ -210,6 +210,44 @@ class TestDistributedCacheStandard(HttpCase):
             self.assertIn('"model": "res.users"', args[1][1])
             self.assertIn(f'"dbname": "{self.env.cr.dbname}"', args[1][1])
 
+    def test_09_notify_invalid_model(self):
+        """Verify that notify_model_invalidation handles invalid model names."""
+        with patch("odoo.addons.distributed_redis_cache.redis_cache.invalidate_model_cache") as mock_invalidate, \
+             patch.object(self.env.cr, 'execute') as mock_execute:
+            notify_model_invalidation(self.env, "invalid.model")
+            mock_invalidate.assert_not_called()
+            mock_execute.assert_not_called()
+
+    def test_10_distributed_cache_complex_args(self):
+        """Verify @distributed_cache with complex arguments."""
+        class MockModel:
+            def __init__(self, env):
+                self.env = env
+                self._name = "mock.model"
+
+            @distributed_cache()
+            def complex_method(self, data):
+                return len(data)
+
+        mock_obj = MockModel(self.env)
+        _local_cache.clear()
+
+        # Bypass test_enable check
+        with patch("odoo.tools.config", {"test_enable": False}), \
+             patch("odoo.addons.distributed_redis_cache.redis_cache.redis", None):
+
+            data = {"a": [1, 2, {"b": 3}], "c": 4}
+            res1 = mock_obj.complex_method(data)
+            self.assertEqual(res1, 2)
+
+            # Change order in dict
+            data2 = {"c": 4, "a": [1, 2, {"b": 3}]}
+            res2 = mock_obj.complex_method(data2)
+            self.assertEqual(res2, 2)
+
+            # Verify they use same cache key
+            self.assertEqual(len(_local_cache), 1)
+
 
 @tagged("integration", "post_install", "-at_install")
 class TestDistributedCacheIntegration(HamsIntegrationCase):
