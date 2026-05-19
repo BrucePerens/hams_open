@@ -2,6 +2,7 @@
 from . import real_transaction
 from . import test_facility
 from . import test_ui
+from . import test_integration
 
 import logging
 import psycopg2
