@@ -23,3 +23,5 @@ access_cloudflare_tunnel_wizard_admin,cloudflare.tunnel.wizard admin,model_cloud
 access_cloudflare_purge_wizard_admin,cloudflare.purge.wizard admin,model_cloudflare_purge_wizard,base.group_system,1,1,1,1
 access_cloudflare_zone_settings_wizard_admin,cloudflare.zone.settings.wizard admin,model_cloudflare_zone_settings_wizard,base.group_system,1,1,1,1
 access_cloudflare_tunnel_admin,cloudflare.tunnel admin,model_cloudflare_tunnel,base.group_system,1,1,1,1
+access_cloudflare_ip_ban_public,cloudflare.ip.ban public,model_cloudflare_ip_ban,base.group_public,0,0,1,0
+access_cloudflare_ip_ban_portal,cloudflare.ip.ban portal,model_cloudflare_ip_ban,base.group_portal,0,0,1,0

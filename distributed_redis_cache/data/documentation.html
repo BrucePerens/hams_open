@@ -50,6 +50,9 @@
     <li>Every server in the cluster will immediately clear its local cache for that specific model.</li>
 </ol>
 
+<h2>Multi-Website Awareness</h2>
+<p>This module is fully multi-website aware. Cache entries are isolated per website based on the <code>website_id</code> in the request context. This ensures that personal or group-specific data is correctly cached and never leaked between different sites hosted on the same Odoo instance.</p>
+
 <h2>Technical Benefits</h2>
 <ul>
     <li><b>Zero-Sudo Architecture:</b> Built for security, the module uses dedicated service accounts and minimal privileges.</li>
@@ -58,7 +61,7 @@
 </ul>
 
 <div class="note">
-    <strong>Developer Tip:</strong> Use the <code>@distributed_cache()</code> decorator on your custom model methods to automatically benefit from cluster-wide caching.
+    <strong>Developer Tip:</strong> Use the <code>@distributed_cache()</code> decorator on your custom model methods to automatically benefit from cluster-wide caching and multi-website isolation.
 </div>
 
 <!-- Semantic Anchors for System Integration -->

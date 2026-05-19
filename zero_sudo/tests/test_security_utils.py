@@ -56,8 +56,12 @@ class TestSecurityUtils(TransactionCase):
             utils._get_system_param("some.unregistered.safe.param")
 
     def test_02_bdd_ormcache_query_counting_service_uid(self):
+        # [@ANCHOR: test_get_service_uid_sql_resolve]
+        # [@ANCHOR: test_get_service_uid_sql_verify]
         # [@ANCHOR: test_get_service_uid]
         # Tests [@ANCHOR: get_service_uid]
+        # Tests [@ANCHOR: get_service_uid_sql_resolve]
+        # Tests [@ANCHOR: get_service_uid_sql_verify]
         # Tests [@ANCHOR: story_secure_escalation]
         # Tests [@ANCHOR: journey_service_account_lifecycle]
         utils = self.env["zero_sudo.security.utils"]
@@ -83,6 +87,7 @@ class TestSecurityUtils(TransactionCase):
     def test_03_bdd_event_bus_payload_generation(self):
         # [@ANCHOR: test_coherent_cache_signal]
         # Tests [@ANCHOR: coherent_cache_signal]
+        # Tests [@ANCHOR: coherent_cache_signal_single]
         # Tests [@ANCHOR: story_cache_signaling]
         utils = self.env["zero_sudo.security.utils"]
         with patch.object(self.env.cr, "execute") as mock_execute:
@@ -101,6 +106,8 @@ class TestSecurityUtils(TransactionCase):
             self.assertEqual(mock_execute.call_count, 0, "Should not notify for empty model or key")
 
     def test_04_god_mode_block_enforcement(self):
+        # [@ANCHOR: test_god_mode_block_sql]
+        # Tests [@ANCHOR: god_mode_block_sql]
         """Verify that any Service Account granted base.group_system is violently rejected."""
         # 1. Create a rogue service account
         rogue_user = self.env["res.users"].create(
@@ -130,6 +137,8 @@ class TestSecurityUtils(TransactionCase):
             utils._get_service_uid("rogue_module.sneaky_admin_service")
 
     def test_05_notify_cache_invalidation_list(self):
+        # [@ANCHOR: test_coherent_cache_signal_batch]
+        # Tests [@ANCHOR: coherent_cache_signal_batch]
         """Test _notify_cache_invalidation with a list payload."""
         utils = self.env["zero_sudo.security.utils"]
         with patch.object(self.env.cr, "execute") as mock_execute:
@@ -203,13 +212,18 @@ class TestSecurityUtils(TransactionCase):
             utils.with_user(non_admin)._update_python_venv()
 
     def test_08_get_crypto_secret(self):
+        # [@ANCHOR: test_get_crypto_secret]
         # Tests [@ANCHOR: get_crypto_secret]
         """Test the cryptographic secret retrieval hierarchy."""
         utils = self.env["zero_sudo.security.utils"]
+        # Clear cache since the method is ormcache'd
+        utils.env.registry.clear_cache()
 
         # 1. Test environment variable resolution
         with patch.dict(os.environ, {"HAMS_CRYPTO_KEY": "test_env_key"}):
             self.assertEqual(utils._get_crypto_secret(), "test_env_key")
+
+        utils.env.registry.clear_cache()
 
         # 2. Test file fallback
         with patch.dict(os.environ, {}, clear=True):
@@ -218,6 +232,7 @@ class TestSecurityUtils(TransactionCase):
                     self.assertEqual(utils._get_crypto_secret(), "test_file_key")
 
             # 3. Test configuration fallback
+            utils.env.registry.clear_cache()
             with patch("os.path.exists", return_value=False):
                 with patch.object(odoo.tools.config, "get", return_value="test_config_key"):
                     self.assertEqual(utils._get_crypto_secret(), "test_config_key")
@@ -299,6 +314,8 @@ class TestSecurityUtils(TransactionCase):
                 mock_manifest.ensure_executable.assert_called_once_with("kopia")
 
     def test_12_kv_store(self):
+        # [@ANCHOR: test_set_kv_sql_check]
+        # Tests [@ANCHOR: set_kv_sql_check]
         """Verify the lightweight Service Account Key-Value storage abstraction."""
         utils = self.env["zero_sudo.security.utils"]
 

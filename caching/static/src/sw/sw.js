@@ -30,10 +30,14 @@ self.addEventListener('fetch', (event) => {
     const request = event.request;
     const url = new URL(request.url);
 
+    // Only cache GET requests.
     if (request.method !== 'GET') return;
-    if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
-    if (url.pathname.startsWith('/my/') || url.pathname.startsWith('/api/')) return;
 
+    // Explicitly bypass WebSockets, secure APIs, and dynamic routes.
+    if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
+    if (url.pathname.startsWith('/my/') || url.pathname.startsWith('/api/') || url.pathname.startsWith('/web/image/') || url.pathname.startsWith('/web/content/')) return; // burn-ignore-route
+
+    // We only intercept requests that match our static asset patterns.
     if (CACHE_URL_REGEX.test(url.pathname)) {
         event.respondWith(
             caches.match(request).then((cachedResponse) => {

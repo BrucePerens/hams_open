@@ -89,11 +89,19 @@ class CloudflareConfigManager(models.AbstractModel):
 
                 # Trigger the purge using the specific purger environment
                 env_purger = utils._get_service_env("cloudflare.user_cloudflare_purge")
-                env_purger["cloudflare.purge.queue"].enqueue_tags(
-                    ["odoo-static-assets"]
-                )
+
+                # Multi-Website Purge: Static assets should be purged across all configured websites
+                # We use the purger environment to access website credentials securely
+                websites = env_purger["website"].search([], limit=1000)
+                for website in websites:
+                    token, zone_id = website._get_cloudflare_credentials()
+                    if token and zone_id:
+                        env_purger["cloudflare.purge.queue"].enqueue_tags(
+                            ["odoo-static-assets"], website_id=website.id
+                        )
+
                 _logger.info(
-                    "[*] Static assets modified (%s > %s). Triggered Cloudflare purge for 'odoo-static-assets'.",
+                    "[*] Static assets modified (%s > %s). Triggered Cloudflare purge for 'odoo-static-assets' across all websites.",
                     latest_mtime, last_mtime
                 )
         except (ValueError, OSError, RuntimeError) as e:

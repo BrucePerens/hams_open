@@ -3,7 +3,6 @@ import time
 import os
 import logging
 from odoo import models, fields, api, tools
-from odoo.http import request
 from ..utils.cloudflare_api import purge_urls, purge_tags
 
 _logger = logging.getLogger(__name__)
@@ -27,13 +26,7 @@ class CloudflarePurgeQueue(models.Model):
         # [@ANCHOR: enqueue_urls_base_url]
         # Verified by [@ANCHOR: test_purge_queue_base_url_sudo]
         if not website_id:
-            try:
-                if getattr(request, "website", False):
-                    website_id = request.website.id
-                else:
-                    website_id = self.env["website"].get_current_website().id
-            except RuntimeError:
-                website_id = self.env["website"].get_current_website().id
+            website_id = self.env["cloudflare.utils"].get_current_website_id()
 
         website = self.env["website"].browse(website_id)
 
@@ -68,13 +61,7 @@ class CloudflarePurgeQueue(models.Model):
         # Verified by [@ANCHOR: test_purge_tags_api]
         # Verified by [@ANCHOR: test_purge_queue_tags_processing]
         if not website_id:
-            try:
-                if getattr(request, "website", False):
-                    website_id = request.website.id
-                else:
-                    website_id = self.env["website"].get_current_website().id
-            except RuntimeError:
-                website_id = self.env["website"].get_current_website().id
+            website_id = self.env["cloudflare.utils"].get_current_website_id()
 
         create_vals = [
             {"target_item": t, "purge_type": "tag", "website_id": website_id}
@@ -92,18 +79,20 @@ class CloudflarePurgeQueue(models.Model):
         batches_processed = 0
 
         while batches_processed < max_batches:
+            # We must process in batches to avoid timing out and to respect Cloudflare rate limits.
+            # However, we also need to group by website/zone because each zone requires a different API call.
             records = self.env["cloudflare.purge.queue"].search(
-                [("state", "=", "pending")], limit=limit
+                [("state", "=", "pending")], order="website_id, id", limit=limit
             )
             if not records:
                 break
 
             # Process strictly by website to prevent credential mixing
-            first_website_id = records[0].website_id
-            batch_records = records.filtered(lambda r: r.website_id == first_website_id)
+            first_website = records[0].website_id
+            batch_records = records.filtered(lambda r: r.website_id == first_website)
 
-            if first_website_id:
-                token, zone_id = first_website_id._get_cloudflare_credentials()
+            if first_website:
+                token, zone_id = first_website._get_cloudflare_credentials()
             else:
                 token = os.environ.get("CLOUDFLARE_API_TOKEN")
                 zone_id = os.environ.get("CLOUDFLARE_ZONE_ID")
@@ -135,9 +124,6 @@ class CloudflarePurgeQueue(models.Model):
             batches_processed += 1
             if not tools.config.get("test_enable"):
                 self.env.cr.commit()
-
-            if len(records) < limit:
-                break
 
             if not os.environ.get("HAMS_DISABLE_SLEEPS"):
                 time.sleep(0.5)  # audit-ignore-sleep: Rate limiting  # fmt: skip

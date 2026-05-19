@@ -28,7 +28,7 @@ The module operates under the `user_daemon_key_manager_service` account. It uses
 * **Strict Permissions:** `.env` files are created with `0600` (read/write only for the Odoo server process user).
 * **Directory Isolation:** Parent directories are created with `0700` to prevent other users on the system from traversing into the key storage area.
 * **Path Validation:** All paths MUST start with `/var/lib/odoo/daemon_keys/`. The module strictly blocks directory traversal (`..`) and symlink attacks by resolving the `os.path.realpath` of the requested path before performing any file operations [@ANCHOR: security_constraints_path].
-* **System Directory Protection:** Writing to sensitive system directories (like `/etc`, `/root`, `/boot`) is explicitly forbidden regardless of the prefix check.
+* **System Directory Protection:** Writing to sensitive system directories (like `/etc`, `/root`, `/boot`, `/home`, `/usr`, `/bin`, `/lib`, `/var/log`) is explicitly forbidden regardless of the prefix check [@ANCHOR: write_secure_env_file_logic].
 
 ### Automated Key Rotation
 Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: cron_rotation_trigger].

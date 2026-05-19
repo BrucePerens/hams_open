@@ -6,6 +6,7 @@ from odoo.tests.common import HttpCase, tagged
 class TestZeroSudoControllers(HttpCase):
 
     def test_01_web_login_interceptor(self):
+        # [@ANCHOR: test_web_login_interceptor_check]
         # [@ANCHOR: test_web_login_interceptor]
         # Tests [@ANCHOR: web_login_interceptor]
         # Tests [@ANCHOR: web_login_interceptor_check]

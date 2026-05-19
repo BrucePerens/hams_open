@@ -4,7 +4,7 @@
     "category": "Operations/Helpdesk",
     "summary": "Zero-Sudo compliant, lightweight helpdesk management.",
     "author": "Bruce Perens K6BP",
-    "depends": ["base", "mail", "calendar", "portal", "zero_sudo"],
+    "depends": ["base", "mail", "calendar", "portal", "zero_sudo", "website"],
     "data": [
         "security/helpdesk_security.xml",
         "security/ir.model.access.csv",
