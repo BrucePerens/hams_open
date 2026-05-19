@@ -58,7 +58,7 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         },
         {
             content: "Wait for save to complete",
-            trigger: '.o_form_saved',
+            trigger: '.o_form_saved, .o_form_button_create',
         }
     ],
 });
