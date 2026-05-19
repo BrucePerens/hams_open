@@ -25,37 +25,37 @@ class TestMultiWebsiteCloudflare(TransactionCase):
             "cloudflare_zone_id": "zone_b",
         })
 
-    @patch("odoo.addons.cloudflare.models.purge_queue.purge_urls")
-    def test_multi_website_purge_queue(self, mock_purge_urls):
+    def test_multi_website_purge_queue(self):
         """Verify that the purge queue correctly isolates zones and credentials."""
-        mock_purge_urls.return_value = True
+        with patch("odoo.addons.cloudflare.models.purge_queue.purge_urls") as mock_purge_urls:
+            mock_purge_urls.return_value = True
 
-        # Enqueue URLs for both websites
-        self.PurgeQueue.enqueue_urls(["/page-a"], website_id=self.website_a.id)
-        self.PurgeQueue.enqueue_urls(["/page-b"], website_id=self.website_b.id)
+            # Enqueue URLs for both websites
+            self.PurgeQueue.enqueue_urls(["/page-a"], website_id=self.website_a.id)
+            self.PurgeQueue.enqueue_urls(["/page-b"], website_id=self.website_b.id)
 
-        # Process the queue
-        # In the first iteration, it picks records for website_a (due to order website_id)
-        # filtered(lambda r: r.website_id == first_website)
-        self.PurgeQueue.process_queue()
+            # Process the queue
+            # In the first iteration, it picks records for website_a (due to order website_id)
+            # filtered(lambda r: r.website_id == first_website)
+            self.PurgeQueue.process_queue()
 
-        # Since it only processes records for the FIRST website in the batch,
-        # and our batch limit (30) is larger than our 2 records,
-        # it will process Website A's records, then Website B's records in the next iteration
-        # of the 'while batches_processed < max_batches' loop.
+            # Since it only processes records for the FIRST website in the batch,
+            # and our batch limit (30) is larger than our 2 records,
+            # it will process Website A's records, then Website B's records in the next iteration
+            # of the 'while batches_processed < max_batches' loop.
 
-        self.assertEqual(mock_purge_urls.call_count, 2)
+            self.assertEqual(mock_purge_urls.call_count, 2)
 
-        calls = mock_purge_urls.call_args_list
-        # args = (urls, token, zone_id)
+            calls = mock_purge_urls.call_args_list
+            # args = (urls, token, zone_id)
 
-        call_a = next(c for c in calls if c[0][2] == "zone_a")
-        self.assertEqual(call_a[0][1], "token_a")
-        self.assertEqual(call_a[0][0], ["https://website-a.com/page-a"])
+            call_a = next(c for c in calls if c[0][2] == "zone_a")
+            self.assertEqual(call_a[0][1], "token_a")
+            self.assertEqual(call_a[0][0], ["https://website-a.com/page-a"])
 
-        call_b = next(c for c in calls if c[0][2] == "zone_b")
-        self.assertEqual(call_b[0][1], "token_b")
-        self.assertEqual(call_b[0][0], ["https://website-b.com/page-b"])
+            call_b = next(c for c in calls if c[0][2] == "zone_b")
+            self.assertEqual(call_b[0][1], "token_b")
+            self.assertEqual(call_b[0][0], ["https://website-b.com/page-b"])
 
     def test_content_hook_multi_website(self):
         """Verify that editing a page linked to a specific website only enqueues for that website."""
@@ -64,7 +64,7 @@ class TestMultiWebsiteCloudflare(TransactionCase):
         view_a = self.env["ir.ui.view"].create({
             "name": "Page A View",
             "type": "qweb",
-            "arch": "<div>A</div>",
+            "arch_db": "<div>A</div>",
             "key": "test.page_a_view",
         })
         page_a = self.env["website.page"].create({
@@ -89,7 +89,7 @@ class TestMultiWebsiteCloudflare(TransactionCase):
         view_global = self.env["ir.ui.view"].create({
             "name": "Global Page View",
             "type": "qweb",
-            "arch": "<div>Global</div>",
+            "arch_db": "<div>Global</div>",
             "key": "test.page_global_view",
         })
         page_global = self.env["website.page"].create({
@@ -109,20 +109,20 @@ class TestMultiWebsiteCloudflare(TransactionCase):
         self.assertIn(self.website_a, websites_in_queue)
         self.assertIn(self.website_b, websites_in_queue)
 
-    @patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
-    def test_waf_ban_multi_website(self, mock_ban_ip):
+    def test_waf_ban_multi_website(self):
         """Verify IP banning respects the website context."""
-        mock_ban_ip.return_value = (True, "rule_123")
+        with patch("odoo.addons.cloudflare.models.ip_ban.ban_ip") as mock_ban_ip:
+            mock_ban_ip.return_value = (True, "rule_123")
 
-        # Ban IP on Website B
-        self.env["cloudflare.waf"].ban_ip("1.2.3.4", website_id=self.website_b.id)
+            # Ban IP on Website B
+            self.env["cloudflare.waf"].ban_ip("1.2.3.4", website_id=self.website_b.id)
 
-        # Check that ban record is linked to Website B
-        ban_record = self.env["cloudflare.ip.ban"].search([("ip_address", "=", "1.2.3.4")])
-        self.assertEqual(ban_record.website_id.id, self.website_b.id)
+            # Check that ban record is linked to Website B
+            ban_record = self.env["cloudflare.ip.ban"].search([("ip_address", "=", "1.2.3.4")])
+            self.assertEqual(ban_record.website_id.id, self.website_b.id)
 
-        # Verify API called with Website B credentials
-        mock_ban_ip.assert_called_once()
-        args = mock_ban_ip.call_args
-        self.assertEqual(args[0][3], "token_b") # token
-        self.assertEqual(args[0][4], "zone_b")  # zone_id
+            # Verify API called with Website B credentials
+            mock_ban_ip.assert_called_once()
+            args = mock_ban_ip.call_args
+            self.assertEqual(args[0][3], "token_b") # token
+            self.assertEqual(args[0][4], "zone_b")  # zone_id
