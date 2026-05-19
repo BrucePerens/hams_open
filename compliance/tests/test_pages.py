@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-from odoo.tests.common import TransactionCase, HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase, HamsHttpCase
 from lxml import etree
 import re
 
 
 @tagged("post_install", "-at_install")
-class TestCompliancePages(TransactionCase):
+class TestCompliancePages(HamsTransactionCase):
 
     def test_pages_presence(self):
         """Verify that legal pages are created."""
@@ -45,7 +46,7 @@ class TestCompliancePages(TransactionCase):
                 self.assertTrue(page.is_published, f"Custom page for {page.url} should be published.")
 
 @tagged("post_install", "-at_install")
-class TestCompliancePagesHttp(HttpCase):
+class TestCompliancePagesHttp(HamsHttpCase):
 
     def test_pages_reachable(self):
         """Verify that legal pages are reachable via HTTP."""

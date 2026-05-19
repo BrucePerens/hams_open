@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 import unittest
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 from odoo.addons.compliance.hooks import post_init_hook
 
 
 @tagged("post_install", "-at_install")
-class TestComplianceHooks(TransactionCase):
+class TestComplianceHooks(HamsTransactionCase):
 
     def test_02_post_init_hook_cookie_bar(self):
         """

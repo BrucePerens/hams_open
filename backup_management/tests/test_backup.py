@@ -60,6 +60,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_01b_sync_kopia_triggered(self):
         # Tests [@ANCHOR: backup_sync_kopia]
+        # Since we offloaded to RabbitMQ, we check if a job was created and task was queued.
         self.config_kopia.action_sync_snapshots()
         job = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
@@ -80,8 +81,10 @@ class TestBackupManagement(RealTransactionCase):
         # Tests [@ANCHOR: test_backup_cron]
         # Tests [@ANCHOR: cron_sync_all_backups]
         # Tests [@ANCHOR: backup_pager_synergy]
+        # In this environment, we just ensure it queues the sync tasks.
         self.env.ref("backup_management.cron_sync_backups")._trigger()
 
+        # Inject a stale snapshot so that it triggers _report_backup_failure -> message_post
         self.env["backup.snapshot"].create(
             {
                 "config_id": self.config_kopia.id,
@@ -93,6 +96,8 @@ class TestBackupManagement(RealTransactionCase):
         )
 
         mock_msg = self.safe_patch_object(type(self.env["backup.config"]), "message_post")
+        # We must be careful because cron_sync_all_backups calls action_sync_snapshots
+        # which now queues a job.
         self.env["backup.config"].cron_sync_all_backups()
         mock_msg.assert_called()
 
@@ -102,8 +107,10 @@ class TestBackupManagement(RealTransactionCase):
     def test_07_orchestration_trigger(self):
         # Tests [@ANCHOR: test_backup_orchestration]
         # Tests [@ANCHOR: backup_trigger_execution]
+        # Validates ADR-0071 Asynchronous Bastion Pattern
         integration_mode = os.environ.get("HAMS_INTEGRATION_MODE") == "1"
 
+        # Tests are as much like production as possible, so RabbitMQ is used.
         res_kopia = self.config_kopia.action_trigger_backup()
         res_pg = self.config_pg.action_trigger_backup()
 
@@ -111,8 +118,11 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(res_pg.get("res_model"), "backup.job")
 
         if integration_mode:
+            # In integration mode, physically commit the transaction.
+            # This triggers the `env.cr.postcommit` hook and pushes the message to RabbitMQ.
             self.env.cr.commit()
         else:
+            # In standard environments without physical commits, trigger the hook manually to test Odoo's internal routing
             self.env.cr.postcommit.run()
 
         job_kopia = self.env["backup.job"].search(
@@ -160,6 +170,7 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(exe_path, "/bin/kopia")
 
     def test_08e_security_path_validation(self):
+        # Tests path validation added for security
         with self.assertRaises(UserError):
             self.config_kopia.write({"target_path": "/etc/shadow"})
             self.env.flush_all()
@@ -207,6 +218,9 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_12_documentation_installation(self):
         # Tests [@ANCHOR: backup_doc_injection]
+
+        # Manually trigger the hook logic for testing if needed,
+        # or just check if it was installed (it should be since registry is ready)
         doc_model = False
         if "knowledge.article" in self.env:
             doc_model = "knowledge.article"

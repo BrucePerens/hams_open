@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import HttpCase, tagged
-from unittest.mock import patch
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 
 @tagged("post_install", "-at_install")
-class TestModeration(HttpCase):
+class TestModeration(HamsHttpCase):
 
     def setUp(self):
         super(TestModeration, self).setUp()
@@ -220,14 +220,14 @@ class TestModeration(HttpCase):
             }
         )
 
-        with patch.object(
+        mock_execute = self.safe_patch_object(
             self.env.cr, "execute", wraps=self.env.cr.execute
-        ) as mock_execute:
-            report.action_take_action_and_strike()
+        )
+        report.action_take_action_and_strike()
 
-            # Assert the lock query was injected
-            lock_query = "SELECT id FROM res_users WHERE id = %s FOR NO KEY UPDATE"
-            mock_execute.assert_any_call(lock_query, (self.bad_user.id,))
+        # Assert the lock query was injected
+        lock_query = "SELECT id FROM res_users WHERE id = %s FOR NO KEY UPDATE"
+        mock_execute.assert_any_call(lock_query, (self.bad_user.id,))
 
         # 2. Test Group Member Lock
         group_report = self.env["content.violation.report"].create(
@@ -246,14 +246,14 @@ class TestModeration(HttpCase):
             }
         )
 
-        with patch.object(
+        mock_execute = self.safe_patch_object(
             self.env.cr, "execute", wraps=self.env.cr.execute
-        ) as mock_execute:
-            group_report.action_take_action_and_strike()
+        )
+        group_report.action_take_action_and_strike()
 
-            lock_query_group = (
-                "SELECT id FROM res_users WHERE id IN %s FOR NO KEY UPDATE"
-            )
-            mock_execute.assert_any_call(
-                lock_query_group, (tuple(group_report.content_group_id.member_ids.ids),)
-            )
+        lock_query_group = (
+            "SELECT id FROM res_users WHERE id IN %s FOR NO KEY UPDATE"
+        )
+        mock_execute.assert_any_call(
+            lock_query_group, (tuple(group_report.content_group_id.member_ids.ids),)
+        )

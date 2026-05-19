@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 from odoo import fields
 from datetime import timedelta
 
 
 @tagged("post_install", "-at_install")
-class TestScheduleEdgeCases(TransactionCase):
+class TestScheduleEdgeCases(HamsTransactionCase):
     def test_01_empty_schedule(self):
         """Verify get_current_on_duty_admin returns False when no shifts exist."""
         self.env["calendar.event"].search([]).unlink()

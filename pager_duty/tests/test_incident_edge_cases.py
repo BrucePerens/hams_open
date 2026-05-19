@@ -1,23 +1,24 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
-from unittest.mock import patch, MagicMock
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
+from unittest.mock import MagicMock
 
 
 @tagged("post_install", "-at_install")
-class TestIncidentEdgeCases(TransactionCase):
+class TestIncidentEdgeCases(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.incident_model = self.env["pager.incident"]
 
-    @patch("odoo.addons.pager_duty.models.incident.redis")
-    @patch("odoo.addons.pager_duty.models.incident.redis_pool", MagicMock())
-    def test_01_redis_fail_open(self, mock_redis):
+    def test_01_redis_fail_open(self):
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", MagicMock())
         """Verify that if Redis crashes during report_incident, it safely fails open and logs the incident."""
         mock_redis.Redis.side_effect = Exception("Redis connection timeout")
         mock_redis.exceptions.RedisError = Exception
 
-        with patch.object(type(self.env["bus.bus"]), "_sendone", create=True):
-            incident_id = self.incident_model.report_incident(
+        self.safe_patch_object(type(self.env["bus.bus"]), "_sendone", create=True)
+        incident_id = self.incident_model.report_incident(
                 {
                     "source": "fail_open_test",
                     "severity": "high",
@@ -31,8 +32,8 @@ class TestIncidentEdgeCases(TransactionCase):
 
     def test_02_default_name_assignment(self):
         """Verify that an omitted or 'New' name is automatically assigned 'INC-AUTO'."""
-        with patch.object(type(self.env["bus.bus"]), "_sendone", create=True):
-            incident_id = self.incident_model.report_incident(
+        self.safe_patch_object(type(self.env["bus.bus"]), "_sendone", create=True)
+        incident_id = self.incident_model.report_incident(
                 {
                     "source": "naming_test",
                     "severity": "low",

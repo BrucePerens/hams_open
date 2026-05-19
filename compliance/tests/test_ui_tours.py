@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 @tagged("post_install", "-at_install")
-class TestComplianceUITour(HttpCase):
+class TestComplianceUITour(HamsHttpCase):
     def test_compliance_tour(self):
         """Run the compliance tour to verify cookie bar and legal pages."""
         # [@ANCHOR: test_compliance_ui_tour]

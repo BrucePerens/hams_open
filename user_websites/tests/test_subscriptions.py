@@ -3,11 +3,12 @@
 import ast
 import odoo
 import time
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 
 @tagged("post_install", "-at_install")
-class TestSubscriptionsAndDigest(HttpCase):
+class TestSubscriptionsAndDigest(HamsHttpCase):
 
     def setUp(self):
         super(TestSubscriptionsAndDigest, self).setUp()

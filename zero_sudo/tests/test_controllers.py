@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import re
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 @tagged("post_install", "-at_install")
-class TestZeroSudoControllers(HttpCase):
+class TestZeroSudoControllers(HamsHttpCase):
 
     def test_01_web_login_interceptor(self):
         # [@ANCHOR: test_web_login_interceptor_check]

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
-from unittest.mock import patch, mock_open, MagicMock
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
+from unittest.mock import mock_open, MagicMock
 
 
 @tagged("post_install", "-at_install")
-class TestGeneralizedConfig(TransactionCase):
+class TestGeneralizedConfig(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.admin = self.env.ref("base.user_admin")
@@ -44,8 +45,9 @@ class TestGeneralizedConfig(TransactionCase):
 
         # Mock the file read to supply our JSON payload
         m_open = mock_open(read_data=self.json_payload)
-        with patch("builtins.open", m_open), patch("os.path.exists", return_value=True):
-            check_model.action_pull_from_json()
+        self.safe_patch("builtins.open", m_open)
+        self.safe_patch("os.path.exists", return_value=True)
+        check_model.action_pull_from_json()
 
         m_open.assert_called_once()
 
@@ -69,9 +71,9 @@ class TestGeneralizedConfig(TransactionCase):
         self.assertEqual(bash_check.comment, "This is a test comment.")
         self.assertEqual(bash_check.ignored_services, "ignored.service")
 
-    @patch("odoo.addons.pager_duty.models.pager_check.PagerCheck.action_push_to_json")
-    @patch("odoo.addons.pager_duty.models.pager_check.subprocess.run")
-    def test_02_autodiscovery(self, mock_run, mock_push):
+    def test_02_autodiscovery(self):
+        mock_push = self.safe_patch("odoo.addons.pager_duty.models.pager_check.PagerCheck.action_push_to_json")
+        mock_run = self.safe_patch("odoo.addons.pager_duty.models.pager_check.subprocess.run")
         """Verify the autodiscover action builds checks safely without crashing."""
         mock_res = MagicMock()
         mock_res.stdout = "postgresql.service\nnginx.service"

@@ -3,7 +3,6 @@ import shutil
 import os
 from odoo.tests.common import tagged
 from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
-from unittest.mock import patch
 from odoo.exceptions import UserError
 
 if not hasattr(shutil, "_orig_which"):
@@ -20,10 +19,10 @@ class TestPgConfig(RealTransactionCase):
         super().setUp()
         self.admin = self.env.ref("base.user_admin")
 
-    @patch(
-        "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid"
-    )
-    def test_01_optimization_wizard(self, mock_get_uid):
+    def test_01_optimization_wizard(self):
+        mock_get_uid = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid"
+        )
         mock_get_uid.return_value = self.admin.id
         # Tests [@ANCHOR: pg_optimize_wizard]
         wizard = (
@@ -39,50 +38,50 @@ class TestPgConfig(RealTransactionCase):
             )
         )
         # Execute the optimization (mocked to prevent ActiveSqlTransaction and actual config changes)
-        with patch.object(type(self.env.cr), "execute") as mock_execute:
-            res = wizard.action_apply_optimizations()
-            self.assertEqual(res.get("type"), "ir.actions.client")
+        mock_execute = self.safe_patch_object(type(self.env.cr), "execute")
+        res = wizard.action_apply_optimizations()
+        self.assertEqual(res.get("type"), "ir.actions.client")
 
-            # Verify specific calculations
-            # 16GB * 0.25 = 4GB = 4096MB
-            # 16GB * 0.75 = 12GB = 12288MB
-            # min(1024, 16GB * 0.05) = min(1024, 819) = 819MB
-            # max(4, (16GB * 0.25) / 500) = max(4, 4096 / 500) = max(4, 8.19) = 8MB
+        # Verify specific calculations
+        # 16GB * 0.25 = 4GB = 4096MB
+        # 16GB * 0.75 = 12GB = 12288MB
+        # min(1024, 16GB * 0.05) = min(1024, 819) = 819MB
+        # max(4, (16GB * 0.25) / 500) = max(4, 4096 / 500) = max(4, 8.19) = 8MB
 
-            calls = [
-                call[0][0]
-                for call in mock_execute.call_args_list
-                if hasattr(call[0][0], "as_string")
-            ]
-            query_strings = [c.as_string(self.env.cr._obj) for c in calls]
+        calls = [
+            call[0][0]
+            for call in mock_execute.call_args_list
+            if hasattr(call[0][0], "as_string")
+        ]
+        query_strings = [c.as_string(self.env.cr._obj) for c in calls]
 
-            self.assertTrue(
-                any("SET \"shared_buffers\" = '4096MB'" in s for s in query_strings)
+        self.assertTrue(
+            any("SET \"shared_buffers\" = '4096MB'" in s for s in query_strings)
+        )
+        self.assertTrue(
+            any(
+                "SET \"effective_cache_size\" = '12288MB'" in s
+                for s in query_strings
             )
-            self.assertTrue(
-                any(
-                    "SET \"effective_cache_size\" = '12288MB'" in s
-                    for s in query_strings
-                )
+        )
+        self.assertTrue(
+            any(
+                "SET \"maintenance_work_mem\" = '819MB'" in s for s in query_strings
             )
-            self.assertTrue(
-                any(
-                    "SET \"maintenance_work_mem\" = '819MB'" in s for s in query_strings
-                )
-            )
-            self.assertTrue(any("SET \"work_mem\" = '8MB'" in s for s in query_strings))
-            self.assertTrue(
-                any("SET \"max_connections\" = '500'" in s for s in query_strings)
-            )
-            self.assertTrue(
-                any("SET \"random_page_cost\" = '1.1'" in s for s in query_strings)
-            )
+        )
+        self.assertTrue(any("SET \"work_mem\" = '8MB'" in s for s in query_strings))
+        self.assertTrue(
+            any("SET \"max_connections\" = '500'" in s for s in query_strings)
+        )
+        self.assertTrue(
+            any("SET \"random_page_cost\" = '1.1'" in s for s in query_strings)
+        )
 
-    @patch(
-        "odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable",
-        return_value="/bin/mock",
-    )
-    def test_02_ha_wizard(self, mock_exe):
+    def test_02_ha_wizard(self):
+        self.safe_patch(
+            "odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable",
+            return_value="/bin/mock",
+        )
         # Tests [@ANCHOR: pg_ha_wizard]
         wizard = (
             self.env["pg.ha.wizard"]
@@ -148,8 +147,8 @@ class TestPgConfig(RealTransactionCase):
         ):
             wizard2.action_generate()
 
-    @patch("shutil.which")
-    def test_02b_ha_wizard_missing_binaries(self, mock_which):
+    def test_02b_ha_wizard_missing_binaries(self):
+        mock_which = self.safe_patch("shutil.which")
         wizard = (
             self.env["pg.ha.wizard"]
             .with_user(self.admin)
@@ -167,10 +166,10 @@ class TestPgConfig(RealTransactionCase):
         with self.assertRaises(UserError):
             wizard.action_generate()
 
-    @patch(
-        "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable"
-    )
-    def test_02c_etcd_auto_download(self, mock_ensure):
+    def test_02c_etcd_auto_download(self):
+        mock_ensure = self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable"
+        )
         # Prove the system defers to the generalized downloader
         mock_ensure.return_value = "/bin/etcd"
         wizard = (

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
 from odoo.exceptions import ValidationError
-from unittest.mock import patch
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 import json
 
 
 @odoo.tests.common.tagged("post_install", "-at_install")
-class TestRobustnessAndBoundaries(odoo.tests.common.HttpCase):
+class TestRobustnessAndBoundaries(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
@@ -32,18 +32,18 @@ class TestRobustnessAndBoundaries(odoo.tests.common.HttpCase):
     def test_01_slug_generation_exhaustion(self):
         """Verify that if the slug namespace is completely exhausted (1000 retries), it raises a ValidationError."""
         # We mock the search_count to always return 1 (simulating a permanent collision across both users and groups)
-        with patch("odoo.models.BaseModel.search_count", return_value=1):
-            with self.assertRaises(
-                ValidationError,
-                msg="Must raise ValidationError if 1000 slug variations are exhausted.",
-            ):
-                self.env["res.users"].create(
-                    {
-                        "name": "Infinite Loop",
-                        "login": "infloop",
-                    }
-                )
-                self.env.flush_all()
+        self.safe_patch("odoo.models.BaseModel.search_count", return_value=1)
+        with self.assertRaises(
+            ValidationError,
+            msg="Must raise ValidationError if 1000 slug variations are exhausted.",
+        ):
+            self.env["res.users"].create(
+                {
+                    "name": "Infinite Loop",
+                    "login": "infloop",
+                }
+            )
+            self.env.flush_all()
 
     def test_02_uppercase_reserved_slug(self):
         """Verify that trying to use a reserved slug with mixed casing is caught by the validations."""

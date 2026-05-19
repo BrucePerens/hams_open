@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 
 
 @tagged("standard", "post_install", "-at_install")
-class TestLogAnalyzer(TransactionCase):
+class TestLogAnalyzer(HamsTransactionCase):
     def test_01_log_analyzer_views(self):
         # [@ANCHOR: test_log_analyzer_views]
         v1 = self.env["pager.log.pattern"].get_view(view_type="list")

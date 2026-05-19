@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-import odoo.tests
-from odoo.tests.common import TransactionCase, tagged
-from unittest.mock import patch, MagicMock
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase, HamsHttpCase
+from unittest.mock import MagicMock
 from odoo.exceptions import UserError
 import subprocess
 
 
 @tagged("post_install", "-at_install")
-class TestDatabaseManagement(TransactionCase):
-    @patch("shutil.which", return_value="/bin/mock")
-    @patch("subprocess.run")
-    def test_01_vacuum_analyze(self, mock_run, mock_which):
+class TestDatabaseManagement(HamsTransactionCase):
+    def test_01_vacuum_analyze(self):
         # Tests [@ANCHOR: vacuum_analyze]
+        mock_run = self.safe_patch("subprocess.run")
+        self.safe_patch("shutil.which", return_value="/bin/mock")
         mock_res = MagicMock()
         mock_res.returncode = 0
         mock_run.return_value = mock_res
@@ -23,9 +23,9 @@ class TestDatabaseManagement(TransactionCase):
             stat.action_vacuum_analyze()
             mock_run.assert_called()
 
-    @patch("shutil.which")
-    @patch("subprocess.run")
-    def test_01b_vacuum_analyze_failures(self, mock_run, mock_which):
+    def test_01b_vacuum_analyze_failures(self):
+        mock_run = self.safe_patch("subprocess.run")
+        mock_which = self.safe_patch("shutil.which")
         stat = self.env["database.table.stat"].search(
             [("table_name", "=", "res_users")], limit=1
         )
@@ -58,12 +58,12 @@ class TestDatabaseManagement(TransactionCase):
 
     def test_03_db_index_stats(self):
         # Tests [@ANCHOR: db_index_stats]
-        with patch.object(
+        mock_search = self.safe_patch_object(
             type(self.env["database.table.stat"]), "search"
-        ) as mock_search:
-            mock_search.return_value = []
-            self.env["database.table.stat"].cron_check_bloat()
-            mock_search.assert_called_once()
+        )
+        mock_search.return_value = []
+        self.env["database.table.stat"].cron_check_bloat()
+        mock_search.assert_called_once()
 
     def test_03_terminate_backend(self):
         # Tests [@ANCHOR: db_terminate_backend]
@@ -115,7 +115,7 @@ class TestDatabaseManagement(TransactionCase):
 
 
 @tagged("post_install", "-at_install")
-class TestDatabaseTours(odoo.tests.HttpCase):
+class TestDatabaseTours(HamsHttpCase):
     def test_db_bloat_tour(self):
         # [@ANCHOR: test_db_bloat_tour]
         # Tests [@ANCHOR: db_index_stats]

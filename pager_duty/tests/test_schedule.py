@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 from odoo import fields
 from datetime import timedelta
 
 
-class TestPagerSchedule(TransactionCase):
+class TestPagerSchedule(HamsTransactionCase):
     def setUp(self):
         super(TestPagerSchedule, self).setUp()
         self.calendar_model = self.env["calendar.event"]

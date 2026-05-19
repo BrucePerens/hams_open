@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import MagicMock, mock_open
 import subprocess
 import os
 import odoo
 
 
 @tagged("post_install", "-at_install")
-class TestSecurityUtils(TransactionCase):
+class TestSecurityUtils(HamsTransactionCase):
 
     def test_01_mechanical_secret_block_enforcement(self):
         # [@ANCHOR: test_01_mechanical_secret_block_enforcement]
@@ -77,12 +78,12 @@ class TestSecurityUtils(TransactionCase):
         except AccessError:
             self.skipTest(f"Service account {svc_xml_id} not available in test env.")
 
-        with patch.object(
+        mock_execute = self.safe_patch_object(
             self.env.cr, "execute", wraps=self.env.cr.execute
-        ) as mock_execute:
-            utils._get_service_uid(svc_xml_id)
-            for call in mock_execute.call_args_list:
-                self.assertNotIn("res_users", call[0][0])
+        )
+        utils._get_service_uid(svc_xml_id)
+        for call in mock_execute.call_args_list:
+            self.assertNotIn("res_users", call[0][0])
 
     def test_03_bdd_event_bus_payload_generation(self):
         # [@ANCHOR: test_coherent_cache_signal]
@@ -90,20 +91,20 @@ class TestSecurityUtils(TransactionCase):
         # Tests [@ANCHOR: coherent_cache_signal_single]
         # Tests [@ANCHOR: story_cache_signaling]
         utils = self.env["zero_sudo.security.utils"]
-        with patch.object(self.env.cr, "execute") as mock_execute:
-            utils._notify_cache_invalidation("test.model", "test_key")
-            mock_execute.assert_called_once_with(
-                "SELECT pg_notify(%s, %s)",
-                ("cache_invalidation", "test.model:test_key"),
-            )
+        mock_execute = self.safe_patch_object(self.env.cr, "execute")
+        utils._notify_cache_invalidation("test.model", "test_key")
+        mock_execute.assert_called_once_with(
+            "SELECT pg_notify(%s, %s)",
+            ("cache_invalidation", "test.model:test_key"),
+        )
 
         # Test edge cases: empty model_name or key_value
-        with patch.object(self.env.cr, "execute") as mock_execute:
-            utils._notify_cache_invalidation("", "test_key")
-            utils._notify_cache_invalidation("test.model", "")
-            utils._notify_cache_invalidation(None, "test_key")
-            utils._notify_cache_invalidation("test.model", None)
-            self.assertEqual(mock_execute.call_count, 0, "Should not notify for empty model or key")
+        mock_execute = self.safe_patch_object(self.env.cr, "execute")
+        utils._notify_cache_invalidation("", "test_key")
+        utils._notify_cache_invalidation("test.model", "")
+        utils._notify_cache_invalidation(None, "test_key")
+        utils._notify_cache_invalidation("test.model", None)
+        self.assertEqual(mock_execute.call_count, 0, "Should not notify for empty model or key")
 
     def test_04_god_mode_block_enforcement(self):
         # [@ANCHOR: test_god_mode_block_sql]
@@ -141,24 +142,24 @@ class TestSecurityUtils(TransactionCase):
         # Tests [@ANCHOR: coherent_cache_signal_batch]
         """Test _notify_cache_invalidation with a list payload."""
         utils = self.env["zero_sudo.security.utils"]
-        with patch.object(self.env.cr, "execute") as mock_execute:
-            utils._notify_cache_invalidation("test.model", ["key1", "key2", "key1"])
+        mock_execute = self.safe_patch_object(self.env.cr, "execute")
+        utils._notify_cache_invalidation("test.model", ["key1", "key2", "key1"])
 
-            # Extract the arguments passed to execute
-            args, _ = mock_execute.call_args
-            query = args[0]
-            params = args[1]
+        # Extract the arguments passed to execute
+        args, _ = mock_execute.call_args
+        query = args[0]
+        params = args[1]
 
-            self.assertEqual(query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload")
-            self.assertEqual(params[0], "cache_invalidation")
-            # We must sort the payloads because set conversion makes the order non-deterministic
-            self.assertListEqual(sorted(params[1]), sorted(["test.model:key1", "test.model:key2"]))
+        self.assertEqual(query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload")
+        self.assertEqual(params[0], "cache_invalidation")
+        # We must sort the payloads because set conversion makes the order non-deterministic
+        self.assertListEqual(sorted(params[1]), sorted(["test.model:key1", "test.model:key2"]))
 
         # Test chunking
         many_keys = [f"key{i}" for i in range(250)]
-        with patch.object(self.env.cr, "execute") as mock_execute:
-            utils._notify_cache_invalidation("test.model", many_keys)
-            self.assertEqual(mock_execute.call_count, 3, "Should chunk 250 keys into 3 calls (100+100+50)")
+        mock_execute = self.safe_patch_object(self.env.cr, "execute")
+        utils._notify_cache_invalidation("test.model", many_keys)
+        self.assertEqual(mock_execute.call_count, 3, "Should chunk 250 keys into 3 calls (100+100+50)")
 
     def test_06_get_deterministic_hash(self):
         # [@ANCHOR: test_deterministic_hash]
@@ -178,9 +179,9 @@ class TestSecurityUtils(TransactionCase):
         self.assertIsInstance(hash4, int, "Should handle non-string inputs gracefully")
         self.assertTrue(0 <= hash1 <= 2147483647, "Hash should be within 32-bit integer range")
 
-    @patch("subprocess.run")
-    @patch("os.path.exists")
-    def test_07_update_python_venv(self, mock_exists, mock_run):
+    def test_07_update_python_venv(self):
+        mock_exists = self.safe_patch("os.path.exists")
+        mock_run = self.safe_patch("subprocess.run")
         # [@ANCHOR: test_update_python_venv]
         # Tests [@ANCHOR: update_python_venv]
         # Tests [@ANCHOR: story_venv_management]
@@ -220,22 +221,33 @@ class TestSecurityUtils(TransactionCase):
         utils.env.registry.clear_cache()
 
         # 1. Test environment variable resolution
-        with patch.dict(os.environ, {"HAMS_CRYPTO_KEY": "test_env_key"}):
+        env_dict = {"HAMS_CRYPTO_KEY": "test_env_key"}
+        original_env = os.environ.copy()
+        os.environ.update(env_dict)
+        try:
             self.assertEqual(utils._get_crypto_secret(), "test_env_key")
+        finally:
+            os.environ.clear()
+            os.environ.update(original_env)
 
         utils.env.registry.clear_cache()
 
         # 2. Test file fallback
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("os.path.exists", return_value=True):
-                with patch("builtins.open", mock_open(read_data="test_file_key\n")):
-                    self.assertEqual(utils._get_crypto_secret(), "test_file_key")
+        original_env = os.environ.copy()
+        os.environ.clear()
+        try:
+            self.safe_patch("os.path.exists", return_value=True)
+            self.safe_patch("builtins.open", mock_open(read_data="test_file_key\n"))
+            self.assertEqual(utils._get_crypto_secret(), "test_file_key")
 
             # 3. Test configuration fallback
             utils.env.registry.clear_cache()
-            with patch("os.path.exists", return_value=False):
-                with patch.object(odoo.tools.config, "get", return_value="test_config_key"):
-                    self.assertEqual(utils._get_crypto_secret(), "test_config_key")
+            self.safe_patch("os.path.exists", return_value=False)
+            self.safe_patch_object(odoo.tools.config, "get", return_value="test_config_key")
+            self.assertEqual(utils._get_crypto_secret(), "test_config_key")
+        finally:
+            os.environ.clear()
+            os.environ.update(original_env)
 
     def test_09_bootstrap_knowledge_docs(self):
         # [@ANCHOR: test_zero_sudo_doc_installer]
@@ -280,8 +292,8 @@ class TestSecurityUtils(TransactionCase):
         # ADR-0001: Ensure background context overrides exist to prevent nested cache faults
         self.assertTrue(env_svc.context.get("mail_notrack"))
 
-    @patch("shutil.which")
-    def test_11_ensure_executable(self, mock_which):
+    def test_11_ensure_executable(self):
+        mock_which = self.safe_patch("shutil.which")
         """Verify the fallback system for auto-installing binary manifests."""
         utils = self.env["zero_sudo.security.utils"]
 
@@ -291,27 +303,30 @@ class TestSecurityUtils(TransactionCase):
 
         # Scenario 2: Missing binary, no manifest available (should raise UserError)
         mock_which.return_value = None
-        # We use patch.dict to avoid 'res.users' KeyError during translation lookup
-        with patch.dict(self.env.registry.models, clear=False) as mock_models:
-            mock_models.pop('binary.manifest', None)
+        original_models = self.env.registry.models.copy()
+        try:
+            self.env.registry.models.pop('binary.manifest', None)
             with self.assertRaises(UserError) as cm:
                 utils._ensure_executable("missing_bin", pkg_name="apt-pkg-missing")
             self.assertIn("Missing dependency", str(cm.exception))
             self.assertIn("apt-pkg-missing", str(cm.exception))
 
-        # Scenario 3: Fallback dynamically invokes the manifest downloader module
-        mock_manifest = MagicMock()
-        mock_manifest.ensure_executable.return_value = "/var/lib/odoo/hams_bin/kopia"
-        mock_env = MagicMock()
-        # Mocking __getitem__ to handle 'binary.manifest'
-        mock_env.__getitem__.side_effect = lambda k: mock_manifest if k == "binary.manifest" else None
+            # Scenario 3: Fallback dynamically invokes the manifest downloader module
+            mock_manifest = MagicMock()
+            mock_manifest.ensure_executable.return_value = "/var/lib/odoo/hams_bin/kopia"
+            mock_env = MagicMock()
+            # Mocking __getitem__ to handle 'binary.manifest'
+            mock_env.__getitem__.side_effect = lambda k: mock_manifest if k == "binary.manifest" else None
 
-        with patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env):
-            # Use patch.dict to make "binary.manifest in self.env" return True
-            with patch.dict(self.env.registry.models, {"binary.manifest": MagicMock()}, clear=False):
-                res = utils._ensure_executable("kopia", svc_xml_id="zero_sudo.mail_service_internal")
-                self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
-                mock_manifest.ensure_executable.assert_called_once_with("kopia")
+            self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env)
+            # Make "binary.manifest in self.env" return True
+            self.env.registry.models["binary.manifest"] = MagicMock()
+            res = utils._ensure_executable("kopia", svc_xml_id="zero_sudo.mail_service_internal")
+            self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
+            mock_manifest.ensure_executable.assert_called_once_with("kopia")
+        finally:
+            self.env.registry.models.clear()
+            self.env.registry.models.update(original_models)
 
     def test_12_kv_store(self):
         # [@ANCHOR: test_set_kv_sql_check]

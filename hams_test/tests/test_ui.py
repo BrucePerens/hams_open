@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from odoo.tests import HttpCase, tagged
+from odoo.tests import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 @tagged('-at_install', 'post_install')
-class TestNoisyTableUI(HttpCase):
+class TestNoisyTableUI(HamsHttpCase):
     def test_01_tour(self):
         # trigger: .o_list_button_add
         # Tests [@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]

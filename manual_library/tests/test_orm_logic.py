@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 from odoo.exceptions import ValidationError
 from psycopg2.errors import ForeignKeyViolation
 from odoo.tools import mute_logger
 
 
 @tagged("post_install", "-at_install")
-class TestManualORMLogic(TransactionCase):
+class TestManualORMLogic(HamsTransactionCase):
 
     def setUp(self):
         super(TestManualORMLogic, self).setUp()

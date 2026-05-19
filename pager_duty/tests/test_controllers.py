@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 
 @tagged("post_install", "-at_install")
-class TestPagerControllers(HttpCase):
+class TestPagerControllers(HamsHttpCase):
     def test_01_ping_endpoint(self):
         response = self.url_open("/api/v1/pager/ping")
         self.assertEqual(

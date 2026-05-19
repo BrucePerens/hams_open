@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 @tagged("post_install", "-at_install")
-class TestZeroSudoViews(HttpCase):
+class TestZeroSudoViews(HamsHttpCase):
 
     def test_01_res_users_views(self):
         # [@ANCHOR: test_res_users_views]

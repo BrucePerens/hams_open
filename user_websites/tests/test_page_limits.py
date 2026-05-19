@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 from odoo.exceptions import ValidationError
 
 
 @tagged("post_install", "-at_install")
-class TestPageLimits(TransactionCase):
+class TestPageLimits(HamsTransactionCase):
 
     def setUp(self):
         super(TestPageLimits, self).setUp()

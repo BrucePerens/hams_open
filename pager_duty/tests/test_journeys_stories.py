@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
 
 @tagged('standard', 'post_install', '-at_install')
-class TestJourneysStories(TransactionCase):
+class TestJourneysStories(HamsTransactionCase):
     def test_journeys_realized(self):
         # Simply verify that the journey files exist in the module
         base_path = os.path.join(os.path.dirname(__file__), '..', 'docs', 'journeys')

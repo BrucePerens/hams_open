@@ -1,7 +1,8 @@
-from odoo.tests import HttpCase, tagged
+from odoo.tests import tagged
+from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
 
 @tagged('post_install', '-at_install', 'ui', 'integration')
-class TestHelpdeskTours(HttpCase):
+class TestHelpdeskTours(HamsHttpCase):
 
     def test_01_helpdesk_operator_tour(self):
         """Simulates an operator logging in, viewing their shift, and executing a handoff."""
