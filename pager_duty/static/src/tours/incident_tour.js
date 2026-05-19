@@ -27,12 +27,12 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: "click",
         },
         {
-            trigger: '.o_field_widget[name="source"] input',
+            trigger: '[name="source"] input',
             content: "Enter incident source",
             run: "edit Manual Test",
         },
         {
-            trigger: '.o_field_widget[name="severity"] .o_select_menu_toggler',
+            trigger: '[name="severity"] .o_select_menu_toggler',
             content: "Open severity dropdown",
             run: "click",
         },
@@ -42,7 +42,7 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: "click",
         },
         {
-            trigger: '.o_field_widget[name="description"] textarea',
+            trigger: '[name="description"] textarea',
             content: "Enter description",
             run: "edit This is a manual test incident.",
         },

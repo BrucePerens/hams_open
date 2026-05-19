@@ -10,6 +10,7 @@ class PagerLogPattern(models.Model):
     name = fields.Char(
         string="Pattern Name", required=True, help="e.g. Kernel Filesystem Corruption"
     )
+    website_id = fields.Many2one("website", string="Website", ondelete="cascade")
     regex = fields.Char(
         string="Regular Expression", required=True, help="e.g. (ext4|xfs|btrfs).*error"
     )
@@ -26,7 +27,9 @@ class PagerLogPattern(models.Model):
     )
     active = fields.Boolean(default=True)
 
-    _name_uniq = models.Constraint("UNIQUE(name)", "The pattern name must be unique!")
+    _name_uniq = models.Constraint(
+        "UNIQUE(name, website_id)", "The pattern name must be unique per website!"
+    )
 
 
 class PagerLogFile(models.Model):
@@ -36,6 +39,9 @@ class PagerLogFile(models.Model):
     filepath = fields.Char(
         string="Absolute Path", required=True, help="e.g. /var/log/syslog"
     )
+    website_id = fields.Many2one("website", string="Website", ondelete="cascade")
     active = fields.Boolean(default=True)
 
-    _path_uniq = models.Constraint("UNIQUE(filepath)", "The file path must be unique!")
+    _path_uniq = models.Constraint(
+        "UNIQUE(filepath, website_id)", "The file path must be unique per website!"
+    )

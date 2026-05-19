@@ -13,6 +13,7 @@ The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) 
 *   **Automated Escalation:** Escalates unacknowledged incidents to wider groups or management.
 *   **Incident Analytics:** Tracks Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).
 *   **Helpdesk Integration:** Automatically creates tickets in the Helpdesk module for incoming incidents.
+*   **Multi-Website Support:** Partition monitoring checks and incidents by website to support multi-tenant Odoo deployments.
 
 ## 🛠️ How to Set It Up
 
@@ -47,6 +48,7 @@ The module follows a **Command Query Responsibility Segregation (CQRS)** pattern
 *   **Zero-Sudo RPC:** Daemons authenticate via the `pager_service_internal` service account. No `sudo()` is used.
 *   **Sandboxing:** Synthetic checks run inside a strict **Bubblewrap (bwrap)** sandbox with optional network isolation.
 *   **Service Accounts:** The module uses `zero_sudo.security.utils` to securely escalate privileges within Odoo's ACL framework.
+*   **Multi-Website Isolation:** Data is partitioned by `website_id`. The NOC Dashboard respects `website_id` passed via query parameters or context.
 
 ---
 

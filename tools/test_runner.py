@@ -393,23 +393,44 @@ def get_addons_path(base_dir):
     return ",".join(paths)
 
 
-def check_linters(venv_python, base_dir, ignore_filepath, extractor=None):
+def check_linters(
+    venv_python, base_dir, ignore_filepath, extractor=None, target_modules=None
+):
     """Executes the AST Burn List and Semantic Anchor DevSecOps linters"""
 
     print("[*] Running Manifest Dependency Graph Linter...")
     manifest_script = os.path.join(base_dir, "tools", "check_manifest_dependencies.py")
     res_manifest = subprocess.run([venv_python, manifest_script, base_dir])
     if res_manifest.returncode != 0:
-        print("🛑 Halting due to manifest load-order violations. Please review the output above.")
+        print(
+            "🛑 Halting due to manifest load-order violations. Please review the output above."
+        )
         if extractor:
-            extractor.captured_blocks.append(("Linter Violation", ["Manifest Dependency Graph Linter failed. Forward references detected.\n"]))
+            extractor.captured_blocks.append(
+                (
+                    "Linter Violation",
+                    ["Manifest Dependency Graph Linter failed. Forward references detected.\n"],
+                )
+            )
             extractor.finish_and_write()
         sys.exit(1)
 
     print("[*] Running AST Burn List Linter...")
     burn_script = os.path.join(base_dir, "tools", "check_burn_list.py")
-    res_burn = subprocess.run(
-        [venv_python, burn_script, base_dir, "--ignore-file", ignore_filepath]
+    res_burn = (
+        subprocess.run(
+            [
+                venv_python,
+                burn_script,
+                os.path.join(base_dir, target_modules[0]),
+                "--ignore-file",
+                ignore_filepath,
+            ]
+        )
+        if target_modules and len(target_modules) == 1
+        else subprocess.run(
+            [venv_python, burn_script, base_dir, "--ignore-file", ignore_filepath]
+        )
     )
     if res_burn.returncode != 0:
         print("🛑 Halting due to burn list violations. Please review the output above.")
@@ -1172,7 +1193,7 @@ def main():
         final_rc = 0
 
         if args.mode == "standard":
-            check_linters(venv_python, base_dir, ignore_filepath, extractor)
+            check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
             final_rc = run_daemon_tests(
                 venv_python, base_dir, extractor, ignore_patterns, target_modules
             )
@@ -1234,7 +1255,7 @@ def main():
                 final_rc = rc_odoo
 
         elif args.mode == "integration":
-            check_linters(venv_python, base_dir, ignore_filepath, extractor)
+            check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
             final_rc = run_daemon_tests(
                 venv_python, base_dir, extractor, ignore_patterns, target_modules
             )
@@ -1355,7 +1376,7 @@ def main():
                     pass
 
         elif args.mode == "individual":
-            check_linters(venv_python, base_dir, ignore_filepath, extractor)
+            check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
             failed_modules = []
             for mod in target_modules:
                 print("\n[*] ----------------------------------------------------")

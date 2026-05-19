@@ -21,6 +21,7 @@ class PagerCheck(models.Model):
     _order = "name asc"
 
     name = fields.Char(string="Check Name / Source", required=True)
+    website_id = fields.Many2one("website", string="Website", ondelete="cascade")
     status = fields.Selection(
         [
             ("passing", "Passing"),
@@ -165,7 +166,9 @@ class PagerCheck(models.Model):
     )
     last_heartbeat = fields.Datetime(string="Last Heartbeat", readonly=True)
 
-    _name_uniq = models.Constraint("UNIQUE(name)", "The check name must be unique!")
+    _name_uniq = models.Constraint(
+        "UNIQUE(name, website_id)", "The check name must be unique per website!"
+    )
     _uuid_uniq = models.Constraint(
         "UNIQUE(heartbeat_uuid)", "The heartbeat UUID must be unique!"
     )

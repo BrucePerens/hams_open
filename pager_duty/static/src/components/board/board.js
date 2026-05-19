@@ -27,7 +27,12 @@ export class PagerBoard extends Component {
     }
 
     async fetchData() {
-        const data = await this.orm.call("pager.incident", "get_board_data", []);
+        const context = {};
+        const urlParams = new URLSearchParams(document.location.search);
+        if (urlParams.has('website_id')) {
+            context.website_id = parseInt(urlParams.get('website_id'));
+        }
+        const data = await this.orm.call("pager.incident", "get_board_data", [], { context });
         this.state.active_incidents = data.active;
         this.state.resolved_incidents = data.resolved;
         this.state.on_duty = data.on_duty;

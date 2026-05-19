@@ -27,6 +27,7 @@ class PagerIncident(models.Model):
     name = fields.Char(
         string="Incident ID", required=True, copy=False, readonly=True, default="New"
     )
+    website_id = fields.Many2one("website", string="Website", ondelete="cascade")
     # Added index=True to prevent sequential scans during daemon polling
     source = fields.Char(string="Source", required=True, index=True)
     severity = fields.Selection(
@@ -115,6 +116,9 @@ class PagerIncident(models.Model):
 
     @api.model
     def report_incident(self, vals):
+        """
+        Reports a new incident. Supports multi-website partitioning.
+        """
         # [@ANCHOR: report_incident_rate_limit]
         source = vals.get("source", "unknown")
         redis_key = f"pager_rate_limit:{source}"
@@ -212,8 +216,12 @@ class PagerIncident(models.Model):
         on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
         duty_name = on_duty_user.name if on_duty_user else "None"
 
+        domain = [("status", "in", ["open", "acknowledged"])]
+        if self.env.context.get("website_id"):
+            domain.append(("website_id", "=", self.env.context.get("website_id")))
+
         active = self.search_read(
-            [("status", "in", ["open", "acknowledged"])],
+            domain,
             [
                 "name",
                 "source",
@@ -231,8 +239,12 @@ class PagerIncident(models.Model):
                 a["acknowledged_by_id"][1] if a["acknowledged_by_id"] else False
             )
 
+        res_domain = [("status", "=", "resolved")]
+        if self.env.context.get("website_id"):
+            res_domain.append(("website_id", "=", self.env.context.get("website_id")))
+
         resolved = self.search_read(
-            [("status", "=", "resolved")],
+            res_domain,
             ["name", "source", "severity", "time_resolved"],
             order="time_resolved desc",
             limit=10,
