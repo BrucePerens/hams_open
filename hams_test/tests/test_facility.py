@@ -158,6 +158,8 @@ class TestRealTransactionFacility(RealTransactionCase):
         """
         # Tests [@ANCHOR: documentation_bootstrap]
         # Tests [@ANCHOR: documentation_injection]
+        # Tests [@ANCHOR: hams_http_case]
+        # Tests [@ANCHOR: hams_transaction_case]
         article_model_name = None
         if "knowledge.article" in self.env:
             article_model_name = "knowledge.article"

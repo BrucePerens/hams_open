@@ -3,23 +3,16 @@ import hashlib
 import os
 import tarfile
 import stat
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from odoo import tools
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsTransactionCase
 from odoo.exceptions import UserError, ValidationError
 
 INTEGRATION_MODE = os.environ.get("HAMS_INTEGRATION_MODE") == "1"
 
-def mock_if_standard(target, **kwargs):
-    """Bypasses the mock if the runner is executing an integration test."""
-    if INTEGRATION_MODE:
-        def decorator(func):
-            return func
-        return decorator
-    return patch(target, **kwargs)
-
 @tagged("post_install", "-at_install", "integration" if INTEGRATION_MODE else "standard")
-class TestBinaryManifest(TransactionCase):
+class TestBinaryManifest(HamsTransactionCase):
 
     def tearDown(self):
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
@@ -62,11 +55,14 @@ class TestBinaryManifest(TransactionCase):
             }
         )
 
-    @mock_if_standard("shutil.which")
-    def test_01_already_installed(self, mock_which=None):
+    def test_01_already_installed(self):
         # [@ANCHOR: test_binary_manifest_standard]
         # Tests [@ANCHOR: binary_ensure_executable]
         # Tests [@ANCHOR: binary_resolution]
+        mock_which = None
+        if not INTEGRATION_MODE:
+            mock_which = self.safe_patch("shutil.which")
+
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         if INTEGRATION_MODE:
             target_bin = os.path.join(data_dir, "hams_bin", "testbin")
@@ -87,24 +83,29 @@ class TestBinaryManifest(TransactionCase):
             self.assertEqual(path, "/usr/bin/testbin")
             mock_which.assert_called_once_with("testbin")
 
-    @mock_if_standard("shutil.which", return_value=None)
-    def test_02_missing_manifest(self, mock_which=None):
+    def test_02_missing_manifest(self):
+        if not INTEGRATION_MODE:
+            self.safe_patch("shutil.which", return_value=None)
         with self.assertRaises(UserError, msg="Must raise error on missing manifest"):
             self.env["binary.manifest"].ensure_executable("missingbin")
 
-    @mock_if_standard("shutil.which", return_value=None)
-    @mock_if_standard("platform.system", return_value="Windows")
-    def test_03_unsupported_platform(self, mock_system=None, mock_which=None):
+    def test_03_unsupported_platform(self):
+        if not INTEGRATION_MODE:
+            self.safe_patch("shutil.which", return_value=None)
+            self.safe_patch("platform.system", return_value="Windows")
         if INTEGRATION_MODE:
             return # Cannot physically spoof kernel architecture
         with self.assertRaises(UserError, msg="Must block non-Linux platforms"):
             self.env["binary.manifest"].ensure_executable("testbin")
 
-    @mock_if_standard("shutil.which", return_value=None)
-    @mock_if_standard("platform.system", return_value="Linux")
-    @mock_if_standard("platform.machine", return_value="x86_64")
-    @mock_if_standard("urllib.request.urlopen")
-    def test_04_successful_download_and_checksum(self, mock_urlopen=None, mock_machine=None, mock_system=None, mock_which=None):
+    def test_04_successful_download_and_checksum(self):
+        mock_urlopen = None
+        if not INTEGRATION_MODE:
+            self.safe_patch("shutil.which", return_value=None)
+            self.safe_patch("platform.system", return_value="Linux")
+            self.safe_patch("platform.machine", return_value="x86_64")
+            mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
         if INTEGRATION_MODE:
             path = self.env["binary.manifest"].ensure_executable("testbin")
             self.assertTrue(path.endswith("testbin"))
@@ -129,9 +130,12 @@ class TestBinaryManifest(TransactionCase):
         v2 = self.env["binary.manifest"].get_view(view_type="form")
         self.assertIn("url", v2["arch"])
 
-    @mock_if_standard("shutil.which")
-    def test_06_is_installed_compute(self, mock_which=None):
+    def test_06_is_installed_compute(self):
         # Tests [@ANCHOR: binary_compute_installed]
+        mock_which = None
+        if not INTEGRATION_MODE:
+            mock_which = self.safe_patch("shutil.which")
+
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         if INTEGRATION_MODE:
             target_bin = os.path.join(data_dir, "hams_bin", "testbin")
@@ -151,9 +155,12 @@ class TestBinaryManifest(TransactionCase):
         mock_which.return_value = None
         self.assertFalse(self.manifest.is_installed)
 
-    @mock_if_standard("odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable")
-    def test_07_action_install(self, mock_ensure=None):
+    def test_07_action_install(self):
         # Tests [@ANCHOR: binary_action_install]
+        mock_ensure = None
+        if not INTEGRATION_MODE:
+            mock_ensure = self.safe_patch("odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable")
+
         if INTEGRATION_MODE:
             result = self.manifest.action_install()
             self.assertEqual(result["type"], "ir.actions.client")
@@ -204,11 +211,14 @@ class TestBinaryManifest(TransactionCase):
         with self.assertRaises(UserError):
             self.manifest.with_user(restricted_user).action_install()
 
-    @mock_if_standard("shutil.which", return_value=None)
-    @mock_if_standard("platform.system", return_value="Linux")
-    @mock_if_standard("platform.machine", return_value="x86_64")
-    @mock_if_standard("urllib.request.urlopen")
-    def test_10_tar_slip_prevention(self, mock_urlopen=None, mock_machine=None, mock_system=None, mock_which=None):
+    def test_10_tar_slip_prevention(self):
+        mock_urlopen = None
+        if not INTEGRATION_MODE:
+            self.safe_patch("shutil.which", return_value=None)
+            self.safe_patch("platform.system", return_value="Linux")
+            self.safe_patch("platform.machine", return_value="x86_64")
+            mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
         if INTEGRATION_MODE:
             return
 
@@ -233,35 +243,38 @@ class TestBinaryManifest(TransactionCase):
             del tarfile.data_filter
 
         try:
-            with patch("tarfile.open") as mock_tar_open:
-                mock_tar = MagicMock()
-                mock_tar_open.return_value.__enter__.return_value = mock_tar
+            mock_tar_open = self.safe_patch("tarfile.open")
+            mock_tar = MagicMock()
+            mock_tar_open.return_value.__enter__.return_value = mock_tar
 
-                mock_member = MagicMock()
-                mock_member.name = "slippy"
-                mock_member.islnk.return_value = False
-                mock_member.issym.return_value = False
+            mock_member = MagicMock()
+            mock_member.name = "slippy"
+            mock_member.islnk.return_value = False
+            mock_member.issym.return_value = False
 
-                mock_tar.getmembers.return_value = [mock_member]
+            mock_tar.getmembers.return_value = [mock_member]
 
-                original_abspath = os.path.abspath
-                def mock_abspath(p):
-                    if isinstance(p, str) and "slippy" in p:
-                        return "/etc/passwd"
-                    return original_abspath(p)
+            original_abspath = os.path.abspath
+            def mock_abspath(p):
+                if isinstance(p, str) and "slippy" in p:
+                    return "/etc/passwd"
+                return original_abspath(p)
 
-                with patch("odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath", side_effect=mock_abspath):
-                    with self.assertRaisesRegex(UserError, "Security Alert: Tar slip attempt detected."):
-                        self.env["binary.manifest"].ensure_executable("slippy")
+            self.safe_patch("odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath", side_effect=mock_abspath)
+            with self.assertRaisesRegex(UserError, "Security Alert: Tar slip attempt detected."):
+                self.env["binary.manifest"].ensure_executable("slippy")
         finally:
             if has_filter:
                 tarfile.data_filter = old_filter
 
-    @mock_if_standard("shutil.which", return_value=None)
-    @mock_if_standard("platform.system", return_value="Linux")
-    @mock_if_standard("platform.machine", return_value="x86_64")
-    @mock_if_standard("urllib.request.urlopen")
-    def test_13_symlink_prevention(self, mock_urlopen=None, mock_machine=None, mock_system=None, mock_which=None):
+    def test_13_symlink_prevention(self):
+        mock_urlopen = None
+        if not INTEGRATION_MODE:
+            self.safe_patch("shutil.which", return_value=None)
+            self.safe_patch("platform.system", return_value="Linux")
+            self.safe_patch("platform.machine", return_value="x86_64")
+            mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
         if INTEGRATION_MODE:
             return
 
@@ -280,16 +293,16 @@ class TestBinaryManifest(TransactionCase):
 
         mock_urlopen.return_value = mock_response_get
 
-        with patch("tarfile.open") as mock_tar_open:
-            mock_tar = MagicMock()
-            mock_tar_open.return_value.__enter__.return_value = mock_tar
+        mock_tar_open = self.safe_patch("tarfile.open")
+        mock_tar = MagicMock()
+        mock_tar_open.return_value.__enter__.return_value = mock_tar
 
-            mock_member = MagicMock()
-            mock_member.name = "symlinkbin"
-            mock_member.islnk.return_value = False
-            mock_member.issym.return_value = True
+        mock_member = MagicMock()
+        mock_member.name = "symlinkbin"
+        mock_member.islnk.return_value = False
+        mock_member.issym.return_value = True
 
-            mock_tar.getmembers.return_value = [mock_member]
+        mock_tar.getmembers.return_value = [mock_member]
 
-            with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
-                self.env["binary.manifest"].ensure_executable("symlinkbin")
+        with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
+            self.env["binary.manifest"].ensure_executable("symlinkbin")

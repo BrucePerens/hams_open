@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install")
-class TestDocumentation(TransactionCase):
+class TestDocumentation(HamsTransactionCase):
 
     def test_documentation_installed(self):
         # Tests [@ANCHOR: caching_docs_bootstrap]

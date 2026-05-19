@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsHttpCase
 from lxml import etree
 
 
 @tagged("post_install", "-at_install")
-class TestServiceWorker(HttpCase):
+class TestServiceWorker(HamsHttpCase):
 
     def test_01_sw_headers(self):
         # [@ANCHOR: test_service_worker_01]

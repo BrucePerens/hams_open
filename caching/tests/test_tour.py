@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsHttpCase
 
 @tagged("post_install", "-at_install")
-class TestCachingTour(HttpCase):
+class TestCachingTour(HamsHttpCase):
 
     def test_caching_service_worker_tour(self):
         # [@ANCHOR: test_caching_service_worker_tour]

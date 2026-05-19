@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-from unittest.mock import MagicMock, patch
-from odoo.tests.common import HttpCase, tagged
+from unittest.mock import MagicMock
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsHttpCase
 from lxml import etree
 from odoo.addons.caching.controllers.main import ServiceWorkerController
 
 @tagged("post_install", "-at_install")
-class TestSettingsAndCache(HttpCase):
+class TestSettingsAndCache(HamsHttpCase):
 
     def test_01_quota_config_updates_sw(self):
         # [@ANCHOR: test_settings_and_cache_01]
@@ -45,30 +46,30 @@ class TestSettingsAndCache(HttpCase):
         svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('caching.user_caching_service')
 
         # Case 1: No files
-        with patch.object(controller, '_get_fs_stats', return_value=(1000.0, [])):
-            with patch('odoo.addons.caching.controllers.main.request', mock_req):
-                # Set specific param for this sub-test
-                self.env['ir.config_parameter'].with_user(svc_uid).set_param('caching.safe_quota_mb', '35') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
-                mtime, max_size = controller._get_global_static_info()
-                self.assertEqual(max_size, str(10 * 1024 * 1024))
+        self.safe_patch_object(controller, '_get_fs_stats', return_value=(1000.0, []))
+        self.safe_patch('odoo.addons.caching.controllers.main.request', mock_req)
+        # Set specific param for this sub-test
+        self.env['ir.config_parameter'].with_user(svc_uid).set_param('caching.safe_quota_mb', '35') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
+        mtime, max_size = controller._get_global_static_info()
+        self.assertEqual(max_size, str(10 * 1024 * 1024))
 
         # Case 2: Files fit within quota
         # Total size: 10MB + 5MB = 15MB. Quota: 35MB.
-        with patch.object(controller, '_get_fs_stats', return_value=(1000.0, [10*1024*1024, 5*1024*1024])):
-            with patch('odoo.addons.caching.controllers.main.request', mock_req):
-                self.env['ir.config_parameter'].with_user(svc_uid).set_param('caching.safe_quota_mb', '35') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
-                mtime, max_size = controller._get_global_static_info()
-                self.assertEqual(max_size, str(10*1024*1024 + 1024))
+        self.safe_patch_object(controller, '_get_fs_stats', return_value=(1000.0, [10*1024*1024, 5*1024*1024]))
+        self.safe_patch('odoo.addons.caching.controllers.main.request', mock_req)
+        self.env['ir.config_parameter'].with_user(svc_uid).set_param('caching.safe_quota_mb', '35') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
+        mtime, max_size = controller._get_global_static_info()
+        self.assertEqual(max_size, str(10*1024*1024 + 1024))
 
         # Case 3: Files exceed quota
         # Total size: 30MB + 10MB = 40MB. Quota: 35MB.
         # Should drop the 30MB file. Remaining: 10MB. 10MB <= 35MB.
         # max_size should be 30MB - 1.
-        with patch.object(controller, '_get_fs_stats', return_value=(1000.0, [30*1024*1024, 10*1024*1024])):
-            with patch('odoo.addons.caching.controllers.main.request', mock_req):
-                self.env['ir.config_parameter'].with_user(svc_uid).set_param('caching.safe_quota_mb', '35') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
-                mtime, max_size = controller._get_global_static_info()
-                self.assertEqual(max_size, str(30*1024*1024 - 1))
+        self.safe_patch_object(controller, '_get_fs_stats', return_value=(1000.0, [30*1024*1024, 10*1024*1024]))
+        self.safe_patch('odoo.addons.caching.controllers.main.request', mock_req)
+        self.env['ir.config_parameter'].with_user(svc_uid).set_param('caching.safe_quota_mb', '35') # Tested by [@ANCHOR: test_caching_sudo_params]  # fmt: skip
+        mtime, max_size = controller._get_global_static_info()
+        self.assertEqual(max_size, str(30*1024*1024 - 1))
 
     def test_02_force_invalidation(self):
         """
@@ -112,10 +113,10 @@ class TestSettingsAndCache(HttpCase):
         mock_req = MagicMock()
         mock_req.env = self.env['res.users'].with_context(force_fs_scan=True).env
 
-        with patch('odoo.addons.caching.controllers.main.request', mock_req):
-            mtime, sizes = controller._get_fs_stats()
-            self.assertGreater(mtime, 0)
-            self.assertIsInstance(sizes, list)
+        self.safe_patch('odoo.addons.caching.controllers.main.request', mock_req)
+        mtime, sizes = controller._get_fs_stats()
+        self.assertGreater(mtime, 0)
+        self.assertIsInstance(sizes, list)
 
     def test_04_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_caching_settings]

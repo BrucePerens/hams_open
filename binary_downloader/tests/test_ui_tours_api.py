@@ -2,8 +2,8 @@
 import os
 from odoo import http
 from odoo.http import request
-from odoo.tests import HttpCase, tagged
-from unittest.mock import patch
+from odoo.addons.hams_test.common import HamsHttpCase
+from odoo.tests import tagged
 
 
 class BinaryDownloaderTestController(http.Controller):
@@ -19,7 +19,7 @@ class BinaryDownloaderTestController(http.Controller):
 
 
 @tagged("post_install", "-at_install")
-class TestBinaryDownloaderTour(HttpCase):
+class TestBinaryDownloaderTour(HamsHttpCase):
     # [@ANCHOR: test_binary_install_tour]
     def setUp(self):
         super().setUp()
@@ -37,11 +37,11 @@ class TestBinaryDownloaderTour(HttpCase):
             except OSError:
                 pass
 
-    @patch(
-        "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable",
-        return_value="/var/lib/odoo/hams_bin/tourbin",
-    )
-    def test_binary_install_tour(self, mock_ensure):
+    def test_binary_install_tour(self):
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable",
+            return_value="/var/lib/odoo/hams_bin/tourbin",
+        )
         # Tested by [@ANCHOR: test_binary_install_tour]
         self.start_tour(
             "/odoo?action=binary_downloader.action_binary_downloader_manifest",

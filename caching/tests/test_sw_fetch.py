@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import re
-from odoo.tests.common import HttpCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsHttpCase
 
 @tagged("post_install", "-at_install")
-class TestServiceWorkerFetch(HttpCase):
+class TestServiceWorkerFetch(HamsHttpCase):
 
     def test_01_sw_fetch_presence(self):
         # [@ANCHOR: test_sw_fetch_01]

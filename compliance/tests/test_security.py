@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-from odoo.tests.common import TransactionCase, tagged
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install")
-class TestComplianceSecurity(TransactionCase):
+class TestComplianceSecurity(HamsTransactionCase):
 
     def test_service_account(self):
         """Verify the compliance service account is correctly configured."""
