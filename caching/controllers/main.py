@@ -8,6 +8,7 @@ from odoo.modules.module import get_module_path
 
 _logger = logging.getLogger(__name__)
 
+
 class ServiceWorkerController(http.Controller):
 
     _fs_cache = None
@@ -17,15 +18,21 @@ class ServiceWorkerController(http.Controller):
         # [@ANCHOR: caching_fs_scan_logic]
         # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
-        Scans the 'static/' directories of all installed modules efficiently.
-        Returns a tuple: (latest_mtime, file_sizes).
-        Cached in RAM at the class level so the disk walk only executes once per worker lifecycle.
+        Scans 'static/' dirs of all installed modules.
+        Returns tuple: (latest_mtime, file_sizes).
+        Cached in RAM at class level.
         """
         # Gating for Jules VM stability during Odoo initialization.
-        # This prevents the scanner from firing during the heavy --init phase of tests.
-        is_test = tools.config.get('test_enable')
-        is_boot = tools.config.get('init') or tools.config.get('stop_after_init')
-        if is_test and is_boot and not request.env.context.get('force_fs_scan'):
+        # Prevent scanner during --init phase of tests.
+        is_test = tools.config.get("test_enable")
+        is_boot = tools.config.get("init") or tools.config.get(
+            "stop_after_init"
+        )
+        if (
+            is_test
+            and is_boot
+            and not request.env.context.get("force_fs_scan")
+        ):
             return (0.0, [])
 
         if type(self)._fs_cache:
@@ -38,18 +45,21 @@ class ServiceWorkerController(http.Controller):
             max_mtime = 0.0
             file_sizes = []
 
-            # STRICT ZERO-SUDO COMPLIANCE: Escalate to micro-privilege service account
-            # to retrieve the list of installed modules without using .sudo().
+            # Escalate to micro-privilege service account.
             # Tested by [@ANCHOR: test_caching_zero_sudo_scan]
-            utils = request.env['zero_sudo.security.utils']
-            env_svc = utils._get_service_env('caching.user_caching_service')
+            # audit-ignore-line: zero-sudo utils
+            utils = request.env["zero_sudo.security.utils"]
+            env_svc = utils._get_service_env(
+                "caching.user_caching_service"
+            )
 
             # Use ORM to get installed modules.
-            # This ensures consistent Zero-Sudo architecture. Bound the search to satisfy AST linters.
-            installed_modules = env_svc['ir.module.module'].search(
-                [('state', '=', 'installed')],
-                limit=10000
-            ).mapped('name')
+            # Bound search to satisfy AST linters.
+            installed_modules = (
+                env_svc["ir.module.module"]
+                .search([("state", "=", "installed")], limit=10000)
+                .mapped("name")
+            )
 
             def _scan_recursive(path):
                 nonlocal max_mtime
@@ -64,7 +74,9 @@ class ServiceWorkerController(http.Controller):
                                     max_mtime = stat.st_mtime
                                 file_sizes.append(stat.st_size)
                 except OSError as e:
-                    _logger.warning("Could not access path %s: %s", path, e)
+                    _logger.warning(
+                        "Could not access path %s: %s", path, e
+                    )
 
             for module_name in installed_modules:
                 mod_path = get_module_path(module_name)
@@ -84,34 +96,52 @@ class ServiceWorkerController(http.Controller):
         # [@ANCHOR: caching_quota_calculation]
         # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
-        Returns a tuple: (latest_mtime_string, dynamic_max_file_size_string).
-        Calculates the safe dynamic max file size based on configurable quota.
+        Calculates the safe dynamic max file size based on quota.
+        Returns tuple: (latest_mtime_string, dynamic_max_size_string).
         """
         max_mtime, file_sizes = self._get_fs_stats()
 
-        #
-        quota_mb = int(request.env['zero_sudo.security.utils']._get_system_param('caching.safe_quota_mb', '35') or 35) # Tested by [@ANCHOR: test_caching_sudo_params]
+        # Multi-Website Awareness: Get quota.
+        website = getattr(request, "website", None)
+        if website:
+            quota_mb = website.caching_safe_quota_mb
+        else:
+            # Fallback to system param.
+            # Tested by [@ANCHOR: test_caching_sudo_params]
+            utils = request.env["zero_sudo.security.utils"]
+            quota_mb = int(
+                utils._get_system_param(
+                    "caching.safe_quota_mb", "35"
+                )
+                or 35
+            )
 
-        # Reserve 15MB for Odoo's compiled /web/assets/ bundles and overhead
+        # Reserve 15MB for compiled bundles and overhead.
         SAFE_QUOTA = quota_mb * 1024 * 1024
 
         total_size = sum(file_sizes)
 
         if not file_sizes:
-            return (str(int(max_mtime)), str(10 * 1024 * 1024))  # Default 10MB
+            return (
+                str(int(max_mtime)),
+                str(10 * 1024 * 1024),
+            )  # Default 10MB
 
         if total_size <= SAFE_QUOTA:
-            # Everything fits. Set max size to just above the largest file.
-            dynamic_max_size = file_sizes[0] + 1024 if file_sizes else 10 * 1024 * 1024
+            # Everything fits.
+            dynamic_max_size = (
+                file_sizes[0] + 1024
+                if file_sizes
+                else 10 * 1024 * 1024
+            )
         else:
-            # We need to drop the largest files until the remaining sum fits in the quota
+            # Drop largest files until remaining sum fits quota.
             current_total = total_size
             dynamic_max_size = 0
             for size in file_sizes:
                 current_total -= size
                 if current_total <= SAFE_QUOTA:
-                    # The file we just dropped ('size') must be rejected by the SW.
-                    # Set the limit to 1 byte less than that file's size.
+                    # File we just dropped must be rejected.
                     dynamic_max_size = size - 1
                     break
 
@@ -123,21 +153,39 @@ class ServiceWorkerController(http.Controller):
         # Verified by [@ANCHOR: test_service_worker_01]
         """
         Serves the Service Worker script from the root scope.
-        Dynamically injects the latest filesystem mtime (for cache invalidation)
-        and the calculated max file size (for quota protection).
+        Injects mtime (invalidation) and max file size (quota).
         """
         try:
-            with tools.file_open("caching/static/src/sw/sw.js", "r") as f:
+            # audit-ignore-path: Internal module file access.
+            with tools.file_open(
+                "caching/static/src/sw/sw.js", "r"
+            ) as f:
                 content = f.read()
         except FileNotFoundError:
             return request.not_found()
 
         latest_mtime, max_file_size = self._get_global_static_info()
 
-        invalidation_version = request.env['zero_sudo.security.utils']._get_system_param('caching.invalidation_version', '1') # Tested by [@ANCHOR: test_caching_sudo_params]
+        # Multi-Website Awareness: Get version from current website.
+        website = getattr(request, "website", None)
+        if website:
+            in_v = website.caching_invalidation_version
+        else:
+            # Fallback to system param.
+            # Tested by [@ANCHOR: test_caching_sudo_params]
+            utils = request.env["zero_sudo.security.utils"]
+            in_v = utils._get_system_param(
+                "caching.invalidation_version", "1"
+            )
 
-        content = content.replace("__CACHE_NAME__", f"odoo-assets-cache-{latest_mtime}-v{invalidation_version}")
-        content = content.replace("__MAX_FILE_SIZE_BYTES__", max_file_size)
+        # Build cache name with version.
+        cache_name = (
+            f"odoo-assets-cache-{latest_mtime}-v{in_v}"
+        )
+        content = content.replace("__CACHE_NAME__", cache_name)
+        content = content.replace(
+            "__MAX_FILE_SIZE_BYTES__", max_file_size
+        )
 
         headers = [
             ("Content-Type", "application/javascript"),
