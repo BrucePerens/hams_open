@@ -1,1 +1,0 @@
-ham_satellite/tests/test_satellite_tour.py

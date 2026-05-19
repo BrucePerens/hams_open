@@ -7,6 +7,7 @@ from odoo.modules.registry import Registry
 import psycopg2
 from psycopg2 import sql
 from odoo.tools import mute_logger, _
+from odoo.addons.hams_test.common import SafePatchMixin
 
 _logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ _logger = logging.getLogger(__name__)
 _original_create = odoo.models.BaseModel.create
 
 
-class RealTransactionCase(HttpCase):
+class RealTransactionCase(HttpCase, SafePatchMixin):
     """
     A testing facility that bypasses Odoo's test cursor wrapping (TransactionCase).
     It provides a real, committable PostgreSQL cursor allowing tests to behave

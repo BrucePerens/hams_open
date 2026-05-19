@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
-from odoo.addons.hams_test.tests.real_transaction import HamsTransactionCase
+from odoo.addons.hams_test.common import HamsTransactionCase
 from unittest.mock import MagicMock
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import odoo.tests
 from odoo.exceptions import ValidationError
-from odoo.addons.hams_test.tests.real_transaction import HamsHttpCase
+from odoo.addons.hams_test.common import HamsHttpCase
 import json
 
 

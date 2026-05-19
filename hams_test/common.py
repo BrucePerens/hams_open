@@ -13,9 +13,11 @@ class DiagnosticMock(MagicMock):
     """
     def __init__(self, *args, **kwargs):
         # ADR-0012: Prevent runaway test execution by hard-capping mock recursion.
-        self._max_depth = kwargs.pop("max_recursion_depth", 5)
-        self._current_depth = 0
+        max_depth = kwargs.pop("max_recursion_depth", 5)
+        # MUST call super before setting attributes to avoid Py3.13 MagicMock getattr crash
         super().__init__(*args, **kwargs)
+        self._max_depth = max_depth
+        self._current_depth = 0
 
     def __call__(self, *args, **kwargs):
         self._current_depth += 1
@@ -37,18 +39,18 @@ class SafePatchMixin:
     Mixin to provide safe, runtime-only patching to avoid Odoo registry
     early-import corruption and mock recursion traps.
     """
-    def safe_patch(self, target, **kwargs):
-        if "new" not in kwargs and "new_callable" not in kwargs:
+    def safe_patch(self, target, *args, **kwargs):
+        if not args and "new" not in kwargs and "new_callable" not in kwargs:
             kwargs["new_callable"] = DiagnosticMock
-        patcher = patch(target, **kwargs)
+        patcher = patch(target, *args, **kwargs)
         mock_obj = patcher.start()
         self.addCleanup(patcher.stop)
         return mock_obj
 
-    def safe_patch_object(self, target, attribute, **kwargs):
-        if "new" not in kwargs and "new_callable" not in kwargs:
+    def safe_patch_object(self, target, attribute, *args, **kwargs):
+        if not args and "new" not in kwargs and "new_callable" not in kwargs:
             kwargs["new_callable"] = DiagnosticMock
-        patcher = patch.object(target, attribute, **kwargs)
+        patcher = patch.object(target, attribute, *args, **kwargs)
         mock_obj = patcher.start()
         self.addCleanup(patcher.stop)
         return mock_obj

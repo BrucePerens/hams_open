@@ -421,7 +421,6 @@ prompts/review_user_websites.md
 prompts/review_user_websites_seo.md
 prompts/review_zero_sudo.md
 requirements.txt
-theme_hams/README.md
 tools/MERGE.sh
 tools/auto_inject_view_audits.py
 tools/binary_manifest.json

@@ -2,7 +2,7 @@
 import shutil
 import os
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.hams_test.common import HamsTransactionCase
 from odoo.exceptions import UserError
 
 if not hasattr(shutil, "_orig_which"):
@@ -13,7 +13,7 @@ if not hasattr(shutil, "_orig_which"):
 
 
 @tagged("post_install", "-at_install")
-class TestPgConfig(RealTransactionCase):
+class TestPgConfig(HamsTransactionCase):
 
     def setUp(self):
         super().setUp()
