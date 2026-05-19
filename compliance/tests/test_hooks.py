@@ -131,3 +131,42 @@ class TestComplianceHooks(TransactionCase):
         custom_page_2.unlink()
         custom_view_2.unlink()
         website_2.unlink()
+
+    def test_05_website_default_cookie_bar(self):
+        """Verify that new websites have cookies_bar enabled by default."""
+        # AI Laziness Fix Test: Ensure our model inheritance works.
+        new_website = self.env["website"].create({"name": "New Compliant Website"})
+        self.assertTrue(
+            new_website.cookies_bar,
+            "New websites should have cookies_bar enabled by default for compliance."
+        )
+        new_website.unlink()
+
+    def test_06_boilerplate_restoration(self):
+        """Verify that boilerplate is restored if custom page is removed."""
+        # Create a custom page
+        custom_view = self.env["ir.ui.view"].create({
+            "name": "Temp Custom Privacy",
+            "type": "qweb",
+            "arch": "<div>Custom Content</div>",
+            "key": "custom.temp_privacy_view"
+        })
+        custom_page = self.env["website.page"].create({
+            "url": "/privacy",
+            "view_id": custom_view.id,
+            "is_published": True,
+            "website_id": False
+        })
+
+        # Run hook to unpublish boilerplate
+        post_init_hook(self.env)
+        boilerplate_page = self.env.ref("compliance.page_privacy_policy")
+        self.assertFalse(boilerplate_page.is_published)
+
+        # Remove custom page
+        custom_page.unlink()
+        custom_view.unlink()
+
+        # Run hook again
+        post_init_hook(self.env)
+        self.assertTrue(boilerplate_page.is_published, "Boilerplate should be re-published if custom page is gone.")

@@ -6,7 +6,7 @@ This module automatically handles the annoying parts of running a legal website.
 
 ## 🌟 What It Does
 
-* **Turns on the Cookie Banner:** As soon as you install this, it flips the switch to turn on Odoo's native Cookie Consent Bar across all your websites. This stops optional tracking scripts until the user clicks "Accept."
+* **Turns on the Cookie Banner:** As soon as you install this, it flips the switch to turn on Odoo's native Cookie Consent Bar across all your websites. It also ensures that any **new** websites created later have this enabled by default. This stops optional tracking scripts until the user clicks "Accept."
 * **Writes Your Legal Pages:** It automatically creates standard, editable pages for your Privacy Policy (`/privacy`), Cookie Policy (`/cookie-policy`), and Terms of Service (`/terms`).
 * **Doesn't Break Your Edits:** If you've already written a privacy policy at `/privacy`, the module detects it and leaves yours alone. If you edit the pages it creates, it won't overwrite your work when you update the module.
 
@@ -47,7 +47,7 @@ A non-interactive configuration module that enforces baseline regulatory complia
 * [Compliance Setup Journey](./docs/journeys/compliance_setup_journey.md) `[@ANCHOR: journey_compliance_setup]`
 
 ## 2. Enforcement Details
-* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean. `[@ANCHOR: compliance_post_init_cookie_bar]`
+* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean on install and sets it as the default for new websites. `[@ANCHOR: compliance_post_init_cookie_bar]`
 * **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records. `[@ANCHOR: compliance_legal_pages_rendering]`
     * Privacy Policy Template `[@ANCHOR: compliance_privacy_policy_template]`
     * Cookie Policy Template `[@ANCHOR: compliance_cookie_policy_template]`
