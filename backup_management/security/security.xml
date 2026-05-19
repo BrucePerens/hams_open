@@ -4,7 +4,8 @@
         <record id="group_backup_admin" model="res.groups">
             <field name="name">Backup Administrator</field>
         </record>
-
+    </data>
+    <data noupdate="0">
         <record id="user_backup_service_internal" model="res.users">
             <field name="name">Backup Service Internal</field>
             <field name="login">backup_service_internal</field>

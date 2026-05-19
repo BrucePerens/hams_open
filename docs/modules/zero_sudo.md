@@ -7,7 +7,7 @@ This is the core security cop for our Odoo ecosystem. It enforces our strict **Z
 ## 🌟 What It Does
 
 * **Safe Privilege Escalation:** Instead of letting developers use Odoo's dangerous `.sudo()` command, this module provides safe, cached functions (like `_get_service_uid`) to run background tasks securely.
-* **Blocks System Hacks:** It forces developers to hardcode a "whitelist" of safe configuration settings. If an attacker tries to trick the system into handing over a cryptographic secret (like a database password), this module blocks it.
+* **Blocks System Hacks:** It forces developers to hardcode a \"whitelist\" of safe configuration settings. If an attacker tries to trick the system into handing over a cryptographic secret (like a database password), this module blocks it.
 * **Locks Out Daemons:** It adds an `is_service_account` checkbox to users. If an account is running a background daemon and someone tries to log into the web browser with that account, this module instantly destroys the session and kicks them out.
 
 ---
@@ -34,7 +34,7 @@ The module utilizes several key patterns to secure the system:
 ## Security Design (ADR-0002, ADR-0005)
 
 -   **Anti-IDOR & Privilege Escalation**: The `_get_service_uid` method performs direct SQL lookups and strictly rejects any service account with global administrative groups (`base.group_system`, `base.group_erp_manager`).
--   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce a hardcoded `PARAM_WHITELIST` and block keys matching cryptographic patterns (e.g., "secret", "token") to prevent SSTI exfiltration.
+-   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce a hardcoded `PARAM_WHITELIST` and block keys matching cryptographic patterns (e.g., \"secret\", \"token\") to prevent SSTI exfiltration.
 -   **Coherent Cache Signaling**: Uses PostgreSQL `NOTIFY` (`pg_notify`) to synchronize in-memory caches across distributed worker nodes.
 </security_design>
 
@@ -50,7 +50,8 @@ If you are an AI or developer working on downstream modules, you **MUST** perfor
 3. **Update Security Utility Calls:** Globally find-and-replace your utility calls to use the new centralized namespace:
    * **Change:** `self.env['custom.security.utils']._get_service_uid(...)`
    * **To:** `self.env['zero_sudo.security.utils']._get_service_uid(...)`
-4. **Service Account XML Provisioning:** You may safely continue to use `<field name="is_service_account" eval="True"/>` in your XML data files without crashing, as the structural field is natively defined by this module.
+4. **Service Account XML Provisioning:** You may safely continue to use `<field name=\"is_service_account\" eval=\"True\"/>` in your XML data files without crashing, as the structural field is natively defined by this module.
+5. **Context Management:** When using `_get_service_env`, note that `prefetch_fields=False` is no longer automatically applied to avoid performance regressions. If you require it for specific high-volume operations, you must apply it manually in your calling context.
 </migration_instructions>
 
 ---
@@ -59,13 +60,13 @@ If you are an AI or developer working on downstream modules, you **MUST** perfor
 ## 1. The Service Account Pattern
 
 You are strictly FORBIDDEN from using `.sudo()` inline. To escalate privileges:
-1. Define your service account in your module's XML data and set `<field name="is_service_account" eval="True"/>`.
+1. Define your service account in your module's XML data and set `<field name=\"is_service_account\" eval=\"True\"/>`.
 2. Retrieve its UID securely:
    `svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('your_module.user_xml_id')`
 3. Execute using the impersonation idiom:
    `self.env['target.model'].with_user(svc_uid).create(vals)`
 
-* **Cache & Resolution:** `_get_service_uid` `[@ANCHOR: get_service_uid]` safely resolves and caches the service account UID to prevent redundant database hits. This logic is verified by `[@ANCHOR: test_get_service_uid]`.
+* **Cache & Resolution:** `_get_service_uid` `[@ANCHOR: get_service_uid]` safely resolves `[@ANCHOR: get_service_uid_sql_resolve]` and verifies `[@ANCHOR: get_service_uid_sql_verify]` the service account UID using raw SQL to prevent redundant database hits and bypasses. It also enforces a mandatory block on accounts with global administrative rights `[@ANCHOR: god_mode_block_sql]`. This logic is verified by `[@ANCHOR: test_get_service_uid]`.
 </service_account_pattern>
 
 ---
@@ -103,7 +104,7 @@ When a daemon or unprivileged user strictly requires native ERP framework intera
 
 <global_cache>
 ## 4. Global Cache Signaling
-* **Postgres NOTIFY Bus:** The `_notify_cache_invalidation` function `[@ANCHOR: coherent_cache_signal]` provides an entry point to trigger cross-worker cache flushes via the distributed event bus, guaranteeing consistency in clustered setups. This behavior is covered by `[@ANCHOR: test_coherent_cache_signal]`.
+* **Postgres NOTIFY Bus:** The `_notify_cache_invalidation` function `[@ANCHOR: coherent_cache_signal]` provides an entry point to trigger cross-worker cache flushes via the distributed event bus. It supports both single invalidations `[@ANCHOR: coherent_cache_signal_single]` and bulk chunked notifications `[@ANCHOR: coherent_cache_signal_batch]`. This behavior is covered by `[@ANCHOR: test_coherent_cache_signal]`.
 </global_cache>
 
 ---
@@ -117,6 +118,7 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * **Secure Privilege Escalation** `[@ANCHOR: story_secure_escalation]`: Narrative on how developers securely escalate privileges using service accounts instead of `.sudo()`. [Read Story](zero_sudo/docs/stories/secure_escalation.md)
 * **Blocking Service Account Login** `[@ANCHOR: story_login_blocking]`: How the system prevents service accounts from accessing the interactive web interface. [Read Story](zero_sudo/docs/stories/login_blocking.md)
 * **Parameter Whitelisting** `[@ANCHOR: story_parameter_whitelisting]`: Protection of sensitive system parameters from unauthorized access. [Read Story](zero_sudo/docs/stories/parameter_whitelisting.md)
+* **Multi-Website Awareness** `[@ANCHOR: story_multi_website]`: How the security core behaves in multi-website environments. [Read Story](zero_sudo/docs/stories/multi_website.md)
 * **Coherent Cache Signaling** `[@ANCHOR: story_cache_signaling]`: Ensuring cache consistency across multiple Odoo workers using Postgres NOTIFY. [Read Story](zero_sudo/docs/stories/cache_signaling.md)
 * **Deterministic Hashing** `[@ANCHOR: story_deterministic_hash]`: Generation of stable integer hashes for PostgreSQL advisory locks. [Read Story](zero_sudo/docs/stories/deterministic_hashing.md)
 * **Python VENV Management** `[@ANCHOR: story_venv_management]`: How administrators can trigger updates of system Python dependencies safely. [Read Story](zero_sudo/docs/stories/venv_management.md)
@@ -125,6 +127,7 @@ For detailed narratives and end-to-end workflows, refer to the following:
 ### Journeys
 * **Service Account Lifecycle** `[@ANCHOR: journey_service_account_lifecycle]`: The end-to-end flow of a service account from provisioning to secure execution. [Read Journey](zero_sudo/docs/journeys/service_account_lifecycle.md)
 * **Securing Configuration Parameters** `[@ANCHOR: journey_securing_configuration]`: The workflow for safely integrating and accessing new configuration parameters. [Read Journey](zero_sudo/docs/journeys/securing_configuration.md)
+* **Developer Integration** `[@ANCHOR: journey_developer_integration]`: End-to-end workflow for developers to integrate with the Zero-Sudo ecosystem. [Read Journey](zero_sudo/docs/journeys/developer_integration.md)
 </stories_and_journeys>
 
 ---
@@ -154,10 +157,13 @@ Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
 * **Arguments:** `model_name` (str): The Odoo model. `key_value` (str): The unique identifier.
 
 #### `_update_python_venv()` `[@ANCHOR: update_python_venv]`
-Triggers `pip install` for module dependencies (restricted to Administrators).
+Triggers `pip install` for module dependencies (restricted to Administrators). It utilizes the `--break-system-packages` flag to ensure compatibility with global Odoo installations on Debian/Ubuntu systems.
 
 #### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
-Retrieves the root cryptographic key from environment or local file, bypassing DB.
+Retrieves the root cryptographic key from environment or local file, bypassing DB. This is the only approved way to access the master system secret without risking exposure via the database's `ir.config_parameter` table.
+
+#### `_set_kv(key, value)` `[@ANCHOR: set_kv_sql_check]`
+Sets a key-value pair in a lightweight service account storage.
 </python_api>
 
 ---
@@ -166,6 +172,7 @@ Retrieves the root cryptographic key from environment or local file, bypassing D
 ## 7. Additional Utilities
 
 ### Web Login Security
+* **Key-Value Store:** Lightweight SA key-value storage `[@ANCHOR: set_kv_sql_check]`.
 * **Field:** `is_service_account` `[@ANCHOR: is_service_account_field]` on `res.users`.
 * **Interceptor:** `web_login` `[@ANCHOR: web_login_interceptor]` in `Home` controller.
 * **Security Check:** Performs direct SQL check `[@ANCHOR: web_login_interceptor_check]` for isolation.
@@ -176,15 +183,15 @@ Retrieves the root cryptographic key from environment or local file, bypassing D
 The `zero_sudo` module provides a centralized facility to inject standalone HTML documentation into the `knowledge.article` or `manual.article` APIs. This structurally eliminates the need to maintain fragile ad-hoc `post_init_hook` scripts in every downstream module.
 
 **How to use it:**
-1. Add a hard dependency on `"zero_sudo"` in your module's `__manifest__.py`.
-2. Add the `"knowledge_docs"` configuration array directly to your `__manifest__.py`:
+1. Add a hard dependency on `\"zero_sudo\"` in your module's `__manifest__.py`.
+2. Add the `\"knowledge_docs\"` configuration array directly to your `__manifest__.py`:
 ```python
-    "knowledge_docs": [
+    \"knowledge_docs\": [
         {
-            "name": "Your Module Guide",
-            "path": "your_module/data/documentation.html",
-            "icon": "🤖",
-            "category": "workspace"
+            \"name\": \"Your Module Guide\",
+            \"path\": \"your_module/data/documentation.html\",
+            \"icon\": \"🤖\",
+            \"category\": \"workspace\"
         }
     ],
 ```

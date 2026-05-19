@@ -1,14 +1,18 @@
-import unittest
-from unittest.mock import patch, MagicMock
 import os
 import tempfile
 import shutil
+from unittest.mock import MagicMock
+from odoo import _
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsIntegrationCase
+from odoo.addons.zero_sudo.daemon.json_rpc_client import SecureJSONRPCClient
 
-from json_rpc_client import SecureJSONRPCClient
 
-class TestSecureJSONRPCClient(unittest.TestCase):
+@tagged('post_install', '-at_install')
+class TestSecureJSONRPCClient(HamsIntegrationCase):
 
     def setUp(self):
+        super().setUp()
         self.test_dir = tempfile.mkdtemp()
         self.env_path = os.path.join(self.test_dir, "test.env")
         self.base_url = "http://odoo:8069"
@@ -21,9 +25,10 @@ class TestSecureJSONRPCClient(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.test_dir)
+        super().tearDown()
 
-    @patch("requests.post")
-    def test_call_success(self, mock_post):
+    def test_call_success(self):
+        mock_post = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.post")
         # Setup mock response
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -41,12 +46,12 @@ class TestSecureJSONRPCClient(unittest.TestCase):
         self.assertEqual(payload["params"]["args"][1], "test_user")
         self.assertEqual(payload["params"]["args"][2], "test_key")
 
-    @patch("requests.post")
-    def test_call_self_healing(self, mock_post):
+    def test_call_self_healing(self):
+        mock_post = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.post")
         # Setup mock responses: first failure (401), then success
         mock_fail = MagicMock()
         mock_fail.status_code = 401
-        mock_fail.json.return_value = {"error": "Access Denied"}
+        mock_fail.json.return_value = {"error": _("Access Denied")}
 
         mock_success = MagicMock()
         mock_success.status_code = 200
@@ -81,6 +86,3 @@ class TestSecureJSONRPCClient(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             SecureJSONRPCClient(self.env_path, self.base_url)
-
-if __name__ == "__main__":
-    unittest.main()

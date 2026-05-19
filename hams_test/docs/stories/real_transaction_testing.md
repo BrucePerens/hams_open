@@ -10,6 +10,9 @@ As a quality assurance engineer, I want to be alerted if any test leaves behind 
 
 The facility takes a mathematical snapshot of all table row counts before the test begins ([@ANCHOR: leak_snapshotting]). After the ORM cleanup, it performs a leak verification ([@ANCHOR: leak_verification]) by comparing current row counts against the initial snapshot. If any discrepancies are found (excluding known "noisy" system tables), the test fails with an informative error.
 
+## Base Testing Classes
+The custom environment introduces new base classes. Developers should inherit from `hams_transaction_case` ([@ANCHOR: hams_transaction_case]) for pure ORM operations, and `hams_http_case` ([@ANCHOR: hams_http_case]) for controller tests.
+
 ## Production-Realistic Testing
 As a backend developer, I want to test features like cross-worker cache invalidation and complex inverse relationships that require actual database commits, so that I can find bugs that standard Odoo tests might miss.
 

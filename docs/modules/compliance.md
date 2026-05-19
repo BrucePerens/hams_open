@@ -6,7 +6,7 @@ This module automatically handles the annoying parts of running a legal website.
 
 ## 🌟 What It Does
 
-* **Turns on the Cookie Banner:** As soon as you install this, it flips the switch to turn on Odoo's native Cookie Consent Bar across all your websites. This stops optional tracking scripts until the user clicks "Accept."
+* **Turns on the Cookie Banner:** As soon as you install this, it flips the switch to turn on Odoo's native Cookie Consent Bar across all your websites. It also ensures that any **new** websites created later have this enabled by default. This stops optional tracking scripts until the user clicks "Accept."
 * **Writes Your Legal Pages:** It automatically creates standard, editable pages for your Privacy Policy (`/privacy`), Cookie Policy (`/cookie-policy`), and Terms of Service (`/terms`).
 * **Doesn't Break Your Edits:** If you've already written a privacy policy at `/privacy`, the module detects it and leaves yours alone. If you edit the pages it creates, it won't overwrite your work when you update the module.
 
@@ -47,8 +47,8 @@ A non-interactive configuration module that enforces baseline regulatory complia
 * [Compliance Setup Journey](./docs/journeys/compliance_setup_journey.md) `[@ANCHOR: journey_compliance_setup]`
 
 ## 2. Enforcement Details
-* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean. `[@ANCHOR: compliance_post_init_cookie_bar]`
-* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records.
+* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean on install and sets it as the default for new websites. `[@ANCHOR: compliance_post_init_cookie_bar]`
+* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records. `[@ANCHOR: compliance_legal_pages_rendering]`
     * Privacy Policy Template `[@ANCHOR: compliance_privacy_policy_template]`
     * Cookie Policy Template `[@ANCHOR: compliance_cookie_policy_template]`
     * Terms of Service Template `[@ANCHOR: compliance_terms_of_service_template]`
@@ -72,10 +72,13 @@ Dependent modules requiring legal links MUST use:
 This module adheres to **ADR-0002 (Zero-Sudo)** and **ADR-0005 (Service Account Web Isolation)**.
 
 * **Micro-Privilege Account:** Automated post-install configuration is executed via the `compliance.user_compliance_service` service account.
-* **ACLs:** The service account is granted minimal read/write access to `website`, `website.page`, and `ir.ui.view` models.
-* **Impersonation:** Escalation is handled via `env.with_user(svc_uid)` instead of `.sudo()` for core operations.
+* **ACLs:** The service account is granted minimal read/write access to `website`, `website.page`, and `ir.ui.view` models. `[@ANCHOR: compliance_security_acls]`
+* **Impersonation:** Escalation is handled via `env.with_user(svc_uid)` instead of `.sudo()` for core operations. `[@ANCHOR: compliance_zero_sudo_impersonation]`
 
-## 5. Documentation Installation
+## 5. Website-Aware Scope
+The module is multi-website aware. When detecting custom pages at target URLs, it only unpublishes the boilerplate for the specific website scope (or global scope) where the custom page is found. If a custom page is removed, the boilerplate is automatically restored. `[@ANCHOR: compliance_website_aware_scope]`
+
+## 6. Documentation Installation
 This module implements a **soft dependency** on documentation providers (`manual_library` or Odoo Enterprise `knowledge`).
 
 * **Mechanism:** Documentation is automatically provisioned during the final registry reload by the central engine (`_bootstrap_knowledge_docs` in `zero_sudo`). `[@ANCHOR: zero_sudo_doc_installer]`

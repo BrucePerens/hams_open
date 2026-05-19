@@ -19,6 +19,7 @@ class BackupConfig(models.Model):
     _inherit = ["mail.thread"]
 
     name = fields.Char(string="Name", required=True)
+    website_id = fields.Many2one("website", string="Website")
     engine = fields.Selection(
         [("kopia", "Kopia"), ("pgbackrest", "pgBackRest")], required=True
     )

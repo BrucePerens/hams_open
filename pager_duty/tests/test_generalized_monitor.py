@@ -4,55 +4,68 @@ import json
 import os
 import socket
 import time
-import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
-import generalized_monitor
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsIntegrationCase
+
+# Utilize implicit namespace packages instead of sys.path manipulation
+import odoo.addons.pager_duty.daemon.generalized_monitor as generalized_monitor
 
 
-class TestMonitorExhaustive(unittest.TestCase):
+@tagged('post_install', '-at_install')
+class TestMonitorExhaustive(HamsIntegrationCase):
 
-    @patch("generalized_monitor.smtplib.SMTP")
-    @patch.dict(
-        "os.environ",
-        {"PAGER_FALLBACK_EMAIL": "admin@test.com", "SMTP_HOST": "smtp.test.com"},
-    )
-    def test_01_smtp_fallback(self, mock_smtp):
+    def test_01_smtp_fallback(self):
         # Tests [@ANCHOR: daemon_report_incident]
         """Verify that if the Odoo client crashes, the report gracefully triggers the SMTP fallback."""
-        mock_client = MagicMock()
-        mock_client.execute.side_effect = Exception("Connection Refused (Odoo Down)")
+        mock_smtp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP")
 
-        mock_smtp_instance = MagicMock()
-        mock_smtp.return_value.__enter__.return_value = mock_smtp_instance
+        orig_env = dict(os.environ)
+        os.environ.update({"PAGER_FALLBACK_EMAIL": "admin@test.com", "SMTP_HOST": "smtp.test.com"})
 
-        generalized_monitor.report(
-            mock_client, "Database Check", "Lost connection to Postgres"
-        )
+        try:
+            mock_client = MagicMock()
+            mock_client.execute.side_effect = Exception("Connection Refused (Odoo Down)")
 
-        mock_client.execute.assert_called_once()
-        mock_smtp.assert_called_with("smtp.test.com", 587, timeout=10)
-        mock_smtp_instance.send_message.assert_called_once()
+            mock_smtp_instance = MagicMock()
+            mock_smtp.return_value.__enter__.return_value = mock_smtp_instance
 
-        em_arg = mock_smtp_instance.send_message.call_args[0][0]
-        self.assertIn("Lost connection to Postgres", em_arg.get_content())
-        self.assertEqual(em_arg["To"], "admin@test.com")
+            generalized_monitor.report(
+                mock_client, "Database Check", "Lost connection to Postgres"
+            )
+
+            mock_client.execute.assert_called_once()
+            mock_smtp.assert_called_with("smtp.test.com", 587, timeout=10)
+            mock_smtp_instance.send_message.assert_called_once()
+
+            em_arg = mock_smtp_instance.send_message.call_args[0][0]
+            self.assertIn("Lost connection to Postgres", em_arg.get_content())
+            self.assertEqual(em_arg["To"], "admin@test.com")
+        finally:
+            os.environ.clear()
+            os.environ.update(orig_env)
 
     def test_02_parse_env_util(self):
         """Verify environment variable injection from YAML configs."""
+        orig_env = dict(os.environ)
         os.environ["TEST_DB_NAME"] = "test_db_123"
-        self.assertEqual(
-            generalized_monitor.parse_env("ENV:TEST_DB_NAME"), "test_db_123"
-        )
-        self.assertEqual(
-            generalized_monitor.parse_env("HardcodedString"), "HardcodedString"
-        )
-        self.assertEqual(generalized_monitor.parse_env(8080), 8080)
+        try:
+            self.assertEqual(
+                generalized_monitor.parse_env("ENV:TEST_DB_NAME"), "test_db_123"
+            )
+            self.assertEqual(
+                generalized_monitor.parse_env("HardcodedString"), "HardcodedString"
+            )
+            self.assertEqual(generalized_monitor.parse_env(8080), 8080)
+        finally:
+            os.environ.clear()
+            os.environ.update(orig_env)
 
-    @patch("generalized_monitor.psutil")
-    def test_03_system_checks(self, mock_psutil):
+    def test_03_system_checks(self):
         # Tests [@ANCHOR: daemon_execute_check]
         """Exhaustively verify Disk, Memory, CPU, IO Wait, and Steal metrics."""
+        mock_psutil = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.psutil")
         # Disk
         mock_psutil.disk_usage.return_value.percent = 95
         success, msg = generalized_monitor.execute_check(
@@ -101,11 +114,13 @@ class TestMonitorExhaustive(unittest.TestCase):
         )
         self.assertFalse(success)
 
-    @patch("generalized_monitor.shutil.which", return_value="/bin/mock")
-    @patch("generalized_monitor.subprocess.run")
-    @patch("generalized_monitor.socket.gethostbyname")
-    def test_04_dns_checks(self, mock_gethost, mock_run, mock_which):
+    def test_04_dns_checks(self):
         """Verify un-cached root DNS lookup via dig with socket fallback."""
+        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which.return_value = "/bin/mock"
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
+        mock_gethost = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.gethostbyname")
+
         # Test Dig Success
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "example.com"
@@ -130,9 +145,9 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("DNS resolution failed", msg)
 
-    @patch("generalized_monitor.urllib.request.urlopen")
-    def test_05_http_checks(self, mock_urlopen):
+    def test_05_http_checks(self):
         """Verify payload matching and 500 error detection on HTTP endpoints."""
+        mock_urlopen = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen")
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = b'{"status": "ok"}'
@@ -159,9 +174,9 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("HTTP status 500", msg)
 
-    @patch("generalized_monitor.socket.create_connection")
-    def test_06_tcp_checks(self, mock_conn):
+    def test_06_tcp_checks(self):
         """Verify raw hex socket handshakes (e.g. RabbitMQ AMQP)."""
+        mock_conn = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
         mock_socket = MagicMock()
         mock_conn.return_value.__enter__.return_value = mock_socket
         mock_socket.recv.return_value = b"+PONG"
@@ -192,9 +207,9 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertTrue(success)
         mock_socket.sendall.assert_called_with(b"AMQP")
 
-    @patch("generalized_monitor.psycopg2")
-    def test_07_postgres_and_anomaly(self, mock_psycopg2):
+    def test_07_postgres_and_anomaly(self):
         """Verify raw database pinging and custom SQL mathematical anomaly detection."""
+        mock_psycopg2 = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.psycopg2")
         mock_conn = MagicMock()
         mock_psycopg2.connect.return_value = mock_conn
         mock_cursor = MagicMock()
@@ -218,10 +233,11 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("Breached", msg)
 
-    @patch("generalized_monitor.socket.create_connection")
-    @patch("generalized_monitor.ssl.create_default_context")
-    def test_08_ssl_checks(self, mock_ssl_ctx, mock_conn):
+    def test_08_ssl_checks(self):
         """Verify Let's Encrypt certificate expiration date math."""
+        self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
+        mock_ssl_ctx = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ssl.create_default_context")
+
         mock_ctx = MagicMock()
         mock_ssl_ctx.return_value = mock_ctx
         mock_ssock = MagicMock()
@@ -250,10 +266,11 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("expires in", msg)
 
-    @patch("generalized_monitor.shutil.which", return_value="/bin/mock")
-    @patch("generalized_monitor.subprocess.run")
-    def test_09_process_wrappers(self, mock_run, mock_which):
+    def test_09_process_wrappers(self):
         """Verify synthetic journey scripts, logrotate, nginx syntax, and cloudflared tunnel checks."""
+        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which.return_value = "/bin/mock"
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
         mock_run.return_value.returncode = 0
 
         # Synthetic
@@ -291,12 +308,14 @@ class TestMonitorExhaustive(unittest.TestCase):
         )
         self.assertTrue(success)
 
-    @patch("generalized_monitor.shutil.which", return_value="/usr/bin/certbot")
-    @patch("generalized_monitor.subprocess.run")
-    @patch("generalized_monitor.urllib.request.urlopen")
-    def test_10_certbot_check(self, mock_urlopen, mock_run, mock_which):
+    def test_10_certbot_check(self):
         # Tests [@ANCHOR: daemon_verify_dependencies]
         """Verify the Certbot 3-stage readiness pipeline (API, DNS IP Match, Dry-Run)."""
+        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which.return_value = "/usr/bin/certbot"
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
+        mock_urlopen = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen")
+
         # Pass API Check
         mock_api_resp = MagicMock()
         mock_api_resp.status = 200
@@ -316,9 +335,9 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("Challenge failed", msg)
 
-    @patch("generalized_monitor.smtplib.SMTP")
-    def test_11_smtp_dryrun(self, mock_smtp):
+    def test_11_smtp_dryrun(self):
         """Verify SMTP pre-flight handshake."""
+        mock_smtp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP")
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
 
@@ -328,15 +347,14 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertTrue(success)
         mock_server.ehlo.assert_called()
 
-    @patch("generalized_monitor.shutil.which", return_value="/bin/mock")
-    @patch("generalized_monitor.socket.socket")
-    @patch("generalized_monitor.urllib.request.urlopen")
-    @patch("xmlrpc.client.ServerProxy")
-    @patch("generalized_monitor.subprocess.run")
-    def test_12_new_protocols_and_rpcs(
-        self, mock_run, mock_xmlrpc, mock_urlopen, mock_socket, mock_which
-    ):
+    def test_12_new_protocols_and_rpcs(self):
         """Verify the new natively supported sub-protocols (UDP, HTTP3, XML-RPC, JSON-RPC, native Redis, native RabbitMQ)."""
+        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which.return_value = "/bin/mock"
+        mock_socket = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.socket")
+        mock_urlopen = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen")
+        mock_xmlrpc = self.safe_patch("xmlrpc.client.ServerProxy")
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
 
         # 1. UDP Datagram
         mock_sock_inst = MagicMock()
@@ -394,32 +412,34 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertTrue(success)
 
         # 5. Native Redis (via library)
-        with patch("redis.Redis") as mock_redis_lib:
-            mock_redis_inst = MagicMock()
-            mock_redis_lib.return_value = mock_redis_inst
-            mock_redis_inst.ping.return_value = True
-            success, msg = generalized_monitor.execute_check(
-                {"type": "redis", "target": "redis"}
-            )
-            self.assertTrue(success)
-            mock_redis_inst.ping.assert_called_once()
+        mock_redis_lib = self.safe_patch("redis.Redis")
+        mock_redis_inst = MagicMock()
+        mock_redis_lib.return_value = mock_redis_inst
+        mock_redis_inst.ping.return_value = True
+        success, msg = generalized_monitor.execute_check(
+            {"type": "redis", "target": "redis"}
+        )
+        self.assertTrue(success)
+        mock_redis_inst.ping.assert_called_once()
 
         # 6. Native RabbitMQ
-        with patch("generalized_monitor.socket.create_connection") as mock_conn:
-            mock_tcp_sock = MagicMock()
-            mock_conn.return_value.__enter__.return_value = mock_tcp_sock
-            mock_tcp_sock.recv.return_value = b"\x01\x02\x03"
-            success, msg = generalized_monitor.execute_check(
-                {"type": "rabbitmq", "target": "rabbitmq"}
-            )
-            self.assertTrue(success)
-            mock_tcp_sock.sendall.assert_called_with(b"AMQP\x00\x00\x09\x01")
+        mock_conn = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
+        mock_tcp_sock = MagicMock()
+        mock_conn.return_value.__enter__.return_value = mock_tcp_sock
+        mock_tcp_sock.recv.return_value = b"\x01\x02\x03"
+        success, msg = generalized_monitor.execute_check(
+            {"type": "rabbitmq", "target": "rabbitmq"}
+        )
+        self.assertTrue(success)
+        mock_tcp_sock.sendall.assert_called_with(b"AMQP\x00\x00\x09\x01")
 
-    @patch("generalized_monitor.shutil.which", return_value="/bin/mock")
-    @patch("generalized_monitor.subprocess.run")
-    @patch("generalized_monitor.socket.create_connection")
-    def test_13_additional_facilities(self, mock_conn, mock_run, mock_which):
+    def test_13_additional_facilities(self):
         """Verify ICMP, Docker, Memcached, SSH, and Systemd checks."""
+        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which.return_value = "/bin/mock"
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
+        mock_conn = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
+
         # ICMP
         mock_run.return_value.returncode = 0
         success, msg = generalized_monitor.execute_check(
@@ -487,9 +507,11 @@ class TestMonitorExhaustive(unittest.TestCase):
             "pager.check", "check_heartbeat_rpc", hb_uuid="1234", interval=60
         )
 
-    @patch("generalized_monitor.os.getloadavg", return_value=(1.5, 1.0, 0.5))
-    def test_14_nagios_checks(self, mock_load):
+    def test_14_nagios_checks(self):
         """Verify Nagios-style checks: load, ftp, imap, pop3, mysql, snmp."""
+        mock_load = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.os.getloadavg")
+        mock_load.return_value = (1.5, 1.0, 0.5)
+
         # Load
         success, msg = generalized_monitor.execute_check(
             {"type": "load", "critical": 1}
@@ -503,100 +525,103 @@ class TestMonitorExhaustive(unittest.TestCase):
         self.assertTrue(success, msg)
 
         # FTP
-        with patch("generalized_monitor.ftplib.FTP") as mock_ftp:
-            mock_inst = MagicMock()
-            mock_ftp.return_value.__enter__.return_value = mock_inst
-            success, msg = generalized_monitor.execute_check(
-                {"type": "ftp", "target": "odoo"}
-            )
-            self.assertTrue(success, msg)
-            mock_inst.login.assert_called()
+        mock_ftp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ftplib.FTP")
+        mock_inst = MagicMock()
+        mock_ftp.return_value.__enter__.return_value = mock_inst
+        success, msg = generalized_monitor.execute_check(
+            {"type": "ftp", "target": "odoo"}
+        )
+        self.assertTrue(success, msg)
+        mock_inst.login.assert_called()
 
         # IMAP
-        with patch("generalized_monitor.imaplib.IMAP4") as mock_imap:
-            mock_inst = MagicMock()
-            mock_imap.return_value = mock_inst
-            success, msg = generalized_monitor.execute_check(
-                {"type": "imap", "target": "odoo"}
-            )
-            self.assertTrue(success, msg)
-            mock_inst.logout.assert_called()
+        mock_imap = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.imaplib.IMAP4")
+        mock_inst = MagicMock()
+        mock_imap.return_value = mock_inst
+        success, msg = generalized_monitor.execute_check(
+            {"type": "imap", "target": "odoo"}
+        )
+        self.assertTrue(success, msg)
+        mock_inst.logout.assert_called()
 
         # POP3
-        with patch("generalized_monitor.poplib.POP3") as mock_pop3:
-            mock_inst = MagicMock()
-            mock_pop3.return_value = mock_inst
-            success, msg = generalized_monitor.execute_check(
-                {"type": "pop3", "target": "odoo"}
-            )
-            self.assertTrue(success, msg)
-            mock_inst.quit.assert_called()
+        mock_pop3 = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.poplib.POP3")
+        mock_inst = MagicMock()
+        mock_pop3.return_value = mock_inst
+        success, msg = generalized_monitor.execute_check(
+            {"type": "pop3", "target": "odoo"}
+        )
+        self.assertTrue(success, msg)
+        mock_inst.quit.assert_called()
 
         # MySQL / MariaDB
-        with patch("generalized_monitor.pymysql") as mock_pymysql:
-            mock_conn = MagicMock()
-            mock_pymysql.connect.return_value = mock_conn
-            mock_cur = MagicMock()
-            mock_conn.cursor.return_value.__enter__.return_value = mock_cur
-            mock_cur.fetchone.return_value = [1]
-            success, msg = generalized_monitor.execute_check(
-                {"type": "mysql", "target": "odoo"}
-            )
-            self.assertTrue(success, msg)
-            mock_cur.execute.assert_called_with("SELECT 1;")
+        mock_pymysql = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.pymysql")
+        mock_conn = MagicMock()
+        mock_pymysql.connect.return_value = mock_conn
+        mock_cur = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+        mock_cur.fetchone.return_value = [1]
+        success, msg = generalized_monitor.execute_check(
+            {"type": "mysql", "target": "odoo"}
+        )
+        self.assertTrue(success, msg)
+        mock_cur.execute.assert_called_with("SELECT 1;")
 
         # LDAP (Fallback)
-        with patch("generalized_monitor.ldap3") as mock_ldap3:
-            mock_inst = MagicMock()
-            mock_ldap3.Server.return_value = MagicMock()
-            mock_ldap3.Connection.return_value = mock_inst
-            success, msg = generalized_monitor.execute_check(
-                {"type": "ldap", "target": "odoo"}
-            )
-            self.assertTrue(success, msg)
-            mock_inst.unbind.assert_called()
+        mock_ldap3 = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ldap3")
+        mock_inst = MagicMock()
+        mock_ldap3.Server.return_value = MagicMock()
+        mock_ldap3.Connection.return_value = mock_inst
+        success, msg = generalized_monitor.execute_check(
+            {"type": "ldap", "target": "odoo"}
+        )
+        self.assertTrue(success, msg)
+        mock_inst.unbind.assert_called()
 
         # NTP (Fallback)
-        with patch("generalized_monitor.ntplib") as mock_ntplib:
-            mock_inst = MagicMock()
-            mock_ntplib.NTPClient.return_value = mock_inst
-            mock_inst.request.return_value.offset = 0.1
-            success, msg = generalized_monitor.execute_check(
-                {"type": "ntp", "target": "odoo"}
-            )
-            self.assertTrue(success, msg)
+        mock_ntplib = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ntplib")
+        mock_inst = MagicMock()
+        mock_ntplib.NTPClient.return_value = mock_inst
+        mock_inst.request.return_value.offset = 0.1
+        success, msg = generalized_monitor.execute_check(
+            {"type": "ntp", "target": "odoo"}
+        )
+        self.assertTrue(success, msg)
 
         # SNMP
-        with patch("generalized_monitor.shutil.which", return_value="/bin/mock"):
-            with patch("generalized_monitor.subprocess.run") as mock_run_snmp:
-                mock_run_snmp.return_value = MagicMock(returncode=0, stdout="Timeout", stderr="")
-                success, msg = generalized_monitor.execute_check(
-                    {
-                        "type": "snmp",
-                        "target": "odoo",
-                        "snmp_oid": "1.3.6",
-                        "expect": "OK",
-                    }
-                )
-                self.assertFalse(success, msg)
+        mock_which_snmp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which_snmp.return_value = "/bin/mock"
+        mock_run_snmp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
 
-                mock_run_snmp.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
-                success, msg = generalized_monitor.execute_check(
-                    {
-                        "type": "snmp",
-                        "target": "odoo",
-                        "snmp_oid": "1.3.6",
-                        "expect": "OK",
-                    }
-                )
-                self.assertTrue(success, msg)
+        mock_run_snmp.return_value = MagicMock(returncode=0, stdout="Timeout", stderr="")
+        success, msg = generalized_monitor.execute_check(
+            {
+                "type": "snmp",
+                "target": "odoo",
+                "snmp_oid": "1.3.6",
+                "expect": "OK",
+            }
+        )
+        self.assertFalse(success, msg)
 
-    @patch("generalized_monitor.os.path.exists")
-    @patch("generalized_monitor.os.path.getmtime")
-    @patch("builtins.open", new_callable=MagicMock)
-    def test_15_synthetic_spool_reads(self, mock_open, mock_mtime, mock_exists):
+        mock_run_snmp.return_value = MagicMock(returncode=0, stdout="OK", stderr="")
+        success, msg = generalized_monitor.execute_check(
+            {
+                "type": "snmp",
+                "target": "odoo",
+                "snmp_oid": "1.3.6",
+                "expect": "OK",
+            }
+        )
+        self.assertTrue(success, msg)
+
+    def test_15_synthetic_spool_reads(self):
         # Tests [@ANCHOR: daemon_main_loop]
         """Verify generalized_monitor correctly reads the airgapped synthetic spool JSON."""
+        mock_exists = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.os.path.exists")
+        mock_mtime = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.os.path.getmtime")
+        mock_open = self.safe_patch("builtins.open")
+
         mock_exists.return_value = True
         mock_mtime.return_value = time.time() - 10  # Fresh
 
@@ -627,7 +652,3 @@ class TestMonitorExhaustive(unittest.TestCase):
         )
         self.assertFalse(success)
         self.assertIn("stale", msg)
-
-
-if __name__ == "__main__":
-    unittest.main()

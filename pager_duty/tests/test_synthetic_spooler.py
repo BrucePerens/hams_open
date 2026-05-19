@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
+from odoo.tests.common import tagged
+from odoo.addons.hams_test.common import HamsIntegrationCase
+from odoo.addons.pager_duty.daemon import pager_synthetic_spooler
 
-import pager_synthetic_spooler
 
-
-class TestSyntheticSpooler(unittest.TestCase):
+@tagged('post_install', '-at_install')
+class TestSyntheticSpooler(HamsIntegrationCase):
 
     def test_00_i18n_headless_audit(self):
         self.assertTrue(hasattr(pager_synthetic_spooler, "execute_check"), "Safely suppresses headless API translation warnings")
 
-    @patch("pager_synthetic_spooler.subprocess.run")
-    def test_01_bash_sandbox_network_blocked(self, mock_run):
+    def test_01_bash_sandbox_network_blocked(self):
         """Verify Bash scripts execute in bwrap and the network is physically unshared by default."""
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.subprocess.run")
         mock_run.return_value.returncode = 0
         check = {
             "type": "bash",
@@ -27,9 +28,9 @@ class TestSyntheticSpooler(unittest.TestCase):
         self.assertIn("bwrap", args)
         self.assertIn("--unshare-net", args, "Network MUST be isolated by default.")
 
-    @patch("pager_synthetic_spooler.subprocess.run")
-    def test_02_bash_sandbox_network_allowed(self, mock_run):
+    def test_02_bash_sandbox_network_allowed(self):
         """Verify the sysadmin toggle correctly omits the --unshare-net flag."""
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.subprocess.run")
         mock_run.return_value.returncode = 0
         check = {
             "type": "bash",
@@ -45,15 +46,14 @@ class TestSyntheticSpooler(unittest.TestCase):
             "--unshare-net", args, "Network toggle MUST allow network access."
         )
 
-    @patch("pager_synthetic_spooler.urllib.request.urlretrieve")
-    @patch("pager_synthetic_spooler.subprocess.run")
-    @patch("pager_synthetic_spooler.hashlib.sha256")
-    @patch("pager_synthetic_spooler.os.chmod")
-    @patch("pager_synthetic_spooler.open", create=True)
-    def test_03_sandbox_downloads_checksum(
-        self, mock_open, mock_chmod, mock_sha, mock_run, mock_url
-    ):
+    def test_03_sandbox_downloads_checksum(self):
         """Verify that downloaded binaries are cryptographically verified before execution."""
+        mock_url = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.urllib.request.urlretrieve")
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.subprocess.run")
+        mock_sha = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.hashlib.sha256")
+        self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.os.chmod")
+        self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.open", create=True)
+
         mock_hasher = MagicMock()
         mock_hasher.hexdigest.return_value = "fakehash"
         mock_sha.return_value = mock_hasher
@@ -77,9 +77,9 @@ class TestSyntheticSpooler(unittest.TestCase):
         self.assertFalse(res["success"])
         self.assertIn("Checksum mismatch", res["error"])
 
-    @patch("pager_synthetic_spooler.subprocess.run")
-    def test_04_playwright_execution(self, mock_run):
+    def test_04_playwright_execution(self):
         """Verify Playwright executes cleanly via python3 natively if full network access is granted."""
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.subprocess.run")
         mock_run.return_value.returncode = 0
         check = {
             "type": "playwright",
@@ -94,9 +94,9 @@ class TestSyntheticSpooler(unittest.TestCase):
         self.assertEqual(args[0], "python3")
         self.assertNotIn("bwrap", args)
 
-    @patch("pager_synthetic_spooler.subprocess.run")
-    def test_05_playwright_loopback(self, mock_run):
+    def test_05_playwright_loopback(self):
         """Verify Playwright uses bwrap to drop network access if loopback is selected."""
+        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.subprocess.run")
         mock_run.return_value.returncode = 0
         check = {
             "type": "playwright",
@@ -110,7 +110,3 @@ class TestSyntheticSpooler(unittest.TestCase):
         args = mock_run.call_args[0][0]
         self.assertEqual(args[0], "bwrap")
         self.assertIn("--unshare-net", args)
-
-
-if __name__ == "__main__":
-    unittest.main()

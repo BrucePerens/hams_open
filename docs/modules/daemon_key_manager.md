@@ -2,14 +2,16 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-An Open Source, generalized utility that manages Odoo API Keys for external background daemons.
-It removes the need to store static passwords in repository code or manually rotate tokens by generating native Odoo API keys and exporting them to highly restricted local `.env` files.
+The **Daemon Key Manager** is the centralized authority for managing Odoo API keys for external background services (daemons). It implements the **Service Account Pattern** by generating native Odoo API keys and exporting them to highly restricted local `.env` files, eliminating the need for hardcoded credentials or manual token rotation. This module is a critical component of the **Zero-Sudo Architecture**, ensuring that background processes operate with minimum privilege and without human intervention for credential management.
 
-## Integration API
-Other modules can request a bearer token and configure a file drop path during their installation or upon configuration:
+## 🚀 Quick Start: Integration API
+
+Other modules should request daemon credentials during their installation (e.g., in a `post_init_hook`) or via a configuration wizard.
 
 ```python
 def setup_daemon_credentials(env):
+    # Idempotent registration and synchronous key generation
+    # This call ensures the daemon is registered for 60-day rotations.
     env['daemon.key.registry'].register_daemon(
         daemon_name="My External Daemon",
         user_xml_id="my_module.my_service_account",
@@ -17,88 +19,74 @@ def setup_daemon_credentials(env):
     )
 ```
 
-## Security Design
-* **OS-Level Sandboxing:** The `.env` files are written with strict `chmod 0600` permissions.
-* **Auto-Rotation:** An `ir.cron` job automatically revokes and regenerates the keys every 60 days, pushing the new credentials to the designated `.env` files automatically. Daemons utilizing these files simply need to reload their environment variables upon detecting an `AccessError` via JSON-RPC.
+## 🛡️ Security Architecture
+
+### Zero-Sudo Compliance
+The module operates under the `user_daemon_key_manager_service` account. It uses `.sudo()` only for the strictly necessary administrative tasks of API key allocation and revocation, which are restricted operations in Odoo that normally require administrative privileges. This specific module is granted an exemption to use `.sudo()` for these operations to maintain the security of the broader system while enabling automated service account management.
+
+### OS-Level Sandboxing
+* **Strict Permissions:** `.env` files are created with `0600` (read/write only for the Odoo server process user).
+* **Directory Isolation:** Parent directories are created with `0700` to prevent other users on the system from traversing into the key storage area.
+* **Path Validation:** All paths MUST start with `/var/lib/odoo/daemon_keys/`. The module strictly blocks directory traversal (`..`) and symlink attacks by resolving the `os.path.realpath` of the requested path before performing any file operations [@ANCHOR: security_constraints_path].
+* **System Directory Protection:** Writing to sensitive system directories (like `/etc`, `/root`, `/boot`, `/home`, `/usr`, `/bin`, `/lib`, `/var/log`) is explicitly forbidden regardless of the prefix check [@ANCHOR: write_secure_env_file_logic].
+
+### Automated Key Rotation
+Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: cron_rotation_trigger].
+* **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue with the next daemon [@ANCHOR: cron_rotation_logic].
+* **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed in case of transient server issues.
+* **Self-Healing Daemons:** Daemons utilizing these keys MUST be designed to catch `AccessError` responses from Odoo, re-read their assigned `.env` file from the disk, and retry the request. This ensures continuous operation across key rotations [@ANCHOR: daemon_self_healing].
 
 ---
 
-# Technical Documentation
+## 🛠️ Technical Reference
 
-## 1. Overview & Architecture
-An Open Source, generalized utility that manages Odoo JSON-RPC API Keys for external background daemons. It removes the need to store static passwords in repository code, manually rotate tokens, or rely on external databases. It generates native Odoo API keys and exports them to highly restricted local `.env` files.
+### 1. Storage & Orchestration Mandate
+All credentials **MUST** be written to `/var/lib/odoo/daemon_keys/`.
+In containerized/orchestrated environments:
+* **Odoo Container:** Mount the volume as **Read/Write**.
+* **Daemon Containers:** Mount the volume as **Read-Only**.
 
-## 2. Storage & Volume Mounts (Orchestration Mandate)
-By convention, all daemon environment files generated by this module **MUST** be written to the following directory:
+### 2. Core API Methods
 
-**`/var/lib/odoo/daemon_keys/`**
+#### `register_daemon(daemon_name, user_xml_id, env_file_path)` [@ANCHOR: register_daemon_api]
+* **`daemon_name`**: A unique string identifier for the external service.
+* **`user_xml_id`**: The XML ID of the service account record (e.g., `pager_duty.user_pager_service_internal`). This account must have `is_service_account` set to `True`.
+* **`env_file_path`**: The absolute path where the `.env` file should be written. It must reside within `/var/lib/odoo/daemon_keys/`.
+* **Behavior**: This method is idempotent. If a daemon with the same name exists, its service account and path are updated. It immediately triggers the generation of the first API key and writes the file [@ANCHOR: register_daemon_logic] [@ANCHOR: register_daemon_idempotency].
 
-When configuring the infrastructure and container orchestration (e.g., Docker Compose), the orchestrator MUST mount this directory as a shared volume:
-* **Odoo Container:** Mounted as Read/Write (to allow the `ir.cron` job to create and update the `.env` files).
-* **Daemon Containers:** Mounted as Read-Only (to allow the daemons to consume their specific `.env` files without risking modification).
+#### `action_force_provision_all()` [@ANCHOR: action_force_provision_all_api]
+* **Use Case**: Used during system bootstrapping (e.g., via systemd or Kubernetes init containers) to ensure all keys are present on disk before daemons start. Also used for emergency rotation of all keys.
+* **Shell Invocation**:
+  ```bash
+  odoo-bin shell -d hams --no-http -e "env['daemon.key.registry'].action_force_provision_all(); env.cr.commit()"
+  ```
+* **Security**: Only accessible to users in the `Daemon Key Management / Manager` group. Internally, it elevates to the service account to perform the privileged key generation [@ANCHOR: force_provision_logic].
 
-## 3. External Dependencies
-* **Python:** None explicitly required beyond standard Odoo.
-* **Odoo:** `base`, `zero_sudo`.
-* **Optional:** `manual_library` or `knowledge` (for documentation).
-
-## 4. Application Programming Interface (API)
-
-**Import Path / Invocation:**
-```python
-self.env['daemon.key.registry'].register_daemon(daemon_name, user_xml_id, env_file_path)
-```
-
-* **`register_daemon(daemon_name, user_xml_id, env_file_path)`** [@ANCHOR: register_daemon_api]:
-    * `daemon_name` (str): Human-readable name of the daemon (e.g., `"Pager Duty Monitor"`).
-    * `user_xml_id` (str): The exact XML ID of the micro-service account (e.g., `"pager_duty.pager_service_internal"`).
-    * `env_file_path` (str): Absolute file path to the desired protected output directory. You MUST use the standard directory convention (e.g., `"/var/lib/odoo/daemon_keys/pager_duty.env"`).
-    * **Behavior:** Safely generates a new API key via `zero_sudo` utilities, writes it to the designated file with strict OS-level `0600` sandboxing, and schedules it for automated 60-day rotation. **The key is generated synchronously during this exact database transaction.**
-
-* **`action_force_provision_all()`** [@ANCHOR: action_force_provision_all_api]:
-    * **Behavior:** Synchronously iterates through all registered daemons, purges legacy keys, and securely provisions fresh keys to disk.
-    * **Use Case:** Designed to be executed programmatically via `odoo-bin shell` during CI/CD bootstrapping sequences. This resolves start-up race conditions where headless containers boot and check for `.env` keys faster than Odoo's automated cron pipeline cycles.
-    * **Example Execution:**
-      ```bash
-      odoo-bin shell -c odoo.conf -d my_database --no-http -e "env['daemon.key.registry'].action_force_provision_all(); env.cr.commit()"
-      ```
-
----
-
-## 5. Security & File Output
-
-The generated `.env` file will contain:
+### 3. File Format (.env) [@ANCHOR: write_secure_env_file_logic]
 ```env
 # Auto-generated by daemon.key.registry
 ODOO_RPC_LOGIN=service_account_login
 ODOO_RPC_KEY=12345abcd...
 ```
 
-### The `__system__` User Restriction
-The `__system__` user ID (`SUPERUSER_ID` 1) is strictly forbidden from provisioning API keys. This account is natively blocked from making JSON-RPC calls for security reasons. Attempting to assign an API key to the `__system__` account will result in an immediate `UserError` and abort the provisioning transaction.
-
-### Self-Healing Rotation
-Daemons utilizing these files must implement a `try/except` loop around their JSON-RPC calls. Upon detecting an `AccessError` (indicating the `ir.cron` job has rotated the keys), the daemon should simply re-read the `.env` file from the disk to acquire the new key and retry the transaction seamlessly. [@ANCHOR: daemon_self_healing]
-
 ---
 
-## 6. Architectural Stories & Journeys
+## 📖 Stories & Journeys
 
-For detailed narratives and end-to-end workflows, refer to the following:
-
-### Stories
 * [Registering a New External Daemon](docs/stories/daemon_registration.md)
 * [Manual Force Provisioning](docs/stories/force_provisioning.md)
 * [Automated 60-Day Key Rotation](docs/stories/key_rotation.md)
-
-### Journeys
 * [Lifecycle of a Daemon API Key](docs/journeys/api_key_lifecycle.md)
 * [Bootstrapping a Containerized Environment](docs/journeys/container_bootstrapping.md)
+* [Zero-Sudo Refactoring Story](docs/stories/zero_sudo_refactoring.md)
 
 ---
 
-## 7. Verification & Tests
-The following anchors verify the functionality of the Daemon Key Manager:
+## 🧪 Verification
 * **register_daemon_api**: Verified by [@ANCHOR: test_register_daemon_api]
-* **documentation_installed**: Verified by [@ANCHOR: test_documentation_installed]
-* **daemon_self_healing**: Verified by [@ANCHOR: test_register_daemon_api] (via idempotent re-generation logic)
+* **force_provision_all**: Verified by [@ANCHOR: test_force_provisioning]
+* **security_constraints**: Verified by [@ANCHOR: test_security_constraints]
+* **ui_tour**: Verified by [@ANCHOR: test_daemon_key_manager_tour]
+* **unauthorized_access**: Verified by [@ANCHOR: test_unauthorized_access]
+* **key_ownership**: Verified by [@ANCHOR: test_key_ownership]
+* **documentation_installed**: Verified by [@ANCHOR: documentation_installed] [@ANCHOR: test_documentation_installed]

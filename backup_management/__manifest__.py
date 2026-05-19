@@ -13,6 +13,7 @@
         "hams_test",
         "binary_downloader",
         "pager_duty",
+        "website",
     ],
     "external_dependencies": {
         "python": ["pika", "cryptography"],

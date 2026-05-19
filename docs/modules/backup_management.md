@@ -1,46 +1,30 @@
-# Backup Management (`backup_management`)
+# Backup Management
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+Unified Backup Management Facility for Odoo 19, orchestrating **Kopia** and **pgBackRest** with a Focus on Zero-Sudo and Multi-Website Architecture.
 
-Implements a centralized "single pane of glass" GUI in Odoo to orchestrate and monitor `kopia` and `pgBackRest` system backups.
+## Architecture Highlights
+- **Hybrid Engine Support:** Native integration with Kopia (files/system) and pgBackRest (PostgreSQL WAL).
+- **Asynchronous Execution:** Offloads heavy CLI operations to a RabbitMQ-backed daemon (`backup_worker`).
+- **Micro-Privilege Security:** Operations execute via specific service accounts; strict path validation prevents system exposure.
+- **Multi-Website Isolation:** Segregates backup configurations and logs by Odoo Website ID.
 
----
+## Prerequisites
+- **pgBackRest:** Must be installed at the OS level (e.g., `apt install pgbackrest`).
+- **Kopia:** Automatically provisioned JIT via `binary_downloader` if not found.
+- **RabbitMQ:** Required for the task queue.
 
-# Technical Documentation
+## Configuration
+1. Navigate to **Backups > Configurations**.
+2. Select an engine and define the **Target Path** (or Stanza name for pgBackRest).
+3. Set retention policies (Daily/Weekly/Monthly).
+4. Configure storage backends (Local, S3, or B2).
 
-## Architecture
-* **Self-Healing Dependencies:** Uses `shutil.which` to detect tools. If `kopia` is missing from the system path, it automatically fetches and extracts the pre-compiled Linux binary into the `var/lib/odoo/ext_bin` local data directory to ensure uninterrupted operation.
-Implements a Hybrid Architecture for unified backup management.
-* **Kopia:** Used for file/system state. Parsed via `kopia snapshot list --json`. State is synchronized via `_sync_kopia` `[@ANCHOR: backup_sync_kopia]`. Retention policies are applied natively via `[@ANCHOR: backup_apply_policies]`.
-* **pgBackRest:** Used for PostgreSQL WAL archiving. Parsed via `pgbackrest info --output=json`. State is synchronized via `_sync_pgbackrest` `[@ANCHOR: backup_sync_pgbackrest]`.
-* **Orchestration:** Capable of pushing execution commands (`kopia snapshot create`, `pgbackrest backup`) directly to the underlying daemons via `subprocess` from the UI `[@ANCHOR: backup_trigger_execution]`. Can generate automated restore drill commands `[@ANCHOR: backup_restore_command]`.
+## Semantic Anchors for Traceability
+- `[@ANCHOR: UX_BACKUP_SYNC]`: Dashboard metadata synchronization.
+- `[@ANCHOR: security_path_validation]`: Logic for validating target paths.
+- `[@ANCHOR: backup_trigger_execution]`: Entry point for manual backup execution.
+- `[@ANCHOR: backup_doc_injection]`: Knowledge article bootstrap.
 
-## Security & Operations
-* **Service Account:** Utilizes `user_backup_service_internal` for background synchronization.
-* **Encryption:** Kopia passwords are encrypted at rest using the system's `ODOO_BACKUP_CRYPTO_KEY` Fernet key via standard getter/setter properties.
-* **Subprocess Execution:** Uses Python's `subprocess.run` to interrogate local CLIs.
-* **Pager Duty Synergy:** Employs a soft-dependency on `pager_duty`. If a CLI command fails or a backup snapshot becomes stale (no new snapshots in >26 hours), the module directly invokes `pager.incident.report_incident()` `[@ANCHOR: backup_pager_synergy]` using the `pager_service_internal` micro-account to instantly alert the on-call SRE.
-* **Size Anomaly Detection:** The config model evaluates newly ingested snapshots against `minimum_size_mb`. If an empty or suspiciously small snapshot is generated (e.g., missing Docker volume mounts), it escalates a critical alert.
-
-## Automated Subsystems & Reporting
-* **Dashboard Status:** Aggregates target state and snapshot staleness for the NOC display `[@ANCHOR: backup_board_data]`.
-* **Global Sync Cron:** Polling loop to synchronize offsite states `[@ANCHOR: cron_sync_all_backups]`.
-
-## Architectural Stories & Journeys
-
-For detailed narratives and end-to-end workflows, refer to the following:
-
-### Stories
-* [Automated Synchronization](docs/stories/automated_sync.md) `[@ANCHOR: story_automated_sync]`
-* [Failure Reporting](docs/stories/failure_reporting.md) `[@ANCHOR: story_failure_reporting]`
-* [Policy Application](docs/stories/policy_application.md) `[@ANCHOR: story_policy_application]`
-* [Secure Path Validation](docs/stories/secure_path_validation.md) `[@ANCHOR: story_secure_path_validation]`
-
-### Journeys
-* [Backup Configuration and First Sync](docs/journeys/backup_config_sync.md) `[@ANCHOR: journey_backup_config_sync]`
-* [Manual Restore Command Generation](docs/journeys/manual_restore_command.md) `[@ANCHOR: journey_manual_restore_command]`
-
-## Testing & Verification
-* **Cron Reliability:** Scheduled syncing functions are validated by `[@ANCHOR: test_backup_cron]`.
-* **View Rendering:** Interface layouts and dashboards are verified by `[@ANCHOR: test_backup_view]`.
-* **Subprocess Orchestration:** Shell executions are strictly mocked and verified by `[@ANCHOR: test_backup_orchestration]`.
+## Operational Notes
+- **Drill Scripts:** You can configure automated restore drills to verify backup integrity weekly.
+- **PagerDuty Integration:** Alerts are automatically dispatched to the SRE team on backup failures or size anomalies.

@@ -2,142 +2,110 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
+[@ANCHOR: pager_duty_module_root]
+
 The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) suite designed to keep your Odoo infrastructure running smoothly. It provides active monitoring, intelligent alerting, and automated incident management.
 
 ## 🌟 What It Does
 
-* **Active System Monitoring:** Continuously checks the health of your web workers, background daemons, databases, and network connections.
-* **Smart Alerting:** Routes alerts to the right person at the right time based on calendar schedules, preventing alert fatigue and ensuring critical issues are addressed.
-* **Automated Escalation:** If an incident isn't acknowledged promptly, it escalates to wider groups or management.
-* **Incident Analytics:** Tracks Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR) to help teams improve their response processes.
+*   **Active System Monitoring:** Continuously checks the health of web workers, background daemons, databases, network connections, and hardware.
+*   **Smart Alerting:** Routes alerts to the right person based on Odoo Calendar schedules, preventing alert fatigue.
+*   **Automated Escalation:** Escalates unacknowledged incidents to wider groups or management.
+*   **Incident Analytics:** Tracks Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).
+*   **Helpdesk Integration:** Automatically creates tickets in the Helpdesk module for incoming incidents.
+*   **Multi-Website Support:** Partition monitoring checks and incidents by website to support multi-tenant Odoo deployments.
 
 ## 🛠️ How to Set It Up
 
-1. Drop the `pager_duty` folder into your Odoo `addons` directory.
-2. Ensure required Python dependencies (like `redis` and `asyncpg`) are installed.
-3. Install the module from the Odoo Apps menu.
-4. Access the **SRE Dashboard** to configure monitoring targets and define on-call schedules.
+1.  **Dependencies:** Ensure `redis`, `psutil`, `ntplib`, `pymysql`, and `ldap3` are installed in your Python environment.
+2.  **Installation:** Install the `pager_duty` module from the Odoo Apps menu.
+3.  **Daemon Configuration:**
+    *   Navigate to **Pager Duty > Monitoring Checks**.
+    *   Use the "JSON Configuration Tools" (Import/Export) to synchronize the database with the daemon's `pager_config.json`.
+    *   Deploy and start the Python daemons located in the `daemon/` directory (see `DEPLOYMENT.md` for systemd service examples).
 
 ---
 
 # Technical Documentation
 
 <system_role>
-**Context:** Technical documentation strictly for LLMs and Integrators.
+**Context:** Technical documentation strictly for Software Engineers, SREs, and Integrators.
 </system_role>
 
-## 1. Overview & Architecture
-The Pager Duty module uses a **CQRS Architecture**: Odoo acts purely as the configuration control plane (`pager.check`), while a standalone Python daemon (`generalized_monitor.py`) handles the execution loop and state holding outside the WSGI workers.
+## 1. Architecture Overview (CQRS)
+The module follows a **Command Query Responsibility Segregation (CQRS)** pattern. Odoo serves as the configuration and reporting plane, while standalone Python daemons handle the high-frequency execution loops.
 
-### Key Architectural Features:
-* **Zero-Sudo RPC:** The daemon pushes incidents to Odoo using the `pager_service_internal` micro-account. This triggers automated notifications [@ANCHOR: test_pager_notification] and implements Redis TTLs to prevent alert spam [@ANCHOR: report_incident_rate_limit].
-* **Documentation Injection:** The module automatically provisions its documentation payload into the `knowledge.article` API upon installation. [@ANCHOR: doc_inject_pager_duty]
-* **Watchdog Threading:** The daemon wraps every check in an isolated thread. The main thread acts as a watchdog, forcibly terminating and restarting the daemon if a thread hangs beyond its timeout threshold.
-* **Airgapped SMTP & Webhooks:** If the Odoo XML-RPC interface crashes (500 Error / Connection Refused), the daemon catches the exception and connects directly to the external `SMTP_HOST` or posts to `PAGER_WEBHOOK_URL` to fire the alert.
-* **Self-Healing Dependencies:** The daemon gracefully verifies system dependencies (e.g., `docker`, `pg_dump`, `nginx`) via `shutil.which`. For Zero Trust edge integration, if the `cloudflared` binary is missing, it dynamically downloads and executes the static GitHub release without requiring administrative intervention.
-* **Stochastic Jitter:** Check loops offset their start times randomly to prevent resource "thundering herds".
-* **Intelligent Calendar Routing:** Natively extends Odoo's `calendar.event` model (`is_pager_duty=True`). When an incident fires, the ORM queries the calendar for the active shift and routes the internal message/email precisely to the user currently on call.
-* **Cascading Suppression & Maintenance:** The daemon parses `parent` and `maint_start`/`maint_end` dependencies to short-circuit execution natively, preventing alert storms. It also automatically resolves incidents when systems recover. [@ANCHOR: auto_resolve_incidents]
-* **Push Monitoring (Heartbeat):** The `/api/v1/pager/heartbeat/<uuid>` REST endpoint accepts check-ins from external bash scripts. The daemon queries `check_heartbeat_rpc` via XML-RPC to verify TTL breaches.
-* **Multi-Tier Escalation:** An Odoo `ir.cron` (`cron_escalate_incidents`) sweeps for forgotten incidents and escalates them to the whole admin group. [@ANCHOR: test_pager_escalation]
-* **SRE Analytics:** The `pager.incident` model auto-computes `mtta` and `mttr` in minutes during state transitions, such as when an incident is acknowledged. [@ANCHOR: action_acknowledge_incident] Active and resolved incidents are aggregated and presented on the NOC Dashboard [@ANCHOR: pager_board_data], which enforces strict URL authentication checks [@ANCHOR: test_pager_board_url].
+### Key Components:
+*   **Control Plane:** Odoo records (`pager.check`) define what to monitor.
+*   **Data Plane (Daemons):**
+    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.).
+    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time.
+    *   `pager_smart_spooler.py`: Securely collects hardware health data (SMART).
+    *   `pager_synthetic_spooler.py`: Executes sandboxed (Bubblewrap) Playwright/Bash tests.
+*   **Inter-Process Communication (IPC):** Uses Redis Pub/Sub and Queues for high-speed communication between Odoo workers and background daemons.
+
+### Security & Micro-Privileges:
+*   **Zero-Sudo RPC:** Daemons authenticate via the `pager_service_internal` service account. No `sudo()` is used.
+*   **Sandboxing:** Synthetic checks run inside a strict **Bubblewrap (bwrap)** sandbox with optional network isolation.
+*   **Service Accounts:** The module uses `zero_sudo.security.utils` to securely escalate privileges within Odoo's ACL framework.
+*   **Multi-Website Isolation:** Data is partitioned by `website_id`. The NOC Dashboard respects `website_id` passed via query parameters or context.
 
 ---
 
-## 2. Configuration Schema (`pager_config.yaml`)
-The daemon parses this YAML file on boot. The `ENV:` prefix securely dynamically injects credentials from the `.env` vault. The Odoo DB checks are exported into this generalized JSON/YAML format for the daemon to consume. [@ANCHOR: generalized_pager_config]
+## 2. Developer API & Integration
 
-```yaml
-checks:
-  - name: "WSGI HTTP Ping"
-    type: http
-    target: [http://127.0.0.1:8069/api/v1/pager/ping](http://127.0.0.1:8069/api/v1/pager/ping)
-    expect: '{"status": "ok"}'
-    interval: 60
-    grace: 120  # Startup grace period suppression
-    parent: "Odoo XML-RPC Handshake"
-    maint_start: "2026-03-15 00:00:00"
-    maint_end: "2026-03-15 02:00:00"
-  - name: "Nightly Backup"
-    type: heartbeat
-    uuid: "123e4567-e89b-12d3-a456-426614174000"
-    interval: 86400
-  - name: "Odoo XML-RPC Handshake"
-    type: xmlrpc
-    target: [http://127.0.0.1:8069/xmlrpc/2/common](http://127.0.0.1:8069/xmlrpc/2/common)
-    rpc_method: version
-    expect: "server_version"
-    interval: 60
+### On-Call Query API
+Other modules can query the currently active responder:
+```python
+on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
+# Returns res.users recordset or False
 ```
+[@ANCHOR: test_pager_notification]
+
+### Incident Reporting API
+External scripts or modules can report incidents programmatically:
+```python
+self.env["pager.incident"].report_incident({
+    "source": "Custom Script",
+    "severity": "high",
+    "description": "Critical failure detected"
+})
+```
+[@ANCHOR: report_incident_rate_limit]
+
+### Helpdesk Adapter
+The module automatically bridges incidents to Helpdesk tickets using an adapter pattern. It respects the `pager_duty.helpdesk_model` system parameter.
+[@ANCHOR: pd_helpdesk_adapter]
 
 ---
 
-## 3. How to Create a New Monitoring Plugin
-To extend the daemon with a new capability (e.g., a `docker` API health check), you must execute these 4 steps in unison:
-
-1. **Database Schema (`pager_check.py`):**
-   Add your new type to the `check_type` Selection field. Add any new specific parameter fields (e.g., `docker_container_name`).
-2. **Configuration Wizard (`pager_config_wizard.py`):**
-   Update `action_generate_yaml()` to pull your new field from the DB and write it to the dict. Update `action_save_to_file_and_db()` to parse the field back from the YAML dict into the DB model.
-3. **User Interface (`pager_check_views.xml`):**
-   Inject your new fields into the notebook pages, using `invisible="check_type != 'your_type'"`. Backend views are tested to ensure rendering stability. [@ANCHOR: test_pager_view]
-4. **Daemon Execution (`generalized_monitor.py`):**
-   Add an `elif ctype == 'your_type':` block to the `execute_check(check)` function. It MUST return a tuple: `(True, "OK")` on success, or `(False, "Error Message")` on failure. Do not trigger alerts directly within this function.
-
----
-
-## 4. Programmatic Setup & Hooks
-**The Secure Cached Resolver Pattern (ADR-0066)**: The `pager_duty` module offers high-performance `@tools.ormcache` resolvers for cross-module use. ALWAYS use these instead of `.search()` in frontend controllers or background daemons to prevent database exhaustion. Callers **MUST** pass their own `override_svc_uid` to execute the database search under their own service account's context.
-* **`pager.check._get_check_id_by_uuid(hb_uuid, override_svc_uid=None)`**: Resolves a heartbeat UUID string to its database ID safely.
+## 3. Extending the System
+To add a new monitoring plugin:
+1.  **Model:** Add the type to `check_type` in `pager_check.py`.
+2.  **View:** Update `pager_check_views.xml` with relevant fields (visible only for the new type).
+3.  **Daemon:** Implement the logic in `execute_check()` within `generalized_monitor.py`.
+4.  **Test:** Add an isolated test case in `test_generalized_monitor.py`.
 
 ---
 
 <stories_and_journeys>
-## 5. Architectural Stories & Journeys
+## 4. Architectural Stories & Journeys
 
-For detailed narratives and end-to-end workflows, refer to the following:
-
-### Stories
-* [Scaling the Watchtower](docs/stories/pager_duty/automated_monitoring_setup.md)
-* [Finding the Needle in the Haystack](docs/stories/pager_duty/log_anomaly_detection.md)
-* [The Midnight Guardian](docs/stories/pager_duty/on_call_alerting.md)
-* [The Data-Driven Post-Mortem](docs/stories/pager_duty/performance_analytics.md)
-
-### Journeys
-* [Daemon Execution Loop](docs/journeys/pager_duty/daemon_execution_loop.md)
-* [Escalation Pathway](docs/journeys/pager_duty/escalation_pathway.md)
-* [Incident Lifecycle](docs/journeys/pager_duty/incident_lifecycle.md)
-* [Synthetic Monitoring Flow](docs/journeys/pager_duty/synthetic_monitoring_flow.md)
+*   [Story: Scaling the Watchtower](docs/stories/automated_monitoring_setup.md)
+*   [Story: Finding the Needle in the Haystack](docs/stories/log_anomaly_detection.md)
+*   [Story: The Midnight Guardian](docs/stories/on_call_alerting.md)
+*   [Story: The Data-Driven Post-Mortem](docs/stories/performance_analytics.md)
+*   [Journey: Daemon Execution Loop](docs/journeys/daemon_execution_loop.md)
+*   [Journey: Escalation Pathway](docs/journeys/escalation_pathway.md)
+*   [Journey: Incident Lifecycle](docs/journeys/incident_lifecycle.md)
+*   [Journey: Synthetic Monitoring Flow](docs/journeys/synthetic_monitoring_flow.md)
 </stories_and_journeys>
 
 ---
 
-## 6. Testing Mandate
-If you create a new plugin, you **MUST** update `daemons/pager_duty/test_generalized_monitor.py` with an isolated, aggressively mocked test verifying its successful parsing and failure states. Headless APIs and synthetic execution layers safely suppress i18n translation requirements during tests. [@ANCHOR: synthetic_i18n]
-
----
-
-## 7. Helpdesk Adapter API
-The Pager Duty module integrates with Helpdesk modules agnostically using an Adapter pattern.
-* **Adapter Implementation (`[@ANCHOR: pd_helpdesk_adapter]`)**: Intercepts incident creation, dynamically resolves the configured helpdesk model, and creates a unified tracking ticket. It incorporates a direct SMTP fallback if the target module is unreachable.
-
----
-
-## 8. Developer API: On-Duty Queries
-The Pager Duty module exposes a native API allowing other Odoo modules (like Helpdesk or Maintenance) to seamlessly query for the currently active on-call responder. This enables unified notification routing and avoids duplicate schedule logic.
-
-**API Endpoint:** `self.env["calendar.event"].get_current_on_duty_admin()`
-* **Returns:** `res.users` recordset (limit 1) if an active Pager Duty shift exists at `fields.Datetime.now()`, otherwise `False`.
-* **Example Usage:**
-  ```python
-  on_duty_user = False
-  if hasattr(self.env["calendar.event"], "get_current_on_duty_admin"):
-      try:
-          svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
-      except Exception:
-          svc_uid = self.env.uid
-      on_duty_user = self.env["calendar.event"].with_user(svc_uid).get_current_on_duty_admin()
-      if on_duty_user:
-          # Route ticket or notification to on_duty_user.partner_id
-          pass
-  ```
+## 5. Testing & Maintenance
+Run module tests using the unified test runner:
+```bash
+python3 tools/test_runner.py -u pager_duty --already-provisioned
+```
+Daemon tests are located in `pager_duty/daemon/` and run via pure `unittest`. **Do not import Odoo packages in daemon tests.**
