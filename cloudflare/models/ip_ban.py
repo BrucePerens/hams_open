@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from odoo.http import request
 from ..utils.cloudflare_api import ban_ip, unban_ip
 
 
@@ -52,13 +51,7 @@ class CloudflareIPBan(models.Model):
         # [@ANCHOR: cf_execute_ban]
         # Verified by [@ANCHOR: test_cf_execute_ban]
         if not website_id:
-            try:
-                if request and getattr(request, "website", False):
-                    website_id = request.website.id
-                else:
-                    website_id = self.env["website"].get_current_website().id
-            except RuntimeError:
-                website_id = self.env["website"].get_current_website().id
+            website_id = self.env["cloudflare.utils"].get_current_website_id()
 
         website = self.env["website"].browse(website_id)
         token, zone_id = website._get_cloudflare_credentials()

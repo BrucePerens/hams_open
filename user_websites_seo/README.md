@@ -4,15 +4,6 @@
 
 This module is a lightweight domain extension for `user_websites`. It connects our shared blog architecture with Odoo's native frontend SEO engine, restoring the interactive "Optimize SEO" widget for personal and group blog indexes.
 
-## Technical Implementation
-* **Model Injection:** It fuses the `website.seo.metadata` mixin into the `res.users` and `user.websites.group` models via `user.websites.seo.metadata.mixin`.
-* **Authorization:** It appends the SEO metadata fields to the `SELF_WRITEABLE_FIELDS` property. This allows standard users to save their customized Meta Title and Description via the frontend widget. Verified by `[@ANCHOR: res_users_self_writeable_fields]`.
-* **Controller Interception:** It overrides the `/<slug>/blog` route. After the base controller prepares the data, this module injects the SEO-aware user or group record as the `main_object`, seamlessly activating the "Optimize SEO" UI menu for the blog owner while hiding it from guests. Verified by `[@ANCHOR: controller_user_blog_index_seo_override]`.
-* **Zero-Sudo Write Elevation:** The module uses a custom `write` method in its mixin to safely escalate privilege using the `user_websites.user_user_websites_service_account` service account when a user edits their own SEO metadata. This ensures that users do not need broad write permissions on their own `res.users` record or the `user.websites.group` record to manage SEO.
-* **Documentation:** Automatically installs its guide into the Knowledge/Manual Library via the `knowledge_docs` manifest entry. This uses the `zero_sudo` automatic bootstrap mechanism. Verified by `[@ANCHOR: soft_dependency_docs_installation]`.
-
----
-
 # Technical Documentation
 
 <system_role>
@@ -23,13 +14,13 @@ This module is a lightweight domain extension for `user_websites`. It connects o
 This module is a lightweight domain extension for `user_websites`. It connects our shared blog architecture with Odoo's native frontend SEO engine. By injecting `website.seo.metadata` into user and group models, it allows these records to act as the "main_object" for SEO purposes on their respective blog index pages.
 
 ## 2. ⚙️ Technical Implementation Details
-* **Model Injection:** It fuses the `website.seo.metadata` mixin into the `res.users` and `user.websites.group` models.
-* **Authorization:** It appends the SEO metadata fields to the `SELF_WRITEABLE_FIELDS` property. This is a critical Odoo idiom that allows users to modify specific fields on their own record without broad write permissions. Verified by `[@ANCHOR: test_self_writeable_fields]`.
-* **Controller Interception:** Overrides the `/blog` route. It calls `super()` to get the standard response, then injects the `profile_user` or `profile_group` record as `main_object` into the `qcontext`. This is what triggers Odoo's frontend to show the "Optimize SEO" menu item. Verified by `[@ANCHOR: test_controller_no_ssti_elevation]`.
+* **Model Injection:** It fuses the `website.seo.metadata` mixin into the `res.users` and `user.websites.group` models via `user.websites.seo.metadata.mixin`.
+* **Authorization:** It appends the SEO metadata fields to the `SELF_WRITEABLE_FIELDS` property. This is a critical Odoo idiom that allows users to modify specific fields on their own record without broad write permissions. Verified by `[@ANCHOR: res_users_self_writeable_fields]`.
+* **Controller Interception:** Overrides the `/<slug>/blog` route. It calls `super()` to get the standard response, then injects the `profile_user` or `profile_group` record as `main_object` into the `qcontext`. This is what triggers Odoo's frontend to show the "Optimize SEO" menu item. It ensures the injected `main_object` is de-elevated to the public user's environment to prevent SSTI. Verified by `[@ANCHOR: controller_user_blog_index_seo_override]`.
 * **Secure Elevation (Zero-Sudo):** In `write()`, the module separates SEO fields from other fields. If a non-administrator is writing to SEO fields, it checks permissions (`_check_seo_write_permission`) and then performs the write using the `user_websites.user_user_websites_service_account` service account. This avoids the use of `.sudo()`.
     * User SEO Write Elevation: `[@ANCHOR: res_users_seo_write_elevation]` (Verified by `test_check_access_rule_res_users`)
     * Group SEO Write Elevation: `[@ANCHOR: user_websites_group_seo_write_elevation]` (Verified by `test_check_access_rule_user_websites_group`)
-* **SSTI Protection:** To prevent Server-Side Template Injection, the controller injects the `main_object` into the QWeb context *without* elevating the recordset itself (i.e., no `sudo()` or `with_user()` in the controller). All privilege elevation is deferred to the model's `write()` method where it is strictly bounded.
+* **SSTI Protection:** To prevent Server-Side Template Injection, the controller injects the `main_object` into the QWeb context *without* elevating the recordset itself. If the recordset was already elevated by a parent controller, it is explicitly de-elevated. All privilege elevation is deferred to the model's `write()` method where it is strictly bounded.
 * **Soft Dependency Documentation:** The module uses the `zero_sudo` automated installer to dynamically install documentation if `knowledge.article` or `manual.article` is present. Verified by `[@ANCHOR: test_soft_dependency_docs_installation]`.
 
 ---

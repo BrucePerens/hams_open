@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
-from odoo.http import request
 
 
 class CloudflareWAF(models.AbstractModel):
@@ -18,14 +17,7 @@ class CloudflareWAF(models.AbstractModel):
         website_id=None,
     ):
         if not website_id:
-
-            try:
-                if request and getattr(request, "website", False):
-                    website_id = request.website.id
-                else:
-                    website_id = self.env["website"].get_current_website().id
-            except RuntimeError:
-                website_id = self.env["website"].get_current_website().id
+            website_id = self.env["cloudflare.utils"].get_current_website_id()
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_waf"

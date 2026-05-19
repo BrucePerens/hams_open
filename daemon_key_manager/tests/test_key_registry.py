@@ -105,6 +105,23 @@ class TestKeyRegistry(TransactionCase):
             self.env.flush_all()
         self.assertIn("Security Alert", str(cm.exception))
 
+        # Test expanded forbidden prefixes
+        forbidden_paths = [
+            "/home/jules/test.env",
+            "/usr/local/bin/test.env",
+            "/bin/test.env",
+            "/var/log/test.env",
+        ]
+        for f_path in forbidden_paths:
+            with self.subTest(path=f_path):
+                with self.assertRaises(UserError) as cm:
+                    self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
+                        'name': f'Forbidden {f_path}',
+                        'user_id': self.service_user.id,
+                        'env_file_path': f_path,
+                    })
+                self.assertIn("Security Alert", str(cm.exception))
+
         # Cleanup
         self.addCleanup(self._silent_remove, symlink_path)
         self.addCleanup(self._silent_rmdir, allowed_dir)

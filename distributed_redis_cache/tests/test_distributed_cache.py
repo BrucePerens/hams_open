@@ -4,8 +4,10 @@ import json
 import logging
 import unittest.mock
 import redis
+import time
 from unittest.mock import patch, MagicMock
 
+from odoo import tools
 from odoo.tests.common import tagged, HttpCase
 from odoo.addons.hams_test.common import HamsIntegrationCase
 from odoo.addons.distributed_redis_cache.models.ir_http import (
@@ -40,25 +42,11 @@ class TestDistributedCacheStandard(HttpCase):
 
         with patch(
             "odoo.addons.distributed_redis_cache.models.ir_http.redis_pool",
-            MagicMock(),
+            None,
         ), patch(
-            "odoo.addons.distributed_redis_cache.models.ir_http.redis"
-        ) as mock_redis, patch(
             "odoo.addons.base.models.ir_http.IrHttp._authenticate",
             return_value=True,
         ):
-
-            mock_redis_client = MagicMock()
-            mock_redis.Redis.return_value = mock_redis_client
-            mock_pubsub = MagicMock()
-            mock_redis_client.pubsub.return_value = mock_pubsub
-
-            payload = json.dumps(
-                {"model": "res.users", "dbname": self.env.cr.dbname}
-            )
-            mock_pubsub.listen.side_effect = [
-                [{"type": "message", "data": payload}],
-            ]
 
             class MockRequest:
                 env = MagicMock()
@@ -129,17 +117,6 @@ class TestDistributedCacheStandard(HttpCase):
         res_redis = wiz.check_redis_status()
         self.assertEqual(res_redis["type"], "ir.actions.client")
 
-    def test_04_cache_manager_config_anchor(self):
-        # Tests [@ANCHOR: cache_manager_config]
-        """
-        Dummy test to satisfy ADR-0054 for cache_manager_config.
-        The actual logic is in the standalone daemon.
-        """
-        model_exists = "distributed.cache.config" in self.env
-        self.assertTrue(
-            model_exists, "The configuration model must be registered."
-        )
-
     def test_05_redis_scan_invalidation_standard(self):
         # Tests [@ANCHOR: invalidate_model_cache_logic]
         # Tests [@ANCHOR: redis_connection_pool]
@@ -185,10 +162,9 @@ class TestDistributedCacheStandard(HttpCase):
             MagicMock(),
         ), patch(
             "odoo.addons.distributed_redis_cache.redis_cache.redis"
-        ) as mock_redis, patch(
-            "odoo.tools.config", {"test_enable": False}
-        ):  # Bypass test_enable check
-
+        ) as mock_redis, patch.dict(
+            tools.config.options, {"test_enable": False}
+        ):
             mock_redis.RedisError = redis.RedisError
             mock_redis_client = MagicMock()
             mock_redis.Redis.return_value = mock_redis_client
@@ -198,7 +174,7 @@ class TestDistributedCacheStandard(HttpCase):
             self.assertEqual(result, 42)
 
             # Verify it's in local cache now
-            self.assertIn(42, _local_cache.values())
+            self.assertIn(42, list(_local_cache.values()))
 
     def test_07_distributed_cache_key_generation(self):
         # Tests [@ANCHOR: distributed_cache_key_generation]
@@ -244,6 +220,45 @@ class TestDistributedCacheStandard(HttpCase):
             self.assertIn('"model": "res.users"', args[1][1])
             self.assertIn(f'"dbname": "{self.env.cr.dbname}"', args[1][1])
 
+    def test_09_multi_website_cache_keys(self):
+        """Verify that cache keys are website-aware."""
+        class MockModel:
+            def __init__(self, env):
+                self.env = env
+                self._name = "mock.model"
+
+            @distributed_cache()
+            def cached_method(self, val):
+                return val
+
+        _local_cache.clear()
+
+        # Bypass test_enable check AND Redis to force local cache usage
+        with patch.dict(tools.config.options, {"test_enable": False}),              patch("odoo.addons.distributed_redis_cache.redis_cache.redis_pool", None):
+
+            # Website 1
+            env_w1 = self.env(context=dict(self.env.context, website_id=1))
+            obj_w1 = MockModel(env_w1)
+            res1 = obj_w1.cached_method("test")
+
+            keys = list(_local_cache.keys())
+            _logger.info("Keys after w1: %s", keys)
+            self.assertTrue(any(":w1" in k for k in keys), "Expected key for website 1 not found in %s" % keys)
+
+            # Website 2
+            env_w2 = self.env(context=dict(self.env.context, website_id=2))
+            obj_w2 = MockModel(env_w2)
+            res2 = obj_w2.cached_method("test")
+
+            # They should have different keys in _local_cache
+            keys = list(_local_cache.keys())
+            _logger.info("Keys after w2: %s", keys)
+            w1_keys = [k for k in keys if ":w1" in k]
+            w2_keys = [k for k in keys if ":w2" in k]
+
+            self.assertTrue(w1_keys, "Expected key for website 1 not found in %s" % keys)
+            self.assertTrue(w2_keys, "Expected key for website 2 not found in %s" % keys)
+            self.assertNotEqual(w1_keys[0], w2_keys[0])
 
 @tagged("integration", "post_install", "-at_install")
 class TestDistributedCacheIntegration(HamsIntegrationCase):
@@ -256,41 +271,40 @@ class TestDistributedCacheIntegration(HamsIntegrationCase):
             )
         )
         if os.path.exists(daemon_path):
-            cls.start_daemon(daemon_path)
+             cls.start_daemon(daemon_path, env_vars={
+                 "REDIS_HOST": "redis",
+                 "DB_HOST": "odoo",
+                 "DB_NAME": cls.env.cr.dbname,
+                 "DB_USER": "odoo",
+                 "DB_PASS": "odoo",
+             })
 
-    def test_01_redis_cache_interceptor_integration(self):
+    def test_01_full_pipeline_integration(self):
         """
-        Integration path: Ensure the real Redis PubSub loop successfully attaches
-        and reads real payloads bypassing the standard mock chain.
+        Verify the full invalidation pipeline:
+        Postgres NOTIFY -> Cache Manager -> Redis PubSub -> Odoo Worker.
         """
-        mock_endpoint = MagicMock()
-        mock_endpoint.routing = {"auth": "none"}
+        # 1. Setup a cached method
+        class MockModel:
+            def __init__(self, env):
+                self.env = env
+                self._name = "res.partner"
 
-        with _listener_lock:
-            _invalidation_queue.add(("res.users", self.env.cr.dbname))
+            @distributed_cache()
+            def cached_method(self, val):
+                return val
 
-        mock_req_inst = unittest.mock.MagicMock()
-        mock_req_inst.httprequest.method = "GET"
-        mock_req_inst.env.__contains__.return_value = True
-        mock_req_inst.env.__getitem__.return_value = self.env["res.users"]
-        mock_req_inst.session = unittest.mock.MagicMock()
-        mock_req_inst.session.uid = self.env.user.id
-        mock_req_inst.session.db = self.env.cr.dbname
-        mock_req_inst.env.cr = self.env.cr
-        mock_req_inst.env.cr.dbname = self.env.cr.dbname
-        mock_req_inst.env.context = self.env.context
+        obj = MockModel(self.env)
+        _local_cache.clear()
 
-        # We must patch the HTTP request object to trick Odoo's internal _authenticate router,
-        # but let the Redis code execute natively against the real socket.
-        with patch(
-            "odoo.addons.base.models.ir_http.request", mock_req_inst
-        ), patch(
-            "odoo.addons.distributed_redis_cache.models.ir_http.request",
-            mock_req_inst,
-        ), patch(
-            "odoo.service.security.check_session", return_value=True
-        ):
-            self.env["ir.http"]._authenticate(mock_endpoint)
+        with patch.dict(tools.config.options, {"test_enable": False}):
+            obj.cached_method("init")
+            cache_key = list(_local_cache.keys())[0]
+            self.assertIn(cache_key, _local_cache)
+
+            # 2. Trigger invalidation via real PG NOTIFY
+            notify_model_invalidation(self.env, "res.partner")
+            self.assertNotIn(cache_key, _local_cache)
 
 
 @tagged("post_install", "-at_install")

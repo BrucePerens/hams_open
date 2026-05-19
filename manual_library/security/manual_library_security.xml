@@ -37,7 +37,18 @@
             <field name="name">Knowledge Article Internal Read</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_portal')), (4, ref('base.group_user'))]"/>
-            <field name="domain_force">['|', '|', ('internal_permission', '!=', 'none'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
+            <field name="domain_force">['&amp;', ('website_id', 'in', (False, website.id)), '|', '|', ('internal_permission', '!=', 'none'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="knowledge_article_internal_read_published_rule" model="ir.rule">
+            <field name="name">Knowledge Article Internal Read Published</field>
+            <field name="model_id" ref="model_knowledge_article"/>
+            <field name="groups" eval="[(4, ref('base.group_portal')), (4, ref('base.group_user'))]"/>
+            <field name="domain_force">['&amp;', ('website_id', 'in', (False, website.id)), ('is_published', '=', True)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>
@@ -48,7 +59,7 @@
             <field name="name">Knowledge Article Internal Write</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_user'))]"/>
-            <field name="domain_force">['|', '|', ('internal_permission', '=', 'write'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
+            <field name="domain_force">['&amp;', ('website_id', 'in', (False, website.id)), '|', '|', ('internal_permission', '=', 'write'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
             <field name="perm_read" eval="False"/>
             <field name="perm_write" eval="True"/>
             <field name="perm_create" eval="True"/>
@@ -59,7 +70,7 @@
             <field name="name">Knowledge Article Public Read</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_public'))]"/>
-            <field name="domain_force">[('is_published', '=', True)]</field>
+            <field name="domain_force">['&amp;', ('website_id', 'in', (False, website.id)), ('is_published', '=', True)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>

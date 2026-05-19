@@ -8,6 +8,18 @@ class CloudflareUtils(models.AbstractModel):
     _description = "Cloudflare Edge Context Utilities"
 
     @api.model
+    def get_current_website_id(self):
+        """
+        Unified helper to resolve the active website ID across HTTP and Cron contexts.
+        """
+        try:
+            if request and getattr(request, "website", False):
+                return request.website.id
+        except RuntimeError:
+            pass
+        return self.env["website"].get_current_website().id
+
+    @api.model
     def get_request_context(self):
         # [@ANCHOR: cf_get_request_context]
         """

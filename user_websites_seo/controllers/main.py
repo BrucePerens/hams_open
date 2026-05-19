@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo import http
+from odoo.http import request
 from odoo.addons.user_websites.controllers.main import UserWebsitesController
 
 class UserWebsitesSEOController(UserWebsitesController):
@@ -45,12 +46,19 @@ class UserWebsitesSEOController(UserWebsitesController):
             user = response.qcontext.get("profile_user")
             group = response.qcontext.get("profile_group")
 
-            # We DO NOT elevate the recordset (SSTI vulnerability mitigation).
+            # We de-elevate the recordset to the current request's environment
+            # if the base controller provided an elevated one, but only if we are
+            # running in a real request context (to support unit tests).
+            # This is a critical SSTI vulnerability mitigation.
             # The models' check_access_rule methods have been enhanced to allow
             # legitimate users to read/write SEO fields without sudo.
             if user:
+                if request and request.env:
+                    user = user.with_env(request.env)
                 response.qcontext["main_object"] = user
             elif group:
+                if request and request.env:
+                    group = group.with_env(request.env)
                 response.qcontext["main_object"] = group
 
         return response

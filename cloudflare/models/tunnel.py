@@ -24,7 +24,7 @@ class CloudflareTunnel(models.Model):
         # [@ANCHOR: cf_delete_tunnel]
         # Verified by [@ANCHOR: test_cf_delete_tunnel]
         for tunnel in self:
-            token, dummy = tunnel.website_id._get_cloudflare_credentials()
+            token, _zone = tunnel.website_id._get_cloudflare_credentials()
             account_id = tunnel.website_id.cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
 
             if not token or not account_id:
@@ -51,7 +51,7 @@ class CloudflareTunnel(models.Model):
         tunnels_to_create = []
 
         for website in websites:
-            token, dummy = website._get_cloudflare_credentials()
+            token, _zone = website._get_cloudflare_credentials()
             account_id = website.cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
 
             if not token or not account_id:

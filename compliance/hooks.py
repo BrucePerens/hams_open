@@ -22,9 +22,9 @@ def post_init_hook(env):
     env_svc = env["zero_sudo.security.utils"]._get_service_env("compliance.user_compliance_service")
 
     _logger.info("Enforcing Cookie Consent Bar on all websites.")
-    # AI Laziness Fix: Ensure we see all websites across all scopes.
-    # Added limit to respect audit standards.
-    websites = env_svc["website"].with_context(active_test=False).search([], limit=1000)
+    # AI Laziness Fix: Removed arbitrary limit=1000.
+    # Ensure we see all websites across all scopes.
+    websites = env_svc["website"].with_context(active_test=False).search([])
     if "cookies_bar" in env_svc["website"]._fields:
         # AI Laziness Fix: Some Odoo website logic expects singletons during write.
         for website in websites:
@@ -37,11 +37,12 @@ def post_init_hook(env):
     legal_urls = ["/privacy", "/cookie-policy", "/terms"]
 
     # ADR-0022: Prevent N+1 queries by pre-fetching outside the loop.
-    # AI Laziness Fix: Use website_id=False in context to ensure we see pages across all websites.
+    # AI Laziness Fix: Removed arbitrary limit=1000.
+    # Use website_id=False in context to ensure we see pages across all websites.
     # Also use active_test=False to see unpublished pages.
     all_pages = env_svc["website.page"].with_context(website_id=False, active_test=False).search([
         ("url", "in", legal_urls)
-    ], limit=1000)
+    ])
 
     def is_boilerplate(page):
         # AI Laziness Fix: Guard against missing view_id or key to avoid AttributeErrors.

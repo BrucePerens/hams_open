@@ -11,7 +11,8 @@ A user wants to find information about a specific topic but doesn't know where i
 2. The `manual_search` controller `[@ANCHOR: controller_manual_search]` receives the query.
 3. The controller performs a full-text search on the `name` and `body` fields of accessible articles.
 4. Native record rules ensure that only articles the user has permission to see are returned.
-5. The search results are displayed to the user, highlighting matches.
+5. Multi-website isolation ensures that results are restricted to the current website context.
+6. The search results are displayed to the user, highlighting matches.
 
 ## Technical Details
 - Controller: `ManualLibraryController.manual_search`

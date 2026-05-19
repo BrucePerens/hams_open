@@ -54,8 +54,13 @@ def distributed_cache():
         def wrapper(self, *args, **kwargs):
             dbname = self.env.cr.dbname
             model_name = self._name
+
+            # Website awareness: Include website_id in cache key if available in context
+            website_id = self.env.context.get("website_id")
+            website_suffix = f":w{website_id}" if website_id else ""
+
             arg_hash = _get_hash(*args, **kwargs)
-            cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}:{arg_hash}"
+            cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}:{arg_hash}"
 
             use_redis = bool(redis and redis_pool)
 
@@ -87,7 +92,7 @@ def distributed_cache():
                     r = redis.Redis(connection_pool=redis_pool)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                     return result
-                except (redis.RedisError, TypeError) as e:
+                except (redis.RedisError, TypeError, json.JSONDecodeError) as e:
                     _logger.warning(
                         "Redis cache write failed, falling back to local: %s",
                         e,
@@ -131,10 +136,9 @@ def invalidate_model_cache(env, model_name, local_only=False):
                 _logger.warning("Redis cache invalidation failed: %s", e)
 
     # Always clear local fallback cache for this process to ensure consistency
+    prefix_local = f"{dbname}:distributed_cache:{model_name}:"
     keys_to_delete = [
-        k
-        for k in _local_cache.keys()
-        if k.startswith(f"{dbname}:distributed_cache:{model_name}:")
+        k for k in _local_cache.keys() if k.startswith(prefix_local)
     ]
     for k in keys_to_delete:
         _local_cache.pop(k, None)

@@ -12,7 +12,7 @@ class KnowledgeArticle(models.Model):
 
     _name = "knowledge.article"
     _description = "Manual Article"
-    _inherit = ["mail.thread", "mail.activity.mixin", "website.published.mixin"]
+    _inherit = ["mail.thread", "mail.activity.mixin", "website.published.mixin", "website.multi.mixin"]
     _order = "sequence, id"
 
     # --- API Interoperability Fields (Strict Matching) ---
@@ -37,6 +37,8 @@ class KnowledgeArticle(models.Model):
     )
     active = fields.Boolean(string="Active", default=True)
 
+    website_id = fields.Many2one("website", string="Website", ondelete="cascade")
+
     internal_permission = fields.Selection(
         [("read", "Read Only"), ("write", "Read & Write"), ("none", "No Access")],
         string="Internal Permission",
@@ -55,14 +57,6 @@ class KnowledgeArticle(models.Model):
     # --- Custom Implementation Fields ---
     helpful_count = fields.Integer(string="Helpful Votes", default=0, readonly=True)
     unhelpful_count = fields.Integer(string="Unhelpful Votes", default=0, readonly=True)
-
-    _name_parent_uniq = models.Constraint(
-        "UNIQUE(name, parent_id)",
-        "Article titles must be unique within the same parent folder!",
-    )
-
-    # NOTE: We rely on the ORM's required=True for the 'name' field because it is a translate=True (JSONB) column.
-    # Applying a Postgres TRIM() CHECK constraint to JSONB causes an initialization crash.
 
     # --- Constraints ---
     @api.constrains("parent_id")
