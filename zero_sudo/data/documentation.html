@@ -24,6 +24,12 @@
     <h3>4. Automatic Documentation Library</h3>
     <p>The module also powers the very documentation system you are using right now! It automatically scans every installed module for manuals and guides, and then "bootstraps" them into this library. This ensures that your documentation is always up-to-date and centrally located, without requiring manual effort during installation.</p>
 
+    <h3>5. Multi-Website Security</h3>
+    <p>Zero-Sudo is designed to be fully aware of environments where multiple websites are running on a single Odoo instance. The security restrictions it imposes, such as blocking service accounts from web logins, are applied globally. This means that if an account is flagged for background tasks, it cannot be used to log into <i>any</i> of the websites managed by the system, ensuring consistent security across all digital properties.</p>
+
+    <h3>6. Security and Secrets</h3>
+    <p>The module includes advanced protections for the system's most sensitive data. Cryptographic secrets and master keys are managed using high-performance, cached methods that bypass standard database tables. This prevents attackers from using techniques like "SQL injection" or template manipulation to steal the keys that protect your data. These protections ensure that your most critical security information remains safe even if other parts of the system are under attack.</p>
+
     <h2>Operating the Module</h2>
 
     <h3>Managing Service Accounts</h3>
