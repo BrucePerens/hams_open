@@ -17,9 +17,10 @@ class TestBackupWorkerDaemon(unittest.TestCase):
         self.mock_method.delivery_tag = 1
         self.mock_properties = MagicMock()
 
-    @patch("backup_worker.subprocess.Popen")
-    @patch("backup_worker._json2_call")
-    def test_execute_job_kopia_success(self, mock_json2, mock_popen):
+    def test_execute_job_kopia_success(self):
+        mock_popen = patch("backup_worker.subprocess.Popen").start()
+        mock_json2 = patch("backup_worker._json2_call").start()
+        self.addCleanup(patch.stopall)
         # Mock the external shell process
         mock_process = MagicMock()
         mock_process.stdout.readline.side_effect = ["Snapshot successful\n", ""]
