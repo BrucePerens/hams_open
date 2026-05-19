@@ -12,6 +12,7 @@ pushes them to the central Redis pub/sub queue.
 import os
 import asyncio
 import logging
+import json
 import asyncpg
 import redis.asyncio as redis
 
@@ -60,8 +61,16 @@ async def broadcast_to_redis(payload):
     if not redis_client:
         return
     try:
+        # Security: Validate JSON payload before publishing to Redis bus
+        data = json.loads(payload)
+        if not data.get("model") or not data.get("dbname"):
+            logger.warning(f"Invalid payload received from Postgres: {payload}")
+            return
+
         await redis_client.publish(REDIS_CHANNEL, payload)
         logger.debug(f"Published invalidation to Redis: {payload}")
+    except json.JSONDecodeError:
+        logger.error(f"Malformed JSON payload from Postgres: {payload}")
     except Exception as e:
         logger.error(f"Redis publish failed: {e}")
 
@@ -116,7 +125,10 @@ async def main():
             logger.error(
                 f"PostgreSQL connection dropped: {e}. Reconnecting in 5s..."
             )
-            await asyncio.sleep(5)
+            try:
+                await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                break
 
     if redis_client:
         await redis_client.aclose()
