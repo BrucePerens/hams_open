@@ -93,6 +93,18 @@ class WebsitePage(models.Model):
 
             # Strip all QWeb execution, inline JS directives, and javascript URIs
             dangerous_prefixes = ("t-", "on")
+            # ADR-0102: Explicitly allow safe QWeb directives while blocking SSTI vectors
+            # Finite whitelist of allowed t-att-* attributes to minimize attack surface.
+            ALLOWED_T_DIRECTIVES = {
+                "t-name", "t-call", "t-set", "t-value", "t-out", "t-esc",
+                "t-if", "t-elif", "t-else", "t-foreach", "t-as",
+                "t-att-class", "t-att-style", "t-att-src", "t-att-href",
+                "t-att-alt", "t-att-title", "t-att-name", "t-att-value",
+                "t-att-data-target", "t-att-data-bs-target",
+                "t-att-data-bs-toggle", "t-att-role", "t-att-aria-label",
+                "t-att-placeholder", "t-att-id", "t-att-checked", "t-att-selected"
+            }
+
             for elem in root.xpath("//*"):
                 for attr in list(elem.attrib.keys()):
                     attr_lower = attr.lower()
@@ -115,17 +127,27 @@ class WebsitePage(models.Model):
                         del elem.attrib[attr]
                         elem.attrib[f"data-blocked-{attr}"] = val
                         was_modified = True
-                    elif attr_lower.startswith(
-                        dangerous_prefixes
-                    ) and attr_lower not in ("t-name", "t-call"):
-                        del elem.attrib[attr]
-                        elem.attrib[f"data-blocked-{attr}"] = val
-                        was_modified = True
+                    elif attr_lower.startswith(dangerous_prefixes):
+                        if attr_lower not in ALLOWED_T_DIRECTIVES:
+                            del elem.attrib[attr]
+                            elem.attrib[f"data-blocked-{attr}"] = val
+                            was_modified = True
+                        else:
+                            # Additional expression-level check for SSTI vectors
+                            # Blocks .sudo(), .with_user(), eval(), exec(), and dunder methods
+                            if re.search(r"\.(sudo|with_user|with_context|with_env|env)\s*\(|__|\b(eval|exec|getattr|setattr)\b", val):
+                                del elem.attrib[attr]
+                                elem.attrib[f"data-blocked-ssti-{attr}"] = val
+                                was_modified = True
 
             # Return inner HTML of root without the wrapper
-            sanitized_content = "".join(
-                [etree.tostring(child, encoding="unicode") for child in root]
-            )
+            # Correctly handle text nodes and tail text to prevent data loss (Bug Fix)
+            full_string = etree.tostring(root, encoding="unicode", method="xml")
+            # Remove the <root> and </root> tags added for parsing
+            start_tag_end = full_string.find(">") + 1
+            end_tag_start = full_string.rfind("</root>")
+            sanitized_content = full_string[start_tag_end:end_tag_start]
+
             return sanitized_content, was_modified
         except Exception: # audit-ignore-catch-all
             _logger.exception("Failed to sanitize user arch")
