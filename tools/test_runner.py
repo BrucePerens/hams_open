@@ -383,10 +383,14 @@ def get_addons_path(base_dir):
     paths = ["/usr/lib/python3/dist-packages/odoo/addons", base_dir]
 
     community_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_community"))
+    root_community_dir = "/hams_community"
     primary_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_private_primary"))
 
     if os.path.isdir(community_dir):
         paths.append(community_dir)
+    elif os.path.isdir(root_community_dir):
+        paths.append(root_community_dir)
+
     if os.path.isdir(primary_dir):
         paths.append(primary_dir)
 
@@ -495,8 +499,8 @@ def rebuild_db(db_name):
     print("[*] Dropping and Rebuilding Database Schema ({})...".format(db_name))
 
     env = dict(os.environ)
-    if "PGHOST" not in env and os.environ.get("HAMS_ISOLATED_NS") == "1":
-        pass  # disabled
+    if os.environ.get("HAMS_ISOLATED_NS") == "1":
+        env["PGHOST"] = "/opt/hams/pgsock"
 
     psql_cmd = shutil.which("psql") or "psql"
     dropdb_cmd = shutil.which("dropdb") or "dropdb"
@@ -535,10 +539,13 @@ def check_and_restore_cache(db_name, mod_string):
 
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     community_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_community"))
+    root_community_dir = "/hams_community"
 
     search_bases = [base_dir]
     if os.path.exists(community_dir):
         search_bases.append(community_dir)
+    elif os.path.exists(root_community_dir):
+        search_bases.append(root_community_dir)
 
     dirs_to_check = []
     for sb in search_bases:
@@ -800,7 +807,7 @@ export HOME=/var/lib/odoo
 mount --bind {base_dir} {base_dir}
 mount -o remount,bind,ro {base_dir}
 
-for dir in "{base_dir}/../hams_community"; do
+for dir in "{base_dir}/../hams_community" "/hams_community"; do
     if [ -d "$dir" ]; then
         REAL_DIR=$(realpath "$dir")
         mount --bind "$REAL_DIR" "$REAL_DIR"
@@ -1068,6 +1075,10 @@ def main():
                         subprocess.run(["sudo", "bash", "-c", cmd], check=True, env=env)
                     else:
                         subprocess.run(["sudo"] + cmd, check=True, env=env)
+
+                print("[*] Clearing any leaked port 8069 bindings...")
+                _run_sudo_cmd("kill $(lsof -t -i :8069) 2>/dev/null || true")
+
                 print("[*] Installing APT packages for early_prod...")
                 old_apt = copy.deepcopy(infrastructure.MANIFEST.get("apt_packages", []))
                 infrastructure.MANIFEST["apt_packages"] = [
@@ -1091,7 +1102,7 @@ def main():
                     print("⚠️ WARNING: requirements.txt not found, skipping Python dependency installation.")
 
                 # Failsafe for missing packages on Jules VM system Python
-                _run_sudo_cmd("pip3 install --break-system-packages pika asyncpg psutil requests passlib cryptography lxml pypdf2 || true")
+                _run_sudo_cmd("pip3 install --break-system-packages pika asyncpg psutil requests passlib cryptography lxml pypdf2 pymysql || true")
 
                 print("[*] Configuring local PostgreSQL for test paths...")
                 pg_data_dir = "/opt/hams/pgdata"
@@ -1113,6 +1124,7 @@ def main():
                     _run_sudo_cmd(f"su -s /bin/bash postgres -c '{pg_bin_dir}initdb -D {pg_data_dir}'")
 
                 _run_sudo_cmd(f"su -s /bin/bash postgres -c \"{pg_bin_dir}pg_ctl -D {pg_data_dir} -m fast stop\" || true")
+                _run_sudo_cmd(f"rm -f {pg_data_dir}/postmaster.pid || true")
                 _run_sudo_cmd(f"su -s /bin/bash postgres -c \"{pg_bin_dir}pg_ctl -D {pg_data_dir} -o '-c listen_addresses= -c unix_socket_directories={pg_socket_dir} -c fsync=off -c synchronous_commit=off -c full_page_writes=off' -w start\"")
                 _run_sudo_cmd(f"echo \"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;\" | su -s /bin/bash postgres -c 'PGUSER=postgres {pg_bin_dir}psql -h {pg_socket_dir} -d postgres' || true")
 
@@ -1125,6 +1137,7 @@ def main():
                     subprocess.run(["sudo", "su", "-s", "/bin/bash", "postgres", "-c", f"{pg_bin_dir}pg_ctl -D {pg_data_dir} -m fast stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 atexit.register(teardown_jules)
             elif args.already_provisioned:
+                subprocess.run(["sudo", "bash", "-c", "kill $(lsof -t -i :8069) 2>/dev/null || true"])
                 pg_data_dir = "/opt/hams/pgdata"
                 pg_bins = glob.glob("/usr/lib/postgresql/*/bin/initdb")
                 if pg_bins:
@@ -1135,6 +1148,7 @@ def main():
                     subprocess.run(["sudo", "chmod", "2775", pg_socket_dir])
                     subprocess.run(["sudo", "chmod", "700", pg_data_dir])
                     subprocess.run(["sudo", "su", "-s", "/bin/bash", "postgres", "-c", f"{pg_bin_dir}pg_ctl -D {pg_data_dir} -m fast stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(["sudo", "rm", "-f", f"{pg_data_dir}/postmaster.pid"])
                     subprocess.run(["sudo", "su", "-s", "/bin/bash", "postgres", "-c", f"{pg_bin_dir}pg_ctl -D {pg_data_dir} -o '-c listen_addresses= -c unix_socket_directories={pg_socket_dir} -c fsync=off -c synchronous_commit=off -c full_page_writes=off' -w start"])
                     subprocess.run(["sudo", "systemctl", "start", "redis-server"])
                     subprocess.run(["sudo", "systemctl", "start", "rabbitmq-server"])
