@@ -921,6 +921,12 @@ exit $RET
 
 def main():
     try:
+        # Cache sudo credentials once at the very start on the host machine
+        if os.environ.get("HAMS_ISOLATED_NS") != "1":
+            subprocess.run(["sudo", "-v"], check=False)
+            print("[*] Reverting kernel memory overcommit to default (0) to allow Headless Chrome VSIZE allocation...")
+            subprocess.run(["sudo", "sysctl", "-w", "vm.overcommit_memory=1"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
         # Silence Odoo's core framework noise (Cybercrud Policy)
         os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
 
@@ -1085,9 +1091,6 @@ def main():
             print("[*] Routing test execution to isolated namespace to protect environment...")
             run_in_isolated_environment(real_error_log)
             return
-
-        print("[*] Enforcing strict memory overcommit globally to prevent OOM kills...")
-        subprocess.run(["sudo", "sysctl", "-w", "vm.overcommit_memory=2"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         if is_jules_vm:
             print("[*] Detected Jules VM environment. Bypassing isolated namespace...")

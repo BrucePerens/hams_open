@@ -10,6 +10,9 @@ class BackupSnapshot(models.Model):
     config_id = fields.Many2one(
         "backup.config", string="Configuration", required=True, ondelete="cascade"
     )
+    website_id = fields.Many2one(
+        "website", string="Website", related="config_id.website_id", store=True
+    )
     snapshot_id = fields.Char(string="Snapshot ID / Label", required=True)
     start_time = fields.Datetime(string="Start Time")
     size_bytes = fields.Float(string="Size (Bytes)")

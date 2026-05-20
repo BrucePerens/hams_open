@@ -109,6 +109,7 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": "/some/test/url",
+                "reason": "Harassment or bullying",
                 "description": "Testing stripped referrer",
                 "email": "ghost@example.com",
             },

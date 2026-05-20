@@ -240,7 +240,7 @@ class TestBackupManagement(RealTransactionCase):
             self.assertTrue(
                 article.exists(), "Backup documentation should be installed"
             )
-            self.assertIn("Unified Backup Management Manual", article.body)
+            self.assertIn("Backup Management User Guide", article.body)
 
     def test_13_restore_action(self):
         # Tests [@ANCHOR: test_restore_action]

@@ -38,4 +38,4 @@ class TestSEOUI(HamsHttpCase):
             self.env["user.websites.group"].get_view(view_type="form")
 
         # Start cleanly from the root to bypass fragile WebClient deep-linking redirects
-        self.start_tour("/odoo", "user_websites_seo_tour", login="admin")
+        self.start_tour("/odoo", "user_websites_seo_tour", login="admin", step_delay=100)

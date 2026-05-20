@@ -47,7 +47,8 @@ class TestUserWebsitesUITours(odoo.tests.HttpCase):
 
     def test_03_gdpr_privacy_tour(self):
         # Tests [@ANCHOR: test_tour_gdpr_privacy]
-        self.start_tour("/my/privacy", "gdpr_privacy_tour", login=self.user_test.login)
+        # Adding a minor delay allows Owl components to hydrate in constrained VM environments
+        self.start_tour("/my/privacy", "gdpr_privacy_tour", login=self.user_test.login, step_delay=100)
 
     def test_04_moderation_appeal_tour(self):
         # Tests [@ANCHOR: test_tour_moderation_appeal]
@@ -76,7 +77,7 @@ class TestUserWebsitesUITours(odoo.tests.HttpCase):
                 ],
             }
         )
-        self.start_tour("/sitetour/home", "create_site_tour", login=user_no_site.login)
+        self.start_tour("/sitetour/home", "create_site_tour", login=user_no_site.login, step_delay=100)
 
     def test_06_create_blog_tour(self):
         # Tests [@ANCHOR: test_tour_create_blog]

@@ -47,7 +47,7 @@ class TestDocumentation(odoo.tests.common.HttpCase):
         )
 
         self.assertIn(
-            "Zero-Sudo Design",
+            "Site Provisioning Wizard",
             article.body,
             "The hook must successfully read the actual HTML file content.",
         )

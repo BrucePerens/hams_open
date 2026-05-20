@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.common import HamsHttpCase
 from lxml import etree
 from odoo.addons.caching.controllers.main import ServiceWorkerController
+from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestSettingsAndCache(HamsHttpCase):
+class TestSettingsAndCache(RealTransactionCase):
 
     def test_01_quota_config_updates_sw(self):
         # [@ANCHOR: test_settings_and_cache_01]
@@ -94,6 +94,9 @@ class TestSettingsAndCache(HamsHttpCase):
             {"website_id": website.id}
         )
         settings.action_force_cache_invalidation()
+
+        # Commit the transaction so the Werkzeug HTTP server cursor can see the updated version
+        self.env.cr.commit()
 
         response_2 = self.url_open("/sw.js")
         content_2 = response_2.text

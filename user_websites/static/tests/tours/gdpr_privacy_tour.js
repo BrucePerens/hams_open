@@ -1,5 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@hams_test/js/tour_utils";
 
 // [@ANCHOR: test_tour_gdpr_privacy]
 // Tests [@ANCHOR: controller_my_privacy_dashboard]
@@ -7,11 +8,13 @@ import { registry } from "@web/core/registry";
 // Tests [@ANCHOR: UX_GDPR_ERASURE]
 registry.category("web_tour.tours").add("gdpr_privacy_tour", {
     steps: () => [
+        TourUtils.waitForElement('h2', 'Wait for Privacy Header'),
         {
             content: "Verify Privacy Dashboard Header",
             trigger: 'body',
             run: () => {},
         },
+        TourUtils.waitForElement('form[action="/my/privacy/export"] button[type="submit"]', 'Wait for Export Button'),
         {
             content: "Verify Export Data Button is properly wired",
             trigger: 'form[action="/my/privacy/export"] button[type="submit"]',

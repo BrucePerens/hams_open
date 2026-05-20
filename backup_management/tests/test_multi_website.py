@@ -61,11 +61,12 @@ class TestBackupMultiWebsite(HamsTransactionCase):
     def test_02_isolated_config_visibility(self):
         """Verify that a backup config linked to Website A is invisible to Website B."""
         self.env.user.write(
-            {"group_ids": [(4, self.env.ref("backup_management.group_backup_admin").id)]}
+            {
+                "group_ids": [(4, self.env.ref("backup_management.group_backup_admin").id)],
+                "website_id": self.website_b.id,
+            }
         )
-        configs_b = self.env["backup.config"].with_context(
-            website_id=self.website_b.id
-        ).search([])
+        configs_b = self.env["backup.config"].search([])
 
         self.assertIn(
             self.config_all,
@@ -84,6 +85,7 @@ class TestBackupMultiWebsite(HamsTransactionCase):
             {
                 "config_id": self.config_a.id,
                 "state": "pending",
+                "job_type": "kopia",
             }
         )
         self.assertEqual(
@@ -96,6 +98,7 @@ class TestBackupMultiWebsite(HamsTransactionCase):
             {
                 "config_id": self.config_all.id,
                 "state": "pending",
+                "job_type": "kopia",
             }
         )
         self.assertFalse(job_global.website_id, "Global job MUST NOT have a website_id.")
@@ -118,14 +121,14 @@ class TestBackupMultiWebsite(HamsTransactionCase):
         """Verify the RPC board fetches correct counts based on website context."""
         # Create jobs and snaps
         self.env["backup.job"].create(
-            {"config_id": self.config_a.id, "state": "pending"}
+            {"config_id": self.config_a.id, "state": "pending", "job_type": "kopia"}
         )
         self.env["backup.snapshot"].create(
             {"config_id": self.config_a.id, "snapshot_id": "snap_123"}
         )
 
         self.env["backup.job"].create(
-            {"config_id": self.config_all.id, "state": "pending"}
+            {"config_id": self.config_all.id, "state": "pending", "job_type": "kopia"}
         )
 
         data_a = self.env["backup.config"].with_context(

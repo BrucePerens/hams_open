@@ -124,8 +124,27 @@ export const TourUtils = {
     waitForElement(trigger, description = "") {
         return {
             content: `[MACRO] Wait for DOM element: ${description || trigger}`,
-            trigger: trigger,
-            run: () => {},
+            trigger: 'body',
+            run: async () => {
+                return new Promise((resolve) => {
+                    let elapsed = 0;
+                    const isFound = () => !!document.querySelector(trigger);
+
+                    if (isFound()) {
+                        return resolve();
+                    }
+
+                    const interval = setInterval(() => {
+                        elapsed++;
+                        if (isFound()) {
+                            clearInterval(interval);
+                            resolve();
+                        } else {
+                            console.log(`[TourUtils] Waiting... Script: Active UI Tour | Elapsed: ${elapsed}s | Waiting for element: ${description || trigger}`);
+                        }
+                    }, 1000);
+                });
+            },
         };
     },
 
@@ -136,8 +155,27 @@ export const TourUtils = {
     waitForAbsence(selector, description = "") {
         return {
             content: `[MACRO] Wait for DOM absence: ${description || selector}`,
-            trigger: `body:not(:has(${selector}))`,
-            run: () => {},
+            trigger: 'body',
+            run: async () => {
+                return new Promise((resolve) => {
+                    let elapsed = 0;
+                    const isAbsent = () => !document.querySelector(selector);
+
+                    if (isAbsent()) {
+                        return resolve();
+                    }
+
+                    const interval = setInterval(() => {
+                        elapsed++;
+                        if (isAbsent()) {
+                            clearInterval(interval);
+                            resolve();
+                        } else {
+                            console.log(`[TourUtils] Waiting... Script: Active UI Tour | Elapsed: ${elapsed}s | Waiting for absence of: ${description || selector}`);
+                        }
+                    }, 1000);
+                });
+            },
         };
     }
 };
