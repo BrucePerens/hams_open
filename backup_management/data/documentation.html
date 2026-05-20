@@ -28,7 +28,10 @@
     <p>This module features native synergy with the <strong>Pager Duty</strong> SRE suite. If an underlying backup engine fails to execute, or if the system detects that a configuration hasn't produced a new successful snapshot in over 26 hours, a <strong>Critical Incident</strong> will be automatically reported to your on-call team. This prevents "silent failures" where backups stop running but no one notices until a disaster occurs. [@ANCHOR: backup_pager_synergy]</p>
 
     <h2>6. Multi-Website Awareness</h2>
-    <p>In a multi-tenant or multi-website environment, each backup configuration can be assigned to a specific website. This ensures that administrators of one site only see and manage backups relevant to their own domain. Dashboard statistics are automatically filtered based on the active website context. [@ANCHOR: backup_multi_website]</p>
+    <p>In a multi-tenant or multi-website environment, each backup configuration can be assigned to a specific website. This ensures that administrators of one site only see and manage backups relevant to their own domain. Dashboard statistics, snapshot records, and asynchronous job logs are all automatically filtered based on your active website context. [@ANCHOR: backup_multi_website]</p>
+
+    <h2>7. Security Best Practices</h2>
+    <p>The module is designed with a <strong>Zero-Sudo</strong> architecture. All interactions with the underlying operating system are performed through dedicated service accounts with minimal necessary privileges. Additionally, all repository paths and restoration targets are strictly validated to prevent unauthorized access to sensitive system directories. Restorations are performed into isolated directories to prevent accidental data overwrites.</p>
 
 </body>
 </html>

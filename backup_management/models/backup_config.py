@@ -225,6 +225,7 @@ class BackupConfig(models.Model):
             job = jobs.create(
                 {
                     "config_id": rec.id,
+                    "website_id": rec.website_id.id,
                     "job_type": (
                         rec.engine if engine != "restore_cmd" else "kopia"
                     ),  # map restore_cmd to engine for UI
@@ -240,6 +241,7 @@ class BackupConfig(models.Model):
                 "engine": engine,
                 "target_path": rec.target_path,
                 "svc_uid": self.env.uid,
+                "website_id": rec.website_id.id,
             }
             if payload_extra:
                 payload_dict.update(payload_extra)
@@ -372,7 +374,14 @@ class BackupConfig(models.Model):
     def get_board_data(self):
         # [@ANCHOR: backup_board_data]
         # Verified by [@ANCHOR: test_backup_view]
-        configs = self.search_read([], ["name", "engine", "target_path"])
+        domain = []
+        if self.env.context.get("website_id"):
+            domain = [
+                "|",
+                ("website_id", "=", False),
+                ("website_id", "=", self.env.context.get("website_id")),
+            ]
+        configs = self.search_read(domain, ["name", "engine", "target_path"])
         now = fields.Datetime.now()
 
         latest_snaps = self.env["backup.latest.snapshot.view"].search_read(

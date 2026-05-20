@@ -15,5 +15,28 @@
             <field name="is_service_account" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('backup_management.group_backup_admin')])]"/>
         </record>
+
+    </data>
+    <data noupdate="1">
+        <record id="rule_backup_config_multi_website" model="ir.rule">
+            <field name="name">Backup Config Multi-Website</field>
+            <field name="model_id" ref="model_backup_config"/>
+            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
+        </record>
+
+        <record id="rule_backup_snapshot_multi_website" model="ir.rule">
+            <field name="name">Backup Snapshot Multi-Website</field>
+            <field name="model_id" ref="model_backup_snapshot"/>
+            <field name="domain_force">['|', ('config_id.website_id', '=', False), ('config_id.website_id', '=', user.website_id.id)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
+        </record>
+
+        <record id="rule_backup_job_multi_website" model="ir.rule">
+            <field name="name">Backup Job Multi-Website</field>
+            <field name="model_id" ref="model_backup_job"/>
+            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
+        </record>
     </data>
 </odoo>
