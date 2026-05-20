@@ -1293,7 +1293,7 @@ def scan_file(filepath, is_odoo_module=False):
                             has_tour = True
                     if not has_tour:
                         errors_found.append(
-                            f"Line {node.lineno}: UI TOUR MANDATE VIOLATION."
+                            f"Line {node.lineno}: UI TOUR MANDATE VIOLATION: All XML views (<record model='ir.ui.view'>) and templates must be tested by a UI tour (include an '[@ANCHOR: ...]' comment linking to the tour) or explicitly bypassed using '' if a tour is unjustified."
                         )
                     if node.attrs.get("inherit_id") in (
                         "website.snippet_options",
