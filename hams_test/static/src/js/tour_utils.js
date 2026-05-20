@@ -115,5 +115,29 @@ export const TourUtils = {
                 run: 'click',
             }
         ];
+    },
+
+    /**
+     * Pauses the tour until a specific DOM element appears and is visible.
+     * Useful for bridging Owl asynchronous rendering gaps and intermittent timing failures.
+     */
+    waitForElement(trigger, description = "") {
+        return {
+            content: `[MACRO] Wait for DOM element: ${description || trigger}`,
+            trigger: trigger,
+            run: () => {},
+        };
+    },
+
+    /**
+     * Pauses the tour until a specific DOM element is completely removed from the document.
+     * Useful for waiting for asynchronous modal closures, RPC blockers, or loading overlay removals.
+     */
+    waitForAbsence(selector, description = "") {
+        return {
+            content: `[MACRO] Wait for DOM absence: ${description || selector}`,
+            trigger: `body:not(:has(${selector}))`,
+            run: () => {},
+        };
     }
 };
