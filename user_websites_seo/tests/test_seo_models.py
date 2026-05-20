@@ -113,6 +113,11 @@ class TestSEOModels(HamsTransactionCase):
             res["arch"],
             "The SEO notebook page must exist in the compiled res.users arch.",
         )
+        self.assertIn(
+            'name="website_meta_og_img"',
+            res["arch"],
+            "The Social Media (Open Graph Image) field must exist in the compiled res.users arch.",
+        )
 
     def test_xpath_rendering_user_websites_group(self):
         # [@ANCHOR: test_xpath_rendering_user_websites_group]
@@ -126,4 +131,9 @@ class TestSEOModels(HamsTransactionCase):
             'name="group_seo_settings"',
             res["arch"],
             "The SEO notebook page must exist in the compiled user.websites.group arch.",
+        )
+        self.assertIn(
+            'name="website_meta_og_img"',
+            res["arch"],
+            "The Social Media (Open Graph Image) field must exist in the compiled user.websites.group arch.",
         )
