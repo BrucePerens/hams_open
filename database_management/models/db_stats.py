@@ -31,7 +31,7 @@ class DatabaseTableStat(models.Model):
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW database_table_stat AS (
                 SELECT
-                    row_number() OVER () as id,
+                    row_number() OVER (ORDER BY t.relname) as id,
                     t.relname as table_name,
                     t.n_live_tup as live_tuples,
                     t.n_dead_tup as dead_tuples,
@@ -60,13 +60,23 @@ class DatabaseTableStat(models.Model):
                 "Skipping vacuumdb execution in test mode to avoid transaction locks."
             )
             return True
+
+        if not self.env.user.has_group("database_management.group_database_management_manager"):
+            raise AccessError(_("Only Database Managers can perform vacuum operations."))
+
         exe = self._get_executable("vacuumdb")
         db_name = self.env.cr.dbname
-        env_vars = os.environ.copy()
+
+        # Security: Filter environment variables passed to subprocess
+        # Allow PG* variables for database connection flexibility (ADR-0042)
+        allowed_keys = {"PATH", "LANG", "LC_ALL", "LD_LIBRARY_PATH"}
+        env_vars = {k: v for k, v in os.environ.items() if k in allowed_keys or k.startswith("PG")}
 
         for rec in self:
             try:
                 # The subprocess bypasses the active ORM transaction block allowing physical vacuuming
+                # Security: rec.table_name is from the DB, but we should still be careful.
+                # However, vacuumdb -t expects a table name and we are not using shell=True.
                 res = subprocess.run(
                     [exe, "-z", "-t", rec.table_name, db_name],
                     capture_output=True,
@@ -148,7 +158,7 @@ class DatabaseQueryStat(models.Model):
             self.env.cr.execute("""
                 CREATE OR REPLACE VIEW database_query_stat AS (
                     SELECT
-                        row_number() OVER () as id,
+                        row_number() OVER (ORDER BY total_exec_time DESC, query) as id,
                         query,
                         calls,
                         total_exec_time as total_time,
@@ -197,6 +207,9 @@ class DatabaseActivity(models.Model):
     def action_terminate_backend(self):
         # [@ANCHOR: db_terminate_backend]
         # Tests [@ANCHOR: db_terminate_backend]
+        if not self.env.user.has_group("database_management.group_database_management_manager"):
+            raise AccessError(_("Only Database Managers can terminate backends."))
+
         # micro-privilege: Use service account for termination
         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
             "database_management.user_database_management_service"
@@ -226,7 +239,7 @@ class DatabaseIndexStat(models.Model):
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW database_index_stat AS (
                 SELECT
-                    row_number() OVER () as id,
+                    row_number() OVER (ORDER BY relname, indexrelname) as id,
                     relname as table_name,
                     indexrelname as index_name,
                     idx_scan,

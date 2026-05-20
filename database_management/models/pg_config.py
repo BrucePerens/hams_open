@@ -57,6 +57,9 @@ class PgOptimizeWizard(models.TransientModel):
     def action_apply_optimizations(self):
         # [@ANCHOR: pg_optimize_wizard]
         # Tests [@ANCHOR: pg_optimize_wizard]
+        if not self.env.user.has_group("database_management.group_database_management_manager"):
+            raise AccessError(_("Only Database Managers can apply optimizations."))
+
         if self.ram_gb <= 0 or self.cpu_cores <= 0:
             raise UserError(_("RAM and CPU must be greater than zero."))
 
@@ -88,14 +91,18 @@ class PgOptimizeWizard(models.TransientModel):
             "max_connections": str(self.max_connections),
         }
 
-        for param, val in settings.items():
-            # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
-            query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
-                sql.Identifier(param), sql.Literal(val)
-            )
-            cr_svc.execute(query)
+        try:
+            for param, val in settings.items():
+                # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
+                query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
+                    sql.Identifier(param), sql.Literal(val)
+                )
+                cr_svc.execute(query)
 
-        cr_svc.execute("SELECT pg_reload_conf()")
+            cr_svc.execute("SELECT pg_reload_conf()")
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.exception("Failed to apply PostgreSQL optimizations")
+            raise UserError(_("Failed to apply optimizations: %s") % str(e))
 
         return {
             "type": "ir.actions.client",
@@ -169,6 +176,9 @@ class PgHaWizard(models.TransientModel):
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
         # Tests [@ANCHOR: pg_ha_wizard]
+        if not self.env.user.has_group("database_management.group_database_management_manager"):
+            raise AccessError(_("Only Database Managers can generate HA configurations."))
+
         self._validate_inputs()
         if not getattr(
             self.env.registry, "in_test", False

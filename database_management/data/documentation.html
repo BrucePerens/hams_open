@@ -22,6 +22,7 @@
         <li>Select the tables you wish to clean in the list view.</li>
         <li>Click <strong>Vacuum Analyze Selected</strong>. This triggers the PostgreSQL <code>VACUUM ANALYZE</code> command, which removes dead tuples and updates optimizer statistics.</li>
     </ol>
+    <p><em>Security Note:</em> Vacuuming is an intensive operation. Only users with <strong>Database Manager</strong> privileges can trigger it.</p>
     <p><em>Proactive Alerting:</em> The system automatically monitors these levels and will trigger a <strong>PagerDuty</strong> incident if critical tables exceed safe bloat thresholds.</p>
 </section>
 
@@ -52,6 +53,7 @@
         <li>Review the <strong>Duration</strong> and the <strong>Active Query</strong> text.</li>
         <li>If you identify a process that is causing issues, select it and click <strong>Kill Selected Queries</strong>. This safely terminates the database backend for that specific session.</li>
     </ul>
+    <p><em>Security Note:</em> Terminating sessions can interrupt user operations. Only <strong>Database Managers</strong> are authorized to use this feature.</p>
 </section>
 
 <section>
