@@ -57,7 +57,7 @@ class HelpdeskTicket(models.Model):
         string="Website",
         ondelete="restrict",
         help="The website this ticket was created on.",
-    )
+    )  # [@ANCHOR: helpdesk_multi_website]
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -160,6 +160,13 @@ class HelpdeskTicket(models.Model):
                 ticket.message_subscribe(partner_ids=[ticket.partner_id.id])
 
     def write(self, vals):
+        # [@ANCHOR: helpdesk_micro_privilege]
+        # Micro-Privilege Security Audit: Prevent portal users from modifying restricted fields.
+        if self.env.user.has_group("base.group_portal"):
+            restricted_fields = {"stage", "user_id", "priority", "calendar_event_id", "website_id"}
+            if any(f in vals for f in restricted_fields):
+                raise AccessError(_("Portal users are not authorized to modify administrative fields."))
+
         res = super().write(vals)
         # Mail-back facility on state change
         if "stage" in vals:

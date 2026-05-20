@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.hams_test.common import HamsTransactionCase
 
@@ -137,3 +138,28 @@ class TestHelpdeskCore(HamsTransactionCase):
         mailback_found = any('Your issue has been updated' in (m.body or '') for m in messages)
 
         self.assertTrue(mailback_found, "A stage transition MUST trigger a mail-back notification to the customer.")
+
+    def test_05_portal_write_restrictions(self):
+        """Verify portal users cannot modify administrative fields."""
+        # [@ANCHOR: test_05_portal_write_restrictions]
+        # Tests [@ANCHOR: helpdesk_micro_privilege]
+        ticket = self.env['hams_helpdesk.ticket'].create({
+            'name': 'Portal Security Test',
+            'partner_id': self.portal_user.partner_id.id,
+            'stage': 'new'
+        })
+
+        ticket_as_portal = ticket.with_user(self.portal_user)
+
+        with self.assertRaises(AccessError, msg="Portal user MUST NOT be able to change ticket stage."):
+            ticket_as_portal.write({'stage': 'resolved'})
+            self.env.flush_all()
+
+        with self.assertRaises(AccessError, msg="Portal user MUST NOT be able to change ticket assignee."):
+            ticket_as_portal.write({'user_id': self.manager_user.id})
+            self.env.flush_all()
+
+        # Verify they CAN still update description or name if allowed (though usually they shouldn't if it's already created,
+        # but let's see current ACLs. CSV says they have write access.)
+        ticket_as_portal.write({'description': 'Updated description by portal user'})
+        self.assertIn('Updated description by portal user', ticket.description)

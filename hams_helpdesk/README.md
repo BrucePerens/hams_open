@@ -41,6 +41,8 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
     - Verified by [@ANCHOR: test_05_doc_injection]
 * **Multi-Website Awareness (`[@ANCHOR: helpdesk_multi_website]`)**: Tickets are associated with specific websites to ensure proper data isolation in multi-tenant environments.
     - Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
+* **Micro-Privilege Security (`[@ANCHOR: helpdesk_micro_privilege]`)**: Access is strictly controlled via record rules and explicit field-level security in the ORM.
+    - Verified by [@ANCHOR: test_05_portal_write_restrictions]
 
 ## Stories and Journeys
 

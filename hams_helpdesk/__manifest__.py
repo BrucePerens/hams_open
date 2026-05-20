@@ -48,6 +48,12 @@
             "path": "docs/journeys/shift_handoff_protocol.md",
             "icon": "🤝",
             "category": "technical",
+        },
+        {
+            "name": "Story: Multi-Website Segregation",
+            "path": "docs/stories/multi_website_segregation.md",
+            "icon": "🌐",
+            "category": "technical",
         }
     ],
     "installable": True,

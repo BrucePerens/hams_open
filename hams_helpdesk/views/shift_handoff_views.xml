@@ -13,7 +13,7 @@
                         <field name="new_user_id" options="{'no_create': True}"/>
                     </group>
                     <group>
-                        <field name="handoff_notes" placeholder="Detail the current status, pending actions, and any relevant context for the next operator..."/>
+                        <field name="handoff_notes" placeholder="Detail the current status, pending actions, and any relevant context for the next operator."/>
                     </group>
                 </sheet>
                 <footer>

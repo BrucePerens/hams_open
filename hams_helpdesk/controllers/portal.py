@@ -15,6 +15,7 @@ class HelpdeskPortal(CustomerPortal):
 
     @http.route(["/my/tickets", "/my/tickets/page/<int:page>"], type="http", auth="user", website=True)
     def portal_my_tickets(self, page=1, **kw):
+        # [@ANCHOR: multi_website_segregation]
         values = self._prepare_portal_layout_values()
         Ticket = request.env["hams_helpdesk.ticket"]
         domain = [("partner_id", "=", request.env.user.partner_id.id)]
