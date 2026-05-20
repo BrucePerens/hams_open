@@ -15,6 +15,10 @@
                             <field name="website_meta_description"/>
                             <field name="website_meta_keywords"/>
                         </group>
+                        <group>
+                            <separator string="Social Media"/>
+                            <field name="website_meta_og_img"/>
+                        </group>
                     </group>
                 </page>
             </xpath>
