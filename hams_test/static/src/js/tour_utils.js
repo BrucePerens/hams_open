@@ -29,15 +29,20 @@ export const TourUtils = {
 
     /**
      * Silently intercepts and bypasses native blocking dialogs which would otherwise
-     * permanently halt the headless browser thread.
+     * permanently halt the headless browser thread. Alarms are raised upon interception.
      */
     bypassDialogs: function () {
         return {
             content: "[MACRO] Bypass native blocking dialogs",
             trigger: 'body',
             run: function () {
-                window.alert = function () {};
-                window.confirm = function () { return true; };
+                window.alert = function (msg) {
+                    console.error("[ALARM] Native window.alert intercepted and bypassed! Message: " + msg);
+                };
+                window.confirm = function (msg) {
+                    console.error("[ALARM] Native window.confirm intercepted and bypassed! Message: " + msg);
+                    return true;
+                };
             }
         };
     },
@@ -141,6 +146,11 @@ export const TourUtils = {
                             resolve();
                         } else {
                             console.error("[TourUtils] Waiting... Script: Active UI Tour | Elapsed: " + elapsed + "s | Waiting for element: " + (description || trigger));
+                            if (elapsed >= 60) {
+                                clearInterval(interval);
+                                console.error("TIMEOUT: Element not found after 60s: " + (description || trigger));
+                                resolve();
+                            }
                         }
                     }, 1000);
                 });
@@ -173,6 +183,11 @@ export const TourUtils = {
                             resolve();
                         } else {
                             console.error("[TourUtils] Waiting... Script: Active UI Tour | Elapsed: " + elapsed + "s | Waiting for absence of: " + (description || selector));
+                            if (elapsed >= 60) {
+                                clearInterval(interval);
+                                console.error("TIMEOUT: Element not removed after 60s: " + (description || selector));
+                                resolve();
+                            }
                         }
                     }, 1000);
                 });
