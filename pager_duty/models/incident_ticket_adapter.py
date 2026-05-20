@@ -7,17 +7,6 @@ _logger = logging.getLogger(__name__)
 class PagerDutyIncidentTicketAdapter(models.Model):
     _inherit = "pager.incident"
 
-    helpdesk_ticket_id = fields.Integer(
-        string="Helpdesk Ticket ID",
-        help="Stores the integer ID of the generated helpdesk ticket to remain schema-agnostic.",
-        tracking=True
-    )
-
-    helpdesk_ticket_model = fields.Char(
-        string="Ticket Model",
-        help="The Odoo model used for the ticket (e.g. hams_helpdesk.ticket or helpdesk.ticket)."
-    )
-
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)

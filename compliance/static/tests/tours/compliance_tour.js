@@ -7,22 +7,32 @@ registry.category("web_tour.tours").add("compliance_tour", {
     steps: () => [
         {
             content: "Verify Privacy Policy content",
-            trigger: "main *:contains('Privacy Policy')",
+            trigger: "#wrap:contains('Privacy Policy')",
+            run: () => {},
+        },
+        {
+            content: "Verify Warning message presence",
+            trigger: "#wrap:contains('Warning: This is the default version')",
+            run: () => {},
+        },
+        {
+            content: "Verify Data Minimization section",
+            trigger: "#wrap:contains('Data Minimization')",
             run: () => {},
         },
         {
             content: "Verify related links are present",
-            trigger: "main *:contains('Related')",
+            trigger: "#wrap:contains('Related')",
             run: () => {},
         },
         {
             content: "Verify Cookie Policy link in related section",
-            trigger: "main a[href='/cookie-policy']",
+            trigger: "a[href='/cookie-policy']",
             run: () => {},
         },
         {
             content: "Verify Terms of Service link in related section",
-            trigger: "main a[href='/terms']",
+            trigger: "a[href='/terms']",
             run: () => {},
         }
     ],

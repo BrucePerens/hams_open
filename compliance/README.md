@@ -83,4 +83,11 @@ This module implements a **soft dependency** on documentation providers (`manual
 
 * **Mechanism:** Documentation is automatically provisioned during the final registry reload by the central engine (`_bootstrap_knowledge_docs` in `zero_sudo`). `[@ANCHOR: zero_sudo_doc_installer]`
 * **Article Title:** "Site Owner's Guide to Regulatory Compliance"
+
+## 7. Verification and Testing
+Comprehensive test coverage ensures ongoing compliance:
+* **Hook Testing:** `test_hooks.py` verifies `cookies_bar` enforcement and non-destructive page provisioning.
+* **Page Integrity:** `test_pages.py` ensures all legal routes are active and contain valid boilerplate content.
+* **Security Audit:** `test_security.py` confirms service account configuration and hook idempotency.
+* **UI Tours:** `compliance_tour.js` simulates end-to-end user navigation across all legal pages. `[@ANCHOR: test_compliance_ui_tour]`
 </security_architecture>

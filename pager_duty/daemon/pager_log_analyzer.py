@@ -160,6 +160,7 @@ def tail_file(fp, compiled_patterns):
                             "source": f"Log Analyzer: {pat['name']}",
                             "severity": pat["severity"],
                             "description": line.strip(),
+                            "website_id": pat.get("website_id"),
                         }
                         # Send to generalized monitor via Redis queue to proxy RPC safely
                         r_client.lpush("pager_log_anomalies", json.dumps(payload))
@@ -221,6 +222,7 @@ if __name__ == "__main__":
                 {
                     "name": p.get("name"),
                     "severity": p.get("severity"),
+                    "website_id": p.get("website_id"),
                     "c_reg": re.compile(p.get("regex"), re.IGNORECASE),
                 }
             )

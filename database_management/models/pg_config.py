@@ -151,10 +151,6 @@ class PgHaWizard(models.TransientModel):
 
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
-        self._get_executable("etcd")
-        self._get_executable("patroni")
-        self._get_executable("pgbouncer")
-
         self.patroni_primary = f"""scope: hams_cluster
 namespace: /db/
 name: node1

@@ -14,7 +14,7 @@ class ManualLibraryController(http.Controller):
     def _get_sidebar_articles(self):
         """Helper to fetch and group root articles for the sidebar."""
         # Domain-based search is more efficient than .filtered() for large datasets
-        base_domain = [("parent_id", "=", False)]
+        base_domain = [("parent_id", "=", False), ("website_id", "in", (False, request.website.id))]
 
         workspace_articles = request.env["knowledge.article"].search(
             base_domain + [("internal_permission", "in", ("read", "write"))], limit=5000
@@ -125,6 +125,9 @@ class ManualLibraryController(http.Controller):
         domain = []
         if search:
             domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
+
+        # Explicitly filter by website_id in case record rules are not enough for frontend context
+        domain += [("website_id", "in", (False, request.website.id))]
 
         # Removed .sudo() to allow native Record Rules to filter visibility by user persona
         articles = request.env["knowledge.article"].search(domain, limit=1000)

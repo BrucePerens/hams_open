@@ -1,62 +1,77 @@
 <div class="ham-manual-container">
-    <h1>Pager Duty &amp; Generalized Monitoring</h1>
+    <h1>📟 Pager Duty &amp; Generalized Monitoring</h1>
     <hr/>
     <p class="text-muted small"><em>Copyright &copy; Bruce Perens K6BP. All Rights Reserved.</em></p>
 
     <h2>Overview</h2>
-    <p>The Pager Duty module is your central hub for infrastructure health. It monitors your servers, services, and hardware, alerting the right people when something goes wrong. It works by combining easy-to-use configuration in Odoo with powerful background programs (daemons) that do the heavy lifting.</p>
+    <p>The Pager Duty module is your central hub for infrastructure health and Site Reliability Engineering (SRE). It provides proactive monitoring, intelligent alerting, and automated incident management to keep your Odoo instance and surrounding infrastructure running at peak performance. By combining intuitive configuration within Odoo with high-frequency background daemons, it ensures that critical issues are detected and routed to the right person instantly.</p>
 
-    <h2>How to Use This Module</h2>
+    <h2>Getting Started</h2>
 
-    <h3>1. Setting Up Your Checks</h3>
-    <p>To start monitoring, go to <strong>Pager Duty &gt; Monitoring Checks</strong>. Here, you can create "Checks" for various parts of your system:</p>
+    <h3>1. Configuring Monitoring Checks</h3>
+    <p>To begin monitoring your infrastructure, navigate to <strong>Pager Duty &gt; Monitoring Checks</strong>. Here, you can define various types of health checks:</p>
     <ul>
-        <li><strong>Websites (HTTP):</strong> Checks if your website is up and showing the expected content.</li>
-        <li><strong>Databases (PostgreSQL/MySQL):</strong> Ensures your databases are reachable and responsive.</li>
-        <li><strong>Server Resources:</strong> Monitors CPU usage, Memory, and Disk space.</li>
-        <li><strong>Services (Systemd/Docker):</strong> Confirms that critical background services and containers are running.</li>
-        <li><strong>Hardware (SMART):</strong> Predicts hard drive failures before they happen.</li>
+        <li><strong>Web Resources:</strong> Monitor HTTP/HTTPS and even modern HTTP/3 (QUIC) endpoints. You can verify not just the status code, but also ensure specific content is present in the response.</li>
+        <li><strong>Database Health:</strong> Perform deep health checks on PostgreSQL and MySQL/MariaDB. For PostgreSQL, you can even define custom SQL queries for advanced anomaly detection.</li>
+        <li><strong>System Metrics:</strong> Keep a close eye on CPU usage, RAM availability, Disk space, and system Load Averages.</li>
+        <li><strong>Network Services:</strong> Verify the availability of TCP/UDP sockets, DNS resolution, Redis, RabbitMQ, Memcached, SSH, and more.</li>
+        <li><strong>Hardware Monitoring:</strong> Proactively monitor physical hard drive health using SMART data to predict and prevent failures.</li>
+        <li><strong>Service Management:</strong> Automatically track the status of critical <code>systemd</code> services and Docker containers.</li>
     </ul>
-    <p>Once you've created your checks, use the <strong>JSON Configuration Tools</strong> button to "Export to JSON". This tells the background programs what to monitor.</p>
 
-    <h3>2. On-Call Schedules</h3>
-    <p>Pager Duty uses the Odoo Calendar to manage who gets alerted. Create an event in the calendar and check the <strong>"Is Pager Duty Shift"</strong> box. The system will automatically route alerts to whoever is scheduled for that time. If no one is scheduled, alerts are still logged as incidents and can be escalated to all administrators.</p>
+    <h3>2. Synchronizing with Daemons</h3>
+    <p>The monitoring logic is executed by standalone Python programs (daemons) for maximum reliability and performance. After configuring your checks in Odoo, you must sync them:</p>
+    <ol>
+        <li>Go to the <strong>Monitoring Checks</strong> list view.</li>
+        <li>Click <strong>JSON Configuration Tools</strong> and select <strong>Export to JSON</strong>.</li>
+        <li>This updates the daemon configuration file (<code>pager_config.json</code>), and the background services will pick up the changes on their next cycle.</li>
+    </ol>
 
-    <h3>3. Managing Incidents</h3>
-    <p>When a check fails, an <strong>Incident</strong> is created. You can view these in the <strong>Incidents</strong> menu or on the <strong>NOC Dashboard</strong>.
+    <h3>3. Managing On-Call Schedules</h3>
+    <p>Alerts are routed based on the Odoo Calendar. To define who is on call:</p>
     <ul>
-        <li><strong>Acknowledge:</strong> Click "Acknowledge" to let the team know you are working on it. This stops the automatic escalation.</li>
-        <li><strong>Resolve:</strong> Once the issue is fixed, the system will usually resolve the incident automatically. You can also resolve it manually.</li>
+        <li>Create a standard Calendar event for the relevant engineer.</li>
+        <li>Check the <strong>"Is Pager Duty Shift"</strong> box on the event.</li>
+        <li>The system will automatically identify the active shift and route incident notifications (via chatter and email) to that specific user.</li>
+    </ul>
+
+    <h2>Incident Management Lifecycle</h2>
+
+    <h3>Detection and Reporting</h3>
+    <p>When a daemon detects a failure, it immediately reports an <strong>Incident</strong> to Odoo. To prevent "alert fatigue" during major outages, the system implements automatic <strong>Rate Limiting</strong> and <strong>De-duplication</strong>. If multiple failures occur for the same source, they are grouped into a single active incident.</p>
+
+    <h3>NOC Dashboard</h3>
+    <p>Access the <strong>NOC Dashboard</strong> via <strong>Pager Duty &gt; NOC Dashboard</strong> for a real-time, high-visibility overview of your system health.
+    <ul>
+        <li><strong>Live Updates:</strong> The board refreshes instantly as incidents are created, acknowledged, or resolved.</li>
+        <li><strong>Burn-In Protection:</strong> Designed for long-term display on office monitors, the dashboard subtly shifts its layout every 60 seconds to protect your hardware.</li>
+        <li><strong>Mean Time Metrics:</strong> View real-time MTTA (Time to Acknowledge) and MTTR (Time to Resolve) analytics.</li>
     </ul>
     </p>
 
-    <h3>4. Automatic Escalation</h3>
-    <p>If an incident isn't acknowledged within 15 minutes, the system will automatically "escalate" it by notifying all Pager Duty Administrators. This ensures that critical problems are never ignored.</p>
-
-    <h3>5. NOC Dashboard</h3>
-    <p>The NOC (Network Operations Center) Dashboard is designed for a "big screen" display in your office. It shows all active incidents, who is currently on call, and a list of recently resolved issues. It features a subtle "burn-in protection" that shifts the display slightly every minute (every 60 seconds) to protect your monitors. You can access the dashboard via <strong>Pager Duty &gt; NOC Dashboard</strong>.</p>
-
-    <h3>6. Multi-Website Support</h3>
-    <p>If your Odoo instance supports multiple websites, Pager Duty can partition checks and incidents by website. This allows different teams to manage their own monitoring infrastructure. To view the NOC Dashboard for a specific website, you can append <code>?website_id=N</code> to the dashboard URL, where N is the ID of the website.</p>
-
-    <h2>Advanced Features</h2>
+    <h3>Acknowledgement &amp; Escalation</h3>
     <ul>
-        <li><strong>Maintenance Windows:</strong> You can schedule "Maintenance Start" and "End" times on any check to silence alerts while you are doing planned work.</li>
-        <li><strong>Parent Checks:</strong> Link checks together. For example, if your main Internet connection is down, the system will silence alerts for individual websites to prevent "alert storms."</li>
-        <li><strong>Log Analysis:</strong> The system can "tail" your server logs in real-time and alert you if it sees specific error patterns (like "database corruption").</li>
-        <li><strong>Helpdesk Integration:</strong> If the <code>hams_helpdesk</code> module is installed, Pager Duty can automatically create helpdesk tickets for every incident, ensuring a formal tracking of the issue and its resolution.</li>
-        <li><strong>Synthetic Monitoring:</strong> You can write small Python (Playwright) or Bash scripts to simulate user journeys, like logging into your website and checking if a specific element is present.</li>
+        <li><strong>Acknowledge:</strong> When you start working on an issue, click "Acknowledge" on the dashboard or incident record. This signals to the team that the issue is being handled and stops the automatic escalation timer.</li>
+        <li><strong>Escalation:</strong> If a high-severity incident remains unacknowledged for more than 15 minutes, the system automatically escalates it by notifying all Pager Duty Administrators.</li>
     </ul>
 
-    <h2>Technical Details for Administrators</h2>
-    <p>Pager Duty consists of several background services (daemons) that must be running on your server:</p>
-    <ul>
-        <li><strong>Generalized Monitor:</strong> Handles most checks like HTTP, TCP, and Databases.</li>
-        <li><strong>Log Analyzer:</strong> Watches your system log files for errors.</li>
-        <li><strong>Synthetic Spooler:</strong> Runs your custom scripts in a secure, sandboxed environment.</li>
-        <li><strong>SMART Spooler:</strong> Periodically checks the health of your physical hard drives.</li>
-    </ul>
+    <h3>Recovery and Resolution</h3>
+    <p>In most cases, Pager Duty is "self-healing." Once the underlying issue is fixed and the daemon detects a healthy state, it will automatically transition the incident to <strong>Resolved</strong>. You can also manually resolve incidents if necessary.</p>
 
-    <h2>Troubleshooting</h2>
-    <p>If you see a "Search timeout" when looking at logs, it usually means the background Log Analyzer daemon is not running. Check with your system administrator to ensure all Pager Duty services are active on the server.</p>
+    <h2>Advanced Technical Features</h2>
+
+    <h3>Multi-Website Awareness</h3>
+    <p>In multi-tenant Odoo deployments, Pager Duty can isolate checks and incidents by website. This allows different departments or clients to manage their own independent monitoring stack. The NOC Dashboard respects the <code>website_id</code> context passed via the URL.</p>
+
+    <h3>Helpdesk Integration</h3>
+    <p>If the <code>hams_helpdesk</code> module is installed, Pager Duty can be configured to automatically generate formal Helpdesk Tickets for every incident. This provides a structured workflow for post-mortems and long-term issue tracking. The system will even link the current on-call engineer as the ticket assignee.</p>
+
+    <h3>Log Analyzer (Splunk-style)</h3>
+    <p>The integrated Log Analyzer tails system logs in real-time. You can define regex patterns in Odoo to watch for critical errors (like "filesystem corruption" or "out of memory"). The <strong>Interactive Log Search</strong> tool allows you to perform live regex searches across your server's log files directly from the Odoo UI.</p>
+
+    <h3>Synthetic Journeys &amp; Sandboxing</h3>
+    <p>For complex application testing, you can write <strong>Playwright</strong> (Python) or <strong>Bash</strong> scripts to simulate user behavior. These scripts are executed in a strictly airgapped and chrooted <strong>Bubblewrap (bwrap)</strong> sandbox, ensuring maximum security for your monitoring infrastructure.</p>
+
+    <h2>Troubleshooting &amp; Support</h2>
+    <p>If the NOC Dashboard shows a "Search timeout" or "Daemon Offline" message, ensure that the background services (<code>generalized_monitor.py</code>, etc.) are active on your server. Administrators should check the systemd journal for detailed daemon logs.</p>
 </div>

@@ -228,7 +228,7 @@ def fallback_notify(source, msg, severity):
         logger.critical(f"SMTP Fallback completely failed: {e}")
 
 
-def report(client, source, msg, severity="high"):
+def report(client, source, msg, severity="high", website_id=False):
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url:
         try:
@@ -248,8 +248,10 @@ def report(client, source, msg, severity="high"):
 
     try:
         payload = {"source": source, "description": msg, "severity": severity}
+        if website_id:
+            payload["website_id"] = website_id
         client.execute("pager.incident", "report_incident", vals=payload)
-        logger.error(f"Incident reported [{source}]: {msg}")
+        logger.error(f"Incident reported [{source}]: {msg} (Website: {website_id})")
     except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
         logger.error(
             f"Failed to report incident via RPC: {e}. Triggering SMTP fallback."
@@ -257,10 +259,17 @@ def report(client, source, msg, severity="high"):
         fallback_notify(source, msg, severity)
 
 
-def auto_resolve(client, source):
+def auto_resolve(client, source, website_id=False):
     try:
-        client.execute("pager.incident", "auto_resolve_incidents", source=source)
-        logger.info(f"[{source}] System stable. Auto-resolved open incidents.")
+        client.execute(
+            "pager.incident",
+            "auto_resolve_incidents",
+            source=source,
+            context={"website_id": website_id} if website_id else {},
+        )
+        logger.info(
+            f"[{source}] System stable. Auto-resolved open incidents. (Website: {website_id})"
+        )
     except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
         logger.error(f"Failed to auto-resolve incidents for {source}: {e}")
 
@@ -1107,6 +1116,8 @@ def execute_check(check, client=None):
 
 def polling_thread(client, check):
     name = check.get("name", "Unknown")
+    check_id = check.get("id")
+    website_id = check.get("website_id")
     interval = int(check.get("interval", 60))
     grace = int(check.get("grace", 0))
     thread_start_time = time.time()
@@ -1126,7 +1137,7 @@ def polling_thread(client, check):
                 f"[{name}] Startup grace period active. Suppressing failure: {msg}"
             )
         else:
-            report(client, name, msg, "high")
+            report(client, name, msg, "high", website_id=website_id)
             remedy = check.get("remediate")
             if clean_loops > 0 and remedy and os.path.exists(remedy):
                 logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")
@@ -1155,6 +1166,16 @@ def polling_thread(client, check):
             continue
 
         success, msg = execute_check(check, client)
+
+        # Update status in Odoo
+        if client and check_id:
+            try:
+                status = "passing" if success else "failing"
+                now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                client.execute("pager.check", "write", ids=[check_id], vals={"status": status, "last_run": now})
+            except Exception as e: # audit-ignore-catch-all
+                logger.warning(f"[{name}] Failed to update status in Odoo: {e}")
+
         if not success:
             FAILING_CHECKS.add(name)
             if time.time() - thread_start_time < grace:
@@ -1162,7 +1183,7 @@ def polling_thread(client, check):
                     f"[{name}] Startup grace period active. Suppressing failure: {msg}"
                 )
             else:
-                report(client, name, msg, "high")
+                report(client, name, msg, "high", website_id=website_id)
                 remedy = check.get("remediate")
                 if clean_loops > 0 and remedy and os.path.exists(remedy):
                     logger.info(
@@ -1177,12 +1198,13 @@ def polling_thread(client, check):
             FAILING_CHECKS.discard(name)
             clean_loops += 1
             if clean_loops == 3:
-                auto_resolve(client, name)
+                auto_resolve(client, name, website_id=website_id)
         time.sleep(interval)
 
 
 def log_tail_thread(client, check):
     name = check.get("name", "Log Monitor")
+    website_id = check.get("website_id")
     filepath = parse_env(check.get("target", ""))
     regex_str = parse_env(check.get("regex", ""))
     grace = int(check.get("grace", 0))
@@ -1221,7 +1243,7 @@ def log_tail_thread(client, check):
                             f"[{name}] Suppressed log alert during grace period."
                         )
                     else:
-                        report(client, name, line.strip(), "critical")
+                        report(client, name, line.strip(), "critical", website_id=website_id)
             else:
                 time.sleep(1)
         except FileNotFoundError:
@@ -1271,14 +1293,16 @@ if __name__ == "__main__":
         )
         while True:
             try:
-                _, data = r.blpop("pager_log_anomalies", timeout=5)
-                if data:
+                res = r.blpop("pager_log_anomalies", timeout=5)
+                if res:
+                    _, data = res
                     payload = json.loads(data)
                     report(
                         cl,
                         payload["source"],
                         payload["description"],
                         payload["severity"],
+                        website_id=payload.get("website_id"),
                     )
             except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
                 logger.warning("Anomaly proxy loop error: %s", e)

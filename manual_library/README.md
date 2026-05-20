@@ -16,6 +16,7 @@ Because it uses the exact same database structure (`knowledge.article`) as the E
 * **Public Web Portal:** Click "Publish" to instantly push your manuals to the public website (`/manual`). The system automatically builds a handy sidebar menu for visitors.
 * **Access Control:** Keep private admin notes hidden, share drafts with logged-in coworkers or portal customers, or publish finalized guides to the public.
 * **Multi-Website Support:** Restrict articles to specific websites or share them across all websites in a multi-website Odoo instance.
+* **Smart Navigation:** Recursive breadcrumbs and a dynamic Table of Contents (TOC) help users navigate deep documentation structures effortlessly.
 
 ## 🛠️ Installation
 
@@ -69,7 +70,8 @@ Uses a standard parent-child relationship for hierarchy. Inherits from `mail.thr
 * **Dynamic TOC:** Automatically parses article HTML on the frontend to generate a dynamic Table of Contents `[@ANCHOR: manual_toc_logic]`.
 * **Automated Documentation Installation:** Utilizes the central `_bootstrap_knowledge_docs` facility from the `zero_sudo` module to automatically discover and install documentation for all installed modules via the `knowledge_docs` manifest key. This supports soft dependencies on `knowledge.article` or `manual.article` `[@ANCHOR: manual_doc_auto_install]`. `[@ANCHOR: manual_doc_injection]`
 * **Zero-Sudo Execution:** All automated operations and frontend feedback increments are performed using the `manual_library.user_manual_library_service_account` micro-privilege account.
-* **Multi-Website Isolation:** Articles can be optionally pinned to a specific website via `website_id`.
+* **Multi-Website Isolation:** Articles are isolated by `website_id`. Controllers and sidebar logic strictly filter content to the current website context.
+* **Hierarchical Breadcrumbs:** Provides a recursive breadcrumb trail in the frontend view to maintain user context within deep folder structures.
 </features>
 
 <security>

@@ -16,6 +16,7 @@
                 <field name="name"/>
                 <field name="parent_id"/>
                 <field name="internal_permission"/>
+                <field name="website_id" groups="website.group_multi_website" optional="show"/>
                 <field name="is_published"/>
             </list>
         </field>
@@ -45,6 +46,7 @@
                         <group>
                             <field name="parent_id"/>
                             <field name="internal_permission"/>
+                            <field name="website_id" groups="website.group_multi_website" options="{'no_create': True}"/>
                         </group>
                         <group>
                             <field name="member_ids" widget="many2many_tags" invisible="internal_permission != 'none'"/>

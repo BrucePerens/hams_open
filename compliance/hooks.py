@@ -19,6 +19,7 @@ def post_init_hook(env):
 
     # ADR-0002: Zero-Sudo Architecture. We must not use .sudo() or stay as SUPERUSER.
     # We switch to a dedicated micro-privilege service account.
+    # [@ANCHOR: compliance_zero_sudo_impersonation]
     env_svc = env["zero_sudo.security.utils"]._get_service_env("compliance.user_compliance_service")
 
     _logger.info("Enforcing Cookie Consent Bar on all websites.")
@@ -31,6 +32,7 @@ def post_init_hook(env):
 
     # Non-Destructive Legal Page Mandate:
     # If a page already exists at these URLs, we unpublish our boilerplate to avoid duplication.
+    # [@ANCHOR: compliance_website_aware_scope]
     # [@ANCHOR: story_automatic_legal_pages]
     # Verified by [@ANCHOR: test_compliance_non_destructive_mandate]
     legal_urls = ["/privacy", "/cookie-policy", "/terms"]
