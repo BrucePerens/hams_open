@@ -46,6 +46,7 @@ class BackupRestoreWizard(models.TransientModel):
         job = jobs.create(
             {
                 "config_id": self.snapshot_id.config_id.id,
+                "website_id": self.snapshot_id.config_id.website_id.id,
                 "job_type": self.snapshot_id.config_id.engine,
                 "state": "pending",
                 "output_log": "Restore queued in RabbitMQ...",

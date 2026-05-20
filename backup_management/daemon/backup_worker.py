@@ -71,6 +71,7 @@ def execute_job(ch, method, properties, body):
         target_path = payload.get("target_path")
         config_id = payload.get("config_id")
         svc_uid = payload.get("svc_uid")
+        website_id = payload.get("website_id")
 
         if not job_id or not engine:
             logger.error("Missing job_id or engine in payload: %s", payload)
@@ -157,14 +158,29 @@ def execute_job(ch, method, properties, body):
             cmd = payload.get("cmd_args", [])
             # Security hardening: ensure cmd is a list and contains only allowed binaries
             allowed_binaries = ["kopia", "pgbackrest"]
-            if not cmd or not isinstance(cmd, list) or cmd[0] not in allowed_binaries:
+            if not cmd or not isinstance(cmd, list) or not cmd or cmd[0] not in allowed_binaries:
                 raise PermissionError(f"Unauthorized command execution attempt: {cmd}")
 
             if cmd[0] == "kopia":
                 # Ensure we don't accidentally write where we shouldn't
                 # Kopia restore usually takes a target path as the last argument
-                # Odoo-side validation already checks this, but we reinforce here
-                pass
+                # Odoo-side validation already checks this, but we reinforce here.
+                # Expected: ['kopia', 'restore', <snap_id>, <target_path>]
+                if len(cmd) < 4:
+                    raise ValueError(f"Insufficient arguments for kopia restore: {cmd}")
+                target_path_arg = cmd[-1]
+                # Re-validate the path in the worker context
+                if target_path_arg.startswith("-") or ".." in target_path_arg or any(c in target_path_arg for c in "; &|`$()<>*?[]{\n"):
+                     raise PermissionError(f"Malicious path detected in worker: {target_path_arg}")
+
+            elif cmd[0] == "pgbackrest":
+                # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
+                # Ensure no dangerous flags are injected
+                for arg in cmd:
+                    if arg.startswith("--") and "=" in arg:
+                        key, val = arg.split("=", 1)
+                        if any(c in val for c in "; &|`$()<>*?[]{\n"):
+                             raise PermissionError(f"Malicious argument detected in worker: {arg}")
 
         if not cmd:
             raise ValueError(f"No command generated for engine: {engine}")

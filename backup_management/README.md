@@ -4,9 +4,10 @@ Unified Backup Management Facility for Odoo 19, orchestrating **Kopia** and **pg
 
 ## Architecture Highlights
 - **Hybrid Engine Support:** Native integration with Kopia (files/system) and pgBackRest (PostgreSQL WAL).
-- **Asynchronous Execution:** Offloads heavy CLI operations to a RabbitMQ-backed daemon (`backup_worker`).
-- **Micro-Privilege Security:** Operations execute via specific service accounts; strict path validation prevents system exposure.
-- **Multi-Website Isolation:** Segregates backup configurations and logs by Odoo Website ID.
+- **Asynchronous Execution:** Offloads heavy CLI operations to a RabbitMQ-backed daemon (`backup_worker`). This ensures that long-running backup or restore processes do not block the Odoo web interface.
+- **Micro-Privilege Security:** Operations execute via specific service accounts; strict path validation prevents system exposure. No `sudo` is used anywhere in the module.
+- **Multi-Website Isolation:** Segregates backup configurations, snapshots, and jobs by Odoo Website ID. Administrators only see data relevant to their authorized websites.
+- **Self-Healing Deployment:** Automatically downloads Kopia binaries if missing, ensuring immediate operational readiness.
 
 ## Prerequisites
 - **pgBackRest:** Must be installed at the OS level (e.g., `apt install pgbackrest`).
