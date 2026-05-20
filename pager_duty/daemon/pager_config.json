@@ -1,6 +1,7 @@
 {
   "checks": [
     {
+      "id": 7,
       "name": "Disk Space (/rom/overlay)",
       "type": "system",
       "target": "disk",
@@ -12,6 +13,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 9,
       "name": "Docker Daemon",
       "type": "systemd",
       "target": "docker.service",
@@ -21,6 +23,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 5,
       "name": "IPv4 Root DNS Reachability",
       "type": "synthetic",
       "target": false,
@@ -31,6 +34,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 6,
       "name": "IPv6 Root DNS Reachability",
       "type": "synthetic",
       "target": false,
@@ -41,6 +45,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 8,
       "name": "Redis Ping",
       "type": "redis",
       "target": "redis",
@@ -51,6 +56,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 2,
       "name": "System CPU",
       "type": "system",
       "target": "cpu",
@@ -61,6 +67,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 3,
       "name": "System Load",
       "type": "load",
       "target": false,
@@ -71,6 +78,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 1,
       "name": "System Memory",
       "type": "system",
       "target": "memory",
@@ -81,6 +89,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 4,
       "name": "Systemd Failed Services Tracker",
       "type": "systemd",
       "target": "*",
@@ -91,6 +100,7 @@
       "sandbox_network_access": "loopback"
     },
     {
+      "id": 10,
       "name": "WSGI HTTP Ping",
       "type": "http",
       "target": "http://odoo:8069/api/v1/pager/ping",

@@ -10,7 +10,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
-    invalidate_model_cache,
+    notify_model_invalidation,
 )
 
 _logger = logging.getLogger(__name__)
@@ -204,19 +204,11 @@ class PagerCheck(models.Model):
         res = super(
             PagerCheck, self.with_context(mail_notrack=True)
         ).write(vals)
-        invalidate_model_cache(self.env, self._name)
-        payload = json.dumps({"model": self._name})
-        self.env.cr.execute(
-            "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
-        )
+        notify_model_invalidation(self.env, self._name)
         return res
 
     def unlink(self):
-        invalidate_model_cache(self.env, self._name)
-        payload = json.dumps({"model": self._name})
-        self.env.cr.execute(
-            "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
-        )
+        notify_model_invalidation(self.env, self._name)
         return super(
             PagerCheck, self.with_context(mail_notrack=True)
         ).unlink()
@@ -362,6 +354,7 @@ class PagerCheck(models.Model):
         check_list = []
         for c in checks:
             d = {
+                "id": c.id,
                 "name": c.name,
                 "type": c.check_type,
                 "target": c.target,
@@ -417,6 +410,8 @@ class PagerCheck(models.Model):
                 d["comment"] = c.comment
             if c.check_type == "heartbeat":
                 d["uuid"] = c.heartbeat_uuid
+            if c.website_id:
+                d["website_id"] = c.website_id.id
             if c.code_payload:
                 d["code_payload"] = c.code_payload
             if c.executable_path:
@@ -443,7 +438,12 @@ class PagerCheck(models.Model):
         json_dict["log_analyzer"] = {
             "files": log_files,
             "patterns": [
-                {"name": p.name, "regex": p.regex, "severity": p.severity}
+                {
+                    "name": p.name,
+                    "regex": p.regex,
+                    "severity": p.severity,
+                    "website_id": p.website_id.id if p.website_id else False,
+                }
                 for p in log_patterns
             ],
         }

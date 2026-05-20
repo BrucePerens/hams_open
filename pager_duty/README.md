@@ -24,6 +24,26 @@ The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) 
     *   Use the "JSON Configuration Tools" (Import/Export) to synchronize the database with the daemon's `pager_config.json`.
     *   Deploy and start the Python daemons located in the `daemon/` directory (see `DEPLOYMENT.md` for systemd service examples).
 
+## 🚀 Key Features and Operations
+
+### Monitoring Checks
+Create diverse checks for your infrastructure:
+- **HTTP/HTTPS/HTTP3:** Verify website availability and content.
+- **PostgreSQL/MySQL:** Ensure database connectivity and performance.
+- **System Resources:** Monitor CPU, RAM, and Disk space.
+- **Service Status:** Check systemd services and Docker containers.
+- **Hard Drive Health:** Proactive SMART monitoring.
+- **Custom Scripts:** Execute sandboxed Bash or Playwright scripts for synthetic journeys.
+
+### Incident Management
+- **Dashboard:** The NOC Dashboard provides a real-time overview of active and resolved incidents. It includes burn-in protection for long-term display.
+- **Acknowledgement:** Engineers can acknowledge incidents to stop further escalation.
+- **Auto-Resolution:** The system automatically resolves incidents when the underlying check returns to a healthy state.
+- **Escalation:** Unacknowledged incidents are automatically escalated after 15 minutes to ensure attention.
+
+### On-Call Scheduling
+Integrates with the Odoo Calendar. Mark calendar events as "Pager Duty Shift" to define the current on-call engineer.
+
 ---
 
 # Technical Documentation
@@ -36,12 +56,12 @@ The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) 
 The module follows a **Command Query Responsibility Segregation (CQRS)** pattern. Odoo serves as the configuration and reporting plane, while standalone Python daemons handle the high-frequency execution loops.
 
 ### Key Components:
-*   **Control Plane:** Odoo records (`pager.check`) define what to monitor.
+*   **Control Plane:** Odoo records (`pager.check`) define what to monitor. [@ANCHOR: generalized_pager_config]
 *   **Data Plane (Daemons):**
-    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.).
-    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time.
+    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.). [@ANCHOR: daemon_execute_check]
+    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time. [@ANCHOR: pd_log_api_i18n]
     *   `pager_smart_spooler.py`: Securely collects hardware health data (SMART).
-    *   `pager_synthetic_spooler.py`: Executes sandboxed (Bubblewrap) Playwright/Bash tests.
+    *   `pager_synthetic_spooler.py`: Executes sandboxed (Bubblewrap) Playwright/Bash tests. [@ANCHOR: synthetic_i18n]
 *   **Inter-Process Communication (IPC):** Uses Redis Pub/Sub and Queues for high-speed communication between Odoo workers and background daemons.
 
 ### Security & Micro-Privileges:

@@ -5,7 +5,7 @@ from odoo import models, fields, api
 class PagerSchedule(models.Model):
     _inherit = "calendar.event"
 
-    is_pager_duty = fields.Boolean(string="Is Pager Duty Shift", default=False)
+    is_pager_duty = fields.Boolean(string="Is Pager Duty Shift", default=False, index=True)
 
     @api.model
     def get_current_on_duty_admin(self):

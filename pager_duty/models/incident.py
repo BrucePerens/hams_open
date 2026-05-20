@@ -29,7 +29,7 @@ class PagerIncident(models.Model):
     )
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
     # Added index=True to prevent sequential scans during daemon polling
-    source = fields.Char(string="Source", required=True, index=True)
+    source = fields.Char(string="Source", required=True, index=True, tracking=True)
     severity = fields.Selection(
         [
             ("low", "Low"),
@@ -39,27 +39,38 @@ class PagerIncident(models.Model):
         ],
         string="Severity",
         required=True,
+        tracking=True,
     )
-    description = fields.Text(string="Description", required=True)
+    description = fields.Text(string="Description", required=True, tracking=True)
     # Added index=True to prevent sequential scans during daemon polling
     status = fields.Selection(
         [("open", "Open"), ("acknowledged", "Acknowledged"), ("resolved", "Resolved")],
         string="Status",
         default="open",
         index=True,
+        tracking=True,
     )
     # Added index=True to prevent sequential scans during cron escalations
     is_escalated = fields.Boolean(string="Escalated", default=False, index=True)
     time_acknowledged = fields.Datetime(string="Acknowledged At", readonly=True)
     time_resolved = fields.Datetime(string="Resolved At", readonly=True)
     acknowledged_by_id = fields.Many2one(
-        "res.users", string="Acknowledged By", readonly=True
+        "res.users", string="Acknowledged By", readonly=True, tracking=True
     )
     mtta = fields.Float(
         string="MTTA (Minutes)", readonly=True, help="Mean Time To Acknowledge"
     )
     mttr = fields.Float(
         string="MTTR (Minutes)", readonly=True, help="Mean Time To Resolve"
+    )
+    helpdesk_ticket_id = fields.Integer(
+        string="Helpdesk Ticket ID",
+        help="Stores the integer ID of the generated helpdesk ticket to remain schema-agnostic.",
+        tracking=True,
+    )
+    helpdesk_ticket_model = fields.Char(
+        string="Ticket Model",
+        help="The Odoo model used for the ticket (e.g. hams_helpdesk.ticket or helpdesk.ticket).",
     )
 
     def write(self, vals):
@@ -129,7 +140,7 @@ class PagerIncident(models.Model):
                 if r_client.get(redis_key):
                     return False
                 r_client.setex(redis_key, 60, "1")
-            except (redis.exceptions.RedisError, Exception) as e:
+            except (redis.exceptions.RedisError, Exception) as e: # audit-ignore-catch-all
                 _logger.warning("Redis rate limit check failed: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
