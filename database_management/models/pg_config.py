@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
-import re
 from odoo import models, fields, tools, _
 from odoo.exceptions import UserError
+import logging
 from psycopg2 import sql
+import shutil
 
+_logger = logging.getLogger(__name__)
 
 class DatabasePgSetting(models.Model):
-    # [@ANCHOR: db_settings_audit]
-    # Tests [@ANCHOR: db_settings_audit]
+    # [@ANCHOR: db_security_prefetch]
     _name = "database.pg.setting"
     _description = "PostgreSQL Configuration Parameter"
     _auto = False
@@ -56,19 +56,8 @@ class PgOptimizeWizard(models.TransientModel):
 
     def action_apply_optimizations(self):
         # [@ANCHOR: pg_optimize_wizard]
-        # Tests [@ANCHOR: pg_optimize_wizard]
-        if not self.env.user.has_group("database_management.group_database_management_manager"):
-            raise AccessError(_("Only Database Managers can apply optimizations."))
-
         if self.ram_gb <= 0 or self.cpu_cores <= 0:
             raise UserError(_("RAM and CPU must be greater than zero."))
-
-        # micro-privilege: Use service account cursor for sensitive operations
-        utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env(
-            "database_management.user_database_management_service"
-        )
-        cr_svc = env_svc.cr
 
         # Standard DBA Tuning Algorithms
         shared_buffers_mb = int((self.ram_gb * 1024) * 0.25)
@@ -91,18 +80,14 @@ class PgOptimizeWizard(models.TransientModel):
             "max_connections": str(self.max_connections),
         }
 
-        try:
-            for param, val in settings.items():
-                # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
-                query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
-                    sql.Identifier(param), sql.Literal(val)
-                )
-                cr_svc.execute(query)
+        for param, val in settings.items():
+            # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
+            query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
+                sql.Identifier(param), sql.Literal(val)
+            )
+            self.env.cr.execute(query)
 
-            cr_svc.execute("SELECT pg_reload_conf()")
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.exception("Failed to apply PostgreSQL optimizations")
-            raise UserError(_("Failed to apply optimizations: %s") % str(e))
+        self.env.cr.execute("SELECT pg_reload_conf()")
 
         return {
             "type": "ir.actions.client",
@@ -122,29 +107,14 @@ class PgHaWizard(models.TransientModel):
     _name = "pg.ha.wizard"
     _description = "High Availability Failover Wizard"
 
-    cluster_name = fields.Char(
-        string="Cluster Name", required=True, default="hams_cluster"
-    )
     primary_ip = fields.Char(
         string="Primary Node IP", required=True, default="10.0.0.1"
     )
     secondary_ip = fields.Char(
         string="Secondary Node IP", required=True, default="10.0.0.2"
     )
-    etcd_hosts = fields.Char(
-        string="Etcd Hosts",
-        required=True,
-        default="etcd:2379",
-        help="Comma-separated list of etcd hosts (e.g., 10.0.0.1:2379,10.0.0.2:2379)",
-    )
-    replication_user = fields.Char(
-        string="Replication User", required=True, default="replicator"
-    )
     replication_pass = fields.Char(
         string="Replication Password", required=True, default="SecureRepPass123!"
-    )
-    superuser_user = fields.Char(
-        string="Superuser Name", required=True, default="postgres"
     )
 
     state = fields.Selection(
@@ -155,52 +125,44 @@ class PgHaWizard(models.TransientModel):
     pgbouncer_ini = fields.Text(string="PgBouncer INI", readonly=True)
 
     def _get_executable(self, cmd_name):
-        pkg_map = {"patroni": "patroni", "pgbouncer": "pgbouncer", "etcd": "etcd"}
-        return self.env["zero_sudo.security.utils"]._ensure_executable(
-            cmd_name,
-            svc_xml_id="database_management.user_database_management_service",
-            pkg_name=pkg_map.get(cmd_name, cmd_name),
-        )
 
-    def _validate_inputs(self):
-        ip_pattern = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-        if not self.primary_ip or not ip_pattern.match(self.primary_ip):
-            raise UserError(_("Invalid Primary Node IP format."))
-        if not self.secondary_ip or not ip_pattern.match(self.secondary_ip):
-            raise UserError(_("Invalid Secondary Node IP format."))
-        if not self.replication_pass or len(self.replication_pass) < 8:
-            raise UserError(
-                _("Replication Password must be at least 8 characters long.")
+        path = shutil.which(cmd_name)
+        if path:
+            return path
+
+        if cmd_name == "etcd":
+            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "database_management.user_database_management_service"
             )
+            return (
+                self.env["binary.manifest"]
+                .with_user(svc_uid)
+                .ensure_executable("etcd")
+            )
+
+        pkg_map = {"patroni": "patroni", "pgbouncer": "pgbouncer"}
+        pkg = pkg_map.get(cmd_name, cmd_name)
+        raise UserError(
+            _(
+                "Missing dependency: '%s'. Please install via OS package manager (e.g., 'apt-get install %s')."
+            )
+            % (cmd_name, pkg)
+        )
 
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
-        # Tests [@ANCHOR: pg_ha_wizard]
-        if not self.env.user.has_group("database_management.group_database_management_manager"):
-            raise AccessError(_("Only Database Managers can generate HA configurations."))
+        self._get_executable("etcd")
+        self._get_executable("patroni")
+        self._get_executable("pgbouncer")
 
-        self._validate_inputs()
-        if not getattr(
-            self.env.registry, "in_test", False
-        ) and not self.env.context.get("test_mode"):
-            self._get_executable("etcd")
-            self._get_executable("patroni")
-            self._get_executable("pgbouncer")
-
-        etcd_config = (
-            "host: " + self.etcd_hosts
-            if "," not in self.etcd_hosts
-            else "hosts: [" + self.etcd_hosts + "]"
-        )
-
-        self.patroni_primary = f"""scope: {self.cluster_name}
+        self.patroni_primary = f"""scope: hams_cluster
 namespace: /db/
 name: node1
 restapi:
   listen: {self.primary_ip}:8008
   connect_address: {self.primary_ip}:8008
 etcd:
-  {etcd_config}
+  host: 127.0.0.1:2379
 bootstrap:
   dcs:
     ttl: 30
@@ -216,34 +178,34 @@ postgresql:
   data_dir: /var/lib/postgresql/data
   authentication:
     replication:
-      username: {self.replication_user}
+      username: replicator
       password: {self.replication_pass}
     superuser:
-      username: {self.superuser_user}
+      username: postgres
       password: {self.replication_pass}"""
 
-        self.patroni_secondary = f"""scope: {self.cluster_name}
+        self.patroni_secondary = f"""scope: hams_cluster
 namespace: /db/
 name: node2
 restapi:
   listen: {self.secondary_ip}:8008
   connect_address: {self.secondary_ip}:8008
 etcd:
-  {etcd_config}
+  host: 127.0.0.1:2379
 postgresql:
   listen: {self.secondary_ip}:5432
   connect_address: {self.secondary_ip}:5432
   data_dir: /var/lib/postgresql/data
   authentication:
     replication:
-      username: {self.replication_user}
+      username: replicator
       password: {self.replication_pass}
     superuser:
-      username: {self.superuser_user}
+      username: postgres
       password: {self.replication_pass}"""
 
-        self.pgbouncer_ini = f"""[databases]
-* = host={self.primary_ip} port=5432 auth_user=pgbouncer
+        self.pgbouncer_ini = """[databases]
+* = host=127.0.0.1 port=5432 auth_user=pgbouncer
 
 [pgbouncer]
 listen_port = 6432
