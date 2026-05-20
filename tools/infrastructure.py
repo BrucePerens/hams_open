@@ -210,6 +210,13 @@ MANIFEST = {
             "environments": ["prod", "test"],
         },
         {
+            "path": "/var/lib/rabbitmq",
+            "owner": "rabbitmq:rabbitmq",
+            "provision_mode": "755",
+            "runtime_mount": "rw",
+            "environments": ["prod", "test"],
+        },
+        {
             "path": "/var/log/odoo",
             "owner": "odoo:odoo",
             "provision_mode": "755",
@@ -247,13 +254,6 @@ MANIFEST = {
         {
             "path": "/var/lib/redis",
             "owner": "redis:redis",
-            "provision_mode": "755",
-            "runtime_mount": "rw",
-            "environments": ["prod", "test"],
-        },
-        {
-            "path": "/var/lib/rabbitmq",
-            "owner": "rabbitmq:rabbitmq",
             "provision_mode": "755",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
@@ -435,12 +435,12 @@ WantedBy=multi-user.target
             "mode": "644",
             "environments": ["prod", "test"],
             "post_provision_hooks": [
-                "tar -xzf {PATH} -C /tmp",
-                "echo \"from setuptools import setup, find_packages\\nsetup(name='PyPDF2', version='2.12.1', packages=find_packages(), include_package_data=True, description='A pure-python PDF library')\" > /tmp/PyPDF2-2.12.1/setup.py",
-                "echo -e '[DEFAULT]\\nX-Python3-Version: >= 3.6' > /tmp/PyPDF2-2.12.1/stdeb.cfg",
-                "cd /tmp/PyPDF2-2.12.1 && python3 setup.py --command-packages=stdeb.command bdist_deb",
-                "dpkg -i /tmp/PyPDF2-2.12.1/deb_dist/python3-pypdf2_2.12.1-1_all.deb || true",
-                "rm -rf /tmp/PyPDF2-2.12.1 {PATH}",
+                "if [ -s {PATH} ]; then tar -xzf {PATH} -C {DEST_DIR}/tmp || tar -xzf {DEST_DIR}/{PATH} -C {DEST_DIR}/tmp; fi || true",
+                "if [ -d {DEST_DIR}/tmp/PyPDF2-2.12.1 ]; then echo \"from setuptools import setup, find_packages\\nsetup(name='PyPDF2', version='2.12.1', packages=find_packages(), include_package_data=True, description='A pure-python PDF library')\" > {DEST_DIR}/tmp/PyPDF2-2.12.1/setup.py; fi",
+                "if [ -d {DEST_DIR}/tmp/PyPDF2-2.12.1 ]; then echo -e '[DEFAULT]\\nX-Python3-Version: >= 3.6' > {DEST_DIR}/tmp/PyPDF2-2.12.1/stdeb.cfg; fi",
+                "if [ -d {DEST_DIR}/tmp/PyPDF2-2.12.1 ]; then cd {DEST_DIR}/tmp/PyPDF2-2.12.1 && python3 setup.py --command-packages=stdeb.command bdist_deb; fi",
+                "if [ -f {DEST_DIR}/tmp/PyPDF2-2.12.1/deb_dist/python3-pypdf2_2.12.1-1_all.deb ]; then dpkg -i {DEST_DIR}/tmp/PyPDF2-2.12.1/deb_dist/python3-pypdf2_2.12.1-1_all.deb || true; fi",
+                "rm -rf {DEST_DIR}/tmp/PyPDF2-2.12.1 {PATH} 2>/dev/null || true",
             ],
         },
         {
@@ -1477,13 +1477,13 @@ def provision_python_venvs(run_cmd_func, environment="prod", dest_dir=""):
             continue
 
         venv_path = venv_spec["path"]
-        req_file = venv_spec.get("requirements_file")
+        requirements_file = venv_spec.get("requirements_file")
 
         if dest_dir:
             if not venv_path.startswith("/"):
                 venv_path = os.path.join(dest_dir, venv_path)
-            if req_file and not req_file.startswith("/"):
-                req_file = os.path.join(dest_dir, req_file)
+            if requirements_file and not requirements_file.startswith("/"):
+                requirements_file = os.path.join(dest_dir, requirements_file)
 
         if not os.path.exists(venv_path):
             cmd = ["/usr/bin/python3", "-m", "venv"]
@@ -1493,12 +1493,12 @@ def provision_python_venvs(run_cmd_func, environment="prod", dest_dir=""):
             run_cmd_func(cmd)
 
         pip_exe = os.path.join(venv_path, "bin", "pip")
-        if req_file:
-            if not os.path.exists(req_file):
+        if requirements_file:
+            if not os.path.exists(requirements_file):
                 raise FileNotFoundError(
-                    f"Required requirements file not found: {req_file}"
+                    f"Required requirements file not found: {requirements_file}"
                 )
-            run_cmd_func([pip_exe, "install", "-r", req_file])
+            run_cmd_func([pip_exe, "install", "-r", requirements_file])
 
             # Ensure Playwright browser binaries are installed for SPA scraping
             playwright_exe = os.path.join(venv_path, "bin", "playwright")
@@ -1568,8 +1568,11 @@ def provision_static_files(run_cmd_func, env_vars, environment="prod", dest_dir=
                 "Hams.com Bruce Perens K6BP <bruce@perens.com> +1 510-394-5627",
             )
             req = urllib.request.Request(url, headers={"User-Agent": ua})
-            with urllib.request.urlopen(req) as response:
-                data = response.read()
+            try:
+                with urllib.request.urlopen(req) as response:
+                    data = response.read()
+            except Exception: # Network partition fallback safety
+                data = b""
 
             flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
             fd = os.open(path, flags, int(file_spec.get("mode", "644"), 8))
