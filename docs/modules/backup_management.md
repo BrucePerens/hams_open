@@ -1,30 +1,21 @@
-# Backup Management
+# Backup Management Module
 
-Unified Backup Management Facility for Odoo 19, orchestrating **Kopia** and **pgBackRest** with a Focus on Zero-Sudo and Multi-Website Architecture.
+## Technical Specification
 
-## Architecture Highlights
-- **Hybrid Engine Support:** Native integration with Kopia (files/system) and pgBackRest (PostgreSQL WAL).
-- **Asynchronous Execution:** Offloads heavy CLI operations to a RabbitMQ-backed daemon (`backup_worker`).
-- **Micro-Privilege Security:** Operations execute via specific service accounts; strict path validation prevents system exposure.
-- **Multi-Website Isolation:** Segregates backup configurations and logs by Odoo Website ID.
+### 1. Automated Volume Synchronization
+Handles the execution loops for continuous file system snapshots and system storage mappings.
+* **Core Sync Anchor:** `[@ANCHOR: backup_management:backup_sync_kopia]`
+* **Database Target Sync Anchor:** `[@ANCHOR: backup_management:backup_sync_pgbackrest]`
+* **Cron Routine Orchestration:** `[@ANCHOR: backup_management:cron_sync_all_backups]`
 
-## Prerequisites
-- **pgBackRest:** Must be installed at the OS level (e.g., `apt install pgbackrest`).
-- **Kopia:** Automatically provisioned JIT via `binary_downloader` if not found.
-- **RabbitMQ:** Required for the task queue.
+### 2. Retention & Purge Governance
+Ensures structural space recovery processes comply with multi-website tenant data privacy mandates.
+* **Policy Application Engine:** `[@ANCHOR: backup_management:backup_apply_policies]`
+* **Interactive Dashboard Telemetry:** `[@ANCHOR: backup_management:backup_board_data]`
 
-## Configuration
-1. Navigate to **Backups > Configurations**.
-2. Select an engine and define the **Target Path** (or Stanza name for pgBackRest).
-3. Set retention policies (Daily/Weekly/Monthly).
-4. Configure storage backends (Local, S3, or B2).
+## Cross-Module Interfaces
 
-## Semantic Anchors for Traceability
-- `[@ANCHOR: UX_BACKUP_SYNC]`: Dashboard metadata synchronization.
-- `[@ANCHOR: security_path_validation]`: Logic for validating target paths.
-- `[@ANCHOR: backup_management:backup_trigger_execution]`: Entry point for manual backup execution.
-- `[@ANCHOR: backup_doc_injection]`: Knowledge article bootstrap.
-
-## Operational Notes
-- **Drill Scripts:** You can configure automated restore drills to verify backup integrity weekly.
-- **PagerDuty Integration:** Alerts are automatically dispatched to the SRE team on backup failures or size anomalies.
+### Compliance Monitoring
+When multi-website context isolation checks detect data boundary leakage or cross-tenant contamination, logging structures communicate directly with the core website security system:
+* **Tenant Violation Reports:** For tracking frontend moderation workflow alerts, see `[@ANCHOR: user_websites:UX_REPORT_VIOLATION]`.
+* **Automated Escalation:** System telemetry monitors structural volume metrics and communicates alerts dynamically.

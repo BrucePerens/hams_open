@@ -31,6 +31,7 @@ class ContentViolationAppeal(models.Model):
     )
 
     def action_approve(self):
+        # Tested by [@ANCHOR: user_websites:test_tour_moderation_appeal]
         """Approves the appeal and pardons the user."""
         # ADR 0078: Fetch service account outside the loop for O(1) Memory Mapping
         mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(

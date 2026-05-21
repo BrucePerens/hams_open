@@ -51,3 +51,6 @@ For detailed narratives and end-to-end workflows, refer to the following:
 | `[@ANCHOR: test_seo_widget_tour]` | UI tour for SEO optimization. | `test_seo_widget_tour` |
 | `[@ANCHOR: test_xpath_rendering_res_users]` | Backend view rendering for users. | `test_xpath_rendering_res_users` |
 | `[@ANCHOR: test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `test_xpath_rendering_user_websites_group` |
+
+## 5. Multi-Website Support
+This module is fully multi-website aware. It respects the `website_id` field on `website.page` records and uses Odoo's native website-switching logic to ensure that SEO metadata is correctly associated with the active website context. All controller logic uses `request.website` to filter relevant records.

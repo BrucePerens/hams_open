@@ -63,6 +63,7 @@ class UserWebsitesController(http.Controller):
 
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     def documentation(self, **kwargs):
+        # Tested by [@ANCHOR: user_websites:test_documentation_route]
         if "knowledge.article" in request.env:
             utils = request.env["zero_sudo.security.utils"]
             env_svc = utils._get_service_env("user_websites.user_websites_service_account")
@@ -74,6 +75,7 @@ class UserWebsitesController(http.Controller):
 
     @http.route("/community", type="http", auth="public", website=True)
     def community_directory(self, **kwargs):
+        # Tested by [@ANCHOR: user_websites:test_tour_community_directory]
         return request.render("user_websites.community_directory", {})
 
     @http.route("/my/privacy", type="http", auth="user", website=True)
@@ -82,20 +84,32 @@ class UserWebsitesController(http.Controller):
 
     @http.route("/my/privacy/export", type="http", auth="user", website=True)
     def privacy_export(self, **kwargs):
-        return request.make_response(json.dumps({"data": "gdpr_export"}), headers=[("Content-Type", "application/json")])
+        # Tested by [@ANCHOR: user_websites:test_gdpr_export_api]
+        user = request.env.user
+        data = user._get_gdpr_export_data()
+        streamed = user._get_gdpr_streamed_keys()
+        for k, generator_func in streamed.items():
+            data[k] = list(generator_func())
+        body = json.dumps(data)
+        headers = [
+            ("Content-Type", "application/json"),
+            ("Content-Disposition", 'attachment; filename="gdpr_export.json"')
+        ]
+        return request.make_response(body, headers=headers)
 
     @http.route("/my/privacy/erasure", type="http", auth="user", website=True)
     def privacy_erasure(self, **kwargs):
         return request.make_response(json.dumps({"success": True}), headers=[("Content-Type", "application/json")])
 
-    @http.route("/api/user-websites/pending-reports", type="http", auth="user")
+    @http.route("/api/user-websites/pending-reports", type="http", auth="user", website=True)
     def pending_reports(self, **kwargs):
-        if not request.env.user.has_group("user_websites.group_user_websites_admin") and not request.env.user.has_group("base.group_system"):
+        if not request.env.user.has_group("user_websites.group_user_websites_administrator") and not request.env.user.has_group("base.group_system"):
             return request.make_response("Forbidden", status=403)
         return request.make_response("OK", status=200)
 
-    @http.route("/unsubscribe/<string:token>", type="http", auth="public", website=True)
-    def unsubscribe(self, token, **kwargs):
+    @http.route("/website/unsubscribe/<string:model>/<int:record_id>/<int:partner_id>/<int:timestamp>/<string:token>", type="http", auth="public", website=True)
+    def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
+        # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
         if token == "invalid":
             return request.make_response("Forbidden", status=403)
         return request.render("user_websites.unsubscribe_success", {})

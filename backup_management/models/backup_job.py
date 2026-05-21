@@ -10,7 +10,9 @@ class BackupJob(models.Model):
     config_id = fields.Many2one(
         "backup.config", string="Configuration", required=True, ondelete="cascade"
     )
-    website_id = fields.Many2one("website", string="Website", help="The website this job belongs to.")
+    website_id = fields.Many2one(
+        "website", string="Website", related="config_id.website_id", store=True
+    )
     job_type = fields.Selection(
         [("kopia", "Kopia"), ("pgbackrest", "pgBackRest")],
         string="Job Type",

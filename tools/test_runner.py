@@ -421,39 +421,35 @@ def check_linters(
 
     print("[*] Running AST Burn List Linter...")
     burn_script = os.path.join(base_dir, "tools", "check_burn_list.py")
-    res_burn = (
-        subprocess.run(
-            [
-                venv_python,
-                burn_script,
-                os.path.join(base_dir, target_modules[0]),
-                "--ignore-file",
-                ignore_filepath,
-            ]
-        )
-        if target_modules and len(target_modules) == 1
-        else subprocess.run(
-            [venv_python, burn_script, base_dir, "--ignore-file", ignore_filepath]
-        )
-    )
+    cmd_burn = [venv_python, burn_script, os.path.join(base_dir, target_modules[0]), "--ignore-file", ignore_filepath] if target_modules and len(target_modules) == 1 else [venv_python, burn_script, base_dir, "--ignore-file", ignore_filepath]
+
+    res_burn = subprocess.run(cmd_burn, capture_output=True, text=True)
     if res_burn.returncode != 0:
+        print(res_burn.stdout)
+        print(res_burn.stderr)
         print("🛑 Halting due to burn list violations. Please review the output above.")
         if extractor:
-            extractor.captured_blocks.append(("Linter Violation", ["AST Burn List Linter failed. Please review the console output for details.\n"]))
+            extractor.captured_blocks.append(("Linter Violation", [res_burn.stdout + "\n", res_burn.stderr + "\n", "AST Burn List Linter failed.\n"]))
             extractor.finish_and_write()
         sys.exit(1)
+    else:
+        print(res_burn.stdout)
 
     print("[*] Scanning documentation and codebase for Semantic Anchors...")
     anchor_script = os.path.join(base_dir, "tools", "verify_anchors.py")
-    res_anchor = subprocess.run([venv_python, anchor_script, base_dir])
+    res_anchor = subprocess.run([venv_python, anchor_script, base_dir], capture_output=True, text=True)
     if res_anchor.returncode != 0:
+        print(res_anchor.stdout)
+        print(res_anchor.stderr)
         print(
             "🛑 Halting due to linter/anchor violations. Please review the output above."
         )
         if extractor:
-            extractor.captured_blocks.append(("Linter Violation", ["Semantic Anchor Linter failed. Please review the console output for details.\n"]))
+            extractor.captured_blocks.append(("Linter Violation", [res_anchor.stdout + "\n", res_anchor.stderr + "\n", "Semantic Anchor Linter failed.\n"]))
             extractor.finish_and_write()
         sys.exit(1)
+    else:
+        print(res_anchor.stdout)
 
 
 def run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns, target_modules):

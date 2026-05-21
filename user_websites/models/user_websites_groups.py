@@ -84,6 +84,7 @@ class UserWebsitesGroup(models.Model):
     @api.model
     @distributed_cache()
     def _get_group_id_by_slug(self, slug, override_svc_uid=None):
+        # Tested by [@ANCHOR: user_websites:test_group_site_routing]
         if not slug:
             return False
         svc_uid = override_svc_uid or self.env[
@@ -151,6 +152,7 @@ class UserWebsitesGroup(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Tested by [@ANCHOR: user_websites:test_group_site_creation]
         """
         Overrides create to automate the creation of the Odoo security group
         and intelligently generate or format the group's website slug.

@@ -97,7 +97,7 @@ class WebsitePage(models.Model):
             # Finite whitelist of allowed t-att-* attributes to minimize attack surface.
             ALLOWED_T_DIRECTIVES = {
                 "t-name", "t-call", "t-set", "t-value", "t-out", "t-esc",
-                "t-if", "t-elif", "t-else", "t-foreach", "t-as",
+                "t-if", "t-elif", "t-else", "t-foreach", "t-as", "t-options", "t-call-options",
                 "t-att-class", "t-att-style", "t-att-src", "t-att-href",
                 "t-att-alt", "t-att-title", "t-att-name", "t-att-value",
                 "t-att-data-target", "t-att-data-bs-target",
@@ -157,7 +157,7 @@ class WebsitePage(models.Model):
     def _trigger_malicious_arch_violation(self, vals, records=None):
         """Creates an automated violation report and issues a strike when malicious SSTI/XSS is stripped."""
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
 
         owner_id = vals.get("owner_user_id")
@@ -218,7 +218,7 @@ class WebsitePage(models.Model):
             return False
         svc_uid = override_svc_uid or self.env[
             "zero_sudo.security.utils"
-        ]._get_service_uid("user_websites.user_user_websites_service_account")
+        ]._get_service_uid("user_websites.user_websites_service_account")
         page = self.with_user(svc_uid).search(
             [
                 ("url", "=", url),
@@ -287,7 +287,7 @@ class WebsitePage(models.Model):
         if owner_ids:
             unique_owner_ids = list(set(owner_ids))
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_user_websites_service_account"
+                "user_websites.user_websites_service_account"
             )
             users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
             user_limits = {user.id: user._get_page_limit() for user in users}
@@ -326,7 +326,7 @@ class WebsitePage(models.Model):
         if group_ids:
             unique_group_ids = list(set(group_ids))
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_user_websites_service_account"
+                "user_websites.user_websites_service_account"
             )
             global_limit = int(
                 self.env["zero_sudo.security.utils"]._get_system_param(
@@ -365,7 +365,7 @@ class WebsitePage(models.Model):
 
         # 3. Apply Service Account to safely bypass standard ir.ui.view creation restrictions
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
         # ADR-0001: All service account mutations must include appropriate context
         self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
@@ -394,7 +394,7 @@ class WebsitePage(models.Model):
                 member_map = {}
                 if group_ids:
                     svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                        "user_websites.user_user_websites_service_account"
+                        "user_websites.user_websites_service_account"
                     )
                     groups = (
                         self.env["user.websites.group"]
@@ -464,7 +464,7 @@ class WebsitePage(models.Model):
         pages_to_invalidate = [p.url for p in self if p.url]
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
         # ADR-0001: All service account mutations must include appropriate context
         self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
@@ -495,7 +495,7 @@ class WebsitePage(models.Model):
         self._invalidate_cloudflare_cache()
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
         # ADR-0001: All service account mutations must include appropriate context
         self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
@@ -573,7 +573,7 @@ class WebsitePage(models.Model):
 
         if cursor != 0:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_user_websites_service_account"
+                "user_websites.user_websites_service_account"
             )
             cron = self.env.ref("user_websites.ir_cron_flush_view_counters", raise_if_not_found=False)
             if cron:

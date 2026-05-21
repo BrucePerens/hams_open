@@ -86,6 +86,14 @@ When developing tours in Odoo 19, you **MUST** navigate several strict environme
 * **The Save Button Crash (Dirty Forms):** You MUST NEVER manually click the save button (`.o_form_button_save`) and immediately end the tour or navigate away. This leaves a dirty form view open, causing asynchronous network requests that corrupt subsequent tests. You MUST spread the `...TourUtils.safeSave()` macro into your step array to force a DOM blur and wait for the `.o_form_button_create` state.
 * **Asset Registration Silent Failures:** Ensure your JavaScript tour files are actually loading. They MUST be explicitly declared in the module's `__manifest__.py` under the `assets` dictionary within the `web.assets_tests` key.
 
+### Robustness Macros (`TourUtils`)
+To combat Owl's asynchronous rendering delays and other race conditions, import `TourUtils` from `@hams_test/js/tour_utils`. It provides several safety macros you can spread into your tour steps:
+* `TourUtils.waitForElement(trigger, description)`: Pauses the tour until the specified element is fully mounted and visible in the DOM. Essential for testing dynamically loaded modals and wizards.
+* `TourUtils.waitForAbsence(selector, description)`: Pauses the tour until the specified element (e.g., a loading overlay or an old modal) is entirely removed from the DOM.
+* `TourUtils.safeSave(saveTrigger, waitTrigger)`: Safely executes a form save by enforcing a DOM blur before clicking the save button and waiting for the RPC resolution.
+* `TourUtils.deterministicInput(trigger, value)`: Safely injects text values, bypassing the standard Odoo `edit` helper which can cause validation races due to simulated keystrokes.
+* `TourUtils.selectDropdown(dropdownTrigger, itemText)`: Handles the two-step click sequence required for interacting with the new `.o_select_menu` element in Odoo 19.
+
 ---
 
 ## 4. Tour Failure Diagnostics (The Skeleton Dump)

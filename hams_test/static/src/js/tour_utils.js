@@ -76,9 +76,27 @@ export const TourUtils = {
     deterministicInput: function (trigger, value) {
         return {
             content: "[MACRO] Deterministic input for " + trigger,
-            trigger: trigger,
+            trigger: 'body', // SAFE TRIGGER: Do not crash Odoo 19's native querySelector
             run: function () {
-                const el = document.querySelector(trigger);
+                let el = null;
+                try {
+                    el = document.querySelector(trigger);
+                } catch(e) {}
+
+                // Vanilla JS fallback for Odoo's native :contains jQuery selector
+                if (!el && trigger.indexOf(':contains(') !== -1) {
+                    let parts = trigger.split(':contains(');
+                    let tag = parts[0] || '*';
+                    let text = parts[1].replace(/['")]/g, '');
+                    let elements = Array.prototype.slice.call(document.querySelectorAll(tag));
+                    for (let i = 0; i < elements.length; i++) {
+                        if (elements[i].textContent.indexOf(text) !== -1) {
+                            el = elements[i];
+                            break;
+                        }
+                    }
+                }
+
                 if (!el) {
                     throw new Error("[FATAL] Element not found for deterministic input: " + trigger);
                 }
@@ -115,8 +133,17 @@ export const TourUtils = {
             },
             {
                 content: "[MACRO] Select menu item: " + itemText,
-                trigger: '.o_select_menu_item:contains("' + itemText + '")',
-                run: 'click',
+                trigger: 'body', // SAFE TRIGGER: Removed :contains(...) to prevent Chrome DOMException
+                run: function () {
+                    const items = document.querySelectorAll('.o_select_menu_item');
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].textContent.includes(itemText)) {
+                            items[i].click();
+                            return;
+                        }
+                    }
+                    throw new Error("Could not find dropdown item: " + itemText);
+                }
             }
         ];
     },
@@ -129,11 +156,29 @@ export const TourUtils = {
         description = description || "";
         return {
             content: "[MACRO] Wait for DOM element: " + (description || trigger),
-            trigger: 'body',
-            run: async function () {
+            trigger: 'body', // SAFE TRIGGER: Protects parser from SyntaxError timeouts
+            run: function () {
                 return new Promise(function (resolve) {
                     let elapsed = 0;
-                    const isFound = function () { return !!document.querySelector(trigger); };
+                    const isFound = function () {
+                        try {
+                            if (document.querySelector(trigger)) return true;
+                        } catch (e) {
+                            // SyntaxError gracefully caught
+                        }
+
+                        // Vanilla JS fallback for Odoo's native :contains jQuery selector
+                        if (trigger.indexOf(':contains(') !== -1) {
+                            let parts = trigger.split(':contains(');
+                            let tag = parts[0] || '*';
+                            let text = parts[1].replace(/['")]/g, '');
+                            let elements = Array.prototype.slice.call(document.querySelectorAll(tag));
+                            for (let i = 0; i < elements.length; i++) {
+                                if (elements[i].textContent.indexOf(text) !== -1) return true;
+                            }
+                        }
+                        return false;
+                    };
 
                     if (isFound()) {
                         return resolve();
@@ -166,11 +211,29 @@ export const TourUtils = {
         description = description || "";
         return {
             content: "[MACRO] Wait for DOM absence: " + (description || selector),
-            trigger: 'body',
-            run: async function () {
+            trigger: 'body', // SAFE TRIGGER
+            run: function () {
                 return new Promise(function (resolve) {
                     let elapsed = 0;
-                    const isAbsent = function () { return !document.querySelector(selector); };
+                    const isAbsent = function () {
+                        try {
+                            if (document.querySelector(selector)) return false;
+                        } catch (e) {
+                            // SyntaxError gracefully caught
+                        }
+
+                        // Vanilla JS fallback for Odoo's native :contains jQuery selector
+                        if (selector.indexOf(':contains(') !== -1) {
+                            let parts = selector.split(':contains(');
+                            let tag = parts[0] || '*';
+                            let text = parts[1].replace(/['")]/g, '');
+                            let elements = Array.prototype.slice.call(document.querySelectorAll(tag));
+                            for (let i = 0; i < elements.length; i++) {
+                                if (elements[i].textContent.indexOf(text) !== -1) return false;
+                            }
+                        }
+                        return true;
+                    };
 
                     if (isAbsent()) {
                         return resolve();

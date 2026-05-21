@@ -18,7 +18,7 @@ The **Binary Downloader** is a secure, database-backed orchestration module desi
 * **Least Privilege:** Executes downloads and installations under the dedicated `user_binary_downloader_service` service account. The module is fully compliant with the **Zero-Sudo** mandate.
 * **Integrity Enforcement:** Verifies SHA-256 hashes before moving binaries to the execution path (`hams_bin`).
 * **Concurrency Protection:** Implements PostgreSQL **advisory locks** (via `pg_advisory_xact_lock`) during the installation process to prevent race conditions and file corruption when multiple Odoo workers trigger installations simultaneously.
-* **Tar Slip Protection:** Implements strict path validation and member name sanitization during archive extraction. Symbolic links and hard links within archives are strictly forbidden.
+* **Archive Security (Tar/Zip Slip):** Implements strict path validation and member name sanitization during archive extraction (both `.tar.gz` and `.zip`). Extracted files are strictly confined to the `hams_bin` directory. Symbolic links and hard links within archives are strictly forbidden.
 * **Timeouts:** All network operations have strict timeouts (15s for HEAD, 600s for GET) to prevent resource exhaustion and hanging threads.
 * **Permissions:** Target directory (`hams_bin`) and binaries are set to `0o750` to restrict execution and access.
 * **Multi-Website Isolation:** While binaries are stored in a shared system directory, their use is orchestrated via Odoo's standard security model, ensuring that only authorized services can trigger or access specific dependencies.
