@@ -451,7 +451,8 @@ tools/parcel_extract.py
 tools/check_manifest_dependencies.py
 tools/sync_to_private.sh
 tools/check_burn_list.py
-tools/test_runner.py
+tools/test.py
+tools/test_runner.py.OLD
 user_websites/__init__.py
 user_websites/__manifest__.py
 user_websites/controllers/__init__.py

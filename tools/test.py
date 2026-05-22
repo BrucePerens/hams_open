@@ -233,6 +233,40 @@ class FailureExtractor:
         print("==========================================================\n")
 
 
+
+# Intercept --tour-debug flag before Odoo's native argparse crashes on it
+for arg in list(sys.argv):
+    if arg.startswith('--tour-debug='):
+        os.environ['HAMS_TOUR_DEBUG'] = arg.split('=', 1)[1]
+        sys.argv.remove(arg)
+
+import sys
+import os
+
+# Intercept --tour-debug flag before Odoo's native argparse crashes on it
+for arg in list(sys.argv):
+    if arg.startswith('--tour-debug='):
+        os.environ['HAMS_TOUR_DEBUG'] = arg.split('=', 1)[1]
+        sys.argv.remove(arg)
+
+import sys
+import os
+
+# Intercept --tour-debug flag before Odoo's native argparse crashes on it
+for arg in list(sys.argv):
+    if arg.startswith('--tour-debug='):
+        os.environ['HAMS_TOUR_DEBUG'] = arg.split('=', 1)[1]
+        sys.argv.remove(arg)
+
+import sys
+import os
+
+# Intercept --tour-debug flag before Odoo's native argparse crashes on it
+for arg in list(sys.argv):
+    if arg.startswith('--tour-debug='):
+        os.environ['HAMS_TOUR_DEBUG'] = arg.split('=', 1)[1]
+        sys.argv.remove(arg)
+
 def assassinate_chrome():
     """Targeted kill of headless Chrome without bringing down the Odoo Python worker."""
     print("[*] [CHROME-REAPER] Executing targeted assassination of headless Chrome...")
@@ -242,9 +276,20 @@ def assassinate_chrome():
             print(f"[*] [CHROME-REAPER] Targeted Chrome PIDs for assassination: {', '.join(pids)}")
         else:
             print("[*] [CHROME-REAPER] No headless Chrome processes found.")
+            pids = []
     except subprocess.CalledProcessError:
         print("[*] [CHROME-REAPER] No headless Chrome processes found.")
+        pids = []
 
+    if pids:
+        print("[*] [CHROME-REAPER] Dumping open file descriptors for diagnostics before SIGTERM:")
+        for pid in pids:
+            print(f"--- FDs for PID {pid} ---")
+            subprocess.run(["ls", "-l", f"/proc/{pid}/fd"], check=False, stderr=subprocess.DEVNULL)
+
+    print("[*] [CHROME-REAPER] Sending SIGTERM to allow V8 profiler to flush logs...")
+    subprocess.run(["pkill", "-15", "-f", "chrome.*--headless"], check=False, stderr=subprocess.DEVNULL)
+    time.sleep(2.5)
     subprocess.run(["pkill", "-9", "-f", "chrome.*--headless"], check=False, stderr=subprocess.DEVNULL)
     print("[*] [CHROME-REAPER] Chrome instances purged.")
 
@@ -288,26 +333,46 @@ def robust_reap(pid):
 
     pids_to_wait = set()
 
+    print("[*] [REAPER] Dumping open file descriptors for all targets before termination:")
+    for c_pid, cmd_str in descendants:
+        print(f"--- FDs for PID {c_pid} ({cmd_str[:50]}) ---")
+        subprocess.run(["ls", "-l", f"/proc/{c_pid}/fd"], check=False, stderr=subprocess.DEVNULL)
+    print(f"--- FDs for main PID {pid} ---")
+    subprocess.run(["ls", "-l", f"/proc/{pid}/fd"], check=False, stderr=subprocess.DEVNULL)
+
     if pgid:
-        print(f"[*] [REAPER] Sending SIGKILL to Process Group {pgid}")
+        print(f"[*] [REAPER] Sending SIGTERM to Process Group {pgid} to allow log flushing")
         try:
-            os.killpg(pgid, signal.SIGKILL)
+            os.killpg(pgid, signal.SIGTERM)
         except OSError as e:
             print(f"[*] [REAPER] Error killing PGID {pgid}: {e}")
 
     for c_pid, cmd_str in descendants:
         pids_to_wait.add(c_pid)
-        print(f"[*] [REAPER] Target logged for kill: {c_pid} ({cmd_str[:100]})")
+        print(f"[*] [REAPER] Target logged for terminate: {c_pid} ({cmd_str[:100]})")
         try:
-            os.kill(c_pid, signal.SIGKILL)
+            os.kill(c_pid, signal.SIGTERM)
         except OSError:
             pass
 
     pids_to_wait.add(pid)
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.kill(pid, signal.SIGTERM)
     except OSError:
         pass
+
+    time.sleep(2.5)
+
+    if pgid:
+        try: os.killpg(pgid, signal.SIGKILL)
+        except OSError: pass
+
+    for c_pid, _ in descendants:
+        try: os.kill(c_pid, signal.SIGKILL)
+        except OSError: pass
+
+    try: os.kill(pid, signal.SIGKILL)
+    except OSError: pass
 
     print("[*] [REAPER] Waiting for processes to terminate...")
     start_wait = time.time()
@@ -346,7 +411,9 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     env.setdefault("REDIS_HOST", "localhost")
     env.setdefault("RMQ_USER", "guest")
     env.setdefault("RMQ_PASS", "guest")
-    env.setdefault("ODOO_TEST_CHROME_ARGS", "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --js-flags=\"--prof --logfile=/var/tmp/v8_hang.log\"")
+    host_tmp_dir = os.path.dirname(os.environ.get("HAMS_REAL_ERROR_LOG", "/var/tmp")) if "HAMS_REAL_ERROR_LOG" in os.environ else "/var/tmp"
+    os.makedirs(host_tmp_dir, exist_ok=True)
+    env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --js-flags=--prof,--logfile={host_tmp_dir}/v8_hang.log")
 
     process = subprocess.Popen(
         cmd,
@@ -429,7 +496,8 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
                     break
             except queue.Empty:
                 idle_seconds += 1
-                timeout_threshold = 30 if has_failed else 180
+                # Give common.py's 60s SIGALRM time to gracefully tear down Chrome first
+                timeout_threshold = 90 if has_failed else 180
 
                 if idle_seconds % 15 == 0:
                     sys.stdout.write(f"[*] [DEBUG-RUNNER] IO Reader idle for {idle_seconds}s. Process poll: {process.poll()}\n")
@@ -441,7 +509,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
                     # The test process died but something (like a Postgres background worker) is holding the pipe open
                     break
                 if idle_seconds >= timeout_threshold:
-                    if has_failed and idle_seconds < 60:
+                    if has_failed and idle_seconds < 120:
                         # First strike: Just kill Chrome to try to unblock Odoo's teardown
                         print(f"\n[!] WARNING: Test teardown hanging for {timeout_threshold}s. Assassinating Chrome to unblock suite...\n")
                         assassinate_chrome()
@@ -755,7 +823,9 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     os.environ["HAMS_ISOLATED_NS"] = "1"
     os.environ["PGHOST"] = pg_sock
-    os.environ["ODOO_TEST_CHROME_ARGS"] = "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --js-flags=\"--prof --logfile=/var/tmp/v8_hang.log\""
+    host_tmp_dir = os.path.dirname(os.environ.get("HAMS_REAL_ERROR_LOG", "/var/tmp")) if "HAMS_REAL_ERROR_LOG" in os.environ else "/var/tmp"
+    os.makedirs(host_tmp_dir, exist_ok=True)
+    os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --js-flags=--prof,--logfile={host_tmp_dir}/v8_hang.log"
     os.environ["HAMS_REAL_ERROR_LOG"] = real_error_log
     os.environ["HOME"] = "/var/lib/odoo"
     os.environ["XDG_DATA_HOME"] = "/var/lib/odoo/.local/share"
@@ -803,7 +873,10 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
             else:
                 shutil.copy2(artifact, dst)
 
-            os.chown(dst, orig_uid, -1)
+            try:
+                os.chown(dst, orig_uid, -1)
+            except OSError:
+                pass
 
     for cf in ["db_cache_master.dump", "db_cache_master.hash", "db_cache_master.filestore.tar.gz"]:
         src = f"/opt/hams/test/{cf}"
@@ -905,7 +978,9 @@ def main():
         return
 
     os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
-    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --js-flags=\"--prof --logfile=/var/tmp/v8_hang.log\"")
+    host_tmp_dir = os.path.dirname(os.environ.get("HAMS_REAL_ERROR_LOG", "/var/tmp")) if "HAMS_REAL_ERROR_LOG" in os.environ else "/var/tmp"
+    os.makedirs(host_tmp_dir, exist_ok=True)
+    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --js-flags=--prof,--logfile={host_tmp_dir}/v8_hang.log")
 
     # Force system site-packages resolution for Odoo core in restricted venvs
     sys_paths = os.environ.get("PYTHONPATH", "")

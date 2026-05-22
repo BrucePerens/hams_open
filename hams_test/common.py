@@ -3,13 +3,16 @@ import glob
 import logging
 import os
 import pwd
+import re
 import shutil
 import signal
+import subprocess
 import time
 import urllib.request
 import threading
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser
+import odoo.tests.common as odoo_test_common
 
 _logger = logging.getLogger(__name__)
 
@@ -21,10 +24,65 @@ def _timeout_handler(signum, frame):
     _logger.error("TRACING: OS Signal %s (Timeout) received! Force-aborting hung thread.", signum)
     raise TourWatchdogError(f"Test step timed out and was aborted by OS signal {signum}.")
 
+
+# 🚨 CHROME LAUNCH INTERCEPTOR 🚨
+# Intercepts the OS-level Popen call to forcefully merge all Chrome flags and point
+# the V8 profiler directly to the host-mounted partition using comma separation.
+original_popen = subprocess.Popen
+
+class PatchedPopen(original_popen):
+    def __init__(self, args, *pargs, **kwargs):
+        is_chrome = isinstance(args, list) and args and isinstance(args[0], str) and 'chrome' in args[0].lower()
+
+        if is_chrome:
+            new_args = []
+            js_flags = []
+            for arg in args:
+                if arg.startswith('--js-flags='):
+                    flags = arg.split('=', 1)[1].split(',')
+                    js_flags.extend([f for f in flags if f])
+                else:
+                    new_args.append(arg)
+
+            # Write directly to the host mount. No ephemeral /var/tmp fallback.
+            host_tmp = "/var/tmp"
+            err_log = os.environ.get("HAMS_REAL_ERROR_LOG")
+            if err_log:
+                host_tmp = os.path.dirname(err_log)
+                try:
+                    os.makedirs(host_tmp, exist_ok=True)
+                except OSError as dir_e:
+                    _logger.warning("TRACING: Ignored OSError creating dir in PatchedPopen: %s", repr(dir_e))
+
+            js_flags.append('--prof')
+            js_flags.append(f'--logfile={host_tmp}/v8_hang.log')
+            js_flags.append('--no-logfile-per-isolate')
+
+            if js_flags:
+                # Deduplicate flags while preserving order
+                seen = set()
+                unique_flags = []
+                for f in js_flags:
+                    if f not in seen:
+                        seen.add(f)
+                        unique_flags.append(f)
+
+                # V8 strictly requires COMMAS to parse multiple flags when passed through Chrome
+                new_args.append('--js-flags=' + ','.join(unique_flags))
+
+            args = new_args
+
+        super().__init__(args, *pargs, **kwargs)
+
+        if is_chrome:
+            _logger.error("TRACING: [POPEN INTERCEPTOR] Launched Chrome PID %s", self.pid)
+
+subprocess.Popen = PatchedPopen
+if hasattr(odoo_test_common, 'subprocess'):
+    odoo_test_common.subprocess.Popen = PatchedPopen
+
+
 # 🚨 BENIGN ERROR SCRUBBER 🚨
-# Odoo native asserts console errors during browser.stop().
-# We intercept this to silently purge expected warnings (like Owl dev mode)
-# so they don't falsely fail the test suite.
 original_browser_stop = ChromeBrowser.stop
 def _patched_browser_stop(self, *args, **kwargs):
     for attr in ['_errors', '_browser_errors', 'errors']:
@@ -41,56 +99,11 @@ def _patched_browser_stop(self, *args, **kwargs):
     return original_browser_stop(self, *args, **kwargs)
 ChromeBrowser.stop = _patched_browser_stop
 
-# 🚨 SYNCHRONOUS DOM & SCREENSHOT DUMP 🚨
-# Kept strictly for normal test failures (e.g. missing elements).
-# We explicitly avoid invoking this when a hard deadlock is detected.
+# 🚨 NATIVE SCREENSHOT RESCUE 🚨
 original_take_screenshot = ChromeBrowser.take_screenshot
 def _patched_take_screenshot(self, *args, **kwargs):
-    _logger.error("\n========== PYTHON-INITIATED UI STATE DUMP ==========")
-    try:
-        res = self._websocket_request('Runtime.evaluate', params={
-            'expression': """
-                (() => {
-                    function _buildSkeleton(node) {
-                        if (!node) return "";
-                        if (node.nodeType === Node.TEXT_NODE) return node.textContent.trim();
-                        if (node.nodeType !== Node.ELEMENT_NODE) return "";
-                        if (node.classList && (node.classList.contains('d-none') || node.classList.contains('o_hidden'))) return "";
-
-                        let isImportant = ['BUTTON', 'INPUT', 'A', 'SELECT', 'TEXTAREA'].includes(node.tagName) ||
-                            node.hasAttribute('name') || node.hasAttribute('id') || node.hasAttribute('data-menu-xmlid') ||
-                            (node.classList && Array.from(node.classList).some(c => c.startsWith('o_tour_') || c === 'o_notification' || c === 'modal'));
-
-                        let childrenText = Array.from(node.childNodes).map(_buildSkeleton).filter(Boolean).join(' ');
-
-                        if (isImportant) {
-                            let attrs = [];
-                            ['name', 'id', 'data-menu-xmlid', 'type', 'placeholder', 'value'].forEach(a => {
-                                if (node.hasAttribute(a)) attrs.push(a + '="' + node.getAttribute(a) + '"');
-                            });
-                            if (node.classList) {
-                                let cls = Array.from(node.classList).filter(c => c.startsWith('o_') || c === 'btn' || c.startsWith('btn-')).join(' ');
-                                if (cls) attrs.push('class="' + cls + '"');
-                            }
-                            let tag = node.tagName.toLowerCase();
-                            let content = childrenText.length > 80 ? childrenText.substring(0, 80) + '...' : childrenText;
-                            return '\\n<' + tag + ' ' + attrs.join(' ') + '>' + content + '</' + tag + '>';
-                        }
-                        return childrenText;
-                    }
-                    return "URL: " + document.location.pathname + document.location.hash + "\\n" + _buildSkeleton(document.body).replace(/\\s{2,}/g, ' ');
-                })();
-            """,
-            'returnByValue': True
-        }, timeout=10.0)
-        if res and 'result' in res and 'value' in res['result']:
-            _logger.error("========== INTERACTABLE DOM SKELETON ==========\n%s\n===============================================", res['result']['value'])
-    except Exception as dump_e: # audit-ignore-catch-all
-        _logger.warning("TRACING: Could not request DOM state via CDP: %s", repr(dump_e))
-
     try:
         path = original_take_screenshot(self, *args, **kwargs)
-        # Odoo 19 returns a concurrent.futures.Future for async screenshot dispatch
         if hasattr(path, 'result'):
             path = path.result(timeout=20.0)
 
@@ -99,9 +112,6 @@ def _patched_take_screenshot(self, *args, **kwargs):
         err_log = os.environ.get("HAMS_REAL_ERROR_LOG")
         if path and os.path.exists(path) and err_log:
             host_tmp = os.path.dirname(err_log)
-
-            # Secure Directory Creation
-            is_new_dir = not os.path.exists(host_tmp)
             os.makedirs(host_tmp, exist_ok=True)
 
             orig_user = os.environ.get("SUDO_USER", "odoo")
@@ -110,7 +120,7 @@ def _patched_take_screenshot(self, *args, **kwargs):
                 user_info = pwd.getpwnam(orig_user)
                 orig_uid = user_info.pw_uid
                 orig_gid = user_info.pw_gid
-                if is_new_dir:
+                if not os.path.exists(host_tmp):
                     os.chown(host_tmp, orig_uid, orig_gid)
             except Exception as user_e: # audit-ignore-catch-all
                 _logger.warning("TRACING: Could not resolve SUDO_USER info for chown: %s", repr(user_e))
@@ -142,9 +152,7 @@ class DiagnosticMock(MagicMock):
         if self._current_depth > self._max_depth:
             self._current_depth = 0
             raise RecursionError(
-                f"DiagnosticMock Security Trip: Recursion depth limit ({self._max_depth}) exceeded "
-                f"on mock '{self._mock_name or 'unnamed'}'. You likely have a cyclic patch or "
-                f"are mocking a core Odoo registry propagation method."
+                f"DiagnosticMock Security Trip: Recursion depth limit ({self._max_depth}) exceeded."
             )
         try:
             return super().__call__(*args, **kwargs)
@@ -181,10 +189,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     @classmethod
     def setUpClass(cls):
         # 🚨 THE ANTI-HANG INJECTION 🚨
-        # Odoo's native HttpCase spawns non-daemon threads for Werkzeug and Chrome websockets.
-        # If these connections deadlock, the non-daemon threads prevent Python from exiting,
-        # causing the entire test runner to hang infinitely.
-        # We intercept thread.start() to force EVERY thread spawned during setup to be a daemon.
         original_start = threading.Thread.start
 
         def _daemonized_start(self_thread, *args, **kwargs):
@@ -198,96 +202,90 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     def tearDownClass(cls):
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        # Defuse Server Thread Join
         if hasattr(cls, 'server_thread') and cls.server_thread:
             cls.server_thread.join = lambda *args, **kwargs: None
 
-        # Defuse Server Stop
         if hasattr(cls, 'server') and cls.server:
             try:
                 if hasattr(cls.server, 'server') and hasattr(cls.server.server, 'socket'):
                     cls.server.server.socket.close()
-            except OSError as e:
-                _logger.error("TRACING: Ignored OSError closing server socket: %s", e)
-            except Exception as e: # audit-ignore-catch-all
-                _logger.error("TRACING: Ignored Exception closing server socket: %s", e)
+            except Exception as close_e: # audit-ignore-catch-all
+                _logger.warning("TRACING: Ignored Exception closing server socket: %s", repr(close_e))
             cls.server.stop = lambda *args, **kwargs: None
 
-        # OS Timeout for super().tearDownClass()
         original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
         signal.alarm(30)
         try:
             super().tearDownClass()
             _logger.info("TRACING: Successfully completed super().tearDownClass()")
         except Exception as e: # audit-ignore-catch-all
-            if "socket is already closed" in str(e) or "WebSocketConnectionClosedException" in type(e).__name__:
-                _logger.warning("TRACING: Native tearDownClass encountered closed websocket (expected during abort).")
-            else:
+            if "socket is already closed" not in str(e) and "WebSocketConnectionClosedException" not in type(e).__name__:
                 _logger.error("TRACING: Native teardown failed or hung: %s", e)
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, original_alrm)
 
-            # Aggressively murder Chrome AFTER teardown
             if hasattr(cls, 'browser') and cls.browser:
                 if hasattr(cls.browser, 'chrome_process'):
                     try:
+                        cls.browser.chrome_process.terminate()
+                        cls.browser.chrome_process.wait(timeout=2.0)
+                    except Exception as term_e: # audit-ignore-catch-all
+                        _logger.warning("TRACING: Ignored Exception terminating chrome process: %s", repr(term_e))
+                    try:
                         cls.browser.chrome_process.kill()
-                        _logger.info("TRACING: Aggressively killed chrome_process to drop websockets.")
-                    except OSError:
-                        pass
-                # Neutralize browser websocket join
+                    except OSError as kill_e:
+                        _logger.warning("TRACING: Ignored OSError killing chrome process: %s", repr(kill_e))
                 if hasattr(cls.browser, '_websocket_thread') and cls.browser._websocket_thread:
                     cls.browser._websocket_thread.join = lambda *args, **kwargs: None
 
             _logger.info("TRACING: Exiting HamsHttpCase.tearDownClass")
 
     def tearDown(self):
-        # Apply OS-level timeout to teardown to prevent unkillable zombies
         _logger.info("TRACING: Entering HamsHttpCase.tearDown")
 
         original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(60) # 60 seconds hard cap for teardown
+        signal.alarm(60)
         try:
             super().tearDown()
             _logger.info("TRACING: Completed super().tearDown")
         except Exception as e: # audit-ignore-catch-all
-            if "socket is already closed" in str(e) or "WebSocketConnectionClosedException" in type(e).__name__ or "BrokenPipeError" in type(e).__name__:
-                _logger.warning("TRACING: Native tearDown encountered closed websocket (expected during abort).")
-            else:
+            if "socket is already closed" not in str(e) and "WebSocketConnectionClosedException" not in type(e).__name__ and "BrokenPipeError" not in type(e).__name__:
                 _logger.error("TRACING: HamsHttpCase.tearDown caught exception: %s", e)
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, original_alrm)
 
-            # 🚨 THE PIPE-CLOSING INJECTION 🚨
-            # Moved aggressive kill AFTER native teardown so Odoo finishes saving screenshots
-            # and extracts code coverage without Chrome dying prematurely.
             if hasattr(self, 'browser') and self.browser:
                 if hasattr(self.browser, 'chrome_process'):
                     try:
+                        self.browser.chrome_process.terminate()
+                        self.browser.chrome_process.wait(timeout=2.0)
+                    except Exception as term_e: # audit-ignore-catch-all
+                        _logger.warning("TRACING: Ignored Exception terminating instance chrome process: %s", repr(term_e))
+                    try:
                         self.browser.chrome_process.kill()
-                        _logger.info("TRACING: Aggressively killed instance chrome_process.")
-                    except OSError:
-                        pass
+                    except OSError as kill_e:
+                        _logger.warning("TRACING: Ignored OSError killing instance chrome process: %s", repr(kill_e))
                 if hasattr(self.browser, '_websocket_thread') and self.browser._websocket_thread:
                     self.browser._websocket_thread.join = lambda *args, **kwargs: None
 
-            # Clean up the V8 profiler log to prevent runaway disk usage if the test succeeded
+            # Clean up the V8 profiler log directly on the host mount if the test succeeded
             if not getattr(self.__class__, '_hams_tour_failed', False):
-                for log_file in glob.glob("/var/tmp/v8_hang*.log"):
+                host_tmp = "/var/tmp"
+                err_log = os.environ.get("HAMS_REAL_ERROR_LOG")
+                if err_log:
+                    host_tmp = os.path.dirname(err_log)
+                for log_file in glob.glob(os.path.join(host_tmp, "v8_hang*.log")):
                     try:
-                        # Truncate rather than remove. This preserves the file descriptor
-                        # so the persistent Chrome instance can safely keep writing to it.
-                        with open(log_file, 'w'):
-                            pass
-                    except OSError:
-                        pass
+                        open(log_file, 'w').close()
+                    except OSError as trunc_e:
+                        _logger.warning("TRACING: Ignored OSError truncating V8 log: %s", repr(trunc_e))
 
             _logger.info("TRACING: Exiting HamsHttpCase.tearDown")
 
     def browser_js(self, *args, **kwargs):
-        _logger.info("TRACING: Entering browser_js wrapper. Setting 60s SIGALRM.")
+        _logger.info("TRACING: Entering browser_js wrapper.")
         original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
         signal.alarm(60)
         try:
@@ -296,8 +294,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         except Exception as e: # audit-ignore-catch-all
             self.__class__._hams_tour_failed = True
 
-            # Check if this exception chain involves our TourWatchdogError
-            # or a websocket closure caused by the reaper/timeout.
             is_watchdog = False
             current_exc = e
             while current_exc is not None:
@@ -306,19 +302,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     break
                 current_exc = getattr(current_exc, '__context__', None)
 
-            # Only attempt a synchronous screenshot if Chrome is NOT deadlocked
             if not is_watchdog and hasattr(self, 'browser'):
                 try:
-                    _logger.error("TRACING: Exception caught in browser_js. Forcing screenshot...")
                     self.browser.take_screenshot()
                 except Exception as ss_e: # audit-ignore-catch-all
-                    _logger.error("TRACING: Forced screenshot failed: %s", repr(ss_e))
+                    _logger.warning("TRACING: Ignored Exception taking fallback screenshot: %s", repr(ss_e))
 
             if is_watchdog:
-                _logger.error("TRACING: Gracefully caught watchdog timeout or severed websocket. Truncating traceback via from None.")
                 raise AssertionError("Tour failed due to watchdog timeout (OS Signal 14) or severed Chrome websocket.") from None
             else:
-                _logger.error("TRACING: super().browser_js failed with exception: %s", repr(e))
                 raise e from None
         finally:
             signal.alarm(0)
@@ -326,7 +318,23 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             _logger.info("TRACING: Exiting browser_js wrapper.")
 
     def start_tour(self, *args, **kwargs):
+        args_list = list(args)
+
+        # 🚨 DYNAMIC DEBUG OVERRIDE 🚨
+        # Reads HAMS_TOUR_DEBUG set by the test runner to override tour URL debug flags.
+        tour_debug = os.environ.get("HAMS_TOUR_DEBUG")
+        if tour_debug and args_list and isinstance(args_list[0], str):
+            url_path = args_list[0]
+            if "debug=" in url_path:
+                url_path = re.sub(r'debug=[^&]*', f'debug={tour_debug}', url_path)
+            else:
+                separator = "&" if "?" in url_path else "?"
+                url_path += f"{separator}debug={tour_debug}"
+            args_list[0] = url_path
+
+        args = tuple(args_list)
         _logger.info("TRACING: Entering start_tour wrapper.")
+
         try:
             super().start_tour(*args, **kwargs)
             _logger.info("TRACING: super().start_tour completed successfully.")
@@ -347,13 +355,11 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         f.write(str(bundle))
                 _logger.error("Dumped compiled JS bundle to %s", dump_path)
             except Exception as inner_e:  # audit-ignore-catch-all
-                _logger.error("Could not dump bundle to /var/tmp: %s", repr(inner_e))
+                _logger.warning("TRACING: Ignored Exception dumping bundle to /var/tmp: %s", repr(inner_e))
 
             if isinstance(e, AssertionError):
-                _logger.error("TRACING: Tour failed cleanly with AssertionError: %s", repr(e))
                 raise e from None
             else:
-                _logger.error("TRACING: Exception caught in start_tour wrapper: %s", repr(e))
                 raise e from None
 
 
@@ -393,8 +399,8 @@ class HamsIntegrationCase(HamsHttpCase):
                         if response.getcode() in (200, 204):
                             is_healthy = True
                             break
-                except Exception as e: # audit-ignore-catch-all
-                    _logger.error("Daemon health check not ready yet: %s", repr(e))
+                except Exception as req_e: # audit-ignore-catch-all
+                    _logger.warning("TRACING: Daemon health check not ready yet: %s", repr(req_e))
                 time.sleep(0.5) # audit-ignore-sleep
 
             if not is_healthy:
