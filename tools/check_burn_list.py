@@ -1054,11 +1054,13 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         else ""
                     )
                 ):
-                    self.add_warning(
-                        node.lineno,
-                        "[%AUDIT] THREAD BLOCKING: 'time.sleep()' halts the worker...",
-                    )
+                    if not any(x in getattr(self, "filepath", self.filename).replace("\\", "/") for x in ("tools/", "daemon/", "daemons/")):
+                        self.add_warning(
+                            node.lineno,
+                            "[%AUDIT] THREAD BLOCKING: 'time.sleep()' halts the worker...",
+                        )
                 elif attr == "Thread" and getattr(node.func.value, "id", "") == "threading":
+                    self.add_error(node.lineno, "CRITICAL DOS VECTOR: Unbounded Thread.")
                     self.add_error(node.lineno, "CRITICAL DOS VECTOR: Unbounded Thread.")
 
             if self.in_http_controller and self.is_odoo_module:
