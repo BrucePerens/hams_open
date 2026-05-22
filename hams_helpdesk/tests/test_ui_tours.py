@@ -8,7 +8,7 @@ class TestHelpdeskTours(HamsHttpCase):
         """Simulates an operator logging in, viewing their shift, and executing a handoff."""
         # [@ANCHOR: test_helpdesk_operator_tour]
         # Note: In a real CI environment, we ensure the 'admin' user has helpdesk manager rights.
-        self.start_tour("/odoo", "helpdesk_operator_tour", login="admin")
+        self.start_tour("/odoo?debug=1", "helpdesk_operator_tour", login="admin")
 
     def test_02_helpdesk_portal_tour(self):
         """Simulates a customer checking their ticket status on the external portal."""
@@ -28,4 +28,4 @@ class TestHelpdeskTours(HamsHttpCase):
             'partner_id': portal_user.partner_id.id,
         })
 
-        self.start_tour("/", "helpdesk_portal_tour", login="portal_test")
+        self.start_tour("/?debug=1", "helpdesk_portal_tour", login="portal_test")

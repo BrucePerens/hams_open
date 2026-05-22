@@ -3,7 +3,7 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@hams_test/js/tour_utils";
 
 registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
-    url: "/odoo",
+    url: "/odoo?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         {

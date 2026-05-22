@@ -39,22 +39,22 @@ class TestUserWebsitesUITours(odoo.tests.HttpCase):
     def test_01_violation_report_tour(self):
         # Tests [@ANCHOR: test_tour_violation_report]
         # Access the page as an unauthenticated guest so the Report Violation button is visible
-        self.start_tour(f"/{self.user_test.website_slug}/home", "violation_report_tour")
+        self.start_tour(f"/{self.user_test.website_slug}/home?debug=1", "violation_report_tour")
 
     def test_02_toast_notifications_tour(self):
         # Tests [@ANCHOR: test_tour_toast_notifications]
-        self.start_tour("/?report_submitted=1", "toast_notifications_tour")
+        self.start_tour("/?report_submitted=1&debug=1", "toast_notifications_tour")
 
     def test_03_gdpr_privacy_tour(self):
         # Tests [@ANCHOR: test_tour_gdpr_privacy]
         # Adding a minor delay allows Owl components to hydrate in constrained VM environments
-        self.start_tour("/my/privacy", "gdpr_privacy_tour", login=self.user_test.login, step_delay=100)
+        self.start_tour("/my/privacy?debug=1", "gdpr_privacy_tour", login=self.user_test.login, step_delay=100)
 
     def test_04_moderation_appeal_tour(self):
         # Tests [@ANCHOR: test_tour_moderation_appeal]
         # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
         self.user_test.is_suspended_from_websites = True
-        self.start_tour("/my/home", "moderation_appeal_tour", login=self.user_test.login)
+        self.start_tour("/my/home?debug=1", "moderation_appeal_tour", login=self.user_test.login)
 
     def test_05_create_site_tour(self):
         # Tests [@ANCHOR: test_tour_create_site]
@@ -77,7 +77,7 @@ class TestUserWebsitesUITours(odoo.tests.HttpCase):
                 ],
             }
         )
-        self.start_tour("/sitetour/home", "create_site_tour", login=user_no_site.login, step_delay=100)
+        self.start_tour("/sitetour/home?debug=1", "create_site_tour", login=user_no_site.login, step_delay=100)
 
     def test_06_create_blog_tour(self):
         # Tests [@ANCHOR: test_tour_create_blog]
@@ -100,17 +100,17 @@ class TestUserWebsitesUITours(odoo.tests.HttpCase):
                 ],
             }
         )
-        self.start_tour("/blogtour/blog", "create_blog_tour", login=user_no_blog.login)
+        self.start_tour("/blogtour/blog?debug=1", "create_blog_tour", login=user_no_blog.login)
 
     def test_07_community_directory_tour(self):
         # Tests [@ANCHOR: test_tour_community_directory]
-        self.start_tour("/community", "community_directory_tour")
+        self.start_tour("/community?debug=1", "community_directory_tour")
 
     def test_08_frontend_misc_tour(self):
         # Tests [@ANCHOR: test_tour_frontend_misc]
-        self.start_tour("/user-websites/documentation", "frontend_misc_tour", login=self.user_test.login)
+        self.start_tour("/user-websites/documentation?debug=1", "frontend_misc_tour", login=self.user_test.login)
 
     def test_09_backend_views_tour(self):
         # Tests [@ANCHOR: test_tour_backend_views]
         admin = self.env.ref("base.user_admin")
-        self.start_tour("/odoo", "backend_views_tour", login=admin.login)
+        self.start_tour("/odoo?debug=1", "backend_views_tour", login=admin.login)

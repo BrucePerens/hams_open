@@ -44,7 +44,7 @@ class TestBinaryDownloaderTour(HamsHttpCase):
         )
         # Tested by [@ANCHOR: test_binary_install_tour]
         self.start_tour(
-            "/odoo?action=binary_downloader.action_binary_downloader_manifest",
+            "/odoo?debug=1&action=binary_downloader.action_binary_downloader_manifest",
             "binary_install_tour",
             login="admin",
         )

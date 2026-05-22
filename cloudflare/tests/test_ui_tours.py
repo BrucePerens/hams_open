@@ -33,12 +33,12 @@ class TestCloudflareUITours(HamsHttpCase):
     def test_01_ip_ban_tour(self):
         """Executes the JS tour simulating an administrator reviewing honeypot bans."""
         self.authenticate(self.admin.login, self.admin.login)
-        self.start_tour("/odoo", "cf_ip_ban_tour", login=self.admin.login)
+        self.start_tour("/odoo?debug=1", "cf_ip_ban_tour", login=self.admin.login)
 
     def test_02_waf_rule_tour(self):
         """Executes the JS tour simulating an administrator viewing WAF Edge configurations."""
         self.authenticate(self.admin.login, self.admin.login)
-        self.start_tour("/odoo", "cf_waf_rule_tour", login=self.admin.login)
+        self.start_tour("/odoo?debug=1", "cf_waf_rule_tour", login=self.admin.login)
 
     def test_03_purge_wizard_tour(self):
         """Executes the JS tour for the Manual Cache Purge Wizard."""
@@ -53,7 +53,7 @@ class TestCloudflareUITours(HamsHttpCase):
         mock_purge.return_value = True
 
         self.authenticate(self.admin.login, self.admin.login)
-        self.start_tour("/odoo", "cf_purge_wizard_tour", login=self.admin.login)
+        self.start_tour("/odoo?debug=1", "cf_purge_wizard_tour", login=self.admin.login)
 
     def test_04_backend_views_rendering(self):
         # [@ANCHOR: test_cf_backend_views_rendering]

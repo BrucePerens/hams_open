@@ -5,7 +5,7 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 
 // # Verified by [@ANCHOR: test_daemon_key_manager_tour]
 registry.category("web_tour.tours").add("daemon_key_manager_tour", {
-    url: "/odoo?action=daemon_key_manager.action_daemon_key_registry",
+    url: "/odoo?debug=1&action=daemon_key_manager.action_daemon_key_registry",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         {

@@ -4,7 +4,7 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 
 // # Verified by [@ANCHOR: test_helpdesk_operator_tour]
 registry.category("web_tour.tours").add("helpdesk_operator_tour", {
-    url: "/odoo",
+    url: "/odoo?debug=1",
     steps: () => [
         {
             trigger: '[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]',

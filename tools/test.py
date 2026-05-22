@@ -20,6 +20,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 
 @contextlib.contextmanager
 def micro_privilege(username):
@@ -231,6 +232,105 @@ class FailureExtractor:
         print("==========================================================\n")
 
 
+def assassinate_chrome():
+    """Targeted kill of headless Chrome without bringing down the Odoo Python worker."""
+    print("[*] [CHROME-REAPER] Executing targeted assassination of headless Chrome...")
+    try:
+        pids = subprocess.check_output(["pgrep", "-f", "chrome.*--headless"], text=True).split()
+        if pids:
+            print(f"[*] [CHROME-REAPER] Targeted Chrome PIDs for assassination: {', '.join(pids)}")
+        else:
+            print("[*] [CHROME-REAPER] No headless Chrome processes found.")
+    except subprocess.CalledProcessError:
+        print("[*] [CHROME-REAPER] No headless Chrome processes found.")
+
+    subprocess.run(["pkill", "-9", "-f", "chrome.*--headless"], check=False, stderr=subprocess.DEVNULL)
+    print("[*] [CHROME-REAPER] Chrome instances purged.")
+
+
+def robust_reap(pid):
+    """
+    Process reaper that hunts down descendants (including those that escape
+    the process group, like headless Chrome), prints what it kills, and waits
+    for confirmation of termination.
+    """
+    print(f"\n[*] [REAPER] Initiating robust reaper for PID {pid}...")
+
+    descendants = []
+    try:
+        output = subprocess.check_output(['ps', '-eo', 'pid,ppid,args'], text=True)
+        children_map = {}
+        for line in output.splitlines()[1:]:
+            parts = line.strip().split(maxsplit=2)
+            if len(parts) >= 3:
+                try:
+                    cpid, ppid = int(parts[0]), int(parts[1])
+                    cmd = parts[2]
+                    children_map.setdefault(ppid, []).append((cpid, cmd))
+                except ValueError:
+                    continue
+
+        def _traverse(p):
+            for c_pid, c_cmd in children_map.get(p, []):
+                descendants.append((c_pid, c_cmd))
+                _traverse(c_pid)
+
+        _traverse(pid)
+    except Exception as e: # audit-ignore-catch-all
+        _logger.warning("Failed to map process tree in robust_reap: %s", e)
+        print(f"[*] [REAPER] Warning: Could not map process tree: {e}")
+
+    try:
+        pgid = os.getpgid(pid)
+    except OSError:
+        pgid = None
+
+    pids_to_wait = set()
+
+    if pgid:
+        print(f"[*] [REAPER] Sending SIGKILL to Process Group {pgid}")
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except OSError as e:
+            print(f"[*] [REAPER] Error killing PGID {pgid}: {e}")
+
+    for c_pid, cmd_str in descendants:
+        pids_to_wait.add(c_pid)
+        print(f"[*] [REAPER] Target logged for kill: {c_pid} ({cmd_str[:100]})")
+        try:
+            os.kill(c_pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+    pids_to_wait.add(pid)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
+    print("[*] [REAPER] Waiting for processes to terminate...")
+    start_wait = time.time()
+    while pids_to_wait and (time.time() - start_wait) < 15.0:
+        still_alive = set()
+        for p in pids_to_wait:
+            try:
+                os.kill(p, 0)
+                still_alive.add(p)
+            except OSError:
+                print(f"[*] [REAPER] Process {p} confirmed dead.")
+
+        pids_to_wait = still_alive
+        if pids_to_wait:
+            time.sleep(0.5)
+
+    if pids_to_wait:
+        print(f"[*] [REAPER] WARNING: PIDs still alive after wait: {pids_to_wait}")
+        print("[*] [REAPER] Executing extreme fallback pkill for headless chrome...")
+        subprocess.run(["pkill", "-f", "chrome.*--headless"], check=False, stderr=subprocess.DEVNULL)
+    else:
+        print("[*] [REAPER] Reaper completed successfully. All targets eliminated.")
+
+
 def run_cmd(cmd, extractor=None, cwd=None, env=None):
     """
     Executes a shell command blocking natively on IO (Queue.get with OS condition variables)
@@ -262,6 +362,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     print(f"[*] [DEBUG-RUNNER] Executing command: {' '.join(cmd)}")
 
     force_killed = False
+    has_failed = False
     q = queue.Queue()
 
     def reader():
@@ -301,6 +402,15 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
                     sys.stdout.flush()
                 # ---------------------------------
 
+                if "[watchdog alarm]" in line_lower:
+                    print("\n[!] FATAL JS WATCHDOG ALARM DETECTED! Invoking immediate reaper...\n")
+                    robust_reap(process.pid)
+                    force_killed = True
+                    break
+
+                if "asking for screenshot" in line_lower or "traceback (most recent" in line_lower or line.startswith("FAIL: ") or line.startswith("ERROR: "):
+                    has_failed = True
+
                 if ("deprecated" in line_lower and "directive" in line_lower) or "pypdf2" in line_lower:
                     continue
 
@@ -312,12 +422,14 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
 
                 # OS SIGNAL COORDINATION: Relay JS watchdog alarms directly to the Python test thread
                 if "Hit CTRL-C again or send a second signal" in line:
-                    print(f"\n[!] WARNING: Odoo background thread refused to terminate gracefully. Executing killpg({os.getpgid(process.pid)}, SIGKILL).\n")
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                    print("\n[!] WARNING: Odoo background thread refused to terminate gracefully. Invoking reaper...\n")
+                    robust_reap(process.pid)
                     force_killed = True
                     break
             except queue.Empty:
                 idle_seconds += 1
+                timeout_threshold = 30 if has_failed else 180
+
                 if idle_seconds % 15 == 0:
                     sys.stdout.write(f"[*] [DEBUG-RUNNER] IO Reader idle for {idle_seconds}s. Process poll: {process.poll()}\n")
                     sys.stdout.flush()
@@ -327,24 +439,25 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
                     sys.stdout.flush()
                     # The test process died but something (like a Postgres background worker) is holding the pipe open
                     break
-                if idle_seconds >= 180:
-                    print(f"\n[!] WARNING: Test runner hung for 180 seconds with no output! Force killing PGID {os.getpgid(process.pid)}...\n")
-                    try:
-                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                        print("[*] [DEBUG-RUNNER] killpg executed successfully for hung process.")
-                    except OSError as e:
-                        print(f"[*] [DEBUG-RUNNER] killpg failed: {e}")
+                if idle_seconds >= timeout_threshold:
+                    if has_failed and idle_seconds < 60:
+                        # First strike: Just kill Chrome to try to unblock Odoo's teardown
+                        print(f"\n[!] WARNING: Test teardown hanging for {timeout_threshold}s. Assassinating Chrome to unblock suite...\n")
+                        assassinate_chrome()
+                        # Reset idle and remove failure flag so it gets a full 180s to recover or proceed
+                        idle_seconds = 0
+                        has_failed = False
+                        continue
+
+                    print(f"\n[!] WARNING: Test runner hung for {timeout_threshold} seconds with no output! Invoking full process group reaper...\n")
+                    robust_reap(process.pid)
                     force_killed = True
                     if extractor:
-                        extractor.process_line("CRITICAL: Test execution hung for 180 seconds. Process forcefully killed.\n")
+                        extractor.process_line(f"CRITICAL: Test execution hung for {timeout_threshold} seconds. Process forcefully killed.\n")
                     break
     except KeyboardInterrupt:
-        print(f"\n[!] CTRL-C detected! Forcefully terminating the test process group {os.getpgid(process.pid)}...")
-        try:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            print("[*] [DEBUG-RUNNER] killpg executed successfully on Ctrl-C.")
-        except OSError as e:
-            print(f"[*] [DEBUG-RUNNER] killpg failed on Ctrl-C: {e}")
+        print("\n[!] CTRL-C detected! Forcefully terminating the test process...")
+        robust_reap(process.pid)
         process.wait()
         sys.exit(1)
 
@@ -594,6 +707,7 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
     pg_bin_dir = os.path.dirname(sorted(pg_bins)[-1]) + "/"
     pg_data, pg_sock = "/opt/hams/pgdata", "/opt/hams/pgsock"
 
+    orig_user = os.environ.get("SUDO_USER", "odoo")
     pg_user = pwd.getpwnam("postgres")
     def preexec_pg():
         os.setresgid(pg_user.pw_gid, pg_user.pw_gid, pg_user.pw_gid)
@@ -603,7 +717,6 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
     # The -w flag makes pg_ctl natively BLOCK until ready. No polling loops needed!
     subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_sock} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "-w", "start"], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
 
-    orig_user = os.environ.get("SUDO_USER", "odoo")
     p = subprocess.Popen([f"{pg_bin_dir}psql", "-h", pg_sock, "-d", "postgres"], stdin=subprocess.PIPE, preexec_fn=preexec_pg, text=True, stdout=subprocess.DEVNULL)
     p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
     p.wait()
@@ -666,6 +779,13 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
         dst = os.path.join(os.path.dirname(real_error_log), os.path.basename(prof))
         shutil.copy2(prof, dst)
         os.chown(dst, orig_uid, -1)
+
+    # Rescue screenshots and headless browser logs from the ephemeral /var/tmp overlay
+    for ext_path in ["/var/tmp/odoo_tests/*/screenshots/*.png", "/var/tmp/odoo_tests/*/chrome_logs/*.txt"]:
+        for artifact in glob.glob(ext_path):
+            dst = os.path.join(os.path.dirname(real_error_log), os.path.basename(artifact))
+            shutil.copy2(artifact, dst)
+            os.chown(dst, orig_uid, -1)
 
     for cf in ["db_cache_master.dump", "db_cache_master.modules", "db_cache_master.filestore.tar.gz"]:
         src = f"/opt/hams/test/{cf}"
@@ -891,7 +1011,7 @@ def main():
 
             if not is_ready:
                 print(f"❌ ERROR: Odoo failed to start on port {free_port} within 120 seconds or crashed.")
-                os.killpg(os.getpgid(odoo_proc.pid), signal.SIGKILL)
+                robust_reap(odoo_proc.pid)
                 sys.exit(1)
 
             daemon_env = os.environ.copy()
@@ -911,7 +1031,7 @@ def main():
             if rc_odoo != 0: final_rc = rc_odoo
 
             for p in d_procs: p.terminate()
-            os.killpg(os.getpgid(odoo_proc.pid), signal.SIGKILL)
+            robust_reap(odoo_proc.pid)
 
     elif args.mode == "individual":
         check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)

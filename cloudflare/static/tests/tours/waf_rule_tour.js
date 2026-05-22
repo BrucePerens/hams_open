@@ -4,7 +4,7 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 
 // [@ANCHOR: test_tour_cf_waf_rule]
 registry.category("web_tour.tours").add("cf_waf_rule_tour", {
-    url: "/odoo",
+    url: "/odoo?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         {

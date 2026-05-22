@@ -309,4 +309,4 @@ class TestKeyRegistryTour(HamsHttpCase):
         if manager_group not in admin.group_ids:
             admin.write({'group_ids': [(4, manager_group.id)]})
 
-        self.start_tour("/odoo?action=daemon_key_manager.action_daemon_key_registry", "daemon_key_manager_tour", login="admin")
+        self.start_tour("/odoo?debug=1&action=daemon_key_manager.action_daemon_key_registry", "daemon_key_manager_tour", login="admin")

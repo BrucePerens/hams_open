@@ -7,4 +7,4 @@ from odoo.addons.hams_test.common import HamsHttpCase
 class TestBackupTour(HamsHttpCase):
     def test_backup_dashboard_tour(self):
         # Tests [@ANCHOR: backup_dashboard_tour]
-        self.start_tour("/odoo", "backup_dashboard_tour", login="admin")
+        self.start_tour("/odoo?debug=1", "backup_dashboard_tour", login="admin")

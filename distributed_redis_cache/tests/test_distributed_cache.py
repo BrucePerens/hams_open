@@ -315,4 +315,4 @@ class TestDistributedCacheIntegration(HamsIntegrationCase):
 class TestDistributedCacheTour(HamsHttpCase):
     def test_distributed_cache_admin_tour(self):
         """Verify the cache management UI via tour."""
-        self.start_tour("/odoo", "distributed_cache_admin_tour", login="admin")
+        self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin")

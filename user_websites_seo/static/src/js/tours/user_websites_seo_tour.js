@@ -4,7 +4,7 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 
 // Verified by [@ANCHOR: test_seo_widget_tour]
 registry.category("web_tour.tours").add("user_websites_seo_tour", {
-    url: "/odoo",
+    url: "/odoo?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         TourUtils.waitForElement('.o_navbar_apps_menu button', 'Wait for Apps Menu Button'),

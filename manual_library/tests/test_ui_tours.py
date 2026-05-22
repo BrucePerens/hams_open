@@ -17,7 +17,7 @@ class TestManualLibraryUITours(HamsHttpCase):
             }
         )
         # Start the frontend tour
-        self.start_tour(article.website_url, "manual_toc_tour")
+        self.start_tour(article.website_url + "?debug=1", "manual_toc_tour")
 
     def test_02_manual_search_tour(self):
         # [@ANCHOR: test_tour_manual_search]
@@ -28,7 +28,7 @@ class TestManualLibraryUITours(HamsHttpCase):
                 "is_published": True,
             }
         )
-        self.start_tour("/manual", "manual_search_tour")
+        self.start_tour("/manual?debug=1", "manual_search_tour")
 
     def test_03_manual_feedback_tour(self):
         # [@ANCHOR: test_tour_manual_feedback]
@@ -39,4 +39,4 @@ class TestManualLibraryUITours(HamsHttpCase):
                 "is_published": True,
             }
         )
-        self.start_tour(article.website_url, "manual_feedback_tour")
+        self.start_tour(article.website_url + "?debug=1", "manual_feedback_tour")

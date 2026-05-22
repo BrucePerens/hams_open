@@ -14,16 +14,12 @@ export const TourUtils = {
         waitTrigger = waitTrigger || '.o_form_button_create';
         return [
             {
-                content: "[MACRO] Click away to force DOM blur and commit pending text inputs",
-                trigger: '.o_form_sheet',
-                run: 'click',
-            },
-            {
                 content: "[MACRO] Click the save button",
                 trigger: saveButtonTrigger,
                 run: 'click',
             },
-            // this.waitForElement(waitTrigger, "RPC resolution / Dirty Form safe save (" + waitTrigger + ")")
+            // Wait for the save resolution indicator
+            this.waitForElement(waitTrigger, "RPC resolution / Dirty Form safe save (" + waitTrigger + ")")
         ];
     },
 
@@ -195,14 +191,14 @@ export const TourUtils = {
                 return new Promise(function (resolve, reject) {
                     let elapsed = 0;
                     const interval = setInterval(function () {
-                        if (!window._pendingRPCs || window._pendingRPCs.size === 0) {
+                        if (!window._pendingRPCCount || window._pendingRPCCount === 0) {
                             clearInterval(interval);
                             let overlay = document.getElementById('tour_rpc_overlay');
                             if (overlay) overlay.remove();
                             resolve();
                         } else {
                             elapsed++;
-                            let msg = "[TourUtils] Jules VM Latency Shield | Elapsed: " + elapsed + "s | Waiting for " + window._pendingRPCs.size + " pending network request(s)...";
+                            let msg = "[TourUtils] Jules VM Latency Shield | Elapsed: " + elapsed + "s | Waiting for " + window._pendingRPCCount + " pending network request(s)...";
                             console.log(msg);
 
                             let overlay = document.getElementById('tour_rpc_overlay');
@@ -216,8 +212,7 @@ export const TourUtils = {
 
                             if (elapsed >= 120) {
                                 clearInterval(interval);
-                                const rpcList = Array.from(window._pendingRPCs).join(', ');
-                                const errorMsg = "FAILED: RPC requests failed to resolve after 120s! Stuck on: " + rpcList;
+                                const errorMsg = "FAILED: " + window._pendingRPCCount + " RPC requests failed to resolve after 120s!";
                                 console.error(errorMsg);
                                 if (overlay) overlay.remove();
                                 reject(new Error(errorMsg));
