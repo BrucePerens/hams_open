@@ -3,6 +3,7 @@ import logging
 import signal
 import time
 import urllib.request
+import threading
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase
 
@@ -65,30 +66,64 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     # [@ANCHOR: hams_http_case]
 
     @classmethod
+    def setUpClass(cls):
+        # 🚨 THE ANTI-HANG INJECTION 🚨
+        # Odoo's native HttpCase spawns non-daemon threads for Werkzeug and Chrome websockets.
+        # If these connections deadlock, the non-daemon threads prevent Python from exiting,
+        # causing the entire test runner to hang infinitely.
+        # We intercept thread.start() to force EVERY thread spawned during setup to be a daemon.
+        original_start = threading.Thread.start
+
+        def _daemonized_start(self_thread, *args, **kwargs):
+            self_thread.daemon = True
+            return original_start(self_thread, *args, **kwargs)
+
+        with patch.object(threading.Thread, 'start', new=_daemonized_start):
+            super().setUpClass()
+
+    @classmethod
     def tearDownClass(cls):
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        # Execute Native Teardown with Hard OS Timeout
+        # 1. Aggressively murder Chrome first to sever all open websockets
+        if hasattr(cls, 'browser') and cls.browser:
+            if hasattr(cls.browser, 'chrome_process'):
+                try:
+                    cls.browser.chrome_process.kill()
+                    _logger.info("TRACING: Aggressively killed chrome_process to drop websockets.")
+                except OSError as e:
+                    _logger.error("TRACING: Ignored OSError killing chrome process: %s", e)
+
+            # Neutralize browser websocket join
+            if hasattr(cls.browser, '_websocket_thread') and cls.browser._websocket_thread:
+                cls.browser._websocket_thread.join = lambda *args, **kwargs: None
+
+        # 2. Defuse Server Thread Join
+        if hasattr(cls, 'server_thread') and cls.server_thread:
+            cls.server_thread.join = lambda *args, **kwargs: None
+
+        # 3. Defuse Server Stop
+        if hasattr(cls, 'server') and cls.server:
+            try:
+                if hasattr(cls.server, 'server') and hasattr(cls.server.server, 'socket'):
+                    cls.server.server.socket.close()
+            except OSError as e:
+                _logger.error("TRACING: Ignored OSError closing server socket: %s", e)
+            except Exception as e: # audit-ignore-catch-all
+                _logger.exception("TRACING: Ignored Exception closing server socket: %s", e)
+            cls.server.stop = lambda *args, **kwargs: None
+
+        # 4. OS Timeout for super().tearDownClass()
         original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(30) # 30 seconds hard cap for native teardown
+        signal.alarm(30)
         try:
             super().tearDownClass()
             _logger.info("TRACING: Successfully completed super().tearDownClass()")
         except Exception as e: # audit-ignore-catch-all
-            _logger.warning("TRACING: Native teardown failed or hung: %s", e)
+            _logger.exception("TRACING: Native teardown failed or hung: %s", e)
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, original_alrm)
-
-            # Aggressive Fallback Cleanup
-            if hasattr(cls, 'browser') and cls.browser:
-                if hasattr(cls.browser, 'chrome_process'):
-                    try:
-                        cls.browser.chrome_process.kill()
-                        _logger.info("TRACING: Executed aggressive fallback kill on chrome_process.")
-                    except OSError:
-                        pass
-
             _logger.info("TRACING: Exiting HamsHttpCase.tearDownClass")
 
     def tearDown(self):
@@ -100,7 +135,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().tearDown()
             _logger.info("TRACING: Completed super().tearDown")
         except Exception as e: # audit-ignore-catch-all
-            _logger.warning("TRACING: HamsHttpCase.tearDown caught exception: %s", e)
+            _logger.exception("TRACING: HamsHttpCase.tearDown caught exception: %s", e)
         finally:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, original_alrm)
@@ -114,7 +149,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().browser_js(*args, **kwargs)
             _logger.info("TRACING: super().browser_js completed successfully.")
         except Exception as e: # audit-ignore-catch-all
-            _logger.warning("TRACING: super().browser_js failed, flagging tour as failed to prevent shutdown hang: %s", e)
+            _logger.exception("TRACING: super().browser_js failed, flagging tour as failed to prevent shutdown hang: %s", e)
             self.__class__._hams_tour_failed = True
             raise
         finally:
@@ -128,7 +163,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().start_tour(*args, **kwargs)
             _logger.info("TRACING: super().start_tour completed successfully.")
         except Exception as e:  # audit-ignore-catch-all
-            _logger.info("TRACING: Exception caught in start_tour wrapper.")
+            _logger.exception("TRACING: Exception caught in start_tour wrapper: %s", e)
             self.__class__._hams_tour_failed = True
             _logger.error("\n=== TOUR FAILED OR HUNG. DUMPING COMPILED ASSETS ===")
             try:
@@ -143,9 +178,9 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         f.write(bundle.raw.decode('utf-8'))
                     else:
                         f.write(str(bundle))
-                _logger.error(f"Dumped compiled JS bundle to {dump_path}")
+                _logger.error("Dumped compiled JS bundle to %s", dump_path)
             except Exception as inner_e:  # audit-ignore-catch-all
-                _logger.error("Could not dump bundle to /var/tmp: %s", inner_e)
+                _logger.exception("Could not dump bundle to /var/tmp: %s", inner_e)
 
             raise e
 
@@ -187,7 +222,7 @@ class HamsIntegrationCase(HamsHttpCase):
                             is_healthy = True
                             break
                 except Exception as e: # audit-ignore-catch-all
-                    _logger.info("Daemon health check not ready yet: %s", e)
+                    _logger.exception("Daemon health check not ready yet: %s", e)
                 time.sleep(0.5) # audit-ignore-sleep
 
             if not is_healthy:

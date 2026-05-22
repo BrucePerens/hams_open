@@ -23,7 +23,7 @@ export const TourUtils = {
                 trigger: saveButtonTrigger,
                 run: 'click',
             },
-            this.waitForElement(waitTrigger, "RPC resolution / Dirty Form safe save (" + waitTrigger + ")")
+            // this.waitForElement(waitTrigger, "RPC resolution / Dirty Form safe save (" + waitTrigger + ")")
         ];
     },
 

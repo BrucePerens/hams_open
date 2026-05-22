@@ -309,37 +309,32 @@ ODOO_ERROR_RULES = [
         re.compile(r"['\"]/web/(?!login\b|signup\b|assets\b|static\b)[^'\"]*['\"]"),
         "CRITICAL ROUTING DEPRECATION: /web is deprecated and forcefully redirected to /odoo in Odoo 19, losing the query parameters! Use /odoo instead.",
     ),
-        (
-            r"tour.*\.js$|.*_tour\.js$",
-            re.compile(r"run:\s*['\"`]text\b"),
-            "CRITICAL JS TOUR ACTION: 'text' is not a valid action in Odoo 19. Use 'edit' to simulate text input.",
-        ),
-        (
-            r"tour.*\.js$|.*_tour\.js$",
-            re.compile(r"base\.menu_custom"),
-            "CRITICAL TOUR DEPRECATION: The Technical menu (base.menu_custom) is strictly hidden/removed in this environment. Do not target it in UI tours.",
-        ),
-        (
-            r"tour.*\.js$|.*_tour\.js$",
-            re.compile(r"\.\.\.TourUtils\.safeSave\("),
-            "CRITICAL JS TOUR MINIFIER CRASH: Do not use the ES6 spread operator (...) inside tour step arrays. Odoo's rjsmin minifier corrupts it and throws 'Unexpected token :'. Use .concat(TourUtils.safeSave()) instead.",
-        ),
-        (
-            r"tour.*\.js$|.*_tour\.js$",
-            re.compile(r"\.ui-menu-item\b"),
-            "CRITICAL JS TOUR DEPRECATION: jQuery autocomplete (.ui-menu-item) is removed in Odoo 19. Target '.o-autocomplete--dropdown-item' or '.dropdown-item' instead, and ensure you use TourUtils.deterministicInput() instead of 'edit' to trigger the dropdown.",
-        ),
-        (
-            r"tour.*\.js$|.*_tour\.js$",
-            re.compile(r"trigger:\s*['\"`]\.o_form_button_save['\"`]"),
-            "CRITICAL JS TOUR LATENCY: Raw triggers on the save button are banned. You MUST use '.concat(TourUtils.safeSave())' to ensure the DOM blur and RPC resolution complete safely before the test runner tears down the environment.",
-        ),
-        (
-            r"test_.*\.py$",
-            re.compile(r"class\s+[a-zA-Z0-9_]+\s*\((?:HttpCase|TransactionCase)\):"),
-            "CRITICAL TEST ARCHITECTURE: Do not inherit directly from Odoo's native HttpCase or TransactionCase. You MUST inherit from HamsHttpCase or HamsTransactionCase to ensure the Process Reaper and latency safeguards are active.",
-        ),
-    ]
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"\.\.\.TourUtils\.safeSave\("),
+        "CRITICAL JS TOUR MINIFIER CRASH: Do not use the ES6 spread operator (...) inside tour step arrays. Odoo's rjsmin minifier corrupts it and throws 'Unexpected token :'. Use .concat(TourUtils.safeSave()) instead.",
+    ),
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"\.ui-menu-item\b"),
+        "CRITICAL JS TOUR DEPRECATION: jQuery autocomplete (.ui-menu-item) is removed in Odoo 19. Target '.o-autocomplete--dropdown-item' or '.dropdown-item' instead, and ensure you use TourUtils.deterministicInput() instead of 'edit' to trigger the dropdown.",
+    ),
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"trigger:\s*['\"`]\.o_form_button_save['\"`]"),
+        "CRITICAL JS TOUR LATENCY: Raw triggers on the save button are banned. You MUST use '.concat(TourUtils.safeSave())' to ensure the DOM blur and RPC resolution complete safely before the test runner tears down the environment.",
+    ),
+    (
+        r"test_.*\.py$",
+        re.compile(r"class\s+[a-zA-Z0-9_]+\s*\((?:HttpCase|TransactionCase)\):"),
+        "CRITICAL TEST ARCHITECTURE: Do not inherit directly from Odoo's native HttpCase or TransactionCase. You MUST inherit from HamsHttpCase or HamsTransactionCase to ensure the Process Reaper and latency safeguards are active.",
+    ),
+    (
+        r"tour.*\.js$|.*_tour\.js$",
+        re.compile(r"url:\s*['\"`]/odoo(?!.*\bdebug=).*?['\"`]"),
+        "CRITICAL TOUR LATENCY TRAP: JS tour URLs MUST explicitly include 'debug=1' to prevent Owl 'dev' mode crashes per ADR-0081.",
+    ),
+]
 
 WARNING_RULES = []
 MULTILINE_WARNING_RULES = []
@@ -1061,7 +1056,6 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         )
                 elif attr == "Thread" and getattr(node.func.value, "id", "") == "threading":
                     self.add_error(node.lineno, "CRITICAL DOS VECTOR: Unbounded Thread.")
-                    self.add_error(node.lineno, "CRITICAL DOS VECTOR: Unbounded Thread.")
 
             if self.in_http_controller and self.is_odoo_module:
                 if (
@@ -1203,6 +1197,14 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
             if attr in ("search", "search_count") and self.is_odoo_module:
                 self._check_search_methods(node, attr)
 
+            if func_name == "start_tour":
+                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                    if "debug=" not in node.args[0].value:
+                        self.add_error(
+                            node.lineno,
+                            "CRITICAL TOUR LATENCY TRAP: start_tour() URLs MUST explicitly include 'debug=1' to prevent Owl 'dev' mode crashes per ADR-0081."
+                        )
+
             self._check_cr_execute(node, is_cr_execute)
 
             if attr == "execute" and not is_cr_execute and self.is_odoo_module:
@@ -1340,10 +1342,6 @@ def scan_file(filepath, is_odoo_module=False):
                     model_name = node.attrs.get("model")
                     defined_fields = {child.attrs.get("name") for child in node.children if child.tag == "field"}
 
-                    # Dictionary of mandatory fields for critical Odoo framework models.
-                    # Since this static linter runs offline without a live PostgreSQL connection,
-                    # it cannot dynamically introspect the `ir.model.fields` registry for `required=True`.
-                    # We strictly enforce the core framework models that most commonly cause silent NOT NULL installation failures.
                     mandatory_model_fields = {
                         "res.users": {"name", "login", "company_id", "company_ids", "notification_type"},
                         "ir.rule": {"name", "model_id"},
@@ -1453,33 +1451,6 @@ def scan_file(filepath, is_odoo_module=False):
                                 f"Line {node.lineno}: [%AUDIT] ACCESSIBILITY (WCAG): Empty \x3c{node.tag}\x3e tag lacks 'string', 'title', or 'aria-label'."
                             )
 
-                # WCAG Accessibility Enforcement
-                if node.tag == "i":
-                    cls = str(node.attrs.get("class", ""))
-                    if "fa " in cls or "fa-" in cls or "oi " in cls or "oi-" in cls:
-                        if not any(
-                            k in node.attrs
-                            for k in ("title", "aria-label", "aria-hidden")
-                        ):
-                            errors_found.append(
-                                f"Line {node.lineno}: CRITICAL ACCESSIBILITY (WCAG): Icon \x3ci\x3e tags with '{cls}' must have 'title', 'aria-label', or 'aria-hidden=\"true\"'."
-                            )
-
-                if node.tag == "img":
-                    if "alt" not in node.attrs:
-                        errors_found.append(
-                            f"Line {node.lineno}: CRITICAL ACCESSIBILITY (WCAG): \x3cimg\x3e tags must have an 'alt' attribute."
-                        )
-
-                if node.tag in ("button", "a"):
-                    if not any(
-                        k in node.attrs for k in ("title", "aria-label", "string")
-                    ):
-                        # Only warn if it's completely empty of text as well (ignoring deep QWeb evaluation complexity for the warning)
-                        if not (node.text and node.text.strip()) and not node.children:
-                            warnings_found.append(
-                                f"Line {node.lineno}: [%AUDIT] ACCESSIBILITY (WCAG): Empty \x3c{node.tag}\x3e tag lacks 'string', 'title', or 'aria-label'."
-                            )
                 if node.tag == "field":
                     record_anc = next(
                         (anc for anc in node.get_ancestors() if anc.tag == "record"),

@@ -3,7 +3,7 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@hams_test/js/tour_utils";
 
 registry.category("web_tour.tours").add("test_real_transaction_tour", {
-    url: "/odoo?action=hams_test.action_noisy_table",
+    url: "/odoo?debug=1&action=hams_test.action_noisy_table",
     steps: () => [
         // # Verified by [@ANCHOR: test_noisy_table_tour]
         TourUtils.bypassDialogs(),

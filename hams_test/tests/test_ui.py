@@ -11,4 +11,5 @@ class TestNoisyTableUI(HamsHttpCase):
         # Verified by [@ANCHOR: test_noisy_table_tour]
 
         # Bypass fragile root menu navigation by jumping directly to the action endpoint
-        self.start_tour("/odoo?action=hams_test.action_noisy_table", 'test_real_transaction_tour', login="admin")
+        # Enforcing ADR-0081 Section 8: Explicitly set ?debug=1 to prevent Owl dev mode crashes
+        self.start_tour("/odoo?debug=1&action=hams_test.action_noisy_table", 'test_real_transaction_tour', login="admin")

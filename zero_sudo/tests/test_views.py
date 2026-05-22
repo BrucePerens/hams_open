@@ -28,4 +28,6 @@ class TestZeroSudoViews(HamsHttpCase):
 
         if 'hams_test' not in installed_modules:
             self.skipTest("hams_test module not installed, skipping tour that depends on its utilities.")
-        self.start_tour("/odoo", "zero_sudo_tour", login="admin")
+
+        # Enforcing ADR-0081 Section 8: Explicitly set ?debug=1 to prevent Owl dev mode crashes
+        self.start_tour("/odoo?debug=1", "zero_sudo_tour", login="admin")
