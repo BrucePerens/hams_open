@@ -24,64 +24,6 @@ def _timeout_handler(signum, frame):
     _logger.error("TRACING: OS Signal %s (Timeout) received! Force-aborting hung thread.", signum)
     raise TourWatchdogError(f"Test step timed out and was aborted by OS signal {signum}.")
 
-
-# 🚨 CHROME LAUNCH INTERCEPTOR 🚨
-# Intercepts the OS-level Popen call to forcefully merge all Chrome flags and point
-# the V8 profiler directly to the host-mounted partition using comma separation.
-original_popen = subprocess.Popen
-
-class PatchedPopen(original_popen):
-    def __init__(self, args, *pargs, **kwargs):
-        is_chrome = isinstance(args, list) and args and isinstance(args[0], str) and 'chrome' in args[0].lower()
-
-        if is_chrome:
-            new_args = []
-            js_flags = []
-            for arg in args:
-                if arg.startswith('--js-flags='):
-                    flags = arg.split('=', 1)[1].split(',')
-                    js_flags.extend([f for f in flags if f])
-                else:
-                    new_args.append(arg)
-
-            # Write directly to the host mount. No ephemeral /var/tmp fallback.
-            host_tmp = "/var/tmp"
-            err_log = os.environ.get("HAMS_REAL_ERROR_LOG")
-            if err_log:
-                host_tmp = os.path.dirname(err_log)
-                try:
-                    os.makedirs(host_tmp, exist_ok=True)
-                except OSError as dir_e:
-                    _logger.warning("TRACING: Ignored OSError creating dir in PatchedPopen: %s", repr(dir_e))
-
-            js_flags.append('--prof')
-            js_flags.append(f'--logfile={host_tmp}/v8_hang.log')
-            js_flags.append('--no-logfile-per-isolate')
-
-            if js_flags:
-                # Deduplicate flags while preserving order
-                seen = set()
-                unique_flags = []
-                for f in js_flags:
-                    if f not in seen:
-                        seen.add(f)
-                        unique_flags.append(f)
-
-                # V8 strictly requires COMMAS to parse multiple flags when passed through Chrome
-                new_args.append('--js-flags=' + ','.join(unique_flags))
-
-            args = new_args
-
-        super().__init__(args, *pargs, **kwargs)
-
-        if is_chrome:
-            _logger.error("TRACING: [POPEN INTERCEPTOR] Launched Chrome PID %s", self.pid)
-
-subprocess.Popen = PatchedPopen
-if hasattr(odoo_test_common, 'subprocess'):
-    odoo_test_common.subprocess.Popen = PatchedPopen
-
-
 # 🚨 BENIGN ERROR SCRUBBER 🚨
 original_browser_stop = ChromeBrowser.stop
 def _patched_browser_stop(self, *args, **kwargs):

@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from lxml import etree
+import werkzeug
 from odoo.addons.caching.controllers.main import ServiceWorkerController
 from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
 
@@ -112,18 +113,11 @@ class TestSettingsAndCache(RealTransactionCase):
         mock_open.return_value.__enter__.return_value = mock_file
         self.safe_patch("odoo.addons.caching.controllers.main.tools.file_open", mock_open)
 
-        class MockResponse:
-            def __init__(self, content):
-                self.content = content
-            @property
-            def response(self):
-                return [self.content.encode('utf-8')]
-
-        mock_req.make_response = MagicMock(side_effect=lambda content, headers: MockResponse(content))
+        mock_req.make_response = MagicMock(side_effect=lambda content, headers: werkzeug.wrappers.Response(content, headers=headers))
 
         response_2 = controller.service_worker()
 
-        content_2 = response_2.response[0].decode('utf-8') if isinstance(response_2.response, list) else response_2.response.decode('utf-8')
+        content_2 = response_2.get_data(as_text=True)
 
         self.assertIn("-v2", content_2)
         self.assertNotIn("-v1", content_2)
