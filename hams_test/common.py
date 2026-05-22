@@ -2,10 +2,22 @@
 import psutil
 import logging
 import time
+import signal
+import threading
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser
 
 _logger = logging.getLogger(__name__)
+
+class TourWatchdogError(Exception):
+    pass
+
+def _cross_process_abort_handler(signum, frame):
+    _logger.error("TRACING: OS Signal %s received! Force-aborting hung thread.", signum)
+    raise TourWatchdogError(f"FATAL: Cross-process abort triggered by signal {signum}. The test hung and was killed by the JS Watchdog Relay.")
+
+# Register for SIGUSR1 to allow the external test runner to snipe hanging tests instantly
+signal.signal(signal.SIGUSR1, _cross_process_abort_handler)
 
 # =================================================================================
 # SYSTEM OVERRIDE: Robust ChromeBrowser Lifecycle & Telemetry
@@ -82,10 +94,6 @@ if _original_take_screenshot:
 
 
 class DiagnosticMock(MagicMock):
-    """
-    A strict mock designed to trap runaway recursion and excessive deep calling
-    often seen when Odoo registry models are incorrectly shadowed or cyclically patched.
-    """
     def __init__(self, *args, **kwargs):
         max_depth = kwargs.pop("max_recursion_depth", 5)
         super().__init__(*args, **kwargs)
@@ -108,10 +116,6 @@ class DiagnosticMock(MagicMock):
 
 
 class SafePatchMixin:
-    """
-    Mixin to provide safe, runtime-only patching to avoid Odoo registry
-    early-import corruption and mock recursion traps.
-    """
     def safe_patch(self, target, *args, **kwargs):
         if not args and "new" not in kwargs and "new_callable" not in kwargs:
             kwargs["new_callable"] = DiagnosticMock
@@ -136,6 +140,18 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
 
 class HamsHttpCase(HttpCase, SafePatchMixin):
     # [@ANCHOR: hams_http_case]
+
+    def tearDown(self):
+        # Apply OS-level timeout to teardown to prevent unkillable zombies
+        original_alrm = signal.signal(signal.SIGALRM, _cross_process_abort_handler)
+        signal.alarm(60) # 60 seconds hard cap for teardown
+        try:
+            super().tearDown()
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("TRACING: HamsHttpCase.tearDown caught exception: %s", e)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, original_alrm)
 
     def start_tour(self, *args, **kwargs):
         try:
@@ -186,5 +202,31 @@ class HamsIntegrationCase(HamsHttpCase):
         cls._daemons.append(process)
 
         if health_url:
-            daemon_utils.poll_health_check(health_url, timeout=timeout)
+            # Active Vitality Watchdog: Monitor OS process while awaiting HTTP health check
+            ready_event = threading.Event()
+            error_container = []
+
+            def check_health():
+                try:
+                    daemon_utils.poll_health_check(health_url, timeout=timeout)
+                    ready_event.set()
+                except Exception as e: # audit-ignore-catch-all
+                    _logger.error("Health check thread failed: %s", e)
+                    error_container.append(e)
+
+            t = threading.Thread(target=check_health, daemon=True)
+            t.start()
+
+            start_time = time.time()
+            while t.is_alive():
+                t.join(timeout=0.25)
+                # Instantly abort if the process segfaults or exits during initialization
+                if process.poll() is not None:
+                    raise RuntimeError(f"FATAL: Daemon process '{script_path}' crashed with exit code {process.returncode} while waiting for health check!")
+                if time.time() - start_time > timeout + 5:
+                    raise TimeoutError(f"FATAL: Daemon health check for '{script_path}' timed out after {timeout} seconds.")
+
+            if error_container:
+                raise error_container[0]
+
         return process
