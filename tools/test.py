@@ -78,10 +78,11 @@ class FailureExtractor:
     Tracebacks and error blocks for writing to a filtered log file.
     """
 
-    def __init__(self, output_path, disable_atexit=False):
-        self.display_path = os.environ.get("HAMS_REAL_ERROR_LOG") or os.path.abspath(
-            os.path.expanduser(output_path)
+    def __init__(self, log_dir, disable_atexit=False):
+        base_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY") or os.path.abspath(
+            os.path.expanduser(log_dir)
         )
+        self.display_path = os.path.join(base_dir, "filtered_test.txt")
 
         if os.environ.get("HAMS_ISOLATED_NS") == "1":
             self.output_path = "/opt/hams/spool/filtered_test.txt"
@@ -363,9 +364,9 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     env.setdefault("REDIS_HOST", "localhost")
     env.setdefault("RMQ_USER", "guest")
     env.setdefault("RMQ_PASS", "guest")
-    host_tmp_dir = os.path.dirname(os.environ.get("HAMS_REAL_ERROR_LOG", "/var/tmp")) if "HAMS_REAL_ERROR_LOG" in os.environ else "/var/tmp"
+    host_tmp_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
     os.makedirs(host_tmp_dir, exist_ok=True)
-    env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --user-data-dir={host_tmp_dir}")
+    env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --user-data-dir={host_tmp_dir} --single-process")
 
     process = subprocess.Popen(
         cmd,
@@ -668,7 +669,7 @@ def save_db_cache(db_name, cache_file, current_hash):
         _logger.error("Failed to execute pg_dump: %s", e)
 
 
-def setup_namespace_and_run_tests(real_error_log, sys_args):
+def setup_namespace_and_run_tests(real_log_dir, sys_args):
     """
     Pure-Python OS-level namespace bootstrapping.
     Executes entirely without Bash wrappers, leveraging `os.setuid` for micro-privileges.
@@ -682,6 +683,11 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
     for d in ["/mnt/upper", "/mnt/work", "/mnt/host_test_dir", "/opt/hams/test"]:
         os.makedirs(d, exist_ok=True)
     subprocess.run(["mount", "--bind", "/opt/hams/test", "/mnt/host_test_dir"], check=True)
+
+    host_tmp_dir = real_log_dir if real_log_dir else "/var/tmp"
+    os.makedirs(host_tmp_dir, exist_ok=True)
+    os.makedirs("/var/tmp", exist_ok=True)
+    subprocess.run(["mount", "--bind", host_tmp_dir, "/var/tmp"], check=True)
 
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -757,10 +763,10 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     os.environ["HAMS_ISOLATED_NS"] = "1"
     os.environ["PGHOST"] = pg_sock
-    host_tmp_dir = os.path.dirname(os.environ.get("HAMS_REAL_ERROR_LOG", "/var/tmp")) if "HAMS_REAL_ERROR_LOG" in os.environ else "/var/tmp"
+    host_tmp_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
     os.makedirs(host_tmp_dir, exist_ok=True)
-    os.environ["ODOO_TEST_CHROME_ARGS"] = "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --user-data-dir={host_tmp_dir}"
-    os.environ["HAMS_REAL_ERROR_LOG"] = real_error_log
+    os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --user-data-dir={host_tmp_dir} --single-process"
+    os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
     os.environ["HOME"] = "/var/lib/odoo"
     os.environ["XDG_DATA_HOME"] = "/var/lib/odoo/.local/share"
 
@@ -778,39 +784,16 @@ def setup_namespace_and_run_tests(real_error_log, sys_args):
     subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-m", "fast", "stop"], preexec_fn=preexec_pg, check=False, stdout=subprocess.DEVNULL)
 
     if os.path.exists("/opt/hams/spool/filtered_test.txt"):
-        os.makedirs(os.path.dirname(real_error_log), exist_ok=True)
-        shutil.copy2("/opt/hams/spool/filtered_test.txt", real_error_log)
+        os.makedirs(real_log_dir, exist_ok=True)
+        dest_file = os.path.join(real_log_dir, "filtered_test.txt")
+        shutil.copy2("/opt/hams/spool/filtered_test.txt", dest_file)
         orig_uid = pwd.getpwnam(orig_user).pw_uid
-        os.chown(real_error_log, orig_uid, -1)
+        os.chown(dest_file, orig_uid, -1)
 
     for prof in glob.glob("/opt/hams/spool/*.prof"):
-        dst = os.path.join(os.path.dirname(real_error_log), os.path.basename(prof))
+        dst = os.path.join(real_log_dir, os.path.basename(prof))
         shutil.copy2(prof, dst)
         os.chown(dst, orig_uid, -1)
-
-    # Rescue screenshots, headless browser logs, and V8 profiles from the ephemeral /var/tmp overlay
-    for ext_path in ["/var/tmp/odoo_tests/*/screenshots/*.png", "/var/tmp/odoo_tests/*/chrome_logs/*.txt", "/var/tmp/v8_hang*.log"]:
-        for artifact in glob.glob(ext_path):
-            dst = os.path.join(os.path.dirname(real_error_log), os.path.basename(artifact))
-
-            if "v8_hang" in artifact:
-                # Strip sparse null bytes (ghost blocks) caused by offset truncation
-                with open(artifact, "rb") as f_in, open(dst, "wb") as f_out:
-                    for chunk in iter(lambda: f_in.read(1048576), b""):
-                        cleaned = chunk.replace(b'\x00', b'')
-                        if cleaned:
-                            f_out.write(cleaned)
-                try:
-                    shutil.copystat(artifact, dst)
-                except OSError:
-                    pass
-            else:
-                shutil.copy2(artifact, dst)
-
-            try:
-                os.chown(dst, orig_uid, -1)
-            except OSError:
-                pass
 
     for cf in ["db_cache_master.dump", "db_cache_master.hash", "db_cache_master.filestore.tar.gz"]:
         src = f"/opt/hams/test/{cf}"
@@ -887,19 +870,19 @@ def main():
     if os.environ.get("HAMS_ISOLATED_NS") != "1" and not os.environ.get("IN_JULES_VM") and not os.environ.get("JULES_SESSION_ID"):
         if "--internal-ns-init" in sys.argv:
             # Phase 2: Execute completely within Python (No bash script interpolation)
-            real_error_log = os.environ.get("HAMS_REAL_ERROR_LOG")
+            real_log_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY")
             sys_args = [arg for arg in sys.argv[1:] if arg != "--internal-ns-init"]
-            setup_namespace_and_run_tests(real_error_log, sys_args)
+            setup_namespace_and_run_tests(real_log_dir, sys_args)
             return
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("-e", "--error-log", default="~/tmp/filtered_test.txt")
+        parser.add_argument("-l", "--log-directory", default="~/tmp")
         args, _ = parser.parse_known_args()
 
-        real_error_log = os.path.abspath(os.path.expanduser(args.error_log))
+        real_log_dir = os.path.abspath(os.path.expanduser(args.log_directory))
         print("[*] Routing test execution to isolated Python namespace...")
 
-        os.environ["HAMS_REAL_ERROR_LOG"] = real_error_log
+        os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
         exec_cmd = ["unshare", "-m", sys.executable, os.path.abspath(__file__), "--internal-ns-init"] + sys.argv[1:]
 
         if os.geteuid() != 0:
@@ -912,9 +895,9 @@ def main():
         return
 
     os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
-    host_tmp_dir = os.path.dirname(os.environ.get("HAMS_REAL_ERROR_LOG", "/var/tmp")) if "HAMS_REAL_ERROR_LOG" in os.environ else "/var/tmp"
+    host_tmp_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
     os.makedirs(host_tmp_dir, exist_ok=True)
-    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --user-data-dir={host_tmp_dir}")
+    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --user-data-dir={host_tmp_dir} --single-process")
 
     # Force system site-packages resolution for Odoo core in restricted venvs
     sys_paths = os.environ.get("PYTHONPATH", "")
@@ -940,7 +923,7 @@ def main():
     parser.add_argument("-m", "--mode", choices=["standard", "integration", "individual", "xml", "downloads"], default="standard")
     parser.add_argument("-d", "--db", default="hams_test")
     parser.add_argument("-u", "--module")
-    parser.add_argument("-e", "--error-log", default="~/tmp/filtered_test.txt")
+    parser.add_argument("-l", "--log-directory", default="~/tmp")
     parser.add_argument("-c", "--config", default="ignore_list.txt")
     parser.add_argument("--daemon")
     parser.add_argument("--provision-jules", action="store_true")
@@ -977,7 +960,7 @@ def main():
             cmd.extend(["-m", "cProfile", "-o", f"/opt/hams/spool/odoo_test{suffix}.prof"])
         return cmd
 
-    extractor = FailureExtractor(args.error_log)
+    extractor = FailureExtractor(args.log_directory)
     print(f"==========================================================\n 🧪 ODOO TEST RUNNER [{args.mode.upper()} MODE]\n==========================================================")
     final_rc = 0
 

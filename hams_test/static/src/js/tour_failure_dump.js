@@ -216,6 +216,28 @@ const sharedWorkerCode = `
     let domGrowthStartTime = 0;
     let lastDomSize = 0;
 
+    function triggerDumpAndKill(diag) {
+        console.error(diag);
+        fetch('/hams_test/watchdog/dump', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ params: { diagnostic: diag, log: lastLog } })
+        }).then(() => {
+            fetch('/hams_test/watchdog/kill', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ params: {} })
+            });
+        }).catch(() => {
+            fetch('/hams_test/watchdog/kill', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ params: {} })
+            });
+        });
+        lastPing = Date.now() + 60000;
+    }
+
     self.onconnect = function(e) {
         const port = e.ports[0];
         port.onmessage = function(event) {
@@ -228,27 +250,13 @@ const sharedWorkerCode = `
 
                 // Check if DOM grows so large it bogs down Chrome (> 5MB string representation)
                 if (currentDomSize > 5000000) {
-                    const diag = "V8 TIGHT LOOP DETECTED: DOM size exceeded 5MB skeleton.\\nLast Log: " + lastLog + "\\nDOM Skeleton: " + lastState.substring(0, 1000);
-                    console.error(diag);
-                    fetch('/hams_test/watchdog/kill', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ params: { diagnostic: diag } })
-                    });
-                    lastPing = Date.now() + 60000;
+                    triggerDumpAndKill("V8 TIGHT LOOP DETECTED: DOM size exceeded 5MB skeleton.\\nLast Log: " + lastLog + "\\nDOM Skeleton:\\n" + lastState.substring(0, 5000) + "\\n...[TRUNCATED]");
                 } else if (currentDomSize > lastDomSize && currentDomSize > 5000) {
                     // Check if DOM is growing without bounds for more than 15 seconds
                     if (domGrowthStartTime === 0) {
                         domGrowthStartTime = Date.now();
                     } else if (Date.now() - domGrowthStartTime > 15000) {
-                        const diag = "V8 TIGHT LOOP DETECTED: DOM grew without bounds for > 15 seconds.\\nLast Log: " + lastLog;
-                        console.error(diag);
-                        fetch('/hams_test/watchdog/kill', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ params: { diagnostic: diag } })
-                        });
-                        lastPing = Date.now() + 60000;
+                        triggerDumpAndKill("V8 TIGHT LOOP DETECTED: DOM grew without bounds for > 15 seconds.\\nLast Log: " + lastLog + "\\nDOM Skeleton:\\n" + lastState.substring(0, 5000) + "\\n...[TRUNCATED]");
                     }
                 } else {
                     domGrowthStartTime = 0;
@@ -261,17 +269,10 @@ const sharedWorkerCode = `
     setInterval(function() {
         // 15 seconds without a ping means the main thread is locked in a tight loop
         if (Date.now() - lastPing > 15000) {
-            const diag = "V8 TIGHT LOOP DETECTED: Main thread unresponsive.\\nLast Log: " + lastLog + "\\nDOM Skeleton: " + lastState.substring(0, 1000);
-            console.error(diag);
-            fetch('/hams_test/watchdog/kill', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ params: { diagnostic: diag } })
-            });
-            lastPing = Date.now() + 60000;
+            triggerDumpAndKill("V8 TIGHT LOOP DETECTED: Main thread unresponsive for 15s.\\nLast Log: " + lastLog + "\\nDOM Skeleton:\\n" + lastState.substring(0, 5000) + "\\n...[TRUNCATED]");
         }
     }, 5000);
-`;
+\`;
 
 try {
     const blob = new Blob([sharedWorkerCode], { type: 'application/javascript' });
