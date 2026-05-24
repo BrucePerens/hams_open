@@ -8,10 +8,50 @@ import shutil
 import time
 import urllib.request
 import threading
+import json
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser
 
 _logger = logging.getLogger(__name__)
+
+global_active_browser = None
+global_captured_stack = None
+
+original_browser_start = ChromeBrowser.start
+def _patched_start(self, *args, **kwargs):
+    global global_active_browser, global_captured_stack
+    global_captured_stack = None
+    global_active_browser = self
+
+    res = original_browser_start(self, *args, **kwargs)
+
+    if hasattr(self, '_websocket') and self._websocket:
+        original_recv = self._websocket.recv
+        def _intercepted_recv(*r_args, **r_kwargs):
+            msg = original_recv(*r_args, **r_kwargs)
+            if isinstance(msg, str) and 'Debugger.paused' in msg:
+                global global_captured_stack
+                try:
+                    data = json.loads(msg)
+                    frames = data.get('params', {}).get('callFrames', [])
+                    stack_lines = ["🚨 V8 HUNG THREAD STACK TRACE 🚨"]
+                    for f in frames:
+                        func = f.get('functionName', '') or '(anonymous)'
+                        url = f.get('url', '') or 'unknown'
+                        loc = f.get('location', {})
+                        line = loc.get('lineNumber', 0) + 1
+                        col = loc.get('columnNumber', 0) + 1
+                        stack_lines.append(f"    at {func} ({url}:{line}:{col})")
+                    global_captured_stack = "\n".join(stack_lines)
+                    _logger.error("Successfully captured V8 stack trace via CDP!")
+                except Exception as e: # audit-ignore-catch-all
+                    _logger.error("Failed to parse Debugger.paused event: %s", e)
+            return msg
+        self._websocket.recv = _intercepted_recv
+
+    return res
+
+ChromeBrowser.start = _patched_start
 
 class VirtualClockThread(threading.Thread):
     """
@@ -284,7 +324,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             try:
                 bundle = self.env['ir.qweb']._get_asset_bundle('web.assets_tests').js()
                 dump_path = '/var/tmp/failed_tour_bundle.js'
+
+                global global_captured_stack
+                prefix = f"/*\n{global_captured_stack}\n*/\n\n" if global_captured_stack else "/* No JS stack trace available. */\n\n"
+
                 with open(dump_path, 'w') as f:
+                    f.write(prefix)
                     if isinstance(bundle, str):
                         f.write(bundle)
                     elif hasattr(bundle, 'decode'):

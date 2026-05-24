@@ -458,6 +458,18 @@ def check_linters(venv_python, base_dir, ignore_filepath, extractor=None, target
     else:
         print(res_anchor.stdout)
 
+    print("[*] Running JavaScript Syntax Linter...")
+    js_linter = os.path.join(base_dir, "tools", "check_js_syntax.py")
+    cmd_js = [venv_python, js_linter, base_dir, "--ignore-file", ignore_filepath]
+    res_js = subprocess.run(cmd_js, capture_output=True, text=True)
+    if res_js.returncode != 0:
+        print(res_js.stdout)
+        print(res_js.stderr)
+        print("🛑 Halting due to JavaScript syntax errors.")
+        sys.exit(1)
+    else:
+        print(res_js.stdout)
+
 
 def run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns, target_modules):
     print("[*] Executing Standalone Daemon Tests...")
