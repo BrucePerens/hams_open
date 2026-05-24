@@ -460,7 +460,8 @@ def check_linters(venv_python, base_dir, ignore_filepath, extractor=None, target
 
     print("[*] Running JavaScript Syntax Linter...")
     js_linter = os.path.join(base_dir, "tools", "check_js_syntax.py")
-    cmd_js = [venv_python, js_linter, base_dir, "--ignore-file", ignore_filepath]
+    target_dirs = [os.path.join(base_dir, m) for m in target_modules]
+    cmd_js = [venv_python, js_linter, "--ignore-file", ignore_filepath] + target_dirs
     res_js = subprocess.run(cmd_js, capture_output=True, text=True)
     if res_js.returncode != 0:
         print(res_js.stdout)

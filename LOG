@@ -1,0 +1,1302 @@
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `install_requires` overwritten in `pyproject.toml` (dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `extras_require` overwritten in `pyproject.toml` (optional-dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running bdist_deb
+running sdist_dsc
+running egg_info
+creating PyPDF2.egg-info
+writing PyPDF2.egg-info/PKG-INFO
+writing dependency_links to PyPDF2.egg-info/dependency_links.txt
+writing requirements to PyPDF2.egg-info/requires.txt
+writing top-level names to PyPDF2.egg-info/top_level.txt
+writing manifest file 'PyPDF2.egg-info/SOURCES.txt'
+reading manifest file 'PyPDF2.egg-info/SOURCES.txt'
+reading manifest template 'MANIFEST.in'
+warning: no files found matching 'CHANGELOG'
+adding license file 'LICENSE'
+writing manifest file 'PyPDF2.egg-info/SOURCES.txt'
+running sdist
+running check
+creating pypdf2-2.12.1
+creating pypdf2-2.12.1/PyPDF2
+creating pypdf2-2.12.1/PyPDF2.egg-info
+creating pypdf2-2.12.1/PyPDF2/_codecs
+creating pypdf2-2.12.1/PyPDF2/generic
+copying files to pypdf2-2.12.1...
+copying LICENSE -> pypdf2-2.12.1
+copying MANIFEST.in -> pypdf2-2.12.1
+copying README.md -> pypdf2-2.12.1
+copying pyproject.toml -> pypdf2-2.12.1
+copying setup.cfg -> pypdf2-2.12.1
+copying setup.py -> pypdf2-2.12.1
+copying PyPDF2/__init__.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_cmap.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_encryption.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_merger.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_page.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_reader.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_security.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_utils.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_version.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/_writer.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/constants.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/errors.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/filters.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/pagerange.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/papersizes.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/py.typed -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/types.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2/xmp.py -> pypdf2-2.12.1/PyPDF2
+copying PyPDF2.egg-info/PKG-INFO -> pypdf2-2.12.1/PyPDF2.egg-info
+copying PyPDF2.egg-info/SOURCES.txt -> pypdf2-2.12.1/PyPDF2.egg-info
+copying PyPDF2.egg-info/dependency_links.txt -> pypdf2-2.12.1/PyPDF2.egg-info
+copying PyPDF2.egg-info/requires.txt -> pypdf2-2.12.1/PyPDF2.egg-info
+copying PyPDF2.egg-info/top_level.txt -> pypdf2-2.12.1/PyPDF2.egg-info
+copying PyPDF2/_codecs/__init__.py -> pypdf2-2.12.1/PyPDF2/_codecs
+copying PyPDF2/_codecs/adobe_glyphs.py -> pypdf2-2.12.1/PyPDF2/_codecs
+copying PyPDF2/_codecs/pdfdoc.py -> pypdf2-2.12.1/PyPDF2/_codecs
+copying PyPDF2/_codecs/std.py -> pypdf2-2.12.1/PyPDF2/_codecs
+copying PyPDF2/_codecs/symbol.py -> pypdf2-2.12.1/PyPDF2/_codecs
+copying PyPDF2/_codecs/zapfding.py -> pypdf2-2.12.1/PyPDF2/_codecs
+copying PyPDF2/generic/__init__.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2/generic/_annotations.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2/generic/_base.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2/generic/_data_structures.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2/generic/_outline.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2/generic/_rectangle.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2/generic/_utils.py -> pypdf2-2.12.1/PyPDF2/generic
+copying PyPDF2.egg-info/SOURCES.txt -> pypdf2-2.12.1/PyPDF2.egg-info
+Writing pypdf2-2.12.1/setup.cfg
+creating dist
+Creating tar archive
+removing 'pypdf2-2.12.1' (and everything under it)
+dpkg-buildpackage: info: source package pypdf2
+dpkg-buildpackage: info: source version 2.12.1-1
+dpkg-buildpackage: info: source distribution unstable
+dpkg-buildpackage: info: source changed by Martin Thoma <Martin Thoma <info@martin-thoma.de>>
+ dpkg-source --before-build .
+ debian/rules clean
+dh clean --with python3 --buildsystem=pybuild
+dh: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_auto_clean -O--buildsystem=pybuild
+dh_auto_clean: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+I: pybuild base:311: python3.13 setup.py clean 
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `install_requires` overwritten in `pyproject.toml` (dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `extras_require` overwritten in `pyproject.toml` (optional-dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running clean
+removing '/mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build' (and everything under it)
+'build/bdist.linux-x86_64' does not exist -- can't clean it
+'build/scripts-3.13' does not exist -- can't clean it
+   dh_clean -O--buildsystem=pybuild
+dh_clean: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+ dpkg-source -b .
+dpkg-source: info: using source format '3.0 (quilt)'
+dpkg-source: info: building pypdf2 using existing ./pypdf2_2.12.1.orig.tar.gz
+dpkg-source: warning: ignoring deletion of directory PyPDF2.egg-info
+dpkg-source: warning: ignoring deletion of file PyPDF2.egg-info/top_level.txt, use --include-removal to override
+dpkg-source: warning: ignoring deletion of file PyPDF2.egg-info/requires.txt, use --include-removal to override
+dpkg-source: warning: ignoring deletion of file PyPDF2.egg-info/dependency_links.txt, use --include-removal to override
+dpkg-source: warning: ignoring deletion of file PyPDF2.egg-info/SOURCES.txt, use --include-removal to override
+dpkg-source: warning: ignoring deletion of file PyPDF2.egg-info/PKG-INFO, use --include-removal to override
+dpkg-source: info: building pypdf2 in pypdf2_2.12.1-1.debian.tar.xz
+dpkg-source: info: building pypdf2 in pypdf2_2.12.1-1.dsc
+ dpkg-genbuildinfo --build=source -O../pypdf2_2.12.1-1_source.buildinfo
+ dpkg-genchanges -sa --build=source -O../pypdf2_2.12.1-1_source.changes
+dpkg-genchanges: info: including full source code in upload
+ dpkg-source --after-build .
+dpkg-buildpackage: info: source-only upload (original source is included)
+dpkg-source: warning: extracting unsigned source package (pypdf2_2.12.1-1.dsc)
+dpkg-source: info: extracting pypdf2 in pypdf2-2.12.1
+dpkg-source: info: unpacking pypdf2_2.12.1.orig.tar.gz
+dpkg-source: info: unpacking pypdf2_2.12.1-1.debian.tar.xz
+dpkg-buildpackage: info: source package pypdf2
+dpkg-buildpackage: info: source version 2.12.1-1
+dpkg-buildpackage: info: source distribution unstable
+dpkg-buildpackage: info: source changed by Martin Thoma <Martin Thoma <info@martin-thoma.de>>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+ debian/rules clean
+dh clean --with python3 --buildsystem=pybuild
+dh: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_auto_clean -O--buildsystem=pybuild
+dh_auto_clean: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+I: pybuild base:311: python3.13 setup.py clean 
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `install_requires` overwritten in `pyproject.toml` (dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `extras_require` overwritten in `pyproject.toml` (optional-dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running clean
+removing '/mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build' (and everything under it)
+'build/bdist.linux-x86_64' does not exist -- can't clean it
+'build/scripts-3.13' does not exist -- can't clean it
+   dh_clean -O--buildsystem=pybuild
+dh_clean: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+ debian/rules binary
+dh binary --with python3 --buildsystem=pybuild
+dh: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_update_autotools_config -O--buildsystem=pybuild
+   dh_auto_configure -O--buildsystem=pybuild
+dh_auto_configure: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+I: pybuild base:311: python3.13 setup.py config 
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `install_requires` overwritten in `pyproject.toml` (dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `extras_require` overwritten in `pyproject.toml` (optional-dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running config
+   dh_auto_build -O--buildsystem=pybuild
+dh_auto_build: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+I: pybuild base:311: /usr/bin/python3 setup.py build 
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `install_requires` overwritten in `pyproject.toml` (dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `extras_require` overwritten in `pyproject.toml` (optional-dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running build
+running build_py
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/xmp.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/types.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/papersizes.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/pagerange.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/filters.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/errors.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/constants.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_writer.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_version.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_utils.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_security.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_reader.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_page.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_merger.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_encryption.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/_cmap.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+copying PyPDF2/__init__.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/_utils.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/_rectangle.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/_outline.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/_data_structures.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/_base.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/_annotations.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+copying PyPDF2/generic/__init__.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+copying PyPDF2/_codecs/zapfding.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+copying PyPDF2/_codecs/symbol.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+copying PyPDF2/_codecs/std.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+copying PyPDF2/_codecs/pdfdoc.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+copying PyPDF2/_codecs/adobe_glyphs.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+copying PyPDF2/_codecs/__init__.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs
+running egg_info
+creating PyPDF2.egg-info
+writing PyPDF2.egg-info/PKG-INFO
+writing dependency_links to PyPDF2.egg-info/dependency_links.txt
+writing requirements to PyPDF2.egg-info/requires.txt
+writing top-level names to PyPDF2.egg-info/top_level.txt
+writing manifest file 'PyPDF2.egg-info/SOURCES.txt'
+reading manifest file 'PyPDF2.egg-info/SOURCES.txt'
+reading manifest template 'MANIFEST.in'
+warning: no files found matching 'CHANGELOG'
+adding license file 'LICENSE'
+writing manifest file 'PyPDF2.egg-info/SOURCES.txt'
+copying PyPDF2/py.typed -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2
+   dh_auto_test -O--buildsystem=pybuild
+dh_auto_test: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+I: pybuild base:311: cd /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build; python3.13 -m unittest discover -v 
+
+----------------------------------------------------------------------
+Ran 0 tests in 0.000s
+
+NO TESTS RAN
+   dh_testroot -O--buildsystem=pybuild
+   dh_prep -O--buildsystem=pybuild
+   dh_auto_install --destdir=debian/python3-pypdf2/ -O--buildsystem=pybuild
+dh_auto_install: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+I: pybuild base:311: /usr/bin/python3 setup.py install --root /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2 
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        This deprecation is overdue, please update your project and remove deprecated
+        calls to avoid build errors in the future.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `install_requires` overwritten in `pyproject.toml` (dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsWarning: `extras_require` overwritten in `pyproject.toml` (optional-dependencies)
+  corresp(dist, value, root_dir)
+/usr/lib/python3/dist-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/usr/lib/python3/dist-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: BSD License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running install
+/usr/lib/python3/dist-packages/setuptools/_distutils/cmd.py:90: SetuptoolsDeprecationWarning: setup.py install is deprecated.
+!!
+
+        ********************************************************************************
+        Please avoid running ``setup.py`` directly.
+        Instead, use pypa/build, pypa/installer or other
+        standards-based tools.
+
+        See https://blog.ganssle.io/articles/2021/10/setup-py-deprecated.html for details.
+        ********************************************************************************
+
+!!
+  self.initialize_options()
+running build
+running build_py
+running egg_info
+writing PyPDF2.egg-info/PKG-INFO
+writing dependency_links to PyPDF2.egg-info/dependency_links.txt
+writing requirements to PyPDF2.egg-info/requires.txt
+writing top-level names to PyPDF2.egg-info/top_level.txt
+reading manifest file 'PyPDF2.egg-info/SOURCES.txt'
+reading manifest template 'MANIFEST.in'
+warning: no files found matching 'CHANGELOG'
+adding license file 'LICENSE'
+writing manifest file 'PyPDF2.egg-info/SOURCES.txt'
+running install_lib
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/py.typed -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs/__init__.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs/adobe_glyphs.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs/pdfdoc.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs/std.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs/symbol.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_codecs/zapfding.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs
+creating /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/__init__.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/_annotations.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/_base.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/_data_structures.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/_outline.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/_rectangle.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/generic/_utils.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/__init__.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_cmap.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_encryption.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_merger.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_page.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_reader.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_security.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_utils.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_version.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/_writer.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/constants.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/errors.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/filters.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/pagerange.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/papersizes.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/types.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+copying /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/.pybuild/cpython3_3.13_pypdf2/build/PyPDF2/xmp.py -> /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs/__init__.py to __init__.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs/adobe_glyphs.py to adobe_glyphs.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs/pdfdoc.py to pdfdoc.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs/std.py to std.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs/symbol.py to symbol.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_codecs/zapfding.py to zapfding.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/__init__.py to __init__.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/_annotations.py to _annotations.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/_base.py to _base.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/_data_structures.py to _data_structures.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/_outline.py to _outline.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/_rectangle.py to _rectangle.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/generic/_utils.py to _utils.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/__init__.py to __init__.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_cmap.py to _cmap.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_encryption.py to _encryption.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_merger.py to _merger.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_page.py to _page.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_reader.py to _reader.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_security.py to _security.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_utils.py to _utils.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_version.py to _version.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/_writer.py to _writer.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/constants.py to constants.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/errors.py to errors.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/filters.py to filters.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/pagerange.py to pagerange.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/papersizes.py to papersizes.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/types.py to types.cpython-313.pyc
+byte-compiling /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2/xmp.py to xmp.cpython-313.pyc
+running install_egg_info
+Copying PyPDF2.egg-info to /mnt/upper/tmp/PyPDF2-2.12.1/deb_dist/pypdf2-2.12.1/debian/python3-pypdf2/usr/lib/python3.13/dist-packages/PyPDF2-2.12.1.egg-info
+Skipping SOURCES.txt
+running install_scripts
+   dh_installdocs -O--buildsystem=pybuild
+dh_installdocs: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_installchangelogs -O--buildsystem=pybuild
+dh_installchangelogs: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_python3 -O--buildsystem=pybuild
+   dh_installinit -O--buildsystem=pybuild
+dh_installinit: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_perl -O--buildsystem=pybuild
+   dh_link -O--buildsystem=pybuild
+dh_link: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_strip_nondeterminism -O--buildsystem=pybuild
+   dh_compress -O--buildsystem=pybuild
+dh_compress: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_fixperms -O--buildsystem=pybuild
+   dh_missing -O--buildsystem=pybuild
+dh_missing: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_installdeb -O--buildsystem=pybuild
+dh_installdeb: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_gencontrol -O--buildsystem=pybuild
+dh_gencontrol: warning: Compatibility levels before 10 are deprecated (level 9 in use)
+   dh_md5sums -O--buildsystem=pybuild
+   dh_builddeb -O--buildsystem=pybuild
+dpkg-deb: building package 'python3-pypdf2' in '../python3-pypdf2_2.12.1-1_all.deb'.
+ dpkg-genbuildinfo --build=binary -O../pypdf2_2.12.1-1_amd64.buildinfo
+ dpkg-genchanges --build=binary -O../pypdf2_2.12.1-1_amd64.changes
+dpkg-genchanges: info: binary-only upload (no source code included)
+ dpkg-source --after-build .
+dpkg-buildpackage: info: binary-only upload (no source included)
+(Reading database ... 302035 files and directories currently installed.)
+Preparing to unpack .../python3-pypdf2_2.12.1-1_all.deb ...
+Unpacking python3-pypdf2 (2.12.1-1) over (2.12.1-1) ...
+Setting up python3-pypdf2 (2.12.1-1) ...
+initdb: warning: enabling "trust" authentication for local connections
+initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+[+] SUCCESS: Manifest Dependency Graph validated. No chronological forward references found.
+==========================================================
+ 🧪 ODOO TEST RUNNER [STANDARD MODE]
+==========================================================
+[*] Running Manifest Dependency Graph Linter...
+[*] Running AST Burn List Linter...
+ 📄 hams_test/common.py
+  ⚠️  WARNING: Line 69 (AST): [%AUDIT] THREAD BLOCKING: 'time.sleep()' halts the worker...
+      Code: `time.sleep(0.1)`
+ 📄 hams_test/controllers/main.py
+  ⚠️  WARNING: Line 27 (AST): [%AUDIT] THREAD BLOCKING: 'time.sleep()' halts the worker...
+      Code: `time.sleep(0.1)`
+
+Scan Complete: Checked 379 files.
+Total Errors: 0 | Total Warnings (Audits): 2
+✅ Passed with warnings. Audits require manual verification.
+
+[*] Scanning for Semantic Anchors...
+[*] Scanning documentation and codebase for Semantic Anchors...
+
+[+] SUCCESS: Verified 386 Semantic Anchors and 260 API Contracts. (Module Bounds Secure & Explicit Targeting Profile Operational)
+
+[*] Executing Standalone Daemon Tests...
+
+[*] ----------------------------------------------------
+[*] Testing Daemon: backup_management
+[*] ----------------------------------------------------
+
+[*] [DEBUG-RUNNER] Subprocess spawned: PID 438843, PGID 438843
+[*] [DEBUG-RUNNER] Executing command: /home/bruce/workspace/hams_community/.venv/bin/python -m unittest discover -p test_*.py -v
+[*] [DEBUG-RUNNER] IO Reader thread started for PID 438843
+test_execute_job_kopia_success (test_backup_worker.TestBackupWorkerDaemon.test_execute_job_kopia_success) ... 2026-05-23 23:41:08,565 - [BACKUP_WORKER] - Processing job 99 (kopia)
+2026-05-23 23:41:08,565 - [BACKUP_WORKER] - Executing: kopia snapshot create /var/lib/odoo/backups --json
+2026-05-23 23:41:08,566 - [BACKUP_WORKER] - Job 99 finished: done
+ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+OK
+[*] [DEBUG-RUNNER] IO Reader thread concluded for PID 438843
+[*] [DEBUG-RUNNER] Received EOF sentinel from IO Reader thread.
+[*] [DEBUG-RUNNER] Waiting for process 438843 to cleanly terminate...
+[*] [DEBUG-RUNNER] Process 438843 terminated with return code 0.
+
+[*] ----------------------------------------------------
+[*] Testing Daemon: distributed_redis_cache
+[*] ----------------------------------------------------
+
+[*] [DEBUG-RUNNER] Subprocess spawned: PID 438845, PGID 438845
+[*] [DEBUG-RUNNER] Executing command: /home/bruce/workspace/hams_community/.venv/bin/python -m unittest discover -p test_*.py -v
+[*] [DEBUG-RUNNER] IO Reader thread started for PID 438845
+test_01_broadcast_to_redis (test_cache_manager.TestCacheManager.test_01_broadcast_to_redis) ... ok
+test_02_postgres_notify_handler (test_cache_manager.TestCacheManager.test_02_postgres_notify_handler)
+Verify that the handler correctly schedules a broadcast task. ... 2026-05-23 23:41:08,714 - INFO - Received Postgres NOTIFY on channel: payload
+ok
+test_03_main_loop_reconnect (test_cache_manager.TestCacheManager.test_03_main_loop_reconnect)
+Verify that the main loop attempts to reconnect to Postgres on failure. ... ok
+test_04_broadcast_to_redis_invalid_payload (test_cache_manager.TestCacheManager.test_04_broadcast_to_redis_invalid_payload)
+Verify that invalid payloads are ignored. ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.108s
+
+OK
+[*] [DEBUG-RUNNER] IO Reader thread concluded for PID 438845
+[*] [DEBUG-RUNNER] Received EOF sentinel from IO Reader thread.
+[*] [DEBUG-RUNNER] Waiting for process 438845 to cleanly terminate...
+[*] [DEBUG-RUNNER] Process 438845 terminated with return code 0.
+[*] Found existing DB cache: 0 bytes.
+[*] DB cache missing or invalid. Rebuilding...
+[*] Dropping and Rebuilding Database Schema (hams_test)...
+
+[*] [DEBUG-RUNNER] Subprocess spawned: PID 438854, PGID 438854
+[*] [DEBUG-RUNNER] Executing command: /home/bruce/workspace/hams_community/.venv/bin/python /usr/bin/odoo --addons-path /usr/lib/python3/dist-packages/odoo/addons,/home/bruce/workspace/hams_community,/home/bruce/workspace/hams_community,/home/bruce/workspace/hams_com -d hams_test -i base,backup_management,binary_downloader,cloudflare,compliance,daemon_key_manager,database_management,distributed_redis_cache,hams_helpdesk,hams_test,manual_library,pager_duty,user_websites,user_websites_seo,zero_sudo --stop-after-init --workers=0 --max-cron-threads=0
+[*] [DEBUG-RUNNER] IO Reader thread started for PID 438854
+2026-05-24 06:41:09,088 438854 WARNING ? odoo.tools.config: missing --http-interface/http_interface, using 0.0.0.0 by default, will change to 127.0.0.1 in 20.0 
+2026-05-24 06:41:09,088 438854 INFO ? odoo: Odoo version 19.0-20260324 
+2026-05-24 06:41:09,088 438854 INFO ? odoo: addons paths: _NamespacePath(['/usr/lib/python3/dist-packages/odoo/addons', '/var/lib/odoo/.local/share/Odoo/addons/19.0', '/home/bruce/workspace/hams_community', '/home/bruce/workspace/hams_com', '/usr/lib/python3/dist-packages/addons']) 
+2026-05-24 06:41:09,088 438854 INFO ? odoo: database: odoo@/opt/hams/pgsock:default 
+2026-05-24 06:41:09,304 438854 INFO hams_test odoo.modules.loading: Initializing database hams_test 
+2026-05-24 06:41:09,728 438854 INFO hams_test odoo.modules.loading: loading 1 modules... 
+2026-05-24 06:41:09,728 438854 INFO hams_test odoo.modules.loading: Loading module base (1/1) 
+2026-05-24 06:41:09,742 438854 INFO hams_test odoo.registry: module base: creating or updating database tables 
+2026-05-24 06:41:09,864 438854 INFO hams_test odoo.models: Prepare computation of ir.module.module.menus_by_module 
+2026-05-24 06:41:09,864 438854 INFO hams_test odoo.models: Prepare computation of ir.module.module.reports_by_module 
+2026-05-24 06:41:09,865 438854 INFO hams_test odoo.models: Prepare computation of ir.module.module.views_by_module 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.user_id 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.commercial_partner_id 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.complete_name 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.lang 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.company_registry 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.commercial_company_name 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.properties 
+2026-05-24 06:41:09,903 438854 INFO hams_test odoo.models: Prepare computation of res.partner.partner_share 
+2026-05-24 06:41:09,916 438854 INFO hams_test odoo.models: Prepare computation of res.currency.decimal_places 
+2026-05-24 06:41:09,924 438854 INFO hams_test odoo.models: Prepare computation of res.company.uses_default_logo 
+2026-05-24 06:41:09,924 438854 INFO hams_test odoo.models: Prepare computation of res.company.logo_web 
+2026-05-24 06:41:09,924 438854 INFO hams_test odoo.models: Computing parent_path for table res_company... 
+2026-05-24 06:41:09,934 438854 INFO hams_test odoo.models: Prepare computation of res.users.signature 
+2026-05-24 06:41:09,934 438854 INFO hams_test odoo.models: Prepare computation of res.users.share 
+2026-05-24 06:41:10,609 438854 INFO hams_test odoo.modules.loading: loading base/data/res_bank.xml 
+2026-05-24 06:41:10,612 438854 INFO hams_test odoo.modules.loading: loading base/data/res.lang.csv 
+2026-05-24 06:41:10,628 438854 INFO hams_test odoo.modules.loading: loading base/data/res_lang_data.xml 
+2026-05-24 06:41:10,644 438854 INFO hams_test odoo.modules.loading: loading base/data/res_partner_data.xml 
+2026-05-24 06:41:10,664 438854 INFO hams_test odoo.modules.loading: loading base/data/res_currency_data.xml 
+2026-05-24 06:41:10,895 438854 INFO hams_test odoo.modules.loading: loading base/data/res_company_data.xml 
+2026-05-24 06:41:10,898 438854 INFO hams_test odoo.modules.loading: loading base/data/res_users_data.xml 
+2026-05-24 06:41:11,364 438854 INFO hams_test odoo.modules.loading: loading base/data/report_paperformat_data.xml 
+2026-05-24 06:41:11,369 438854 INFO hams_test odoo.modules.loading: loading base/data/res_country_data.xml 
+2026-05-24 06:41:11,653 438854 INFO hams_test odoo.modules.loading: loading base/data/ir_demo_data.xml 
+2026-05-24 06:41:11,660 438854 INFO hams_test odoo.modules.loading: loading base/security/base_groups.xml 
+2026-05-24 06:41:11,769 438854 INFO hams_test odoo.modules.loading: loading base/security/base_security.xml 
+2026-05-24 06:41:11,851 438854 INFO hams_test odoo.modules.loading: loading base/wizard/wizard_ir_model_menu_create_views.xml 
+2026-05-24 06:41:11,857 438854 INFO hams_test odoo.modules.loading: loading base/views/base_menus.xml 
+2026-05-24 06:41:11,889 438854 INFO hams_test odoo.modules.loading: loading base/views/decimal_precision_views.xml 
+2026-05-24 06:41:11,899 438854 INFO hams_test odoo.modules.loading: loading base/views/res_config_views.xml 
+2026-05-24 06:41:11,903 438854 INFO hams_test odoo.modules.loading: loading base/data/res.country.state.csv 
+2026-05-24 06:41:12,087 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_actions_views.xml 
+2026-05-24 06:41:12,178 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_asset_views.xml 
+2026-05-24 06:41:12,188 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_config_parameter_views.xml 
+2026-05-24 06:41:12,197 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_cron_views.xml 
+2026-05-24 06:41:12,210 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_cron_trigger_views.xml 
+2026-05-24 06:41:12,217 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_filters_views.xml 
+2026-05-24 06:41:12,228 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_mail_server_views.xml 
+2026-05-24 06:41:12,241 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_model_views.xml 
+2026-05-24 06:41:12,315 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_attachment_views.xml 
+2026-05-24 06:41:12,327 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_rule_views.xml 
+2026-05-24 06:41:12,339 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_sequence_views.xml 
+2026-05-24 06:41:12,350 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_ui_menu_views.xml 
+2026-05-24 06:41:12,361 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_ui_view_views.xml 
+2026-05-24 06:41:12,397 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_default_views.xml 
+2026-05-24 06:41:12,409 438854 INFO hams_test odoo.modules.loading: loading base/data/ir_config_parameter_data.xml 
+2026-05-24 06:41:12,411 438854 INFO hams_test odoo.modules.loading: loading base/data/ir_cron_data.xml 
+2026-05-24 06:41:12,420 438854 INFO hams_test odoo.modules.loading: loading base/report/ir_model_report.xml 
+2026-05-24 06:41:12,424 438854 INFO hams_test odoo.modules.loading: loading base/report/ir_model_templates.xml 
+2026-05-24 06:41:12,431 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_logging_views.xml 
+2026-05-24 06:41:12,447 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_qweb_widget_templates.xml 
+2026-05-24 06:41:12,456 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_module_views.xml 
+2026-05-24 06:41:12,483 438854 INFO hams_test odoo.modules.loading: loading base/data/ir_module_category_data.xml 
+2026-05-24 06:41:12,496 438854 INFO hams_test odoo.modules.loading: loading base/data/ir_module_module.xml 
+2026-05-24 06:41:12,525 438854 INFO hams_test odoo.modules.loading: loading base/report/ir_module_reports.xml 
+2026-05-24 06:41:12,527 438854 INFO hams_test odoo.modules.loading: loading base/report/ir_module_report_templates.xml 
+2026-05-24 06:41:12,531 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_module_update_views.xml 
+2026-05-24 06:41:12,536 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_language_install_views.xml 
+2026-05-24 06:41:12,545 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_import_language_views.xml 
+2026-05-24 06:41:12,551 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_module_upgrade_views.xml 
+2026-05-24 06:41:12,560 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_module_uninstall_views.xml 
+2026-05-24 06:41:12,566 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_export_language_views.xml 
+2026-05-24 06:41:12,574 438854 INFO hams_test odoo.modules.loading: loading base/wizard/base_partner_merge_views.xml 
+2026-05-24 06:41:12,584 438854 INFO hams_test odoo.modules.loading: loading base/data/ir_demo_failure_data.xml 
+2026-05-24 06:41:12,594 438854 INFO hams_test odoo.modules.loading: loading base/views/ir_profile_views.xml 
+2026-05-24 06:41:12,607 438854 INFO hams_test odoo.modules.loading: loading base/views/res_company_views.xml 
+2026-05-24 06:41:12,620 438854 INFO hams_test odoo.modules.loading: loading base/views/res_lang_views.xml 
+2026-05-24 06:41:12,633 438854 INFO hams_test odoo.modules.loading: loading base/views/res_partner_views.xml 
+2026-05-24 06:41:12,686 438854 INFO hams_test odoo.modules.loading: loading base/views/res_bank_views.xml 
+2026-05-24 06:41:12,709 438854 INFO hams_test odoo.modules.loading: loading base/views/res_country_views.xml 
+2026-05-24 06:41:12,733 438854 INFO hams_test odoo.modules.loading: loading base/views/res_currency_views.xml 
+2026-05-24 06:41:12,758 438854 INFO hams_test odoo.modules.loading: loading base/views/res_groups_views.xml 
+2026-05-24 06:41:12,807 438854 INFO hams_test odoo.modules.loading: loading base/views/res_users_views.xml 
+2026-05-24 06:41:12,870 438854 INFO hams_test odoo.modules.loading: loading base/views/res_users_apikeys_views.xml 
+2026-05-24 06:41:12,873 438854 INFO hams_test odoo.modules.loading: loading base/views/res_device_views.xml 
+2026-05-24 06:41:12,883 438854 INFO hams_test odoo.modules.loading: loading base/views/res_users_identitycheck_views.xml 
+2026-05-24 06:41:12,888 438854 INFO hams_test odoo.modules.loading: loading base/views/res_config_settings_views.xml 
+2026-05-24 06:41:12,893 438854 INFO hams_test odoo.modules.loading: loading base/views/report_paperformat_views.xml 
+2026-05-24 06:41:12,904 438854 INFO hams_test odoo.modules.loading: loading base/security/ir.model.access.csv 
+2026-05-24 06:41:12,960 438854 INFO hams_test odoo.modules.loading: Module base loaded in 3.23s, 8403 queries (+8403 other) 
+2026-05-24 06:41:12,960 438854 INFO hams_test odoo.modules.loading: 1 modules loaded in 3.23s, 8403 queries (+8403 extra) 
+2026-05-24 06:41:12,962 438854 INFO hams_test odoo.modules.loading: updating modules list 
+2026-05-24 06:41:12,963 438854 INFO hams_test odoo.addons.base.models.ir_module: ALLOW access to module.update_list on [] to user __system__ #1 via n/a 
+2026-05-24 06:41:13,400 438854 INFO hams_test odoo.addons.base.models.ir_module: ALLOW access to module.button_install on ['Hams Helpdesk', 'Manual Library', 'User Websites', 'Backup Management', 'Binary Downloader', 'Cloudflare Edge Orchestration', 'Global Compliance & Privacy', 'Daemon Key Manager', 'Database Management', 'Distributed Redis Cache', 'Hams Test Infrastructure', 'Pager Duty', 'User Websites SEO', 'Zero-Sudo Security Core'] to user __system__ #1 via n/a 
+2026-05-24 06:41:13,482 438854 INFO hams_test odoo.modules.loading: loading 89 modules... 
+2026-05-24 06:41:13,482 438854 INFO hams_test odoo.modules.loading: Loading module rpc (2/89) 
+2026-05-24 06:41:13,492 438854 INFO hams_test odoo.modules.loading: Module rpc loaded in 0.01s, 9 queries (+9 other) 
+2026-05-24 06:41:13,492 438854 INFO hams_test odoo.modules.loading: Loading module social_media (3/89) 
+2026-05-24 06:41:13,494 438854 INFO hams_test odoo.registry: module social_media: creating or updating database tables 
+2026-05-24 06:41:13,517 438854 INFO hams_test odoo.modules.loading: loading social_media/views/res_company_views.xml 
+2026-05-24 06:41:13,530 438854 INFO hams_test odoo.modules.loading: Module social_media loaded in 0.04s, 75 queries (+75 other) 
+2026-05-24 06:41:13,530 438854 INFO hams_test odoo.modules.loading: Loading module uom (4/89) 
+2026-05-24 06:41:13,532 438854 INFO hams_test odoo.registry: module uom: creating or updating database tables 
+2026-05-24 06:41:13,552 438854 INFO hams_test odoo.modules.loading: loading uom/data/uom_data.xml 
+2026-05-24 06:41:13,583 438854 INFO hams_test odoo.modules.loading: loading uom/security/uom_security.xml 
+2026-05-24 06:41:13,586 438854 INFO hams_test odoo.modules.loading: loading uom/security/ir.model.access.csv 
+2026-05-24 06:41:13,590 438854 INFO hams_test odoo.modules.loading: loading uom/views/uom_uom_views.xml 
+2026-05-24 06:41:13,603 438854 INFO hams_test odoo.modules.loading: Module uom loaded in 0.07s, 230 queries (+230 other) 
+2026-05-24 06:41:13,603 438854 INFO hams_test odoo.modules.loading: Loading module web (5/89) 
+2026-05-24 06:41:13,618 438854 INFO hams_test odoo.registry: module web: creating or updating database tables 
+2026-05-24 06:41:13,897 438854 INFO hams_test odoo.modules.loading: loading web/security/ir.model.access.csv 
+2026-05-24 06:41:13,901 438854 INFO hams_test odoo.modules.loading: loading web/security/web_security.xml 
+2026-05-24 06:41:13,907 438854 INFO hams_test odoo.modules.loading: loading web/views/webclient_templates.xml 
+2026-05-24 06:41:13,936 438854 INFO hams_test odoo.modules.loading: loading web/views/report_templates.xml 
+2026-05-24 06:41:13,993 438854 INFO hams_test odoo.modules.loading: loading web/views/base_document_layout_views.xml 
+2026-05-24 06:41:14,002 438854 INFO hams_test odoo.modules.loading: loading web/views/partner_view.xml 
+2026-05-24 06:41:14,007 438854 INFO hams_test odoo.modules.loading: loading web/views/speedscope_template.xml 
+2026-05-24 06:41:14,010 438854 INFO hams_test odoo.modules.loading: loading web/views/memory_template.xml 
+2026-05-24 06:41:14,014 438854 INFO hams_test odoo.modules.loading: loading web/views/speedscope_config_wizard.xml 
+2026-05-24 06:41:14,018 438854 INFO hams_test odoo.modules.loading: loading web/views/neutralize_views.xml 
+2026-05-24 06:41:14,023 438854 INFO hams_test odoo.modules.loading: loading web/views/ir_ui_view_views.xml 
+2026-05-24 06:41:14,030 438854 INFO hams_test odoo.modules.loading: loading web/data/ir_attachment.xml 
+2026-05-24 06:41:14,034 438854 INFO hams_test odoo.modules.loading: loading web/data/report_layout.xml 
+2026-05-24 06:41:14,056 438854 INFO hams_test odoo.modules.loading: Module web loaded in 0.45s, 1239 queries (+1239 other) 
+2026-05-24 06:41:14,056 438854 INFO hams_test odoo.modules.loading: Loading module api_doc (6/89) 
+2026-05-24 06:41:14,062 438854 INFO hams_test odoo.registry: module api_doc: creating or updating database tables 
+2026-05-24 06:41:14,076 438854 INFO hams_test odoo.modules.loading: loading api_doc/security/res_groups.xml 
+2026-05-24 06:41:14,093 438854 INFO hams_test odoo.modules.loading: loading api_doc/views/docclient.xml 
+2026-05-24 06:41:14,105 438854 INFO hams_test odoo.modules.loading: Module api_doc loaded in 0.05s, 63 queries (+63 other) 
+2026-05-24 06:41:14,105 438854 INFO hams_test odoo.modules.loading: Loading module auth_totp (7/89) 
+2026-05-24 06:41:14,115 438854 INFO hams_test odoo.registry: module auth_totp: creating or updating database tables 
+2026-05-24 06:41:14,156 438854 INFO hams_test odoo.modules.loading: loading auth_totp/security/security.xml 
+2026-05-24 06:41:14,168 438854 INFO hams_test odoo.modules.loading: loading auth_totp/security/ir.model.access.csv 
+2026-05-24 06:41:14,171 438854 INFO hams_test odoo.modules.loading: loading auth_totp/data/ir_action_data.xml 
+2026-05-24 06:41:14,178 438854 INFO hams_test odoo.modules.loading: loading auth_totp/views/res_users_views.xml 
+2026-05-24 06:41:14,192 438854 INFO hams_test odoo.modules.loading: loading auth_totp/views/templates.xml 
+2026-05-24 06:41:14,195 438854 INFO hams_test odoo.modules.loading: loading auth_totp/wizard/auth_totp_wizard_views.xml 
+2026-05-24 06:41:14,207 438854 INFO hams_test odoo.modules.loading: Module auth_totp loaded in 0.10s, 218 queries (+218 other) 
+2026-05-24 06:41:14,207 438854 INFO hams_test odoo.modules.loading: Loading module base_import (8/89) 
+2026-05-24 06:41:14,242 438854 INFO hams_test odoo.registry: module base_import: creating or updating database tables 
+2026-05-24 06:41:14,556 438854 INFO hams_test odoo.modules.loading: loading base_import/security/ir.model.access.csv 
+2026-05-24 06:41:14,564 438854 INFO hams_test odoo.modules.loading: Module base_import loaded in 0.36s, 966 queries (+966 other) 
+2026-05-24 06:41:14,564 438854 INFO hams_test odoo.modules.loading: Loading module base_import_module (9/89) 
+2026-05-24 06:41:14,568 438854 INFO hams_test odoo.registry: module base_import_module: creating or updating database tables 
+2026-05-24 06:41:14,600 438854 INFO hams_test odoo.modules.loading: loading base_import_module/security/ir.model.access.csv 
+2026-05-24 06:41:14,603 438854 INFO hams_test odoo.modules.loading: loading base_import_module/views/base_import_module_view.xml 
+2026-05-24 06:41:14,612 438854 INFO hams_test odoo.modules.loading: loading base_import_module/views/ir_module_views.xml 
+2026-05-24 06:41:14,635 438854 INFO hams_test odoo.modules.loading: Module base_import_module loaded in 0.07s, 172 queries (+172 other) 
+2026-05-24 06:41:14,635 438854 INFO hams_test odoo.modules.loading: Loading module base_setup (10/89) 
+2026-05-24 06:41:14,640 438854 INFO hams_test odoo.registry: module base_setup: creating or updating database tables 
+2026-05-24 06:41:14,662 438854 INFO hams_test odoo.modules.loading: loading base_setup/data/base_setup_data.xml 
+2026-05-24 06:41:14,665 438854 INFO hams_test odoo.modules.loading: loading base_setup/views/res_config_settings_views.xml 
+2026-05-24 06:41:14,683 438854 INFO hams_test odoo.modules.loading: loading base_setup/views/res_partner_views.xml 
+2026-05-24 06:41:14,692 438854 INFO hams_test odoo.modules.loading: Module base_setup loaded in 0.06s, 152 queries (+152 other) 
+2026-05-24 06:41:14,692 438854 INFO hams_test odoo.modules.loading: Loading module bus (11/89) 
+2026-05-24 06:41:14,701 438854 INFO hams_test odoo.registry: module bus: creating or updating database tables 
+2026-05-24 06:41:14,759 438854 INFO hams_test odoo.modules.loading: loading bus/security/ir.model.access.csv 
+2026-05-24 06:41:14,765 438854 INFO hams_test odoo.modules.loading: Module bus loaded in 0.07s, 155 queries (+155 other) 
+2026-05-24 06:41:14,765 438854 INFO hams_test odoo.modules.loading: Loading module http_routing (12/89) 
+2026-05-24 06:41:14,767 438854 INFO hams_test odoo.registry: module http_routing: creating or updating database tables 
+2026-05-24 06:41:14,777 438854 INFO hams_test odoo.modules.loading: loading http_routing/views/http_routing_template.xml 
+2026-05-24 06:41:14,806 438854 INFO hams_test odoo.modules.loading: loading http_routing/views/res_lang_views.xml 
+2026-05-24 06:41:14,824 438854 INFO hams_test odoo.modules.loading: Module http_routing loaded in 0.06s, 114 queries (+114 other) 
+2026-05-24 06:41:14,824 438854 INFO hams_test odoo.modules.loading: Loading module onboarding (13/89) 
+2026-05-24 06:41:14,828 438854 INFO hams_test odoo.registry: module onboarding: creating or updating database tables 
+2026-05-24 06:41:14,877 438854 INFO hams_test odoo.modules.loading: loading onboarding/views/onboarding_templates.xml 
+2026-05-24 06:41:14,886 438854 INFO hams_test odoo.modules.loading: loading onboarding/views/onboarding_views.xml 
+2026-05-24 06:41:14,904 438854 INFO hams_test odoo.modules.loading: loading onboarding/views/onboarding_menus.xml 
+2026-05-24 06:41:14,911 438854 INFO hams_test odoo.modules.loading: loading onboarding/security/ir.model.access.csv 
+2026-05-24 06:41:14,923 438854 INFO hams_test odoo.modules.loading: Module onboarding loaded in 0.10s, 246 queries (+246 other) 
+2026-05-24 06:41:14,923 438854 INFO hams_test odoo.modules.loading: Loading module resource (14/89) 
+2026-05-24 06:41:14,936 438854 INFO hams_test odoo.registry: module resource: creating or updating database tables 
+2026-05-24 06:41:15,003 438854 INFO hams_test odoo.modules.loading: loading resource/data/resource_data.xml 
+2026-05-24 06:41:15,012 438854 INFO hams_test odoo.modules.loading: loading resource/security/ir.model.access.csv 
+2026-05-24 06:41:15,016 438854 INFO hams_test odoo.modules.loading: loading resource/security/resource_security.xml 
+2026-05-24 06:41:15,025 438854 INFO hams_test odoo.modules.loading: loading resource/views/resource_resource_views.xml 
+2026-05-24 06:41:15,036 438854 INFO hams_test odoo.modules.loading: loading resource/views/resource_calendar_leaves_views.xml 
+2026-05-24 06:41:15,049 438854 INFO hams_test odoo.modules.loading: loading resource/views/resource_calendar_attendance_views.xml 
+2026-05-24 06:41:15,056 438854 INFO hams_test odoo.modules.loading: loading resource/views/resource_calendar_views.xml 
+2026-05-24 06:41:15,075 438854 INFO hams_test odoo.modules.loading: loading resource/views/menuitems.xml 
+2026-05-24 06:41:15,087 438854 INFO hams_test odoo.modules.loading: Module resource loaded in 0.16s, 414 queries (+414 other) 
+2026-05-24 06:41:15,087 438854 INFO hams_test odoo.modules.loading: Loading module utm (15/89) 
+2026-05-24 06:41:15,091 438854 INFO hams_test odoo.registry: module utm: creating or updating database tables 
+2026-05-24 06:41:15,139 438854 INFO hams_test odoo.modules.loading: loading utm/data/utm_medium_data.xml 
+2026-05-24 06:41:15,154 438854 INFO hams_test odoo.modules.loading: loading utm/data/utm_source_data.xml 
+2026-05-24 06:41:15,166 438854 INFO hams_test odoo.modules.loading: loading utm/data/utm_stage_data.xml 
+2026-05-24 06:41:15,168 438854 INFO hams_test odoo.modules.loading: loading utm/data/utm_tag_data.xml 
+2026-05-24 06:41:15,170 438854 INFO hams_test odoo.modules.loading: loading utm/views/utm_campaign_views.xml 
+2026-05-24 06:41:15,187 438854 INFO hams_test odoo.modules.loading: loading utm/views/utm_medium_views.xml 
+2026-05-24 06:41:15,197 438854 INFO hams_test odoo.modules.loading: loading utm/views/utm_source_views.xml 
+2026-05-24 06:41:15,205 438854 INFO hams_test odoo.modules.loading: loading utm/views/utm_stage_views.xml 
+2026-05-24 06:41:15,214 438854 INFO hams_test odoo.modules.loading: loading utm/views/utm_tag_views.xml 
+2026-05-24 06:41:15,220 438854 INFO hams_test odoo.modules.loading: loading utm/views/utm_menus.xml 
+2026-05-24 06:41:15,230 438854 INFO hams_test odoo.modules.loading: loading utm/security/ir.model.access.csv 
+2026-05-24 06:41:15,239 438854 INFO hams_test odoo.modules.loading: Module utm loaded in 0.15s, 410 queries (+410 other) 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:15,239 438854 INFO hams_test odoo.modules.loading: Loading module web_tour (16/89) 
+2026-05-24 06:41:15,239 438854 INFO hams_test odoo.modules.loading: Loading module web_tour (16/89) 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:15,247 438854 INFO hams_test odoo.registry: module web_tour: creating or updating database tables 
+2026-05-24 06:41:15,247 438854 INFO hams_test odoo.registry: module web_tour: creating or updating database tables 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:15,251 438854 INFO hams_test odoo.models: Prepare computation of res.users.tour_enabled 
+2026-05-24 06:41:15,251 438854 INFO hams_test odoo.models: Prepare computation of res.users.tour_enabled 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:15,301 438854 INFO hams_test odoo.modules.loading: loading web_tour/security/ir.model.access.csv 
+2026-05-24 06:41:15,301 438854 INFO hams_test odoo.modules.loading: loading web_tour/security/ir.model.access.csv 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:15,305 438854 INFO hams_test odoo.modules.loading: loading web_tour/views/tour_views.xml 
+2026-05-24 06:41:15,305 438854 INFO hams_test odoo.modules.loading: loading web_tour/views/tour_views.xml 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:15,330 438854 INFO hams_test odoo.modules.loading: Module web_tour loaded in 0.09s, 180 queries (+180 other) 
+2026-05-24 06:41:15,330 438854 INFO hams_test odoo.modules.loading: Module web_tour loaded in 0.09s, 180 queries (+180 other) 
+2026-05-24 06:41:15,330 438854 INFO hams_test odoo.modules.loading: Loading module auth_passkey (17/89) 
+2026-05-24 06:41:15,361 438854 INFO hams_test odoo.registry: module auth_passkey: creating or updating database tables 
+2026-05-24 06:41:15,396 438854 INFO hams_test odoo.modules.loading: loading auth_passkey/views/auth_passkey_key_views.xml 
+2026-05-24 06:41:15,410 438854 INFO hams_test odoo.modules.loading: loading auth_passkey/views/auth_passkey_login_templates.xml 
+2026-05-24 06:41:15,418 438854 INFO hams_test odoo.modules.loading: loading auth_passkey/views/res_users_identitycheck_views.xml 
+2026-05-24 06:41:15,425 438854 INFO hams_test odoo.modules.loading: loading auth_passkey/views/res_users_views.xml 
+2026-05-24 06:41:15,440 438854 INFO hams_test odoo.modules.loading: loading auth_passkey/security/ir.model.access.csv 
+2026-05-24 06:41:15,444 438854 INFO hams_test odoo.modules.loading: loading auth_passkey/security/security.xml 
+2026-05-24 06:41:15,459 438854 INFO hams_test odoo.modules.loading: Module auth_passkey loaded in 0.13s, 218 queries (+218 other) 
+2026-05-24 06:41:15,459 438854 INFO hams_test odoo.modules.loading: Loading module google_recaptcha (18/89) 
+2026-05-24 06:41:15,463 438854 INFO hams_test odoo.registry: module google_recaptcha: creating or updating database tables 
+2026-05-24 06:41:15,476 438854 INFO hams_test odoo.modules.loading: loading google_recaptcha/views/res_config_settings_view.xml 
+2026-05-24 06:41:15,497 438854 INFO hams_test odoo.modules.loading: Module google_recaptcha loaded in 0.04s, 64 queries (+64 other) 
+2026-05-24 06:41:15,497 438854 INFO hams_test odoo.modules.loading: Loading module html_editor (19/89) 
+2026-05-24 06:41:15,644 438854 INFO hams_test odoo.registry: module html_editor: creating or updating database tables 
+2026-05-24 06:41:15,937 438854 INFO hams_test odoo.modules.loading: loading html_editor/security/ir.model.access.csv 
+2026-05-24 06:41:15,945 438854 INFO hams_test odoo.modules.loading: Module html_editor loaded in 0.45s, 1160 queries (+1160 other) 
+2026-05-24 06:41:15,945 438854 INFO hams_test odoo.modules.loading: Loading module iap (20/89) 
+2026-05-24 06:41:15,947 438854 INFO hams_test odoo.registry: module iap: creating or updating database tables 
+2026-05-24 06:41:15,983 438854 INFO hams_test odoo.modules.loading: loading iap/data/services.xml 
+2026-05-24 06:41:15,986 438854 INFO hams_test odoo.modules.loading: loading iap/security/ir.model.access.csv 
+2026-05-24 06:41:15,990 438854 INFO hams_test odoo.modules.loading: loading iap/security/ir_rule.xml 
+2026-05-24 06:41:15,994 438854 INFO hams_test odoo.modules.loading: loading iap/views/iap_views.xml 
+2026-05-24 06:41:16,006 438854 INFO hams_test odoo.modules.loading: loading iap/views/res_config_settings.xml 
+2026-05-24 06:41:16,019 438854 INFO hams_test odoo.modules.loading: Module iap loaded in 0.07s, 184 queries (+184 other) 
+2026-05-24 06:41:16,019 438854 INFO hams_test odoo.modules.loading: Loading module mail (21/89) 
+2026-05-24 06:41:16,054 438854 INFO hams_test odoo.registry: module mail: creating or updating database tables 
+2026-05-24 06:41:16,144 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.partner_ids 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_user_id 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_type_id 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.template_id 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_date_deadline_range 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_summary 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.followers_type 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.followers_partner_field_name 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.mail_post_method 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_date_deadline_range_type 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_user_type 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_user_field_name 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_note 
+2026-05-24 06:41:16,145 438854 INFO hams_test odoo.models: Prepare computation of ir.actions.server.mail_post_autofollow 
+2026-05-24 06:41:16,186 438854 INFO hams_test odoo.models: Prepare computation of res.users.notification_type 
+2026-05-24 06:41:16,225 438854 INFO hams_test odoo.models: Prepare computation of res.partner.email_normalized 
+<string>:38: (ERROR/3) Unexpected indentation.
+<string>:43: (WARNING/2) Block quote ends without a blank line; unexpected unindent.
+2026-05-24 06:41:16,976 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_groups.xml 
+2026-05-24 06:41:16,996 438854 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_activity_schedule_views.xml 
+2026-05-24 06:41:17,007 438854 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_blacklist_remove_views.xml 
+2026-05-24 06:41:17,012 438854 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_compose_message_views.xml 
+2026-05-24 06:41:17,023 438854 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_template_preview_views.xml 
+2026-05-24 06:41:17,030 438854 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_followers_edit_views.xml 
+2026-05-24 06:41:17,037 438854 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_template_reset_views.xml 
+2026-05-24 06:41:17,042 438854 INFO hams_test odoo.modules.loading: loading mail/views/fetchmail_views.xml 
+2026-05-24 06:41:17,054 438854 INFO hams_test odoo.modules.loading: loading mail/views/ir_cron_views.xml 
+2026-05-24 06:41:17,062 438854 INFO hams_test odoo.modules.loading: loading mail/views/ir_filters_views.xml 
+2026-05-24 06:41:17,072 438854 INFO hams_test odoo.modules.loading: loading mail/views/ir_mail_server_views.xml 
+2026-05-24 06:41:17,078 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_subtype_views.xml 
+2026-05-24 06:41:17,089 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_tracking_value_views.xml 
+2026-05-24 06:41:17,098 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_notification_views.xml 
+2026-05-24 06:41:17,107 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_views.xml 
+2026-05-24 06:41:17,124 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_schedule_views.xml 
+2026-05-24 06:41:17,132 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_mail_views.xml 
+2026-05-24 06:41:17,147 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_followers_views.xml 
+2026-05-24 06:41:17,154 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_ice_server_views.xml 
+2026-05-24 06:41:17,166 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss_channel_member_views.xml 
+2026-05-24 06:41:17,174 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss_channel_rtc_session_views.xml 
+2026-05-24 06:41:17,187 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_link_preview_views.xml 
+2026-05-24 06:41:17,202 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss/discuss_gif_favorite_views.xml 
+2026-05-24 06:41:17,211 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss_channel_views.xml 
+2026-05-24 06:41:17,233 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_canned_response_views.xml 
+2026-05-24 06:41:17,245 438854 INFO hams_test odoo.modules.loading: loading mail/views/res_role_views.xml 
+2026-05-24 06:41:17,254 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_activity_views.xml 
+2026-05-24 06:41:17,308 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_activity_plan_views.xml 
+2026-05-24 06:41:17,329 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_activity_plan_template_views.xml 
+2026-05-24 06:41:17,335 438854 INFO hams_test odoo.modules.loading: loading mail/views/res_config_settings_views.xml 
+2026-05-24 06:41:17,348 438854 INFO hams_test odoo.modules.loading: loading mail/data/ir_config_parameter_data.xml 
+2026-05-24 06:41:17,351 438854 INFO hams_test odoo.modules.loading: loading mail/data/res_partner_data.xml 
+2026-05-24 06:41:17,386 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_message_subtype_data.xml 
+2026-05-24 06:41:17,390 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_chatter.xml 
+2026-05-24 06:41:17,399 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_email_layouts.xml 
+2026-05-24 06:41:17,408 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_mailgateway.xml 
+2026-05-24 06:41:17,416 438854 INFO hams_test odoo.modules.loading: loading mail/data/discuss_channel_data.xml 
+2026-05-24 06:41:17,435 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_activity_type_data.xml 
+2026-05-24 06:41:17,441 438854 INFO hams_test odoo.modules.loading: loading mail/data/security_notifications_templates.xml 
+2026-05-24 06:41:17,443 438854 INFO hams_test odoo.modules.loading: loading mail/data/ir_cron_data.xml 
+2026-05-24 06:41:17,504 438854 INFO hams_test odoo.modules.loading: loading mail/data/ir_actions_client.xml 
+2026-05-24 06:41:17,507 438854 INFO hams_test odoo.modules.loading: loading mail/security/mail_security.xml 
+2026-05-24 06:41:17,596 438854 INFO hams_test odoo.modules.loading: loading mail/security/ir.model.access.csv 
+2026-05-24 06:41:17,617 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss_public_templates.xml 
+2026-05-24 06:41:17,620 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_alias_domain_views.xml 
+2026-05-24 06:41:17,630 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_alias_views.xml 
+2026-05-24 06:41:17,649 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_gateway_allowed_views.xml 
+2026-05-24 06:41:17,664 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_guest_views.xml 
+2026-05-24 06:41:17,680 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_reaction_views.xml 
+2026-05-24 06:41:17,689 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_templates_public.xml 
+2026-05-24 06:41:17,696 438854 INFO hams_test odoo.modules.loading: loading mail/views/res_users_views.xml 
+2026-05-24 06:41:17,717 438854 INFO hams_test odoo.modules.loading: loading mail/views/res_users_settings_views.xml 
+2026-05-24 06:41:17,730 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_template_views.xml 
+2026-05-24 06:41:17,748 438854 INFO hams_test odoo.modules.loading: loading mail/views/ir_actions_server_views.xml 
+2026-05-24 06:41:17,758 438854 INFO hams_test odoo.modules.loading: loading mail/views/ir_model_views.xml 
+2026-05-24 06:41:17,776 438854 INFO hams_test odoo.modules.loading: loading mail/views/res_partner_views.xml 
+2026-05-24 06:41:17,807 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_blacklist_views.xml 
+2026-05-24 06:41:17,821 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_menus.xml 
+2026-05-24 06:41:17,896 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss/discuss_menus.xml 
+2026-05-24 06:41:17,897 438854 INFO hams_test odoo.modules.loading: loading mail/views/discuss/discuss_call_history_views.xml 
+2026-05-24 06:41:17,909 438854 INFO hams_test odoo.modules.loading: loading mail/views/res_company_views.xml 
+2026-05-24 06:41:17,914 438854 INFO hams_test odoo.modules.loading: loading mail/views/mail_scheduled_message_views.xml 
+2026-05-24 06:41:17,918 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_canned_response_data.xml 
+2026-05-24 06:41:17,923 438854 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_invite.xml 
+
+[JS/BROWSER TRACE] ---> 2026-05-24 06:41:17,928 438854 INFO hams_test odoo.modules.loading: loading mail/data/web_tour_tour.xml 
+2026-05-24 06:41:17,928 438854 INFO hams_test odoo.modules.loading: loading mail/data/web_tour_tour.xml 
+2026-05-24 06:41:17,948 438854 INFO hams_test odoo.modules.loading: Module mail loaded in 1.93s, 5105 queries (+5106 other) 
+2026-05-24 06:41:17,948 438854 INFO hams_test odoo.modules.loading: Loading module web_unsplash (22/89) 
+2026-05-24 06:41:17,957 438854 INFO hams_test odoo.registry: module web_unsplash: creating or updating database tables 
+2026-05-24 06:41:17,990 438854 INFO hams_test odoo.modules.loading: loading web_unsplash/views/res_config_settings_view.xml 
+2026-05-24 06:41:18,016 438854 INFO hams_test odoo.modules.loading: Module web_unsplash loaded in 0.07s, 103 queries (+103 other) 
+2026-05-24 06:41:18,016 438854 INFO hams_test odoo.modules.loading: Loading module analytic (23/89) 
+2026-05-24 06:41:18,025 438854 INFO hams_test odoo.registry: module analytic: creating or updating database tables 
+2026-05-24 06:41:18,124 438854 INFO hams_test odoo.modules.loading: loading analytic/security/analytic_security.xml 
+2026-05-24 06:41:18,136 438854 INFO hams_test odoo.modules.loading: loading analytic/security/ir.model.access.csv 
+2026-05-24 06:41:18,143 438854 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_line_views.xml 
+2026-05-24 06:41:18,167 438854 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_account_views.xml 
+2026-05-24 06:41:18,186 438854 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_plan_views.xml 
+2026-05-24 06:41:18,198 438854 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_distribution_model_views.xml 
+2026-05-24 06:41:18,207 438854 INFO hams_test odoo.modules.loading: loading analytic/data/analytic_data.xml 
+2026-05-24 06:41:18,230 438854 INFO hams_test odoo.modules.loading: Module analytic loaded in 0.21s, 425 queries (+425 other) 
+2026-05-24 06:41:18,230 438854 INFO hams_test odoo.modules.loading: Loading module auth_signup (24/89) 
+2026-05-24 06:41:18,238 438854 INFO hams_test odoo.registry: module auth_signup: creating or updating database tables 
+2026-05-24 06:41:18,292 438854 INFO hams_test odoo.modules.loading: loading auth_signup/data/ir_config_parameter_data.xml 
+2026-05-24 06:41:18,295 438854 INFO hams_test odoo.modules.loading: loading auth_signup/data/ir_cron_data.xml 
+2026-05-24 06:41:18,316 438854 INFO hams_test odoo.modules.loading: loading auth_signup/data/mail_template_data.xml 
+2026-05-24 06:41:18,366 438854 INFO hams_test odoo.modules.loading: loading auth_signup/views/res_config_settings_views.xml 
+2026-05-24 06:41:18,377 438854 INFO hams_test odoo.modules.loading: loading auth_signup/views/res_users_views.xml 
+2026-05-24 06:41:18,395 438854 INFO hams_test odoo.modules.loading: loading auth_signup/views/auth_signup_login_templates.xml 
+2026-05-24 06:41:18,409 438854 INFO hams_test odoo.modules.loading: loading auth_signup/views/auth_signup_templates_email.xml 
+2026-05-24 06:41:18,413 438854 INFO hams_test odoo.modules.loading: loading auth_signup/views/webclient_templates.xml 
+2026-05-24 06:41:18,431 438854 INFO hams_test odoo.modules.loading: Module auth_signup loaded in 0.20s, 255 queries (+255 other) 
+2026-05-24 06:41:18,431 438854 INFO hams_test odoo.modules.loading: Loading module auth_totp_mail (25/89) 
+2026-05-24 06:41:18,439 438854 INFO hams_test odoo.registry: module auth_totp_mail: creating or updating database tables 
+2026-05-24 06:41:18,475 438854 INFO hams_test odoo.modules.loading: loading auth_totp_mail/data/ir_action_data.xml 
+2026-05-24 06:41:18,495 438854 INFO hams_test odoo.modules.loading: loading auth_totp_mail/data/mail_template_data.xml 
+2026-05-24 06:41:18,523 438854 INFO hams_test odoo.modules.loading: loading auth_totp_mail/data/security_notifications_template.xml 
+2026-05-24 06:41:18,529 438854 INFO hams_test odoo.modules.loading: loading auth_totp_mail/views/res_config_settings_views.xml 
+2026-05-24 06:41:18,549 438854 INFO hams_test odoo.modules.loading: loading auth_totp_mail/views/res_users_views.xml 
+2026-05-24 06:41:18,570 438854 INFO hams_test odoo.modules.loading: loading auth_totp_mail/views/templates.xml 
+2026-05-24 06:41:18,590 438854 INFO hams_test odoo.modules.loading: Module auth_totp_mail loaded in 0.16s, 189 queries (+189 other) 
+2026-05-24 06:41:18,591 438854 INFO hams_test odoo.modules.loading: Loading module base_install_request (26/89) 
+2026-05-24 06:41:18,597 438854 INFO hams_test odoo.registry: module base_install_request: creating or updating database tables 
+2026-05-24 06:41:18,633 438854 INFO hams_test odoo.modules.loading: loading base_install_request/security/ir.model.access.csv 
+2026-05-24 06:41:18,637 438854 INFO hams_test odoo.modules.loading: loading base_install_request/wizard/base_module_install_request_views.xml 
+2026-05-24 06:41:18,646 438854 INFO hams_test odoo.modules.loading: loading base_install_request/data/mail_template_data.xml 
+2026-05-24 06:41:18,649 438854 INFO hams_test odoo.modules.loading: loading base_install_request/data/mail_templates_module_install.xml 
+2026-05-24 06:41:18,652 438854 INFO hams_test odoo.modules.loading: loading base_install_request/views/ir_module_module_views.xml 
+2026-05-24 06:41:18,664 438854 INFO hams_test odoo.modules.loading: Module base_install_request loaded in 0.07s, 154 queries (+154 other) 
+2026-05-24 06:41:18,664 438854 INFO hams_test odoo.modules.loading: Loading module calendar (27/89) 
+2026-05-24 06:41:18,690 438854 INFO hams_test odoo.registry: module calendar: creating or updating database tables 
+2026-05-24 06:41:18,837 438854 INFO hams_test odoo.modules.loading: loading calendar/security/ir.model.access.csv 
+2026-05-24 06:41:18,843 438854 INFO hams_test odoo.modules.loading: loading calendar/security/calendar_security.xml 
+2026-05-24 06:41:18,854 438854 INFO hams_test odoo.modules.loading: loading calendar/data/calendar_cron.xml 
+2026-05-24 06:41:18,866 438854 INFO hams_test odoo.modules.loading: loading calendar/data/mail_template_data.xml 
+2026-05-24 06:41:18,883 438854 INFO hams_test odoo.modules.loading: loading calendar/data/calendar_data.xml 
+2026-05-24 06:41:18,891 438854 INFO hams_test odoo.modules.loading: loading calendar/data/mail_activity_type_data.xml 
+2026-05-24 06:41:18,893 438854 INFO hams_test odoo.modules.loading: loading calendar/data/mail_message_subtype_data.xml 
+2026-05-24 06:41:18,895 438854 INFO hams_test odoo.modules.loading: loading calendar/views/mail_activity_views.xml 
+2026-05-24 06:41:18,906 438854 INFO hams_test odoo.modules.loading: loading calendar/views/calendar_templates.xml 
+2026-05-24 06:41:18,910 438854 INFO hams_test odoo.modules.loading: loading calendar/views/calendar_views.xml 
+2026-05-24 06:41:18,985 438854 INFO hams_test odoo.modules.loading: loading calendar/views/res_config_settings_views.xml 
+2026-05-24 06:41:18,993 438854 INFO hams_test odoo.modules.loading: loading calendar/views/res_partner_views.xml 
+2026-05-24 06:41:19,000 438854 INFO hams_test odoo.modules.loading: loading calendar/views/res_users_views.xml 
+2026-05-24 06:41:19,011 438854 INFO hams_test odoo.modules.loading: loading calendar/wizard/calendar_provider_config.xml 
+2026-05-24 06:41:19,016 438854 INFO hams_test odoo.modules.loading: loading calendar/wizard/calendar_popover_delete_wizard.xml 
+2026-05-24 06:41:19,025 438854 INFO hams_test odoo.modules.loading: loading calendar/wizard/mail_activity_schedule_views.xml 
+2026-05-24 06:41:19,049 438854 INFO hams_test odoo.modules.loading: Module calendar loaded in 0.38s, 883 queries (+883 other) 
+2026-05-24 06:41:19,049 438854 INFO hams_test odoo.modules.loading: Loading module google_gmail (28/89) 
+2026-05-24 06:41:19,058 438854 INFO hams_test odoo.registry: module google_gmail: creating or updating database tables 
+2026-05-24 06:41:19,091 438854 INFO hams_test odoo.modules.loading: loading google_gmail/views/fetchmail_server_views.xml 
+2026-05-24 06:41:19,100 438854 INFO hams_test odoo.modules.loading: loading google_gmail/views/ir_mail_server_views.xml 
+2026-05-24 06:41:19,107 438854 INFO hams_test odoo.modules.loading: loading google_gmail/views/res_config_settings_views.xml 
+2026-05-24 06:41:19,121 438854 INFO hams_test odoo.modules.loading: loading google_gmail/views/templates.xml 
+2026-05-24 06:41:19,129 438854 INFO hams_test odoo.modules.loading: Module google_gmail loaded in 0.08s, 155 queries (+155 other) 
+2026-05-24 06:41:19,129 438854 INFO hams_test odoo.modules.loading: Loading module ham_sanitizer (29/89) 
+2026-05-24 06:41:19,146 438854 INFO hams_test odoo.modules.loading: Module ham_sanitizer loaded in 0.02s, 10 queries (+10 other) 
+2026-05-24 06:41:19,146 438854 INFO hams_test odoo.modules.loading: Loading module html_builder (30/89) 
+2026-05-24 06:41:19,160 438854 INFO hams_test odoo.modules.loading: Module html_builder loaded in 0.01s, 10 queries (+10 other) 
+2026-05-24 06:41:19,160 438854 INFO hams_test odoo.modules.loading: Loading module iap_mail (31/89) 
+2026-05-24 06:41:19,163 438854 INFO hams_test odoo.registry: module iap_mail: creating or updating database tables 
+2026-05-24 06:41:19,188 438854 INFO hams_test odoo.modules.loading: loading iap_mail/data/mail_templates.xml 
+2026-05-24 06:41:19,198 438854 INFO hams_test odoo.modules.loading: loading iap_mail/views/iap_views.xml 
+2026-05-24 06:41:19,211 438854 INFO hams_test odoo.modules.loading: Module iap_mail loaded in 0.05s, 70 queries (+70 other) 
+2026-05-24 06:41:19,211 438854 INFO hams_test odoo.modules.loading: Loading module mail_bot (32/89) 
+2026-05-24 06:41:19,217 438854 INFO hams_test odoo.registry: module mail_bot: creating or updating database tables 
+2026-05-24 06:41:19,262 438854 INFO hams_test odoo.modules.loading: loading mail_bot/views/res_users_views.xml 
+2026-05-24 06:41:19,274 438854 INFO hams_test odoo.modules.loading: loading mail_bot/data/mailbot_data.xml 
+2026-05-24 06:41:19,281 438854 INFO hams_test odoo.modules.loading: Module mail_bot loaded in 0.07s, 109 queries (+109 other) 
+2026-05-24 06:41:19,281 438854 INFO hams_test odoo.modules.loading: Loading module microsoft_outlook (33/89) 
+2026-05-24 06:41:19,288 438854 INFO hams_test odoo.registry: module microsoft_outlook: creating or updating database tables 
+2026-05-24 06:41:19,323 438854 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/fetchmail_server_views.xml 
+2026-05-24 06:41:19,334 438854 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/ir_mail_server_views.xml 
+2026-05-24 06:41:19,341 438854 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/res_config_settings_views.xml 
+2026-05-24 06:41:19,353 438854 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/templates.xml 
+2026-05-24 06:41:19,362 438854 INFO hams_test odoo.modules.loading: Module microsoft_outlook loaded in 0.08s, 158 queries (+158 other) 
+2026-05-24 06:41:19,362 438854 INFO hams_test odoo.modules.loading: Loading module phone_validation (34/89) 
+2026-05-24 06:41:19,401 438854 INFO hams_test odoo.registry: module phone_validation: creating or updating database tables 
+2026-05-24 06:41:19,407 438854 INFO hams_test odoo.models: Prepare computation of res.partner.phone_sanitized 
+2026-05-24 06:41:19,830 438854 INFO hams_test odoo.modules.loading: loading phone_validation/security/ir.model.access.csv 
+2026-05-24 06:41:19,835 438854 INFO hams_test odoo.modules.loading: loading phone_validation/views/phone_blacklist_views.xml 
+2026-05-24 06:41:19,853 438854 INFO hams_test odoo.modules.loading: loading phone_validation/views/res_partner_views.xml 
+2026-05-24 06:41:19,860 438854 INFO hams_test odoo.modules.loading: loading phone_validation/wizard/phone_blacklist_remove_view.xml 
+2026-05-24 06:41:19,872 438854 INFO hams_test odoo.modules.loading: Module phone_validation loaded in 0.51s, 1854 queries (+1854 other) 
+2026-05-24 06:41:19,872 438854 INFO hams_test odoo.modules.loading: Loading module privacy_lookup (35/89) 
+2026-05-24 06:41:19,881 438854 INFO hams_test odoo.registry: module privacy_lookup: creating or updating database tables 
+2026-05-24 06:41:19,937 438854 INFO hams_test odoo.modules.loading: loading privacy_lookup/wizard/privacy_lookup_wizard_views.xml 
+2026-05-24 06:41:19,972 438854 INFO hams_test odoo.modules.loading: loading privacy_lookup/views/privacy_log_views.xml 
+2026-05-24 06:41:19,985 438854 INFO hams_test odoo.modules.loading: loading privacy_lookup/security/ir.model.access.csv 
+2026-05-24 06:41:19,994 438854 INFO hams_test odoo.modules.loading: loading privacy_lookup/data/ir_actions_server_data.xml 
+2026-05-24 06:41:20,014 438854 INFO hams_test odoo.modules.loading: Module privacy_lookup loaded in 0.14s, 295 queries (+295 other) 
+2026-05-24 06:41:20,014 438854 INFO hams_test odoo.modules.loading: Loading module product (36/89) 
+2026-05-24 06:41:20,051 438854 INFO hams_test odoo.registry: module product: creating or updating database tables 
+2026-05-24 06:41:20,365 438854 INFO hams_test odoo.modules.loading: loading product/data/product_data.xml 
+2026-05-24 06:41:20,382 438854 INFO hams_test odoo.modules.loading: loading product/security/product_security.xml 
+2026-05-24 06:41:20,416 438854 INFO hams_test odoo.modules.loading: loading product/security/ir.model.access.csv 
+2026-05-24 06:41:20,426 438854 INFO hams_test odoo.modules.loading: loading product/wizard/product_label_layout_views.xml 
+2026-05-24 06:41:20,432 438854 INFO hams_test odoo.modules.loading: loading product/wizard/update_product_attribute_value_views.xml 
+2026-05-24 06:41:20,436 438854 INFO hams_test odoo.modules.loading: loading product/views/product_tag_views.xml 
+2026-05-24 06:41:20,445 438854 INFO hams_test odoo.modules.loading: loading product/views/product_views.xml 
+2026-05-24 06:41:20,520 438854 INFO hams_test odoo.modules.loading: loading product/views/res_config_settings_views.xml 
+2026-05-24 06:41:20,530 438854 INFO hams_test odoo.modules.loading: loading product/views/product_attribute_views.xml 
+2026-05-24 06:41:20,557 438854 INFO hams_test odoo.modules.loading: loading product/views/product_attribute_value_views.xml 
+2026-05-24 06:41:20,561 438854 INFO hams_test odoo.modules.loading: loading product/views/product_category_views.xml 
+2026-05-24 06:41:20,572 438854 INFO hams_test odoo.modules.loading: loading product/views/product_combo_views.xml 
+2026-05-24 06:41:20,581 438854 INFO hams_test odoo.modules.loading: loading product/views/product_document_views.xml 
+2026-05-24 06:41:20,595 438854 INFO hams_test odoo.modules.loading: loading product/views/product_pricelist_item_views.xml 
+2026-05-24 06:41:20,616 438854 INFO hams_test odoo.modules.loading: loading product/views/product_pricelist_views.xml 
+2026-05-24 06:41:20,636 438854 INFO hams_test odoo.modules.loading: loading product/views/product_supplierinfo_views.xml 
+2026-05-24 06:41:20,655 438854 INFO hams_test odoo.modules.loading: loading product/views/product_template_attribute_line_views.xml 
+2026-05-24 06:41:20,658 438854 INFO hams_test odoo.modules.loading: loading product/views/product_template_views.xml 
+2026-05-24 06:41:20,695 438854 INFO hams_test odoo.modules.loading: loading product/views/res_country_group_views.xml 
+2026-05-24 06:41:20,700 438854 INFO hams_test odoo.modules.loading: loading product/views/res_partner_views.xml 
+2026-05-24 06:41:20,709 438854 INFO hams_test odoo.modules.loading: loading product/views/uom_views.xml 
+2026-05-24 06:41:20,717 438854 INFO hams_test odoo.modules.loading: loading product/report/product_reports.xml 
+2026-05-24 06:41:20,727 438854 INFO hams_test odoo.modules.loading: loading product/report/product_product_templates.xml 
+2026-05-24 06:41:20,744 438854 INFO hams_test odoo.modules.loading: loading product/report/product_template_templates.xml 
+2026-05-24 06:41:20,756 438854 INFO hams_test odoo.modules.loading: loading product/report/product_packaging.xml 
+2026-05-24 06:41:20,759 438854 INFO hams_test odoo.modules.loading: loading product/report/product_pricelist_report_templates.xml 
+2026-05-24 06:41:20,786 438854 INFO hams_test odoo.modules.loading: Module product loaded in 0.77s, 1636 queries (+1636 other) 
+2026-05-24 06:41:20,786 438854 INFO hams_test odoo.modules.loading: Loading module rating (37/89) 
+2026-05-24 06:41:20,811 438854 INFO hams_test odoo.registry: module rating: creating or updating database tables 
+2026-05-24 06:41:20,925 438854 INFO hams_test odoo.modules.loading: loading rating/views/rating_rating_views.xml 
+2026-05-24 06:41:20,958 438854 INFO hams_test odoo.modules.loading: loading rating/views/rating_templates.xml 
+2026-05-24 06:41:20,967 438854 INFO hams_test odoo.modules.loading: loading rating/views/mail_message_views.xml 
+2026-05-24 06:41:20,975 438854 INFO hams_test odoo.modules.loading: loading rating/security/ir.model.access.csv 
+2026-05-24 06:41:20,985 438854 INFO hams_test odoo.modules.loading: Module rating loaded in 0.20s, 457 queries (+457 other) 
+2026-05-24 06:41:20,985 438854 INFO hams_test odoo.modules.loading: Loading module resource_mail (38/89) 
+2026-05-24 06:41:20,990 438854 INFO hams_test odoo.registry: module resource_mail: creating or updating database tables 
+2026-05-24 06:41:21,011 438854 INFO hams_test odoo.modules.loading: Module resource_mail loaded in 0.03s, 36 queries (+36 other) 
+2026-05-24 06:41:21,011 438854 INFO hams_test odoo.modules.loading: Loading module sales_team (39/89) 
+2026-05-24 06:41:21,019 438854 INFO hams_test odoo.registry: module sales_team: creating or updating database tables 
+2026-05-24 06:41:21,029 438854 INFO hams_test odoo.models: Prepare computation of res.users.sale_team_id 
+2026-05-24 06:41:21,074 438854 INFO hams_test odoo.modules.loading: loading sales_team/security/sales_team_security.xml 
+2026-05-24 06:41:21,120 438854 INFO hams_test odoo.modules.loading: loading sales_team/security/ir.model.access.csv 
+2026-05-24 06:41:21,125 438854 INFO hams_test odoo.modules.loading: loading sales_team/data/crm_team_data.xml 
+2026-05-24 06:41:21,152 438854 INFO hams_test odoo.modules.loading: loading sales_team/views/crm_tag_views.xml 
+2026-05-24 06:41:21,159 438854 INFO hams_test odoo.modules.loading: loading sales_team/views/crm_team_views.xml 
+2026-05-24 06:41:21,183 438854 INFO hams_test odoo.modules.loading: loading sales_team/views/crm_team_member_views.xml 
+2026-05-24 06:41:21,209 438854 INFO hams_test odoo.modules.loading: loading sales_team/views/mail_activity_views.xml 
+2026-05-24 06:41:21,217 438854 INFO hams_test odoo.modules.loading: Module sales_team loaded in 0.21s, 365 queries (+365 other) 
+2026-05-24 06:41:21,217 438854 INFO hams_test odoo.modules.loading: Loading module zero_sudo (40/89) 
+2026-05-24 06:41:21,228 438854 INFO hams_test odoo.registry: module zero_sudo: creating or updating database tables 
+<string>:39: (WARNING/2) Bullet list ends without a blank line; unexpected unindent.
+<string>:54: (WARNING/2) Enumerated list ends without a blank line; unexpected unindent.
+<string>:65: (ERROR/3) Unexpected indentation.
+<string>:66: (WARNING/2) Block quote ends without a blank line; unexpected unindent.
+<string>:70: (WARNING/2) Bullet list ends without a blank line; unexpected unindent.
+<string>:189: (ERROR/3) Unexpected indentation.
+<string>:185: (WARNING/2) Inline literal start-string without end-string.
+<string>:185: (WARNING/2) Inline interpreted text or phrase reference start-string without end-string.
+<string>:195: (WARNING/2) Definition list ends without a blank line; unexpected unindent.
+<string>:196: (WARNING/2) Definition list ends without a blank line; unexpected unindent.
+<string>:197: (WARNING/2) Block quote ends without a blank line; unexpected unindent.
+<string>:197: (WARNING/2) Inline literal start-string without end-string.
+2026-05-24 06:41:21,280 438854 INFO hams_test odoo.modules.loading: loading zero_sudo/data/security_data.xml 
+2026-05-24 06:41:21,423 438854 INFO hams_test odoo.modules.loading: loading zero_sudo/security/ir.model.access.csv 
+2026-05-24 06:41:21,431 438854 INFO hams_test odoo.modules.loading: loading zero_sudo/views/res_users_views.xml 
+2026-05-24 06:41:21,453 438854 INFO hams_test odoo.modules.loading: Module zero_sudo loaded in 0.24s, 420 queries (+421 other) 
+2026-05-24 06:41:21,453 438854 INFO hams_test odoo.modules.loading: Loading module hams_test (41/89) 
+2026-05-24 06:41:21,455 438854 CRITICAL hams_test odoo.modules.module: Couldn't load module hams_test 
+2026-05-24 06:41:21,457 438854 WARNING hams_test odoo.modules.loading: Transient module states were reset 
+2026-05-24 06:41:21,457 438854 ERROR hams_test odoo.registry: Failed to load registry 
+2026-05-24 06:41:21,457 438854 CRITICAL hams_test odoo.service.server: Failed to initialize database `hams_test`. 
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/odoo/service/server.py", line 1544, in preload_registries
+    registry = Registry.new(dbname, update_module=update_module, install_modules=config['init'], upgrade_modules=config['update'], reinit_modules=config['reinit'])
+  File "/usr/lib/python3/dist-packages/odoo/tools/func.py", line 88, in locked
+    return func(inst, *args, **kwargs)
+  File "/usr/lib/python3/dist-packages/odoo/orm/registry.py", line 199, in new
+    load_modules(
+    ~~~~~~~~~~~~^
+        registry,
+        ^^^^^^^^^
+    ...<5 lines>...
+        models_to_check=models_to_check,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 464, in load_modules
+    load_module_graph(
+    ~~~~~~~~~~~~~~~~~^
+        env, graph, update_module=update_module,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        report=report, models_to_check=models_to_check)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 178, in load_module_graph
+    load_openerp_module(package.name)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/modules/module.py", line 505, in load_openerp_module
+    __import__(qualname)
+    ~~~~~~~~~~^^^^^^^^^^
+  File "/home/bruce/workspace/hams_community/hams_test/__init__.py", line 3, in <module>
+    from . import controllers
+  File "/home/bruce/workspace/hams_community/hams_test/controllers/__init__.py", line 1, in <module>
+    from . import main
+  File "/home/bruce/workspace/hams_community/hams_test/controllers/main.py", line 7, in <module>
+    import hams_test.common as hams_common
+ModuleNotFoundError: No module named 'hams_test'
+2026-05-24 06:41:21,469 438854 INFO hams_test odoo.service.server: Initiating shutdown 
+2026-05-24 06:41:21,470 438854 INFO hams_test odoo.service.server: Hit CTRL-C again or send a second signal to force the shutdown. 
+
+[!] WARNING: Odoo background thread refused to terminate gracefully. Invoking reaper...
+
+
+[*] [REAPER] Initiating robust reaper for PID 438854...
+[*] [REAPER] Sending SIGTERM to Process Group 438854
+[*] [DEBUG-RUNNER] IO Reader thread concluded for PID 438854
+[*] [REAPER] Process 438854 did not exit after SIGTERM. Sending SIGKILL to Process Group 438854
+[*] [DEBUG-RUNNER] Waiting for process 438854 to cleanly terminate...
+[*] [DEBUG-RUNNER] Process 438854 terminated with return code -2.
+❌ ERROR: DB init failed!
+
+==========================================================
+🚨 TEST RUN COMPLETE: 1 test failure(s) detected!
+📄 Failure details extracted and saved to: /home/bruce/tmp/filtered_test.txt
+==========================================================
+
