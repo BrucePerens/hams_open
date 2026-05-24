@@ -5,24 +5,13 @@ import os
 import pwd
 import re
 import shutil
-import signal
-import subprocess
 import time
 import urllib.request
 import threading
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser
-import odoo.tests.common as odoo_test_common
 
 _logger = logging.getLogger(__name__)
-
-class TourWatchdogError(Exception):
-    pass
-
-def _timeout_handler(signum, frame):
-    signal.signal(signum, signal.SIG_IGN) # Debounce
-    _logger.error("TRACING: OS Signal %s (Timeout) received! Force-aborting hung thread.", signum)
-    raise TourWatchdogError(f"Test step timed out and was aborted by OS signal {signum}.")
 
 # 🚨 BENIGN ERROR SCRUBBER 🚨
 original_browser_stop = ChromeBrowser.stop
@@ -155,8 +144,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 _logger.warning("TRACING: Ignored Exception closing server socket: %s", repr(close_e))
             cls.server.stop = lambda *args, **kwargs: None
 
-        original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(30)
         try:
             super().tearDownClass()
             _logger.info("TRACING: Successfully completed super().tearDownClass()")
@@ -164,9 +151,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             if "socket is already closed" not in str(e) and "WebSocketConnectionClosedException" not in type(e).__name__:
                 _logger.error("TRACING: Native teardown failed or hung: %s", e)
         finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, original_alrm)
-
             if hasattr(cls, 'browser') and cls.browser:
                 if hasattr(cls.browser, 'chrome_process'):
                     try:
@@ -186,8 +170,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     def tearDown(self):
         _logger.info("TRACING: Entering HamsHttpCase.tearDown")
 
-        original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(60)
         try:
             super().tearDown()
             _logger.info("TRACING: Completed super().tearDown")
@@ -195,9 +177,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             if "socket is already closed" not in str(e) and "WebSocketConnectionClosedException" not in type(e).__name__ and "BrokenPipeError" not in type(e).__name__:
                 _logger.error("TRACING: HamsHttpCase.tearDown caught exception: %s", e)
         finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, original_alrm)
-
             if hasattr(self, 'browser') and self.browser:
                 if hasattr(self.browser, 'chrome_process'):
                     try:
@@ -228,8 +207,6 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
     def browser_js(self, *args, **kwargs):
         _logger.info("TRACING: Entering browser_js wrapper.")
-        original_alrm = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(60)
         try:
             super().browser_js(*args, **kwargs)
             _logger.info("TRACING: super().browser_js completed successfully.")
@@ -239,7 +216,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             is_watchdog = False
             current_exc = e
             while current_exc is not None:
-                if isinstance(current_exc, TourWatchdogError) or "socket is already closed" in str(current_exc) or "BrokenPipeError" in type(current_exc).__name__:
+                if "socket is already closed" in str(current_exc) or "BrokenPipeError" in type(current_exc).__name__:
                     is_watchdog = True
                     break
                 current_exc = getattr(current_exc, '__context__', None)
@@ -251,12 +228,10 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     _logger.warning("TRACING: Ignored Exception taking fallback screenshot: %s", repr(ss_e))
 
             if is_watchdog:
-                raise AssertionError("Tour failed due to watchdog timeout (OS Signal 14) or severed Chrome websocket.") from None
+                raise AssertionError("Tour failed due to severed Chrome websocket.") from None
             else:
                 raise e from None
         finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, original_alrm)
             _logger.info("TRACING: Exiting browser_js wrapper.")
 
     def start_tour(self, *args, **kwargs):

@@ -24,6 +24,7 @@ console.warn = function(...args) {
         originalLog.apply(console, ["[WHITELISTED WARN]"].concat(args));
         return;
     }
+    originalWarn.apply(console, new Error.captureStackTrace());
     originalWarn.apply(console, args);
 };
 
@@ -138,6 +139,7 @@ window.fetch = async function(...args) {
 };
 
 const originalXHR = window.XMLHttpRequest.prototype.open;
+
 window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
     this.addEventListener('loadend', () => window._pendingRPCCount--);
     this.addEventListener('error', () => {
@@ -171,6 +173,7 @@ function buildInteractableSkeleton(node) {
         ['name', 'id', 'data-menu-xmlid', 'type', 'placeholder', 'value'].forEach(a => {
             if (node.hasAttribute(a)) attrs.push(`${a}="${node.getAttribute(a)}"`);
         });
+
         if (node.classList) {
             // Strip layout/utility classes, keep semantic identifiers
             let cls = Array.from(node.classList).filter(c => c.startsWith('o_') || c === 'btn' || c.startsWith('btn-')).join(' ');
@@ -205,21 +208,105 @@ console.log = function(...args) {
     }
 };
 
-window._hamsTourWatchdogInterval = setInterval(() => {
-    if (window._hamsAbortTriggered) {
-        clearInterval(window._hamsTourWatchdogInterval);
-        return;
-    }
+// Shared Worker V8 Hang Watchdog
+const sharedWorkerCode = `
+    let lastPing = Date.now();
+    let lastState = "Initializing...";
+    let lastLog = "";
+    let domGrowthStartTime = 0;
+    let lastDomSize = 0;
 
-    const idleTime = Date.now() - window._hamsTourWatchdog.lastActivity;
-    // Trigger alarm if the tour pipeline goes completely silent for 15 seconds
-    if (idleTime > 15000) {
-        triggerInstantAbort("Idle Hang Watchdog", `Tour step execution idled for over 15 seconds. Last recorded activity: ${window._hamsTourWatchdog.lastLog}`);
-    }
+    self.onconnect = function(e) {
+        const port = e.ports[0];
+        port.onmessage = function(event) {
+            if (event.data.type === 'ping') {
+                lastPing = Date.now();
+                if (event.data.state) lastState = event.data.state;
+                if (event.data.log) lastLog = event.data.log;
 
-    // Detect illegal routing fallback to Discuss app
-    const url = document.location.pathname + document.location.hash + document.location.search;
-    if (url.includes('/discuss')) {
-        triggerInstantAbort("Illegal Routing Override", "Tour illegally redirected to /odoo/discuss! Hash routing or query parameters were malformed.");
-    }
-}, 2000);
+                let currentDomSize = event.data.domSize || 0;
+
+                // Check if DOM grows so large it bogs down Chrome (> 5MB string representation)
+                if (currentDomSize > 5000000) {
+                    const diag = "V8 TIGHT LOOP DETECTED: DOM size exceeded 5MB skeleton.\\nLast Log: " + lastLog + "\\nDOM Skeleton: " + lastState.substring(0, 1000);
+                    console.error(diag);
+                    fetch('/hams_test/watchdog/kill', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ params: { diagnostic: diag } })
+                    });
+                    lastPing = Date.now() + 60000;
+                } else if (currentDomSize > lastDomSize && currentDomSize > 5000) {
+                    // Check if DOM is growing without bounds for more than 15 seconds
+                    if (domGrowthStartTime === 0) {
+                        domGrowthStartTime = Date.now();
+                    } else if (Date.now() - domGrowthStartTime > 15000) {
+                        const diag = "V8 TIGHT LOOP DETECTED: DOM grew without bounds for > 15 seconds.\\nLast Log: " + lastLog;
+                        console.error(diag);
+                        fetch('/hams_test/watchdog/kill', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ params: { diagnostic: diag } })
+                        });
+                        lastPing = Date.now() + 60000;
+                    }
+                } else {
+                    domGrowthStartTime = 0;
+                }
+                lastDomSize = currentDomSize;
+            }
+        };
+    };
+
+    setInterval(function() {
+        // 15 seconds without a ping means the main thread is locked in a tight loop
+        if (Date.now() - lastPing > 15000) {
+            const diag = "V8 TIGHT LOOP DETECTED: Main thread unresponsive.\\nLast Log: " + lastLog + "\\nDOM Skeleton: " + lastState.substring(0, 1000);
+            console.error(diag);
+            fetch('/hams_test/watchdog/kill', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ params: { diagnostic: diag } })
+            });
+            lastPing = Date.now() + 60000;
+        }
+    }, 5000);
+`;
+
+try {
+    const blob = new Blob([sharedWorkerCode], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(blob);
+    const watchdogWorker = new SharedWorker(workerUrl);
+    watchdogWorker.port.start();
+
+    window._hamsTourWatchdogInterval = setInterval(() => {
+        if (window._hamsAbortTriggered) {
+            clearInterval(window._hamsTourWatchdogInterval);
+            return;
+        }
+
+        // Detect illegal routing fallback to Discuss app
+        const url = document.location.pathname + document.location.hash + document.location.search;
+        if (url.includes('/discuss')) {
+            triggerInstantAbort("Illegal Routing Override", "Tour illegally redirected to /odoo/discuss! Hash routing or query parameters were malformed.");
+        }
+
+        // Ping the shared worker with the latest state and DOM size
+        let domState = "DOM not ready";
+        if (window._buildInteractableSkeleton && document.body) {
+            try {
+                domState = window._buildInteractableSkeleton(document.body).replace(/\s{2,}/g, ' ');
+            } catch(e) {
+                domState = "Error building skeleton: " + e.message;
+            }
+        }
+        watchdogWorker.port.postMessage({
+            type: 'ping',
+            state: domState,
+            domSize: domState.length,
+            log: window._hamsTourWatchdog.lastLog
+        });
+    }, 2000);
+} catch (e) {
+    console.warn("Could not instantiate SharedWorker watchdog:", e);
+}
