@@ -15,8 +15,6 @@ registry.category("web_tour.tours").add("create_site_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
-            expectUnloadPage: true,
-        },
         {
             content: "Verify site created (targeting invisible dropzone with native pseudo-selector)",
             trigger: '#user_websites_dropzone_home_header:not(:visible)',

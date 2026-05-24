@@ -15,8 +15,6 @@ registry.category("web_tour.tours").add("create_blog_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
-            expectUnloadPage: true,
-        },
         {
             content: "Verify blog created by targeting the rendered blog index",
             trigger: '#o_wblog_index_content',
