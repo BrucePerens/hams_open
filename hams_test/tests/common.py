@@ -59,25 +59,42 @@ else:
         _apply_cdp_hook(self)
     ChromeBrowser.__init__ = _patched_init
 
+_original_time = time.time
+
 class PassiveVirtualClock:
     """
     A CPU-time equivalent clock that suppresses massive jumps in wall-clock time
     caused by the VM being suspended, entirely without GIL-thrashing threads.
     """
     def __init__(self):
-        self.vtime = 0.0
-        self.last_real = time.time()
-        self._lock = threading.Lock()
+        self.vtime = _original_time()
+        self.last_real = _original_time()
+        self._lock = threading.RLock()
 
     def time(self):
         with self._lock:
-            now = time.time()
+            now = _original_time()
             delta = now - self.last_real
             self.last_real = now
             self.vtime += min(delta, 0.5)
             return self.vtime
 
 global_vclock = PassiveVirtualClock()
+
+# 🚨 INJECT VIRTUAL CLOCK INTO ODOO CHROME BROWSER ENGINE 🚨
+if hasattr(ChromeBrowser, '_wait_ready'):
+    original_wait_ready = ChromeBrowser._wait_ready
+    def _patched_wait_ready(self, ready_code, timeout=60, *args, **kwargs):
+        with patch('time.time', side_effect=global_vclock.time):
+            return original_wait_ready(self, ready_code, timeout=timeout, *args, **kwargs)
+    ChromeBrowser._wait_ready = _patched_wait_ready
+
+if hasattr(ChromeBrowser, '_wait_code_ok'):
+    original_wait_code_ok = ChromeBrowser._wait_code_ok
+    def _patched_wait_code_ok(self, code, timeout, *args, **kwargs):
+        with patch('time.time', side_effect=global_vclock.time):
+            return original_wait_code_ok(self, code, timeout, *args, **kwargs)
+    ChromeBrowser._wait_code_ok = _patched_wait_code_ok
 
 # 🚨 BENIGN ERROR SCRUBBER 🚨
 if hasattr(ChromeBrowser, 'stop'):

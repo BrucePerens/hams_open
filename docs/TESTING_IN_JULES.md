@@ -74,6 +74,8 @@ When running the tests under `--provision-jules` or `--already-provisioned`, the
 
 ## 4. Handling Intermittent UI Tour Failures (Owl Rendering Delays)
 
+> **NOTICE:** For the exhaustive, centralized guide on constructing resilient UI tours, you MUST consult [docs/LLM_WRITING_TOURS.md](LLM_WRITING_TOURS.md).
+
 Due to resource constraints in the Jules VM and the asynchronous nature of Odoo 19's Owl UI framework, UI tours can suffer from race conditions where the tour executor attempts to click elements before they are fully rendered (especially modals and wizards).
 
 To guarantee architectural compliance and stabilize the build, you MUST utilize the centralized DOM wait macros provided by `hams_test`.

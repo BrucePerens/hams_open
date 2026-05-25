@@ -37,10 +37,14 @@ registry.category("web_tour.tours").add("test_tour_violation_report", {
         },
         {
             trigger: 'button[type="submit"].btn-danger',
-            content: "Submit violation ticket",
+            content: "Submit violation ticket and trigger page reload",
             run: "click",
+            expectUnloadPage: true,
         },
-        TourUtils.waitForAbsence('.modal.show', 'Wait for submission modal to close'),
-
+        {
+            trigger: 'body',
+            content: 'Wait for page reload after successful controller redirect',
+            run: function() {}
+        }
     ]
 });

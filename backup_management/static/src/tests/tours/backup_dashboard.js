@@ -6,6 +6,7 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 registry.category("web_tour.tours").add("backup_dashboard_tour", {
     url: "/odoo?debug=1",
     steps: () => [
+        TourUtils.bypassDialogs(),
         { trigger: 'body', content: 'Initialize Tour' },
         {
             trigger: '.o_navbar_apps_menu button',
@@ -46,11 +47,16 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: "Select Kopia engine value",
             run: function () {
                 const items = document.querySelectorAll('.o_select_menu_item');
+                let found = false;
                 for (const item of items) {
                     if (item.textContent.includes('Kopia')) {
                         item.click();
+                        found = true;
                         break;
                     }
+                }
+                if (!found) {
+                    throw new Error("Kopia engine option not found in dropdown.");
                 }
             }
         },
@@ -64,7 +70,7 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: 'Click away to force DOM blur and commit text input',
             run: 'click',
         }
-    ].concat(TourUtils.safeSave()),
+    ].concat(TourUtils.safeSave('.o_form_button_save', '.o_form_saved, .o_form_button_create, .o_list_button_add')),
 });
 
 // # Tests [@ANCHOR: backup_dashboard_tour]

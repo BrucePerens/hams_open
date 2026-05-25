@@ -34,6 +34,8 @@ class CloudflarePurgeWizard(models.TransientModel):
         if not token or not zone_id:
             raise UserError(_("Missing Cloudflare API Token or Zone ID for the selected website."))
 
+        close_action = {"type": "ir.actions.act_window_close"}
+
         if self.purge_type == "everything":
             success = purge_everything(token, zone_id)
             if success:
@@ -45,6 +47,7 @@ class CloudflarePurgeWizard(models.TransientModel):
                         "message": _("Purged everything from Cloudflare cache successfully."),
                         "type": "success",
                         "sticky": False,
+                        "next": close_action,
                     },
                 }
             else:
@@ -69,6 +72,7 @@ class CloudflarePurgeWizard(models.TransientModel):
                         "message": _("Purged specific URLs from Cloudflare cache successfully."),
                         "type": "success",
                         "sticky": False,
+                        "next": close_action,
                     },
                 }
             else:
@@ -85,6 +89,7 @@ class CloudflarePurgeWizard(models.TransientModel):
                         "message": _("Purged specific Cache-Tags from Cloudflare cache successfully."),
                         "type": "success",
                         "sticky": False,
+                        "next": close_action,
                     },
                 }
             else:

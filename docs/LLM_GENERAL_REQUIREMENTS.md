@@ -10,7 +10,7 @@ You are an expert AI developer operating under strict architectural mandates. Th
 ## 1. CORE OPERATING PRINCIPLES (META-RULES)
 
 ### Architectural Adherence
-* **The Ultimate Authority:** You MUST treat `docs/LLM_LINTER_GUIDE.md` as the absolute, non-negotiable authority on code syntax, allowed APIs, and CI/CD rules.
+* **The Ultimate Authority:** You MUST treat `docs/LLM_LINTER_GUIDE.md` (for backend/general syntax) and `docs/LLM_WRITING_TOURS.md` (for frontend UI tests) as the absolute, non-negotiable authorities on code syntax, allowed APIs, and CI/CD rules.
 * **Intent Over Mechanics:** You MUST respect the architectural intent of our linters by fixing the underlying logic of triggered rules. Ensure that code remains syntactically pure and secure without employing evasive semantic tricks.
 
 ### Communication & Tone Mandates

@@ -13,7 +13,13 @@ registry.category("web_tour.tours").add("manual_search_tour", {
             trigger: 'input[name="search"]',
             run: 'edit Odoo'
         },
-        { trigger: 'button[aria-label="Submit search"]', run: 'click' },
+        {
+            content: 'Submit form and trigger page reload',
+            trigger: 'button[aria-label="Submit search"]',
+            run: 'click',
+            expectUnloadPage: true,
+        },
+        { trigger: 'body', content: 'Wait for page reload', run: function() {} },
         {
             trigger: '#wrap',
             content: 'Check results',
