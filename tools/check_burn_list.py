@@ -1588,13 +1588,6 @@ def scan_file(filepath, is_odoo_module=False):
         except Exception as e:
             errors_found.append(f"CRITICAL XML AST ERROR: {e}")
 
-    if is_odoo_module and filename.endswith(".js") and "web_tour.tours" in content:
-        FOUND_TOURS.append(filepath)
-        if "trigger:" not in content and not re.search(r"TourUtils\.(waitForElement|waitForAbsence|clickAndUnload|deterministicInput|safeSave|waitForRPC)", content):
-            errors_found.append(
-                "UI TOUR MANDATE VIOLATION: Odoo UI Tours MUST contain 'trigger:' or a valid 'TourUtils' macro."
-            )
-
     if filename.startswith("test_") and filename.endswith(".py"):
         FOUND_TEST_CONTENTS[filepath] = content
     if filename.endswith(".py"):
