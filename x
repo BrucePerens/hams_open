@@ -1,3 +1,7 @@
+@@BOUNDARY_OVERWRITE_TEST_PY@@
+Path: tools/test.py
+Operation: overwrite
+
 #!/usr/bin/env python3
 """
 Unified Pure-Python Odoo Test Runner for Hams.com
@@ -896,3 +900,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+@@BOUNDARY_OVERWRITE_TEST_PY@@--

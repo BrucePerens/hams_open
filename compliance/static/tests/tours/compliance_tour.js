@@ -12,7 +12,8 @@ registry.category("web_tour.tours").add("compliance_tour", {
             content: 'Verify Privacy Policy content',
             run: function () {
                 const text = document.body.textContent;
-                if (!text.includes('Privacy Policy') || !text.includes('Warning: This is the default version') || !text.includes('Data Minimization') || !text.includes('Related')) {
+                // Check shortened to avoid HTML newline characters breaking the match
+                if (!text.includes('Privacy Policy') || !text.includes('Warning: This is the default') || !text.includes('Data Minimization') || !text.includes('Related')) {
                     throw new Error('Compliance content missing');
                 }
             }
