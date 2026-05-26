@@ -8,7 +8,17 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 registry.category("web_tour.tours").add("manual_feedback_tour", {
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
-        { trigger: 'button[name="is_helpful"][value="1"]', run: 'click' },
+        {
+            trigger: 'button[name="is_helpful"][value="1"]',
+            content: 'Submit feedback and trigger reload',
+            run: 'click',
+            expectUnloadPage: true,
+        },
+        {
+            trigger: 'body',
+            content: 'Wait for page reload',
+            run: function() {}
+        },
         {
             trigger: '.alert-success',
             content: 'Check success message',

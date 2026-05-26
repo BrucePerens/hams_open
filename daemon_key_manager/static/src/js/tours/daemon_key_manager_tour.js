@@ -18,18 +18,31 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         },
         {
             trigger: 'div[name="user_id"] input',
-            content: 'Click to focus service account input',
-            run: 'click',
-        },
-        {
-            trigger: 'div[name="user_id"] input',
-            content: 'Type service account name',
-            run: 'edit facility',
+            content: 'Input service account name manually and dispatch events',
+            run: function () {
+                const el = document.querySelector('div[name="user_id"] input');
+                el.value = 'facility';
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
         },
         {
             trigger: '.dropdown-item, .o-autocomplete--dropdown-item',
             content: 'Select the service account from OWL autocomplete',
-            run: 'click',
+            run: function () {
+                const items = document.querySelectorAll('.dropdown-item, .o-autocomplete--dropdown-item');
+                let found = false;
+                for (const item of items) {
+                    if (item.textContent.toLowerCase().includes('facility')) {
+                        item.click();
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    throw new Error("Service account 'facility' not found in dropdown.");
+                }
+            }
         },
         {
             trigger: 'div[name="env_file_path"] input',
@@ -48,9 +61,42 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             run: 'click',
         },
         {
-            trigger: '.o_field_widget[name="last_rotated"]:not(.o_field_empty):not(:visible)',
-            content: 'Wait for the object button RPC to resolve and reload the form with the new rotation date',
-            run: function () {}
+            content: 'Wait for the object button RPC to resolve and the rotation date to render',
+            trigger: 'body',
+            timeout: 20000,
+            run: function () {
+                return new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(() => {
+                        clearInterval(interval);
+                        reject(new Error("Timeout waiting for rotation date or success toast."));
+                    }, 18000);
+
+                    const interval = setInterval(() => {
+                        const field = document.querySelector('.o_field_widget[name="last_rotated"]');
+                        const toast = document.querySelector('.toast-body') || document.querySelector('.o_notification_manager');
+                        const errorDialog = document.querySelector('.modal-body.text-danger') || document.querySelector('.o_notification_manager .text-danger');
+
+                        // Condition 1: Form reloaded successfully and field populated
+                        if (field && /\d/.test(field.textContent)) {
+                            clearInterval(interval);
+                            clearTimeout(timeoutId);
+                            resolve();
+                        }
+                        // Condition 2: Backend returned a notification instead of a form reload
+                        else if (toast && toast.textContent.toLowerCase().includes('success')) {
+                            clearInterval(interval);
+                            clearTimeout(timeoutId);
+                            resolve();
+                        }
+                        // Condition 3: Catch validation errors and fail fast
+                        else if (errorDialog) {
+                            clearInterval(interval);
+                            clearTimeout(timeoutId);
+                            reject(new Error("Backend returned an error: " + errorDialog.textContent));
+                        }
+                    }, 250);
+                });
+            }
         }
     ]),
 });

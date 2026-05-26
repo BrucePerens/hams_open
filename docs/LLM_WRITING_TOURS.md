@@ -10,7 +10,7 @@ JavaScript UI Tours in Odoo are inherently brittle. This document centralizes al
 ## 2. DOM Targeting & Selectors
 * **Native-First:** Prioritize `name` attributes (`button[name="action_install"]`, `input[name="login"]`) over structural layout classes.
 * **Avoid `:contains`:** The pseudo-selector `:contains(...)` crashes Odoo 19's native `document.querySelectorAll()`. Target elements by name, ID, or structural class instead.
-* **Invisible Elements:** The tour framework ignores 0x0 pixel elements. If you must target a hidden dropzone or invisible structural tracking field, append the `:not(:visible)` pseudo-selector.
+* **Invisible Elements (The 0x0 Bypass):** The tour framework ignores elements calculating to 0x0 pixels. If you must target a hidden dropzone, a `display: contents` wrapper, or a readonly span to verify a DOM state change, you MUST append the `:not(:visible)` pseudo-selector to bypass the strict bounding-box visibility check.
 * **Legacy Tags:** Native `<select>` and `<option>` tags are deprecated in Odoo 19 form views. Use `.o_select_menu` and `.o_select_menu_item`.
 * **Autocomplete Dropdowns:** jQuery autocomplete (`.ui-menu-item`) is removed. Target `.o-autocomplete--dropdown-item` or `.dropdown-item`.
 
@@ -22,14 +22,17 @@ JavaScript UI Tours in Odoo are inherently brittle. This document centralizes al
 ## 4. Safe Saves & RPC Resolution
 * **Safe Save Macro:** Never manually click `.o_form_button_save` and end the tour. You MUST append `.concat(TourUtils.safeSave())` to your steps array. (Note: Do NOT use the ES6 spread operator `...TourUtils` as it crashes the `rjsmin` asset minifier).
 * **RPC Resolution (True vs Action):** When clicking a backend action button:
-    * If the backend returns `True`, Odoo silently reloads the form. It DOES NOT spawn a notification. You MUST wait for a verifiable DOM state change (e.g., `trigger: '.o_field_widget[name="my_field"]:not(.o_field_empty)'`) before ending the tour.
+    * If the backend returns `True`, Odoo silently reloads the form. It DOES NOT spawn a notification. You MUST wait for a verifiable DOM state change.
+    * **False Positive CSS Traps:** Do not rely exclusively on CSS classes like `:not(.o_field_empty)` to verify form reloads. In Odoo 19, readonly fields may lack this class initially, causing instant false positive successes that crash the teardown process.
+    * **Promise-Based Polling:** To bulletproof RPC resolution checks, use a custom `Promise` loop with `setInterval` that physically reads the `textContent` of the target DOM node (e.g., checking `/\d/.test(field.textContent)`) to guarantee the backend data has rendered.
     * If the backend explicitly returns a notification/action, wait for it safely using `.o_notification` or `TourUtils.waitForAbsence()`.
 
 ## 5. Modals & Dialogs
 * **Native Dialogs:** `window.alert` and `window.confirm` freeze headless Chrome. Bypass them by injecting a window override on the `body` in a preceding step.
-* **Modal Targeting:** Structural wrappers like `.modal-content` or `.modal-dialog` MUST ONLY be used for passive DOM polling (`run: function() {}`) to wait for a modal to render.
-* **Modal Click-Away:** When forcing a DOM blur inside a modal, you MUST click a neutral safe zone inside the modal, such as `.modal-body`.
+* **Modal Targeting (Strict Rules):** Structural wrappers like `.modal-content` or `.modal-dialog` MUST ONLY be used for passive DOM polling (`run: function() {}`) to wait for a modal to mount and render. Attempting to click them directly will trip linter fragility checks.
+* **Modal Click-Away:** When forcing a DOM blur inside a modal to commit text input, you MUST click a neutral safe zone inside the modal, such as `.modal-body`.
 
 ## 6. Page Unloads
-* When triggering a hard browser navigation or form submit (bypassing the SPA router), use `expectUnloadPage: true` on the step.
+* **Form Submissions:** When a tour clicks a `type="submit"` button or triggers a hard browser navigation (bypassing the SPA router), you MUST explicitly declare `expectUnloadPage: true` on that step. Failing to do so causes the tour runner to crash on the browser's `beforeUnload` event.
 * You MUST use Odoo's native helper `run: 'click'` on unload steps. Custom closures (`run: () => {...}`) break the unload event binding.
+* **Post-Unload Waiting:** Immediately after an `expectUnloadPage` step, provide a neutral wait step (e.g., `trigger: 'body', run: function() {}`) to allow the new page DOM to hydrate before asserting success.

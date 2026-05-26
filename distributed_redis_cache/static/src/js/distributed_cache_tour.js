@@ -53,18 +53,28 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             }
         },
         {
+            trigger: '.o_form_sheet',
+            content: 'Click away to force DOM blur and commit text input',
+            run: 'click',
+        },
+        {
             trigger: 'button[name="action_invalidate_model_cache"]',
             content: "Invalidate the cache",
             run: "click",
         },
         {
-            trigger: '.toast-body, .o_notification_manager',
-            content: "Verify success message",
+            trigger: 'body',
+            content: "Wait for the success toast to render",
             run: function () {
-                const el = document.querySelector('.toast-body') || document.querySelector('.o_notification_manager');
-                if (!el || !el.textContent.includes('Success')) {
-                    throw new Error('Success message not found.');
-                }
+                return new Promise((resolve) => {
+                    const interval = setInterval(() => {
+                        const toast = document.querySelector('.toast-body') || document.querySelector('.o_notification_manager');
+                        if (toast && toast.textContent.includes('Success')) {
+                            clearInterval(interval);
+                            resolve();
+                        }
+                    }, 250);
+                });
             }
         }
     ]
