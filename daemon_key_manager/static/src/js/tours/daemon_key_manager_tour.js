@@ -18,30 +18,38 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         },
         {
             trigger: 'div[name="user_id"] input',
-            content: 'Input service account name manually and dispatch events',
-            run: function () {
-                const el = document.querySelector('div[name="user_id"] input');
-                el.value = 'facility';
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+            content: 'Click to focus service account input',
+            run: 'click',
         },
         {
-            trigger: '.dropdown-item, .o-autocomplete--dropdown-item',
-            content: 'Select the service account from OWL autocomplete',
+            trigger: 'div[name="user_id"] input',
+            content: 'Type service account name',
+            run: 'edit facility',
+        },
+        {
+            trigger: 'body',
+            content: 'Wait for autocomplete dropdown and click the item',
             run: function () {
-                const items = document.querySelectorAll('.dropdown-item, .o-autocomplete--dropdown-item');
-                let found = false;
-                for (const item of items) {
-                    if (item.textContent.toLowerCase().includes('facility')) {
-                        item.click();
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    throw new Error("Service account 'facility' not found in dropdown.");
-                }
+                return new Promise((resolve, reject) => {
+                    let interval;
+                    const timeoutId = setTimeout(() => {
+                        clearInterval(interval);
+                        reject(new Error("Service account 'facility' never appeared in dropdown."));
+                    }, 10000);
+
+                    interval = setInterval(() => {
+                        const items = document.querySelectorAll('.dropdown-item, .o-autocomplete--dropdown-item');
+                        for (const item of items) {
+                            if (item.textContent.toLowerCase().includes('facility')) {
+                                clearInterval(interval);
+                                clearTimeout(timeoutId);
+                                item.click();
+                                resolve();
+                                return;
+                            }
+                        }
+                    }, 250);
+                });
             }
         },
         {
@@ -66,12 +74,13 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             timeout: 20000,
             run: function () {
                 return new Promise((resolve, reject) => {
+                    let interval;
                     const timeoutId = setTimeout(() => {
                         clearInterval(interval);
                         reject(new Error("Timeout waiting for rotation date or success toast."));
                     }, 18000);
 
-                    const interval = setInterval(() => {
+                    interval = setInterval(() => {
                         const field = document.querySelector('.o_field_widget[name="last_rotated"]');
                         const toast = document.querySelector('.toast-body') || document.querySelector('.o_notification_manager');
                         const errorDialog = document.querySelector('.modal-body.text-danger') || document.querySelector('.o_notification_manager .text-danger');

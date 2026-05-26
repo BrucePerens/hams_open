@@ -31,25 +31,33 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
         },
         {
             trigger: '.o_field_widget[name="model_id"] input',
-            content: "Input model name manually",
-            run: function () {
-                const el = document.querySelector('.o_field_widget[name="model_id"] input');
-                el.value = 'User';
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            }
+            content: "Input model name using native simulator",
+            run: "edit User",
         },
         {
-            trigger: '.dropdown-item, .o-autocomplete--dropdown-item',
-            content: "Select the model from autocomplete",
+            trigger: 'body',
+            content: "Wait for autocomplete dropdown and click the item",
             run: function () {
-                const items = document.querySelectorAll('.dropdown-item, .o-autocomplete--dropdown-item');
-                for (const item of items) {
-                    if (item.textContent.includes('User')) {
-                        item.click();
-                        break;
-                    }
-                }
+                return new Promise((resolve, reject) => {
+                    let interval;
+                    const timeoutId = setTimeout(() => {
+                        clearInterval(interval);
+                        reject(new Error("Model 'User' never appeared in dropdown."));
+                    }, 10000);
+
+                    interval = setInterval(() => {
+                        const items = document.querySelectorAll('.dropdown-item, .o-autocomplete--dropdown-item');
+                        for (const item of items) {
+                            if (item.textContent.includes('User')) {
+                                clearInterval(interval);
+                                clearTimeout(timeoutId);
+                                item.click();
+                                resolve();
+                                return;
+                            }
+                        }
+                    }, 250);
+                });
             }
         },
         {
