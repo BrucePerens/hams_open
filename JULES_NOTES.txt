@@ -1,2 +1,1 @@
 This will will be updated with any notes for working Jules sessions.
-[Note: Enforce sysctl vm.overcommit_memory=1 in Jules VM provisioning. State 1 (Always Overcommit) is required because Headless Chrome requests massive VSIZE allocations during UI tours that State 2 (Strict) rejects, while State 0 (Heuristic) leads to Erlang/RabbitMQ OOM kills.]
