@@ -6,8 +6,10 @@ import { TourUtils } from "@hams_test/js/tour_utils";
 registry.category("web_tour.tours").add("helpdesk_operator_tour", {
     url: "/odoo?debug=1",
     steps: () => [
+        { trigger: 'body', content: 'Initialize Tour' },
+        { trigger: '.o_app[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]', content: 'Wait for Helpdesk App Icon on Root Menu', run: function() {} },
         {
-            trigger: '[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]',
+            trigger: '.o_app[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]',
             content: "Open the Helpdesk app",
             run: "click",
         },

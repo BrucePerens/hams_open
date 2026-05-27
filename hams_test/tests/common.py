@@ -192,7 +192,44 @@ class SafePatchMixin:
 
 class HamsTransactionCase(TransactionCase, SafePatchMixin):
     # [@ANCHOR: hams_transaction_case]
-    pass
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, '_active_daemons'):
+            for p in cls._active_daemons:
+                try:
+                    p.terminate()
+                    p.wait(timeout=2.0)
+                except Exception as e: # audit-ignore-catch-all
+                    _logger.warning("Failed to terminate daemon: %s", repr(e))
+            cls._active_daemons.clear()
+        super().tearDownClass()
+
+    def start_daemon(self, script_path, args=None, env_vars=None, health_url=None, timeout=600):
+        if not hasattr(self.__class__, '_active_daemons'):
+            self.__class__._active_daemons = []
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+        process = daemon_utils.start_daemon_process(script_path, args, env_vars)
+        self.__class__._active_daemons.append(process)
+
+        if health_url:
+            start_time = global_vclock.time()
+            is_healthy = False
+            while global_vclock.time() - start_time < timeout:
+                if process.poll() is not None:
+                    raise RuntimeError(f"FATAL: Daemon '{script_path}' crashed.")
+                try:
+                    req = urllib.request.Request(health_url)
+                    with urllib.request.urlopen(req, timeout=1.0) as response:
+                        if response.getcode() in (200, 204):
+                            is_healthy = True
+                            break
+                except Exception as req_e: # audit-ignore-catch-all
+                    _logger.warning("TRACING: Daemon health check not ready yet: %s", repr(req_e))
+                time.sleep(0.5)  # audit-ignore-sleep
+            if not is_healthy:
+                raise TimeoutError("Daemon health check timed out.")
+        return process
 
 class HamsHttpCase(HttpCase, SafePatchMixin):
     # [@ANCHOR: hams_http_case]
@@ -351,47 +388,4 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             else:
                 raise e from None
 
-class HamsIntegrationCase(HamsHttpCase):
-    # [@ANCHOR: integration_daemon_testing]
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls._daemons = []
-
-    @classmethod
-    def tearDownClass(cls):
-        env = cls.env
-        daemon_utils = env["zero_sudo.daemon.utils"]
-        for process in cls._daemons:
-            daemon_utils.stop_daemon_process(process)
-        cls._daemons.clear()
-        super().tearDownClass()
-
-    @classmethod
-    def start_daemon(cls, script_path, args=None, env_vars=None, health_url=None, timeout=600):
-        env = cls.env
-        daemon_utils = env["zero_sudo.daemon.utils"]
-        process = daemon_utils.start_daemon_process(script_path, args, env_vars)
-        cls._daemons.append(process)
-
-        if health_url:
-            start_vtime = global_vclock.time()
-            is_healthy = False
-            while global_vclock.time() - start_vtime < timeout:
-                if process.poll() is not None:
-                    raise RuntimeError(f"FATAL: Daemon process '{script_path}' crashed with exit code {process.returncode} while waiting for health check!")
-                try:
-                    req = urllib.request.Request(health_url)
-                    with urllib.request.urlopen(req, timeout=1.0) as response:
-                        if response.getcode() in (200, 204):
-                            is_healthy = True
-                            break
-                except Exception as req_e: # audit-ignore-catch-all
-                    _logger.warning("TRACING: Daemon health check not ready yet: %s", repr(req_e))
-                time.sleep(0.5) # audit-ignore-sleep
-
-            if not is_healthy:
-                raise TimeoutError(f"FATAL: Daemon health check for '{script_path}' timed out after {timeout} virtual seconds.")
-
-        return process

@@ -4,12 +4,12 @@ import shutil
 from unittest.mock import MagicMock
 from odoo import _
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsIntegrationCase
+from odoo.addons.hams_test.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.daemon.json_rpc_client import SecureJSONRPCClient
 
 
 @tagged('post_install', '-at_install')
-class TestSecureJSONRPCClient(HamsIntegrationCase):
+class TestSecureJSONRPCClient(HamsTransactionCase):
 
     def setUp(self):
         super().setUp()

@@ -86,6 +86,10 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
             trigger: 'button[data-menu-xmlid="base.menu_users"]',
             run: 'click',
         },
-
+        {
+            content: "Wait for list view to load",
+            trigger: '.o_list_table',
+            run: function() {}
+        },
     ]),
 });

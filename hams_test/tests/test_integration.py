@@ -3,17 +3,17 @@ import os
 import socket
 import urllib.request
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsIntegrationCase
+from odoo.addons.hams_test.tests.common import HamsTransactionCase
 
 @tagged('post_install', '-at_install', 'integration')
-class TestIntegrationFacility(HamsIntegrationCase):
+class TestIntegrationFacility(HamsTransactionCase):
     # Tests [@ANCHOR: integration_daemon_testing]
 
     def test_01_daemon_lifecycle(self):
         # [@ANCHOR: test_integration_daemon_testing]
         # Verified by [@ANCHOR: test_integration_daemon_testing]
         """
-        Verify that HamsIntegrationCase correctly starts a daemon and polls its health.
+        Verify that HamsTransactionCase correctly starts a daemon and polls its health.
         """
         base_dir = os.path.dirname(os.path.dirname(__file__))
         script_path = os.path.join(base_dir, 'tests', 'dummy_daemon.py')

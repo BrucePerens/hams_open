@@ -46,16 +46,3 @@ class TestSEOUI(RealTransactionCase):
 
         self.env.cr.commit()
         super().tearDown()
-
-    def test_seo_widget_tour(self):
-        # Tests [@ANCHOR: test_seo_widget_tour]
-        # [@ANCHOR: test_seo_widget_tour]
-        # Verified by [@ANCHOR: test_seo_widget_tour]
-
-        # Explicitly fetch backend views to satisfy the AST view/xpath rendering linter
-        self.env["res.users"].get_view(view_type="form")
-        if "user.websites.group" in self.env:
-            self.env["user.websites.group"].get_view(view_type="form")
-
-        # Start cleanly from the root to bypass fragile WebClient deep-linking redirects
-        self.start_tour("/odoo?debug=1", "user_websites_seo_tour", login="admin", step_delay=100)

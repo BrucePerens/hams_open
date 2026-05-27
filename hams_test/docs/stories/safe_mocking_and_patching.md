@@ -17,10 +17,7 @@ This ensures the mock is instantiated *after* Odoo's registry is safely built, a
 By default, `self.safe_patch()` injects a `DiagnosticMock` instead of a standard `MagicMock`. The `DiagnosticMock` monitors the runtime call stack. If it detects rapid recursive execution exceeding a depth of 5, it raises an immediate, explicit `RecursionError` to fail the test quickly and clearly, preventing pipeline timeouts.
 
 ### Daemons and Testing Isolation
-While standard architecture dictates that background daemons should be isolated from the Odoo framework, tests requiring extensive patching and mocking MUST inherit from `HamsIntegrationCase` (from `odoo.addons.hams_test.common`) instead of `unittest.TestCase`. This provides access to `self.safe_patch()`, resolving pipeline lockups without violating the underlying operational isolation of the daemon itself.
-
-### Daemons and Testing Isolation
-While standard architecture dictates that background daemons should be isolated from the Odoo framework, tests requiring extensive patching and mocking MUST inherit from `HamsIntegrationCase` (from `odoo.addons.hams_test.common`) instead of `unittest.TestCase`. This provides access to `self.safe_patch()`, resolving pipeline lockups without violating the underlying operational isolation of the daemon itself.
+While standard architecture dictates that background daemons should be isolated from the Odoo framework, tests requiring extensive patching and mocking MUST inherit from `HamsTransactionCase` (from `odoo.addons.hams_test.tests.common`) instead of `unittest.TestCase`. This provides access to `self.safe_patch()`, resolving pipeline lockups without violating the underlying operational isolation of the daemon itself.
 
 ### Example Refactoring
 

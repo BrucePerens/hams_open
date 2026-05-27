@@ -143,7 +143,7 @@ GENERAL_ERROR_RULES = [
     (
         r"test_.*\.py$",
         re.compile(r"class\s+[A-Za-z0-9_]+\s*\(\s*(?:TransactionCase|HttpCase)\s*\)\s*:"),
-        "CRITICAL ARCHITECTURE: Tests must inherit from HamsTransactionCase, HamsHttpCase, or HamsIntegrationCase. Direct Odoo base class inheritance is forbidden.",
+        "CRITICAL ARCHITECTURE: Tests must inherit from HamsTransactionCase or HamsHttpCase. Direct Odoo base class inheritance is forbidden.",
     ),
     (
         r"test_.*\.py$",

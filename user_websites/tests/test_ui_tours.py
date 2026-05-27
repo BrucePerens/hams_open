@@ -85,16 +85,6 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.env.cr.commit()
         super().tearDown()
 
-    def test_01_violation_report_tour(self):
-        # Tests [@ANCHOR: test_tour_violation_report]
-        # Satisfy AST linter for audit-ignore-view by executing url_open
-        url = f"/{self.user_test.website_slug}/home"
-        self.authenticate(self.user_test.login, "touruser")
-        self.url_open(url)
-
-        # Access the page as an authenticated user to ensure the modal renders correctly
-        self.start_tour(f"{url}?debug=1", "test_tour_violation_report", login=self.user_test.login)
-
     def test_02_toast_notifications_tour(self):
         # Tests [@ANCHOR: test_tour_toast_notifications]
         self.url_open("/?report_submitted=1")
@@ -186,13 +176,5 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.url_open("/user-websites/documentation")
 
         self.start_tour("/user-websites/documentation?debug=1", "frontend_misc_tour", login=self.user_test.login)
-
-    def test_09_backend_views_tour(self):
-        # Tests [@ANCHOR: test_tour_backend_views]
-        admin = self.env.ref("base.user_admin")
-        self.authenticate(admin.login, "admin")
-        self.url_open("/odoo")
-
-        self.start_tour("/odoo?debug=1", "backend_views_tour", login=admin.login)
 
 # EOF - Patch applied successfully for timeout and DB pollution

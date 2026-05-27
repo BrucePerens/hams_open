@@ -7,14 +7,14 @@ import time
 from unittest.mock import MagicMock
 
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsIntegrationCase
+from odoo.addons.hams_test.tests.common import HamsTransactionCase
 
 # Utilize implicit namespace packages instead of sys.path manipulation
 import odoo.addons.pager_duty.daemon.generalized_monitor as generalized_monitor
 
 
 @tagged('post_install', '-at_install')
-class TestMonitorExhaustive(HamsIntegrationCase):
+class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_01_smtp_fallback(self):
         # Tests [@ANCHOR: daemon_report_incident]

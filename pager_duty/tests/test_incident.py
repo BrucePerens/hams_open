@@ -4,7 +4,7 @@ import redis
 import logging
 import datetime
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase, HamsIntegrationCase
+from odoo.addons.hams_test.tests.common import HamsTransactionCase
 from unittest.mock import MagicMock
 from odoo import fields, _
 
@@ -139,21 +139,20 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
 
 @tagged("integration", "post_install", "-at_install")
-class TestPagerIncidentIntegration(HamsIntegrationCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        base_dir = os.path.join(os.path.dirname(__file__), "..", "daemon")
-        daemons = ["pager_smart_spooler.py", "pager_log_analyzer.py", "pager_synthetic_spooler.py"]
-        for d in daemons:
-            daemon_path = os.path.abspath(os.path.join(base_dir, d))
-            if os.path.exists(daemon_path):
-                cls.start_daemon(daemon_path)
-
+class TestPagerIncidentIntegration(HamsTransactionCase):
     def setUp(self):
         super(TestPagerIncidentIntegration, self).setUp()
         self.incident_model = self.env["pager.incident"]
         self.service_user = self.env.ref("pager_duty.user_pager_service_internal")
+
+        if not hasattr(self.__class__, '_daemons_started'):
+            base_dir = os.path.join(os.path.dirname(__file__), "..", "daemon")
+            daemons = ["pager_smart_spooler.py", "pager_log_analyzer.py", "pager_synthetic_spooler.py"]
+            for d in daemons:
+                daemon_path = os.path.abspath(os.path.join(base_dir, d))
+                if os.path.exists(daemon_path):
+                    self.start_daemon(daemon_path)
+            self.__class__._daemons_started = True
 
     def test_01_rate_limiting_blocks_spam_integration(self):
         vals = {

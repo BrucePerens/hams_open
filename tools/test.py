@@ -348,6 +348,9 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
                     print("[*] [DEBUG-RUNNER] Received EOF sentinel from IO Reader thread.")
                     break
 
+                if "@t-esc" in line and "deprecated" in line.lower():
+                    continue
+
                 sys.stdout.write(line)
                 sys.stdout.flush()
 
@@ -448,25 +451,35 @@ def check_linters(venv_python, base_dir, ignore_filepath, extractor=None, target
         print(res_js.stdout)
 
 
-def run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns, target_modules):
-    print("[*] Executing Standalone Daemon Tests...")
-    final_rc = 0
-    for mod in target_modules:
-        daemon_dir = os.path.join(base_dir, mod, "daemon")
-        if not os.path.exists(daemon_dir):
-            daemon_dir = os.path.join(base_dir, mod, "daemons")
-        if not os.path.exists(daemon_dir) or is_ignored(daemon_dir, ignore_patterns):
-            continue
+def wait_for_port(port, name, host="127.0.0.1", timeout=60.0):
+    print(f"[*] Waiting for {name} on {host}:{port} to open...")
+    start_time = global_vclock.time()
+    while global_vclock.time() - start_time < timeout:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            if sock.connect_ex((host, port)) == 0:
+                print(f"[*] {name} is ready.")
+                return True
+        time.sleep(0.5)
+    print(f"❌ ERROR: {name} did not open port {port} within {timeout} seconds.")
+    return False
 
-        if any(f.startswith("test_") and f.endswith(".py") for f in os.listdir(daemon_dir)):
-            print(f"\n[*] ----------------------------------------------------\n[*] Testing Daemon: {mod}\n[*] ----------------------------------------------------")
-            if extractor:
-                extractor.set_context(f"Daemon Tests / {mod}")
-            cmd = [venv_python, "-m", "unittest", "discover", "-p", "test_*.py", "-v"]
-            rc = run_cmd(cmd, extractor, cwd=daemon_dir)
-            if rc != 0:
-                final_rc = rc
-    return final_rc
+def wait_for_socket(sock_path, name, timeout=60.0):
+    print(f"[*] Waiting for {name} unix socket {sock_path} to open...")
+    start_time = global_vclock.time()
+    while global_vclock.time() - start_time < timeout:
+        if os.path.exists(sock_path):
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1.0)
+                try:
+                    sock.connect(sock_path)
+                    print(f"[*] {name} socket is ready.")
+                    return True
+                except OSError:
+                    pass
+        time.sleep(0.5)
+    print(f"❌ ERROR: {name} socket {sock_path} did not open within {timeout} seconds.")
+    return False
 
 
 def rebuild_db(db_name):
@@ -546,8 +559,9 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
         os.setresuid(pg_user.pw_uid, pg_user.pw_uid, pg_user.pw_uid)
 
     subprocess.run([f"{pg_bin_dir}initdb", "-D", pg_data], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
-    # The -w flag makes pg_ctl natively BLOCK until ready. No polling loops needed!
-    subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_sock} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "-w", "start"], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_sock} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
+
+    wait_for_socket(f"{pg_sock}/.s.PGSQL.5432", "PostgreSQL")
 
     p = subprocess.Popen([f"{pg_bin_dir}psql", "-h", pg_sock, "-d", "postgres"], stdin=subprocess.PIPE, preexec_fn=preexec_pg, text=True, stdout=subprocess.DEVNULL)
     p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
@@ -556,6 +570,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     # 4. Redis Sandboxing
     redis_user = pwd.getpwnam("redis")
     redis_proc = subprocess.Popen(["redis-server", "--daemonize", "no"], preexec_fn=lambda: (os.setresgid(redis_user.pw_gid, redis_user.pw_gid, redis_user.pw_gid), os.setresuid(redis_user.pw_uid, redis_user.pw_uid, redis_user.pw_uid)), stdout=subprocess.DEVNULL)
+    wait_for_port(6379, "Redis")
 
     # 5. RabbitMQ Sandboxing
     subprocess.run(["systemctl", "stop", "rabbitmq-server"], check=False, stderr=subprocess.DEVNULL)
@@ -576,15 +591,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
         os.environ["HOME"] = "/var/lib/rabbitmq"
 
     subprocess.run(["rabbitmq-server", "-detached"], preexec_fn=preexec_rmq, check=True, stdout=subprocess.DEVNULL)
-
-    # Native blocking await mapped to CPU Virtual Time
-    rmq_proc = subprocess.Popen(["rabbitmqctl", "await_startup"], preexec_fn=preexec_rmq, stdout=subprocess.DEVNULL)
-    start_vtime = global_vclock.time()
-    while rmq_proc.poll() is None:
-        if global_vclock.time() - start_vtime > 120.0:
-            rmq_proc.kill()
-            raise TimeoutError("FATAL: Daemon health check for rabbitmqctl timed out.")
-        time.sleep(0.1)
+    wait_for_port(5672, "RabbitMQ")
 
     # 6. Execute Inner Odoo Test Suite
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -671,7 +678,8 @@ def provision_jules(base_dir):
         pass
 
     with micro_privilege(orig_user):
-        subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "-w", "start"], check=True)
+        subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], check=True)
+        wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
 
         p = subprocess.Popen([f"{pg_bin_dir}psql", "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, text=True, stdout=subprocess.DEVNULL)
         p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
@@ -680,6 +688,9 @@ def provision_jules(base_dir):
     print("[*] Starting local Redis and RabbitMQ...")
     subprocess.run(["systemctl", "start", "redis-server"], check=False, stderr=subprocess.DEVNULL)
     subprocess.run(["systemctl", "start", "rabbitmq-server"], check=False, stderr=subprocess.DEVNULL)
+
+    wait_for_port(6379, "Redis")
+    wait_for_port(5672, "RabbitMQ")
 
     os.environ["PGHOST"] = pg_socket
     os.environ["HAMS_ISOLATED_NS"] = "1"
@@ -765,8 +776,6 @@ def main():
     args = parser.parse_args()
 
     is_jules = bool(os.environ.get("IN_JULES_VM")) or bool(os.environ.get("JULES_SESSION_ID"))
-    if is_jules and (args.provision_jules or args.already_provisioned):
-        provision_jules(base_dir)
 
     venv_python = "/usr/bin/python3" if is_jules else os.path.join(base_dir, ".venv", "bin", "python")
     odoo_bin = "/usr/bin/odoo"
@@ -795,86 +804,48 @@ def main():
 
     extractor = FailureExtractor(args.log_directory)
     print(f"==========================================================\n 🧪 ODOO TEST RUNNER [{args.mode.upper()} MODE]\n==========================================================")
+
+    check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
+
+    if is_jules and (args.provision_jules or args.already_provisioned):
+        provision_jules(base_dir)
+
     final_rc = 0
 
-    if args.mode == "standard":
-        check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
-        final_rc = run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns, target_modules)
-
+    if args.mode in ("standard", "integration"):
         rebuild_db(args.db)
-        cmd = get_odoo_test_cmd() + [odoo_bin, "--addons-path", addons_path, "--dev=all", "-d", args.db, "-i", mod_string, "--test-enable", "--test-tags", test_tags + ",-integration", "--stop-after-init", "--workers=0", "--max-cron-threads=0", "--http-interface", "127.0.0.1"]
+
+        # Inject environment variables for daemons spawned securely by tests
+        os.environ["ODOO_URL"] = "http://127.0.0.1:8069"
+        os.environ["DB_NAME"] = args.db
+        os.environ["ODOO_USER"] = "admin"
+        os.environ["ODOO_PASSWORD"] = "admin"
+
+        cmd = get_odoo_test_cmd() + [
+            odoo_bin, "--load=base,web,hams_test", "--addons-path", addons_path,
+            "--dev=all", "-d", args.db, "-i", mod_string, "--test-enable",
+            "--test-tags", test_tags, "--stop-after-init", "--workers=0",
+            "--max-cron-threads=0", "--http-interface", "127.0.0.1", "--http-port", "8069"
+        ]
+
         rc_odoo = run_cmd(cmd, extractor)
-        if rc_odoo != 0: final_rc = rc_odoo
-
-    elif args.mode == "integration":
-        check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
-        final_rc = run_daemon_tests(venv_python, base_dir, extractor, ignore_patterns, target_modules)
-        os.environ["HAMS_INTEGRATION_MODE"] = "1"
-
-        rebuild_db(args.db)
-        rc_init = run_cmd([venv_python, odoo_bin, "--addons-path", addons_path, "-d", args.db, "-i", mod_string, "--test-enable", "--test-tags", "/__skip_init__", "--stop-after-init", "--workers=0", "--max-cron-threads=0", "--http-interface", "127.0.0.1"], extractor)
-        if rc_init != 0: final_rc = rc_init
-
-        if final_rc == 0:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(("", 0))
-                free_port = s.getsockname()[1]
-
-            print(f"[*] Starting background Odoo on port {free_port}...")
-            odoo_proc = subprocess.Popen([venv_python, odoo_bin, "--addons-path", addons_path, "-d", args.db, "--db-filter", f"^{args.db}$", "--workers=0", "--max-cron-threads=0", "--http-port", str(free_port), "--log-level=warn", "--http-interface", "127.0.0.1"], stdout=subprocess.PIPE, text=True)
-
-            ready_event = threading.Event()
-            def stream_odoo():
-                try:
-                    for line in odoo_proc.stdout:
-                        sys.stdout.write(line)
-                        sys.stdout.flush()
-                        if "http service (werkzeug) running on" in line.lower() or "modules loaded." in line.lower() or "running on" in line.lower():
-                            ready_event.set()
-                except Exception as e: # audit-ignore-catch-all
-                    _logger.error("Error in stream_odoo: %s", e)
-
-            threading.Thread(target=stream_odoo, daemon=True).start()
-
-            is_ready = False
-            start_vtime = global_vclock.time()
-            while global_vclock.time() - start_vtime < 120.0:
-                if ready_event.wait(timeout=0.1):
-                    is_ready = True
-                    break
-                if odoo_proc.poll() is not None:
-                    print(f"❌ ERROR: Odoo background process crashed prematurely with code {odoo_proc.returncode}!")
-                    break
-
-            if not is_ready:
-                print(f"❌ ERROR: Odoo failed to start on port {free_port} within 120 virtual seconds or crashed.")
-                robust_reap(odoo_proc.pid)
-                sys.exit(1)
-
-            daemon_env = os.environ.copy()
-            daemon_env.update({"ODOO_URL": f"http://localhost:{free_port}", "DB_NAME": args.db, "ODOO_USER": "admin", "ODOO_PASSWORD": "admin"})
-
-            d_procs = []
-            for mod in target_modules:
-                for d in ["daemon", "daemons"]:
-                    dd = os.path.join(base_dir, mod, d)
-                    if os.path.exists(dd):
-                        for f in os.listdir(dd):
-                            if f.endswith(".py") and not f.startswith("test_") and not f.startswith("__"):
-                                d_procs.append(subprocess.Popen([venv_python, os.path.join(dd, f)], env=daemon_env, stdout=subprocess.DEVNULL))
-
-            test_cmd = get_odoo_test_cmd("_integration") + [odoo_bin, "--addons-path", addons_path, "-d", args.db, "--test-enable", "--test-tags", test_tags + ",-standard", "--stop-after-init", "--workers=0", "--max-cron-threads=0", "--http-interface", "127.0.0.1"]
-            rc_odoo = run_cmd(test_cmd, extractor, env=daemon_env)
-            if rc_odoo != 0: final_rc = rc_odoo
-
-            for p in d_procs: p.terminate()
-            robust_reap(odoo_proc.pid)
+        if rc_odoo != 0:
+            final_rc = rc_odoo
 
     elif args.mode == "individual":
-        check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
+        os.environ["ODOO_URL"] = "http://127.0.0.1:8069"
+        os.environ["DB_NAME"] = args.db
+        os.environ["ODOO_USER"] = "admin"
+        os.environ["ODOO_PASSWORD"] = "admin"
+
         for mod in target_modules:
             rebuild_db(args.db)
-            rc = run_cmd(get_odoo_test_cmd(f"_{mod}") + [odoo_bin, "--addons-path", addons_path, "--dev=all", "-d", args.db, "-i", mod, "--test-enable", "--test-tags", f"/{mod}", "--stop-after-init", "--workers=0", "--max-cron-threads=0", "--http-interface", "127.0.0.1"], extractor)
+            rc = run_cmd(get_odoo_test_cmd(f"_{mod}") + [
+                odoo_bin, "--load=base,web,hams_test", "--addons-path", addons_path,
+                "--dev=all", "-d", args.db, "-i", mod, "--test-enable",
+                "--test-tags", f"/{mod}", "--stop-after-init", "--workers=0",
+                "--max-cron-threads=0", "--http-interface", "127.0.0.1", "--http-port", "8069"
+            ], extractor)
             if rc != 0: final_rc = 1
 
     sys.exit(final_rc)

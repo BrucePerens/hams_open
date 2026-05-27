@@ -36,7 +36,7 @@ class MyAdvancedTest(RealTransactionCase):
 
 ---
 
-## 2. Integration Daemon Testing (`HamsIntegrationCase`)
+## 2. Integration Daemon Testing (`HamsTransactionCase`)
 
 This facility provides an automated execution wrapper to spin up external Python daemons (e.g., Pager Duty Spoolers, Redis Cache Managers) and run real HTTP/XML-RPC requests against them during the test phase.
 
@@ -111,7 +111,7 @@ To prevent CSS bloat, the AST Burn List linter (`check_burn_list.py`) automatica
 ### Core Architecture
 The module implements three primary testing facilities:
 1. **Real Transaction Testing (`RealTransactionCase`)**: Bypasses Odoo's standard `TestCursor` to provide a real, committable database connection. It uses ORM instrumentation ([@ANCHOR: orm_instrumentation]) and mathematical table snapshots ([@ANCHOR: leak_snapshotting]) to ensure database integrity.
-2. **Integration Daemon Testing (`HamsIntegrationCase`)**: Provides a lifecycle management wrapper for external Python daemons, including automated health polling. ([@ANCHOR: integration_daemon_testing]) Verified by [@ANCHOR: test_integration_daemon_testing]
+2. **Integration Daemon Testing (`HamsTransactionCase`)**: Provides a lifecycle management wrapper for external Python daemons, including automated health polling. ([@ANCHOR: integration_daemon_testing]) Verified by [@ANCHOR: test_integration_daemon_testing]
 3. **UI Tour Governance**: Defines standards for JavaScript-based UI tours and provides `TourUtils` for robust frontend testing.
 
 It also includes a **Noisy Table Management** interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]) to allow administrators to whitelist tables from leak detection.

@@ -1,8 +1,8 @@
 from odoo.tests import tagged
-from odoo.addons.hams_test.tests.common import HamsHttpCase
+from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
 
 @tagged('post_install', '-at_install', 'ui', 'integration')
-class TestHelpdeskTours(HamsHttpCase):
+class TestHelpdeskTours(RealTransactionCase):
 
     def test_01_helpdesk_operator_tour(self):
         """Simulates an operator logging in, viewing their shift, and executing a handoff."""
@@ -27,5 +27,6 @@ class TestHelpdeskTours(HamsHttpCase):
             'name': 'Tour Test Ticket',
             'partner_id': portal_user.partner_id.id,
         })
+        self.env.cr.commit()
 
-        self.start_tour("/?debug=1", "helpdesk_portal_tour", login="portal_test")
+        self.start_tour("/my/tickets?debug=1", "helpdesk_portal_tour", login="portal_test")
