@@ -122,8 +122,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                                 records.unlink()
                         # If we reach here, the unlink was successful
                         self._tracked_records[model_name] = set()
-                    except (psycopg2.IntegrityError, odoo.exceptions.AccessError, odoo.exceptions.UserError, odoo.exceptions.RedirectWarning, odoo.exceptions.ValidationError) as e:
-                        # These are expected if records are still referenced or have access restrictions
+                    except (psycopg2.IntegrityError, psycopg2.OperationalError, odoo.exceptions.AccessError, odoo.exceptions.UserError, odoo.exceptions.RedirectWarning, odoo.exceptions.ValidationError) as e:
+                        # These are expected if records are still referenced, locked by concurrent web workers, or have access restrictions
                         pending_deletes = True
                         if attempt == 4:
                             _logger.info(
@@ -175,6 +175,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 "database_index_stat",
                 "ir_attachment",
                 "ir_model_data",
+                "website_visitor",
+                "website_track",
             }
 
         for t in self._tables:

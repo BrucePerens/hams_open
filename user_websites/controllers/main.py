@@ -242,15 +242,16 @@ class UserWebsitesController(http.Controller):
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     def documentation(self, **kwargs):
         # Tested by [@ANCHOR: user_websites:test_documentation_route]
-        utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
         try:
+            # We explicitly use request.env here instead of env_svc to ensure
+            # the current user has the correct portal/public access rights to view the article,
+            # avoiding artificial AccessErrors from the backend service account.
             if 'manual.article' in request.env:
-                article = env_svc['manual.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
+                article = request.env['manual.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
                 if article and hasattr(article, 'website_url') and article.website_url:
                     return request.redirect(article.website_url)
             if 'knowledge.article' in request.env:
-                article = env_svc['knowledge.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
+                article = request.env['knowledge.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
                 if article and hasattr(article, 'website_url') and article.website_url:
                     return request.redirect(article.website_url)
         except Exception as e: # audit-ignore-catch-all

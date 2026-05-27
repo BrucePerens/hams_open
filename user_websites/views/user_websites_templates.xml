@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <template id="user_navbar" name="User Websites Navbar"> <!-- audit-ignore-view: Tested by [@ANCHOR: UX_COMMUNITY_DIRECTORY] -->
+    <template id="user_navbar" name="User Websites Navbar">
         <nav t-if="resolved_slug" class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar">
             <div class="container">
                 <a class="navbar-brand" t-attf-href="/#{resolved_slug}/home">
@@ -25,20 +25,15 @@
                             <a class="nav-link" t-attf-href="/#{resolved_slug}/blog">Blog</a>
                         </li>
                     </ul>
-                    <!-- Downstream Dropzone for Navbar Actions -->
                     <div id="user_websites_dropzone_navbar_actions">
-                        <!-- [@ANCHOR: dropzone_navbar_actions] -->
-                        <!-- Verified by [@ANCHOR: test_dropzone_navbar_actions] -->
-                    </div>
+                        </div>
                 </div>
             </div>
         </nav>
     </template>
 
-    <template id="layout_inherit_user_navbar" inherit_id="website.layout" name="User Navbar Global"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_navbar] -->
-        <!-- Verified by [@ANCHOR: test_dropzone_navbar] -->
-        <xpath expr="//head" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_navbar] -->
-            <!-- Universal Context Provider for Frontend JS Widgets & Layout -->
+    <template id="layout_inherit_user_navbar" inherit_id="website.layout" name="User Navbar Global">
+        <xpath expr="//head" position="inside">
             <t t-set="profile_user" t-value="profile_user or (main_object.owner_user_id if main_object and 'owner_user_id' in main_object else False)"/>
             <t t-set="profile_group" t-value="profile_group or (main_object.user_websites_group_id if main_object and 'user_websites_group_id' in main_object else False)"/>
             <t t-set="resolved_slug" t-value="resolved_slug or (profile_user.website_slug if profile_user else (profile_group.website_slug if profile_group else False))"/>
@@ -49,24 +44,20 @@
                 <meta name="user_websites_slug" t-att-content="resolved_slug"/>
             </t>
         </xpath>
-        <!-- [@ANCHOR: xpath_rendering_navbar] -->
-        <!-- Verified by [@ANCHOR: test_xpath_rendering_navbar] -->
-        <xpath expr="//header" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar] -->
+
+        <xpath expr="//header" position="after">
             <div id="user_websites_dropzone_navbar">
-                <!-- [@ANCHOR: dropzone_navbar] -->
-            </div>
+                </div>
             <t t-if="resolved_slug">
                 <t t-call="user_websites.user_navbar"/>
             </t>
         </xpath>
     </template>
 
-    <template id="portal_my_home_appeal" inherit_id="portal.portal_my_home" name="Portal My Home Appeal"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_templates] -->
-        <!-- Verified by [@ANCHOR: test_dropzone_templates] -->
-        <xpath expr="//div[hasclass('o_portal_my_home')]" position="before"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_templates] -->
+    <template id="portal_my_home_appeal" inherit_id="portal.portal_my_home" name="Portal My Home Appeal">
+        <xpath expr="//div[hasclass('o_portal_my_home')]" position="before">
             <div id="user_websites_dropzone_templates">
-                <!-- [@ANCHOR: dropzone_templates] -->
-            </div>
+                </div>
             <div class="container mt-4">
                 <t t-if="user_id.is_suspended_from_websites">
                     <div class="alert alert-danger shadow-sm" role="alert">
@@ -94,7 +85,7 @@
             </div>
         </xpath>
 
-        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_templates] -->
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
             <div class="o_portal_doc_spinner col-12 col-md-6 col-lg-4 mb-4">
                 <a href="/my/privacy" class="text-decoration-none d-flex flex-column h-100 p-3 border rounded shadow-sm bg-white">
                     <div class="d-flex align-items-center mb-2">
@@ -107,7 +98,7 @@
         </xpath>
     </template>
 
-    <template id="portal_my_privacy" name="My Privacy &amp; Data"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_gdpr_privacy] -->
+    <template id="portal_my_privacy" name="My Privacy &amp; Data">
         <t t-call="portal.portal_layout">
             <t t-set="breadcrumbs_searchbar" t-value="True"/>
             <t t-call="portal.portal_searchbar">
@@ -145,27 +136,19 @@
         </t>
     </template>
 
-    <!-- Verified by [@ANCHOR: test_tour_create_site] -->
-    <template id="template_default_home" name="User Website Home Master Layout"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_create_site] -->
+    <template id="template_default_home" name="User Website Home Master Layout">
         <t t-call="website.layout">
-            <!-- Global User Website Header / Monetization Dropzone -->
             <div id="user_websites_dropzone_home_header">
-                <!-- [@ANCHOR: dropzone_home_header] -->
-                <!-- Verified by [@ANCHOR: test_dropzone_home_header] -->
-            </div>
+                </div>
 
-            <!-- Yields to the individual user's page content -->
             <t t-out="0"/>
 
-            <!-- Global User Website Footer / Monetization Dropzone -->
             <div id="user_websites_dropzone_home_footer">
-                <!-- [@ANCHOR: dropzone_home_footer] -->
-                <!-- Verified by [@ANCHOR: test_dropzone_home_footer] -->
-            </div>
+                </div>
         </t>
     </template>
 
-    <template id="blog_index" name="User Blog Index"> <!-- audit-ignore-view: Tested by [@ANCHOR: UX_COMMUNITY_DIRECTORY] -->
+    <template id="blog_index" name="User Blog Index">
         <t t-call="website.layout">
             <div id="user_websites_dropzone_blog_header"></div>
             <div class="container mt-5">
@@ -193,7 +176,7 @@
         </t>
     </template>
 
-    <template id="community_directory" name="Community Directory"> <!-- audit-ignore-view: Tested by [@ANCHOR: UX_COMMUNITY_DIRECTORY] -->
+    <template id="community_directory" name="Community Directory">
         <t t-call="website.layout">
             <div class="container mt-5">
                 <div class="row">
@@ -214,11 +197,8 @@
                                     <a t-attf-href="/#{user.website_slug}/home" class="btn btn-outline-primary w-100 mt-2">
                                         Visit Website
                                     </a>
-                                    <!-- Downstream Dropzone for User Cards -->
                                     <div id="user_websites_dropzone_directory_card" class="mt-3">
-                                        <!-- [@ANCHOR: dropzone_directory_card] -->
-                                        <!-- Verified by [@ANCHOR: test_dropzone_directory_card] -->
-                                    </div>
+                                        </div>
                                 </div>
                             </div>
                         </div>
@@ -234,7 +214,7 @@
         </t>
     </template>
 
-    <template id="report_violation_modal" name="Report Violation Modal"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_violation_report] -->
+    <template id="report_violation_modal" name="Report Violation Modal">
         <div class="modal fade" id="reportViolationModal" tabindex="-1" role="dialog" aria-labelledby="reportViolationModalLabel" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
@@ -275,7 +255,7 @@
         </div>
     </template>
 
-    <template id="report_violation_snippet" name="Report Violation Button"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_violation_report] -->
+    <template id="report_violation_snippet" name="Report Violation Button">
         <div class="text-center user-websites-report-container d-inline">
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reportViolationModal" t-att-data-url="request.httprequest.url">
                 <i class="fa fa-flag" aria-hidden="true"/> Report Violation
@@ -283,7 +263,7 @@
         </div>
     </template>
 
-    <template id="unsubscribe_success" name="Unsubscription Success"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_frontend_misc] -->
+    <template id="unsubscribe_success" name="Unsubscription Success">
         <t t-call="website.layout">
             <div class="container mt-5 pt-5 text-center">
                 <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
@@ -301,7 +281,7 @@
         </t>
     </template>
 
-    <template id="documentation_page" name="User Websites Documentation"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_frontend_misc] -->
+    <template id="documentation_page" name="User Websites Documentation">
         <t t-call="website.layout">
             <div class="container mt-5 mb-5 shadow-sm p-5 bg-white rounded">
                 <div class="row">
@@ -316,8 +296,7 @@
         </t>
     </template>
 
-    <!-- Verified by [@ANCHOR: test_tour_create_site] -->
-    <template id="placeholder_page" name="Website Placeholder"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_create_site] -->
+    <template id="placeholder_page" name="Website Placeholder">
         <t t-call="website.layout">
             <div class="container mt-5 mb-5 text-center">
                 <t t-set="entity_name" t-value="profile_user.name if profile_user else profile_group.name"/>

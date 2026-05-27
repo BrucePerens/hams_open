@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="view_content_violation_report_kanban" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+    <record id="view_content_violation_report_kanban" model="ir.ui.view">
         <field name="name">content.violation.report.kanban</field>
         <field name="model">content.violation.report</field>
         <field name="arch" type="xml">
@@ -44,7 +44,7 @@
         </field>
     </record>
 
-    <record id="view_content_violation_report_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+    <record id="view_content_violation_report_list" model="ir.ui.view">
         <field name="name">content.violation.report.list</field>
         <field name="model">content.violation.report</field>
         <field name="arch" type="xml">
@@ -62,7 +62,7 @@
         </field>
     </record>
 
-    <record id="view_content_violation_report_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+    <record id="view_content_violation_report_form" model="ir.ui.view">
         <field name="name">content.violation.report.form</field>
         <field name="model">content.violation.report</field>
         <field name="arch" type="xml">
