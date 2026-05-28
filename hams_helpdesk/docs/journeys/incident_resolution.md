@@ -11,4 +11,3 @@ This journey describes how an SRE operator resolves a critical system incident u
 5.  **Resolution**: The operator implements a fix, updates the ticket status to "Resolved".
 6.  **Closure**: After verifying the fix, the ticket is moved to "Closed".
 
-*Verified by [@ANCHOR: test_helpdesk_operator_tour]*
