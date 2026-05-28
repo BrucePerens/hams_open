@@ -4928,3 +4928,409 @@ Stack (most recent call last):
 2026-05-28 19:42:39,212 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours: Starting TestUserWebsitesUITours.test_05_create_site_tour ... 
 2026-05-28 19:42:39,373 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:sitetour from n/a 
 2026-05-28 19:42:39,378 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:42:40,248 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:40] "GET /sitetour/home HTTP/1.1" 200 - 128 0.043 0.828
+2026-05-28 19:42:40,250 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: step_delay is only suitable for local testing 
+2026-05-28 19:42:40,363 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Chrome pid: 34924 
+2026-05-28 19:42:40,363 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Chrome headless temporary user profile dir: /var/tmp/tmpytib2rtm_chrome_odoo 
+2026-05-28 19:42:40,363 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Issuing json command http://127.0.0.1:33555/json/version 
+2026-05-28 19:42:40,364 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:33555', path='/json/version', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:40,383 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Browser version: Chrome/148.0.7778.215 
+2026-05-28 19:42:40,383 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Issuing json command http://127.0.0.1:33555/json 
+2026-05-28 19:42:40,383 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:33555', path='/json', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:40,391 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Websocket url found: ws://127.0.0.1:33555/devtools/page/868B58BD5CF4B7FCF064B2D98F9F60ED 
+2026-05-28 19:42:40,397 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Enable chrome headless console log notification 
+2026-05-28 19:42:40,399 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Chrome headless enable page notifications 
+2026-05-28 19:42:40,552 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:sitetour from n/a 
+2026-05-28 19:42:40,554 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Setting session cookie in browser 
+2026-05-28 19:42:40,554 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Open "http://127.0.0.1:8069/sitetour/home?debug=1" in browser 
+2026-05-28 19:42:40,554 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Navigating to: "http://127.0.0.1:8069/sitetour/home?debug=1" 
+2026-05-28 19:42:41,413 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:41] "GET /sitetour/home?debug=1 HTTP/1.1" 200 - 98 0.039 0.817
+2026-05-28 19:42:41,415 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Navigation result: {'frameId': '868B58BD5CF4B7FCF064B2D98F9F60ED', 'loaderId': '24870FC3FDEF78B48FADA61C97284E49', 'isDownload': False} 
+2026-05-28 19:42:41,415 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Evaluate ready code "odoo.isTourReady('create_site_tour')" 
+2026-05-28 19:42:41,428 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/static/src/libs/fontawesome/fonts/fontawesome-webfont.woff2?v=4.7.0 HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:41,431 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /website/static/src/js/content/cookie_watcher.js HTTP/1.1" 200 - 0 0.000 0.004
+2026-05-28 19:42:41,452 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/5a20860/web.assets_frontend_minimal.min.js, copying from /web/assets/5a20860/web.assets_frontend_minimal.min.js 
+2026-05-28 19:42:41,458 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/assets/1/5a20860/web.assets_frontend_minimal.min.js HTTP/1.1" 200 - 17 0.005 0.012
+2026-05-28 19:42:41,489 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/b1b0710/web.__assets_tests_call__.min.js, copying from /web/assets/b1b0710/web.__assets_tests_call__.min.js 
+2026-05-28 19:42:41,497 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/assets/1/b1b0710/web.__assets_tests_call__.min.js HTTP/1.1" 200 - 17 0.005 0.029
+2026-05-28 19:42:41,544 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/d7ad05a/web.assets_frontend.min.css, copying from /web/assets/d7ad05a/web.assets_frontend.min.css 
+2026-05-28 19:42:41,576 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/assets/1/d7ad05a/web.assets_frontend.min.css HTTP/1.1" 200 - 26 0.028 0.122
+2026-05-28 19:42:41,585 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i&display=swap 
+2026-05-28 19:42:41,585 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter+Tight:300,300i,400,400i,500,500i,700,700i&display=swap 
+2026-05-28 19:42:41,624 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/static/img/odoo_logo_tiny.png HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:41,626 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/static/lib/odoo_ui_icons/fonts/odoo_ui_icons.woff2 HTTP/1.1" 200 - 0 0.000 0.005
+2026-05-28 19:42:41,635 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/image/website/1/logo/My%20Website?unique=8726dc7 HTTP/1.1" 200 - 4 0.005 0.008
+2026-05-28 19:42:41,664 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/image/website/1/favicon?unique=8726dc7 HTTP/1.1" 200 - 6 0.008 0.016
+2026-05-28 19:42:41,670 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:07] "GET /web/image/res.users/310/avatar_128?unique=1779997359 HTTP/1.1" 200 - 22 0.024 0.024
+2026-05-28 19:42:41,717 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js, copying from /web/assets/c4cf9f8/web.assets_frontend_lazy.min.js 
+2026-05-28 19:42:41,729 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:08] "GET /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js HTTP/1.1" 200 - 27 0.022 0.069
+2026-05-28 19:42:41,980 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:08] "GET /website/translations?hash=&lang=en_US HTTP/1.1" 200 - 1 0.000 0.004
+2026-05-28 19:42:41,993 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: [WHITELISTED INFO] Owl is running in 'dev' mode. 
+2026-05-28 19:42:42,005 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:08] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:42,009 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Evaluate test code "odoo.startTour('create_site_tour', {"stepDelay": 100, "keepWatchBrowser": false, "debug": false, "startUrl": "/sitetour/home?debug=1", "delayToCheckUndeterminisms": 0})" 
+2026-05-28 19:42:42,818 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:09] "GET /sitetour/home HTTP/1.1" 200 - 97 0.028 0.775
+2026-05-28 19:42:42,896 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:09] "GET /website/translations?hash=f49fcd11bdd910c3a2833f3c519263de90bb3a15&lang=en_US HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:42,897 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: [1/3] Tour create_site_tour → Step Wait for: Wait for Create Site Button (trigger: button.o_tour_create_site_btn) 
+2026-05-28 19:42:42,906 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:09] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:42,950 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: [2/3] Tour create_site_tour → Step Click Create using namespaced fallback class (trigger: button.o_tour_create_site_btn) 
+2026-05-28 19:42:43,046 29434 INFO hams_test odoo.tests.common: Simulating signal changes during tests 
+2026-05-28 19:42:43,046 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:09] "POST /sitetour/create_site HTTP/1.1" 303 - 66 0.014 0.020
+2026-05-28 19:42:43,834 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /sitetour/home HTTP/1.1" 200 - 106 0.031 0.755
+2026-05-28 19:42:43,884 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: [3/3] Tour create_site_tour → Step Verify site created (targeting invisible dropzone with native pseudo-selector) (trigger: #user_websites_dropzone_home_header:not(:visible)) 
+2026-05-28 19:42:43,887 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /website/translations?hash=f49fcd11bdd910c3a2833f3c519263de90bb3a15&lang=en_US HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:43,892 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:43,935 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: tour succeeded 
+2026-05-28 19:42:43,935 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: 
+
+╔═════════════════════════════════╗
+║ TOUR create_site_tour SUCCEEDED ║
+╚═════════════════════════════════╝
+ 
+2026-05-28 19:42:43,954 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour.browser: heap 5984472 (allocated 7864320) 
+2026-05-28 19:42:43,955 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Closing chrome headless with pid 34924 
+2026-05-28 19:42:43,956 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Closing websocket connection 
+2026-05-28 19:42:43,956 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Terminating chrome headless with pid 34924 
+2026-05-28 19:42:44,018 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Chrome Log in: /var/tmp/odoo_tests/hams_test/chrome_logs/chrome_log_20260528_194244_018378_test_05_create_site_tour.txt 
+2026-05-28 19:42:44,018 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_05_create_site_tour: Removing chrome user profile "/var/tmp/tmpytib2rtm_chrome_odoo" 
+2026-05-28 19:42:44,114 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 1/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."website_page" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:44,702 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 2/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."website_page" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:45,279 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 3/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."website_page" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:45,840 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 4/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."website_page" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:46,381 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 5/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."website_page" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:46,979 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours: Starting TestUserWebsitesUITours.test_06_create_blog_tour ... 
+2026-05-28 19:42:47,120 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:blogtour from n/a 
+2026-05-28 19:42:47,124 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:42:47,340 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 312, model: res.partner 
+2026-05-28 19:42:47,772 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:47] "GET /blogtour/blog HTTP/1.1" 200 - 133 0.034 0.616
+2026-05-28 19:42:47,884 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Chrome pid: 35113 
+2026-05-28 19:42:47,884 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Chrome headless temporary user profile dir: /var/tmp/tmp2pizg0ib_chrome_odoo 
+2026-05-28 19:42:47,884 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Issuing json command http://127.0.0.1:35335/json/version 
+2026-05-28 19:42:47,885 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:35335', path='/json/version', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:47,905 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Browser version: Chrome/148.0.7778.215 
+2026-05-28 19:42:47,905 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Issuing json command http://127.0.0.1:35335/json 
+2026-05-28 19:42:47,906 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:35335', path='/json', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:47,911 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Websocket url found: ws://127.0.0.1:35335/devtools/page/453A05CD4173D75C5DE0C7B3DBB277E8 
+2026-05-28 19:42:47,916 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Enable chrome headless console log notification 
+2026-05-28 19:42:47,918 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Chrome headless enable page notifications 
+2026-05-28 19:42:48,069 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:blogtour from n/a 
+2026-05-28 19:42:48,070 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Setting session cookie in browser 
+2026-05-28 19:42:48,071 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Open "http://127.0.0.1:8069/blogtour/blog?debug=1" in browser 
+2026-05-28 19:42:48,071 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Navigating to: "http://127.0.0.1:8069/blogtour/blog?debug=1" 
+2026-05-28 19:42:48,277 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 312, model: res.partner 
+2026-05-28 19:42:48,691 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:48] "GET /blogtour/blog?debug=1 HTTP/1.1" 200 - 102 0.025 0.590
+2026-05-28 19:42:48,693 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Navigation result: {'frameId': '453A05CD4173D75C5DE0C7B3DBB277E8', 'loaderId': '7E1A21681B3692F264C8D5ED6D64BC41', 'isDownload': False} 
+2026-05-28 19:42:48,694 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Evaluate ready code "odoo.isTourReady('create_blog_tour')" 
+2026-05-28 19:42:48,707 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /website/static/src/js/content/cookie_watcher.js HTTP/1.1" 200 - 0 0.000 0.004
+2026-05-28 19:42:48,708 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/static/src/libs/fontawesome/fonts/fontawesome-webfont.woff2?v=4.7.0 HTTP/1.1" 200 - 0 0.000 0.006
+2026-05-28 19:42:48,726 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/5a20860/web.assets_frontend_minimal.min.js, copying from /web/assets/5a20860/web.assets_frontend_minimal.min.js 
+2026-05-28 19:42:48,730 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/assets/1/5a20860/web.assets_frontend_minimal.min.js HTTP/1.1" 200 - 17 0.005 0.010
+2026-05-28 19:42:48,751 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/b1b0710/web.__assets_tests_call__.min.js, copying from /web/assets/b1b0710/web.__assets_tests_call__.min.js 
+2026-05-28 19:42:48,757 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/assets/1/b1b0710/web.__assets_tests_call__.min.js HTTP/1.1" 200 - 17 0.004 0.019
+2026-05-28 19:42:48,796 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/d7ad05a/web.assets_frontend.min.css, copying from /web/assets/d7ad05a/web.assets_frontend.min.css 
+2026-05-28 19:42:48,819 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/assets/1/d7ad05a/web.assets_frontend.min.css HTTP/1.1" 200 - 26 0.022 0.095
+2026-05-28 19:42:48,826 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i&display=swap 
+2026-05-28 19:42:48,826 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter+Tight:300,300i,400,400i,500,500i,700,700i&display=swap 
+2026-05-28 19:42:48,866 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/static/img/odoo_logo_tiny.png HTTP/1.1" 200 - 0 0.000 0.005
+2026-05-28 19:42:48,870 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/image/website/1/logo/My%20Website?unique=8726dc7 HTTP/1.1" 200 - 4 0.004 0.005
+2026-05-28 19:42:48,871 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/static/lib/odoo_ui_icons/fonts/odoo_ui_icons.woff2 HTTP/1.1" 200 - 0 0.000 0.008
+2026-05-28 19:42:48,896 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/image/res.users/312/avatar_128?unique=1779997367 HTTP/1.1" 200 - 22 0.014 0.021
+2026-05-28 19:42:48,902 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/image/website/1/favicon?unique=8726dc7 HTTP/1.1" 200 - 6 0.006 0.009
+2026-05-28 19:42:48,953 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js, copying from /web/assets/c4cf9f8/web.assets_frontend_lazy.min.js 
+2026-05-28 19:42:48,961 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:10] "GET /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js HTTP/1.1" 200 - 27 0.012 0.068
+2026-05-28 19:42:49,167 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:11] "GET /website/translations?hash=&lang=en_US HTTP/1.1" 200 - 1 0.000 0.004
+2026-05-28 19:42:49,179 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: [WHITELISTED INFO] Owl is running in 'dev' mode. 
+2026-05-28 19:42:49,190 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:11] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:49,195 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Evaluate test code "odoo.startTour('create_blog_tour', {"stepDelay": 0, "keepWatchBrowser": false, "debug": false, "startUrl": "/blogtour/blog?debug=1", "delayToCheckUndeterminisms": 0})" 
+2026-05-28 19:42:49,442 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 312, model: res.partner 
+2026-05-28 19:42:49,952 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:11] "GET /blogtour/blog HTTP/1.1" 200 - 101 0.032 0.720
+2026-05-28 19:42:50,021 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:12] "GET /website/translations?hash=f49fcd11bdd910c3a2833f3c519263de90bb3a15&lang=en_US HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:50,022 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: [1/3] Tour create_blog_tour → Step Wait for: Wait for Create Blog Button (trigger: button.o_tour_create_site_btn) 
+2026-05-28 19:42:50,031 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:12] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:50,075 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: [2/3] Tour create_blog_tour → Step Click Create using namespaced fallback class (trigger: button.o_tour_create_site_btn) 
+2026-05-28 19:42:50,153 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:12] "POST /blogtour/create_blog HTTP/1.1" 303 - 34 0.007 0.013
+2026-05-28 19:42:50,386 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 312, model: res.partner 
+2026-05-28 19:42:50,912 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:12] "GET /blogtour/blog HTTP/1.1" 200 - 101 0.032 0.725
+2026-05-28 19:42:50,977 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: [3/3] Tour create_blog_tour → Step Verify blog created by targeting the community namespaced dropzone (trigger: #user_websites_dropzone_blog_header:not(:visible)) 
+2026-05-28 19:42:50,981 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:12] "GET /website/translations?hash=f49fcd11bdd910c3a2833f3c519263de90bb3a15&lang=en_US HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:50,986 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:12] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:51,028 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: tour succeeded 
+2026-05-28 19:42:51,029 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: 
+
+╔═════════════════════════════════╗
+║ TOUR create_blog_tour SUCCEEDED ║
+╚═════════════════════════════════╝
+ 
+2026-05-28 19:42:51,047 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour.browser: heap 5984544 (allocated 7602176) 
+2026-05-28 19:42:51,047 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Closing chrome headless with pid 35113 
+2026-05-28 19:42:51,048 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Closing websocket connection 
+2026-05-28 19:42:51,048 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Terminating chrome headless with pid 35113 
+2026-05-28 19:42:51,146 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Chrome Log in: /var/tmp/odoo_tests/hams_test/chrome_logs/chrome_log_20260528_194251_146567_test_06_create_blog_tour.txt 
+2026-05-28 19:42:51,146 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_06_create_blog_tour: Removing chrome user profile "/var/tmp/tmp2pizg0ib_chrome_odoo" 
+2026-05-28 19:42:51,222 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 1/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."blog_blog" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:51,777 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 2/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."blog_blog" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:52,331 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 3/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."blog_blog" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:52,875 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 4/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."blog_blog" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:53,417 29434 WARNING hams_test odoo.addons.user_websites.tests.test_ui_tours: Resilient cleanup encountered exception (Attempt 5/5): could not serialize access due to concurrent update
+CONTEXT:  SQL statement "UPDATE ONLY "public"."blog_blog" SET "write_uid" = NULL WHERE $1 OPERATOR(pg_catalog.=) "write_uid""
+ 
+2026-05-28 19:42:53,919 29434 WARNING hams_test py.warnings: /usr/lib/python3/dist-packages/odoo/addons/user_websites/models/blog_blog.py:79: DeprecationWarning: check_access_rule() is deprecated since 18.0; use check_access() instead.
+  File "/usr/bin/odoo", line 6, in <module>
+    odoo.cli.main()
+  File "/usr/lib/python3/dist-packages/odoo/cli/command.py", line 133, in main
+    command().run(args)
+  File "/usr/lib/python3/dist-packages/odoo/cli/server.py", line 127, in run
+    main(args)
+  File "/usr/lib/python3/dist-packages/odoo/cli/server.py", line 118, in main
+    rc = server.start(preload=config['db_name'], stop=stop)
+  File "/usr/lib/python3/dist-packages/odoo/service/server.py", line 1630, in start
+    rc = server.run(preload, stop)
+  File "/usr/lib/python3/dist-packages/odoo/service/server.py", line 702, in run
+    rc = preload_registries(preload)
+  File "/usr/lib/python3/dist-packages/odoo/service/server.py", line 1560, in preload_registries
+    result = loader.run_suite(post_install_suite, global_report=registry._assertion_report)
+  File "/usr/lib/python3/dist-packages/odoo/tests/loader.py", line 116, in run_suite
+    suite(results)
+  File "/usr/lib/python3.13/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+  File "/usr/lib/python3/dist-packages/odoo/tests/suite.py", line 76, in run
+    test(result)
+  File "/usr/lib/python3.13/unittest/case.py", line 707, in __call__
+    return self.run(*args, **kwds)
+  File "/usr/lib/python3/dist-packages/odoo/tests/case.py", line 218, in run
+    self._callTearDown()
+  File "/usr/lib/python3/dist-packages/odoo/tests/case.py", line 187, in _callTearDown
+    self.tearDown()
+  File "/usr/lib/python3/dist-packages/odoo/addons/user_websites/tests/test_ui_tours.py", line 89, in tearDown
+    super().tearDown()
+  File "/home/bruce/workspace/hams_community/hams_test/tests/real_transaction.py", line 134, in tearDown
+    records.unlink()
+  File "/usr/lib/python3/dist-packages/odoo/addons/user_websites/models/blog_blog.py", line 110, in unlink
+    self.check_access_rule("unlink")
+  File "/usr/lib/python3/dist-packages/odoo/addons/user_websites/models/blog_blog.py", line 79, in check_access_rule
+    return super(BlogBlog, self).check_access_rule(operation)
+ 
+2026-05-28 19:42:54,006 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours: Starting TestUserWebsitesUITours.test_07_community_directory_tour ... 
+2026-05-28 19:42:54,119 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:42:54,800 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:54] "GET /community HTTP/1.1" 200 - 103 0.035 0.648
+2026-05-28 19:42:54,912 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Chrome pid: 35304 
+2026-05-28 19:42:54,912 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Chrome headless temporary user profile dir: /var/tmp/tmpmkeg88_j_chrome_odoo 
+2026-05-28 19:42:54,912 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Issuing json command http://127.0.0.1:43673/json/version 
+2026-05-28 19:42:54,913 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:43673', path='/json/version', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:54,925 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Browser version: Chrome/148.0.7778.215 
+2026-05-28 19:42:54,925 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Issuing json command http://127.0.0.1:43673/json 
+2026-05-28 19:42:54,926 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:43673', path='/json', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:54,933 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Websocket url found: ws://127.0.0.1:43673/devtools/page/2B472B3CBC02C89634258A4CE1F2CBE3 
+2026-05-28 19:42:54,935 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Enable chrome headless console log notification 
+2026-05-28 19:42:54,937 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Chrome headless enable page notifications 
+2026-05-28 19:42:55,078 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Setting session cookie in browser 
+2026-05-28 19:42:55,079 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Open "http://127.0.0.1:8069/community?debug=1" in browser 
+2026-05-28 19:42:55,079 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Navigating to: "http://127.0.0.1:8069/community?debug=1" 
+2026-05-28 19:42:55,727 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:55] "GET /community?debug=1 HTTP/1.1" 200 - 79 0.021 0.625
+2026-05-28 19:42:55,729 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Navigation result: {'frameId': '2B472B3CBC02C89634258A4CE1F2CBE3', 'loaderId': 'F1FE1AC07C4CF896AC20C90744EF7ED5', 'isDownload': False} 
+2026-05-28 19:42:55,730 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Evaluate ready code "odoo.isTourReady('community_directory_tour')" 
+2026-05-28 19:42:55,740 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /website/static/src/js/content/cookie_watcher.js HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:55,740 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/static/src/libs/fontawesome/fonts/fontawesome-webfont.woff2?v=4.7.0 HTTP/1.1" 200 - 0 0.000 0.005
+2026-05-28 19:42:55,758 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/5a20860/web.assets_frontend_minimal.min.js, copying from /web/assets/5a20860/web.assets_frontend_minimal.min.js 
+2026-05-28 19:42:55,764 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/assets/1/5a20860/web.assets_frontend_minimal.min.js HTTP/1.1" 200 - 17 0.005 0.012
+2026-05-28 19:42:55,789 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/b1b0710/web.__assets_tests_call__.min.js, copying from /web/assets/b1b0710/web.__assets_tests_call__.min.js 
+2026-05-28 19:42:55,806 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/assets/1/b1b0710/web.__assets_tests_call__.min.js HTTP/1.1" 200 - 17 0.005 0.032
+2026-05-28 19:42:55,830 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/d7ad05a/web.assets_frontend.min.css, copying from /web/assets/d7ad05a/web.assets_frontend.min.css 
+2026-05-28 19:42:55,850 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/assets/1/d7ad05a/web.assets_frontend.min.css HTTP/1.1" 200 - 26 0.020 0.094
+2026-05-28 19:42:55,858 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i&display=swap 
+2026-05-28 19:42:55,858 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter+Tight:300,300i,400,400i,500,500i,700,700i&display=swap 
+2026-05-28 19:42:55,895 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/static/lib/odoo_ui_icons/fonts/odoo_ui_icons.woff2 HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:55,895 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/static/img/odoo_logo_tiny.png HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:55,897 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/image/website/1/logo/My%20Website?unique=8726dc7 HTTP/1.1" 200 - 4 0.002 0.004
+2026-05-28 19:42:55,916 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/image/website/1/favicon?unique=8726dc7 HTTP/1.1" 200 - 6 0.003 0.007
+2026-05-28 19:42:55,956 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js, copying from /web/assets/c4cf9f8/web.assets_frontend_lazy.min.js 
+2026-05-28 19:42:55,964 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js HTTP/1.1" 200 - 27 0.008 0.051
+2026-05-28 19:42:56,166 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /website/translations?hash=&lang=en_US HTTP/1.1" 200 - 1 0.000 0.004
+2026-05-28 19:42:56,177 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour.browser: [WHITELISTED INFO] Owl is running in 'dev' mode. 
+2026-05-28 19:42:56,189 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:13] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:56,195 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Evaluate test code "odoo.startTour('community_directory_tour', {"stepDelay": 0, "keepWatchBrowser": false, "debug": false, "startUrl": "/community?debug=1", "delayToCheckUndeterminisms": 0})" 
+2026-05-28 19:42:56,917 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:14] "GET /community HTTP/1.1" 200 - 79 0.028 0.686
+2026-05-28 19:42:56,985 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:14] "GET /website/translations?hash=f49fcd11bdd910c3a2833f3c519263de90bb3a15&lang=en_US HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:42:56,985 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour.browser: [1/2] Tour community_directory_tour → Step Wait for: Wait for Directory Header (trigger: h1) 
+2026-05-28 19:42:56,994 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:14] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.002
+2026-05-28 19:42:57,037 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour.browser: [2/2] Tour community_directory_tour → Step Check that the directory page renders (trigger: body) 
+2026-05-28 19:42:57,089 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour.browser: tour succeeded 
+2026-05-28 19:42:57,089 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour.browser: 
+
+╔═════════════════════════════════════════╗
+║ TOUR community_directory_tour SUCCEEDED ║
+╚═════════════════════════════════════════╝
+ 
+2026-05-28 19:42:57,112 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour.browser: heap 5867548 (allocated 7340032) 
+2026-05-28 19:42:57,114 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Closing chrome headless with pid 35304 
+2026-05-28 19:42:57,115 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Closing websocket connection 
+2026-05-28 19:42:57,115 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Terminating chrome headless with pid 35304 
+2026-05-28 19:42:57,219 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Chrome Log in: /var/tmp/odoo_tests/hams_test/chrome_logs/chrome_log_20260528_194257_219216_test_07_community_directory_tour.txt 
+2026-05-28 19:42:57,219 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_07_community_directory_tour: Removing chrome user profile "/var/tmp/tmpmkeg88_j_chrome_odoo" 
+2026-05-28 19:42:57,328 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours: Starting TestUserWebsitesUITours.test_08_frontend_misc_tour ... 
+2026-05-28 19:42:57,451 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:touruser from n/a 
+2026-05-28 19:42:57,456 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:42:57,487 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:57] "GET /user-websites/documentation HTTP/1.1" 303 - 20 0.004 0.029
+2026-05-28 19:42:57,704 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 314, model: knowledge.article 
+2026-05-28 19:42:58,433 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:58] "GET /manual/21-user-websites-documentation HTTP/1.1" 200 - 112 0.031 0.914
+2026-05-28 19:42:58,549 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Chrome pid: 35491 
+2026-05-28 19:42:58,549 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Chrome headless temporary user profile dir: /var/tmp/tmpanb5yvq1_chrome_odoo 
+2026-05-28 19:42:58,549 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Issuing json command http://127.0.0.1:37423/json/version 
+2026-05-28 19:42:58,550 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:37423', path='/json/version', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:58,580 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Browser version: Chrome/148.0.7778.215 
+2026-05-28 19:42:58,581 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Issuing json command http://127.0.0.1:37423/json 
+2026-05-28 19:42:58,581 29434 INFO hams_test odoo.tests.common.requests: request SplitResult(scheme='http', netloc='127.0.0.1:37423', path='/json', query='', fragment='') with timeout 3 increased to 10s during tests 
+2026-05-28 19:42:58,587 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Websocket url found: ws://127.0.0.1:37423/devtools/page/28E26E55C467EA2FAFA88A51C267D1B8 
+2026-05-28 19:42:58,592 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Enable chrome headless console log notification 
+2026-05-28 19:42:58,594 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Chrome headless enable page notifications 
+2026-05-28 19:42:58,742 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:touruser from n/a 
+2026-05-28 19:42:58,744 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Setting session cookie in browser 
+2026-05-28 19:42:58,744 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Open "http://127.0.0.1:8069/user-websites/documentation?debug=1" in browser 
+2026-05-28 19:42:58,745 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Navigating to: "http://127.0.0.1:8069/user-websites/documentation?debug=1" 
+2026-05-28 19:42:58,761 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:58] "GET /user-websites/documentation?debug=1 HTTP/1.1" 303 - 7 0.003 0.009
+2026-05-28 19:42:59,052 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 314, model: knowledge.article 
+2026-05-28 19:42:59,852 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:42:59] "GET /manual/21-user-websites-documentation HTTP/1.1" 200 - 99 0.036 1.053
+2026-05-28 19:42:59,854 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Navigation result: {'frameId': '28E26E55C467EA2FAFA88A51C267D1B8', 'loaderId': '808E5CBC7820BDB25CB3A9F6F40F43FF', 'isDownload': False} 
+2026-05-28 19:42:59,855 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Evaluate ready code "odoo.isTourReady('frontend_misc_tour')" 
+2026-05-28 19:42:59,869 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/static/src/libs/fontawesome/fonts/fontawesome-webfont.woff2?v=4.7.0 HTTP/1.1" 200 - 0 0.000 0.005
+2026-05-28 19:42:59,869 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /website/static/src/js/content/cookie_watcher.js HTTP/1.1" 200 - 0 0.000 0.004
+2026-05-28 19:42:59,889 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/5a20860/web.assets_frontend_minimal.min.js, copying from /web/assets/5a20860/web.assets_frontend_minimal.min.js 
+2026-05-28 19:42:59,894 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/assets/1/5a20860/web.assets_frontend_minimal.min.js HTTP/1.1" 200 - 17 0.005 0.010
+2026-05-28 19:42:59,932 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/b1b0710/web.__assets_tests_call__.min.js, copying from /web/assets/b1b0710/web.__assets_tests_call__.min.js 
+2026-05-28 19:42:59,942 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/assets/1/b1b0710/web.__assets_tests_call__.min.js HTTP/1.1" 200 - 17 0.007 0.037
+2026-05-28 19:42:59,996 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/d7ad05a/web.assets_frontend.min.css, copying from /web/assets/d7ad05a/web.assets_frontend.min.css 
+2026-05-28 19:43:00,027 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/assets/1/d7ad05a/web.assets_frontend.min.css HTTP/1.1" 200 - 26 0.029 0.134
+2026-05-28 19:43:00,035 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i&display=swap 
+2026-05-28 19:43:00,036 29434 INFO hams_test odoo.tests.common: External chrome request during tests: Return empty file for https://fonts.googleapis.com/css?family=Inter+Tight:300,300i,400,400i,500,500i,700,700i&display=swap 
+2026-05-28 19:43:00,089 29434 INFO ? werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/static/lib/odoo_ui_icons/fonts/odoo_ui_icons.woff2 HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:43:00,093 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/image/website/1/logo/My%20Website?unique=8726dc7 HTTP/1.1" 200 - 4 0.002 0.005
+2026-05-28 19:43:00,122 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/image/website/1/favicon?unique=8726dc7 HTTP/1.1" 200 - 6 0.004 0.008
+2026-05-28 19:43:00,174 29434 INFO hams_test odoo.addons.base.models.assetsbundle: Found a similar attachment for /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js, copying from /web/assets/c4cf9f8/web.assets_frontend_lazy.min.js 
+2026-05-28 19:43:00,185 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /web/assets/1/c4cf9f8/web.assets_frontend_lazy.min.js HTTP/1.1" 200 - 27 0.011 0.068
+2026-05-28 19:43:00,417 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /website/translations?hash=&lang=en_US HTTP/1.1" 200 - 1 0.000 0.004
+2026-05-28 19:43:00,445 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:43:00,452 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Evaluate test code "odoo.startTour('frontend_misc_tour', {"stepDelay": 0, "keepWatchBrowser": false, "debug": false, "startUrl": "/user-websites/documentation?debug=1", "delayToCheckUndeterminisms": 0})" 
+2026-05-28 19:43:00,473 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:15] "GET /user-websites/documentation HTTP/1.1" 303 - 7 0.003 0.009
+2026-05-28 19:43:00,752 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 314, model: knowledge.article 
+2026-05-28 19:43:01,582 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:16] "GET /manual/21-user-websites-documentation HTTP/1.1" 200 - 98 0.039 1.068
+2026-05-28 19:43:01,684 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:16] "GET /website/translations?hash=f49fcd11bdd910c3a2833f3c519263de90bb3a15&lang=en_US HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:43:01,685 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour.browser: [1/2] Tour frontend_misc_tour → Step Initialize Tour (trigger: body) 
+2026-05-28 19:43:01,695 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:40:16] "GET /api/v1/user_websites/pending_reports HTTP/1.1" 200 - 0 0.000 0.003
+2026-05-28 19:43:01,737 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour.browser: [2/2] Tour frontend_misc_tour → Step Wait for: Verify Documentation Page renders correctly (trigger: body) 
+2026-05-28 19:43:01,788 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour.browser: tour succeeded 
+2026-05-28 19:43:01,789 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour.browser: 
+
+╔═══════════════════════════════════╗
+║ TOUR frontend_misc_tour SUCCEEDED ║
+╚═══════════════════════════════════╝
+ 
+2026-05-28 19:43:01,808 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour.browser: heap 5819368 (allocated 6553600) 
+2026-05-28 19:43:01,810 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Closing chrome headless with pid 35491 
+2026-05-28 19:43:01,810 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Closing websocket connection 
+2026-05-28 19:43:01,811 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Terminating chrome headless with pid 35491 
+2026-05-28 19:43:01,912 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Chrome Log in: /var/tmp/odoo_tests/hams_test/chrome_logs/chrome_log_20260528_194301_912013_test_08_frontend_misc_tour.txt 
+2026-05-28 19:43:01,912 29434 INFO hams_test odoo.addons.user_websites.tests.test_ui_tours.TestUserWebsitesUITours.test_08_frontend_misc_tour: Removing chrome user profile "/var/tmp/tmpanb5yvq1_chrome_odoo" 
+2026-05-28 19:43:02,057 29434 INFO hams_test odoo.addons.base.models.ir_attachment: filestore gc 4 checked, 0 removed 
+2026-05-28 19:43:02,066 29434 INFO hams_test odoo.addons.user_websites.tests.test_user_websites_blog_post: Starting TestBlogPostOwnership.test_01_user_blog_route_isolation ... 
+2026-05-28 19:43:02,192 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <usera> to <usera@example.com> 
+2026-05-28 19:43:02,294 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <userb> to <userb@example.com> 
+2026-05-28 19:43:02,347 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:03,318 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:03] "GET /usera/blog HTTP/1.1" 200 - 118 0.042 0.931
+2026-05-28 19:43:03,320 29434 INFO hams_test odoo.addons.user_websites.tests.test_user_websites_blog_post: Starting TestBlogPostOwnership.test_02_user_b_cannot_claim_user_a_post ... 
+2026-05-28 19:43:03,427 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <usera> to <usera@example.com> 
+2026-05-28 19:43:03,501 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <userb> to <userb@example.com> 
+2026-05-28 19:43:03,548 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:04,444 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:04] "GET /userb/blog HTTP/1.1" 200 - 116 0.045 0.853
+2026-05-28 19:43:04,446 29434 INFO hams_test odoo.addons.user_websites.tests.test_user_websites_blog_post: Starting TestBlogPostOwnership.test_03_report_button_visibility ... 
+2026-05-28 19:43:04,563 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <usera> to <usera@example.com> 
+2026-05-28 19:43:04,657 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <userb> to <userb@example.com> 
+2026-05-28 19:43:04,700 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:usera from n/a 
+2026-05-28 19:43:04,706 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:05,094 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 319, model: res.partner 
+2026-05-28 19:43:05,749 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:05] "GET /usera/blog HTTP/1.1" 200 - 129 0.054 0.990
+2026-05-28 19:43:05,755 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:userb from n/a 
+2026-05-28 19:43:06,029 29434 INFO hams_test odoo.addons.base.models.ir_model: Access Denied by ACLs for operation: write, uid: 320, model: res.partner 
+2026-05-28 19:43:06,638 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:06] "GET /usera/blog HTTP/1.1" 200 - 109 0.050 0.831
+2026-05-28 19:43:06,640 29434 INFO hams_test odoo.addons.user_websites.tests.test_user_websites_blog_post: Starting TestBlogPostOwnership.test_04_public_cannot_create_blog ... 
+2026-05-28 19:43:06,767 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <usera> to <usera@example.com> 
+2026-05-28 19:43:06,850 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <userb> to <userb@example.com> 
+2026-05-28 19:43:06,901 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:06,934 29434 INFO hams_test odoo.http: Session expired 
+2026-05-28 19:43:06,934 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:06] "POST /usera/create_blog HTTP/1.1" 303 - 12 0.004 0.032
+2026-05-28 19:43:07,769 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:07] "GET /web/login?redirect=/usera/create_blog? HTTP/1.1" 200 - 85 0.035 0.798
+2026-05-28 19:43:07,773 29434 INFO hams_test odoo.addons.base.models.ir_attachment: filestore gc 0 checked, 0 removed 
+2026-05-28 19:43:07,780 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_01_res_config_settings ... 
+2026-05-28 19:43:07,903 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:07,959 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_02_res_users ... 
+2026-05-28 19:43:08,078 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:08,116 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_03_blog_post ... 
+2026-05-28 19:43:08,261 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:08,275 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_04_snippets ... 
+2026-05-28 19:43:08,403 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:08,425 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_05_portal_templates ... 
+2026-05-28 19:43:08,540 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:08,544 29434 INFO hams_test odoo.addons.base.models.res_users: Login successful for login:portaluser from n/a 
+2026-05-28 19:43:08,548 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:09,931 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:09] "GET /my/home HTTP/1.1" 200 - 139 0.055 1.329
+2026-05-28 19:43:09,932 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_06_layout_templates ... 
+2026-05-28 19:43:10,076 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:10,080 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:10,915 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:10] "GET / HTTP/1.1" 200 - 95 0.040 0.797
+2026-05-28 19:43:10,918 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_07_navbar_rendering ... 
+2026-05-28 19:43:11,034 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:11,101 29434 INFO hams_test odoo.addons.base.models.ir_http: Generating routing map for key 1 
+2026-05-28 19:43:11,933 29434 INFO hams_test werkzeug: 127.0.0.1 - - [28/May/2026 19:43:11] "GET /navuser/home HTTP/1.1" 200 - 119 0.050 0.783
+2026-05-28 19:43:11,935 29434 INFO hams_test odoo.addons.user_websites.tests.test_xpath_rendering: Starting TestXPathRendering.test_08_backend_views_rendering ... 
+2026-05-28 19:43:12,041 29434 INFO hams_test odoo.addons.auth_signup.models.res_users: Signup email sent for user <portaluser> to <portal@example.com> 
+2026-05-28 19:43:12,097 29434 INFO hams_test odoo.addons.base.models.ir_attachment: filestore gc 0 checked, 0 removed 
+2026-05-28 19:43:12,101 29434 INFO hams_test odoo.service.server: 314 post-tests in 201.53s, 126944 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: backup_management: 34 tests 5.58s 25455 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: binary_downloader: 20 tests 2.49s 954 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: cloudflare: 40 tests 10.36s 4114 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: compliance: 21 tests 4.46s 1725 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: daemon_key_manager: 13 tests 4.14s 3130 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: database_management: 25 tests 6.23s 2459 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: distributed_redis_cache: 3 tests 2.49s 539 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: hams_helpdesk: 12 tests 2.35s 3358 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: hams_test: 15 tests 3.72s 8164 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: manual_library: 44 tests 37.70s 8921 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: pager_duty: 59 tests 7.03s 4452 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: user_websites: 165 tests 92.75s 60640 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: user_websites_seo: 11 tests 0.52s 494 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.stats: zero_sudo: 28 tests 5.75s 2742 queries 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.tests.result: 0 failed, 0 error(s) of 330 tests when loading database 'hams_test' 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.service.server: Initiating shutdown 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.service.server: Hit CTRL-C again or send a second signal to force the shutdown. 
+2026-05-28 19:43:12,102 29434 INFO hams_test odoo.sql_db: ConnectionPool(read/write;used=0/count=0/max=64): Closed 6 connections  
+[*] [DEBUG-RUNNER] IO Reader thread concluded for PID 29434
+[*] [DEBUG-RUNNER] Received EOF sentinel from IO Reader thread.
+[*] [DEBUG-RUNNER] Waiting for process 29434 to cleanly terminate...
+[*] [DEBUG-RUNNER] Process 29434 terminated with return code 0.
+
+==========================================================
+🎉 TEST RUN COMPLETE: No test failures detected.
+==========================================================
+
+[*] Waiting for PostgreSQL unix socket /opt/hams/pgsock/.s.PGSQL.5432 to open...
+[*] PostgreSQL socket is ready.
+[*] Waiting for Redis on 127.0.0.1:6379 to open...
+[*] Redis is ready.
+[*] Waiting for RabbitMQ on 127.0.0.1:5672 to open...
+[*] RabbitMQ is ready.
