@@ -116,5 +116,5 @@
     "files": [],
     "patterns": []
   },
-  "odoo_database": "hams_test"
+  "odoo_database": "zero_sudo"
 }

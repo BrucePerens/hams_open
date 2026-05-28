@@ -24,7 +24,6 @@ This module enables:
         "zero_sudo",
         "distributed_redis_cache",
         "cloudflare",
-        "hams_test",
     ],
     "external_dependencies": {
         "python": ["redis"],

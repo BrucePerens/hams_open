@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from .real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
@@ -11,6 +11,8 @@ class TestRealTransactionFacility(RealTransactionCase):
     # Tests [@ANCHOR: automated_cleanup]
     # Tests [@ANCHOR: leak_verification]
     # Tests [@ANCHOR: user_real_transaction_service]
+    # Tests [@ANCHOR: hams_transaction_case]
+    # Tests [@ANCHOR: hams_http_case]
 
     def test_00_cursor_hijacking_and_snapshot(self):
         # [@ANCHOR: test_cursor_hijacking]
@@ -62,8 +64,8 @@ class TestRealTransactionFacility(RealTransactionCase):
         # Temporarily mock the tearDown leak detector to ensure it would raise
         leaks = []
         noisy_tables = set()
-        if 'hams_test.noisy_table' in self.env:
-            noisy_tables_records = self.env['hams_test.noisy_table'].search([])
+        if 'zero_sudo.noisy_table' in self.env:
+            noisy_tables_records = self.env['zero_sudo.noisy_table'].search([])
             noisy_tables = {record.name for record in noisy_tables_records}
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
@@ -111,7 +113,7 @@ class TestRealTransactionFacility(RealTransactionCase):
         from catching it.
         """
         # 1. Add table to noisy tables
-        noisy_table = self.env['hams_test.noisy_table'].create({
+        noisy_table = self.env['zero_sudo.noisy_table'].create({
             'name': 'ir_module_category'
         })
         self.env.cr.commit()
@@ -125,7 +127,7 @@ class TestRealTransactionFacility(RealTransactionCase):
 
         # 3. Run the leak detector logic
         leaks = []
-        noisy_records = self.env["hams_test.noisy_table"].search(
+        noisy_records = self.env["zero_sudo.noisy_table"].search(
             [('active', '=', True)], limit=1000
         )
         noisy_tables = {r.name for r in noisy_records}
@@ -148,56 +150,31 @@ class TestRealTransactionFacility(RealTransactionCase):
             "The leak detector MUST ignore tables present in the noisy_table model.",
         )
 
-    def test_05_documentation_installed(self):
-        # [@ANCHOR: test_documentation_bootstrap]
-        # [@ANCHOR: test_documentation_injection]
-        # Verified by [@ANCHOR: test_documentation_bootstrap]
-        # Verified by [@ANCHOR: test_documentation_injection]
-        """
-        Verify that the module's documentation was correctly installed.
-        """
-        # Tests [@ANCHOR: documentation_bootstrap]
-        # Tests [@ANCHOR: documentation_injection]
-        # Tests [@ANCHOR: hams_http_case]
-        # Tests [@ANCHOR: hams_transaction_case]
-        article_model_name = None
-        if "knowledge.article" in self.env:
-            article_model_name = "knowledge.article"
-        elif "manual.article" in self.env:
-            article_model_name = "manual.article"
-
-        if article_model_name:
-            article = self.env[article_model_name].search(
-                [("name", "=", "Real Transaction Testing Facility Guide")], limit=1
-            )
-            self.assertTrue(article, "Documentation article should have been created.")
-            self.assertIn("Real Transaction Testing Facility", article.body)
-
     def test_06_leak_detector_handles_multiple_initial_counts(self):
         """
         Ensure the leak detector correctly identifies leaks even if initial count was non-zero.
         """
         try:
             # 1. Ensure we have an initial count
-            self.cr.execute("INSERT INTO hams_test_noisy_table (name) VALUES ('temp_table_leak_test')")
+            self.cr.execute("INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test')")
             self.env.cr.commit()
 
             # We need to re-run snapshotting logic or simulate it
-            self.cr.execute("SELECT count(1) FROM hams_test_noisy_table")
+            self.cr.execute("SELECT count(1) FROM zero_sudo_noisy_table")
             initial_count = self.cr.fetchone()[0]
 
             # 2. Add another record via SQL (bypass ORM)
-            self.cr.execute("INSERT INTO hams_test_noisy_table (name) VALUES ('temp_table_leak_test_2')")
+            self.cr.execute("INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test_2')")
             self.env.cr.commit()
 
             # 3. Verify leak detector would catch it
-            self.cr.execute("SELECT count(1) FROM hams_test_noisy_table")
+            self.cr.execute("SELECT count(1) FROM zero_sudo_noisy_table")
             final_count = self.cr.fetchone()[0]
 
             self.assertEqual(final_count - initial_count, 1)
         finally:
             # Cleanup
-            self.cr.execute("DELETE FROM hams_test_noisy_table WHERE name IN ('temp_table_leak_test', 'temp_table_leak_test_2')")
+            self.cr.execute("DELETE FROM zero_sudo_noisy_table WHERE name IN ('temp_table_leak_test', 'temp_table_leak_test_2')")
             self.env.cr.commit()
 
     @classmethod

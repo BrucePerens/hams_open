@@ -12,7 +12,7 @@ if not hasattr(shutil, "_orig_which"):
     )
 
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError
 
 

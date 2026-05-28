@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // # Verified by [@ANCHOR: test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {

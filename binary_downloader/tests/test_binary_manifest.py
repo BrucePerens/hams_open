@@ -8,7 +8,7 @@ import stat
 from unittest.mock import MagicMock
 from odoo import tools
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError, ValidationError
 
 INTEGRATION_MODE = os.environ.get("HAMS_INTEGRATION_MODE") == "1"

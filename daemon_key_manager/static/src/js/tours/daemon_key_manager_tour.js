@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("daemon_key_manager_tour", {
     url: "/odoo?debug=1&action=daemon_key_manager.action_daemon_key_registry",

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError, AccessError
 
 
@@ -181,7 +181,7 @@ class TestBackupSecurity(RealTransactionCase):
             self.env.flush_all()
 
     def tearDown(self):
-        # Explicit cleanup to avoid hams_test teardown issues with res.users/res.partner cleanup order
+        # Explicit cleanup to avoid zero_sudo teardown issues with res.users/res.partner cleanup order
         if hasattr(self, "user_no_group") and self.user_no_group.exists():
             partner = self.user_no_group.partner_id
             self.user_no_group.unlink()

@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("cf_purge_wizard_tour", {
     url: "/odoo?debug=1",

@@ -2,7 +2,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 import unittest
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.compliance.hooks import post_init_hook
 
 

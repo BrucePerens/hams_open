@@ -919,7 +919,7 @@ def main():
 
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("-m", "--mode", choices=["standard", "integration", "individual", "xml", "downloads"], default="standard")
-    parser.add_argument("-d", "--db", default="hams_test")
+    parser.add_argument("-d", "--db", default="zero_sudo")
     parser.add_argument("-u", "--module")
     parser.add_argument("-l", "--log-directory", default="~/tmp")
     parser.add_argument("-c", "--config", default="ignore_list.txt")
@@ -995,7 +995,7 @@ def main():
         os.environ["ODOO_PASSWORD"] = "admin"
 
         cmd = get_odoo_test_cmd() + [
-            odoo_bin, "--load=base,web,hams_test", "--addons-path", addons_path,
+            odoo_bin, "--load=base,web,zero_sudo", "--addons-path", addons_path,
             "--dev=all", "-d", args.db, "-i", mod_string, "--test-enable",
             "--test-tags", test_tags, "--stop-after-init", "--workers=0",
             "--max-cron-threads=0", "--http-interface", "127.0.0.1", "--http-port", "8069"
@@ -1017,7 +1017,7 @@ def main():
         for mod in target_modules:
             rebuild_db(args.db)
             cmd = get_odoo_test_cmd(f"_{mod}") + [
-                odoo_bin, "--load=base,web,hams_test", "--addons-path", addons_path,
+                odoo_bin, "--load=base,web,zero_sudo", "--addons-path", addons_path,
                 "--dev=all", "-d", args.db, "-i", mod, "--test-enable",
                 "--test-tags", f"/{mod}", "--stop-after-init", "--workers=0",
                 "--max-cron-threads=0", "--http-interface", "127.0.0.1", "--http-port", "8069"

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Default noisy tables -->
+        <record id="noisy_table_bus_bus" model="zero_sudo.noisy_table">
+            <field name="name">bus_bus</field>
+        </record>
+        <record id="noisy_table_ir_logging" model="zero_sudo.noisy_table">
+            <field name="name">ir_logging</field>
+        </record>
+        <record id="noisy_table_base_registry_signaling" model="zero_sudo.noisy_table">
+            <field name="name">base_registry_signaling</field>
+        </record>
+        <record id="noisy_table_ir_cron" model="zero_sudo.noisy_table">
+            <field name="name">ir_cron</field>
+        </record>
+        <record id="noisy_table_mail_message" model="zero_sudo.noisy_table">
+            <field name="name">mail_message</field>
+        </record>
+        <record id="noisy_table_mail_notification" model="zero_sudo.noisy_table">
+            <field name="name">mail_notification</field>
+        </record>
+        <record id="noisy_table_mail_followers" model="zero_sudo.noisy_table">
+            <field name="name">mail_followers</field>
+        </record>
+        <record id="noisy_table_mail_tracking_value" model="zero_sudo.noisy_table">
+            <field name="name">mail_tracking_value</field>
+        </record>
+        <record id="noisy_table_res_groups_users_rel" model="zero_sudo.noisy_table">
+            <field name="name">res_groups_users_rel</field>
+        </record>
+        <record id="noisy_table_res_company_users_rel" model="zero_sudo.noisy_table">
+            <field name="name">res_company_users_rel</field>
+        </record>
+        <record id="noisy_table_res_users_log" model="zero_sudo.noisy_table">
+            <field name="name">res_users_log</field>
+        </record>
+        <record id="noisy_table_http_session" model="zero_sudo.noisy_table">
+            <field name="name">http_session</field>
+        </record>
+        <record id="noisy_table_database_pg_setting" model="zero_sudo.noisy_table">
+            <field name="name">database_pg_setting</field>
+        </record>
+        <record id="noisy_table_database_table_stat" model="zero_sudo.noisy_table">
+            <field name="name">database_table_stat</field>
+        </record>
+        <record id="noisy_table_database_query_stat" model="zero_sudo.noisy_table">
+            <field name="name">database_query_stat</field>
+        </record>
+        <record id="noisy_table_database_activity" model="zero_sudo.noisy_table">
+            <field name="name">database_activity</field>
+        </record>
+        <record id="noisy_table_database_index_stat" model="zero_sudo.noisy_table">
+            <field name="name">database_index_stat</field>
+        </record>
+        <record id="noisy_table_ir_attachment" model="zero_sudo.noisy_table">
+            <field name="name">ir_attachment</field>
+        </record>
+        <record id="noisy_table_ir_model_data" model="zero_sudo.noisy_table">
+            <field name="name">ir_model_data</field>
+        </record>
+    </data>
+</odoo>

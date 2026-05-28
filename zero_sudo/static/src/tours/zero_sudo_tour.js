@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("zero_sudo_tour", {
     // [@ANCHOR: zero_sudo_tour]

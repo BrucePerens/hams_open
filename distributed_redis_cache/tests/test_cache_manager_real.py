@@ -5,7 +5,7 @@ import json
 import os
 import logging
 from odoo.tests import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 

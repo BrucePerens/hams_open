@@ -13,7 +13,6 @@
         "binary_downloader",
         "pager_duty",
         "web_tour",
-        "hams_test",
     ],
     "data": [
         "security/security.xml",

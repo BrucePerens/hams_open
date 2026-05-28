@@ -1,4 +1,4 @@
-<h1>Hams Testing Infrastructure</h1>
+<h1>Real Transaction Testing Facility</h1>
 
 <p>This module provides the core testing facilities for the repository, ensuring that our software is reliable, secure, and functions as expected in a production-like environment.</p>
 
@@ -14,12 +14,12 @@
 <h3>Noisy Tables</h3>
 <p>Some tables in Odoo are naturally "noisy"—they get new data all the time from background processes (like system logs or internal message tracking). If the leak protector caught these, tests would fail for no reason.</p>
 
-<p>Administrators can manage which tables are ignored by the leak protector using the <strong>Noisy Tables</strong> interface ([@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]). You can find this under <strong>Settings > Technical > Database Structure > Noisy Tables</strong>.</p>
+<p>Administrators can manage which tables are ignored by the leak protector using the <strong>Noisy Tables</strong> interface. You can find this under <strong>Settings &gt; Technical &gt; Database Structure &gt; Noisy Tables</strong>.</p>
 
 <ul>
     <li><strong>Table Name:</strong> The internal name of the database table to ignore (e.g., <code>ir_logging</code>).</li>
     <li><strong>Active:</strong> If unchecked, the table will no longer be ignored, and the leak protector will start checking it again.</li>
-    <li>This management interface is crucial for ensuring tests pass without false positives ([@ANCHOR: test_noisy_table_tour]).</li>
+    <li>This management interface is crucial for ensuring tests pass without false positives.</li>
 </ul>
 
 <h2>External Service Testing</h2>

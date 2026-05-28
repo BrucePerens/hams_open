@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.pager_duty.daemon import pager_synthetic_spooler
 
 @tagged('post_install', '-at_install')

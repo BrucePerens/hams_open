@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsHttpCase
+from .common import HamsHttpCase
 
 @tagged("post_install", "-at_install")
 class TestZeroSudoViews(HamsHttpCase):
@@ -21,13 +21,15 @@ class TestZeroSudoViews(HamsHttpCase):
         # Tests [@ANCHOR: journey_service_account_lifecycle]
         # Tests [@ANCHOR: zero_sudo_tour]
         """Run the zero_sudo_tour to verify UI functionality."""
-        # Use the security utility to safely check for installed modules without violating Zero-Sudo
-        utils = self.env['zero_sudo.security.utils']
-        facility_uid = utils._get_service_uid("zero_sudo.odoo_facility_service_internal")
-        installed_modules = self.env['ir.module.module'].with_user(facility_uid).search([('state', '=', 'installed')]).mapped('name')
-
-        if 'hams_test' not in installed_modules:
-            self.skipTest("hams_test module not installed, skipping tour that depends on its utilities.")
-
         # Enforcing ADR-0081 Section 8: Explicitly set ?debug=1 to prevent Owl dev mode crashes
         self.start_tour("/odoo?debug=1", "zero_sudo_tour", login="admin")
+
+    def test_03_noisy_table_views(self):
+        # [@ANCHOR: test_noisy_table_views]
+        # Tests [@ANCHOR: test_noisy_table_views]
+        # Tests [@ANCHOR: UX_NOISY_TABLE_MANAGEMENT]
+        """
+        Verify that the noisy_table views compile and render correctly.
+        """
+        self.env['zero_sudo.noisy_table'].get_view(view_type='form')
+        self.env['zero_sudo.noisy_table'].get_view(view_type='list')

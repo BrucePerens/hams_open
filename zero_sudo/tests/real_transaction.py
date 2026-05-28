@@ -7,7 +7,7 @@ from odoo.modules.registry import Registry
 import psycopg2
 from psycopg2 import sql
 from odoo.tools import mute_logger, _
-from odoo.addons.hams_test.tests.common import SafePatchMixin
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 
 _logger = logging.getLogger(__name__)
 
@@ -142,8 +142,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # Verified by [@ANCHOR: test_leak_verification]
         leaks = []
         noisy_tables = set()
-        if "hams_test.noisy_table" in self.env:
-            noisy_records = self.env["hams_test.noisy_table"].search(
+        if "zero_sudo.noisy_table" in self.env:
+            noisy_records = self.env["zero_sudo.noisy_table"].search(
                 [('active', '=', True)], limit=1000
             )
             noisy_tables = {r.name for r in noisy_records}

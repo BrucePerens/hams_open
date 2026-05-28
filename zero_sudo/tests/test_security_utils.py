@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError
 from unittest.mock import MagicMock, mock_open
 import subprocess
@@ -251,9 +251,13 @@ class TestSecurityUtils(HamsTransactionCase):
 
     def test_09_bootstrap_knowledge_docs(self):
         # [@ANCHOR: zero_sudo:test_zero_sudo_doc_installer]
+        # [@ANCHOR: test_documentation_bootstrap]
+        # [@ANCHOR: test_documentation_injection]
         # Tests [@ANCHOR: zero_sudo:zero_sudo_doc_installer]
         # Tests [@ANCHOR: story_zero_sudo_doc_installer]
         # Tests [@ANCHOR: journey_developer_integration]
+        # Tests [@ANCHOR: documentation_bootstrap]
+        # Tests [@ANCHOR: documentation_injection]
         """
         Verify that the _bootstrap_knowledge_docs method correctly
         discovers and installs documentation from module manifests.

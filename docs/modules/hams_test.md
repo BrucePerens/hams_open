@@ -1,4 +1,4 @@
-# Hams Test Infrastructure (`hams_test`)
+# Hams Test Infrastructure (`zero_sudo`)
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
@@ -10,7 +10,7 @@ This module is the unified testing infrastructure for the repository. It consoli
 
 In standard Odoo testing, `TransactionCase` wraps the entire test execution inside an uncommitted PostgreSQL `SAVEPOINT`. While this makes tests extremely fast and prevents database pollution, it creates an artificial environment. This environment fundamentally breaks the ORM's local memory cache for inverse relational fields (like `One2many` relationships) and makes testing distributed workers impossible.
 
-The `hams_test` module solves this by providing: **`RealTransactionCase`**.
+The `zero_sudo` module solves this by providing: **`RealTransactionCase`**.
 **Because it inherits from Odoo's `HttpCase`, it natively supports full Werkzeug HTTP routing and testing utilities like `self.authenticate()` and `self.make_jsonrpc_request()`.**
 
 ### True Database Commits
@@ -25,7 +25,7 @@ To guarantee a pristine database, the facility takes a mathematical snapshot of 
 **Usage Example:**
 ```python
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 @tagged('post_install', '-at_install')
 class MyAdvancedTest(RealTransactionCase):
@@ -87,7 +87,7 @@ When developing tours in Odoo 19, you **MUST** navigate several strict environme
 * **Asset Registration Silent Failures:** Ensure your JavaScript tour files are actually loading. They MUST be explicitly declared in the module's `__manifest__.py` under the `assets` dictionary within the `web.assets_tests` key.
 
 ### Robustness Macros (`TourUtils`)
-To combat Owl's asynchronous rendering delays and other race conditions, import `TourUtils` from `@hams_test/js/tour_utils`. It provides several safety macros you can spread into your tour steps:
+To combat Owl's asynchronous rendering delays and other race conditions, import `TourUtils` from `@zero_sudo/js/tour_utils`. It provides several safety macros you can spread into your tour steps:
 * `TourUtils.waitForAbsence(selector, description)`: Pauses the tour until the specified element (e.g., a loading overlay or an old modal) is entirely removed from the DOM.
 * `TourUtils.safeSave(saveTrigger, waitTrigger)`: Safely executes a form save by enforcing a DOM blur before clicking the save button and waiting for the RPC resolution.
 

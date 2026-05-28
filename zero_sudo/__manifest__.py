@@ -2,7 +2,14 @@
 {
     "name": "Zero-Sudo Security Core",
     "summary": "Foundational security utilities, service account patterns, and web isolation.",
-    "description": "Zero-Sudo Security Core foundational module.",
+    "description": """Zero-Sudo Security Core foundational module.
+
+Semantic Anchors mapping:
+[@ANCHOR: documentation_bootstrap]
+[@ANCHOR: documentation_injection]
+Verified by [@ANCHOR: test_documentation_bootstrap]
+Verified by [@ANCHOR: test_documentation_injection]
+""",
     "author": "Bruce Perens K6BP",
     "category": "Security",
     "version": "1.0",
@@ -16,13 +23,21 @@
     "data": [
         "data/security_data.xml",
         "security/ir.model.access.csv",
-        "views/res_users_views.xml"
+        "views/res_users_views.xml",
+        "data/noisy_table_data.xml",
+        "views/noisy_table_views.xml"
     ],
     "knowledge_docs": [
         {
             "name": "Zero-Sudo Security Core",
             "path": "data/documentation.html",
             "icon": "🛡️",
+            "category": "workspace"
+        },
+        {
+            "name": "Real Transaction Testing Facility Guide",
+            "path": "data/testing_documentation.html",
+            "icon": "🧪",
             "category": "workspace"
         },
         {

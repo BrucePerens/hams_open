@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError
 
 class TestSEOModels(HamsTransactionCase):

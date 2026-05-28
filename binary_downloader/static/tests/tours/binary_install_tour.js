@@ -1,7 +1,7 @@
 /** @odoo-module **/
 // # Verified by [@ANCHOR: test_binary_install_tour]
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("binary_install_tour", {
     url: "/odoo?debug=1&action=binary_downloader.action_binary_downloader_manifest",

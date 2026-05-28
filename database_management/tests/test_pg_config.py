@@ -2,7 +2,7 @@
 import shutil
 import os
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
 
 if not hasattr(shutil, "_orig_which"):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged('standard', 'post_install', '-at_install')
 class TestJourneysStories(HamsTransactionCase):

@@ -15,7 +15,6 @@
         "bus",
         "zero_sudo",
         "distributed_redis_cache",
-        "hams_test",
         "hams_helpdesk",
     ],
     "external_dependencies": {

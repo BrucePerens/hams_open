@@ -2,7 +2,7 @@
 import os
 from odoo import http
 from odoo.http import request
-from odoo.addons.hams_test.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests import tagged
 
 

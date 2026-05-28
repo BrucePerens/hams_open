@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_cf_ip_ban]
 registry.category("web_tour.tours").add("cf_ip_ban_tour", {

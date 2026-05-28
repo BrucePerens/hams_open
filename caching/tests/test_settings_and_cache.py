@@ -4,7 +4,7 @@ from odoo.tests.common import tagged
 from lxml import etree
 import werkzeug
 from odoo.addons.caching.controllers.main import ServiceWorkerController
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")

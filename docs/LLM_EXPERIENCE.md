@@ -133,10 +133,10 @@ session.
 * **The Solution:** NEVER use `mail_notrack=True` or empty contexts (`context={}`) when creating records for pure data models (e.g., `cloudflare.purge.queue`). If an existing BDD test forces this pattern to verify zero-query caching, the test must be skipped, or the underlying model must be re-architected to formally support chatter if tracking manipulation is strictly required by the business logic.
 
 ## 35. The Odoo JS Asset Bundling Trap (@module_name Not Found)
-**The Trap:** When writing frontend JavaScript or UI Tours, attempting to import a utility or component from another custom Odoo addon (e.g., `import { TourUtils } from "@hams_test/js/tour_utils";`) will cause a fatal test crash (`asset not found`), even if the target module is installed in the database or passed via the `-u` flag during testing.
+**The Trap:** When writing frontend JavaScript or UI Tours, attempting to import a utility or component from another custom Odoo addon (e.g., `import { TourUtils } from "@zero_sudo/js/tour_utils";`) will cause a fatal test crash (`asset not found`), even if the target module is installed in the database or passed via the `-u` flag during testing.
 **The Solution:** Odoo's asset bundler strictly relies on the `__manifest__.py` graph. You cannot import a JS module from another addon unless that addon is explicitly listed in your module's `depends` array.
   1. **If the import is unused (Dead Code):** Delete the import statement entirely.
-  2. **If the import is required:** You MUST add the target module (e.g., `"hams_test"`) to the `depends` array in your `__manifest__.py` file.
+  2. **If the import is required:** You MUST add the target module (e.g., `"zero_sudo"`) to the `depends` array in your `__manifest__.py` file.
 
 ## 36. Odoo 19 Group Membership & Privilege Architecture
 **The Trap:**

@@ -3,7 +3,7 @@ import logging
 import time
 import odoo.tests
 from odoo.tools import mute_logger
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 

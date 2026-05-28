@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.cloudflare.models.ir_http import IrHttp as CloudflareIrHttp
 from odoo.http import Response
 

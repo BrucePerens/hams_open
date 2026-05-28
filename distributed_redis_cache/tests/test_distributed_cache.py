@@ -1,7 +1,7 @@
 import os
 import odoo.tests
 from odoo import _
-from odoo.addons.hams_test.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 # Tests [@ANCHOR: redis_connection_pool]
 # Tests [@ANCHOR: distributed_cache_key_generation]

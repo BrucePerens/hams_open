@@ -2,7 +2,7 @@
 import unittest
 import logging
 import odoo.tests
-from odoo.addons.hams_test.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.user_websites.hooks import post_init_hook
 
 _logger = logging.getLogger(__name__)

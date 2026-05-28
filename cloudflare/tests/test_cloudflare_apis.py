@@ -2,7 +2,7 @@
 import requests
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.cloudflare.utils.cloudflare_api import purge_urls, purge_tags
 
 

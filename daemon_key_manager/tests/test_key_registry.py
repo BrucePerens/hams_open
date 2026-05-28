@@ -2,7 +2,7 @@
 import logging
 import os
 from odoo.tests import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase, HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase
 from odoo.exceptions import UserError, AccessError
 from odoo import SUPERUSER_ID
 

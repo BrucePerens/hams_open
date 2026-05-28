@@ -10,7 +10,6 @@
         "base",
         "mail",
         "zero_sudo",
-        "hams_test",
         "binary_downloader",
         "pager_duty",
         "website",

@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@hams_test/js/tour_utils";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_backend_views]
 registry.category("web_tour.tours").add("backend_views_tour", {

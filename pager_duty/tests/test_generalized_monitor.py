@@ -7,7 +7,7 @@ import time
 from unittest.mock import MagicMock
 
 from odoo.tests.common import tagged
-from odoo.addons.hams_test.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 # Utilize implicit namespace packages instead of sys.path manipulation
 import odoo.addons.pager_duty.daemon.generalized_monitor as generalized_monitor

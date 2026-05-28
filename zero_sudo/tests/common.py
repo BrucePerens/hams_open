@@ -11,7 +11,7 @@ import threading
 import json
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser
-from .. import watchdog_shared
+from . import watchdog_shared
 
 _logger = logging.getLogger(__name__)
 
@@ -387,5 +387,3 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 raise e from None
             else:
                 raise e from None
-
-
