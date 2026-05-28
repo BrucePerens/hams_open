@@ -1,3 +1,7 @@
+@@BOUNDARY_TEST_RUNNER_FINAL_FIX@@
+Path: tools/test.py
+Operation: overwrite
+
 #!/usr/bin/env python3
 """
 Unified Pure-Python Odoo Test Runner for Hams.com
@@ -674,7 +678,7 @@ def provision_jules(base_dir, already_provisioned=False):
         wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
         os.environ["PGHOST"] = pg_socket
         os.environ["HAMS_ISOLATED_NS"] = "1"
-
+        
         def teardown():
             try:
                 pg_ctl_cmd = get_pg_bin("pg_ctl")
@@ -689,13 +693,13 @@ def provision_jules(base_dir, already_provisioned=False):
     def run_sys(cmd, **kw):
         print(f"[*] Running: {' '.join(cmd)}")
         return subprocess.run(cmd, check=True, **kw)
-
+    
     try:
         # APT Packages MUST run before static files to ensure python3-setuptools exists for PyPDF2 setup.py
         infrastructure.provision_apt_packages(run_sys, environment="early_prod")
         infrastructure.provision_static_files(run_sys, env_vars, environment="prod")
         run_sys(["apt-get", "install", "-y", "odoo"])
-
+        
         req_file = os.path.join(base_dir, "requirements.txt")
         if os.path.exists(req_file):
             run_sys(["/usr/bin/python3", "-m", "pip", "install", "--break-system-packages", "-r", req_file])
@@ -892,7 +896,7 @@ def main():
         rebuild_db(args.db)
 
         # Inject environment variables for daemons spawned securely by tests
-        os.environ["ODOO_URL"] = "http://127.0.0.1:8069"
+        os.environ["ODOO_URL"] = "[http://127.0.0.1:8069](http://127.0.0.1:8069)"
         os.environ["DB_NAME"] = args.db
         os.environ["ODOO_USER"] = "admin"
         os.environ["ODOO_PASSWORD"] = "admin"
@@ -909,7 +913,7 @@ def main():
             final_rc = rc_odoo
 
     elif args.mode == "individual":
-        os.environ["ODOO_URL"] = "http://127.0.0.1:8069"
+        os.environ["ODOO_URL"] = "[http://127.0.0.1:8069](http://127.0.0.1:8069)"
         os.environ["DB_NAME"] = args.db
         os.environ["ODOO_USER"] = "admin"
         os.environ["ODOO_PASSWORD"] = "admin"
@@ -928,3 +932,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+@@BOUNDARY_TEST_RUNNER_FINAL_FIX@@--
