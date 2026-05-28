@@ -671,8 +671,12 @@ def provision_jules(base_dir, already_provisioned=False):
 
         def teardown():
             try:
+                u_info = pwd.getpwnam(orig_user)
+                def pre_td():
+                    os.setresgid(u_info.pw_gid, u_info.pw_gid, u_info.pw_gid)
+                    os.setresuid(u_info.pw_uid, u_info.pw_uid, u_info.pw_uid)
                 pg_ctl_cmd = get_pg_bin("pg_ctl")
-                subprocess.run([pg_ctl_cmd, "-D", "/opt/hams/pgdata", "-m", "fast", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run([pg_ctl_cmd, "-D", "/opt/hams/pgdata", "-m", "fast", "stop"], preexec_fn=pre_td, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e: # audit-ignore-catch-all
                 _logger.warning("Teardown exception: %s", e)
         atexit.register(teardown)
@@ -688,7 +692,7 @@ def provision_jules(base_dir, already_provisioned=False):
         try:
             # APT Packages MUST run before static files to ensure python3-setuptools exists for PyPDF2 setup.py
             run_sys(["apt-get", "update"])
-            run_sys(["apt-get", "install", "-y", "python3-setuptools", "python3-stdeb", "dh-python", "python3-all", "fakeroot", "curl", "gnupg", "lsb-release"])
+            run_sys(["apt-get", "install", "-y", "python3-setuptools", "python3-stdeb", "dh-python", "python3-all", "fakeroot", "curl", "gnupg", "lsb-release", "python3-pip"])
 
             run_sys(["bash", "-c", "curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor --yes -o /usr/share/keyrings/postgresql-keyring.gpg"])
             run_sys(["bash", "-c", "echo \"deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main\" > /etc/apt/sources.list.d/pgdg.list"])
@@ -726,6 +730,10 @@ def provision_jules(base_dir, already_provisioned=False):
     user_info = pwd.getpwnam(orig_user)
     orig_uid, orig_gid = user_info.pw_uid, user_info.pw_gid
 
+    def preexec_orig_user():
+        os.setresgid(orig_gid, orig_gid, orig_gid)
+        os.setresuid(orig_uid, orig_uid, orig_uid)
+
     os.chown(pg_data, orig_uid, orig_gid)
     os.chown(pg_socket, orig_uid, orig_gid)
 
@@ -733,24 +741,21 @@ def provision_jules(base_dir, already_provisioned=False):
     os.chmod(pg_socket, 0o2775)
 
     if not os.listdir(pg_data):
-        with micro_privilege(orig_user):
-            subprocess.run([initdb_cmd, "-D", pg_data], check=True)
+        subprocess.run([initdb_cmd, "-D", pg_data], preexec_fn=preexec_orig_user, check=True)
 
-    with micro_privilege(orig_user):
-        subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], check=False, stderr=subprocess.DEVNULL)
+    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], preexec_fn=preexec_orig_user, check=False, stderr=subprocess.DEVNULL)
 
     try:
         os.remove(f"{pg_data}/postmaster.pid")
     except OSError:
         pass
 
-    with micro_privilege(orig_user):
-        subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], check=True)
-        wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
+    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], preexec_fn=preexec_orig_user, check=True)
+    wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
 
-        p = subprocess.Popen([psql_cmd, "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, text=True, stdout=subprocess.DEVNULL)
-        p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
-        p.wait()
+    p = subprocess.Popen([psql_cmd, "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, preexec_fn=preexec_orig_user, text=True, stdout=subprocess.DEVNULL)
+    p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
+    p.wait()
 
     print("[*] Starting local Redis and RabbitMQ...")
     subprocess.run(["systemctl", "start", "redis-server"], check=False, stderr=subprocess.DEVNULL)
