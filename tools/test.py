@@ -482,15 +482,30 @@ def wait_for_socket(sock_path, name, timeout=60.0):
     return False
 
 
+def get_pg_bin(name):
+    """Locate a PostgreSQL binary reliably across different distributions."""
+    paths = glob.glob(f"/usr/lib/postgresql/*/bin/{name}")
+    if paths:
+        return sorted(paths)[-1]
+    res = shutil.which(name)
+    if not res:
+        for p in [f"/usr/bin/{name}", f"/usr/local/bin/{name}"]:
+            if os.path.exists(p): return p
+        raise FileNotFoundError(f"Could not find PostgreSQL binary: {name}")
+    return res
+
+
 def rebuild_db(db_name):
     print(f"[*] Dropping and Rebuilding Database Schema ({db_name})...")
     env = dict(os.environ)
-    pg_bins = glob.glob("/usr/lib/postgresql/*/bin/")
-    pg_bin_dir = sorted(pg_bins)[-1] if pg_bins else ""
 
-    psql_cmd = f"{pg_bin_dir}psql" if pg_bin_dir else (shutil.which("psql") or "psql")
-    dropdb_cmd = f"{pg_bin_dir}dropdb" if pg_bin_dir else (shutil.which("dropdb") or "dropdb")
-    createdb_cmd = f"{pg_bin_dir}createdb" if pg_bin_dir else (shutil.which("createdb") or "createdb")
+    try:
+        psql_cmd = get_pg_bin("psql")
+        dropdb_cmd = get_pg_bin("dropdb")
+        createdb_cmd = get_pg_bin("createdb")
+    except FileNotFoundError as e:
+        print(f"❌ ERROR: {e}")
+        sys.exit(1)
 
     subprocess.run([psql_cmd, "postgres", "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}';"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
     subprocess.run([dropdb_cmd, "--if-exists", "--force", db_name], check=False, stderr=subprocess.DEVNULL, env=env)
@@ -545,11 +560,14 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
             subprocess.run(["mount", "-o", "remount,bind,ro", real_dir], check=True)
 
     # 3. PostgreSQL Sandboxing
-    pg_bins = glob.glob("/usr/lib/postgresql/*/bin/initdb")
-    if not pg_bins:
-        print("❌ ERROR: Could not locate PostgreSQL initdb.")
+    try:
+        initdb_cmd = get_pg_bin("initdb")
+        pg_ctl_cmd = get_pg_bin("pg_ctl")
+        psql_cmd = get_pg_bin("psql")
+    except FileNotFoundError as e:
+        print(f"❌ ERROR: {e}")
         sys.exit(1)
-    pg_bin_dir = os.path.dirname(sorted(pg_bins)[-1]) + "/"
+
     pg_data, pg_sock = "/opt/hams/pgdata", "/opt/hams/pgsock"
 
     orig_user = os.environ.get("SUDO_USER", "odoo")
@@ -558,12 +576,12 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
         os.setresgid(pg_user.pw_gid, pg_user.pw_gid, pg_user.pw_gid)
         os.setresuid(pg_user.pw_uid, pg_user.pw_uid, pg_user.pw_uid)
 
-    subprocess.run([f"{pg_bin_dir}initdb", "-D", pg_data], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
-    subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_sock} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run([initdb_cmd, "-D", pg_data], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_sock} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
 
     wait_for_socket(f"{pg_sock}/.s.PGSQL.5432", "PostgreSQL")
 
-    p = subprocess.Popen([f"{pg_bin_dir}psql", "-h", pg_sock, "-d", "postgres"], stdin=subprocess.PIPE, preexec_fn=preexec_pg, text=True, stdout=subprocess.DEVNULL)
+    p = subprocess.Popen([psql_cmd, "-h", pg_sock, "-d", "postgres"], stdin=subprocess.PIPE, preexec_fn=preexec_pg, text=True, stdout=subprocess.DEVNULL)
     p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
     p.wait()
 
@@ -619,7 +637,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     # 7. Graceful Ephemeral Teardown
     subprocess.run(["rabbitmqctl", "stop"], preexec_fn=preexec_rmq, check=False, stdout=subprocess.DEVNULL)
     redis_proc.terminate()
-    subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-m", "fast", "stop"], preexec_fn=preexec_pg, check=False, stdout=subprocess.DEVNULL)
+    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], preexec_fn=preexec_pg, check=False, stdout=subprocess.DEVNULL)
 
     if os.path.exists("/opt/hams/spool/filtered_test.txt"):
         os.makedirs(real_log_dir, exist_ok=True)
@@ -644,11 +662,14 @@ def provision_jules(base_dir):
     subprocess.run(["fuser", "-k", "8069/tcp"], check=False, stderr=subprocess.DEVNULL)
 
     print("[*] Configuring local PostgreSQL...")
-    pg_bins = glob.glob("/usr/lib/postgresql/*/bin/initdb")
-    if not pg_bins:
-        print("❌ ERROR: PostgreSQL initdb not found.")
+    try:
+        initdb_cmd = get_pg_bin("initdb")
+        pg_ctl_cmd = get_pg_bin("pg_ctl")
+        psql_cmd = get_pg_bin("psql")
+    except FileNotFoundError as e:
+        print(f"❌ ERROR: {e}")
         sys.exit(1)
-    pg_bin_dir = os.path.dirname(sorted(pg_bins)[-1]) + "/"
+
     pg_data, pg_socket = "/opt/hams/pgdata", "/opt/hams/pgsock"
 
     subprocess.run(["systemctl", "stop", "postgresql"], check=False, stderr=subprocess.DEVNULL)
@@ -667,10 +688,10 @@ def provision_jules(base_dir):
 
     if not os.listdir(pg_data):
         with micro_privilege(orig_user):
-            subprocess.run([f"{pg_bin_dir}initdb", "-D", pg_data], check=True)
+            subprocess.run([initdb_cmd, "-D", pg_data], check=True)
 
     with micro_privilege(orig_user):
-        subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-m", "fast", "stop"], check=False, stderr=subprocess.DEVNULL)
+        subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], check=False, stderr=subprocess.DEVNULL)
 
     try:
         os.remove(f"{pg_data}/postmaster.pid")
@@ -678,10 +699,10 @@ def provision_jules(base_dir):
         pass
 
     with micro_privilege(orig_user):
-        subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], check=True)
+        subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], check=True)
         wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
 
-        p = subprocess.Popen([f"{pg_bin_dir}psql", "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, text=True, stdout=subprocess.DEVNULL)
+        p = subprocess.Popen([psql_cmd, "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, text=True, stdout=subprocess.DEVNULL)
         p.communicate(f"CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; CREATE ROLE {orig_user} WITH SUPERUSER LOGIN;")
         p.wait()
 
@@ -697,7 +718,7 @@ def provision_jules(base_dir):
 
     def teardown():
         with micro_privilege(orig_user):
-            subprocess.run([f"{pg_bin_dir}pg_ctl", "-D", pg_data, "-m", "fast", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     atexit.register(teardown)
 
 
