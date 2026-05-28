@@ -310,7 +310,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
         os.chmod(host_tmp_dir, 0o1777)
     except OSError:
         pass
-    env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider --user-data-dir={host_tmp_dir}")
+    env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
     env.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
 
     process = subprocess.Popen(
@@ -659,7 +659,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
         os.chmod(host_tmp_dir, 0o1777)
     except OSError:
         pass
-    os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker --user-data-dir={host_tmp_dir} --single-process"
+    os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,dbus --user-data-dir={host_tmp_dir} --single-process"
     os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
     os.environ["HOME"] = "/var/lib/odoo"
     os.environ["XDG_DATA_HOME"] = "/var/lib/odoo/.local/share"
@@ -894,7 +894,7 @@ def main():
         os.chmod(host_tmp_dir, 0o1777)
     except OSError:
         pass
-    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider --user-data-dir={host_tmp_dir}")
+    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
     os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
 
     # Force system site-packages resolution for Odoo core in restricted venvs

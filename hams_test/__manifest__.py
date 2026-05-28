@@ -5,7 +5,7 @@
     "author": "Bruce Perens K6BP",
     "category": "Hidden",
     "summary": "Unified testing infrastructure (Real Transaction, Tours, Integration Daemons).",
-    "depends": ["base", "web", "web_tour", "zero_sudo"],
+    "depends": ["base", "web", "web_tour"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
