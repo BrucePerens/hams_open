@@ -738,6 +738,10 @@ def provision_jules(base_dir, already_provisioned=False):
             run_sys(["bash", "-c", "curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor --yes -o /usr/share/keyrings/postgresql-keyring.gpg"])
             run_sys(["bash", "-c", "echo \"deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main\" > /etc/apt/sources.list.d/pgdg.list"])
 
+            run_sys(["apt-get", "update"] + apt_opts)
+            run_sys(["apt-get", "install", "-y"] + apt_opts + ["postgresql-common"])
+            run_sys(["apt-get", "install", "-y"] + apt_opts + ["postgresql-client"])
+
             infrastructure.provision_static_files(run_sys, env_vars, environment="prod")
             infrastructure.provision_apt_packages(run_sys, environment="early_prod")
             run_sys(["apt-get", "install", "-y"] + apt_opts + ["odoo"])

@@ -7,7 +7,7 @@
     "category": "Security",
     "version": "1.0",
     "license": "AGPL-3",
-    "depends": ["base", "mail", "hams_test"],
+    "depends": ["base", "mail"],
     "assets": {
       "web.assets_tests": [
         "zero_sudo/static/src/**/*"
