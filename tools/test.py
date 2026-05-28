@@ -735,6 +735,24 @@ def provision_jules(base_dir, already_provisioned=False):
     user_info = pwd.getpwnam(orig_user)
     orig_uid, orig_gid = user_info.pw_uid, user_info.pw_gid
 
+    print("[*] Preparing testing directories with production paths...")
+    for d in [
+        "/var/lib/odoo/daemon_keys",
+        "/opt/hams/spool",
+        "/opt/hams/spool/ncvec",
+        "/opt/hams/spool/adif_queue",
+        "/opt/hams/cache",
+        "/opt/hams/pycache",
+        "/opt/hams/failed_input",
+        "/opt/hams/downloads"
+    ]:
+        os.makedirs(d, exist_ok=True)
+        try:
+            os.chown(d, orig_uid, orig_gid)
+            os.chmod(d, 0o775)
+        except OSError:
+            pass
+
     def preexec_orig_user():
         os.setresgid(orig_gid, orig_gid, orig_gid)
         os.setresuid(orig_uid, orig_uid, orig_uid)
