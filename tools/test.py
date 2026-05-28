@@ -703,7 +703,10 @@ def provision_jules(base_dir, already_provisioned=False):
 
             req_file = os.path.join(base_dir, "requirements.txt")
             if os.path.exists(req_file):
-                run_sys(["/usr/bin/python3", "-m", "pip", "install", "--break-system-packages", "-r", req_file])
+                try:
+                    run_sys(["/usr/bin/python3", "-m", "pip", "install", "--break-system-packages", "--ignore-installed", "-r", req_file])
+                except subprocess.CalledProcessError as e:
+                    print(f"[*] WARNING: pip install encountered an error: {e}. Continuing to ensure database provisioning completes.")
         except subprocess.CalledProcessError as e:
             print(f"❌ ERROR: Failed to provision system packages: {e}")
             sys.exit(1)
