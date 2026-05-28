@@ -1,10 +1,12 @@
-# Jules Issues: backup_management
+# Jules Issues - backup_management
+
+This document records issues encountered during environment provisioning and test execution for the `backup_management` module in the Jules VM environment.
 
 ## Provisioning Issues
-- **Recursion Error in Module Dependencies**: Encountered `odoo.exceptions.UserError: Recursion error in modules dependencies!` when attempting to provision the environment or run tests for `backup_management`.
-  - Investigation revealed a circular dependency: `hams_test` depends on `zero_sudo`, and `zero_sudo` depends on `hams_test`.
-  - This prevents the Odoo registry from loading and tests from running.
-  - This issue was confirmed by attempting to run tests for `base`, `hams_test`, and `zero_sudo` individually; `base` worked (though with some test failures), but `hams_test` and `zero_sudo` both failed with the same recursion error.
+- Initial provisioning with `--provision-jules` timed out due to the large number of APT packages being installed (Odoo and its dependencies).
+- APT locks were occasionally held by background processes, requiring retries.
+- Odoo package installation was initially in a half-configured state (`iF` in dpkg), but was eventually resolved.
 
-## Standard Test Issues
-- **Unable to Run Standard Tests**: Due to the circular dependency issue mentioned above, standard tests for the `backup_management` module could not be executed.
+## Test Issues
+- `TestBackupSecurity.test_symlink_traversal`: Failed with `PermissionError: [Errno 13] Permission denied: '/var/lib/odoo/backups'`. The test attempts to create a directory in a system path that the `jules` user (or the `odoo` user under which tests might be running) does not have write access to in this environment.
+- `TestBackupTour.test_backup_dashboard_tour`: Skipped with `Failed to detect chrome devtools port after 10.0s`. Chrome headless failed to start, possibly due to DBUS connection issues (`Failed to connect to the bus: Address does not contain a colon`).
