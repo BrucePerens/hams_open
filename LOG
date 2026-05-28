@@ -1,0 +1,60 @@
+Requirement already satisfied: PyPDF2==2.12.1 in /usr/local/lib/python3.13/dist-packages (2.12.1)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+initdb: warning: enabling "trust" authentication for local connections
+initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+[+] SUCCESS: Manifest Dependency Graph validated. No chronological forward references found.
+==========================================================
+ 🧪 ODOO TEST RUNNER [STANDARD MODE]
+==========================================================
+[*] Running Manifest Dependency Graph Linter...
+[*] Running AST Burn List Linter...
+
+[*] Scanning for Semantic Anchors...
+[*] Scanning documentation and codebase for Semantic Anchors...
+
+[+] SUCCESS: Verified 389 Semantic Anchors and 260 API Contracts. (Module Bounds Secure & Explicit Targeting Profile Operational)
+
+[*] Running JavaScript Syntax Linter...
+[*] JS Syntax Linter: Checking 36 JS files...
+[+] JS Syntax Linter: All 36 files passed.
+
+[*] Dropping and Rebuilding Database Schema (hams_test)...
+[*] Flushing persistent daemons (Redis / RabbitMQ)...
+
+[*] [DEBUG-RUNNER] Subprocess spawned: PID 28358, PGID 28358
+[*] [DEBUG-RUNNER] Executing command: /home/bruce/workspace/hams_community/.venv/bin/python /usr/bin/odoo --load=base,web,hams_test --addons-path /usr/lib/python3/dist-packages/odoo/addons,/home/bruce/workspace/hams_community,/home/bruce/workspace/hams_community,/home/bruce/workspace/hams_com --dev=all -d hams_test -i base,backup_management,binary_downloader,cloudflare,compliance,daemon_key_manager,database_management,distributed_redis_cache,hams_helpdesk,hams_test,manual_library,pager_duty,user_websites,user_websites_seo,zero_sudo --test-enable --test-tags /backup_management,/binary_downloader,/cloudflare,/compliance,/daemon_key_manager,/database_management,/distributed_redis_cache,/hams_helpdesk,/hams_test,/manual_library,/pager_duty,/user_websites,/user_websites_seo,/zero_sudo --stop-after-init --workers=0 --max-cron-threads=0 --http-interface 127.0.0.1 --http-port 8069
+[*] [DEBUG-RUNNER] IO Reader thread started for PID 28358
+2026-05-28 19:38:33,534 28358 INFO ? odoo: Odoo version 19.0-20260527 
+2026-05-28 19:38:33,534 28358 INFO ? odoo: addons paths: _NamespacePath(['/usr/lib/python3/dist-packages/odoo/addons', '/var/lib/odoo/.local/share/Odoo/addons/19.0', '/home/bruce/workspace/hams_community', '/home/bruce/workspace/hams_com', '/usr/lib/python3/dist-packages/addons']) 
+2026-05-28 19:38:33,534 28358 INFO ? odoo: database: odoo@/opt/hams/pgsock:default 
+2026-05-28 19:38:33,681 28358 WARNING ? odoo.service.server: 'inotify' module not installed. Code autoreload feature is disabled 
+2026-05-28 19:38:33,682 28358 INFO ? odoo.service.server: HTTP service (werkzeug) running on localhost:8069 
+2026-05-28 19:38:33,737 28358 INFO hams_test odoo.tests.common: Importing test framework 
+2026-05-28 19:38:33,751 28358 INFO hams_test odoo.modules.loading: Initializing database hams_test 
+2026-05-28 19:38:34,077 28358 INFO hams_test odoo.modules.loading: loading 1 modules... 
+2026-05-28 19:38:34,077 28358 INFO hams_test odoo.modules.loading: Loading module base (1/1) 
+2026-05-28 19:38:34,090 28358 INFO hams_test odoo.registry: module base: creating or updating database tables 
+2026-05-28 19:38:34,195 28358 INFO hams_test odoo.models: Prepare computation of ir.module.module.menus_by_module 
+2026-05-28 19:38:34,195 28358 INFO hams_test odoo.models: Prepare computation of ir.module.module.reports_by_module 
+2026-05-28 19:38:34,195 28358 INFO hams_test odoo.models: Prepare computation of ir.module.module.views_by_module 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.user_id 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.commercial_partner_id 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.complete_name 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.lang 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.company_registry 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.commercial_company_name 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.properties 
+2026-05-28 19:38:34,230 28358 INFO hams_test odoo.models: Prepare computation of res.partner.partner_share 
+2026-05-28 19:38:34,242 28358 INFO hams_test odoo.models: Prepare computation of res.currency.decimal_places 
+2026-05-28 19:38:34,249 28358 INFO hams_test odoo.models: Prepare computation of res.company.uses_default_logo 
+2026-05-28 19:38:34,249 28358 INFO hams_test odoo.models: Prepare computation of res.company.logo_web 
+2026-05-28 19:38:34,250 28358 INFO hams_test odoo.models: Computing parent_path for table res_company... 
+2026-05-28 19:38:34,259 28358 INFO hams_test odoo.models: Prepare computation of res.users.signature 
+2026-05-28 19:38:34,260 28358 INFO hams_test odoo.models: Prepare computation of res.users.share 
+2026-05-28 19:38:34,819 28358 INFO hams_test odoo.modules.loading: loading base/data/res_bank.xml 
+2026-05-28 19:38:34,822 28358 INFO hams_test odoo.modules.loading: loading base/data/res.lang.csv 
+2026-05-28 19:38:34,846 28358 INFO hams_test odoo.modules.loading: loading base/data/res_lang_data.xml 
+2026-05-28 19:38:34,863 28358 INFO hams_test odoo.modules.loading: loading base/data/res_partner_data.xml 
+2026-05-28 19:38:34,891 28358 INFO hams_test odoo.modules.loading: loading base/data/res_currency_data.xml 
+2026-05-28 19:38:35,053 28358 INFO hams_test odoo.modules.loading: loading base/data/res_company_data.xml 
+2026-05-28 19:38:35,058 28358 INFO hams_test odoo.modules.loading: loading base/data/res_users_data.xml 

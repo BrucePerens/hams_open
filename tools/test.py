@@ -160,6 +160,7 @@ class FailureExtractor:
                 or "Cloudflare URL purge API failed for chunk: API fail" in line
                 or "Cloudflare Tag purge API failed for chunk: API fail" in line
                 or "[BACKUP_WORKER]" in line
+                or "[LOG_ANALYZER]" in line
             ):
                 if self.capturing:
                     self.captured_blocks.append((self.current_context, self.current_block))
