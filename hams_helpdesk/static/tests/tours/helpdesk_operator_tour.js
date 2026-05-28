@@ -7,12 +7,15 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
     url: "/odoo?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
-        { trigger: '.o_app[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]', content: 'Wait for Helpdesk App Icon on Root Menu', run: function() {} },
+        // Wait for the home menu app icon to render using pure structure-agnostic attributes
+        { trigger: '[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]', content: 'Wait for Helpdesk App Icon on Root Menu', run: function() {} },
         {
-            trigger: '.o_app[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]',
+            trigger: '[data-menu-xmlid="hams_helpdesk.menu_hams_helpdesk_root"]',
             content: "Open the Helpdesk app",
             run: "click",
         },
+        // Wait for the list view to load before trying to click add
+        { trigger: '.o_list_button_add', content: 'Wait for Create Button', run: function() {} },
         {
             trigger: '.o_list_button_add',
             content: "Create a new ticket",
@@ -29,12 +32,13 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             run: 'click',
         }
     ].concat(TourUtils.safeSave()).concat([
+        { trigger: 'button[name="action_shift_handoff"]', content: 'Wait for Handoff button', run: function() {} },
         {
             trigger: 'button[name="action_shift_handoff"]',
             content: "Initiate the Shift Handoff procedure",
             run: "click",
         },
-        { trigger: '.modal-content', content: 'Wait for Handoff Modal to mount and render', run: function() {} },
+        { trigger: '.modal-body', content: 'Wait for Handoff Modal to mount and render', run: function() {} },
         {
             trigger: 'div[name="handoff_notes"] textarea',
             content: "Enter briefing notes for the next operator",
@@ -46,7 +50,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             run: 'click',
         },
         {
-            trigger: '.modal-footer button[name="action_confirm_handoff"]',
+            trigger: 'button[name="action_confirm_handoff"]',
             content: "Confirm the handoff to transfer ownership",
             run: "click",
         }

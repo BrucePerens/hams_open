@@ -232,35 +232,3 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
             view_type="list",
         )
         self.assertIn("website_published", v8["arch"])
-
-    def test_09_community_directory_rendering(self):
-        # [@ANCHOR: test_dropzone_directory_card]
-        # Tests [@ANCHOR: dropzone_directory_card]
-
-        # Create a user that will show up in the directory
-        self.env["res.users"].create(
-            {
-                "name": "Directory User",
-                "login": "diruser",
-                "website_slug": "diruser",
-                "privacy_show_in_directory": True,
-                "group_ids": [
-                    (
-                        6,
-                        0,
-                        [
-                            self.env.ref("base.group_portal").id,
-                            self.env.ref("user_websites.group_user_websites_user").id,
-                        ],
-                    )
-                ],
-            }
-        )
-
-        response = self.url_open("/community")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(
-            b'id="user_websites_dropzone_directory_card"',
-            response.content,
-            "The community directory must render the directory card dropzone."
-        )

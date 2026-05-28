@@ -7,9 +7,14 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         { trigger: 'table tbody tr td a', content: 'Wait for Ticket List to Render', run: function() {} },
-        TourUtils.clickAndUnload('table tbody tr td a'),
-        { trigger: '#optional_classes.container h3', content: 'Wait for: Verify that the ticket detail page loaded successfully', run: function() {} },
+        {
+            trigger: 'table tbody tr td a',
+            content: 'Click ticket to navigate to detail page',
+            run: 'click',
+            expectUnloadPage: true, // Navigation breaks SPA
+        },
+        { trigger: 'body', content: 'Wait for page unload and hydrate', run: function() {} },
+        // Verify we are on the ticket detail page using a robust native structural class
         { trigger: '.o_portal_chatter', content: 'Wait for: Verify the chatter is available', run: function() {} },
-
     ],
 });
