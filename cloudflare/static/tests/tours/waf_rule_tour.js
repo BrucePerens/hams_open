@@ -14,6 +14,11 @@ registry.category("web_tour.tours").add("cf_waf_rule_tour", {
         },
         { trigger: '[data-menu-xmlid="cloudflare.menu_cloudflare_root"]', content: "Open Cloudflare Edge Menu", run: 'click' },
         {
+            trigger: '.o_breadcrumb',
+            content: "Wait for App Breadcrumb to render",
+            run: function () {}
+        },
+        {
             content: "Open WAF Rules Menu",
             trigger: '[data-menu-xmlid="cloudflare.menu_cf_waf_rules"]',
             run: "click"

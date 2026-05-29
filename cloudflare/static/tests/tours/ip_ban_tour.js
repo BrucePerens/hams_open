@@ -18,6 +18,11 @@ registry.category("web_tour.tours").add("cf_ip_ban_tour", {
             run: 'click',
         },
         {
+            trigger: '.o_breadcrumb',
+            content: "Wait for App Breadcrumb to render",
+            run: function () {}
+        },
+        {
             content: "Open IP Bans Menu",
             trigger: 'a[data-menu-xmlid="cloudflare.menu_cf_ip_bans"]',
             run: "click"

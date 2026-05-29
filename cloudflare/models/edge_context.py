@@ -13,8 +13,16 @@ class CloudflareUtils(models.AbstractModel):
         Unified helper to resolve the active website ID across HTTP and Cron contexts.
         """
         try:
-            if request and getattr(request, "website", False):
-                return request.website.id
+            # Accessing request._get_current_object() will raise RuntimeError if not bound.
+            # Odoo's request is a Werkzeug LocalProxy.
+            if request:
+                if hasattr(request, "_get_current_object"):
+                    request_obj = request._get_current_object()
+                else:
+                    request_obj = request
+
+                if hasattr(request_obj, "website") and request_obj.website:
+                    return request_obj.website.id
         except RuntimeError:
             pass
         return self.env["website"].get_current_website().id
@@ -27,9 +35,17 @@ class CloudflareUtils(models.AbstractModel):
         Returns a dictionary to be used by proprietary modules for default routing.
         """
         try:
-            if not request or not hasattr(request, "httprequest"):
+            if not request:
                 return {}
-            headers = request.httprequest.headers
+            # Check if request is bound to a current thread/context
+            if hasattr(request, "_get_current_object"):
+                request_obj = request._get_current_object()
+            else:
+                request_obj = request
+
+            if not hasattr(request_obj, "httprequest"):
+                return {}
+            headers = request_obj.httprequest.headers
         except RuntimeError:
             return {}
 

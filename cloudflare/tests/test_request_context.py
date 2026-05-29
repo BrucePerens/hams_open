@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -19,9 +20,11 @@ class TestRequestContext(HamsHttpCase):
         }
 
         # safe_patch replaces the target, so we mock the entire object
-        mock_obj = self.safe_patch('odoo.addons.cloudflare.models.edge_context.request')
+        mock_obj = MagicMock()
         mock_obj.httprequest.headers = headers
         mock_obj.httprequest.remote_addr = '1.1.1.1'
+        mock_obj._get_current_object.return_value = mock_obj
+        self.safe_patch('odoo.addons.cloudflare.models.edge_context.request', new=mock_obj)
 
         context = self.env['cloudflare.utils'].get_request_context()
 
@@ -34,9 +37,11 @@ class TestRequestContext(HamsHttpCase):
 
     def test_02_get_request_context_no_headers(self):
         """Verify fallback when Cloudflare headers are missing."""
-        mock_obj = self.safe_patch('odoo.addons.cloudflare.models.edge_context.request')
+        mock_obj = MagicMock()
         mock_obj.httprequest.headers = {}
         mock_obj.httprequest.remote_addr = '1.1.1.1'
+        mock_obj._get_current_object.return_value = mock_obj
+        self.safe_patch('odoo.addons.cloudflare.models.edge_context.request', new=mock_obj)
 
         context = self.env['cloudflare.utils'].get_request_context()
         self.assertEqual(context['ip'], '1.1.1.1')

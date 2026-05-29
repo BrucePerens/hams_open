@@ -16,14 +16,24 @@ class IrHttp(models.AbstractModel):
         """
         res = super()._post_dispatch(response)
 
-        if (
-            not request
-            or not hasattr(request, "httprequest")
-            or not hasattr(response, "headers")
-        ):
+        if not hasattr(response, "headers"):
             return res
 
-        path = request.httprequest.path
+        try:
+            if not request:
+                return res
+
+            if hasattr(request, "_get_current_object"):
+                request_obj = request._get_current_object()
+            else:
+                request_obj = request
+
+            if not hasattr(request_obj, "httprequest"):
+                return res
+        except RuntimeError:
+            return res
+
+        path = request_obj.httprequest.path
 
         # 1. Media & Assets (Max aggressive caching: 1 year)
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
