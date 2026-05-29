@@ -317,7 +317,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     except OSError:
         pass
     env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
-    env.setdefault("DBUS_SESSION_BUS_ADDRESS", "unix:path=/dev/null")
+    env.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
 
     process = subprocess.Popen(
         cmd,
@@ -901,7 +901,7 @@ def main():
     except OSError:
         pass
     os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
-    os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "unix:path=/dev/null")
+    os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
 
     # Force system site-packages resolution for Odoo core in restricted venvs
     sys_paths = os.environ.get("PYTHONPATH", "")

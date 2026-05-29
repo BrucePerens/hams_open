@@ -2,7 +2,7 @@
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import ValidationError
-from psycopg2.errors import ForeignKeyViolation
+from psycopg2.errors import RestrictViolation
 from odoo.tools import mute_logger
 
 
@@ -73,6 +73,6 @@ class TestManualORMLogic(HamsTransactionCase):
         Verify that parent articles cannot be deleted if they have children,
         due to the ondelete='restrict' configuration.
         """
-        with self.assertRaises(ForeignKeyViolation):
+        with self.assertRaises(RestrictViolation):
             with self.env.cr.savepoint():
                 self.article_a.unlink()
