@@ -306,8 +306,8 @@ class BinaryManifest(models.Model):
                 if tmp_path and os.path.exists(tmp_path):
                     try:
                         os.unlink(tmp_path)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        _logger.warning("Failed to remove temporary file %s: %s", tmp_path, e)
         except (UserError, ValidationError):
             raise
         except (

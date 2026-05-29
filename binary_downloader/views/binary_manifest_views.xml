@@ -34,7 +34,7 @@
                         <group>
                             <field name="is_installed" readonly="1"/>
                             <field name="archive_type"/>
-                            <field name="extract_member" invisible="archive_type != 'tar.gz'"/>
+                            <field name="extract_member" invisible="archive_type not in ('tar.gz', 'zip')"/>
                         </group>
                         <group>
                             <field name="url"/>

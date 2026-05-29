@@ -4,6 +4,8 @@
 
 The **Binary Downloader** is a secure, database-backed orchestration module designed to provide static executable dependencies (e.g., `kopia`, `etcd`, `cloudflared`) to other Odoo subsystems. It implements a robust lifecycle management system for external tools while maintaining strict security standards.
 
+The module supports raw binaries as well as compressed archives (`.tar.gz` and `.zip`). When using archives, you must specify the member to be extracted. The installation process is protected by database-level advisory locks to prevent concurrent write operations.
+
 ---
 
 # Technical Documentation
