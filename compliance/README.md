@@ -17,6 +17,39 @@ The boilerplate policies we generate are written specifically to cover the featu
 * How our abuse reporting system hides the reporter's email to protect them.
 * How our 3-strike moderation and suspension system works.
 
+## 📖 User Guide: Operating Your Compliant Website
+
+Managing regulatory compliance is easy with this module. Here is how you can operate the core features:
+
+### 1. Viewing and Editing Your Legal Pages
+We provide three standard pages that you can edit to fit your needs:
+* **Privacy Policy:** `/privacy`
+* **Cookie Policy:** `/cookie-policy`
+* **Terms of Service:** `/terms`
+
+**To edit these pages:**
+1. Navigate to the page URL on your website.
+2. Click the **Edit** button in the top-right corner of the screen.
+3. Use the Odoo website builder to change the text.
+4. Click **Save**. Your changes are safe and won't be overwritten when you update the module.
+
+### 2. The Cookie Consent Bar
+The module automatically enables Odoo's native Cookie Bar.
+* **To verify it:** Open your site in an "Incognito" or "Private" browser window. You should see a banner at the bottom of the page.
+* **To manage it:** You can find the settings under **Website -> Configuration -> Settings**. Look for the "Cookie Bar" option.
+
+### 3. Handling Your Own Legal Pages
+If you already had a page at `/privacy` before installing this module, we won't touch it. Our "boilerplate" page will stay hidden (unpublished) so your visitors only see your version.
+* **To switch to our boilerplate:** Delete or rename your custom page, and our version will automatically become visible again.
+
+## 🧪 Testing
+
+To run the tests for this module in the Jules VM environment:
+
+```bash
+IN_JULES_VM=1 python3 tools/test.py -u compliance --already-provisioned
+```
+
 ## 🛠️ Installation
 
 1. Drop the `compliance` folder into your Odoo `addons` directory.
