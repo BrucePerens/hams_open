@@ -34,6 +34,10 @@ class PagerLogAPI(http.Controller):
         if not request.env.user.has_group("pager_duty.group_pager_admin"):
             raise AccessError(_("Access Denied: Admins only."))
 
+        # CWE-22 Path Traversal Prevention
+        if ".." in file_path.split(os.path.sep):
+            raise AccessError(_("Illegal path traversal detected."))
+
         if not redis or not redis_pool:
             return {"error": _("Redis not available for IPC.")}  # # Tests [@ANCHOR: pd_log_api_i18n]  # fmt: skip
 

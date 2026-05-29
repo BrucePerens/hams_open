@@ -628,44 +628,34 @@ def execute_check(check, client=None):
             else "SELECT 1;"
         )
 
-        if psycopg2:
-            conn = None
-            try:
-                conn = psycopg2.connect(
-                    host=target,
-                    port=port,
-                    dbname=dbname,
-                    user=user,
-                    password=password,
-                    connect_timeout=2,
-                )
-                with conn.cursor() as cur:
-                    cur.execute(query)
-                    val = cur.fetchone()[0]
+        conn = None
+        try:
+            conn = psycopg2.connect(
+                host=target,
+                port=port,
+                dbname=dbname,
+                user=user,
+                password=password,
+                connect_timeout=2,
+            )
+            with conn.cursor() as cur:
+                cur.execute(query)
+                val = cur.fetchone()[0]
 
-                if ctype == "anomaly":
-                    critical_min = int(check.get("critical", 0))
-                    if val < critical_min:
-                        return (
-                            False,
-                            f"Anomaly Threshold Breached: {val} < {critical_min}",
-                        )
-                return True, "OK"
-            except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
-                logger.warning("Postgres check failed: %s", e)
-                return False, f"PostgreSQL/Anomaly check failed: {e}"
-            finally:
-                if conn:
-                    conn.close()
-        else:
             if ctype == "anomaly":
-                return False, "psycopg2 required for anomaly queries"
-            try:
-                with socket.create_connection((target, port), timeout=2):
-                    return True, "OK"
-            except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
-                logger.warning("Postgres socket check failed: %s", e)
-                return False, f"PostgreSQL socket fallback failed: {e}"
+                critical_min = int(check.get("critical", 0))
+                if val < critical_min:
+                    return (
+                        False,
+                        f"Anomaly Threshold Breached: {val} < {critical_min}",
+                    )
+            return True, "OK"
+        except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
+            logger.warning("Postgres check failed: %s", e)
+            return False, f"PostgreSQL/Anomaly check failed: {e}"
+        finally:
+            if conn:
+                conn.close()
 
     elif ctype == "ssl":
         try:

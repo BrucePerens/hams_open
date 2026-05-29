@@ -145,7 +145,7 @@ class TestPagerIncidentIntegration(HamsTransactionCase):
         self.incident_model = self.env["pager.incident"]
         self.service_user = self.env.ref("pager_duty.user_pager_service_internal")
 
-        if not hasattr(self.__class__, '_daemons_started'):
+        if not getattr(self.__class__, '_daemons_started', False):
             base_dir = os.path.join(os.path.dirname(__file__), "..", "daemon")
             daemons = ["pager_smart_spooler.py", "pager_log_analyzer.py", "pager_synthetic_spooler.py"]
             for d in daemons:

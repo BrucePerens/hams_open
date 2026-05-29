@@ -32,10 +32,9 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                 target_model = "hams_helpdesk.ticket"
 
             assignee_id = False
-            if hasattr(self.env["calendar.event"], "get_current_on_duty_admin"):
-                user = self.env["calendar.event"].get_current_on_duty_admin()
-                if user:
-                    assignee_id = user.id
+            user = self.env["calendar.event"].get_current_on_duty_admin()
+            if user:
+                assignee_id = user.id
 
             if target_model not in self.env:
                 _logger.warning("Target helpdesk model '%s' not found. Ensure the module is installed.", target_model)
@@ -96,10 +95,9 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         Executes a direct SMTP page if the Helpdesk integration fails or is unreachable.
         """
         if not assignee_id:
-            if hasattr(self.env["calendar.event"], "get_current_on_duty_admin"):
-                user = self.env["calendar.event"].get_current_on_duty_admin()
-                if user:
-                    assignee_id = user.id
+            user = self.env["calendar.event"].get_current_on_duty_admin()
+            if user:
+                assignee_id = user.id
 
         try:
             pd_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

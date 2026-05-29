@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import json
+from odoo import fields
 import os
 import socket
 import time
@@ -244,7 +245,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_ctx.wrap_socket.return_value.__enter__.return_value = mock_ssock
 
         # Future Cert
-        future_date = datetime.datetime.utcnow() + datetime.timedelta(days=20)
+        future_date = fields.Datetime.now() + datetime.timedelta(days=20)
         mock_ssock.getpeercert.return_value = {
             "notAfter": future_date.strftime("%b %d %H:%M:%S %Y GMT")
         }
@@ -255,7 +256,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertTrue(success)
 
         # Expiring Cert
-        expiring_date = datetime.datetime.utcnow() + datetime.timedelta(days=5)
+        expiring_date = fields.Datetime.now() + datetime.timedelta(days=5)
         mock_ssock.getpeercert.return_value = {
             "notAfter": expiring_date.strftime("%b %d %H:%M:%S %Y GMT")
         }
