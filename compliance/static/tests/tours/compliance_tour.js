@@ -7,8 +7,9 @@ registry.category("web_tour.tours").add("compliance_tour", {
     url: "/privacy?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
+        { trigger: '#wrap', run: function() {} }, // Wait for wrap
         {
-            trigger: '#wrap',
+            trigger: 'h1',
             content: 'Verify Privacy Policy content',
             run: function () {
                 const text = document.body.textContent;

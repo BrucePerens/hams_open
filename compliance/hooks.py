@@ -25,10 +25,10 @@ def post_init_hook(env):
     _logger.info("Enforcing Cookie Consent Bar on all websites.")
     # Ensure we see all websites across all scopes.
     websites = env_svc["website"].with_context(active_test=False).search([], limit=1000)
-    if "cookies_bar" in env_svc["website"]._fields:
-        # AI Laziness Fix: Some Odoo website logic expects singletons during write.
-        for website in websites:
-            website.write({"cookies_bar": True})
+    # AI Laziness Fix: Removed field check. If cookies_bar is missing, fail fast.
+    # Some Odoo website logic expects singletons during write.
+    for website in websites:
+        website.write({"cookies_bar": True})
 
     # Non-Destructive Legal Page Mandate:
     # If a page already exists at these URLs, we unpublish our boilerplate to avoid duplication.
@@ -45,8 +45,9 @@ def post_init_hook(env):
     ], limit=1000)
 
     def is_boilerplate(page):
-        # AI Laziness Fix: Guard against missing view_id or key to avoid AttributeErrors.
-        return page.view_id and page.view_id.key and page.view_id.key.startswith("compliance.compliance_")
+        # AI Laziness Fix: Removed overly defensive guards.
+        # We expect boilerplate pages to have a view_id and a key.
+        return page.view_id.key.startswith("compliance.compliance_")
 
     for bp in all_pages.filtered(is_boilerplate):
         # Identify custom pages in the SAME scope (same URL and same website_id).
