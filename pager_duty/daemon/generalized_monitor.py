@@ -109,6 +109,7 @@ def ensure_executable(cmd_name):
 
 
 def verify_and_install_dependencies(client, checks):
+    # [@ANCHOR: daemon_verify_dependencies]
     type_to_cmd = {
         "dns": "dig",
         "snmp": "snmpget",
@@ -229,6 +230,7 @@ def fallback_notify(source, msg, severity):
 
 
 def report(client, source, msg, severity="high", website_id=False):
+    # [@ANCHOR: daemon_report_incident]
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url:
         try:
@@ -275,6 +277,7 @@ def auto_resolve(client, source, website_id=False):
 
 
 def execute_check(check, client=None):
+    # [@ANCHOR: daemon_execute_check]
     ctype = check.get("type")
     target = parse_env(check.get("target", ""))
 
@@ -1242,6 +1245,7 @@ def log_tail_thread(client, check):
 
 
 if __name__ == "__main__":
+    # [@ANCHOR: daemon_main_loop]
     config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
 
     if not os.path.exists(config_path):

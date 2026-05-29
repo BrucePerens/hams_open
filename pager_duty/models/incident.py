@@ -166,14 +166,7 @@ class PagerIncident(models.Model):
 
         # Suppress native pager notifications if helpdesk integration is active
         # to prevent duplicate alerting (Helpdesk will handle the page).
-        try:
-            use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param("pager_duty.helpdesk_model")
-        except (ValueError, KeyError, AttributeError) as e:
-            _logger.warning("Helpdesk integration check failed (Config missing): %s", e)
-            use_helpdesk = False
-        except Exception as e: # audit-ignore-catch-all
-            _logger.error("Unexpected error during helpdesk integration check: %s", e)
-            use_helpdesk = False
+        use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param("pager_duty.helpdesk_model")
 
         if on_duty_user and not use_helpdesk:
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(

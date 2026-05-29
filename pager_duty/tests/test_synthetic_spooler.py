@@ -8,7 +8,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
 
     def test_00_i18n_headless_audit(self):
         # Tests [@ANCHOR: synthetic_i18n]
-        self.assertTrue(callable(getattr(pager_synthetic_spooler, "execute_check", None)))
+        self.assertTrue(callable(pager_synthetic_spooler.execute_check))
 
     def test_01_real_bash_execution(self):
         check = {

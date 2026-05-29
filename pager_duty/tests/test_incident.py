@@ -161,15 +161,12 @@ class TestPagerIncidentIntegration(HamsTransactionCase):
             "description": "Test breach",
         }
 
-        try:
-            r = redis.Redis(
-                host=os.getenv("REDIS_HOST") or "redis",
-                port=int(os.getenv("REDIS_PORT") or "6379"),
-                db=0,
-            )
-            r.delete("pager_rate_limit:test_daemon")
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("An error occurred communicating with Redis: %s", e)
+        r = redis.Redis(
+            host=os.getenv("REDIS_HOST") or "redis",
+            port=int(os.getenv("REDIS_PORT") or "6379"),
+            db=0,
+        )
+        r.delete("pager_rate_limit:test_daemon")
 
         # First request passes the cache check
         res1 = self.incident_model.report_incident(vals)
@@ -186,15 +183,12 @@ class TestPagerIncidentIntegration(HamsTransactionCase):
             "description": "Zero sudo test",
         }
 
-        try:
-            r = redis.Redis(
-                host=os.getenv("REDIS_HOST") or "redis",
-                port=int(os.getenv("REDIS_PORT") or "6379"),
-                db=0,
-            )
-            r.delete("pager_rate_limit:test_daemon_2")
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("An error occurred communicating with Redis: %s", e)
+        r = redis.Redis(
+            host=os.getenv("REDIS_HOST") or "redis",
+            port=int(os.getenv("REDIS_PORT") or "6379"),
+            db=0,
+        )
+        r.delete("pager_rate_limit:test_daemon_2")
 
         incident_id = self.incident_model.report_incident(vals)
         self.assertTrue(
