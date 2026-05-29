@@ -46,3 +46,7 @@ class TestSEOUI(RealTransactionCase):
 
         self.env.cr.commit()
         super().tearDown()
+
+    def test_01_seo_widget_tour(self):
+        """Execute the SEO Optimization UI Tour as the portal user."""
+        self.start_tour("/blog?debug=1", "user_websites_seo_tour", login="seouitest")

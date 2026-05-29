@@ -261,7 +261,6 @@ docs/adrs/README.md
 docs/adrs/0076_ui_tour_mandate_and_bypass_governance.md
 docs/adrs/0081_ui_testability_and_tour_friendly_design.md
 docs/adrs/0082_strict_daemon_integration_testing.md
-docs/backup_management.md
 docs/callbook/#STATUS.md
 docs/callbook/Argentina.md
 docs/callbook/Australia.md

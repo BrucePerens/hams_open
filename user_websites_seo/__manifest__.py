@@ -1,7 +1,9 @@
 {
     "name": "User Websites SEO",
     "summary": "Lets users optimize their personal and group blogs for search engines.",
-    "description": "Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.",
+    "description": """
+Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.
+    """,
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "category": "Website",

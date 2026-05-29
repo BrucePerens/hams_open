@@ -244,6 +244,12 @@ class PagerCheck(models.Model):
 
     @api.model
     def _get_config_path(self):
+        # Prefer the system-wide writable configuration directory in production/test environments
+        # ADR-0070 restricts daemon directories to read-only for Odoo workers.
+        sys_config_dir = "/opt/hams/etc"
+        if os.path.exists(sys_config_dir) and os.access(sys_config_dir, os.W_OK):
+            return os.path.join(sys_config_dir, "pager_config.json")
+
         base_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "daemon")
         )
