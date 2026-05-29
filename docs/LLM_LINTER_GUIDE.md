@@ -54,6 +54,7 @@ You MUST pre-fetch data into memory-mapped dictionaries.
 You MUST paginate or limit bulk searches.
 * **Cursor Mismanagement:** Using `env.cr.commit()` or `env.cr.rollback()` directly inside a `with registry.cursor():` block breaks psycopg2 state.
 You MUST use `cr = registry.cursor()` followed by `try/except/finally`.
+* **Multi-Tenant Context Management (ADR-0083):** You MUST NOT manually inject `allowed_company_ids` into the context dictionary via `.with_context()`. The linter actively blocks this. You MUST use the native ORM abstraction `.with_company(company_id)`.
 * **Proxy Ownership Constraints:** When assigning proxy ownership to a dictionary payload in Python, assigning BOTH `owner_user_id` and `user_websites_group_id` simultaneously will trigger an AST trap.
 They are mutually exclusive.
 * **RPC Mass Assignment:** Passing `kwargs` directly into `.create(**kwargs)` or `.write(kwargs)` inside a controller routes is blocked.

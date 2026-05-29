@@ -12,9 +12,9 @@ class Module(models.Model):
     @api.model
     def _register_hook(self):
         super()._register_hook()
-        # [@ANCHOR: zero_sudo:zero_sudo_register_hook]
-        # Verified by [@ANCHOR: zero_sudo:test_zero_sudo_register_hook]
-        self._bootstrap_knowledge_docs()
+        if not getattr(self.env.registry, '_zero_sudo_docs_checked', False):
+            self.env.registry._zero_sudo_docs_checked = True
+            self._bootstrap_knowledge_docs()
 
     @api.model
     def _bootstrap_knowledge_docs(self):

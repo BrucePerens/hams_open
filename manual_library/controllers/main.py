@@ -188,9 +188,9 @@ class ManualLibraryController(http.Controller):
                         'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
-        except (ValueError, AccessError):
+        except (ValueError, AccessError) as e:
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery
-            pass
+            _logger.warning("Feedback submission failed gracefully: %s", e)
 
         # Protect against open redirects by enforcing local paths
         referer = request.httprequest.referrer or "/manual"

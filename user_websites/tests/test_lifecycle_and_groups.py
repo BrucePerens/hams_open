@@ -132,7 +132,8 @@ class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
                 "owner_user_id": self.user_a.id,
             }
         )
-        self.assertTrue(page.website_published and post.is_published)
+        self.assertTrue(page.website_published, "Page should be published initially")
+        self.assertTrue(post.is_published, "Post should be published initially")
 
         self.logout()
         self.authenticate("admin", "admin")

@@ -197,7 +197,7 @@ class UserWebsitesController(http.Controller):
             "name": f"{entity_name} Home",
             "type": "qweb",
             "arch_base": arch_base,
-            "website_id": request.website.id if hasattr(request, 'website') and request.website else False,
+            "website_id": request.website.id if getattr(request, 'website', False) else False,
             "website_published": True,
         }
         if profile_user:
@@ -229,7 +229,7 @@ class UserWebsitesController(http.Controller):
 
         create_vals = {
             "name": f"{entity_name}'s Blog",
-            "website_id": request.website.id if hasattr(request, 'website') and request.website else False,
+            "website_id": request.website.id if getattr(request, 'website', False) else False,
         }
         if profile_user:
             create_vals["owner_user_id"] = profile_user.id

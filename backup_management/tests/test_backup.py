@@ -2,11 +2,14 @@
 import datetime
 import shutil
 import os
+import logging
 
 from odoo import fields, _
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
@@ -18,8 +21,8 @@ class TestBackupManagement(RealTransactionCase):
             else:
                 try:
                     os.remove("/var/lib/odoo/backup_repo")
-                except OSError:
-                    pass
+                except OSError as e:
+                    _logger.warning("Failed to remove backup repo: %s", e)
         super().tearDown()
 
     def setUp(self):
@@ -46,8 +49,8 @@ class TestBackupManagement(RealTransactionCase):
             else:
                 try:
                     os.remove("/var/lib/odoo/backup_repo")
-                except OSError:
-                    pass
+                except OSError as e:
+                    _logger.warning("Failed to remove backup repo: %s", e)
         self.admin = self.env.ref("base.user_admin")
         self.config_kopia = self.env["backup.config"].create(
             {

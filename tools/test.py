@@ -116,8 +116,8 @@ class FailureExtractor:
         os.makedirs(base_dir, exist_ok=True)
         try:
             os.chmod(base_dir, 0o1777)
-        except OSError:
-            pass
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
         self.display_path = os.path.join(base_dir, "filtered_test.txt")
 
         if os.environ.get("HAMS_ISOLATED_NS") == "1":
@@ -127,8 +127,8 @@ class FailureExtractor:
 
         try:
             os.remove(self.output_path)
-        except OSError:
-            pass
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
 
         self.log_prefix_pattern = re.compile(
             r"^(?:\s*)?\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}"
@@ -315,8 +315,8 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     os.makedirs(host_tmp_dir, exist_ok=True)
     try:
         os.chmod(host_tmp_dir, 0o1777)
-    except OSError:
-        pass
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
     env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
     env.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
@@ -427,15 +427,17 @@ def get_addons_path(base_dir):
                 if item.startswith("hams_community") or item.startswith("hams_com"):
                     if item_path not in paths:
                         paths.append(item_path)
-    except OSError:
-        pass
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
 
     community_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_community"))
     primary_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_com"))
 
     if os.path.isdir(community_dir) and community_dir not in paths: paths.append(community_dir)
-    if os.path.isdir("/hams_community") and "/hams_community" not in paths: paths.append("/hams_community")
     if os.path.isdir(primary_dir) and primary_dir not in paths: paths.append(primary_dir)
+
+    nested_community = os.path.abspath(os.path.join(base_dir, "hams_community"))
+    if os.path.isdir(nested_community) and nested_community not in paths: paths.append(nested_community)
 
     return ",".join(paths)
 
@@ -508,8 +510,8 @@ def wait_for_socket(sock_path, name, timeout=60.0):
                     sock.connect(sock_path)
                     print(f"[*] {name} socket is ready.")
                     return True
-                except OSError:
-                    pass
+                except OSError as e:
+                    _logger.debug("Ignored OSError: %s", e)
         time.sleep(0.5)
     print(f"❌ ERROR: {name} socket {sock_path} did not open within {timeout} seconds.")
     return False
@@ -591,8 +593,8 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     os.makedirs(host_tmp_dir, exist_ok=True)
     try:
         os.chmod(host_tmp_dir, 0o1777)
-    except OSError:
-        pass
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
     os.makedirs("/var/tmp", exist_ok=True)
     subprocess.run(["mount", "--bind", host_tmp_dir, "/var/tmp"], check=True)
 
@@ -605,9 +607,9 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
         for item in os.listdir(parent_dir):
             if item.startswith("hams_community") or item.startswith("hams_com"):
                 extra_mounts.append(os.path.join(parent_dir, item))
-    except OSError:
-        pass
-    extra_mounts.extend([os.path.join(base_dir, "..", "hams_community"), "/hams_community"])
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
+    extra_mounts.extend([os.path.join(base_dir, "..", "hams_community"), "/hams_community", os.path.join(base_dir, "hams_community")])
 
     mounted_dirs = set()
     for extra_dir in extra_mounts:
@@ -690,8 +692,8 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     os.makedirs(host_tmp_dir, exist_ok=True)
     try:
         os.chmod(host_tmp_dir, 0o1777)
-    except OSError:
-        pass
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
     os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,dbus --user-data-dir={host_tmp_dir} --single-process"
     os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
     os.environ["HOME"] = "/var/lib/odoo"
@@ -763,6 +765,16 @@ def provision_jules(base_dir, already_provisioned=False):
 
     if not already_provisioned:
         print("[*] Provisioning APT Sources and Packages...")
+
+        if "hams_community" not in os.path.basename(os.path.abspath(base_dir)):
+            target_clone = "/app/hams_community" if os.path.abspath(base_dir) == "/app" else "../hams_community"
+            if not os.path.exists(target_clone):
+                print(f"[*] Sibling repository not found. Cloning hams_community to {target_clone}...")
+                try:
+                    run_sys(["git", "clone", "https://github.com/BrucePerens/hams_community", target_clone])
+                except subprocess.CalledProcessError as e:
+                    print(f"[*] WARNING: Failed to clone hams_community: {e}")
+
         try:
             apt_opts = ["-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Lock::Timeout=120"]
             # APT Packages MUST run before static files to ensure python3-setuptools exists for PyPDF2 setup.py
@@ -803,8 +815,8 @@ def provision_jules(base_dir, already_provisioned=False):
                     try:
                         os.chown(d, odoo_uid, odoo_gid)
                         os.chmod(d, 0o750)
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        _logger.debug("Ignored OSError: %s", e)
             except KeyError:
                 print("[*] WARNING: 'odoo' user not found during directory preparation.")
 
@@ -851,8 +863,8 @@ def provision_jules(base_dir, already_provisioned=False):
 
     try:
         os.remove(f"{pg_data}/postmaster.pid")
-    except OSError:
-        pass
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
 
     subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], preexec_fn=preexec_orig_user, check=True)
     wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
@@ -903,8 +915,8 @@ def main():
         os.makedirs(real_log_dir, exist_ok=True)
         try:
             os.chmod(real_log_dir, 0o1777)
-        except OSError:
-            pass
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
         print("[*] Routing test execution to isolated Python namespace...")
 
         os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
@@ -924,8 +936,8 @@ def main():
     os.makedirs(host_tmp_dir, exist_ok=True)
     try:
         os.chmod(host_tmp_dir, 0o1777)
-    except OSError:
-        pass
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
     os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
     os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
 

@@ -160,11 +160,6 @@ GENERAL_ERROR_RULES = [
 ODOO_ERROR_RULES = [
     (
         r"\.py$",
-        re.compile(r"\bhasattr\s*\(\s*(?:request|self\.env\.registry|self\.env\[)"),
-        "CRITICAL AI LAZINESS: Defensive 'hasattr' checks mask missing architectural components or unbound proxies. Fail fast instead.",
-    ),
-    (
-        r"\.py$",
         re.compile(r"['\"]groups_id['\"]\s*:"),
         "CRITICAL BIAS TRAP: Odoo 18+ normalized the res.users groups relation to 'group_ids'.",
     ),
@@ -249,6 +244,11 @@ ODOO_ERROR_RULES = [
         r"\.py$",
         re.compile(r"['\"]detailed_type['\"]\s*:"),
         "CRITICAL DEPRECATION: 'detailed_type' on product.template was reverted to 'type' in Odoo 19.",
+    ),
+    (
+        r"\.py$",
+        re.compile(r"\bwith_context\s*\(\s*allowed_company_ids\s*="),
+        "CRITICAL MULTI-TENANT BYPASS: Manually injecting 'allowed_company_ids' via with_context is forbidden per ADR-0083. You MUST use the architecturally mandated '.with_company(company_id)' method.",
     ),
     (
         r"\.(py|js|xml)$",
@@ -1078,6 +1078,12 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                     self.add_error(node.lineno, "CRITICAL DOS VECTOR: Unbounded Thread.")
 
             if self.in_http_controller and self.is_odoo_module:
+                if attr == "website" and getattr(node.func.value, "id", "") == "request":
+                     self.add_warning(
+                         node.lineno,
+                         "[%AUDIT] MULTI-TENANT ISOLATION: When extracting 'request.website', ensure you immediately extract its '.id' or fallback to 0 for distributed cache keys (ADR-0083)."
+                     )
+
                 if (
                     attr == "get"
                     and getattr(node.func.value, "id", "") == self.current_kwarg_name

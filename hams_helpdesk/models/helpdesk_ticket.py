@@ -93,10 +93,10 @@ class HelpdeskTicket(models.Model):
         try:
             pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
             Calendar = pager_env["calendar.event"]
-        except AccessError:
+        except AccessError as e:
             # PagerDuty service account might not be provisioned yet or module not installed.
             # This is an optional integration, so we continue with standard env.
-            pass
+            _logger.info("PagerDuty service env not loaded (optional integration): %s", e)
 
         if hasattr(Calendar, "get_current_on_duty_admin"):
             on_duty_admin = Calendar.get_current_on_duty_admin()

@@ -38,5 +38,5 @@ def post_init_hook(env):
 
     # Lock down the Cloudflare service account (Hard Dependency)
     cf_svc = env_svc.ref("cloudflare.user_cloudflare_service", raise_if_not_found=False)
-    if cf_svc and "is_service_account" in cf_svc._fields:
+    if cf_svc:
         cf_svc.write({"is_service_account": True})
