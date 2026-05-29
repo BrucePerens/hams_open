@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
 from odoo.http import request
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class CloudflareUtils(models.AbstractModel):
     _name = "cloudflare.utils"
@@ -13,18 +15,12 @@ class CloudflareUtils(models.AbstractModel):
         Unified helper to resolve the active website ID across HTTP and Cron contexts.
         """
         try:
-            # Accessing request._get_current_object() will raise RuntimeError if not bound.
-            # Odoo's request is a Werkzeug LocalProxy.
             if request:
-                if hasattr(request, "_get_current_object"):
-                    request_obj = request._get_current_object()
-                else:
-                    request_obj = request
-
-                if hasattr(request_obj, "website") and request_obj.website:
+                request_obj = request._get_current_object()
+                if getattr(request_obj, "website", False):
                     return request_obj.website.id
-        except RuntimeError:
-            pass
+        except (RuntimeError, AttributeError) as e:
+            _logger.warning("Failed to resolve current website: %s", e)
         return self.env["website"].get_current_website().id
 
     @api.model
@@ -38,15 +34,10 @@ class CloudflareUtils(models.AbstractModel):
             if not request:
                 return {}
             # Check if request is bound to a current thread/context
-            if hasattr(request, "_get_current_object"):
-                request_obj = request._get_current_object()
-            else:
-                request_obj = request
-
-            if not hasattr(request_obj, "httprequest"):
-                return {}
+            request_obj = request._get_current_object()
             headers = request_obj.httprequest.headers
-        except RuntimeError:
+        except (RuntimeError, AttributeError) as e:
+            _logger.warning("Failed to get request context: %s", e)
             return {}
 
         return {

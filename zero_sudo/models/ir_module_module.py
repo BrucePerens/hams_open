@@ -12,7 +12,7 @@ class Module(models.Model):
     @api.model
     def _register_hook(self):
         super()._register_hook()
-        if not hasattr(self.env.registry, '_zero_sudo_docs_checked'):
+        if not getattr(self.env.registry, '_zero_sudo_docs_checked', False):
             self.env.registry._zero_sudo_docs_checked = True
             self._bootstrap_knowledge_docs()
 

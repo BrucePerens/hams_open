@@ -62,8 +62,8 @@ if hasattr(ChromeBrowser, 'start'):
                     try:
                         self.chrome_process.terminate()
                         self.chrome_process.wait(timeout=1.0)
-                    except OSError:
-                        pass
+                    except OSError as te:
+                        _logger.warning("TRACING: Failed terminating chrome process: %s", te)
                 time.sleep(1.0) # audit-ignore-sleep
     ChromeBrowser.start = _patched_start
 else:
@@ -82,8 +82,8 @@ else:
                     try:
                         self.chrome_process.terminate()
                         self.chrome_process.wait(timeout=1.0)
-                    except OSError:
-                        pass
+                    except OSError as te:
+                        _logger.warning("TRACING: Failed terminating chrome process: %s", te)
                 time.sleep(1.0) # audit-ignore-sleep
     ChromeBrowser.__init__ = _patched_init
 

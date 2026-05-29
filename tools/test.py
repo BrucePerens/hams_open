@@ -434,7 +434,6 @@ def get_addons_path(base_dir):
     primary_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_com"))
 
     if os.path.isdir(community_dir) and community_dir not in paths: paths.append(community_dir)
-    if os.path.isdir("/hams_community") and "/hams_community" not in paths: paths.append("/hams_community")
     if os.path.isdir(primary_dir) and primary_dir not in paths: paths.append(primary_dir)
 
     nested_community = os.path.abspath(os.path.join(base_dir, "hams_community"))
@@ -768,11 +767,11 @@ def provision_jules(base_dir, already_provisioned=False):
         print("[*] Provisioning APT Sources and Packages...")
 
         if "hams_community" not in os.path.basename(os.path.abspath(base_dir)):
-            target_clone = "/app/hams_community" if os.path.abspath(base_dir) == "/app" else "/hams_community"
+            target_clone = "/app/hams_community" if os.path.abspath(base_dir) == "/app" else "../hams_community"
             if not os.path.exists(target_clone):
                 print(f"[*] Sibling repository not found. Cloning hams_community to {target_clone}...")
                 try:
-                    run_sys(["git", "clone", "--depth", "1", "https://github.com/BrucePerens/hams_community", target_clone])
+                    run_sys(["git", "clone", "https://github.com/BrucePerens/hams_community", target_clone])
                 except subprocess.CalledProcessError as e:
                     print(f"[*] WARNING: Failed to clone hams_community: {e}")
 
