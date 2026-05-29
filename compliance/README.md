@@ -2,45 +2,44 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-This module automatically handles the annoying parts of running a legal website. It makes sure your Odoo instance complies with GDPR, CCPA, and ePrivacy rules without you having to configure anything manually.
+This module helps your website stay legal. It handles the technical requirements of privacy laws like GDPR and CCPA automatically, so you don't have to worry about the details.
 
 ## 🌟 What It Does
 
-* **Turns on the Cookie Banner:** As soon as you install this, it flips the switch to turn on Odoo's native Cookie Consent Bar across all your websites. It also ensures that any **new** websites created later have this enabled by default. This stops optional tracking scripts until the user clicks "Accept."
-* **Writes Your Legal Pages:** It automatically creates standard, editable pages for your Privacy Policy (`/privacy`), Cookie Policy (`/cookie-policy`), and Terms of Service (`/terms`).
-* **Doesn't Break Your Edits:** If you've already written a privacy policy at `/privacy`, the module detects it and leaves yours alone. If you edit the pages it creates, it won't overwrite your work when you update the module.
+* **Automatic Cookie Banner:** It turns on the standard Odoo cookie banner on all your websites. This banner asks visitors for permission before any optional tracking starts. New websites you create will also have this turned on automatically.
+* **Ready-to-Use Legal Pages:** It creates basic versions of the three pages every website needs: a Privacy Policy, a Cookie Policy, and Terms of Service.
+* **Protects Your Changes:** If you edit these pages using the website builder, your changes are safe. We won't overwrite them when you update the module. If you already had your own legal pages, we'll keep yours and hide ours.
 
-## ⚖️ Included Policy Coverage
-The boilerplate policies we generate are written specifically to cover the features in our other open-source modules. They explain:
-* How our privacy-friendly view counters work.
-* How users can download or permanently delete their data at the `/my/privacy` dashboard.
-* How our abuse reporting system hides the reporter's email to protect them.
-* How our 3-strike moderation and suspension system works.
+## ⚖️ What's in the Policies?
+The policies we provide are designed to work with our other modules. They explain:
+* How we count visitors without tracking them.
+* How users can see or delete their data from their account dashboard.
+* How we protect the identity of people who report problems or abuse.
+* How our simple "three-strikes" system keeps the community safe.
 
-## 📖 User Guide: Operating Your Compliant Website
+## 📖 How to Manage Your Website's Compliance
 
-Managing regulatory compliance is easy with this module. Here is how you can operate the core features:
-
-### 1. Viewing and Editing Your Legal Pages
-We provide three standard pages that you can edit to fit your needs:
+### 1. Editing Your Legal Pages
+You can find your legal pages at these addresses on your site:
 * **Privacy Policy:** `/privacy`
 * **Cookie Policy:** `/cookie-policy`
 * **Terms of Service:** `/terms`
 
-**To edit these pages:**
-1. Navigate to the page URL on your website.
-2. Click the **Edit** button in the top-right corner of the screen.
-3. Use the Odoo website builder to change the text.
-4. Click **Save**. Your changes are safe and won't be overwritten when you update the module.
+**To change the text on these pages:**
+1. Go to the page on your website.
+2. Click **Edit** at the top right.
+3. Type your changes directly into the page.
+4. Click **Save**.
 
-### 2. The Cookie Consent Bar
-The module automatically enables Odoo's native Cookie Bar.
-* **To verify it:** Open your site in an "Incognito" or "Private" browser window. You should see a banner at the bottom of the page.
-* **To manage it:** You can find the settings under **Website -> Configuration -> Settings**. Look for the "Cookie Bar" option.
+### 2. Checking the Cookie Banner
+The cookie banner shows up for new visitors. To see it yourself:
+1. Open your browser in "Private" or "Incognito" mode.
+2. Go to your website.
+3. You should see a banner at the bottom of the screen.
 
-### 3. Handling Your Own Legal Pages
-If you already had a page at `/privacy` before installing this module, we won't touch it. Our "boilerplate" page will stay hidden (unpublished) so your visitors only see your version.
-* **To switch to our boilerplate:** Delete or rename your custom page, and our version will automatically become visible again.
+### 3. Using Your Own Custom Pages
+If you already made your own page at `/privacy` (or the other addresses) before installing this module, we won't change it. We'll hide our version so visitors only see yours.
+* **To use our version instead:** Just delete or rename your custom page, and our standard version will show up automatically.
 
 ## 🧪 Testing
 

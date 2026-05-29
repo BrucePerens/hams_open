@@ -1,13 +1,13 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // # Verified by [@ANCHOR: test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {
     url: "/privacy?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
-        { trigger: '#wrap', run: function() {} }, // Wait for wrap
+        { trigger: '#wrap', content: 'Wait for wrap', run: function() {} },
+        { trigger: 'h1', content: 'Wait for header', run: function() {} },
         {
             trigger: 'h1',
             content: 'Verify Privacy Policy content',
@@ -19,7 +19,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
                 }
             }
         },
-        { trigger: "a[href='/cookie-policy']", content: 'Wait for: Verify Cookie Policy link in related section', run: function() {} },
-        { trigger: "a[href='/terms']", content: 'Wait for: Verify Terms of Service link in related section', run: function() {} },
+        { trigger: "a[href='/cookie-policy']", content: 'Verify Cookie Policy link in related section', run: function() {} },
+        { trigger: "a[href='/terms']", content: 'Verify Terms of Service link in related section', run: function() {} },
     ],
 });

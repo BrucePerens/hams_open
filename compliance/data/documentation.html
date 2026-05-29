@@ -1,90 +1,71 @@
 <h1 class="mb-4">Site Owner's Guide to Regulatory Compliance</h1>
-<p class="lead text-muted">A comprehensive guide for community administrators regarding GDPR, CCPA, ePrivacy, WCAG, and platform moderation regulations.</p>
+<p class="lead text-muted">A simple guide to help you understand how this website handles privacy and legal rules.</p>
 
 <hr class="mt-4 mb-4"/>
 
 <h2 class="mt-4">1. Introduction</h2>
-<p>Running a website today involves many legal responsibilities. The <code>compliance</code> module is designed to automate the technical side of these responsibilities so you can focus on your community. This guide explains what the module does and how you can manage your site's legal standing.</p>
+<p>Running a website comes with legal responsibilities. We've automated the technical parts so you can focus on your community. This guide explains how your site stays legal and what you need to do.</p>
 
-<h2 class="mt-4">2. Data Privacy &amp; Protection (GDPR &amp; CCPA)</h2>
-<p>Modern data protection laws like the General Data Protection Regulation (GDPR) in Europe and the California Consumer Privacy Act (CCPA) mandate strict handling of personal data. This platform is built with <strong>Privacy by Design</strong>.</p>
+<h2 class="mt-4">2. Privacy Laws (GDPR &amp; CCPA)</h2>
+<p>Privacy laws require you to be careful with personal data. Our platform is built to be "Privacy First":</p>
 <ul>
-    <li><strong>Data Minimization:</strong> The platform avoids unnecessary data collection. System view counters operate without logging Personally Identifiable Information (PII) or IP addresses.</li>
-    <li><strong>Data Portability (Right to Access):</strong> Users have the right to request a copy of their data. The platform provides an automated JSON export tool at <code>/my/privacy</code>.</li>
-    <li><strong>Right to Erasure (Right to be Forgotten):</strong> Users must be able to delete their accounts and data. An automated hard-delete facility is available at <code>/my/privacy</code>, which immediately unlinks all authored pages and blogs.</li>
+    <li><strong>Collecting Less Data:</strong> We only collect what is strictly needed. Our visitor counters don't track individual people or store their IP addresses.</li>
+    <li><strong>Data Access:</strong> Users can download a copy of all their data from their account dashboard at <code>/my/privacy</code>.</li>
+    <li><strong>Right to be Forgotten:</strong> Users can delete their account and all their content instantly from the same dashboard.</li>
 </ul>
 
 <hr class="mt-4 mb-4"/>
 
-<h2 class="mt-4">3. Cookie Consent (ePrivacy Directive)</h2>
-<p>The ePrivacy Directive (often called the "Cookie Law") requires explicit user consent before storing non-essential cookies (like analytics or marketing trackers) on a user's device.</p>
+<h2 class="mt-4">3. Cookie Consent</h2>
+<p>In many places, you must ask visitors for permission before using "cookies" (small files that track them).</p>
 <ul>
-    <li><strong>Native Integration:</strong> This module automatically enforces Odoo's native Cookie Consent Bar across all active websites upon installation. It also ensures that any new websites you create will have this feature enabled by default. [@ANCHOR: compliance_post_init_cookie_bar]</li>
-    <li><strong>How to Verify:</strong> To see the cookie bar in action, open your website in a "Private" or "Incognito" browser window. You should see a banner at the bottom of the page asking for your permission to use cookies.</li>
-    <li><strong>Compliance Protocol:</strong> Do not bypass this bar by hardcoding third-party tracking scripts into your website templates. All trackers must hook into the core framework's consent state.</li>
+    <li><strong>Automatic Banner:</strong> This module turns on the standard cookie banner for you. New visitors will see it at the bottom of the page. [@ANCHOR: compliance_post_init_cookie_bar]</li>
+    <li><strong>How to Check:</strong> Open your site in an "Incognito" or "Private" window to see the banner yourself.</li>
+    <li><strong>Stay Compliant:</strong> If you add new features (like chat or tracking tools), make sure they work with this banner. Don't add tracking code that bypasses it.</li>
 </ul>
 
 <hr class="mt-4 mb-4"/>
 
-<h2 class="mt-4">4. Required Legal Boilerplates</h2>
-<p>To operate legally, your website must publicly display specific policy documents. The <code>compliance</code> module automatically provisions editable, AGPL-3 compatible templates for:</p>
+<h2 class="mt-4">4. Legal Documents</h2>
+<p>Every website needs a few standard documents. We've created basic versions for you:</p>
 <ul>
-    <li><strong>Privacy Policy</strong> (accessible at <code>/privacy</code>): Explains data collection, usage, and user rights. [@ANCHOR: compliance_privacy_policy_template]</li>
-    <li><strong>Cookie Policy</strong> (accessible at <code>/cookie-policy</code>): Details the types of cookies used and how users can manage them. [@ANCHOR: compliance_cookie_policy_template]</li>
-    <li><strong>Terms of Service</strong> (accessible at <code>/terms</code>): Outlines the rules for using the platform, content ownership, and moderation policies. [@ANCHOR: compliance_terms_of_service_template]</li>
+    <li><strong>Privacy Policy</strong> (at <code>/privacy</code>): Explains how you handle data. [@ANCHOR: compliance_privacy_policy_template]</li>
+    <li><strong>Cookie Policy</strong> (at <code>/cookie-policy</code>): Explains the small files your site uses. [@ANCHOR: compliance_cookie_policy_template]</li>
+    <li><strong>Terms of Service</strong> (at <code>/terms</code>): The rules for using your site. [@ANCHOR: compliance_terms_of_service_template]</li>
 </ul>
 
-<h3 class="mt-3">How to Verify and Customize These Pages</h3>
-<p>You can find and edit these pages using the standard Odoo Website tools:</p>
+<h3 class="mt-3">How to Change These Documents</h3>
 <ol>
-    <li>Go to your website.</li>
-    <li>Navigate to the URL (e.g., <code>yourdomain.com/privacy</code>).</li>
-    <li>Click the <strong>Edit</strong> button in the top right corner.</li>
-    <li>Use the Odoo website builder to update the text to reflect your specific organization's details.</li>
+    <li>Go to the page on your website (e.g., <code>yourdomain.com/privacy</code>).</li>
+    <li>Click the <strong>Edit</strong> button at the top right.</li>
+    <li>Change the text to fit your needs.</li>
+    <li>Click <strong>Save</strong>. Your changes won't be lost when you update the software.</li>
 </ol>
 
-<h3 class="mt-3">The "Non-Destructive Mandate"</h3>
-<p>We respect your work. If you have already created a custom page at one of these URLs before installing this module, we will <strong>not</strong> overwrite it. Instead, the module will automatically "unpublish" its own boilerplate version to ensure your custom content remains the one your visitors see. [@ANCHOR: test_compliance_non_destructive_mandate]</p>
-<p>If you want to go back to using our boilerplate after having unpublished it (or having it automatically unpublished), simply delete your custom page or unpublish it, and then re-publish the "Global Compliance" version of the page in the <b>Site -> Pages</b> menu. The module's background processes will also automatically re-publish its boilerplate if no custom version is detected for that specific website.</p>
-<p>Additionally, because these pages are created as "noupdate" records, any edits you make using the website builder will be preserved even when you update the <code>compliance</code> module in the future.</p>
+<h3 class="mt-3">Using Your Own Custom Pages</h3>
+<p>If you already wrote your own policy pages before installing this module, we won't touch them. We'll hide our version so visitors only see yours. [@ANCHOR: test_compliance_non_destructive_mandate]</p>
+<p>If you want to go back to using our version, just delete your custom page or change its address.</p>
 
 <hr class="mt-4 mb-4"/>
 
-<h2 class="mt-4">5. Web Accessibility (WCAG 2.1 AA)</h2>
-<p>The Web Content Accessibility Guidelines (WCAG) ensure that web content is accessible to people with disabilities. Many jurisdictions now legally require WCAG 2.1 AA compliance.</p>
-<p>Our platform is designed to facilitate compliance, but the responsibility for accessible content remains with the site owner. Key features include:</p>
+<h2 class="mt-4">5. Accessibility</h2>
+<p>We've designed our legal pages to be easy to read for everyone, including people who use screen readers or other assistive tools. This helps your site meet "WCAG" accessibility rules.</p>
+
+<hr class="mt-4 mb-4"/>
+
+<h2 class="mt-4">6. Keeping Your Site Safe (Moderation)</h2>
+<p>Rules like the "Digital Services Act" require you to handle reports about bad content fairly. Our platform helps with this:</p>
 <ul>
-    <li><strong>Semantic HTML:</strong> The legal page templates use proper tag hierarchy (e.g., <code>&lt;h1&gt;</code>, <code>&lt;h2&gt;</code>, <code>&lt;p&gt;</code>) to ensure screen readers can navigate the content logically.</li>
-    <li><strong>Keyboard Navigability:</strong> All standard interactive elements are navigable via the <code>Tab</code> key with visible focus states.</li>
-    <li><strong>ARIA Labels:</strong> Where necessary, elements are equipped with <code>aria-label</code> attributes to describe their function to assistive technologies.</li>
+    <li><strong>Report Button:</strong> Visitors can report content that breaks the rules.</li>
+    <li><strong>Privacy for Reporters:</strong> We hide the identity of the person who reported the content to prevent retaliation.</li>
+    <li><strong>Fair System:</strong> We use a "three-strikes" system for people who break the rules, so everyone is treated fairly.</li>
 </ul>
 
 <hr class="mt-4 mb-4"/>
 
-<h2 class="mt-4">6. Platform Moderation (Digital Services Act / DSA)</h2>
-<p>Regulations governing user-generated content, such as the EU's Digital Services Act (DSA), require platforms to have transparent, accessible, and fair moderation processes. While the <code>compliance</code> module doesn't handle moderation itself, our platform architecture supports these requirements through other integrated modules:</p>
+<h2 class="mt-4">7. Quick Checklist for Site Owners</h2>
 <ul>
-    <li><strong>Notice and Action Mechanism:</strong> Integrated modules provide a "Report Violation" button on user-generated content, allowing guests and users to report abuse.</li>
-    <li><strong>Reporter Shielding:</strong> To prevent retaliation, the identity of the complainant is strictly shielded from the content owner.</li>
-    <li><strong>Fair Appeals:</strong> The automated Three-Strike suspension system implemented across the platform ensures users can contest moderation decisions fairly.</li>
-</ul>
-
-<hr class="mt-4 mb-4"/>
-
-<h2 class="mt-4">7. Administrative Summary: How to Manage Compliance</h2>
-<p>As a Site Administrator, your day-to-day operations regarding compliance are simplified by this module. Follow these best practices:</p>
-<ul>
-    <li><strong>Review Templates Monthly:</strong> Regulations change. While our templates provide a solid starting point, navigate to <code>/privacy</code> and <code>/terms</code> once a month to ensure the text accurately reflects your community's current practices.</li>
-    <li><strong>Test the Consent Bar:</strong> Every time you add a new third-party widget (like a chat tool or video embed), open your site in an Incognito window to confirm the Cookie Bar still appears and functions correctly.</li>
-    <li><strong>Monitor Violation Reports:</strong> Use the "Content Violations" menu in the backend to review any reports submitted by users. Fair and timely moderation is a key part of modern compliance (e.g., Digital Services Act).</li>
-</ul>
-
-<hr class="mt-4 mb-4"/>
-
-<h2 class="mt-4">Module Compliance Statement: Global Compliance</h2>
-<p><strong>How the <code>compliance</code> module complies with the above regulations:</strong></p>
-<ul>
-    <li><strong>ePrivacy:</strong> Directly enforces the activation of the core <code>cookies_bar</code> upon installation.</li>
-    <li><strong>Transparency:</strong> Automatically provisions the required legal boilerplate pages utilizing standard Odoo website pages.</li>
-    <li><strong>WCAG:</strong> The generated QWeb templates for the legal pages utilize semantic HTML structures and respect standard theme contrasts.</li>
+    <li><strong>Check your policies:</strong> Read through <code>/privacy</code> and <code>/terms</code> once a month to make sure they still describe your site correctly.</li>
+    <li><strong>Test the banner:</strong> Every time you add a new tool or widget, check in a Private window to make sure the cookie banner still works.</li>
+    <li><strong>Review reports:</strong> Check the "Content Violations" section in your admin area regularly to handle any reports from users.</li>
 </ul>
