@@ -122,6 +122,21 @@ class TestBinaryManifest(HamsTransactionCase):
 
     def test_07_action_install(self):
         # Tests [@ANCHOR: binary_action_install]
+
+        # We must mock the network layer here just like in test_04 because
+        # action_install calls ensure_executable which triggers the download
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"1234", b""]
+        mock_response_get.getheader.return_value = "fake-etag"
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+
         result = self.manifest.action_install()
         self.assertEqual(result["type"], "ir.actions.client")
         self.assertEqual(result["tag"], "display_notification")
