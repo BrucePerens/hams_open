@@ -66,4 +66,4 @@ The daemon natively understands and monitors the following layers of your infras
 **File Formats & Log Analysis:**
 * **Log Tailing:** Spawns isolated threads to continuously tail system files (e.g., `/var/log/syslog` or Odoo application logs).
 * **RegEx Pattern Matching:** Evaluates log streams against complex Regular Expressions (e.g., `FATAL|Exception|Auth failure`) to catch silent crashes instantly.
-* **YAML Configuration:** The entire monitoring engine is driven by a highly readable `pager_config.yaml` file, which is graphically editable directly from the Odoo backend.
+* **JSON Configuration:** The entire monitoring engine is driven by a highly readable `pager_config.json` file, which is graphically editable directly from the Odoo backend.
