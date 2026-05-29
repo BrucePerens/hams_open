@@ -35,6 +35,24 @@ Browsers give Service Workers a strict storage limit. If a Service Worker tries 
 
 **The Golden Rule:** Keep your `static/` folders strictly reserved for lightweight UI code (JS, CSS) and small layout graphics. If you need to serve heavy media, user uploads, or large datasets, use Odoo's standard attachment routes (`/web/image` or `/web/content`). The Service Worker explicitly ignores those routes, allowing Cloudflare to handle the heavy lifting safely.
 
+## 3. Zero-Sudo Architecture
+This module is built with security as a primary concern, adhering strictly to the Zero-Sudo architecture:
+- **Micro-Privileged Service Account**: A dedicated service user `caching.user_caching_service` is utilized for the filesystem scan ([@ANCHOR: caching_fs_scan_logic]). This account has zero access to business data.
+- **Secure Parameter Access**: System parameters are retrieved through the `zero_sudo.security.utils` abstraction layer, preventing direct access to `ir.config_parameter` and maintaining strict audit trails.
+- **Configuration Whitelisting**: Only specifically approved parameters (`caching.safe_quota_mb`, `caching.invalidation_version`) are accessible to the caching service, preventing unauthorized configuration leakage.
+- **No Sudo Escalation**: All background operations run within the context of their assigned service accounts without ever requesting global administrative (`sudo`) privileges.
+
+## 4. Multi-Tenant & Multi-Website Support
+The module is fully multi-tenant aware:
+- **Website-Specific Configuration**: Each website can have its own `caching_safe_quota_mb` and `caching_invalidation_version`.
+- **Isolation**: The Service Worker respects the current website context when retrieving settings.
+- **Fallback Mechanism**: In scenarios where a website context is unavailable (e.g., direct `/sw.js` requests without a session), the module securely falls back to global system parameters via `zero_sudo` utilities.
+
+## 5. Security & Privacy
+- **Technical Assets Only**: The Service Worker is strictly limited to caching static assets (`static/` directories).
+- **Sensitive Route Bypass**: Private routes such as `/my/`, `/api/`, and administrative interfaces are explicitly bypassed ([@ANCHOR: caching_sw_fetch_interceptor]).
+- **No Personal Data**: No user-specific data, cookies, or session information are stored in the Service Worker cache.
+
 ---
 
 # Technical Documentation

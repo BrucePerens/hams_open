@@ -20,13 +20,19 @@
         <li><strong>Real-time Compatibility:</strong> Live communication features like chat and notifications are explicitly bypassed by the caching system to ensure they always provide real-time updates.</li>
     </ul>
 
-    <h2>4. Administrator Controls</h2>
+    <h2>4. Multi-Tenant Support</h2>
+    <p>The caching module is designed to work seamlessly across multiple websites and companies. Each website maintains its own independent cache versioning and quota settings, ensuring that updates to one site do not inadvertently affect others.</p>
+
+    <h2>5. Security & Privacy</h2>
+    <p>Security is baked into the module's core. We use the "Zero-Sudo" architecture, which means all technical background tasks are performed with the lowest possible privileges. The caching system only interacts with public technical files and never touches your private business data or customer information.</p>
+
+    <h2>6. Administrator Controls</h2>
     <p>Administrators can fine-tune the caching behavior from the <strong>Website Settings</strong> (Configuration &gt; Settings &gt; Website section):</p>
     <ul>
         <li><strong>Safe Quota (MB):</strong> Adjust the maximum total size of files the browser is allowed to save. The default is 35MB, which is safe for most modern browsers. If your website's assets exceed this limit, the module will automatically prioritize essential files and skip the heaviest ones to maintain stability.</li>
         <li><strong>Force Cache Invalidation:</strong> If you have made major visual changes (like updating logos, brand colors, or custom scripts) and want to ensure all users see the update immediately on their next visit, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version and forces all browsers to purge their saved assets and download fresh ones.</li>
     </ul>
 
-    <h2>5. Troubleshooting</h2>
+    <h2>7. Troubleshooting</h2>
     <p>If the website layout appears inconsistent or "broken" after a major update, it is possible that some browsers are still holding onto stale cached files. An administrator can resolve this globally by using the <strong>Invalidate Cache Now</strong> button in the Website Settings. For individual users, a simple page refresh is usually enough to trigger the Service Worker's background update mechanism.</p>
 </section>
