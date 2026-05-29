@@ -111,6 +111,7 @@ class TestManualFeatures(HamsHttpCase):
     def test_04_doc_installation(self):
         # Verified by [@ANCHOR: story_manual_doc_installation]
         # Tests [@ANCHOR: manual_doc_injection]
+        # Tests [@ANCHOR: manual_doc_auto_install]
         """Verify that documentation from the manifest is correctly installed."""
         # Trigger bootstrap manually to ensure it runs during the test
         self.env['ir.module.module']._bootstrap_knowledge_docs()
