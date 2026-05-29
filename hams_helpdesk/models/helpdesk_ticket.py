@@ -59,6 +59,14 @@ class HelpdeskTicket(models.Model):
         help="The website this ticket was created on.",
     )  # [@ANCHOR: helpdesk_multi_website]
 
+    company_id = fields.Many2one(
+        "res.company",
+        string="Company",
+        required=True,
+        index=True,
+        default=lambda self: self.env.company,
+    )
+
     @api.model_create_multi
     def create(self, vals_list):
         # [@ANCHOR: helpdesk_ticket_creation]
@@ -66,6 +74,15 @@ class HelpdeskTicket(models.Model):
         for vals in vals_list:
             if "website_id" not in vals and self.env.context.get("website_id"):
                 vals["website_id"] = self.env.context.get("website_id")
+
+            # Multi-Company Alignment: Ensure company is set, prioritizing website company
+            if not vals.get("company_id"):
+                if vals.get("website_id"):
+                    website = self.env["website"].browse(vals["website_id"])
+                    if website.company_id:
+                        vals["company_id"] = website.company_id.id
+                if not vals.get("company_id") and self.env.context.get("company_id"):
+                    vals["company_id"] = self.env.context.get("company_id")
 
         tickets = super().create(vals_list)
 
@@ -89,6 +106,7 @@ class HelpdeskTicket(models.Model):
         upcoming_partner_ids = []
 
         # Use service account if available, otherwise fallback to current env (e.g. during tests or if pager_duty not installed)
+        # [@ANCHOR: helpdesk_pager_duty_integration]
         Calendar = self.env["calendar.event"]
         try:
             pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
@@ -96,8 +114,9 @@ class HelpdeskTicket(models.Model):
         except AccessError:
             # PagerDuty service account might not be provisioned yet or module not installed.
             # This is an optional integration, so we continue with standard env.
-            pass
+            _logger.debug("PagerDuty service account not available, skipping PagerDuty-specific routing.")
 
+        # [@ANCHOR: helpdesk_pager_duty_check]
         if hasattr(Calendar, "get_current_on_duty_admin"):
             on_duty_admin = Calendar.get_current_on_duty_admin()
             if on_duty_admin:

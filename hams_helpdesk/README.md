@@ -4,6 +4,42 @@
 
 Zero-Sudo compliant, lightweight helpdesk management designed for deep SRE integration.
 
+## Overview
+
+Hams Helpdesk is a specialized support and incident management system designed for high-availability environments. It prioritizes security, traceability, and operational continuity through unique features like Zero-Sudo service accounts and formal shift handoffs.
+
+## Key Features
+
+### 🎫 Advanced Ticketing
+- **Multi-Channel**: Supports ticket creation via backend, web portal, and automated incident triggers.
+- **Traceable Chatter**: Every action, assignment change, and customer communication is logged in an unalterable chatter history.
+- **Micro-Privilege Security**: Granular access control ensures that users only see what they need and can only perform authorized actions.
+
+### 🤝 Operational Continuity
+- **Formal Shift Handoff**: A mandatory wizard-driven process for transferring ticket ownership between operators, capturing critical briefing notes and maintaining a clear audit trail.
+- **On-Duty Routing**: Automatically assigns incoming tickets to the administrator currently on-duty, leveraging integration with PagerDuty and Odoo Calendar.
+
+### 🌐 Multi-Tenant & Multi-Website
+- **Website Segregation**: Tickets are strictly isolated by website, ensuring customers only see their relevant issues on the correct portal.
+- **Company Awareness**: Full multi-company support, with record rules ensuring data isolation across different business units.
+
+### 🛡️ Zero-Sudo Compliance
+- **Secure Automation**: All background tasks, such as auto-assignment and notifications, run under restricted service accounts.
+- **No Global Admin**: Service accounts are mathematically prevented from possessing global administrative privileges, enforcing the principle of least privilege.
+
+## User Guide
+
+### For Support Operators
+1. **Navigating Tickets**: Use the Helpdesk dashboard to view your assigned tickets or browse unassigned queues.
+2. **Assigning Tickets**: Tickets are often auto-assigned. If you need to manually take a ticket, ensure it doesn't conflict with on-duty rotations.
+3. **Updating Status**: Move tickets through stages (New -> In Progress -> Resolved -> Closed) as you work. The customer is automatically notified of these updates.
+4. **Shift Handoff**: When your shift ends, use the "Shift Handoff" button on any active tickets to securely transfer them to the next operator.
+
+### For Portal Customers
+1. **Viewing My Tickets**: Log in to the portal and navigate to "My Tickets" to see a list of your open and past requests.
+2. **Communicating**: Click on a ticket to see its details and post messages directly to the support team.
+3. **Tracking Progress**: You will receive email updates whenever the status of your ticket changes.
+
 <system_role>
 Zero-Sudo compliant, lightweight helpdesk management system designed for SRE (Site Reliability Engineering) workflows. It prioritizes traceability, minimal privilege, and seamless integration with calendar-based on-duty rotations.
 </system_role>
@@ -33,6 +69,10 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
     - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
 * **Ticket Creation (`[@ANCHOR: helpdesk_ticket_creation]`)**: Intercepts the ORM `create` method to automatically execute pre-shift CC logic and route to the currently on-duty personnel based on calendar availability.
     - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+* **PagerDuty Integration (`[@ANCHOR: helpdesk_pager_duty_integration]`)**: Deep integration with calendar-based rotations. The system dynamically resolves the currently active on-duty administrator via the PagerDuty service account to automate ticket assignment during critical incidents.
+    - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+* **PagerDuty Registry Check (`[@ANCHOR: helpdesk_pager_duty_check]`)**: Robust architectural check for optional module integration, ensuring the system fails gracefully if PagerDuty components are not installed in the registry.
+    - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
 * **Shift Handoff Initiation (`[@ANCHOR: helpdesk_shift_handoff]`)**: UI action triggering the secure transfer wizard, ensuring the leaving operator leaves context.
     - Verified by [@ANCHOR: test_02_shift_handoff_wizard]
 * **Handoff Execution (`[@ANCHOR: helpdesk_handoff_execution]`)**: The backend transaction that officially modifies ownership and commits the transfer briefing to the unalterable chatter log.
@@ -41,6 +81,14 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
     - Verified by [@ANCHOR: test_05_doc_injection]
 * **Multi-Website Awareness (`[@ANCHOR: helpdesk_multi_website]`)**: Tickets are associated with specific websites to ensure proper data isolation in multi-tenant environments.
     - Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
+* **Portal List View (`[@ANCHOR: helpdesk_portal_list]`)**: Secure display of customer-owned tickets within the portal, strictly respecting website and company boundaries.
+    - Verified by [@ANCHOR: test_03_portal_security_rules]
+* **Portal Detail View (`[@ANCHOR: helpdesk_portal_detail]`)**: Secure access to individual ticket details, preventing unauthorized cross-website or cross-company access.
+    - Verified by [@ANCHOR: test_03_portal_security_rules]
+* **Operator Tour (`[@ANCHOR: helpdesk_operator_tour]`)**: End-to-end UI verification of the operator workflow, from ticket creation to shift handoff.
+    - Verified by [@ANCHOR: test_helpdesk_operator_tour]
+* **Portal Tour (`[@ANCHOR: helpdesk_portal_tour]`)**: UI verification of the customer portal experience, ensuring tickets are visible and navigable.
+    - Verified by [@ANCHOR: test_helpdesk_portal_tour]
 * **Micro-Privilege Security (`[@ANCHOR: helpdesk_micro_privilege]`)**: Access is strictly controlled via record rules and explicit field-level security in the ORM.
     - Verified by [@ANCHOR: test_05_portal_write_restrictions]
 

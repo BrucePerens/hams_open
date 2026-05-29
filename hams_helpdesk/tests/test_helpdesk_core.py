@@ -35,6 +35,8 @@ class TestHelpdeskCore(HamsTransactionCase):
         # [@ANCHOR: test_01_ticket_creation_and_routing]
         # Tests [@ANCHOR: helpdesk_ticket_creation]
         # Tests [@ANCHOR: helpdesk_ticket_lifecycle]
+        # Tests [@ANCHOR: helpdesk_pager_duty_integration]
+        # Tests [@ANCHOR: helpdesk_pager_duty_check]
 
         manager = self.manager_user
 
@@ -86,6 +88,8 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_03_portal_security_rules(self):
         """Verify DevSecOps compliance: Portal users can ONLY access their own explicitly owned tickets."""
+        # Tests [@ANCHOR: helpdesk_portal_list]
+        # Tests [@ANCHOR: helpdesk_portal_detail]
         my_ticket = self.env['hams_helpdesk.ticket'].create({
             'name': 'My Authorized Ticket',
             'partner_id': self.portal_user.partner_id.id

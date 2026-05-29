@@ -10,17 +10,19 @@ class HelpdeskPortal(CustomerPortal):
             domain = [("partner_id", "=", request.env.user.partner_id.id)]
             if request.website:
                 domain += [("website_id", "in", [False, request.website.id])]
+            domain += [("company_id", "in", request.env.user.company_ids.ids)]
             values["ticket_count"] = request.env["hams_helpdesk.ticket"].search_count(domain)
         return values
 
     @http.route(["/my/tickets", "/my/tickets/page/<int:page>"], type="http", auth="user", website=True)
     def portal_my_tickets(self, page=1, **kw):
-        # [@ANCHOR: multi_website_segregation]
+        # [@ANCHOR: helpdesk_portal_list]
         values = self._prepare_portal_layout_values()
         Ticket = request.env["hams_helpdesk.ticket"]
         domain = [("partner_id", "=", request.env.user.partner_id.id)]
         if request.website:
             domain += [("website_id", "in", [False, request.website.id])]
+        domain += [("company_id", "in", request.env.user.company_ids.ids)]
 
         ticket_count = Ticket.search_count(domain)
         pager = portal_pager(
@@ -41,8 +43,12 @@ class HelpdeskPortal(CustomerPortal):
 
     @http.route(["/my/ticket/<int:ticket_id>"], type="http", auth="user", website=True)
     def portal_ticket_detail(self, ticket_id, **kw):
+        # [@ANCHOR: helpdesk_portal_detail]
         ticket = request.env["hams_helpdesk.ticket"].browse(ticket_id)
         if not ticket.exists() or ticket.partner_id != request.env.user.partner_id:
+            return request.redirect("/my")
+
+        if ticket.company_id.id not in request.env.user.company_ids.ids:
             return request.redirect("/my")
 
         if request.website and ticket.website_id and ticket.website_id != request.website:
