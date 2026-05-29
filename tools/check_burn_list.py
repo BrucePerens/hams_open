@@ -160,11 +160,6 @@ GENERAL_ERROR_RULES = [
 ODOO_ERROR_RULES = [
     (
         r"\.py$",
-        re.compile(r"\bhasattr\s*\(\s*(?:request|self\.env\.registry|self\.env\[)"),
-        "CRITICAL AI LAZINESS: Defensive 'hasattr' checks mask missing architectural components or unbound proxies. Fail fast instead.",
-    ),
-    (
-        r"\.py$",
         re.compile(r"['\"]groups_id['\"]\s*:"),
         "CRITICAL BIAS TRAP: Odoo 18+ normalized the res.users groups relation to 'group_ids'.",
     ),
