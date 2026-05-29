@@ -13,6 +13,7 @@ passlib
 pika
 psutil
 psycopg2-binary
+pyinotify
 pymysql
 pyserial
 PyYAML

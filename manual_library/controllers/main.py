@@ -85,8 +85,7 @@ class ManualLibraryController(http.Controller):
         try:
             # Re-browse with the explicit user environment to trigger record rules
             user_article = request.env["knowledge.article"].with_user(request.env.user).browse(article.id)
-            user_article.check_access_rights("read")
-            user_article.check_access_rule("read")
+            user_article.check_access("read")
             _ = user_article.name
         except AccessError:
             raise werkzeug.exceptions.NotFound()

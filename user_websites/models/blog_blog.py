@@ -39,7 +39,7 @@ class BlogBlog(models.Model):
         )
         return super(BlogBlog, self.with_user(svc_uid)).create(vals_list)
 
-    def check_access_rule(self, operation):
+    def check_access(self, operation):
         """Proactively catch write/unlink access violations to prevent ir.rule INFO log spam."""
         if operation in ("write", "unlink") and not self.env.su and self:
             if self.env.user.has_group(
@@ -76,11 +76,10 @@ class BlogBlog(models.Model):
                                 "Access Denied: You do not have permission to modify this blog."
                             )
                         )
-        return super(BlogBlog, self).check_access_rule(operation)
+        return super(BlogBlog, self).check_access(operation)
 
     def write(self, vals):
         self.check_access("write")
-        self.check_access_rule("write")
         self._check_proxy_ownership_write(vals)
         if not (
             self.env.su
@@ -107,7 +106,6 @@ class BlogBlog(models.Model):
 
     def unlink(self):
         self.check_access("unlink")
-        self.check_access_rule("unlink")
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )

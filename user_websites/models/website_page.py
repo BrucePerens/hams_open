@@ -400,7 +400,7 @@ class WebsitePage(models.Model):
         records._invalidate_cloudflare_cache()
         return records
 
-    def check_access_rule(self, operation):
+    def check_access(self, operation):
         # Verified by [@ANCHOR: test_acl_overhead_loop_elimination]
         """
         Proactively catch write/unlink access violations for standard users on pages they don't own.
@@ -444,7 +444,7 @@ class WebsitePage(models.Model):
                                 "Access Denied: You do not have permission to modify this page."
                             )
                         )
-        return super(WebsitePage, self).check_access_rule(operation)
+        return super(WebsitePage, self).check_access(operation)
 
     def write(self, vals):
         # Verified by [@ANCHOR: test_tenant_view_isolation]

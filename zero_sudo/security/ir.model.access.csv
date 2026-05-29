@@ -10,3 +10,4 @@ access_mail_alias_domain_mail_svc,mail.alias.domain mail svc,mail.model_mail_ali
 access_zero_sudo_kv_facility,zero_sudo.kv,model_zero_sudo_kv,zero_sudo.group_odoo_facility_service,1,1,1,1
 access_ir_config_parameter_config_svc,ir.config_parameter config svc,base.model_ir_config_parameter,zero_sudo.group_config_service,1,1,1,1
 access_zero_sudo_daemon_utils,zero_sudo.daemon.utils,model_zero_sudo_daemon_utils,base.group_system,1,1,1,1
+access_zero_sudo_noisy_table,zero_sudo.noisy_table,model_zero_sudo_noisy_table,base.group_system,1,1,1,1

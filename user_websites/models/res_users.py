@@ -309,9 +309,9 @@ class ResUsers(models.Model):
                         break
 
         try:
-            result = super(ResUsers, self).write(vals)
+            with self.env.cr.savepoint():
+                result = super(ResUsers, self).write(vals)
         except IntegrityError:
-            self.env.cr.rollback()
             raise ValidationError(_("The Website Slug must be unique and valid."))
 
         # --- 301 Redirect Automation ---
@@ -501,7 +501,15 @@ class ResUsers(models.Model):
             )
             if not pages:
                 break
-            env_svc["website.page"].browse(pages.ids).unlink()
+            try:
+                with self.env.cr.savepoint():
+                    env_svc["website.page"].browse(pages.ids).unlink()
+            except Exception as e: # audit-ignore-catch-all
+                logging.getLogger(__name__).warning("GDPR erasure concurrent update pages: %s", e)
+                if 'concurrent update' in str(e).lower() or 'serialization' in str(e).lower() or 'deadlock' in str(e).lower():
+                    time.sleep(0.5) # audit-ignore-sleep: Retry backoff
+                    continue
+                raise
             if not odoo.tools.config.get("test_enable"):
                 self.env.cr.commit()
             if len(pages) < 5000:
@@ -515,7 +523,15 @@ class ResUsers(models.Model):
             )
             if not posts:
                 break
-            env_svc["blog.post"].browse(posts.ids).unlink()
+            try:
+                with self.env.cr.savepoint():
+                    env_svc["blog.post"].browse(posts.ids).unlink()
+            except Exception as e: # audit-ignore-catch-all
+                logging.getLogger(__name__).warning("GDPR erasure concurrent update posts: %s", e)
+                if 'concurrent update' in str(e).lower() or 'serialization' in str(e).lower() or 'deadlock' in str(e).lower():
+                    time.sleep(0.5) # audit-ignore-sleep: Retry backoff
+                    continue
+                raise
             if not odoo.tools.config.get("test_enable"):
                 self.env.cr.commit()
             if len(posts) < 5000:
@@ -529,7 +545,15 @@ class ResUsers(models.Model):
             )
             if not blogs:
                 break
-            env_svc["blog.blog"].browse(blogs.ids).unlink()
+            try:
+                with self.env.cr.savepoint():
+                    env_svc["blog.blog"].browse(blogs.ids).unlink()
+            except Exception as e: # audit-ignore-catch-all
+                logging.getLogger(__name__).warning("GDPR erasure concurrent update blogs: %s", e)
+                if 'concurrent update' in str(e).lower() or 'serialization' in str(e).lower() or 'deadlock' in str(e).lower():
+                    time.sleep(0.5) # audit-ignore-sleep: Retry backoff
+                    continue
+                raise
             if not odoo.tools.config.get("test_enable"):
                 self.env.cr.commit()
             if len(blogs) < 5000:

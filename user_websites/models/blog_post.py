@@ -116,7 +116,7 @@ class BlogPost(models.Model):
         posts._invalidate_cloudflare_cache()
         return posts
 
-    def check_access_rule(self, operation):
+    def check_access(self, operation):
         """
         Proactively catch write/unlink access violations to prevent ir.rule INFO log spam
         when the frontend evaluates edit capabilities.
@@ -158,7 +158,7 @@ class BlogPost(models.Model):
                                 "Access Denied: You do not have permission to modify this post."
                             )
                         )
-        return super(BlogPost, self).check_access_rule(operation)
+        return super(BlogPost, self).check_access(operation)
 
     def write(self, vals):
         self.check_access("write")
