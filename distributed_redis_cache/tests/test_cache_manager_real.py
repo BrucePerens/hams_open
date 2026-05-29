@@ -28,11 +28,23 @@ class TestRealCacheManager(RealTransactionCase):
         daemon_script = os.path.join(base_dir, "daemons", "cache_manager.py")
 
         daemon_utils = self.env["zero_sudo.daemon.utils"]
-        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script)
 
-        r = redis.Redis(host=os.environ.get("REDIS_HOST", "redis"), decode_responses=True)
+        # Inject the dynamic test database name so the daemon listens to the correct PG instance
+        env_vars = {
+            "DB_NAME": self.env.cr.dbname,
+            "REDIS_HOST": os.environ.get("REDIS_HOST", "redis"),
+        }
+
+        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
+
+        # Standardize Redis host to match the daemon's default fallback
+        redis_host = os.environ.get("REDIS_HOST", "redis")
+        redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+        r = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+
         pubsub = r.pubsub()
-        pubsub.subscribe("odoo_cache_invalidation")
+        # Must match REDIS_CHANNEL defined in cache_manager.py
+        pubsub.subscribe("odoo_cache_invalidation_bus")
 
         message_received = False
         user = self.env.user
