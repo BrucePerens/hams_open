@@ -81,5 +81,5 @@
 
 <section>
     <h2>Security & Architecture</h2>
-    <p>To maintain a "Zero-Sudo" environment, this module uses a dedicated service account (<code>user_database_management_service</code>) for all sensitive operations. This ensures that even administrative actions are performed with the minimum necessary privileges and are fully auditable.</p>
+    <p>To maintain a "Zero-Sudo" environment, this module uses a dedicated service account (<code>user_database_management_service</code>) for all sensitive operations. This ensures that even administrative actions, such as vacuuming tables or modifying PostgreSQL settings, are performed with the minimum necessary privileges required for that specific task. By avoiding the use of full administrative or <code>sudo</code> permissions, the system minimizes the potential impact of any single administrative action and ensures that all operations are fully auditable and compliant with enterprise security standards.</p>
 </section>

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from psycopg2 import sql
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
@@ -43,7 +44,7 @@ class TestPgConfig(HamsTransactionCase):
         calls = [
             call[0][0]
             for call in mock_execute.call_args_list
-            if hasattr(call[0][0], "as_string")
+            if isinstance(call[0][0], sql.Composable)
         ]
         query_strings = [c.as_string(self.env.cr._obj) for c in calls]
 

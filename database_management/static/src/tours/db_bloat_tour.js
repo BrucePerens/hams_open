@@ -33,7 +33,8 @@ registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verif
             run: 'click',
         },
         {
-            trigger: 'body',
+            trigger: 'body:not(:has(.o_loading))',
+            content: "Wait for RPC resolution",
             run: function() {},
         }
     ],

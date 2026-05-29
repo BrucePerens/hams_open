@@ -21,7 +21,7 @@ The `database_management` module provides a comprehensive suite of Database Admi
 ## 🛠 Architecture & Security
 
 ### Micro-Privilege Architecture
-This module strictly adheres to a Zero-Sudo policy. Sensitive operations are delegated to the `user_database_management_service` service account. Privilege elevation is handled via `_get_service_env()` from the `zero_sudo` module, ensuring that no `sudo()` calls are used in the codebase.
+This module strictly adheres to a Zero-Sudo policy. Sensitive operations are delegated to the `user_database_management_service` service account. This service account is provisioned with the minimum necessary PostgreSQL and Odoo permissions to execute DBA tasks (like vacuuming or terminating backends) without requiring full administrative access. Privilege elevation is handled exclusively via `_get_service_env()` from the `zero_sudo` module, ensuring that no `sudo()` calls are used in the business logic, maintaining a hardened security posture.
 
 ### Security Hardening
 *   **SQL Injection Prevention:** All raw SQL queries utilize the `psycopg2.sql` library for AST-compliant parameterization. `[@ANCHOR: pg_optimize_wizard]`
