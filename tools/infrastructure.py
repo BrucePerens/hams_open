@@ -385,7 +385,7 @@ MANIFEST = {
         },
         {
             "path": "/etc/apt/sources.list.d/kopia.list",
-            "content": "deb [signed-by=/usr/share/keyrings/kopia-keyring.gpg] http://packages.kopia.io/apt/ stable main\n",
+            "content": "deb [signed-by=/usr/share/keyrings/kopia-keyring.gpg] https://packages.kopia.io/apt/ stable main\n",
             "owner": "root:root",
             "mode": "644",
             "environments": ["prod"],
@@ -877,7 +877,7 @@ WorkingDirectory=/opt/hams/daemons/ncvec_sync
 Environment="ODOO_USER=captcha_service_internal"
 
 # Execution via Python virtual environment
-ExecStart=/opt/hams/.venv/bin/python /opt/hams/daemons/ncvec_sync/ncvec_sync.py --url "http://www.ncvec.org/downloads/2022-2026 Tech Pool.txt"
+ExecStart=/opt/hams/.venv/bin/python /opt/hams/daemons/ncvec_sync/ncvec_sync.py --url "https://www.ncvec.org/downloads/2022-2026 Tech Pool.txt"
 
 # Resiliency
 Restart=always
