@@ -18,9 +18,11 @@ class TestRealCacheManager(RealTransactionCase):
     def tearDown(self):
         if self.daemon_proc:
             try:
-                self.env["zero_sudo.daemon.utils"].stop_daemon_process(self.daemon_proc)
-            except Exception as e: # audit-ignore-catch-all
-                _logger.warning("Daemon termination ignored: %s", repr(e))
+                self.env["zero_sudo.daemon.utils"].stop_daemon_process(
+                    self.daemon_proc
+                )
+            except (ProcessLookupError, PermissionError) as e:
+                _logger.warning("Daemon termination failed: %s", repr(e))
         super().tearDown()
 
     def test_real_cache_manager_redis(self):
@@ -57,8 +59,7 @@ class TestRealCacheManager(RealTransactionCase):
 
             # In test environments, web request teardown hooks do not run automatically.
             # We manually trigger registry signals to flush the cache invalidation queue.
-            if hasattr(self.env.registry, "signal_changes"):
-                self.env.registry.signal_changes()
+            self.env.registry.signal_changes()
 
             # Failsafe: directly emit NOTIFY to test the daemon relay using parameterized pg_notify
             payload = json.dumps({"model": "res.users", "dbname": self.env.cr.dbname})

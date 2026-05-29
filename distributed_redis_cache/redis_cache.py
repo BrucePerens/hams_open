@@ -60,12 +60,14 @@ def distributed_cache():
             dbname = self.env.cr.dbname
             model_name = self._name
 
-            # Website awareness: Include website_id in cache key if available in context
+            # Multi-Tenant awareness: Include website_id and company_id in cache key
             website_id = self.env.context.get("website_id")
+            company_id = self.env.company.id
             website_suffix = f":w{website_id}" if website_id else ""
+            company_suffix = f":c{company_id}" if company_id else ""
 
             arg_hash = _get_hash(*args, **kwargs)
-            cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}:{arg_hash}"
+            cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}{company_suffix}:{arg_hash}"
 
             use_redis = bool(redis and redis_pool)
 

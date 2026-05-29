@@ -6,7 +6,7 @@ Fine-grained distributed caching and phase coherence for horizontally scaled Odo
 
 ## Features
 - **Distributed Redis-backed cache**: Replaces or augments Odoo's local cache for cluster-wide consistency.
-- **Multi-Website Awareness**: Isolated cache keys per website (`website_id`) to ensure strict data separation.
+- **Multi-Tenant Awareness**: Isolated cache keys per website (`website_id`) and company (`company_id`) to ensure strict data separation.
 - **Cache Drift Prevention**: Ensures all Odoo nodes stay synchronized in real-time.
 - **Fail-Open Design**: Automatically falls back to local memory if Redis is unavailable, ensuring high availability.
 - **Fine-grained Invalidation**: Precisely flushes specific models instead of the entire cache, minimizing performance impact.
@@ -66,7 +66,7 @@ If Redis is unreachable, the system gracefully falls back to a standard Python d
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache, notify_model_invalidation
 ```
 
-* **`@distributed_cache()`**: Decorator for `api.model` functions. Generates SHA256 cache keys based on serialized arguments and writes to Redis with a 24h TTL. Handles `bytes`, `sets`, `frozensets`, and recordsets deterministically. **Website Aware**: Isolated keys if `website_id` is in context. [@ANCHOR: distributed_cache_decorator]
+* **`@distributed_cache()`**: Decorator for `api.model` functions. Generates SHA256 cache keys based on serialized arguments and writes to Redis with a 24h TTL. Handles `bytes`, `sets`, `frozensets`, and recordsets deterministically. **Multi-Tenant Aware**: Isolated keys if `website_id` or `company_id` are in context. [@ANCHOR: distributed_cache_decorator]
 * **`invalidate_model_cache(env, model_name, local_only=False)`**: Forcibly flushes model cache. Uses batched `SCAN` for production safety. [@ANCHOR: invalidate_model_cache_logic]
 * **`notify_model_invalidation(env, model_name)`**: Triggers cluster-wide invalidation signal via Postgres NOTIFY. [@ANCHOR: notify_model_invalidation_logic]
 </api>
