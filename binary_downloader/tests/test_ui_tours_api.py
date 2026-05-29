@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
+import logging
 from odoo import http
 from odoo.http import request
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests import tagged
+
+_logger = logging.getLogger(__name__)
 
 
 class BinaryDownloaderTestController(http.Controller):
@@ -28,14 +31,15 @@ class TestBinaryDownloaderTour(HamsHttpCase):
         self.env.ref("base.user_admin").lang = "en_US"
 
     def tearDown(self):
-        super().tearDown()
         # Clean up the physical dummy binary created by the tour
         test_bin_path = "/var/lib/odoo/hams_bin/tourbin"
         if os.path.exists(test_bin_path):
             try:
                 os.remove(test_bin_path)
-            except OSError:
-                pass
+            except OSError as e:
+                # audit-ignore-path: Tested by [@ANCHOR: test_binary_install_tour]
+                _logger.warning("Cleanup failed for %s: %s", test_bin_path, e)
+        super().tearDown()
 
     def test_binary_install_tour(self):
         self.safe_patch(

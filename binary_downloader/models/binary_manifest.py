@@ -133,7 +133,6 @@ class BinaryManifest(models.Model):
         # [@ANCHOR: binary_ensure_executable]
         # [@ANCHOR: binary_resolution]
         # Verified by [@ANCHOR: test_binary_manifest_standard]
-        # Verified by [@ANCHOR: test_binary_manifest_standard]
         if (
             not cmd_name
             or "/" in cmd_name
@@ -146,7 +145,8 @@ class BinaryManifest(models.Model):
         if path:
             return path
 
-        # Use micro-privilege service account for manifest resolution and download
+        # CONDUCT SECURITY AUDIT: Binary manifests are technical system-wide resources.
+        # We use the micro-privilege service account for resolution.
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "binary_downloader.user_binary_downloader_service"
         )
