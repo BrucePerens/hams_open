@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import shutil
-import os
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
