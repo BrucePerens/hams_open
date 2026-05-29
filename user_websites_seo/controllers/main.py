@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo import http
-from odoo.http import request
+from odoo.http import request, Response
 from odoo.addons.user_websites.controllers.main import UserWebsitesController
 
 class UserWebsitesSEOController(UserWebsitesController):
@@ -42,7 +42,8 @@ class UserWebsitesSEOController(UserWebsitesController):
         )
 
         # Intercept and modify the rendering dictionary before it hits the templating engine
-        if response and hasattr(response, "qcontext"):
+        # We explicitly check for odoo.http.Response to avoid AI-generated hasattr shortcuts.
+        if isinstance(response, Response) and hasattr(response, "qcontext"):
             user = response.qcontext.get("profile_user")
             group = response.qcontext.get("profile_group")
 

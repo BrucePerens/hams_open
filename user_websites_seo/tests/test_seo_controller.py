@@ -28,6 +28,7 @@ class TestSEOController(HamsTransactionCase):
 
         # Mock the response from the base controller
         mock_response = Response()
+        mock_response.type = 'http'
         mock_response.qcontext = {
             'profile_user': self.regular_user
         }
