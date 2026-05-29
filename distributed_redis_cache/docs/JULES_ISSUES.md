@@ -16,3 +16,8 @@ The module implements a "Fail-Open" design for Redis connectivity. While "FAIL F
 
 -   The module already imports `redis` and `asyncpg` at the top level of some files, which will cause it to fail to load if they are missing. This is correct.
 -   The "Fail-Open" behavior at runtime is preserved as it's a feature, not a hallucination.
+
+## Environment Verification
+- Provisioning started at 2026-05-29 20:00 UTC.
+- Provisioning command timed out once, but retry showed postgres shutdown, suggesting it might have finished or hit an issue.
+- Re-running with `--already-provisioned` to verify. Successfully verified.

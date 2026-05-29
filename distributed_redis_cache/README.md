@@ -5,30 +5,31 @@
 Fine-grained distributed caching and phase coherence for horizontally scaled Odoo clusters.
 
 ## Features
-- **Distributed Redis-backed cache**: Replaces or augments Odoo's local cache for cluster-wide consistency.
-- **Multi-Tenant Awareness**: Isolated cache keys per website (`website_id`) and company (`company_id`) to ensure strict data separation.
-- **Cache Drift Prevention**: Ensures all Odoo nodes stay synchronized in real-time.
-- **Fail-Open Design**: Automatically falls back to local memory if Redis is unavailable, ensuring high availability.
-- **Fine-grained Invalidation**: Precisely flushes specific models instead of the entire cache, minimizing performance impact.
-- **Batch Processing**: Uses Redis `SCAN` in batches for efficient cleanup of millions of keys without blocking the server.
-- **Management UI**: Dedicated interface for health checks and manual cache invalidation.
-- **Zero-Sudo Architecture**: All background operations execute with minimal privileges using dedicated service accounts.
+- **Distributed Redis-backed cache**: Replaces or augments Odoo's local cache for cluster-wide consistency across multiple servers.
+- **Multi-Tenant Awareness**: Keeps data strictly separated by website and company, so users only see what they are supposed to.
+- **No More Out-of-Sync Data**: Ensures all your Odoo servers show the same updated information at the same time.
+- **Resilient by Design**: If your Redis server goes offline, Odoo won't crash. It will safely switch back to its standard way of working until Redis is back.
+- **High Performance**: Only clears the specific data that changed, rather than dumping the whole cache. This keeps your system snappy even during updates.
+- **Production Ready**: Efficiently manages millions of cache keys without slowing down your database or Redis server.
+- **Easy Management UI**: Check system health and manually refresh data from a simple dashboard.
+- **Secure**: Uses minimal permissions and dedicated service accounts for background tasks.
 
 ## Installation
-This module requires a Redis server.
-Ensure the `redis` and `asyncpg` Python packages are installed.
+1.  Ensure you have a Redis server running and accessible.
+2.  Install the required Python libraries: `pip install redis asyncpg`.
+3.  Install this module in your Odoo instance.
 
 ## Configuration
-Configure the Redis connection via environment variables:
-- `REDIS_HOST`: Defaults to `redis` or `127.0.0.1`.
-- `REDIS_PORT`: Defaults to `6379`.
-- `REDIS_PASSWORD`: Optional Redis password.
+The module automatically looks for a Redis server at `127.0.0.1:6379`. You can change this using these environment variables:
+- `REDIS_HOST`: The address of your Redis server (e.g., `10.0.0.5`).
+- `REDIS_PORT`: The port number (default is `6379`).
+- `REDIS_PASSWORD`: Your Redis password, if you have one.
 
-## Architecture
-- **Postgres NOTIFY**: Triggered on model mutation to signal invalidation.
-- **Cache Manager Daemon**: A standalone service bridging Postgres NOTIFY to Redis Pub/Sub. Includes robust reconnection and payload validation logic.
-- **Redis Pub/Sub**: Distributes invalidation signals across all Odoo workers.
-- **Middleware Interceptor**: Odoo workers check signals in `ir.http` and flush local caches before processing requests.
+## How It Works
+1.  **Change Detected**: When you update something in Odoo, it sends a quick "ping" to the database.
+2.  **Signal Relayed**: A small background program (the *Cache Manager*) sees this ping and tells the Redis server.
+3.  **Cluster Update**: All your Odoo servers are listening to Redis. They hear the message and immediately update their local memory.
+4.  **Fresh Data**: The next person to visit your site sees the latest information, no matter which server they connect to.
 
 ## Security
 Built with the **Zero-Sudo** architecture. Operations are performed by dedicated service accounts with minimal privileges. The `cache_manager_sys` user handles daemon-to-database communication.

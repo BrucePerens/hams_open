@@ -25,12 +25,9 @@ logger = logging.getLogger("cache_manager")
 # [@ANCHOR: cache_manager_config]
 ENV_FILE = "/var/lib/odoo/daemon_keys/cache_manager.env"
 if os.path.exists(ENV_FILE):
-    try:
-        from dotenv import load_dotenv
+    from dotenv import load_dotenv
 
-        load_dotenv(ENV_FILE)
-    except ImportError:
-        logger.warning("python-dotenv not installed, skipping .env loading")
+    load_dotenv(ENV_FILE)
 
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = os.getenv("DB_PORT", "5432")
@@ -71,7 +68,7 @@ async def broadcast_to_redis(payload):
         logger.debug(f"Published invalidation to Redis: {payload}")
     except json.JSONDecodeError:
         logger.error(f"Malformed JSON payload from Postgres: {payload}")
-    except Exception as e:
+    except (redis.RedisError, json.JSONDecodeError) as e:
         logger.error(f"Redis publish failed: {e}")
 
 
@@ -99,7 +96,7 @@ async def main():
         )
         await redis_client.ping()
         logger.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
-    except Exception as e:
+    except (redis.RedisError, OSError) as e:
         logger.critical(f"Fatal Redis connection error: {e}")
         return
 
@@ -124,7 +121,7 @@ async def main():
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break
-        except Exception as e:
+        except (asyncpg.PostgresError, OSError) as e:
             logger.error(
                 f"PostgreSQL connection dropped: {e}. Reconnecting in 5s..."
             )
