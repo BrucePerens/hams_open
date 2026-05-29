@@ -122,6 +122,8 @@ class DatabaseTableStat(models.Model):
                     "Permission or configuration error reporting bloat incident: %s", e
                 )
             except Exception:  # audit-ignore-catch-all
+                # Catch-all is intentional here to ensure cron completion
+                # even if PagerDuty integration is broken.
                 _logger.exception(
                     "Unexpected error reporting bloat incident to PagerDuty"
                 )

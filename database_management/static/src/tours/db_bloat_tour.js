@@ -28,17 +28,13 @@ registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verif
             run: 'click',
         },
         {
-            trigger: 'button, .dropdown-item',
+            trigger: 'button[name="action_vacuum_analyze"]',
             content: "Vacuum Analyze Selected",
-            run: function () {
-                const items = document.querySelectorAll('button, .dropdown-item');
-                for (const item of items) {
-                    if (item.textContent.includes('Vacuum Analyze Selected') && item.offsetWidth > 0) {
-                        item.click();
-                        break;
-                    }
-                }
-            }
+            run: 'click',
         },
+        {
+            trigger: 'body',
+            run: function() {},
+        }
     ],
 });

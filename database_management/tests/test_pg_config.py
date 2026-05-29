@@ -5,12 +5,6 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
 
-if not hasattr(shutil, "_orig_which"):
-    shutil._orig_which = shutil.which
-    shutil.which = lambda cmd, mode=os.F_OK, path=None: (
-        None if cmd in ("kopia", "etcd") else shutil._orig_which(cmd, mode, path)
-    )
-
 
 @tagged("post_install", "-at_install")
 class TestPgConfig(HamsTransactionCase):
