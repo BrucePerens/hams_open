@@ -9,6 +9,19 @@ This is the core security cop for our Odoo ecosystem. It enforces our strict **Z
 * **Safe Privilege Escalation:** Instead of letting developers use Odoo's dangerous `.sudo()` command, this module provides safe, cached functions (like `_get_service_uid`) to run background tasks securely.
 * **Blocks System Hacks:** It forces developers to hardcode a \"whitelist\" of safe configuration settings. If an attacker tries to trick the system into handing over a cryptographic secret (like a database password), this module blocks it.
 * **Locks Out Daemons:** It adds an `is_service_account` checkbox to users. If an account is running a background daemon and someone tries to log into the web browser with that account, this module instantly destroys the session and kicks them out.
+* **Platform-Wide Data:** It manages global system settings that are shared across all your websites and companies.
+
+---
+
+## 👩‍💼 User Guide (Non-Technical)
+
+### What is a Service Account?
+A "Service Account" is a special type of user account used by background programs and automated bots. To keep your system safe, these accounts are **forbidden** from being used to log into the website through a browser.
+
+### How to use it:
+1.  **Restrict an Account:** If you have a user account that is only used for automated tasks, go to **Settings > Users**, open the user's profile, and check the **"Is Service Account"** box.
+2.  **Access Denied:** Once restricted, any attempt to log into the website with that account will result in an "Access Denied" error. This is a security feature, not a bug.
+3.  **Automatic Help:** This module automatically installs help manuals (like the one you are reading) whenever new features are added to your system.
 
 ---
 
@@ -116,6 +129,7 @@ For detailed narratives and end-to-end workflows, refer to the following:
 
 ### Stories
 * **Secure Privilege Escalation** `[@ANCHOR: story_secure_escalation]`: Narrative on how developers securely escalate privileges using service accounts instead of `.sudo()`. [Read Story](zero_sudo/docs/stories/secure_escalation.md)
+* **Global Model Management** `[@ANCHOR: story_global_models]`: How the system manages global, non-multi-tenant data across all websites and companies.
 * **Blocking Service Account Login** `[@ANCHOR: story_login_blocking]`: How the system prevents service accounts from accessing the interactive web interface. [Read Story](zero_sudo/docs/stories/login_blocking.md)
 * **Parameter Whitelisting** `[@ANCHOR: story_parameter_whitelisting]`: Protection of sensitive system parameters from unauthorized access. [Read Story](zero_sudo/docs/stories/parameter_whitelisting.md)
 * **Multi-Website Awareness** `[@ANCHOR: story_multi_website]`: How the security core behaves in multi-website environments. [Read Story](zero_sudo/docs/stories/multi_website.md)

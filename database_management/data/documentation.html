@@ -82,4 +82,6 @@
 <section>
     <h2>Security & Architecture</h2>
     <p>To maintain a "Zero-Sudo" environment, this module uses a dedicated service account (<code>user_database_management_service</code>) for all sensitive operations. This ensures that even administrative actions are performed with the minimum necessary privileges and are fully auditable.</p>
+    <h3>Multi-Tenant Considerations</h3>
+    <p>Models in this module are classified as <strong>logically global</strong>. This is because they interface directly with PostgreSQL system views that track the health and activity of the entire database instance. In a multi-company setup, these metrics provide a unified view of the shared database resources, ensuring that administrators can optimize performance for all users simultaneously.</p>
 </section>

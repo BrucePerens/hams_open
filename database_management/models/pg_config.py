@@ -8,6 +8,8 @@ from psycopg2 import sql
 class DatabasePgSetting(models.Model):
     # [@ANCHOR: db_settings_audit]
     # Tests [@ANCHOR: db_settings_audit]
+    # This model is logically global as it tracks the overall PostgreSQL configuration
+    # settings for the database cluster.
     _name = "database.pg.setting"
     _description = "PostgreSQL Configuration Parameter"
     _auto = False

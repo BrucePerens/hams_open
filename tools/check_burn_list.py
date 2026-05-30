@@ -341,7 +341,13 @@ ODOO_ERROR_RULES = [
     ),
 ]
 
-WARNING_RULES = []
+WARNING_RULES = [
+    (
+        r"\.py$",
+        re.compile(r"zipfile\.ZipFile|tarfile\.open"),
+        "[%AUDIT] ARCHIVE EXTRACTION: Ensure zip/tar extraction includes a check for symlink bits (e.g., `external_attr`) to prevent path traversal/slip attacks.",
+    ),
+]
 MULTILINE_WARNING_RULES = []
 EXEMPTIONS = {}
 REQUIRE_TEST_VERIFICATION = []
@@ -1118,7 +1124,7 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                 ) and not self.filename.startswith("test_"):
                     self.add_warning(
                         node.lineno,
-                        "[%AUDIT] UNBOUNDED SEARCH: '.search()' called without 'limit'.",
+                        "[%AUDIT] UNBOUNDED SEARCH: '.search()' called without 'limit'. If this model is multi-tenant, also ensure explicitly filtering by 'company_id' or False.",
                     )
                 if any(kw.arg == "count" for kw in node.keywords):
                     self.add_error(
@@ -1985,6 +1991,8 @@ def main():
                 "venv",
                 "env",
                 "hams_local_relay",
+                "hams_community",
+                "hams_com",
             )
             and not is_ignored(os.path.relpath(os.path.join(root, d), target_dir))
         ]

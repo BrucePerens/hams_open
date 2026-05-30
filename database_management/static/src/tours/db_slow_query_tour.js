@@ -22,6 +22,10 @@ registry.category("web_tour.tours").add("db_management_slow_query_tour", { // # 
             run: 'click',
         },
         { trigger: '.o_list_table', content: 'Wait for: Wait for slow query table to render', run: function() {} },
-        
+        {
+            trigger: '.o_control_panel:has(.o_breadcrumb)',
+            content: "Wait for breadcrumbs to ensure page loaded",
+            run: function() {},
+        },
     ],
 });

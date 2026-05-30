@@ -62,7 +62,10 @@
     <h2>Advanced Technical Features</h2>
 
     <h3>Multi-Website Awareness</h3>
-    <p>In multi-tenant Odoo deployments, Pager Duty can isolate checks and incidents by website. This allows different departments or clients to manage their own independent monitoring stack. The NOC Dashboard respects the <code>website_id</code> context passed via the URL.</p>
+    <p>In multi-tenant Odoo deployments, Pager Duty can isolate checks, incidents, and schedules by website. This allows different departments or clients to manage their own independent monitoring and on-call stack. The NOC Dashboard, incident reporting, and on-duty lookups all respect the <code>website_id</code> context.</p>
+
+    <h3>Zero-Sudo & Micro-Privileges</h3>
+    <p>The monitoring daemons communicate with Odoo using the <code>pager_service_internal</code> service account. This account is configured with minimal privileges necessary to read monitoring checks and report incidents. The system strictly avoids the use of <code>sudo()</code>, ensuring that all operations are performed within the scope of the assigned service user via <code>with_user()</code>. Furthermore, high-privilege operations like binary provisioning are protected by strict allow-lists (see <code>rpc_ensure_executable</code> [@ANCHOR: rpc_ensure_executable_security]).</p>
 
     <h3>Helpdesk Integration</h3>
     <p>If the <code>hams_helpdesk</code> module is installed, Pager Duty can be configured to automatically generate formal Helpdesk Tickets for every incident. This provides a structured workflow for post-mortems and long-term issue tracking. The system will even link the current on-call engineer as the ticket assignee.</p>

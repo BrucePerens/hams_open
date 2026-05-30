@@ -20,6 +20,12 @@ class BackupConfig(models.Model):
 
     name = fields.Char(string="Name", required=True)
     website_id = fields.Many2one("website", string="Website")
+    company_id = fields.Many2one(
+        "res.company",
+        string="Company",
+        required=True,
+        default=lambda self: self.env.company,
+    )
     engine = fields.Selection(
         [("kopia", "Kopia"), ("pgbackrest", "pgBackRest")], required=True
     )
@@ -225,7 +231,6 @@ class BackupConfig(models.Model):
             job = jobs.create(
                 {
                     "config_id": rec.id,
-                    "website_id": rec.website_id.id,
                     "job_type": (
                         rec.engine if engine != "restore_cmd" else "kopia"
                     ),  # map restore_cmd to engine for UI

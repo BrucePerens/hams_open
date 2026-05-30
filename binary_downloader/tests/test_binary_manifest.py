@@ -334,6 +334,71 @@ class TestBinaryManifest(HamsTransactionCase):
         with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
             self.env["binary.manifest"].ensure_executable("symlinkzip")
 
+    def test_17_multi_tenant_isolation(self):
+        # Create a manifest for Company A
+        company_a = self.env['res.company'].create({'name': 'Company A'})
+        self.env['binary.manifest'].create({
+            'name': 'isolated_bin',
+            'url': 'http://example.com/a',
+            'checksum': 'hash_a',
+            'company_id': company_a.id
+        })
+
+        # Try to resolve it from the default company
+        self.safe_patch("shutil.which", return_value=None)
+        with self.assertRaisesRegex(UserError, "Missing dependency: 'isolated_bin'"):
+            self.env['binary.manifest'].ensure_executable('isolated_bin')
+
+        # Create a global manifest
+        self.env['binary.manifest'].create({
+            'name': 'global_bin',
+            'url': 'http://example.com/g',
+            'checksum': 'hash_g',
+            'company_id': False
+        })
+
+        # Should be resolvable from any company
+        # We mock platform to ensure it hits the expected unsupported error (as a proxy for finding the manifest)
+        self.safe_patch("platform.system", return_value="Windows")
+        with self.assertRaisesRegex(UserError, "Auto-install of global_bin is only supported on Linux x86_64"):
+             # It got past the "Missing dependency" check, so it found the global manifest
+             self.env['binary.manifest'].ensure_executable('global_bin')
+
+    def test_18_zip_version_symlink_prevention(self):
+        # Setup for BinaryVersion download
+        manifest = self.env["binary.manifest"].create({
+            "name": "versioned_zip",
+            "url": "http://example.com/v.zip",
+            "checksum": "fake",
+            "archive_type": "zip",
+            "extract_member": "versioned_zip"
+        })
+        version = self.env["binary.version"].create({
+            "manifest_id": manifest.id,
+            "version_number": "1.0",
+            "url": "http://example.com/v1.zip",
+            "checksum": hashlib.sha256(b"data").hexdigest(),
+            "archive_type": "zip"
+        })
+
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [b"data", b""]
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        mock_zip_open = self.safe_patch("zipfile.ZipFile")
+        mock_zip = MagicMock()
+        mock_zip_open.return_value.__enter__.return_value = mock_zip
+
+        mock_zinfo = MagicMock()
+        mock_zinfo.filename = "versioned_zip"
+        mock_zinfo.external_attr = 0xA000 << 16 # Symlink
+        mock_zip.infolist.return_value = [mock_zinfo]
+
+        with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
+            version.action_download_to_pool()
+
     def test_15_zip_slip_prevention(self):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")

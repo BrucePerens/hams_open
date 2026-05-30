@@ -16,6 +16,10 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 _logger = logging.getLogger(__name__)
 
 class PagerCheck(models.Model):
+    """
+    Configurable monitoring check.
+    This model is multi-tenant and multi-website, partitioned by website_id.
+    """
     _name = "pager.check"
     _description = "Graphical Pager Duty Check"
     _order = "name asc"
@@ -219,10 +223,33 @@ class PagerCheck(models.Model):
 
     @api.model
     def rpc_ensure_executable(self, cmd_name):
+        """
+        Ensures that a binary is available for the monitoring daemon.
+        Restricted to a known allow-list of safe monitoring tools.
+        """
+        # [@ANCHOR: rpc_ensure_executable_security]
+        allow_list = {
+            "dig", "snmpget", "pg_dump", "nginx", "certbot", "logrotate",
+            "curl", "ping", "docker", "systemctl", "cloudflared"
+        }
+        if cmd_name not in allow_list:
+            _logger.warning("Unauthorized binary provisioning request: %s", cmd_name)
+            return {"status": "error", "message": _("Command not in allow-list.")}
+
         if not cmd_name or not isinstance(cmd_name, str) or "/" in cmd_name:
             return {"status": "error", "message": _("Invalid command name.")}
         try:
-            path = self.env["binary.manifest"].ensure_executable(cmd_name)
+            # We must use with_user for service accounts to ensure minimum privilege.
+            # We use the binary_downloader's dedicated service account if available.
+            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "binary_downloader.user_binary_downloader_service"
+            )
+            # Use self.env.get() for safer model access across optional dependencies
+            ManifestModel = self.env.get("binary.manifest")
+            if ManifestModel is None:
+                return {"status": "error", "message": _("binary_downloader module not installed.")}
+
+            path = ManifestModel.with_user(svc_uid).ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
         except (ValueError, FileNotFoundError, PermissionError) as e:
             _logger.warning("Executable provisioning failed for %s: %s", cmd_name, e)

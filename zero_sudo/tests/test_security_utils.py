@@ -356,7 +356,18 @@ class TestSecurityUtils(HamsTransactionCase):
         # Test Update
         utils._set_kv("test_key_1", "updated_value")
         self.assertEqual(utils._get_kv("test_key_1"), "updated_value")
+        # Tests [@ANCHOR: zero_sudo_kv_global]
 
+    def test_noisy_table_global(self):
+        # Tests [@ANCHOR: zero_sudo_noisy_table_global]
+        # We ensure the model is accessible and we can create a record.
+        table_name = "test_noisy_table"
+        table = self.env["zero_sudo.noisy_table"].create({"name": table_name})
+        self.assertTrue(table.exists())
+        self.assertIn(table_name, self.env["zero_sudo.noisy_table"].search([]).mapped("name"))
+
+    def test_missing_key(self):
+        utils = self.env["zero_sudo.security.utils"]
         # Test Missing Key
         self.assertIsNone(utils._get_kv("non_existent_key"))
 

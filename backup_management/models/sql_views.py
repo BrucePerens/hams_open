@@ -8,6 +8,8 @@ class BackupLatestSnapshotView(models.Model):
     _auto = False
 
     config_id = fields.Many2one("backup.config", readonly=True)
+    website_id = fields.Many2one("website", readonly=True)
+    company_id = fields.Many2one("res.company", readonly=True)
     snapshot_id = fields.Char(readonly=True)
     start_time = fields.Datetime(readonly=True)
     size_bytes = fields.Float(readonly=True)
@@ -18,7 +20,7 @@ class BackupLatestSnapshotView(models.Model):
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW backup_latest_snapshot_view AS (
                 SELECT DISTINCT ON (config_id)
-                    id, config_id, snapshot_id, start_time, size_bytes, status
+                    id, config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status
                 FROM backup_snapshot
                 ORDER BY config_id, start_time DESC
             )

@@ -3,6 +3,10 @@ from odoo import models, fields
 
 
 class PagerLogPattern(models.Model):
+    """
+    Regex pattern for log analysis.
+    This model is multi-tenant and multi-website, partitioned by website_id.
+    """
     _name = "pager.log.pattern"
     _description = "Log Analyzer Regex Pattern"
     _order = "severity desc, name asc"
@@ -33,6 +37,10 @@ class PagerLogPattern(models.Model):
 
 
 class PagerLogFile(models.Model):
+    """
+    Log file to be analyzed by the daemon.
+    This model is multi-tenant and multi-website, partitioned by website_id.
+    """
     _name = "pager.log.file"
     _description = "Log Analyzer Target File"
 

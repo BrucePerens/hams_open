@@ -11,7 +11,7 @@ This Odoo 19 module lets users build their own personal or group websites and bl
 * **Personal Sites & Blogs:** Give every user their own URL (like `/<username>/home`) where they can drag and drop pages or write blog posts.
 * **Group Sites:** Let teams or clubs share a website. Anyone in the group can edit pages or post to the group's blog.
 * **Community Directory:** A public list where users can show off their sites (if they choose to opt-in).
-* **Built-in Moderation:** Every page has a "Report Violation" button. If users post bad content, admins can review it, hand out strikes, and automatically suspend accounts that break the rules.
+* **Built-in Moderation:** Every page has a "Report Violation" button. If users post bad content, admins can review it, hand out strikes, and automatically suspend accounts that break the rules. These records are multi-tenant and partitioned by company.
 * **Page Limits:** Stop spam by setting limits on how many pages a single user can create.
 * **GDPR Compliance:** Built-in Data Portability (Export) and Right to Erasure (Delete) features for user-generated content.
 * **Security-First Sanitization:** Automated neutralization of malicious code (SSTI/XSS) attempting to execute on user-managed pages.

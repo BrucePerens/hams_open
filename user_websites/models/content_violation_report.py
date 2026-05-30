@@ -42,6 +42,13 @@ class ContentViolationReport(models.Model):
     )
     reported_by_email = fields.Char(string="Reported By (Guest Email)")
 
+    company_id = fields.Many2one(
+        "res.company",
+        string="Company",
+        required=True,
+        default=lambda self: self.env.company,
+    )
+
     _report_uniq = models.Constraint(
         "UNIQUE(target_url, reported_by_user_id)",
         "You have already submitted a report for this URL.",

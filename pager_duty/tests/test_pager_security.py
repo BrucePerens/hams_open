@@ -91,7 +91,34 @@ class TestPagerSecurity(HamsTransactionCase):
             ):
                 self.incident.with_user(user).unlink()
 
-    def test_02_documentation_injection(self):
+    def test_02_rpc_ensure_executable_security(self):
+        """
+        Tests [@ANCHOR: rpc_ensure_executable_security]
+        """
+        # Ensure the binary_downloader service account exists for the test
+        service_user = self.env["res.users"].create({
+            "name": "Binary Service",
+            "login": "binary_service",
+            "is_service_account": True,
+        })
+        self.env["ir.model.data"].create({
+            "name": "user_binary_downloader_service",
+            "module": "binary_downloader",
+            "model": "res.users",
+            "res_id": service_user.id,
+        })
+
+        CheckModel = self.env["pager.check"]
+        # Should fail for non-allow-listed command
+        res = CheckModel.rpc_ensure_executable("rm")
+        self.assertEqual(res["status"], "error")
+        self.assertIn("Command not in allow-list", res["message"])
+
+        # Should pass (or at least get past allow-list) for allowed command
+        res = CheckModel.rpc_ensure_executable("ping")
+        self.assertNotEqual(res.get("message"), "Command not in allow-list.")
+
+    def test_03_documentation_injection(self):
         """
         Verify that documentation is correctly injected during post_init_hook.
         Tests [@ANCHOR: doc_inject_pager_duty]

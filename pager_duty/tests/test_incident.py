@@ -36,7 +36,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertFalse(
             result, "Incident engine failed to block rate-limited request."
         )
-        mock_client.get.assert_called_with("pager_rate_limit:test_daemon")
+        mock_client.get.assert_called_with("pager_rate_limit:test_daemon:global")
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]

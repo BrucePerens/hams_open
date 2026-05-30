@@ -18,24 +18,31 @@
 
     </data>
     <data noupdate="1">
-        <record id="rule_backup_config_multi_website" model="ir.rule">
-            <field name="name">Backup Config Multi-Website</field>
+        <record id="rule_backup_config_multi_tenant" model="ir.rule">
+            <field name="name">Backup Config Multi-Tenant</field>
             <field name="model_id" ref="model_backup_config"/>
-            <field name="domain_force">['|', ('website_id', '=', False), '|', ('website_id', '=', user.website_id.id), '&amp;', ('website_id', '!=', False), ('website_id', '=', False)]</field>
+            <field name="domain_force">[('company_id', 'in', company_ids), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
         </record>
 
-        <record id="rule_backup_snapshot_multi_website" model="ir.rule">
-            <field name="name">Backup Snapshot Multi-Website</field>
+        <record id="rule_backup_snapshot_multi_tenant" model="ir.rule">
+            <field name="name">Backup Snapshot Multi-Tenant</field>
             <field name="model_id" ref="model_backup_snapshot"/>
-            <field name="domain_force">['|', ('config_id.website_id', '=', False), '|', ('config_id.website_id', '=', user.website_id.id), '&amp;', ('config_id.website_id', '!=', False), ('config_id.website_id', '=', False)]</field>
+            <field name="domain_force">[('company_id', 'in', company_ids), '|', ('config_id.website_id', '=', False), ('config_id.website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
         </record>
 
-        <record id="rule_backup_job_multi_website" model="ir.rule">
-            <field name="name">Backup Job Multi-Website</field>
+        <record id="rule_backup_job_multi_tenant" model="ir.rule">
+            <field name="name">Backup Job Multi-Tenant</field>
             <field name="model_id" ref="model_backup_job"/>
-            <field name="domain_force">['|', ('website_id', '=', False), '|', ('website_id', '=', user.website_id.id), '&amp;', ('website_id', '!=', False), ('website_id', '=', False)]</field>
+            <field name="domain_force">[('company_id', 'in', company_ids), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
+        </record>
+
+        <record id="rule_backup_latest_snapshot_view_multi_tenant" model="ir.rule">
+            <field name="name">Backup Latest Snapshot View Multi-Tenant</field>
+            <field name="model_id" ref="model_backup_latest_snapshot_view"/>
+            <field name="domain_force">[('company_id', 'in', company_ids), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
         </record>
     </data>

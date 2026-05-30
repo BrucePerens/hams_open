@@ -248,11 +248,11 @@ class UserWebsitesController(http.Controller):
             # avoiding artificial AccessErrors from the backend service account.
             if 'manual.article' in request.env:
                 article = request.env['manual.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
-                if article and hasattr(article, 'website_url') and article.website_url:
+                if article and article.website_url:
                     return request.redirect(article.website_url)
             if 'knowledge.article' in request.env:
                 article = request.env['knowledge.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
-                if article and hasattr(article, 'website_url') and article.website_url:
+                if article and article.website_url:
                     return request.redirect(article.website_url)
         except Exception as e: # audit-ignore-catch-all
             _logger.warning("Failed to redirect to documentation article: %s", e)
@@ -342,9 +342,9 @@ class UserWebsitesController(http.Controller):
 
             # Validate token using object method or fallback to HMAC
             is_valid = False
-            if hasattr(record, '_verify_unsubscribe_token'):
+            try:
                 is_valid = record._verify_unsubscribe_token(partner_id, token)
-            else:
+            except AttributeError:
                 secret = utils._get_crypto_secret()
                 msg = f"{model}-{record_id}-{partner_id}-{timestamp}"
                 expected = hmac.new(secret.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256).hexdigest()

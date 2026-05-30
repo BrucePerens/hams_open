@@ -20,21 +20,21 @@
         <record id="rule_helpdesk_ticket_user" model="ir.rule">
             <field name="name">Helpdesk Ticket User</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
-            <field name="domain_force">['|', ('user_id', '=', user.id), ('user_id', '=', False)]</field>
+            <field name="domain_force">['&amp;', ('company_id', 'in', company_ids), '|', ('user_id', '=', user.id), ('user_id', '=', False)]</field>
             <field name="groups" eval="[(4, ref('group_helpdesk_user'))]"/>
         </record>
 
         <record id="rule_helpdesk_ticket_manager" model="ir.rule">
             <field name="name">Helpdesk Ticket Manager</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
-            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('group_helpdesk_manager'))]"/>
         </record>
 
         <record id="rule_helpdesk_ticket_portal" model="ir.rule">
             <field name="name">Helpdesk Ticket Portal</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
-            <field name="domain_force">['&amp;', ('partner_id', '=', user.partner_id.id), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
+            <field name="domain_force">['&amp;', ('company_id', 'in', company_ids), '&amp;', ('partner_id', '=', user.partner_id.id), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
         </record>
     </data>

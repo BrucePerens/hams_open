@@ -45,7 +45,7 @@ class TestDocumentation(RealTransactionCase):
         and post_init_hook) correctly utilizes file_open to read the HTML
         documentation from the disk.
         """
-        if "knowledge.article" not in self.env:
+        if "knowledge.article" not in self.env.registry:
             raise unittest.SkipTest(
                 "knowledge.article API is not installed. Skipping documentation hook test."
             )
@@ -87,7 +87,7 @@ class TestDocumentation(RealTransactionCase):
         # Sync cursor state
         self.env.cr.commit()
 
-        if "knowledge.article" in self.env:
+        if "knowledge.article" in self.env.registry:
             article = self.env["knowledge.article"].search(
                 [("name", "=", "User Websites Documentation")]
             )
@@ -146,7 +146,7 @@ class TestDocumentation(RealTransactionCase):
         Explicitly test that if the API is absent, the system does not
         attempt to call it and gracefully defaults to the QWeb menu.
         """
-        if "knowledge.article" in self.env:
+        if "knowledge.article" in self.env.registry:
             raise unittest.SkipTest(
                 "knowledge.article API IS installed. Skipping API absence test."
             )

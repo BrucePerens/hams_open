@@ -13,6 +13,9 @@ class BackupJob(models.Model):
     website_id = fields.Many2one(
         "website", string="Website", related="config_id.website_id", store=True
     )
+    company_id = fields.Many2one(
+        "res.company", string="Company", related="config_id.company_id", store=True
+    )
     job_type = fields.Selection(
         [("kopia", "Kopia"), ("pgbackrest", "pgBackRest")],
         string="Job Type",

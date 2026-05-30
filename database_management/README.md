@@ -23,6 +23,9 @@ The `database_management` module provides a comprehensive suite of Database Admi
 ### Micro-Privilege Architecture
 This module strictly adheres to a Zero-Sudo policy. Sensitive operations are delegated to the `user_database_management_service` service account. Privilege elevation is handled via `_get_service_env()` from the `zero_sudo` module, ensuring that no `sudo()` calls are used in the codebase.
 
+### Multi-Tenant & Global Awareness
+Models in this module are designed to be **logically global**. Since they monitor PostgreSQL system statistics (such as `pg_stat_user_tables` and `pg_stat_statements`), the data they provide represents the aggregate state of the entire database cluster. In multi-tenant environments where multiple Odoo companies share a single database, these statistics correctly reflect the performance and health of the shared infrastructure.
+
 ### Security Hardening
 *   **SQL Injection Prevention:** All raw SQL queries utilize the `psycopg2.sql` library for AST-compliant parameterization. `[@ANCHOR: pg_optimize_wizard]`
 *   **Input Validation:** Strict regex validation for IP addresses and complexity requirements for replication passwords. `[@ANCHOR: pg_ha_wizard]`

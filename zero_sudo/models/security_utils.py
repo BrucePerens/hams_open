@@ -103,7 +103,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         if path:
             return path
 
-        if "binary.manifest" in self.env and svc_xml_id:
+        # Properly check if the binary_downloader module is installed before attempting to use its model
+        if self.env.registry.get("binary.manifest") and svc_xml_id:
             env_svc = self._get_service_env(svc_xml_id)
             return env_svc["binary.manifest"].ensure_executable(cmd_name)
 

@@ -133,7 +133,7 @@ class TestSettingsAndCache(RealTransactionCase):
             self.env["zero_sudo.security.utils"]
             ._get_system_param("caching.safe_quota_mb")
         )
-        self.assertTrue(val is not None or val is None)
+        self.assertIsInstance(val, (str, type(None)))
 
     def test_05_zero_sudo_scan(self):
         # [@ANCHOR: test_caching_zero_sudo_scan]

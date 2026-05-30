@@ -17,6 +17,10 @@ class TestComplianceHooks(HamsTransactionCase):
         # Tests [@ANCHOR: compliance_post_init_cookie_bar]
         # Tests [@ANCHOR: story_cookie_consent]
         # Tests [@ANCHOR: journey_compliance_setup]
+        if "cookies_bar" not in self.env.registry["website"]._fields:
+            raise unittest.SkipTest(
+                "'cookies_bar' field is not present on the website model. Skipping cookie bar hook test."
+            )
 
         post_init_hook(self.env)
 

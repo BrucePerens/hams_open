@@ -132,34 +132,9 @@ def verify_and_install_dependencies(client, checks):
 
     for cmd in required_cmds:
         if not shutil.which(cmd):
-            logger.info(f"Dependency '{cmd}' missing. Polling Odoo...")
-            success = False
-            for attempt in range(12):
-                try:
-                    res = client.execute(
-                        "pager.check", "rpc_ensure_executable", cmd_name=cmd
-                    )
-                    if res and res.get("status") == "ok":
-                        bin_path = res.get("path")
-                        logger.info(f"Provisioned {cmd} at {bin_path}")
-                        bin_dir = os.path.dirname(bin_path)
-                        if bin_dir not in os.environ["PATH"]:
-                            os.environ["PATH"] = (
-                                bin_dir + os.pathsep + os.environ["PATH"]
-                            )
-                        success = True
-                        break
-                    else:
-                        err_msg = res.get("message") if res else "Unknown error"
-                        logger.warning(f"Provision failed: {err_msg}")
-                except (ConnectionError, socket.timeout, Exception) as e: # audit-ignore-catch-all
-                    logger.warning(f"RPC unavailable, waiting... ({e})")
-                time.sleep(10)
-
-            if not success:
-                msg = f"FATAL: Missing dependency '{cmd}'. Halting."
-                logger.critical(msg)
-                fallback_notify("Daemon Boot", msg, "critical")
+            msg = f"FATAL: Missing required dependency '{cmd}'. The daemon must fail fast when resources are missing."
+            logger.critical(msg)
+            fallback_notify("Daemon Boot", msg, "critical")
             try:
                 client.execute(
                     "pager.incident",

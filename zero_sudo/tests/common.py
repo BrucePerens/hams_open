@@ -54,7 +54,9 @@ if hasattr(ChromeBrowser, 'start'):
                 res = original_browser_start(self, *args, **kwargs)
                 _apply_cdp_hook(self)
                 return res
-            except (Exception, unittest.SkipTest) as e:
+            except unittest.SkipTest:
+                raise
+            except Exception as e: # audit-ignore-catch-all
                 if attempt == 3:
                     raise
                 _logger.warning("TRACING: Chrome start failed on attempt %d (%s). Retrying...", attempt + 1, e)
@@ -62,8 +64,8 @@ if hasattr(ChromeBrowser, 'start'):
                     try:
                         self.chrome_process.terminate()
                         self.chrome_process.wait(timeout=1.0)
-                    except OSError as e:
-                        _logger.debug("Safe termination of chrome process failed: %s", e)
+                    except OSError as err:
+                        _logger.debug("Safe termination of chrome process failed: %s", err)
                 time.sleep(1.0) # audit-ignore-sleep
     ChromeBrowser.start = _patched_start
 else:
@@ -74,7 +76,9 @@ else:
                 original_browser_init(self, *args, **kwargs)
                 _apply_cdp_hook(self)
                 break
-            except (Exception, unittest.SkipTest) as e:
+            except unittest.SkipTest:
+                raise
+            except Exception as e: # audit-ignore-catch-all
                 if attempt == 3:
                     raise
                 _logger.warning("TRACING: Chrome init failed on attempt %d (%s). Retrying...", attempt + 1, e)
@@ -82,8 +86,8 @@ else:
                     try:
                         self.chrome_process.terminate()
                         self.chrome_process.wait(timeout=1.0)
-                    except OSError as e:
-                        _logger.debug("Safe termination of chrome process failed: %s", e)
+                    except OSError as err:
+                        _logger.debug("Safe termination of chrome process failed: %s", err)
                 time.sleep(1.0) # audit-ignore-sleep
     ChromeBrowser.__init__ = _patched_init
 

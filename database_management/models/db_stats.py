@@ -11,6 +11,8 @@ _logger = logging.getLogger(__name__)
 
 class DatabaseTableStat(models.Model):
     # [@ANCHOR: db_security_prefetch]
+    # This model is logically global as it tracks PostgreSQL internal statistics
+    # for the entire database instance, which may be shared by multiple Odoo companies.
     _name = "database.table.stat"
     _description = "Database Table Statistics (Bloat & Vacuum)"
     _auto = False
@@ -132,6 +134,8 @@ class DatabaseTableStat(models.Model):
 class DatabaseQueryStat(models.Model):
     # [@ANCHOR: db_slow_queries]
     # Tests [@ANCHOR: db_slow_queries]
+    # This model is logically global as pg_stat_statements tracks all queries
+    # hitting the database, regardless of which Odoo company or website initiated them.
     _name = "database.query.stat"
     _description = "Slow Query Tracking"
     _auto = False
@@ -170,6 +174,8 @@ class DatabaseQueryStat(models.Model):
 class DatabaseActivity(models.Model):
     # [@ANCHOR: db_active_sessions]
     # Tests [@ANCHOR: db_active_sessions]
+    # This model is logically global as it tracks all active PostgreSQL backends
+    # for the current database, representing the aggregate state of the database server.
     _name = "database.activity"
     _description = "Active Database Sessions"
     _auto = False
@@ -214,6 +220,8 @@ class DatabaseActivity(models.Model):
 class DatabaseIndexStat(models.Model):
     # [@ANCHOR: db_index_stats]
     # Tests [@ANCHOR: db_index_stats]
+    # This model is logically global as it tracks index performance at the
+    # PostgreSQL storage layer, which is shared by all Odoo tenants in this database.
     _name = "database.index.stat"
     _description = "Database Index Health"
     _auto = False

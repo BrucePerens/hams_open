@@ -20,6 +20,10 @@ redis_pool = redis.ConnectionPool(
 
 
 class PagerIncident(models.Model):
+    """
+    Represents an incident detected by the monitoring system.
+    This model is multi-tenant and multi-website, partitioned by website_id.
+    """
     _name = "pager.incident"
     _description = "Pager Duty Incident"
     _inherit = ["mail.thread"]
@@ -102,6 +106,10 @@ class PagerIncident(models.Model):
 
     @api.model
     def action_escalate_unacknowledged(self):
+        """
+        Escalates unacknowledged incidents older than 15 minutes.
+        Groups escalations by website to maintain multi-tenant isolation in notifications.
+        """
         # [@ANCHOR: test_pager_escalation]
         fifteen_mins_ago = fields.Datetime.now() - datetime.timedelta(minutes=15)
         incidents = self.env["pager.incident"].search(
@@ -119,8 +127,18 @@ class PagerIncident(models.Model):
             "zero_sudo.mail_service_internal"
         )
         pager_admin_group = self.env.ref("pager_duty.group_pager_admin")
-        partners = pager_admin_group.user_ids.mapped("partner_id")
+
+        # Group incidents by website_id to ensure relevant admins are notified
+        # if the deployment has per-website admin groups (future expansion).
+        # For now, we respect website isolation in the message posting.
         for inc in incidents:
+            partners = pager_admin_group.user_ids.filtered(
+                lambda u: not inc.website_id or inc.website_id in u.website_ids
+            ).mapped("partner_id")
+
+            if not partners:
+                partners = pager_admin_group.user_ids.mapped("partner_id")
+
             msg_body = _("🚨 ESCALATION: Incident open for > 15 minutes!")
             inc.with_user(mail_svc).message_post(body=msg_body, partner_ids=partners.ids)   # fmt: skip
         incidents.write({"is_escalated": True})
@@ -132,7 +150,8 @@ class PagerIncident(models.Model):
         """
         # [@ANCHOR: report_incident_rate_limit]
         source = vals.get("source", "unknown")
-        redis_key = f"pager_rate_limit:{source}"
+        website_id = vals.get("website_id") or self.env.context.get("website_id")
+        redis_key = f"pager_rate_limit:{source}:{website_id or 'global'}"
 
         if redis and redis_pool:
             try:
@@ -148,13 +167,15 @@ class PagerIncident(models.Model):
         )
         IncidentModel = self.env["pager.incident"].with_user(svc_uid)
 
-        existing = IncidentModel.search(
-            [
-                ("source", "=", vals.get("source", "unknown")),
-                ("status", "in", ["open", "acknowledged"]),
-            ],
-            limit=1,
-        )
+        search_domain = [
+            ("source", "=", vals.get("source", "unknown")),
+            ("status", "in", ["open", "acknowledged"]),
+        ]
+        if website_id:
+            search_domain.append(("website_id", "=", website_id))
+            vals["website_id"] = website_id
+
+        existing = IncidentModel.search(search_domain, limit=1)
         if existing:
             return existing.id
 
@@ -162,7 +183,9 @@ class PagerIncident(models.Model):
             vals["name"] = "INC-AUTO"
 
         incident = IncidentModel.create(vals)
-        on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
+        on_duty_user = self.env["calendar.event"].with_context(
+            website_id=website_id
+        ).get_current_on_duty_admin()
 
         # Suppress native pager notifications if helpdesk integration is active
         # to prevent duplicate alerting (Helpdesk will handle the page).

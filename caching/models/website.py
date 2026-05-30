@@ -3,6 +3,8 @@ from odoo import fields, models
 
 class Website(models.Model):
     _inherit = 'website'
+    # This model is multi-tenant and multi-website.
+    # Each website can have its own caching configuration (quota and version).
 
     caching_safe_quota_mb = fields.Integer(
         string="Safe Quota (MB)",

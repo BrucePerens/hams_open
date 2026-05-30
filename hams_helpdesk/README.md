@@ -16,6 +16,7 @@ The module implements a reactive ticketing system where assignment is driven by 
     - `hams_helpdesk.shift_handoff`: Transient wizard for secure ownership transfer.
 - **Security**: Strict IR rules enforce that portal users only see their own tickets, and helpdesk users see tickets assigned to them or unassigned.
 - **Multi-Website**: Supports multiple websites by segregating tickets via `website_id`.
+- **Multi-Company**: Full multi-company support with strict record rules and automatic company inference.
 </architecture>
 
 <security_design>
@@ -39,7 +40,7 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
     - Verified by [@ANCHOR: test_02_shift_handoff_wizard]
 * **Documentation Injection (`[@ANCHOR: helpdesk_doc_injection]`)**: Automated bootstrapping of user documentation into the central knowledge base via the `zero-sudo` documentation facility.
     - Verified by [@ANCHOR: test_05_doc_injection]
-* **Multi-Website Awareness (`[@ANCHOR: helpdesk_multi_website]`)**: Tickets are associated with specific websites to ensure proper data isolation in multi-tenant environments.
+* **Multi-Website & Multi-Company Awareness (`[@ANCHOR: helpdesk_multi_website]`)**: Tickets are associated with specific websites and companies to ensure proper data isolation in multi-tenant environments.
     - Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
 * **Micro-Privilege Security (`[@ANCHOR: helpdesk_micro_privilege]`)**: Access is strictly controlled via record rules and explicit field-level security in the ORM.
     - Verified by [@ANCHOR: test_05_portal_write_restrictions]

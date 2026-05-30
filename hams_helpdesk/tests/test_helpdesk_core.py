@@ -74,7 +74,8 @@ class TestHelpdeskCore(HamsTransactionCase):
         })
 
         # Execute the formal handoff
-        wizard.action_confirm_handoff()
+        # Use a new environment to avoid multi-company search issues during handoff
+        wizard.with_company(self.env.company).action_confirm_handoff()
 
         self.assertEqual(ticket.user_id, new_user, "Ticket ownership MUST instantly transfer to the new shift operator.")
 
@@ -86,17 +87,21 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_03_portal_security_rules(self):
         """Verify DevSecOps compliance: Portal users can ONLY access their own explicitly owned tickets."""
+        # Ensure company context is consistent
+        self.portal_user.company_id = self.env.company
         my_ticket = self.env['hams_helpdesk.ticket'].create({
             'name': 'My Authorized Ticket',
-            'partner_id': self.portal_user.partner_id.id
+            'partner_id': self.portal_user.partner_id.id,
+            'company_id': self.env.company.id,
         })
         other_ticket = self.env['hams_helpdesk.ticket'].create({
             'name': 'Other Confidential Ticket',
-            'partner_id': self.manager_user.partner_id.id
+            'partner_id': self.manager_user.partner_id.id,
+            'company_id': self.env.company.id,
         })
 
         # Switch ORM execution context to the unprivileged portal user
-        Ticket_as_portal = self.env['hams_helpdesk.ticket'].with_user(self.portal_user)
+        Ticket_as_portal = self.env['hams_helpdesk.ticket'].with_user(self.portal_user).with_company(self.env.company)
         visible_tickets = Ticket_as_portal.search([])
 
         self.assertIn(my_ticket, visible_tickets, "Portal user MUST be able to see their own tickets.")

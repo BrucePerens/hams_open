@@ -70,12 +70,13 @@ if os.geteuid() == 0:
     logger.info("Executing isolation sequence...")
 
     # A. Chroot to /var/log
-    if hasattr(os, "chroot") and os.path.exists("/var/log"):
-        os.chdir("/var/log")
-        os.chroot("/var/log")
-        logger.info("Successfully chrooted to /var/log")
-    else:
-        logger.warning("Chroot not supported or /var/log missing.")
+    # Assume POSIX environment with os.chroot available
+    if not os.path.exists("/var/log"):
+        logger.critical("/var/log missing. Cannot chroot.")
+        sys.exit(1)
+    os.chdir("/var/log")
+    os.chroot("/var/log")
+    logger.info("Successfully chrooted to /var/log")
 
     # B. Drop Kernel Capabilities (PR_CAPBSET_DROP = 24)
     try:
@@ -101,10 +102,8 @@ if os.geteuid() == 0:
 # --- 3. Translation Layer ---
 def translate_path(fp):
     """Maps absolute paths to the chrooted filesystem view."""
-    if hasattr(os, "chroot") and os.path.exists("/var/log"):
-        # Because we chrooted to /var/log, /var/log/syslog is now just /syslog
-        return fp.replace("/var/log", "")
-    return fp
+    # Because we chrooted to /var/log, /var/log/syslog is now just /syslog
+    return fp.replace("/var/log", "")
 
 
 # --- 4. Tailing Engine ---

@@ -14,6 +14,13 @@
     <h3>Safe Configuration</h3>
     <p>The system maintains a "whitelist" (a list of allowed items) for sensitive settings. This prevents even an authorized process from accidentally accessing or changing critical security information like master passwords or encryption keys unless it is explicitly allowed to do so.</p>
 
+    <h3>Global Data Management</h3>
+    <p>Some information in the system is considered "Global", meaning it is shared across all websites and companies. This is typical for technical system data.</p>
+    <ul>
+        <li><strong>System Keys (KV Store):</strong> Technical state and security flags are stored centrally to ensure consistency across the entire platform. [@ANCHOR: zero_sudo_kv_global]</li>
+        <li><strong>Leak Detection (Noisy Tables):</strong> The names of database tables that are safe to ignore during security audits are stored globally. [@ANCHOR: zero_sudo_noisy_table_global]</li>
+    </ul>
+
     <h3>Automatic Help Library</h3>
     <p>This module also helps organize the very library you are reading! It automatically finds and installs help guides for every new feature you add to your system, ensuring your team always has the latest instructions available in the Knowledge base.</p>
 
@@ -37,5 +44,7 @@
         <span style="display:none;">[@ANCHOR: set_kv_sql_check]</span>
         <span style="display:none;">[@ANCHOR: zero_sudo_register_hook]</span>
         <span style="display:none;">[@ANCHOR: zero_sudo_doc_installer]</span>
+        <span style="display:none;">[@ANCHOR: zero_sudo_kv_global]</span>
+        <span style="display:none;">[@ANCHOR: zero_sudo_noisy_table_global]</span>
     </div>
 </div>

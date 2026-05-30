@@ -141,12 +141,22 @@ class BinaryVersion(models.Model):
                     with zipfile.ZipFile(tmp_path, "r") as zip_ref:
                         extract_target = self.extract_member or self.manifest_id.name
                         found = False
-                        for name in zip_ref.namelist():
+                        for zinfo in zip_ref.infolist():
+                            name = zinfo.filename
                             if name.endswith(f"/{extract_target}") or name == extract_target:
+                                # Security: Check for symlinks (external attributes)
+                                # ZIP external attributes: bits 16-31 for Unix permissions
+                                if (zinfo.external_attr >> 16) & 0o120000 == 0o120000:
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Links are not allowed in the archive."
+                                        )
+                                    )
+
                                 target_path = os.path.join(bin_dir, os.path.basename(target_bin))
                                 if not os.path.abspath(target_path).startswith(os.path.abspath(bin_dir)):
                                     raise UserError(_("Security Alert: Zip slip attempt detected."))
-                                with zip_ref.open(name) as source:
+                                with zip_ref.open(zinfo) as source:
                                     with open(target_path, "wb") as target:
                                         shutil.copyfileobj(source, target)
                                 found = True

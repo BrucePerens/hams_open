@@ -58,17 +58,17 @@ The module follows a **Command Query Responsibility Segregation (CQRS)** pattern
 ### Key Components:
 *   **Control Plane:** Odoo records (`pager.check`) define what to monitor. [@ANCHOR: generalized_pager_config]
 *   **Data Plane (Daemons):**
-    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.). [@ANCHOR: daemon_execute_check]
-    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time. [@ANCHOR: pd_log_api_i18n]
+    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.) via a micro-privilege service account. It is designed to "fail fast" if system dependencies are missing. [@ANCHOR: daemon_execute_check]
+    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time. It runs chrooted to `/var/log`, drops all kernel capabilities, and de-escalates to `nobody:adm`. [@ANCHOR: pd_log_api_i18n]
     *   `pager_smart_spooler.py`: Securely collects hardware health data (SMART).
     *   `pager_synthetic_spooler.py`: Executes sandboxed (Bubblewrap) Playwright/Bash tests. [@ANCHOR: synthetic_i18n]
 *   **Inter-Process Communication (IPC):** Uses Redis Pub/Sub and Queues for high-speed communication between Odoo workers and background daemons.
 
 ### Security & Micro-Privileges:
-*   **Zero-Sudo RPC:** Daemons authenticate via the `pager_service_internal` service account. No `sudo()` is used.
+*   **Zero-Sudo RPC:** Daemons authenticate via the `pager_service_internal` service account. No `sudo()` is used. All operations utilize `with_user()` for minimum privilege execution. High-privilege RPCs are protected by allow-lists. [@ANCHOR: rpc_ensure_executable_security]
 *   **Sandboxing:** Synthetic checks run inside a strict **Bubblewrap (bwrap)** sandbox with optional network isolation.
 *   **Service Accounts:** The module uses `zero_sudo.security.utils` to securely escalate privileges within Odoo's ACL framework.
-*   **Multi-Website Isolation:** Data is partitioned by `website_id`. The NOC Dashboard respects `website_id` passed via query parameters or context.
+*   **Multi-Website Isolation:** Data is partitioned by `website_id`. The NOC Dashboard, incident reporting, and on-duty scheduling all respect `website_id` for strict multi-tenant isolation.
 
 ---
 

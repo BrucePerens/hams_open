@@ -18,6 +18,13 @@ class ContentViolationAppeal(models.Model):
     )
     reason = fields.Text(string="Appeal Reason", required=True)
 
+    company_id = fields.Many2one(
+        "res.company",
+        string="Company",
+        required=True,
+        default=lambda self: self.env.company,
+    )
+
     state = fields.Selection(
         [
             ("new", "Pending Review"),
