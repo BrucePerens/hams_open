@@ -13,63 +13,63 @@
 </head>
 <body>
 <h1>Distributed Redis Cache</h1>
-<p>The <b>Distributed Redis Cache</b> module provides a high-performance, horizontally scalable caching solution for Odoo cluster environments. It ensures that all Odoo servers in your cluster stay synchronized by sharing cache invalidation signals through Redis.</p>
+<p>The <b>Distributed Redis Cache</b> module is a performance tool designed for Odoo environments with multiple servers. It ensures that when data changes on one server, every other server in your cluster is updated instantly, preventing "stale data" errors.</p>
 
 <h2>Overview</h2>
-<p>In a multi-server setup, standard Odoo servers keep their own local memory caches. When data is updated on one server, others might still serve old data. This module solves this "cache drift" by providing a central Redis-backed signaling system.</p>
+<p>Normally, Odoo servers work independently. If you update a price or a user's permissions on Server A, Server B might not realize it for some time. This module links them all to a central "brain" (Redis) so they can share information about what has changed in real-time.</p>
 
-<h2>Core Functionality</h2>
+<h2>How it Works</h2>
 <ol>
-    <li><b>Instant Synchronization:</b> Whenever a record is updated, the module sends a notification through the database.</li>
-    <li><b>Automated Distribution:</b> A background service (the <i>Cache Manager</i>) picks up these notifications and publishes them to Redis.</li>
-    <li><b>Cluster-Wide Invalidation:</b> All Odoo servers listening to Redis receive the signal and immediately clear the relevant parts of their local memory.</li>
+    <li><b>Detection:</b> Odoo notices when you save a record.</li>
+    <li><b>Broadcast:</b> A background service immediately tells the shared memory (Redis) that specific data has changed.</li>
+    <li><b>Refresh:</b> All other Odoo servers listening to Redis get the signal and immediately refresh their own memory.</li>
 </ol>
 
 <div class="note">
-    <strong>Smart Invalidation:</strong> Unlike standard Odoo, which may clear large portions of the cache at once, this module uses fine-grained invalidation to only flush specific models, keeping the rest of your system fast.
+    <strong>Smart Cleanup:</strong> Instead of clearing everything and slowing down your system, this module only clears the specific data that actually changed.
 </div>
 
 <h2>User Instructions</h2>
 
 <h3>Managing the Cache</h3>
-<p>Administrators can access the management interface via the <b>Distributed Cache</b> menu in the Odoo navbar.</p>
+<p>Administrators can find management tools under the <b>Distributed Cache</b> menu in Odoo.</p>
 
 <h4>Checking System Health</h4>
-<p>Use the <b>Check Redis Status</b> button to verify that Odoo can communicate with the Redis server.
+<p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server.
 <ul>
-    <li>A <b>green success message</b> indicates a healthy connection.</li>
-    <li>A <b>red error message</b> means Redis is unreachable. In this case, the module automatically switches to "Fail-Open" mode, falling back to standard local caching to ensure your site stays online.</li>
+    <li><b>Green Success:</b> Everything is working perfectly.</li>
+    <li><b>Red Error:</b> The shared memory is unreachable. Don't worry—Odoo will automatically switch to "Fail-Open" mode and use standard local memory so your website stays online.</li>
 </ul>
 </p>
 
-<h4>Manual Cache Clearing</h4>
-<p>If you suspect that data is out of sync across your cluster, you can manually trigger a flush for a specific data type (a "Model"):</p>
+<h4>Manual Refresh</h4>
+<p>If you suspect a server is showing old information, you can manually trigger a refresh:</p>
 <ol>
-    <li>Select the <b>Model</b> (e.g., <code>User</code> or <code>Partner</code>) from the dropdown list.</li>
+    <li>Select the <b>Data Type</b> (called a "Model", like <code>User</code> or <code>Partner</code>) from the list.</li>
     <li>Click <b>Invalidate Model Cache</b>.</li>
-    <li>Every server in the cluster will immediately clear its local cache for that specific model.</li>
+    <li>All servers in your cluster will instantly refresh their memory for that specific data type.</li>
 </ol>
 
-<h2>Multi-Tenant Awareness</h2>
-<p>This module is fully multi-tenant aware. Cache entries are isolated per website based on the <code>website_id</code> and per company based on the <code>company_id</code> in the request context. This ensures that personal or group-specific data is correctly cached and never leaked between different sites or companies hosted on the same Odoo instance.</p>
+<h2>Privacy and Isolation</h2>
+<p>This module is built for security. It automatically keeps data from different websites or different companies separate. A user on Website A will never see cached data intended for a user on Website B.</p>
 
 <h2>Technical Benefits</h2>
 <ul>
-    <li><b>Zero-Sudo Architecture:</b> Built for security, the module uses dedicated service accounts and minimal privileges.</li>
-    <li><b>Resilience:</b> Designed to be "Fail-Open," meaning your system will never crash due to a Redis outage; it will simply revert to standard Odoo behavior.</li>
-    <li><b>Efficiency:</b> Uses the <code>SCAN</code> command for Redis operations to ensure performance even with millions of cache keys.</li>
+    <li><b>Secure:</b> Uses "Zero-Sudo" architecture—background tasks have only the minimum access they need.</li>
+    <li><b>Reliable:</b> Designed to never crash your site even if the cache server goes down.</li>
+    <li><b>Efficient:</b> Uses optimized commands to handle millions of records without lagging.</li>
 </ul>
 
 <div class="note">
-    <strong>Developer Tip:</strong> Use the <code>@distributed_cache()</code> decorator on your custom model methods to automatically benefit from cluster-wide caching and multi-tenant isolation. Ensure that your method arguments are JSON-serializable for optimal performance. The system handles Odoo recordsets, dates, and basic Python collections automatically.
+    <strong>Developer Tip:</strong> Use the <code>@distributed_cache()</code> decorator on your custom model methods to automatically benefit from cluster-wide caching and multi-tenant isolation.
 </div>
 
 <h3>Troubleshooting</h3>
-<p>If you notice the cache is not invalidating as expected:</p>
+<p>If updates aren't appearing instantly:</p>
 <ul>
-    <li><b>Check the Cache Manager Daemon:</b> Ensure the background service is running. It is responsible for bridging database events to Redis.</li>
-    <li><b>Redis Connectivity:</b> Use the "Check Redis Status" button. If Redis is down, the system will fall back to local memory, which may cause temporary drift between servers.</li>
-    <li><b>Wait for Invalidation:</b> Invalidation signals are processed asynchronously. They usually take less than a second to propagate across the cluster.</li>
+    <li><b>Check Status:</b> Use the "Check Redis Status" button.</li>
+    <li><b>Check the Service:</b> Ensure the "Cache Manager" background service is active on your host.</li>
+    <li><b>Be Patient:</b> While usually instant, network signals can sometimes take a fraction of a second to travel between servers.</li>
 </ul>
 
 <!-- Semantic Anchors for System Integration -->
