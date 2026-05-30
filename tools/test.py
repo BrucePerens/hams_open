@@ -769,7 +769,10 @@ def provision_jules(base_dir, already_provisioned=False):
     if not already_provisioned:
         print("[*] Provisioning APT Sources and Packages...")
 
-        if "hams_community" not in os.path.basename(os.path.abspath(base_dir)):
+        # Identify if the current repository is hams_community by checking for a signature core module.
+        is_hams_community = os.path.exists(os.path.join(base_dir, "zero_sudo", "__manifest__.py"))
+
+        if not is_hams_community:
             target_clone = "/app/hams_community" if os.path.abspath(base_dir) == "/app" else "../hams_community"
             if not os.path.exists(target_clone):
                 print(f"[*] Sibling repository not found. Cloning hams_community to {target_clone}...")
