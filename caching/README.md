@@ -17,6 +17,12 @@ The Service Worker automatically looks for requests matching these patterns:
 
 As long as you place your Javascript, CSS, and UI icons inside your module's standard `static/` directory, they will be cached automatically.
 
+## 🏢 Multi-Tenant & Multi-Website Support
+
+The caching system is fully aware of Odoo's multi-website architecture. Each website can have its own independent caching configuration:
+- **Individual Quotas:** Large websites with many assets can have higher quotas, while smaller ones stay lean.
+- **Independent Invalidation:** Updating one website's branding won't force users of other websites to re-download their cached assets.
+
 ## 🔄 Automated Cache Invalidation
 
 This module eliminates the need for manual version bumping or complex cache-busting query parameters.
