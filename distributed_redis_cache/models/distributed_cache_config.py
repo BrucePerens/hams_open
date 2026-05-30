@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-from odoo import models, fields, _
+from odoo import models, fields, tools, _
 from odoo.addons.distributed_redis_cache.redis_cache import (
     notify_model_invalidation,
 )

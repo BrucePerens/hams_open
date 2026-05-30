@@ -38,3 +38,36 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         # Verify it's actually an executable by checking its mode
         mode = os.stat(path).st_mode
         self.assertTrue(bool(mode & stat.S_IXUSR))
+
+    def test_pure_python_symlink_engine(self):
+        # Tests [@ANCHOR: pure_python_symlink_engine]
+        website = self.env['website'].search([], limit=1)
+        if not website:
+            website = self.env['website'].create({'name': 'Test Tenant'})
+
+        manifest = self.env['binary.manifest'].create({
+            'name': 'test_symlink_bin',
+            'url': 'http://odoo-service.internal'
+        })
+        version = self.env['binary.version'].create({
+            'manifest_id': manifest.id,
+            'version_number': '1.0',
+            'url': 'http://odoo-service.internal/1.0',
+            'checksum': 'fake'
+        })
+
+        mock_symlink = self.safe_patch('os.symlink')
+        self.safe_patch('os.makedirs')
+        self.safe_patch('os.chmod')
+        self.safe_patch('os.path.lexists', return_value=False)
+
+        self.safe_patch_object(type(version), 'action_download_to_pool', return_value=True)
+        self.safe_patch_object(type(version), '_get_central_path', return_value='/fake/central/path')
+
+        link = self.env['binary.tenant.link'].create({
+            'website_id': website.id,
+            'manifest_id': manifest.id,
+            'active_version_id': version.id,
+        })
+
+        mock_symlink.assert_called_once_with('/fake/central/path', link.symlink_path)

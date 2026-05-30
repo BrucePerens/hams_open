@@ -15,7 +15,7 @@
     </record>
 
     <!-- Tenant Link Form -->
-    <!-- audit-ignore-ui-tour -->
+    <!-- audit-ignore-view -->
     <record id="view_binary_tenant_link_form" model="ir.ui.view">
         <field name="name">binary.tenant.link.form</field>
         <field name="model">binary.tenant.link</field>
@@ -37,7 +37,7 @@
     </record>
 
     <!-- Version Form -->
-    <!-- audit-ignore-ui-tour -->
+    <!-- audit-ignore-view -->
     <record id="view_binary_version_form" model="ir.ui.view">
         <field name="name">binary.version.form</field>
         <field name="model">binary.version</field>

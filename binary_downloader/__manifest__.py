@@ -4,12 +4,13 @@
     "version": "1.0",
     "category": "Hidden",
     "author": "Bruce Perens K6BP",
-    "depends": ["base", "zero_sudo"],
+    "depends": ["base", "zero_sudo", "website"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
         "data/binary_manifest_data.xml",
         "views/binary_manifest_views.xml",
+        "views/tenant_binary_views.xml",
     ],
     "knowledge_docs": [
         {
