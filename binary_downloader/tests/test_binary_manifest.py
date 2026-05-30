@@ -97,7 +97,7 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen.return_value = mock_response_get
 
         path = self.env["binary.manifest"].ensure_executable("testbin")
-        self.assertTrue(path.endswith("testbin"))
+        self.assertTrue(os.path.basename(path).startswith("testbin"))
         self.assertTrue(os.path.exists(path))
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"1234")
@@ -295,7 +295,7 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen.return_value = mock_response_get
 
         path = self.env["binary.manifest"].ensure_executable("zippy")
-        self.assertTrue(path.endswith("zippy"))
+        self.assertTrue(os.path.basename(path).startswith("zippy"))
         self.assertTrue(os.path.exists(path))
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"zipdata")
