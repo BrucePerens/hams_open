@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api, tools
 from odoo.modules.module import get_manifest
+from odoo.exceptions import AccessError
 import hashlib
 import logging
 
@@ -14,17 +15,13 @@ class Module(models.Model):
         # [@ANCHOR: zero_sudo:zero_sudo_register_hook]
         # Verified by [@ANCHOR: zero_sudo:test_zero_sudo_register_hook]
         super()._register_hook()
-        if not getattr(self.env.registry, '_zero_sudo_docs_checked', False):
-            self.env.registry._zero_sudo_docs_checked = True
-            self._bootstrap_knowledge_docs()
+        # Always run on register_hook to ensure new modules get their docs
+        self._bootstrap_knowledge_docs()
 
     @api.model
     def _bootstrap_knowledge_docs(self):
         # [@ANCHOR: zero_sudo:zero_sudo_doc_installer]
         # Verified by [@ANCHOR: zero_sudo:test_zero_sudo_doc_installer]
-        if getattr(self.env.registry, '_zero_sudo_docs_checked', False):
-            return
-        self.env.registry._zero_sudo_docs_checked = True
 
         article_model_name = None
         if 'knowledge.article' in self.env:
@@ -42,7 +39,11 @@ class Module(models.Model):
              svc_account = "zero_sudo.odoo_facility_service_internal"
 
         # Context for creating documentation
-        svc_uid = utils._get_service_uid(svc_account)
+        try:
+            svc_uid = utils._get_service_uid(svc_account)
+        except AccessError:
+            return
+
         Article = self.env[article_model_name].with_user(svc_uid).with_context(
             mail_notrack=True
         )

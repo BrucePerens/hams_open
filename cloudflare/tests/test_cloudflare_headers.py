@@ -53,6 +53,10 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_request.httprequest = type("MockHttpRequest", (object,), {})()
         mock_request.httprequest.path = "/web/assets/1/dummy.js" # burn-ignore-route
 
+        # FIX: The middleware relies on _get_current_object() to resolve the LocalProxy.
+        # Without this, it throws an AttributeError and skips header injection.
+        mock_request._get_current_object = lambda: mock_request
+
         self.safe_patch("odoo.addons.cloudflare.models.ir_http.request", new=mock_request)
         res = DummyIrHttp._post_dispatch(mock_response)
 
