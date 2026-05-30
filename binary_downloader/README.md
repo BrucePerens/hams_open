@@ -25,7 +25,7 @@ The module supports raw binaries as well as compressed archives (`.tar.gz` and `
 * **Archive Security (Tar/Zip Slip):** Implements strict path validation and member name sanitization during archive extraction (both `.tar.gz` and `.zip`). Extracted files are strictly confined to the `hams_bin` directory. Symbolic links and hard links within archives are strictly forbidden.
 * **Timeouts:** All network operations have strict timeouts (15s for HEAD, 600s for GET) to prevent resource exhaustion and hanging threads.
 * **Permissions:** Target directory (`hams_bin`) and binaries are set to `0o750` to restrict execution and access.
-* **Multi-Website Isolation:** While binaries are stored in a shared system directory, their use is orchestrated via Odoo's standard security model, ensuring that only authorized services can trigger or access specific dependencies.
+* **Multi-Company & Multi-Website Isolation:** Binaries are stored in a shared system directory (`hams_bin`), but their filenames are version-aware (hashed name + checksum). The `binary.manifest` model supports `company_id`, ensuring that each company can manage its own dependencies or specific versions without conflict. Access is orchestrated via Odoo's standard security model.
 </security_design>
 
 <api>

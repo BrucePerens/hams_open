@@ -20,24 +20,26 @@ class TestBinaryManifest(HamsTransactionCase):
     def tearDown(self):
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
-        for path in [os.path.join(bin_dir, "fake"), os.path.join(bin_dir, "testbin"), os.path.join(bin_dir, "slippy"), os.path.join(bin_dir, "symlinkbin")]:
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except OSError as e:
-                    _logger.warning("Failed to remove path %s: %s", path, e)
+        if os.path.exists(bin_dir):
+            for f in os.listdir(bin_dir):
+                if f.startswith(("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")):
+                    try:
+                        os.remove(os.path.join(bin_dir, f))
+                    except OSError as e:
+                        _logger.warning("Failed to remove path %s: %s", f, e)
         super().tearDown()
 
     def setUp(self):
         super().setUp()
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
-        for path in [os.path.join(bin_dir, "fake"), os.path.join(bin_dir, "testbin"), os.path.join(bin_dir, "slippy"), os.path.join(bin_dir, "symlinkbin")]:
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except OSError as e:
-                    _logger.warning("Failed to remove path %s: %s", path, e)
+        if os.path.exists(bin_dir):
+            for f in os.listdir(bin_dir):
+                if f.startswith(("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")):
+                    try:
+                        os.remove(os.path.join(bin_dir, f))
+                    except OSError as e:
+                        _logger.warning("Failed to remove path %s: %s", f, e)
         self.service_user = self.env.ref("binary_downloader.user_binary_downloader_service")
 
         # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
@@ -60,7 +62,7 @@ class TestBinaryManifest(HamsTransactionCase):
         # Tests [@ANCHOR: binary_resolution]
 
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
-        target_bin = os.path.join(data_dir, "hams_bin", "testbin")
+        target_bin = os.path.join(data_dir, "hams_bin", self.manifest._get_target_filename())
         if not os.path.exists(os.path.dirname(target_bin)):
             os.makedirs(os.path.dirname(target_bin))
         with open(target_bin, "wb") as f:
@@ -68,7 +70,7 @@ class TestBinaryManifest(HamsTransactionCase):
         os.chmod(target_bin, stat.S_IRWXU)
 
         path = self.env["binary.manifest"].ensure_executable("testbin")
-        self.assertEqual(path, os.path.join(data_dir, "hams_bin", "testbin"))
+        self.assertEqual(path, target_bin)
 
     def test_02_missing_manifest(self):
         self.safe_patch("shutil.which", return_value=None)
@@ -110,7 +112,7 @@ class TestBinaryManifest(HamsTransactionCase):
     def test_06_is_installed_compute(self):
         # Tests [@ANCHOR: binary_compute_installed]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
-        target_bin = os.path.join(data_dir, "hams_bin", "testbin")
+        target_bin = os.path.join(data_dir, "hams_bin", self.manifest._get_target_filename())
         if not os.path.exists(os.path.dirname(target_bin)):
             os.makedirs(os.path.dirname(target_bin))
         with open(target_bin, "wb") as f:
@@ -298,6 +300,40 @@ class TestBinaryManifest(HamsTransactionCase):
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"zipdata")
 
+    def test_16_zip_symlink_prevention(self):
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
+        self.env["binary.manifest"].create({
+            "name": "symlinkzip",
+            "url": "http://example.com/symlink.zip",
+            "checksum": hashlib.sha256(b"data").hexdigest(),
+            "archive_type": "zip",
+            "extract_member": "symlinkbin"
+        })
+
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"data", b""]
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+
+        mock_zip_open = self.safe_patch("zipfile.ZipFile")
+        mock_zip = MagicMock()
+        mock_zip_open.return_value.__enter__.return_value = mock_zip
+
+        mock_zinfo = MagicMock()
+        mock_zinfo.filename = "symlinkbin"
+        # Set external_attr to represent a symlink (0xA000 << 16)
+        mock_zinfo.external_attr = 0xA000 << 16
+
+        mock_zip.infolist.return_value = [mock_zinfo]
+
+        with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
+            self.env["binary.manifest"].ensure_executable("symlinkzip")
+
     def test_15_zip_slip_prevention(self):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
@@ -322,7 +358,11 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_zip = MagicMock()
         mock_zip_open.return_value.__enter__.return_value = mock_zip
 
-        mock_zip.namelist.return_value = ["slip"]
+        mock_zinfo = MagicMock()
+        mock_zinfo.filename = "slip"
+        mock_zinfo.external_attr = 0
+
+        mock_zip.infolist.return_value = [mock_zinfo]
 
         original_abspath = os.path.abspath
         def mock_abspath(p):

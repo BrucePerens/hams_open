@@ -1,37 +1,22 @@
 # Jules Session Issues - binary_downloader
 
 ## Environment Verification
-- **Date:** 2026-05-29
+- **Date:** 2026-05-30
 - **Provisioning:** Successful using `IN_JULES_VM=1 python3 tools/test.py --provision-jules -u binary_downloader`.
-- **Standard Tests:** Passed (16 tests).
-- **UI Tours:** Passed as part of the test suite.
+- **Standard Tests:** Passed.
+- **UI Tours:** Passed.
+- **Linter/Anchor Issues:** The anchor linter reports duplicates because it scans both the root module directory and the `hams_community/` directory created during provisioning. This is a known environment hurdle and does not represent actual duplicates in the module itself.
 
-## Repaired AI Hallucinations & Laziness
-- **Empty Exception Handler:** In `models/binary_manifest.py`, `tests/test_binary_manifest.py`, and `tests/test_ui_tours_api.py`, empty `except OSError: pass` blocks were found. These were repaired by adding proper `_logger.warning` calls to ensure that failures to delete temporary or test files are visible in the logs.
-- **UI Visibility Logic:** In `views/binary_manifest_views.xml`, the `extract_member` field was incorrectly hidden for ZIP archives. This was an AI shortcut assuming only tarballs need member extraction. Fixed to show for both `tar.gz` and `zip`.
-- **UI Tour Robustness:** Updated `static/tests/tours/binary_install_tour.js` to use `TourUtils.waitForAbsence('.o_loading')` and added explicit waits for notifications to prevent race conditions during form submission and RPC resolution.
+## AI Hallucination & Laziness Audit
+- **Empty Exception Handlers:** Verified that `models/binary_manifest.py`, `tests/test_binary_manifest.py`, and `tests/test_ui_tours_api.py` have proper logging in exception blocks.
+- **UI Visibility Logic:** Checked `views/binary_manifest_views.xml`. The `extract_member` field is correctly visible for both `tar.gz` and `zip` archives.
+- **UI Tour Robustness:** `static/tests/tours/binary_install_tour.js` uses `TourUtils.waitForAbsence('.o_loading')` and includes success notification checks.
 
-## Proposed Linter Rules
-To catch empty exception handlers globally, I propose adding the following AST check to `tools/check_burn_list.py`:
-
-```python
-def visit_ExceptHandler(self, node):
-    if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
-        self.add_error(
-            node.lineno,
-            "CRITICAL AI LAZINESS: Empty exception handlers using 'pass' are forbidden. Log the error or handle it."
-        )
-    self.generic_visit(node)
-```
+## Multi-Tenant Awareness
+- Binaries are system-wide resources stored in `hams_bin`, but versioned via name+checksum hash to allow multi-tenant coexistence.
+- The `binary.manifest` model now includes `company_id` for strict ownership and isolation.
 
 ## Security Audit
-- **Zero-Sudo Compliance:** Verified. No `.sudo()` calls found. Service account `user_binary_downloader_service` is correctly used with `.with_user()`.
-- **Path Traversal:** Protections against Tar Slip and Zip Slip are verified by tests.
-- **Multi-Tenant Awareness:** Binaries are stored in a shared system directory (`hams_bin`), but their orchestration and access are governed by Odoo's security groups, ensuring isolation at the service level.
-
-## Sibling Module Verification (Temporary Fixes Applied & Removed)
-To enable clean testing and linter runs, the following temporary fixes were applied to sibling modules during verification:
-1.  **zero_sudo**: Added `# Tested by [@ANCHOR: zero_sudo:test_zero_sudo_register_hook]` in `models/ir_module_module.py` to resolve a CI/CD anchor disconnect.
-2.  **manual_library**: Modified `tests/test_orm_logic.py` to use `assertRaises(RestrictViolation)` instead of a tuple to bypass a `TypeError` in Odoo's test framework when handling multiple exceptions.
-
-These fixes were removed before the final PR submission.
+- Verified SHA-256 integrity checks, advisory locking, and path sanitization (Tar/Zip slip protection).
+- **Symlink Protection:** Added explicit check for symlinks in ZIP archives (via `external_attr`) to match Tarball security.
+- **Zero-Sudo:** No `.sudo()` calls found; strictly uses `with_user()` with service accounts.
