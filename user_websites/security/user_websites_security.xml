@@ -127,6 +127,17 @@
             <field name="perm_unlink" eval="False"/>
         </record>
 
+        <record id="content_violation_report_multi_company_rule" model="ir.rule">
+            <field name="name">Content Violation Report Multi-Company Rule</field>
+            <field name="model_id" ref="model_content_violation_report"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
         <record id="content_violation_report_admin_rule" model="ir.rule">
             <field name="name">Content Violation Report Admin Rule</field>
             <field name="model_id" ref="model_content_violation_report"/>
@@ -226,11 +237,33 @@
             <field name="perm_unlink" eval="False"/>
         </record>
 
+        <record id="content_violation_appeal_multi_company_rule" model="ir.rule">
+            <field name="name">Content Violation Appeal Multi-Company Rule</field>
+            <field name="model_id" ref="model_content_violation_appeal"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
         <record id="content_violation_appeal_admin_rule" model="ir.rule">
             <field name="name">Content Violation Appeal Admin Rule</field>
             <field name="model_id" ref="model_content_violation_appeal"/>
             <field name="groups" eval="[(4, ref('user_websites.group_user_websites_administrator')), (4, ref('user_websites.group_user_websites_service_account'))]"/>
             <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <record id="user_websites_group_multi_company_rule" model="ir.rule">
+            <field name="name">User Websites Group Multi-Company Rule</field>
+            <field name="model_id" ref="model_user_websites_group"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
             <field name="perm_create" eval="True"/>

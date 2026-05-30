@@ -17,6 +17,7 @@ from odoo.modules.registry import Registry
 from ..utils import slugify, RESERVED_SLUGS
 
 BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_logger = logging.getLogger(__name__)
 
 
 def _async_unpublish_content(db_name, user_ids):
@@ -159,6 +160,10 @@ class ResUsers(models.Model):
         r"CHECK(website_slug IS NULL OR website_slug = '' OR website_slug ~ '^[a-z0-9\-]+$')",
         "The Website Slug can only contain lowercase letters, numbers, and hyphens.",
     )
+
+    def _is_admin(self):
+        """Helper to check if the user has administration rights."""
+        return self.has_group("user_websites.group_user_websites_administrator") or self.has_group("base.group_system")
 
     @api.constrains("website_slug")
     def _check_reserved_slugs(self):
@@ -564,5 +569,9 @@ class ResUsers(models.Model):
         # ADR-0001: All service account mutations must include appropriate context
         self.with_env(env_svc).write({"privacy_show_in_directory": False})
 
-        if hasattr(super(), "_execute_gdpr_erasure"):
+        try:
             super()._execute_gdpr_erasure()
+        except AttributeError:
+            # ADR-0002: Base res.users doesn't have this method; this is normal
+            # and only exists if other modules (like manual_library) provide it.
+            _logger.debug("Base res.users has no _execute_gdpr_erasure to call")

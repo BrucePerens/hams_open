@@ -62,6 +62,13 @@ class UserWebsitesGroup(models.Model):
         help="Blog posts belonging to this group.",
     )
 
+    company_id = fields.Many2one(
+        "res.company",
+        string="Company",
+        required=True,
+        default=lambda self: self.env.company,
+    )
+
     # --- Odoo 19 Constraint Syntax ---
     _website_slug_unique = models.Constraint(
         "UNIQUE(website_slug)", "The Group Website Slug must be unique!"
