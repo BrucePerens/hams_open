@@ -9,6 +9,13 @@ _logger = logging.getLogger(__name__)
 
 
 class DaemonKeyRegistry(models.Model):
+    """
+    Daemon API Key Registry.
+    This model is multi-tenant (company-aware) because service accounts and their
+    associated API keys are bound to a specific company context. Daemons operating
+    for different companies must have separate registry entries to maintain strict
+    security isolation.
+    """
     _name = "daemon.key.registry"
     _description = "Daemon API Key Registry"
 
@@ -32,6 +39,7 @@ class DaemonKeyRegistry(models.Model):
         string="Company",
         required=True,
         default=lambda self: self.env.company,
+        help="The company that owns this daemon registry. Service accounts are company-specific.",
     )
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
 

@@ -54,7 +54,17 @@
         <b>Tip:</b> If an external program stops working after a refresh, it should be designed to "self-heal" by re-reading its configuration file. If it doesn't, you may need to restart that specific external program.
     </div>
 
-    <h3>3. Adding a New Connection Manually</h3>
+    <h3>3. Automated Key Rotation</h3>
+    <p>The system is designed to be "set and forget." Every 60 days, a background task automatically:</p>
+    <ul>
+        <li>Identifies keys that are about to expire.</li>
+        <li>Generates a fresh replacement key.</li>
+        <li>Updates the secure <code>.env</code> file on the server.</li>
+        <li>Deactivates the old key.</li>
+    </ul>
+    <p>This ensures that even if a key were somehow leaked, it would only be valid for a short window of time.</p>
+
+    <h3>4. Adding a New Connection Manually</h3>
     <p>While most external programs register themselves automatically when their corresponding module is installed, you can add one manually:</p>
     <ol>
         <li>Click the <b>New</b> button in the Daemon Key Registry.</li>

@@ -1,20 +1,29 @@
 # Jules Issues - daemon_key_manager
 
 ## Environment Verification
-- Provisioning: Completed successfully.
-- Basic Test Run: Completed successfully.
+- Session started: 2026-05-30
+- Provisioning: Already provisioned.
+- Initial Test Run: Passed.
 
 ## Identified Issues & Repairs
-1.  **Strictly Prohibited .sudo() Usage:** The module initially relied on `.sudo()` for API key allocation and revocation, which was flagged as an exemption in the README.
-    - **Repair:** Refactored the module to be 100% Zero-Sudo compliant. This was achieved by:
-        - Adding explicit ACLs in `ir.model.access.csv` for `res.users.apikeys`, `res.users`, and `ir.cron`.
-        - Replacing all `.sudo()` calls with `with_user()` context elevation to the internal service account or the target service account.
-        - Updating `README.md` to reflect the removal of the sudo exemption.
-2.  **Linter Noise (External):** Initial linter runs reported numerous duplicate anchor violations. These were traced to the presence of `hams_community` in the parent directory of the VM, which the linters were scanning redundantly.
-    - **Resolution:** Removed the redundant `hams_community` directory from the VM to ensure clean linter output for the target module.
-3.  **Audit for AI Hallucinations:** Conducted a deep search for `hasattr` bypasses, empty `except:` blocks, and hollow assertions (`assertTrue(1==1)`). No such anti-patterns were found in the `daemon_key_manager` module.
-4.  **Security Audit:** Verified robust path traversal and symlink attack prevention using `os.path.realpath` and strict prefix validation.
+1.  **Strictly Prohibited .sudo() Usage:**
+    - The module contained one `.sudo()` call in `_rotate_key_and_write_file`.
+    - **Repair:** Refactored the module to be 100% Zero-Sudo compliant. Removed `.sudo()` and replaced it with a micro-privilege pattern using `group_daemon_key_usage`.
+    - **Fallback Mechanism:** Implemented a try-except block that falls back to a 24-hour key if the service account lacks the extended duration privilege. This ensures high-security by default while maintaining system uptime.
+2.  **Multi-Tenant Awareness:**
+    - Confirmed that `daemon.key.registry` has `company_id` and respects it in searches and creation.
+    - Added detailed documentation comments to the `DaemonKeyRegistry` model explaining its multi-tenant nature.
+3.  **Security Audit:**
+    - Verified robust path traversal and symlink attack prevention using `os.path.realpath` and strict prefix validation.
+    - Verified `0600` file permissions and `0700` directory permissions.
+4.  **AI Hallucination & Laziness Audit:**
+    - Conducted a deep search for AI-generated shortcuts.
+    - No hollow assertions, `hasattr` bypasses, or empty `except:` blocks found.
+    - Verified that all `except:` blocks either log the error or are for expected non-critical failures.
+5.  **Documentation:**
+    - Updated `README.md` to explain the Zero-Sudo compliance and rotation logic clearly.
+    - Enhanced `data/documentation.html` with sections on automated rotation and better user instructions.
 
 ## Proposed Linter Rules (for check_burn_list.py)
-- **Hollow Assertions:** `assertEqual(x, x)` or `assertTrue(True)` should be flagged globally. (Already partially covered by Jules linters).
-- **Empty Handlers:** Bare `pass` in `except:` blocks should be strictly blocked unless `# audit-ignore-catch-all` is present with logging. (Already covered).
+- **Hollow Assertions:** `assertEqual(x, x)` or `assertTrue(True)` should be flagged globally.
+- **Path Join on Hardcoded Prefixes:** Encourage using `os.path.join` even with hardcoded prefixes to ensure platform agnostic paths.
