@@ -37,6 +37,12 @@ class BinaryManifest(models.Model):
     extract_member = fields.Char(
         string="Extract Member", help="Specific file to extract from the archive."
     )
+    company_id = fields.Many2one(
+        "res.company",
+        string="Company",
+        required=True,
+        default=lambda self: self.env.company,
+    )
 
     @api.constrains("url")
     def _check_url_scheme(self):
@@ -51,7 +57,9 @@ class BinaryManifest(models.Model):
 
     is_installed = fields.Boolean(string="Installed", compute="_compute_is_installed")
 
-    _name_uniq = models.Constraint("UNIQUE(name)", "The binary name must be unique!")
+    _name_uniq = models.Constraint(
+        "UNIQUE(name, company_id)", "The binary name must be unique per company!"
+    )
     _name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "The binary name cannot be empty."
     )
@@ -97,11 +105,24 @@ class BinaryManifest(models.Model):
                 continue
 
             # Check hams_bin
-            target_bin = os.path.join(bin_dir, record.name)
+            filename = record._get_target_filename()
+            target_bin = os.path.join(bin_dir, filename)
             if os.path.exists(target_bin) and os.access(target_bin, os.X_OK):
                 record.is_installed = True
             else:
                 record.is_installed = False
+
+    def _get_target_filename(self):
+        """Generates a stable, unique filename based on the binary name and its checksum.
+        This allows multiple versions or company-specific variants of the same command
+        to coexist in the shared hams_bin directory.
+        """
+        self.ensure_one()
+        # Hash name and checksum to create a unique identifier for this specific binary variant
+        identifier = hashlib.sha256(
+            f"{self.name}_{self.checksum}".encode()
+        ).hexdigest()[:16]
+        return f"{self.name}_{identifier}"
 
     def action_install(self):
         # [@ANCHOR: binary_action_install]
@@ -178,11 +199,11 @@ class BinaryManifest(models.Model):
             os.makedirs(bin_dir, exist_ok=True)
             os.chmod(bin_dir, 0o750)
 
-        target_bin = os.path.join(bin_dir, cmd_name)
+        target_bin = os.path.join(bin_dir, manifest_record._get_target_filename())
 
         # Deterministic advisory lock to prevent concurrent downloads of the SAME binary
         lock_id = self.env["zero_sudo.security.utils"]._get_deterministic_hash(
-            f"binary_install_{cmd_name}"
+            f"binary_install_{cmd_name}_{manifest_record.checksum}"
         )
         self.env.cr.execute("SELECT pg_advisory_xact_lock(%s)", (lock_id,))
 
@@ -276,10 +297,20 @@ class BinaryManifest(models.Model):
                     with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                         extract_target = manifest_record.extract_member or cmd_name
                         found = False
-                        for name in zip_ref.namelist():
+                        for zinfo in zip_ref.infolist():
+                            name = zinfo.filename
                             if name.endswith(f"/{extract_target}") or name == extract_target:
+                                # Security: Check for symlinks (external attributes)
+                                # ZIP external attributes: bits 16-31 for Unix permissions
+                                if (zinfo.external_attr >> 16) & stat.S_IFLNK:
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Links are not allowed in the archive."
+                                        )
+                                    )
+
                                 # Path traversal protection for ZIP
-                                target_path = os.path.join(bin_dir, cmd_name)
+                                target_path = os.path.join(bin_dir, manifest_record._get_target_filename())
 
                                 if not os.path.abspath(target_path).startswith(
                                     os.path.abspath(bin_dir)
@@ -288,7 +319,7 @@ class BinaryManifest(models.Model):
                                         _("Security Alert: Zip slip attempt detected.")
                                     )
 
-                                with zip_ref.open(name) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                                with zip_ref.open(zinfo) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                                     with open(target_path, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                                         shutil.copyfileobj(source, target)
                                 found = True

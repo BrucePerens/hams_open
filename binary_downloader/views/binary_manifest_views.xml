@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <list string="Binary Manifests">
                 <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
                 <field name="archive_type"/>
                 <field name="url"/>
                 <field name="checksum"/>
@@ -33,6 +34,7 @@
                     <group>
                         <group>
                             <field name="is_installed" readonly="1"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
                             <field name="archive_type"/>
                             <field name="extract_member" invisible="archive_type not in ('tar.gz', 'zip')"/>
                         </group>
