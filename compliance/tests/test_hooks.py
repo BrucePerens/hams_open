@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-import unittest
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.compliance.hooks import post_init_hook
@@ -18,10 +17,6 @@ class TestComplianceHooks(HamsTransactionCase):
         # Tests [@ANCHOR: compliance_post_init_cookie_bar]
         # Tests [@ANCHOR: story_cookie_consent]
         # Tests [@ANCHOR: journey_compliance_setup]
-        if "cookies_bar" not in self.env["website"]._fields:
-            raise unittest.SkipTest(
-                "'cookies_bar' field is not present on the website model. Skipping cookie bar hook test."
-            )
 
         post_init_hook(self.env)
 

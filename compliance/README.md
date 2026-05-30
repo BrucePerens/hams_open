@@ -22,6 +22,8 @@ The boilerplate policies we generate are written specifically to cover the featu
 Managing regulatory compliance is easy with this module. Here is how you can operate the core features:
 
 ### 1. Viewing and Editing Your Legal Pages
+As a site owner, it is your responsibility to ensure that your legal documents accurately reflect your specific business practices and jurisdictional requirements. We provide standard templates that cover the default functionality of our modules, but you should review and customize them.
+
 We provide three standard pages that you can edit to fit your needs:
 * **Privacy Policy:** `/privacy`
 * **Cookie Policy:** `/cookie-policy`
@@ -34,9 +36,10 @@ We provide three standard pages that you can edit to fit your needs:
 4. Click **Save**. Your changes are safe and won't be overwritten when you update the module.
 
 ### 2. The Cookie Consent Bar
-The module automatically enables Odoo's native Cookie Bar.
-* **To verify it:** Open your site in an "Incognito" or "Private" browser window. You should see a banner at the bottom of the page.
-* **To manage it:** You can find the settings under **Website -> Configuration -> Settings**. Look for the "Cookie Bar" option.
+The module automatically enables Odoo's native Cookie Bar. This ensures that no non-essential cookies are placed on a visitor's device until they have given their explicit consent.
+
+* **To verify it:** Open your site in an "Incognito" or "Private" browser window (which ensures you are treated as a new visitor). You should see a banner at the bottom of the page.
+* **To manage it:** You can find the settings under **Website -> Configuration -> Settings**. Search for "Cookie Bar". Here you can also customize the text of the banner and the "Learn More" link if you wish to point it to a specific page other than our default `/cookie-policy`.
 
 ### 3. Handling Your Own Legal Pages
 If you already had a page at `/privacy` before installing this module, we won't touch it. Our "boilerplate" page will stay hidden (unpublished) so your visitors only see your version.
