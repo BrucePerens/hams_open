@@ -3,14 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <title>Backup Management User Documentation</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; }
+        h4 { color: #7f8c8d; }
+        .feature-list { list-style: none; padding: 0; }
+        .feature-list li { margin-bottom: 10px; padding-left: 20px; position: relative; }
+        .feature-list li:before { content: "✓"; position: absolute; left: 0; color: #27ae60; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        .note { background: #fff3cd; border-left: 5px solid #ffeeba; padding: 15px; margin: 20px 0; }
+    </style>
 </head>
 <body>
     <main>
         <h1>Backup Management User Guide</h1>
+
+        <p>This module centralizes the management of your system's data protection. It supports both file-level backups (Kopia) and database-level backups (pgBackRest).</p>
+
+        <h2>Core Features</h2>
+        <ul class="feature-list">
+            <li><strong>Unified Dashboard:</strong> View the health and status of all your backup configurations in one place.</li>
+            <li><strong>Automated Scheduling:</strong> Configure periodic snapshots and retention policies.</li>
+            <li><strong>Safe Execution:</strong> Operations run in the background to ensure the system remains responsive.</li>
+            <li><strong>Integrity Checks:</strong> Automated restore drills verify that your data can actually be recovered.</li>
+        </ul>
+
+        <h2>Getting Started</h2>
+
         <section id="backup-sync-section">
-            <h4>Automated Volume Synchronization</h4>
+            <h4>1. Setup a Backup Configuration</h4>
+            <p>Go to <strong>Backup Management > Configuration > Backup Configurations</strong>. Create a new record, choosing the appropriate engine (Kopia for files, pgBackRest for databases) and providing the target destination. You can also specify how many daily, weekly, and monthly snapshots to keep.</p>
             <span style="display:none;">[@ANCHOR: UX_BACKUP_SYNC]</span>
         </section>
+
+        <h4>2. Monitor via Dashboard</h4>
+        <p>The <strong>Backup Dashboard</strong> shows you at a glance if your backups are up to date. Records highlighted in red indicate that no backup has been successful in the last 26 hours.</p>
+
+        <h4>3. Performing a Restore</h4>
+        <p>In the event of data loss, navigate to <strong>Backups > Snapshots</strong>. Select a known good snapshot and click the <strong>Restore</strong> button. You will be prompted for a target directory where the files should be placed.</p>
+
+        <div class="note">
+            <strong>Security Note:</strong> Only users with "Backup Administrator" privileges can create configurations or trigger restore operations.
+        </div>
     </main>
 </body>
 </html>

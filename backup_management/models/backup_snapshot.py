@@ -13,6 +13,9 @@ class BackupSnapshot(models.Model):
     website_id = fields.Many2one(
         "website", string="Website", related="config_id.website_id", store=True
     )
+    company_id = fields.Many2one(
+        "res.company", string="Company", related="config_id.company_id", store=True
+    )
     snapshot_id = fields.Char(string="Snapshot ID / Label", required=True)
     start_time = fields.Datetime(string="Start Time")
     size_bytes = fields.Float(string="Size (Bytes)")
