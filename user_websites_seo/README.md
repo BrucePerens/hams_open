@@ -58,5 +58,8 @@ For detailed narratives and end-to-end workflows, refer to the following:
 | `[@ANCHOR: test_xpath_rendering_res_users]` | Backend view rendering for users. | `test_xpath_rendering_res_users` |
 | `[@ANCHOR: test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `test_xpath_rendering_user_websites_group` |
 
-## 5. Multi-Website Support
-This module is fully multi-website aware. It respects the `website_id` field on `website.page` records and uses Odoo's native website-switching logic to ensure that SEO metadata is correctly associated with the active website context. All controller logic uses `request.website` to filter relevant records.
+## 5. Multi-Website & Multi-Tenant Support
+This module is fully multi-website and multi-tenant aware.
+
+*   **Multi-Tenancy:** SEO metadata is stored on `res.users` and `user.websites.group` records. Since these models are company-specific (multi-tenant), the SEO metadata naturally follows the same isolation rules.
+*   **Multi-Website:** It respects the `website_id` field on related records and uses Odoo's native website-switching logic to ensure that SEO metadata is correctly associated with the active website context. All controller logic uses standard Odoo routing which is multi-website aware.

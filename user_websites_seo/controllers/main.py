@@ -41,11 +41,15 @@ class UserWebsitesSEOController(UserWebsitesController):
             **kwargs
         )
 
-        # Intercept and modify the rendering dictionary before it hits the templating engine
-        # We explicitly check for odoo.http.Response to avoid AI-generated hasattr shortcuts.
-        if isinstance(response, Response) and hasattr(response, "qcontext"):
-            user = response.qcontext.get("profile_user")
-            group = response.qcontext.get("profile_group")
+        # Intercept and modify the rendering dictionary before it hits the templating engine.
+        if isinstance(response, Response):
+            # Accessing .qcontext is safe on a Response object, but it may be None.
+            qcontext = getattr(response, "qcontext", None)
+            if qcontext is None:
+                return response
+
+            user = qcontext.get("profile_user")
+            group = qcontext.get("profile_group")
 
             # We de-elevate the recordset to the current request's environment
             # if the base controller provided an elevated one, but only if we are
@@ -56,10 +60,10 @@ class UserWebsitesSEOController(UserWebsitesController):
             if user:
                 if request and request.env:
                     user = user.with_env(request.env)
-                response.qcontext["main_object"] = user
+                qcontext["main_object"] = user
             elif group:
                 if request and request.env:
                     group = group.with_env(request.env)
-                response.qcontext["main_object"] = group
+                qcontext["main_object"] = group
 
         return response
