@@ -6,7 +6,7 @@
 
     <h2>1. Purpose and Automation</h2>
     <p>
-        Modern Odoo deployments often rely on external high-performance tools written in languages like Go or Rust. Instead of requiring manual system administration to install these tools on the host server, the Binary Downloader automates the lifecycle of these dependencies.
+        Modern Odoo deployments often rely on external high-performance tools written in languages like Go or Rust. Instead of requiring manual system administration to install these tools on the host server, the Binary Downloader automates the lifecycle of these dependencies. This module operates without administrative privileges (Zero-Sudo) and ensures that all binaries are verified for integrity before execution.
     </p>
     <p>
         When an Odoo module needs a specific program, it asks the Binary Downloader to "ensure" it is available. If the program is missing or invalid, it is downloaded, verified for integrity using cryptographic hashes, and installed into a protected internal directory.

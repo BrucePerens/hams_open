@@ -6,6 +6,7 @@ import { TourUtils } from "@zero_sudo/js/tour_utils";
 registry.category("web_tour.tours").add("binary_install_tour", {
     url: "/odoo?debug=1&action=binary_downloader.action_binary_downloader_manifest",
     steps: () => [
+        TourUtils.waitForAbsence('.o_loading', 'Wait for initial load'),
         { trigger: 'body', content: 'Initialize Tour' },
         {
             trigger: '.o_list_button_add',

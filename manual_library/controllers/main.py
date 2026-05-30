@@ -189,6 +189,11 @@ class ManualLibraryController(http.Controller):
                         (article.id,),
                     )
 <<<<<<< HEAD
+        except (ValueError, AccessError) as e:
+            # Silently fail on bad input or unauthorized access to prevent brute-force discovery
+            _logger.warning("Feedback submission failed gracefully: %s", e)
+=======
+<<<<<<< HEAD
         except (ValueError, AccessError):
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery.
             # Log at debug level to satisfy linter while maintaining security obscurity.
@@ -197,6 +202,7 @@ class ManualLibraryController(http.Controller):
         except (ValueError, AccessError) as e:
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery
             _logger.warning("Feedback submission failed gracefully: %s", e)
+>>>>>>> main
 >>>>>>> main
 
         # Protect against open redirects by enforcing local paths
