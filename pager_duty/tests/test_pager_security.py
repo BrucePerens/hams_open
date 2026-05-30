@@ -96,17 +96,18 @@ class TestPagerSecurity(HamsTransactionCase):
         Tests [@ANCHOR: rpc_ensure_executable_security]
         """
         # Ensure the binary_downloader service account exists for the test
-        service_user = self.env["res.users"].create({
-            "name": "Binary Service",
-            "login": "binary_service",
-            "is_service_account": True,
-        })
-        self.env["ir.model.data"].create({
-            "name": "user_binary_downloader_service",
-            "module": "binary_downloader",
-            "model": "res.users",
-            "res_id": service_user.id,
-        })
+        if not self.env.ref("binary_downloader.user_binary_downloader_service", raise_if_not_found=False):
+            service_user = self.env["res.users"].create({
+                "name": "Binary Service",
+                "login": "binary_service",
+                "is_service_account": True,
+            })
+            self.env["ir.model.data"].create({
+                "name": "user_binary_downloader_service",
+                "module": "binary_downloader",
+                "model": "res.users",
+                "res_id": service_user.id,
+            })
 
         CheckModel = self.env["pager.check"]
         # Should fail for non-allow-listed command
