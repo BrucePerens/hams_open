@@ -55,6 +55,8 @@ class ServiceWorkerController(http.Controller):
 
             # Use ORM to get installed modules.
             # Bound search to satisfy AST linters.
+            # This is a global search across all companies as modules are
+            # global in Odoo.
             installed_modules = (
                 env_svc["ir.module.module"]
                 .search([("state", "=", "installed")], limit=10000)
