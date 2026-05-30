@@ -26,7 +26,7 @@ class BlogPost(models.Model):
 
     def _invalidate_cloudflare_cache(self):
         """Purge the global Cache-Tag at the edge."""
-        if "cloudflare.purge.queue" not in self.env:
+        if "cloudflare.purge.queue" not in self.env.registry:
             return
 
         # ADR 0078: Pre-fetch related fields to prevent N+1 queries in the loop

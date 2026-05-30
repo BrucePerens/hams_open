@@ -184,11 +184,31 @@ def find_anchors_in_code(root_dir, repo_root):
         duplicates,
     )
 
+def is_primary(path_or_loc, primary_dirs, repo_root):
+    if not primary_dirs:
+        return True
+    if ":" in path_or_loc:
+        path_or_loc = path_or_loc.split(":")[0]
+    if path_or_loc.startswith("./"):
+        path_or_loc = os.path.abspath(os.path.join(repo_root, path_or_loc[2:]))
+    else:
+        path_or_loc = os.path.abspath(path_or_loc)
 
-def _report_duplicates(duplicates):
-    if duplicates:
+    for p in primary_dirs:
+        if path_or_loc.startswith(p):
+            return True
+    return False
+
+def _report_duplicates(duplicates, primary_dirs, repo_root):
+    actual_duplicates = []
+    for dup in duplicates:
+        anchor, current_loc, prior_locs = dup
+        if is_primary(current_loc, primary_dirs, repo_root) or any(is_primary(p, primary_dirs, repo_root) for p in prior_locs):
+            actual_duplicates.append(dup)
+
+    if actual_duplicates:
         print("\n[!] CI/CD FAILURE: Duplicate Semantic Anchors detected:")
-        for anchor, current_loc, prior_locs in duplicates:
+        for anchor, current_loc, prior_locs in actual_duplicates:
             print(f"    - Duplicate Anchor Found: '{anchor}'")
             print(f"      Current Location: {current_loc}")
             print("      Prior Definition(s):")
@@ -205,11 +225,14 @@ def _report_duplicates(duplicates):
     return False
 
 
-def _report_missing_cross_refs(cross_references, code_anchors, contract_anchors):
+def _report_missing_cross_refs(cross_references, code_anchors, contract_anchors, primary_dirs, repo_root):
     has_errors = False
     all_known_anchors = set(code_anchors.keys()) | set(contract_anchors.keys())
 
     for anchor, source_locs in cross_references.items():
+        primary_source_locs = [loc for loc in source_locs if is_primary(loc, primary_dirs, repo_root)]
+        if not primary_source_locs:
+            continue
         if anchor not in all_known_anchors:
             base_name = anchor.split(":")[1]
             if base_name.startswith("example_") or base_name in ("unique_name", "name", "feature_name"):
@@ -221,17 +244,19 @@ def _report_missing_cross_refs(cross_references, code_anchors, contract_anchors)
 
             print(f"    - Missing Cross-Reference Target: '{anchor}'")
             print("      Triggered from locations:")
-            for loc in source_locs:
+            for loc in primary_source_locs:
                 print(f"        -> {loc}")
             print("      [!] DIAGNOSTIC: Use 'target_module:anchor_name' syntax to cross boundaries intentionally.")
     return has_errors
 
 
-def _report_missing_tests(tests_links, code_anchors, contract_anchors, repo_root):
+def _report_missing_tests(tests_links, code_anchors, contract_anchors, repo_root, primary_dirs):
     has_errors = False
     all_known_anchors = set(code_anchors.keys()) | set(contract_anchors.keys())
 
     for filepath, links in tests_links.items():
+        if not is_primary(filepath, primary_dirs, repo_root):
+            continue
         rel_path = os.path.relpath(filepath, repo_root)
         for anchor, line in links:
             if anchor not in all_known_anchors:
@@ -247,7 +272,7 @@ def _report_missing_tests(tests_links, code_anchors, contract_anchors, repo_root
     return has_errors
 
 
-def _report_bidirectional_orphans(code_anchors, tests_links_set, verified_by_links, contract_anchors):
+def _report_bidirectional_orphans(code_anchors, tests_links_set, verified_by_links, contract_anchors, primary_dirs, repo_root):
     has_errors = False
     all_contracts = set(contract_anchors.keys())
 
@@ -265,29 +290,43 @@ def _report_bidirectional_orphans(code_anchors, tests_links_set, verified_by_lin
     orphaned_tests = {a: locs for a, locs in orphaned_tests.items() if "test_tour_signup" not in a.split(":")[1]}
 
     if orphaned_source:
-        print("\n[!] CI/CD FAILURE: ADR-0054 Bidirectional Disconnect (Source Missing Test Link):")
+        reported = False
         for anchor, locs in orphaned_source.items():
+            primary_locs = [loc for loc in locs if is_primary(loc, primary_dirs, repo_root)]
+            if not primary_locs:
+                continue
+            if not reported:
+                print("\n[!] CI/CD FAILURE: ADR-0054 Bidirectional Disconnect (Source Missing Test Link):")
+                reported = True
             print(f"    - Code Feature '{anchor}' has no active test linkage coverage.")
             print("      Feature Definition Locations:")
-            for loc in locs:
+            for loc in primary_locs:
                 print(f"        -> {loc}")
             print(f"      [!] DIAGNOSTIC: Append a tracking line '# Tests [@ANCHOR: {anchor.split(':')[1]}]' inside the corresponding test file.")
-        has_errors = True
+        if reported:
+            has_errors = True
 
     if orphaned_tests:
-        print("\n[!] CI/CD FAILURE: ADR-0054 Bidirectional Disconnect (Test Missing Feature Reference):")
+        reported = False
         for anchor, locs in orphaned_tests.items():
+            primary_locs = [loc for loc in locs if is_primary(loc, primary_dirs, repo_root)]
+            if not primary_locs:
+                continue
+            if not reported:
+                print("\n[!] CI/CD FAILURE: ADR-0054 Bidirectional Disconnect (Test Missing Feature Reference):")
+                reported = True
             print(f"    - Test Logic Target '{anchor}' has no inverse implementation link.")
             print("      Test Definition Locations:")
-            for loc in locs:
+            for loc in primary_locs:
                 print(f"        -> {loc}")
             print("      [!] DIAGNOSTIC: Ensure your production files define the feature, and add '# Tested by' anchors where appropriate.")
-        has_errors = True
+        if reported:
+            has_errors = True
 
     return has_errors, source_anchors
 
 
-def _report_documentation_gaps(source_anchors, docs_anchors, code_anchors, contract_anchors):
+def _report_documentation_gaps(source_anchors, docs_anchors, code_anchors, contract_anchors, primary_dirs, repo_root):
     has_errors = False
     all_contracts = set(contract_anchors.keys())
 
@@ -300,38 +339,56 @@ def _report_documentation_gaps(source_anchors, docs_anchors, code_anchors, contr
     }
 
     if undocumented:
-        print("\n[!] CI/CD FAILURE: ADR-0055 Documentation Coverage Gap Detected:")
+        reported = False
         for anchor, locs in undocumented.items():
+            primary_locs = [loc for loc in locs if is_primary(loc, primary_dirs, repo_root)]
+            if not primary_locs:
+                continue
+            if not reported:
+                print("\n[!] CI/CD FAILURE: ADR-0055 Documentation Coverage Gap Detected:")
+                reported = True
             print(f"    - Code Feature '{anchor}' is completely missing from documentation manuals.")
             print("      Feature Definition Locations:")
-            for loc in locs:
+            for loc in primary_locs:
                 print(f"        -> {loc}")
-        has_errors = True
+        if reported:
+            has_errors = True
 
     if missing_in_code:
-        print("\n[!] CI/CD WARNING: Documentation references anchors missing from codebase modules:")
+        reported = False
         for anchor, locs in missing_in_code.items():
+            primary_locs = [loc for loc in locs if is_primary(loc, primary_dirs, repo_root)]
+            if not primary_locs:
+                continue
+            if not reported:
+                print("\n[!] CI/CD WARNING: Documentation references anchors missing from codebase modules:")
+                reported = True
             print(f"    - Reference Target '{anchor}' is missing from operational source code.")
             print("      Referenced inside Manual Files:")
-            for loc in locs:
+            for loc in primary_locs:
                 print(f"        -> {loc}")
             h = {"t": "[@ANCHOR"}
             print(f"      [!] DIAGNOSTIC: If this targets an external domain context, explicitly structure it as '{h['t']}: module_name:{anchor.split(':')[1]}]'")
+        if reported:
+            has_errors = True
     return has_errors
 
 
-def _report_missing_ux_docs(code_anchors, user_manual_anchors):
+def _report_missing_ux_docs(code_anchors, user_manual_anchors, primary_dirs, repo_root):
     ux_code_anchors = {a: locs for a, locs in code_anchors.items() if a.split(":")[1].startswith("UX_")}
     has_errors = False
 
     for anchor, locs in ux_code_anchors.items():
         if anchor not in user_manual_anchors:
+            primary_locs = [loc for loc in locs if is_primary(loc, primary_dirs, repo_root)]
+            if not primary_locs:
+                continue
             if not has_errors:
                 print("\n[!] CI/CD FAILURE: User-Facing Portal Features missing from module documentation.html index:")
                 has_errors = True
             print(f"    - Missing User Manual Item: '{anchor}'")
             print("      Declared in layout code files:")
-            for loc in locs:
+            for loc in primary_locs:
                 print(f"        -> {loc}")
             print(f"      [!] DIAGNOSTIC: Append a container item '<span style=\"display:none;\">[@ANCHOR: {anchor.split(':')[1]}]</span>' to your module's data/documentation.html file.")
     return has_errors
@@ -345,6 +402,29 @@ def main():
     if not args:
         args = ["."]
 
+    primary_dirs = [os.path.abspath(d) for d in args]
+    target_dirs = list(primary_dirs)
+
+    has_community = any("hams_community" in d or "hams_com" in d for d in target_dirs)
+    if not has_community:
+        for possible_path in [
+            os.path.abspath(os.path.join(repo_root, "..", "hams_community")),
+            os.path.abspath(os.path.join(repo_root, "..", "hams_com")),
+            os.path.abspath(os.path.join(repo_root, "hams_community")),
+            os.path.abspath(os.path.join(repo_root, "hams_com")),
+        ]:
+            if os.path.isdir(possible_path):
+                target_dirs.append(possible_path)
+                break
+
+    scanned_realpaths = set()
+    final_targets = []
+    for d in target_dirs:
+        rp = os.path.realpath(d)
+        if rp not in scanned_realpaths:
+            scanned_realpaths.add(rp)
+            final_targets.append(d)
+
     docs_anchors, contract_anchors = {}, {}
     code_anchors, anchor_locations = {}, {}
     tests_links, tests_links_set = {}, {}
@@ -352,7 +432,7 @@ def main():
     user_manual_anchors = set()
     duplicates = []
 
-    for target_dir in args:
+    for target_dir in final_targets:
         da, ca = find_anchors_in_docs(target_dir, repo_root)
         for k, v in da.items(): docs_anchors.setdefault(k, []).extend(v)
         for k, v in ca.items(): contract_anchors.setdefault(k, []).extend(v)
@@ -391,19 +471,19 @@ def main():
                     continue
 
     errs = [
-        _report_duplicates(duplicates),
-        _report_missing_cross_refs(cross_references, code_anchors, contract_anchors),
-        _report_missing_tests(tests_links, code_anchors, contract_anchors, repo_root),
-        _report_missing_ux_docs(code_anchors, user_manual_anchors),
+        _report_duplicates(duplicates, primary_dirs, repo_root),
+        _report_missing_cross_refs(cross_references, code_anchors, contract_anchors, primary_dirs, repo_root),
+        _report_missing_tests(tests_links, code_anchors, contract_anchors, repo_root, primary_dirs),
+        _report_missing_ux_docs(code_anchors, user_manual_anchors, primary_dirs, repo_root),
     ]
 
     bidi_err, source_anchors = _report_bidirectional_orphans(
-        code_anchors, tests_links_set, verified_by_links, contract_anchors
+        code_anchors, tests_links_set, verified_by_links, contract_anchors, primary_dirs, repo_root
     )
     errs.append(bidi_err)
     errs.append(
         _report_documentation_gaps(
-            source_anchors, docs_anchors, code_anchors, contract_anchors
+            source_anchors, docs_anchors, code_anchors, contract_anchors, primary_dirs, repo_root
         )
     )
 

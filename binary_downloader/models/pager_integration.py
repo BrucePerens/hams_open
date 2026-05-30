@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-from odoo import models, _, exceptions
+from odoo import models, _
+from odoo.exceptions import UserError
 
 class BinaryVersionPager(models.Model):
     _inherit = "binary.version"
 
     def action_notify_tenants(self):
         """Integrates with PagerDuty to alert tenants of a new upstream binary version."""
-        # Fail Fast: The calling UI action or process should know if this integration is available.
-        # However, to maintain stability across module uninstallations, we verify the model existence.
-        if 'pager.incident' not in self.env:
-            raise exceptions.UserError(_("PagerDuty module is not installed. Notifications cannot be sent."))
+        # Fail fast if pager_duty is uninstalled
+        if 'pager.incident' not in self.env.registry:
+            raise UserError(_("PagerDuty integration is not installed. Please install the 'pager_duty' module to use this feature."))
 
         # Security: Elevate using micro-privilege architecture instead of sudo()
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

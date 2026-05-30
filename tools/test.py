@@ -421,25 +421,30 @@ def get_local_modules(base_dir, ignore_patterns):
 def get_addons_path(base_dir):
     paths = ["/usr/lib/python3/dist-packages/odoo/addons", base_dir]
 
+    found_community = False
+
     parent_dir = os.path.abspath(os.path.join(base_dir, ".."))
     try:
         for item in os.listdir(parent_dir):
             item_path = os.path.join(parent_dir, item)
             if os.path.isdir(item_path):
                 if item.startswith("hams_community") or item.startswith("hams_com"):
-                    if item_path not in paths:
+                    if item_path not in paths and not found_community:
                         paths.append(item_path)
+                        found_community = True
     except OSError as e:
         _logger.debug("Ignored OSError: %s", e)
 
-    community_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_community"))
-    primary_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_com"))
+    if not found_community:
+        community_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_community"))
+        primary_dir = os.path.abspath(os.path.join(base_dir, "..", "hams_com"))
+        nested_community = os.path.abspath(os.path.join(base_dir, "hams_community"))
 
-    if os.path.isdir(community_dir) and community_dir not in paths: paths.append(community_dir)
-    if os.path.isdir(primary_dir) and primary_dir not in paths: paths.append(primary_dir)
-
-    nested_community = os.path.abspath(os.path.join(base_dir, "hams_community"))
-    if os.path.isdir(nested_community) and nested_community not in paths: paths.append(nested_community)
+        for d in [community_dir, primary_dir, nested_community]:
+            if os.path.isdir(d) and d not in paths:
+                paths.append(d)
+                found_community = True
+                break
 
     return ",".join(paths)
 
@@ -625,6 +630,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
             mounted_dirs.add(real_dir)
             subprocess.run(["mount", "--bind", real_dir, real_dir], check=True)
             subprocess.run(["mount", "-o", "remount,bind,ro", real_dir], check=True)
+            break
 
     # 3. PostgreSQL Sandboxing
     try:
