@@ -41,8 +41,9 @@ class BinaryManifest(models.Model):
     company_id = fields.Many2one(
         "res.company",
         string="Company",
-        required=True,
+        required=False,
         default=lambda self: self.env.company,
+        help="If unset, this manifest is global and accessible by all companies."
     )
 
     @api.constrains("url")
@@ -172,11 +173,21 @@ class BinaryManifest(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "binary_downloader.user_binary_downloader_service"
         )
+        # Search for manifest record, prioritizing the current company's manifest.
+        # This allows multi-tenant overrides while falling back to global defaults
+        # (company_id = False) if the current company hasn't defined its own.
         manifest_record = (
             self.env["binary.manifest"]
             .with_user(svc_uid)
-            .search([("name", "=", cmd_name)], limit=1)
+            .search([("name", "=", cmd_name), ("company_id", "=", self.env.company.id)], limit=1)
         )
+        if not manifest_record:
+            # Fallback ONLY to global manifests to ensure strict cross-company isolation.
+            manifest_record = (
+                self.env["binary.manifest"]
+                .with_user(svc_uid)
+                .search([("name", "=", cmd_name), ("company_id", "=", False)], limit=1)
+            )
         if not manifest_record:
             raise UserError(
                 _(
