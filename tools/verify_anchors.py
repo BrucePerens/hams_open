@@ -40,10 +40,10 @@ def find_anchors_in_docs(root_dir, repo_root):
     doc_anchors = {}
     contract_anchors = {}
     pattern = re.compile(r"\[@ANCHOR:\s*([a-zA-Z0-9_:]+)\s*\]")
+    exclude_dirs = {"tools", "scripts", "hams_community", "hams_com", ".git", "venv", "__pycache__"}
 
-    for root, _, files in os.walk(root_dir):
-        if "tools" in root.split(os.sep):
-            continue
+    for root, dirs, files in os.walk(root_dir):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
         is_docs_dir = "docs" in root.split(os.sep)
 
         for file in files:
@@ -76,7 +76,7 @@ def find_anchors_in_docs(root_dir, repo_root):
                                 else:
                                     doc_anchors.setdefault(anchor, []).append(loc_str)
                 except UnicodeDecodeError:
-                    pass
+                    continue
 
     return doc_anchors, contract_anchors
 
@@ -145,7 +145,7 @@ def find_anchors_in_code(root_dir, repo_root):
     verified_by_links, cross_references = {}, {}
     duplicates = []
     pattern = re.compile(r"\[@ANCHOR:\s*([a-zA-Z0-9_:]+)\s*\]")
-    exclude_dirs = {"docs", ".git", "venv", "__pycache__", "tools", "scripts"}
+    exclude_dirs = {"docs", ".git", "venv", "__pycache__", "tools", "scripts", "hams_community", "hams_com"}
 
     for root, dirs, files in os.walk(root_dir):
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
@@ -172,7 +172,7 @@ def find_anchors_in_code(root_dir, repo_root):
                             repo_root,
                         )
                 except UnicodeDecodeError:
-                    pass
+                    continue
 
     return (
         code_anchors,
@@ -376,8 +376,7 @@ def main():
         duplicates.extend(dups)
 
         for root, dirs, files in os.walk(target_dir):
-            if "tools" in root.split(os.sep) or "scripts" in root.split(os.sep):
-                continue
+            dirs[:] = [d for d in dirs if d not in {"tools", "scripts", "hams_community", "hams_com", ".git", "venv", "__pycache__"}]
             if "documentation.html" in files:
                 full_doc_path = os.path.join(root, "documentation.html")
                 try:
@@ -389,7 +388,7 @@ def main():
                                 mod, anchor_name = anchor_name.split(":", 1)
                             user_manual_anchors.add(f"{mod}:{anchor_name}")
                 except (OSError, UnicodeDecodeError):
-                    pass
+                    continue
 
     errs = [
         _report_duplicates(duplicates),

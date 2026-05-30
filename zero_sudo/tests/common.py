@@ -54,7 +54,9 @@ if hasattr(ChromeBrowser, 'start'):
                 res = original_browser_start(self, *args, **kwargs)
                 _apply_cdp_hook(self)
                 return res
-            except (Exception, unittest.SkipTest) as e:
+            except unittest.SkipTest:
+                raise
+            except Exception as e: # audit-ignore-catch-all
                 if attempt == 3:
                     raise
                 _logger.warning("TRACING: Chrome start failed on attempt %d (%s). Retrying...", attempt + 1, e)
@@ -62,8 +64,8 @@ if hasattr(ChromeBrowser, 'start'):
                     try:
                         self.chrome_process.terminate()
                         self.chrome_process.wait(timeout=1.0)
-                    except OSError as e:
-                        _logger.debug("Safe termination of chrome process failed (expected if already gone): %s", e)
+                    except OSError as err:
+                        _logger.debug("Safe termination of chrome process failed: %s", err)
                 time.sleep(1.0) # audit-ignore-sleep
     ChromeBrowser.start = _patched_start
 else:
@@ -74,7 +76,9 @@ else:
                 original_browser_init(self, *args, **kwargs)
                 _apply_cdp_hook(self)
                 break
-            except (Exception, unittest.SkipTest) as e:
+            except unittest.SkipTest:
+                raise
+            except Exception as e: # audit-ignore-catch-all
                 if attempt == 3:
                     raise
                 _logger.warning("TRACING: Chrome init failed on attempt %d (%s). Retrying...", attempt + 1, e)
@@ -82,8 +86,8 @@ else:
                     try:
                         self.chrome_process.terminate()
                         self.chrome_process.wait(timeout=1.0)
-                    except OSError as e:
-                        _logger.debug("Safe termination of chrome process failed: %s", e)
+                    except OSError as err:
+                        _logger.debug("Safe termination of chrome process failed: %s", err)
                 time.sleep(1.0) # audit-ignore-sleep
     ChromeBrowser.__init__ = _patched_init
 
@@ -306,7 +310,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     try:
                         cls.browser.chrome_process.kill()
                     except OSError as kill_e:
-                        _logger.debug("TRACING: OSError killing chrome process (expected if already gone): %s", repr(kill_e))
+                        _logger.warning("TRACING: Ignored OSError killing chrome process: %s", repr(kill_e))
                 if hasattr(cls.browser, '_websocket_thread') and cls.browser._websocket_thread:
                     cls.browser._websocket_thread.join = lambda *args, **kwargs: None
 
@@ -332,7 +336,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     try:
                         self.browser.chrome_process.kill()
                     except OSError as kill_e:
-                        _logger.debug("TRACING: OSError killing instance chrome process (expected if already gone): %s", repr(kill_e))
+                        _logger.warning("TRACING: Ignored OSError killing instance chrome process: %s", repr(kill_e))
                 if hasattr(self.browser, '_websocket_thread') and self.browser._websocket_thread:
                     self.browser._websocket_thread.join = lambda *args, **kwargs: None
 
@@ -342,7 +346,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     try:
                         open(log_file, 'w').close()
                     except OSError as trunc_e:
-                        _logger.error("TRACING: Failed to truncate V8 log at %s: %s", log_file, repr(trunc_e))
+                        _logger.warning("TRACING: Ignored OSError truncating V8 log: %s", repr(trunc_e))
 
             _logger.info("TRACING: Exiting HamsHttpCase.tearDown")
 

@@ -320,6 +320,11 @@ ODOO_ERROR_RULES = [
         "CRITICAL ROUTING DEPRECATION: /web is deprecated and forcefully redirected to /odoo in Odoo 19, losing the query parameters! Use /odoo instead.",
     ),
     (
+        r"\.py$",
+        re.compile(r"['\"][a-zA-Z0-9_\.]+['\"]\s+not\s+in\s+self\.env"),
+        "CRITICAL DEPENDENCY FALLBACK: Soft fallbacks ('model' not in self.env) are forbidden. Fail fast with UserError or manage dependencies explicitly.",
+    ),
+    (
         r"tour.*\.js$|.*_tour\.js$",
         re.compile(r"\.\.\.TourUtils\.safeSave\("),
         "CRITICAL JS TOUR MINIFIER CRASH: Do not use the ES6 spread operator (...) inside tour step arrays. Odoo's rjsmin minifier corrupts it and throws 'Unexpected token :'. Use .concat(TourUtils.safeSave()) instead.",
@@ -341,7 +346,13 @@ ODOO_ERROR_RULES = [
     ),
 ]
 
-WARNING_RULES = []
+WARNING_RULES = [
+    (
+        r"\.py$",
+        re.compile(r"zipfile\.ZipFile|tarfile\.open"),
+        "[%AUDIT] ARCHIVE EXTRACTION: Ensure zip/tar extraction includes a check for symlink bits (e.g., `external_attr`) to prevent path traversal/slip attacks.",
+    ),
+]
 MULTILINE_WARNING_RULES = []
 EXEMPTIONS = {}
 REQUIRE_TEST_VERIFICATION = []
@@ -1118,7 +1129,7 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                 ) and not self.filename.startswith("test_"):
                     self.add_warning(
                         node.lineno,
-                        "[%AUDIT] UNBOUNDED SEARCH: '.search()' called without 'limit'.",
+                        "[%AUDIT] UNBOUNDED SEARCH: '.search()' called without 'limit'. If this model is multi-tenant, also ensure explicitly filtering by 'company_id' or False.",
                     )
                 if any(kw.arg == "count" for kw in node.keywords):
                     self.add_error(
@@ -1985,6 +1996,8 @@ def main():
                 "venv",
                 "env",
                 "hams_local_relay",
+                "hams_community",
+                "hams_com",
             )
             and not is_ignored(os.path.relpath(os.path.join(root, d), target_dir))
         ]

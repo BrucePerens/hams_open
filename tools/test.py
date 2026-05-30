@@ -408,6 +408,8 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
 def get_local_modules(base_dir, ignore_patterns):
     mods = []
     for item in os.listdir(base_dir):
+        if item in ("hams_community", "hams_com"):
+            continue
         mod_path = os.path.join(base_dir, item)
         if is_ignored(mod_path, ignore_patterns):
             continue
