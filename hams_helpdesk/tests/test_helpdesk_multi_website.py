@@ -27,25 +27,31 @@ class TestHelpdeskMultiWebsite(HamsTransactionCase):
         # Tests [@ANCHOR: multi_website_segregation]
         # [@ANCHOR: test_06_multi_website_awareness_logic]
 
+        # Ensure company context is consistent
+        self.portal_user.company_id = self.env.company
+
         ticket_w1 = self.env['hams_helpdesk.ticket'].create({
             'name': 'Website 1 Ticket',
             'partner_id': self.portal_partner.id,
             'website_id': self.website_1.id,
+            'company_id': self.env.company.id,
         })
         ticket_w2 = self.env['hams_helpdesk.ticket'].create({
             'name': 'Website 2 Ticket',
             'partner_id': self.portal_partner.id,
             'website_id': self.website_2.id,
+            'company_id': self.env.company.id,
         })
         ticket_no_w = self.env['hams_helpdesk.ticket'].create({
             'name': 'No Website Ticket',
             'partner_id': self.portal_partner.id,
             'website_id': False,
+            'company_id': self.env.company.id,
         })
 
         # Test portal user on Website 1
         self.portal_user.website_id = self.website_1
-        Ticket_portal = self.env['hams_helpdesk.ticket'].with_user(self.portal_user)
+        Ticket_portal = self.env['hams_helpdesk.ticket'].with_user(self.portal_user).with_company(self.env.company)
 
         visible_w1 = Ticket_portal.search([])
         self.assertIn(ticket_w1, visible_w1)

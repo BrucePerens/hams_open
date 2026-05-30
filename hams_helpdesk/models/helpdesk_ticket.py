@@ -59,6 +59,11 @@ class HelpdeskTicket(models.Model):
         help="The website this ticket was created on.",
     )  # [@ANCHOR: helpdesk_multi_website]
 
+    company_id = fields.Many2one(
+        'res.company', string='Company', required=True,
+        default=lambda self: self.env.company
+    )
+
     @api.model_create_multi
     def create(self, vals_list):
         # [@ANCHOR: helpdesk_ticket_creation]
@@ -66,6 +71,10 @@ class HelpdeskTicket(models.Model):
         for vals in vals_list:
             if "website_id" not in vals and self.env.context.get("website_id"):
                 vals["website_id"] = self.env.context.get("website_id")
+            if "company_id" not in vals and vals.get("website_id"):
+                website = self.env['website'].browse(vals["website_id"])
+                if website.company_id:
+                    vals["company_id"] = website.company_id.id
 
         tickets = super().create(vals_list)
 
@@ -98,12 +107,13 @@ class HelpdeskTicket(models.Model):
             # This is an optional integration, so we continue with standard env.
             _logger.info("PagerDuty service env not loaded (optional integration): %s", e)
 
+        # Discover On-Duty Admin
         if hasattr(Calendar, "get_current_on_duty_admin"):
             on_duty_admin = Calendar.get_current_on_duty_admin()
             if on_duty_admin:
                 on_duty_user_id = on_duty_admin.id
 
-        # Discover upcoming shifts (within 30 minutes)
+        # Discover upcoming shifts (within 30 minutes) if PagerDuty is installed
         if "is_pager_duty" in Calendar._fields:
             now = fields.Datetime.now()
             thirty_mins = now + datetime.timedelta(minutes=30)
@@ -119,45 +129,47 @@ class HelpdeskTicket(models.Model):
         # account is misconfigured, we fail fast.
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
 
-        for ticket in self.with_env(hd_env):
+        for ticket in self:
+            # Switch to service account and ensure company context is correct for each ticket
+            ticket_service = ticket.with_env(hd_env).with_company(ticket.company_id)
             # Assignment
-            if on_duty_user_id and not ticket.user_id:
-                ticket.user_id = on_duty_user_id
+            if on_duty_user_id and not ticket_service.user_id:
+                ticket_service.user_id = on_duty_user_id
 
-            if ticket.user_id:
+            if ticket_service.user_id:
                 # Email Notification
-                ticket.message_post(
-                    body=_("Helpdesk Ticket #%s assigned to you.") % ticket.id,
-                    partner_ids=[ticket.user_id.partner_id.id],
-                    subject=_("Ticket Assigned: %s") % ticket.name
+                ticket_service.message_post(
+                    body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id,
+                    partner_ids=[ticket_service.user_id.partner_id.id],
+                    subject=_("Ticket Assigned: %s") % ticket_service.name
                 )
                 # Bus Toast
                 self.env["bus.bus"]._sendone(
-                    ticket.user_id.partner_id,
+                    ticket_service.user_id.partner_id,
                     "simple_notification",
                     {
                         "type": "warning",
                         "title": _("New Helpdesk Ticket"),
-                        "message": _("Ticket %s requires your attention.") % ticket.name
+                        "message": _("Ticket %s requires your attention.") % ticket_service.name
                     }
                 )
 
             # Pre-Shift Awareness (CC upcoming admins)
             if upcoming_partner_ids:
-                current_assignee_pid = ticket.user_id.partner_id.id if ticket.user_id else False
+                current_assignee_pid = ticket_service.user_id.partner_id.id if ticket_service.user_id else False
                 cc_pids = [pid for pid in upcoming_partner_ids if pid != current_assignee_pid]
                 if cc_pids:
-                    ticket.message_subscribe(partner_ids=cc_pids)
-                    ticket.message_post(
+                    ticket_service.message_subscribe(partner_ids=cc_pids)
+                    ticket_service.message_post(
                         body=_("Upcoming shift awareness: A new ticket was created near your shift start."),
                         partner_ids=cc_pids,
-                        subject=_("Shift CC: %s") % ticket.name,
+                        subject=_("Shift CC: %s") % ticket_service.name,
                         subtype_xmlid="mail.mt_note"
                     )
 
             # Ensure customer is subscribed
-            if ticket.partner_id:
-                ticket.message_subscribe(partner_ids=[ticket.partner_id.id])
+            if ticket_service.partner_id:
+                ticket_service.message_subscribe(partner_ids=[ticket_service.partner_id.id])
 
     def write(self, vals):
         # [@ANCHOR: helpdesk_micro_privilege]
