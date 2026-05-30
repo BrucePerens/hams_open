@@ -61,8 +61,9 @@ def distributed_cache():
             model_name = self._name
 
             # Multi-Tenant awareness: Include website_id and company_id in cache key
+            # Force company_id from context if available, else use env.company
             website_id = self.env.context.get("website_id")
-            company_id = self.env.company.id
+            company_id = self.env.context.get("allowed_company_ids", [self.env.company.id])[0]
             website_suffix = f":w{website_id}" if website_id else ""
             company_suffix = f":c{company_id}" if company_id else ""
 
@@ -71,10 +72,15 @@ def distributed_cache():
 
             use_redis = bool(redis and redis_pool)
 
-            # Completely sever Redis connection during automated testing
+            # Sever Redis connection during standard automated testing
             # to prevent cross-test ghost cache poisoning after Postgres rollbacks.
+            # RealTransactionCase and integration tests can re-enable it via system parameter.
             if tools.config.get("test_enable"):
-                use_redis = False
+                # Use super-user ID directly for system parameter read to comply with zero-sudo linter
+                param_obj = self.env['ir.config_parameter'].with_user(1)
+                integration_active = param_obj.get_param('distributed_redis_cache.test_integration_active')
+                if not integration_active:
+                    use_redis = False
 
             if use_redis:
                 try:

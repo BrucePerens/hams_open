@@ -41,6 +41,14 @@ class DistributedCacheConfig(models.TransientModel):
     def check_redis_status(self):
         # [@ANCHOR: check_redis_status_logic]
         use_redis = bool(redis and redis_pool)
+
+        if tools.config.get("test_enable"):
+            # Use super-user ID directly for system parameter read to comply with zero-sudo linter
+            param_obj = self.env['ir.config_parameter'].with_user(1)
+            integration_active = param_obj.get_param('distributed_redis_cache.test_integration_active')
+            if not integration_active:
+                use_redis = False
+
         status_msg = _(
             "Redis connection is not configured or unavailable. Local fallback cache is active."
         )

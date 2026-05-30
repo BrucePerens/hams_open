@@ -49,4 +49,13 @@ class TestDistributedCacheTour(HamsHttpCase):
             self.safe_patch_object(cache_model_cls, 'action_invalidate_model_cache', mock_action_invalidate)
 
         # Run the tour (Mocked in standard, Real Daemons in integration)
-        self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin")
+        if is_integration:
+            # Signal the server to use real Redis during this tour session.
+            # We use a system parameter as a global toggle for the test session.
+            self.env['ir.config_parameter'].with_user(1).set_param('distributed_redis_cache.test_integration_active', '1')
+
+        try:
+            self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin")
+        finally:
+            if is_integration:
+                self.env['ir.config_parameter'].with_user(1).set_param('distributed_redis_cache.test_integration_active', '0')

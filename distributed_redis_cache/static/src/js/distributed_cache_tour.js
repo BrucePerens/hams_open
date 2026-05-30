@@ -16,6 +16,11 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: "click",
         },
         {
+            trigger: '.o_navbar_apps_menu.show',
+            content: "Wait for Apps Menu to be visible",
+            run: function() {}
+        },
+        {
             trigger: '[data-menu-xmlid="distributed_redis_cache.menu_distributed_cache_root"]',
             content: "Open Distributed Cache Manager",
             run: "click",
@@ -26,8 +31,8 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: "click",
         },
         {
-            trigger: '.o_notification_manager',
-            content: "Wait for status notification manager to be ready",
+            trigger: '.o_notification',
+            content: "Wait for status notification to appear",
             run: function() {}
         },
         {
