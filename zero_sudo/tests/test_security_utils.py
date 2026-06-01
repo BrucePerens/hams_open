@@ -407,3 +407,39 @@ class TestSecurityUtils(HamsTransactionCase):
         with self.assertRaises(AccessError) as cm:
             utils._get_service_uid("zero_sudo.disabled_sa_xml")
         self.assertIn("is disabled", str(cm.exception))
+
+    def test_14_service_account_password_generation(self):
+        # [@ANCHOR: test_is_service_account_field]
+        # Tests [@ANCHOR: is_service_account_field]
+        # Tests [@ANCHOR: test_is_service_account_field]
+        """
+        Verify that service accounts are automatically assigned a massive,
+        cryptographically secure random password to prevent interactive logins.
+        """
+        service_account_1 = self.env["res.users"].create({
+            "name": "Service Account 1",
+            "login": "service_test_user_1",
+            "is_service_account": True,
+        })
+
+        service_account_2 = self.env["res.users"].create({
+            "name": "Service Account 2",
+            "login": "service_test_user_2",
+            "is_service_account": True,
+        })
+
+        self.env.cr.execute(
+            "SELECT password FROM res_users WHERE id = %s",
+            (service_account_1.id,)
+        )
+        hash_1 = self.env.cr.fetchone()[0]
+
+        self.env.cr.execute(
+            "SELECT password FROM res_users WHERE id = %s",
+            (service_account_2.id,)
+        )
+        hash_2 = self.env.cr.fetchone()[0]
+
+        self.assertTrue(hash_1, "Service account MUST have a generated password hash.")
+        self.assertTrue(hash_2, "Service account MUST have a generated password hash.")
+        self.assertNotEqual(hash_1, hash_2, "Every service account MUST receive a unique random password.")

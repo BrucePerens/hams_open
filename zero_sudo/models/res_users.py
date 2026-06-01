@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+import secrets
+
+from odoo import api, fields, models
 
 
 class ResUsersZeroSudo(models.Model):
@@ -14,3 +16,12 @@ class ResUsersZeroSudo(models.Model):
         default=False,
         help="Flags this user as an internal service account. Prevents interactive web logins.",
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get("is_service_account"):
+                # Inject a cryptographically secure, extremely large password
+                # to guarantee the account cannot be logged into interactively.
+                vals["password"] = secrets.token_urlsafe(128)
+        return super().create(vals_list)
