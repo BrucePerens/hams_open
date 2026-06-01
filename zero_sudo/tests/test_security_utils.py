@@ -411,6 +411,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_14_service_account_password_generation(self):
         # [@ANCHOR: test_service_account_password]
         # Tests [@ANCHOR: is_service_account_field]
+        # Tests [@ANCHOR: service_account_password_generation]
         """
         Verify that service accounts are automatically assigned a massive,
         cryptographically secure random password to prevent interactive logins.

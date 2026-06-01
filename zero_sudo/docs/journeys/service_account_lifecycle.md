@@ -8,9 +8,9 @@ A module developer defines a service account in an XML data file.
 <record id="user_my_daemon" model="res.users">
     <field name="name">My Daemon Service</field>
     <field name="login">my_daemon_service</field>
-    <field name="is_service_account" eval="True"/> <!-- [@ANCHOR: is_service_account_field] -->
-</record>
+    <field name="is_service_account" eval="True"/> </record>
 ```
+During creation, the system automatically assigns the account a cryptographically secure, 128-byte random password to ensure it cannot be accessed interactively `[@ANCHOR: service_account_password_generation]`.
 
 ## 2. Verification of Isolation
 The developer attempts to log in as `my_daemon_service` in the web browser. The `web_login` interceptor `[@ANCHOR: web_login_interceptor]` detects the `is_service_account` flag and blocks access.
