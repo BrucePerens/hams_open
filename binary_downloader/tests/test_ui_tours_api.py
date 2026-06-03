@@ -40,6 +40,8 @@ class TestBinaryDownloaderTour(HamsHttpCase):
                 _logger.warning("Failed to remove tourbin: %s", e)
 
     def test_binary_install_tour(self):
+        # [!] DIAGNOSTIC FOR AI: Running UI tour for binary installation.
+        # Tests [@ANCHOR: UX_BINARY_INSTALL]
         self.safe_patch(
             "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable",
             return_value="/var/lib/odoo/hams_bin/tourbin",

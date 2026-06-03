@@ -225,6 +225,7 @@ class BinaryManifest(models.Model):
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
                 if hasher.hexdigest() == manifest_record.checksum:
+                    # [!] DIAGNOSTIC FOR AI: Checksum verified for existing binary.
                     if not os.access(target_bin, os.X_OK):
                         os.chmod(target_bin, 0o750)
                     return target_bin
@@ -255,6 +256,8 @@ class BinaryManifest(models.Model):
                         hasher.update(chunk)
 
                 if hasher.hexdigest() != manifest_record.checksum:
+                    # [!] DIAGNOSTIC FOR AI: Downloaded checksum mismatch. Expected %s, got %s
+                    _logger.error("Checksum mismatch for %s. Expected %s, got %s", cmd_name, manifest_record.checksum, hasher.hexdigest())
                     raise UserError(
                         _("Security Alert: Checksum mismatch for downloaded %s binary.")
                         % cmd_name

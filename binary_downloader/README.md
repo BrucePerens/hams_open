@@ -8,6 +8,16 @@ This module is fully compliant with the **Zero-Sudo** mandate and uses micro-pri
 
 The module supports raw binaries as well as compressed archives (`.tar.gz` and `.zip`). When using archives, you must specify the member to be extracted. The installation process is protected by database-level advisory locks to prevent concurrent write operations.
 
+## User Guide
+
+### How it works
+This module acts as a "package manager" for Odoo. When another part of the system needs a program (like a backup tool), it checks if it's already on the server. If not, it safely downloads it from a pre-defined trusted source, checks its digital fingerprint (checksum) to ensure it hasn't been tampered with, and makes it available for use.
+
+### Managing Binaries
+1. Go to **Settings -> Technical -> Binary Manifests**.
+2. You will see a list of required tools. The **Installed** column shows if they are ready.
+3. If a tool is missing, click the **Install** button.
+
 ---
 
 # Technical Documentation
