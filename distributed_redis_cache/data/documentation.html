@@ -20,9 +20,9 @@
 
 <h2>How it Works</h2>
 <ol>
-    <li><b>Detection:</b> Odoo notices when you save a record.</li>
-    <li><b>Broadcast:</b> A background service immediately tells the shared memory (Redis) that specific data has changed.</li>
-    <li><b>Refresh:</b> All other Odoo servers listening to Redis get the signal and immediately refresh their own memory.</li>
+    <li><b>Detection:</b> Odoo automatically identifies when you save a record in a model (like a User, Product, or Customer).</li>
+    <li><b>Broadcast:</b> A background service (the <i>Cache Manager</i>) immediately relays this change to the shared memory server (Redis).</li>
+    <li><b>Refresh:</b> All other Odoo servers in your cluster are listening to Redis. As soon as they hear the signal, they instantly clear their local memory for that specific data type and fetch the latest version from the database.</li>
 </ol>
 
 <div class="note">
@@ -32,7 +32,7 @@
 <h2>User Instructions</h2>
 
 <h3>Managing the Cache</h3>
-<p>Administrators can find management tools under the <b>Distributed Cache</b> menu in Odoo.</p>
+<p>The <b>Distributed Cache Manager</b> is your central dashboard for ensuring synchronization across your Odoo cluster. Administrators can find these tools under the <b>Distributed Cache</b> menu in Odoo Settings.</p>
 
 <h4>Checking System Health</h4>
 <p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server.

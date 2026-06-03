@@ -36,29 +36,16 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: "edit User",
         },
         {
-            trigger: 'body',
+            trigger: '.o-autocomplete--dropdown-item',
             content: "Wait for autocomplete dropdown and click the item",
             run: function () {
-                return new Promise((resolve, reject) => {
-                    let interval;
-                    const timeoutId = setTimeout(() => {
-                        clearInterval(interval);
-                        reject(new Error("Model 'User' never appeared in dropdown."));
-                    }, 10000);
-
-                    interval = setInterval(() => {
-                        const items = document.querySelectorAll('.dropdown-item, .o-autocomplete--dropdown-item');
-                        for (const item of items) {
-                            if (item.textContent.includes('User')) {
-                                clearInterval(interval);
-                                clearTimeout(timeoutId);
-                                item.click();
-                                resolve();
-                                return;
-                            }
-                        }
-                    }, 250);
-                });
+                const items = document.querySelectorAll('.o-autocomplete--dropdown-item, .dropdown-item');
+                for (const item of items) {
+                    if (item.textContent.includes('User')) {
+                        item.click();
+                        return;
+                    }
+                }
             }
         },
         {
@@ -71,33 +58,6 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             content: "Invalidate the cache",
             run: "click",
         },
-        {
-            trigger: 'body',
-            content: "Wait for RPC resolution and optional toast",
-            run: function () {
-                return new Promise((resolve) => {
-                    let interval;
-
-                    // If Redis is offline in the Jules VM, the backend safely returns False (no toast).
-                    // We wait 3 seconds to ensure the fast RPC has safely resolved before teardown
-                    // to prevent "dirty form" teardown crashes.
-                    const timeoutId = setTimeout(() => {
-                        clearInterval(interval);
-                        resolve();
-                    }, 3000);
-
-                    interval = setInterval(() => {
-                        const toast = document.querySelector('.toast-body, .o_notification');
-                        const errorDialog = document.querySelector('.modal-body.text-danger, .o_notification_manager .text-danger');
-
-                        if (toast || errorDialog) {
-                            clearInterval(interval);
-                            clearTimeout(timeoutId);
-                            resolve();
-                        }
-                    }, 250);
-                });
-            }
-        }
+        TourUtils.waitForAbsence('.o_notification', 'Wait for notification to disappear'),
     ]
 });

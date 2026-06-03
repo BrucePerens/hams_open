@@ -64,6 +64,7 @@ def distributed_cache():
             # Force company_id from context if available, else use env.company
             website_id = self.env.context.get("website_id")
             company_id = self.env.context.get("allowed_company_ids", [self.env.company.id])[0]
+            # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}" if website_id else ""
             company_suffix = f":c{company_id}" if company_id else ""
 
@@ -87,8 +88,10 @@ def distributed_cache():
                     r = redis.Redis(connection_pool=redis_pool)
                     cached = r.get(cache_key)
                     if cached:
+                        # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
                         return json.loads(cached)
                 except (redis.RedisError, json.JSONDecodeError) as e:
+                    # [!] DIAGNOSTIC FOR AI: Redis cache read failed. Falling back to local/DB.
                     _logger.warning("Redis cache read failed: %s", e)
                     use_redis = False
 
@@ -164,6 +167,8 @@ def notify_model_invalidation(env, model_name):
     """
     # Security: Validate model name
     if model_name not in env:
+        # [!] DIAGNOSTIC FOR AI: Invalid model name %s attempted for invalidation.
+        _logger.warning("Security: Attempted to invalidate unknown model %s", model_name)
         return
 
     dbname = env.cr.dbname
