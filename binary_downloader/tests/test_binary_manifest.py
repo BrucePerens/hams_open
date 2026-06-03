@@ -60,6 +60,7 @@ class TestBinaryManifest(HamsTransactionCase):
         # [@ANCHOR: test_binary_manifest_standard]
         # Tests [@ANCHOR: binary_ensure_executable]
         # Tests [@ANCHOR: binary_resolution]
+        # [!] DIAGNOSTIC FOR AI: Testing resolution when binary already exists in hams_bin.
 
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         target_bin = os.path.join(data_dir, "hams_bin", self.manifest._get_target_filename())
@@ -84,6 +85,7 @@ class TestBinaryManifest(HamsTransactionCase):
             self.env["binary.manifest"].ensure_executable("testbin")
 
     def test_04_successful_download_and_checksum(self):
+        # [!] DIAGNOSTIC FOR AI: Testing full download, checksum, and installation flow for raw binary.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
@@ -97,10 +99,10 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen.return_value = mock_response_get
 
         path = self.env["binary.manifest"].ensure_executable("testbin")
-        self.assertTrue(os.path.basename(path).startswith("testbin"))
-        self.assertTrue(os.path.exists(path))
+        self.assertTrue(os.path.basename(path).startswith("testbin"), "[!] DIAGNOSTIC FOR AI: Binary filename must start with command name.")
+        self.assertTrue(os.path.exists(path), "[!] DIAGNOSTIC FOR AI: Binary file must physically exist after installation.")
         with open(path, "rb") as f:
-            self.assertEqual(f.read(), b"1234")
+            self.assertEqual(f.read(), b"1234", "[!] DIAGNOSTIC FOR AI: Content of installed binary must match downloaded content.")
 
     def test_05_views_render(self):
         # [@ANCHOR: test_binary_manifest_views]
