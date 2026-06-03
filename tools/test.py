@@ -1007,6 +1007,11 @@ def main():
 
     os.environ.setdefault("HAMS_KEYS_DIR", "/opt/hams/etc/keys")
 
+    if os.environ.get("IN_JULES_VM") or os.environ.get("JULES_SESSION_ID"):
+        existing_args = os.environ.get("ODOO_TEST_CHROME_ARGS", "")
+        if "--no-sandbox" not in existing_args:
+            os.environ["ODOO_TEST_CHROME_ARGS"] = f"{existing_args} --no-sandbox --disable-dev-shm-usage".strip()
+
     if os.environ.get("HAMS_ISOLATED_NS") != "1" and not os.environ.get("IN_JULES_VM") and not os.environ.get("JULES_SESSION_ID"):
         if "--internal-ns-init" in sys.argv:
             # Phase 2: Execute completely within Python (No bash script interpolation)
