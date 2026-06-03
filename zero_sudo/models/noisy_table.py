@@ -8,6 +8,7 @@ class NoisyTable(models.Model):
     # by the leak detection engine. Physical tables are global to the database cluster.
     _name = 'zero_sudo.noisy_table'
     _description = 'Noisy Table'
+    _order = "name"
 
     name = fields.Char(string='Table Name', required=True, index=True, help='Name of the PostgreSQL table to ignore in leak detection.')
     active = fields.Boolean(default=True, help='If unchecked, it will allow leak detection for this table.')

@@ -22,7 +22,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # Safe parameters should pass
         base_url = utils._get_system_param("web.base.url")
-        self.assertTrue(base_url is not None or base_url is False)
+        self.assertTrue(base_url is not None or base_url is False, msg="[!] DIAGNOSTIC FOR AI: Failed to retrieve whitelisted parameter 'web.base.url'.")
 
         # Test setting safe parameter
         # Use a dummy context so it doesn't break the actual DB url

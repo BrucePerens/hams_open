@@ -26,6 +26,17 @@ class ZeroSudoHome(Home):
             )
             res = request.env.cr.fetchone()
             if res and res[0]:
+                # Log the blocked attempt before logging out
+                # We assume the facility account context for logging
+                utils = request.env['zero_sudo.security.utils']
+                facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
+                facility_env['zero_sudo.security.log'].create({
+                    'user_id': request.session.uid,
+                    'login': kw.get('login'),
+                    'ip_address': request.httprequest.remote_addr,
+                    'user_agent': request.httprequest.user_agent.string,
+                    'reason': 'service_account_blocked',
+                })
                 request.session.logout()
                 # Use query parameter to show error on login page after redirect
                 return request.redirect("/web/login?error=access_denied_service") # burn-ignore-route
