@@ -28,6 +28,7 @@
         "views/schedule_views.xml",
         "views/pager_check_views.xml",
         "views/log_analyzer_views.xml",
+        "views/board_templates.xml",
     ],
     "knowledge_docs": [
         {

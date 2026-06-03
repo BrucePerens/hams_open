@@ -18,7 +18,7 @@ print = functools.partial(print, flush=True)
 
 # Ensure base_dir is in path so we can import infrastructure when running globally
 sys.path.insert(0, "/app")
-import infrastructure
+import infrastructure # noqa: E402
 
 _logger = logging.getLogger(__name__)
 
@@ -97,15 +97,15 @@ def provision_jules():
         # 5. Final update with all repositories loaded
         run_sys(["apt-get", "update"] + apt_opts + ["--allow-insecure-repositories"])
 
-        # 5. Collect all required packages (excluding those already in Jules: curl, build-essential)
+        # 6. Collect all required packages (excluding those already in Jules: curl, python3-pip, build-essential)
         all_packages = [
             "python3-setuptools", "python3-stdeb", "dh-python", "python3-all",
             "fakeroot", "postgresql-common", "postgresql-client",
-            "postgresql", "odoo", "python3-pip"
+            "postgresql", "odoo"
         ]
 
         # Tools explicitly pre-installed by the Jules VM
-        jules_provided = {"curl", "build-essential"}
+        jules_provided = {"curl", "python3-pip", "build-essential"}
 
         for pkg_spec in infrastructure.MANIFEST.get("apt_packages", []):
             if "early_prod" in pkg_spec["environments"]:
