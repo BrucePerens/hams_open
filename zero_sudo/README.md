@@ -9,6 +9,7 @@ This is the core security cop for our Odoo ecosystem. It enforces our strict **Z
 * **Safe Privilege Escalation:** Instead of letting developers use Odoo's dangerous `.sudo()` command, this module provides safe, cached functions (like `_get_service_uid`) to run background tasks securely.
 * **Blocks System Hacks:** It forces developers to hardcode a \"whitelist\" of safe configuration settings. If an attacker tries to trick the system into handing over a cryptographic secret (like a database password), this module blocks it.
 * **Locks Out Daemons:** It adds an `is_service_account` checkbox to users. If an account is running a background daemon and someone tries to log into the web browser with that account, this module instantly destroys the session and kicks them out.
+* **Security Auditing:** Every blocked login attempt by a service account is recorded in a centralized security log for review by administrators.
 * **Platform-Wide Data:** It manages global system settings that are shared across all your websites and companies.
 
 ---

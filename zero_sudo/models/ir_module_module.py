@@ -45,7 +45,8 @@ class Module(models.Model):
             return
 
         Article = self.env[article_model_name].with_user(svc_uid).with_context(
-            mail_notrack=True
+            mail_notrack=True,
+            prefetch_fields=False,
         )
 
         # Context for reading the core ERP framework table

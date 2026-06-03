@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import re
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 @tagged("post_install", "-at_install")
-class TestZeroSudoControllers(HamsHttpCase):
+class TestZeroSudoControllers(RealTransactionCase):
 
     def test_01_web_login_interceptor(self):
         # [@ANCHOR: test_web_login_interceptor_check]
@@ -13,6 +13,7 @@ class TestZeroSudoControllers(HamsHttpCase):
         # Tests [@ANCHOR: web_login_interceptor_check]
         # Tests [@ANCHOR: story_login_blocking]
         # Tests [@ANCHOR: journey_service_account_lifecycle]
+        # Tests [@ANCHOR: zero_sudo_security_log_global]
         """Verify that service accounts cannot log into the web interface."""
         # [@ANCHOR: test_is_service_account_field]
         # Tests [@ANCHOR: is_service_account_field]
@@ -21,12 +22,23 @@ class TestZeroSudoControllers(HamsHttpCase):
         password = 'test_password'
 
         # 1. Create a service account
-        self.env['res.users'].create({
+        # We create it as a human first, then toggle to Service Account
+        # to bypass the automatic password randomization in create()
+        # so we can actually test the controller-level blocking.
+        user = self.env['res.users'].create({
             'name': 'Test Service Block',
             'login': login,
             'password': password,
-            'is_service_account': True,
+            'is_service_account': False,
+            'active': True,
         })
+        self.env.cr.execute(
+            "UPDATE res_users SET is_service_account = True WHERE id = %s",
+            (user.id,)
+        )
+        # MANDATORY: Commit so the HTTP worker thread can see the new user.
+        # RealTransactionCase will handle the cleanup in tearDown.
+        self.env.cr.commit()
 
         # 2. Attempt login via POST to /web/login
         # We fetch the login page first to get a session and CSRF token
@@ -41,8 +53,16 @@ class TestZeroSudoControllers(HamsHttpCase):
             'login': login,
             'password': password,
             'csrf_token': csrf_token,
-        })
+        }, allow_redirects=False)
 
         # 3. Check if we were redirected to login with error
-        self.assertIn('/web/login', response.url) # burn-ignore-route
-        self.assertIn('error=access_denied_service', response.url)
+        # A 303 redirect means the interceptor triggered and called request.redirect
+        self.assertEqual(response.status_code, 303, msg="[!] DIAGNOSTIC FOR AI: Expected 303 redirect from login interceptor.")
+        self.assertIn('error=access_denied_service', response.headers.get('Location', ''), msg="[!] DIAGNOSTIC FOR AI: Expected error parameter 'access_denied_service' missing in redirect Location header.")
+
+        # 4. Verify security log entry
+        log_entry = self.env['zero_sudo.security.log'].search([
+            ('user_id', '=', user.id),
+            ('reason', '=', 'service_account_blocked')
+        ])
+        self.assertTrue(log_entry, msg="[!] DIAGNOSTIC FOR AI: Security log entry was not created for blocked login.")

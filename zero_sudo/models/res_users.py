@@ -15,6 +15,7 @@ class ResUsersZeroSudo(models.Model):
         string="Is Service Account",
         default=False,
         help="Flags this user as an internal service account. Prevents interactive web logins.",
+        groups="base.group_system",
     )
 
     @api.model_create_multi
