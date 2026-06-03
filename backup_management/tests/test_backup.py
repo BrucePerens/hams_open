@@ -69,7 +69,7 @@ class TestBackupManagement(RealTransactionCase):
         job = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
         )
-        self.assertTrue(job.exists())
+        self.assertTrue(job.exists(), "[!] DIAGNOSTIC FOR AI: Kopia sync did not create a backup.job record. Ensure action_sync_snapshots() correctly calls _publish_to_worker().")
         self.assertEqual(job.state, "pending")
 
     def test_02_sync_pgbackrest_triggered(self):
@@ -78,7 +78,7 @@ class TestBackupManagement(RealTransactionCase):
         job = self.env["backup.job"].search(
             [("config_id", "=", self.config_pg.id)], order="id desc", limit=1
         )
-        self.assertTrue(job.exists())
+        self.assertTrue(job.exists(), "[!] DIAGNOSTIC FOR AI: pgBackRest sync did not create a backup.job record. Check action_sync_snapshots() logic.")
         self.assertEqual(job.state, "pending")
 
     def test_04_cron_trigger(self):
@@ -112,21 +112,21 @@ class TestBackupManagement(RealTransactionCase):
         res_kopia = self.config_kopia.action_trigger_backup()
         res_pg = self.config_pg.action_trigger_backup()
 
-        self.assertEqual(res_kopia.get("res_model"), "backup.job")
-        self.assertEqual(res_pg.get("res_model"), "backup.job")
+        self.assertEqual(res_kopia.get("res_model"), "backup.job", "[!] DIAGNOSTIC FOR AI: action_trigger_backup() for Kopia should return an ir.actions.act_window for backup.job.")
+        self.assertEqual(res_pg.get("res_model"), "backup.job", "[!] DIAGNOSTIC FOR AI: action_trigger_backup() for pgBackRest should return an ir.actions.act_window for backup.job.")
 
         self.env.cr.commit()
 
         job_kopia = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], limit=1
         )
-        self.assertTrue(job_kopia.exists())
+        self.assertTrue(job_kopia.exists(), "[!] DIAGNOSTIC FOR AI: Kopia orchestration trigger failed to create a job record.")
         self.assertEqual(job_kopia.state, "pending")
 
         job_pg = self.env["backup.job"].search(
             [("config_id", "=", self.config_pg.id)], limit=1
         )
-        self.assertTrue(job_pg.exists())
+        self.assertTrue(job_pg.exists(), "[!] DIAGNOSTIC FOR AI: pgBackRest orchestration trigger failed to create a job record.")
         self.assertEqual(job_pg.state, "pending")
 
     def test_08_apply_policies_triggered(self):
@@ -222,9 +222,9 @@ class TestBackupManagement(RealTransactionCase):
                 [("name", "=", "Backup Management")], limit=1
             )
             self.assertTrue(
-                article.exists(), "Backup documentation should be installed"
+                article.exists(), "[!] DIAGNOSTIC FOR AI: Backup documentation article 'Backup Management' not found. Verify the 'knowledge_docs' manifest entry and the bootstrap mechanism."
             )
-            self.assertIn("Backup Management User Guide", article.body)
+            self.assertIn("Backup Management User Guide", article.body, "[!] DIAGNOSTIC FOR AI: Backup documentation body content is missing expected headers. Check data/documentation.html.")
 
     def test_13_restore_action(self):
         # Tests [@ANCHOR: test_restore_action]
