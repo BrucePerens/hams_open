@@ -20,13 +20,7 @@ registry.category("web_tour.tours").add("gdpr_privacy_tour", {
             trigger: 'form[action="/my/privacy/export"] button[type="submit"]',
             run: () => {}, // Verify presence only to prevent file download from unloading the test page
         },
-        {
-            content: "Bypass JS confirmation safeguard safely in an isolated step",
-            trigger: 'body',
-            run: () => {
-                window.confirm = () => true;
-            },
-        },
+        TourUtils.bypassDialogs(),
         {
             content: "Verify Erasure Form invokes deletion using namespaced class",
             trigger: 'button.o_tour_erasure_initiate',

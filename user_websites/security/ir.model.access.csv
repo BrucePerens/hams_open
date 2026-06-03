@@ -31,6 +31,7 @@ access_mail_message_svc,mail.message svc,mail.model_mail_message,user_websites.g
 access_mail_template_svc,mail.template svc,mail.model_mail_template,user_websites.group_user_websites_service_account,1,0,0,0
 access_mail_followers_svc,mail.followers svc,mail.model_mail_followers,user_websites.group_user_websites_service_account,1,1,1,1
 access_website_svc,website svc,website.model_website,user_websites.group_user_websites_service_account,1,0,0,0
+access_website_portal,website portal,website.model_website,base.group_portal,1,0,0,0
 access_mail_message_subtype_svc,mail.message.subtype svc,mail.model_mail_message_subtype,user_websites.group_user_websites_service_account,1,0,0,0
 access_mail_alias_domain_svc,mail.alias.domain svc,mail.model_mail_alias_domain,user_websites.group_user_websites_service_account,1,0,0,0
 access_discuss_channel_member_svc,discuss.channel.member svc,mail.model_discuss_channel_member,user_websites.group_user_websites_service_account,1,1,1,1
