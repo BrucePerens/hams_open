@@ -246,6 +246,11 @@ ODOO_ERROR_RULES = [
         "CRITICAL OWL 2 DEPRECATION: 'willUnmount' is removed in OWL 2. Use 'onWillUnmount' from '@odoo/owl'.",
     ),
     (
+        r"\.js$",
+        re.compile(r"publicWidget\.registry|['\"]web\.public\.widget['\"]|@web/legacy/js/public/public_widget"),
+        "CRITICAL OWL ARCHITECTURE: Legacy publicWidget is deprecated in Odoo 19. You MUST use the modern Interaction pattern (@web/public/interaction) and mountComponent.",
+    ),
+    (
         r"tour.*\.js$|.*_tour\.js$",
         re.compile(r"\.o_form_readonly"),
         "FRAGILE TOUR TRIGGER: '.o_form_readonly' is frequently unreliable in Odoo 19 tours. Use standard buttons, '.o_form_button_create', or 'body' instead.",

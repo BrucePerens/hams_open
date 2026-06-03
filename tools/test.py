@@ -828,12 +828,17 @@ def provision_jules(base_dir, already_provisioned=False):
             if not os.path.exists(target_clone):
                 print(f"[*] Sibling repository not found. Cloning hams_community to {target_clone}...")
                 try:
-                    run_sys(["git", "clone", "https://github.com/BrucePerens/hams_community", target_clone])
+                    clone_env = dict(env_vars)
+                    clone_env["GIT_TERMINAL_PROMPT"] = "0"
+                    run_sys(["git", "clone", "https://github.com/BrucePerens/hams_community", target_clone], env=clone_env)
                     if orig_user:
                         u_info = pwd.getpwnam(orig_user)
                         run_sys(["chown", "-R", f"{u_info.pw_uid}:{u_info.pw_gid}", target_clone])
                 except subprocess.CalledProcessError as e:
                     print(f"[*] WARNING: Failed to clone to {target_clone}: {e}")
+                    print("[!] DIAGNOSTIC FOR AI: The hams_community repository could not be cloned due to GitHub authentication restrictions in this headless VM.")
+                    print("    If the required 'zero_sudo' module is not present in your current working directory, the tests will fatally crash.")
+                    print("    ACTION: Document this blocker in JULES_ISSUES.md and gracefully conclude your session.")
 
         try:
             apt_opts = ["-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Lock::Timeout=120"]
@@ -989,6 +994,17 @@ def provision_jules(base_dir, already_provisioned=False):
 
 
 def main():
+    cwd = os.getcwd()
+    if not os.path.isdir(os.path.join(cwd, ".git")) or not os.path.isfile(os.path.join(cwd, "tools", "test.py")):
+        print("================================================================================")
+        print("🚨 CRITICAL EXECUTION ENVIRONMENT ERROR 🚨")
+        print(f"Current Working Directory: {cwd}")
+        print("You MUST execute tools/test.py from the root of the Git repository.")
+        print("The current directory is either not a git repository or lacks tools/test.py.")
+        print("[!] DIAGNOSTIC FOR AI: `cd` into the proper repository root before invoking this script.")
+        print("================================================================================")
+        sys.exit(1)
+
     os.environ.setdefault("HAMS_KEYS_DIR", "/opt/hams/etc/keys")
 
     if os.environ.get("HAMS_ISOLATED_NS") != "1" and not os.environ.get("IN_JULES_VM") and not os.environ.get("JULES_SESSION_ID"):
