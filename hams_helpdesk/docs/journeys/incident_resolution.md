@@ -2,7 +2,7 @@
 
 **[@ANCHOR: journey_incident_resolution]**
 
-This journey describes how an SRE operator resolves a critical system incident using the Hams Helpdesk (**[@ANCHOR: test_helpdesk_operator_tour]**).
+This journey describes how an SRE operator resolves a critical system incident using the Hams Helpdesk.
 
 1.  **Detection**: An automated alert triggers the creation of a new ticket (`[@ANCHOR: helpdesk_ticket_creation]`).
 2.  **Assignment**: The ticket is automatically assigned to the on-duty admin.
@@ -10,4 +10,3 @@ This journey describes how an SRE operator resolves a critical system incident u
 4.  **Investigation**: The operator adds internal notes and communicates with stakeholders via the chatter.
 5.  **Resolution**: The operator implements a fix, updates the ticket status to "Resolved".
 6.  **Closure**: After verifying the fix, the ticket is moved to "Closed".
-
