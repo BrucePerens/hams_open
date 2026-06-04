@@ -60,6 +60,12 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
             trigger: '.o_field_widget[name="website_meta_description"] textarea, textarea[id*="website_meta_description"]',
             run: 'edit SEO Description',
         },
+        { trigger: '.o_field_widget[name="website_meta_keywords"] input, input[id*="website_meta_keywords"]', content: 'Wait for: Wait for keywords input', run: function() {} },
+        {
+            content: "Input SEO Meta Keywords",
+            trigger: '.o_field_widget[name="website_meta_keywords"] input, input[id*="website_meta_keywords"]',
+            run: 'edit SEO, Keywords, Odoo',
+        },
         {
             trigger: '.o_form_sheet',
             content: 'Click away to force DOM blur and commit text input',

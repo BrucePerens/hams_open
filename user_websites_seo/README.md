@@ -8,6 +8,7 @@ Search Engine Optimization (SEO) is critical for making your content discoverabl
 ## Key Features
 - **Frontend SEO Widget:** Edit meta titles, descriptions, and keywords directly while viewing your blog.
 - **Social Media Previews:** Customize the images and titles that appear when your blog is shared on platforms like Facebook or X (Twitter).
+- **SEO Keywords:** Add specific keywords to help search engines understand the topics of your blog.
 - **Secure Editing:** Our "Zero-Sudo" architecture ensures you can only edit SEO data for your own blog or groups you belong to.
 - **Backend Management:** SEO fields are conveniently located in a dedicated tab on your user profile and group records.
 
@@ -17,12 +18,13 @@ Search Engine Optimization (SEO) is critical for making your content discoverabl
 1. Log in and navigate to your blog page (e.g., `/your-slug/blog`).
 2. Click the **Site** menu in the top bar.
 3. Select **Optimize SEO**.
-4. Update your metadata and click **Save**.
+4. Update your **Title**, **Description**, and **Keywords** in the dialog.
+5. Click **Save**.
 
 ### From the Backend
 1. Go to your **User Profile** or **Group** record.
 2. Click on the **SEO Metadata** tab.
-3. Modify the fields as needed.
+3. Modify the fields as needed (Title, Description, Keywords, Social Media Image).
 4. Click **Save**.
 
 ---
