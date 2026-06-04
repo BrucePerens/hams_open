@@ -247,3 +247,93 @@ class DatabaseIndexStat(models.Model):
                 WHERE indisunique IS FALSE
             )
         """)
+
+
+class DatabaseIndexAdvisor(models.Model):
+    # [@ANCHOR: db_index_advisor]
+    # Tests [@ANCHOR: db_index_advisor]
+    # This model identifies tables with high sequential scan counts and large
+    # sizes that might benefit from additional indexing.
+    _name = "database.index.advisor"
+    _description = "Index Recommendation Advisor"
+    _auto = False
+    _order = "seq_scan desc"
+
+    table_name = fields.Char(string="Table Name", readonly=True)
+    seq_scan = fields.Integer(string="Sequential Scans", readonly=True)
+    seq_tup_read = fields.Integer(string="Tuples Read (Seq)", readonly=True)
+    idx_scan = fields.Integer(string="Index Scans", readonly=True)
+    table_size_mb = fields.Float(string="Table Size (MB)", readonly=True)
+
+    def init(self):
+        tools.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute("""
+            CREATE OR REPLACE VIEW database_index_advisor AS (
+                SELECT
+                    relid as id,
+                    relname as table_name,
+                    seq_scan,
+                    seq_tup_read,
+                    idx_scan,
+                    pg_total_relation_size(relid) / (1024.0 * 1024.0) as table_size_mb
+                FROM pg_stat_user_tables
+                WHERE seq_scan > 100 AND pg_total_relation_size(relid) > 10 * 1024 * 1024
+            )
+        """)
+
+
+class PgExplainWizard(models.TransientModel):
+    _name = "pg.explain.wizard"
+    _description = "PostgreSQL Explain Wizard"
+
+    query = fields.Text(string="SQL Query", readonly=True)
+    explain_plan = fields.Text(string="Explain Plan", readonly=True)
+
+    def action_close(self):
+        return {"type": "ir.actions.act_window_close"}
+
+
+class DatabaseQueryStatInherit(models.Model):
+    _inherit = "database.query.stat"
+
+    def action_explain_query(self):
+        # [@ANCHOR: db_explain_query]
+        # Tests [@ANCHOR: db_explain_query]
+        self.ensure_one()
+        utils = self.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env(
+            "database_management.user_database_management_service"
+        )
+        cr_svc = env_svc.cr
+
+        try:
+            # We use EXPLAIN (ANALYZE, BUFFERS) to get real performance data.
+            # WARNING: This executes the query. Since it's a SELECT, it's generally safe
+            # but in production, we should be careful with side-effecting functions.
+            # We strictly enforce that it MUST be a SELECT query for this tool.
+            query_upper = self.query.strip().upper()
+            if not query_upper.startswith("SELECT"):
+                raise UserError(_("Only SELECT queries can be analyzed via Explain."))
+
+            explain_query = "EXPLAIN (ANALYZE, BUFFERS) " + self.query
+            cr_svc.execute(explain_query)
+            plan = "\n".join([row[0] for row in cr_svc.fetchall()])
+
+            wizard = self.env["pg.explain.wizard"].create(
+                {
+                    "query": self.query,
+                    "explain_plan": plan,
+                }
+            )
+
+            return {
+                "name": _("Query Explain Plan"),
+                "type": "ir.actions.act_window",
+                "res_model": "pg.explain.wizard",
+                "res_id": wizard.id,
+                "view_mode": "form",
+                "target": "new",
+            }
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.error("Failed to explain query: %s", e)
+            raise UserError(_("Could not generate explain plan: %s") % str(e))
