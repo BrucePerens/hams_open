@@ -41,7 +41,7 @@ class TestSEOModels(HamsTransactionCase):
             "seo_name",
         ]
         for field in seo_fields:
-            self.assertIn(field, fields, f"Field {field} should be writeable")
+            self.assertIn(field, fields, f"[!] DIAGNOSTIC FOR AI: Field {field} should be whitelisted in SELF_WRITEABLE_FIELDS to allow users to edit their own SEO metadata.")
 
     def test_check_access_rule_res_users(self):
         # Tests [@ANCHOR: res_users_seo_write_elevation]
@@ -55,7 +55,7 @@ class TestSEOModels(HamsTransactionCase):
 
         # reg1 cannot write to reg2
         reg2_record_by_reg1 = self.regular_user2.with_user(self.regular_user1)
-        with self.assertRaises(AccessError):
+        with self.assertRaises(AccessError, msg="[!] DIAGNOSTIC FOR AI: A user MUST NOT be able to modify the SEO metadata of another user. check_access_rule or the write override is broken."):
             reg2_record_by_reg1.write({'website_meta_title': 'Hacked Title'})
             self.env.flush_all()
 
@@ -71,7 +71,7 @@ class TestSEOModels(HamsTransactionCase):
 
         # reg2 is not a member, cannot write
         group_by_reg2 = self.group.with_user(self.regular_user2)
-        with self.assertRaises(AccessError):
+        with self.assertRaises(AccessError, msg="[!] DIAGNOSTIC FOR AI: A user MUST NOT be able to modify the SEO metadata of a group they are not a member of."):
             group_by_reg2.write({'website_meta_title': 'Hacked Group Title'})
             self.env.flush_all()
 
