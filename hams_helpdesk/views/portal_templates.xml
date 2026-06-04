@@ -27,6 +27,7 @@
     </template>
 
     <!-- burn-ignore-tour -->
+    <!-- Verified by [@ANCHOR: test_helpdesk_portal_tour] -->
     <template id="portal_my_tickets" name="My Tickets">
         <t t-call="portal.portal_layout">
             <t t-set="breadcrumbs_searchbar" t-value="True"/>

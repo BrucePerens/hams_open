@@ -2,6 +2,8 @@
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
+// # Verified by [@ANCHOR: test_helpdesk_portal_tour]
+
 registry.category("web_tour.tours").add("helpdesk_portal_tour", {
     url: "/my/tickets",
     steps: () => [

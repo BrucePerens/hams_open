@@ -3,6 +3,8 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // # Verified by [@ANCHOR: test_helpdesk_operator_tour]
+
+// # Verified by [@ANCHOR: test_helpdesk_operator_tour]
 registry.category("web_tour.tours").add("helpdesk_operator_tour", {
     url: "/odoo?debug=1",
     steps: () => [
