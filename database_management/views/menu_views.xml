@@ -26,9 +26,16 @@
         <field name="view_mode">list</field>
     </record>
 
+    <record id="action_db_index_advisor" model="ir.actions.act_window">
+        <field name="name">Index Advisor (Recommendations)</field>
+        <field name="res_model">database.index.advisor</field>
+        <field name="view_mode">list</field>
+    </record>
+
     <menuitem id="menu_db_root" name="Database Health" parent="menu_admin_root" sequence="70"/>
     <menuitem id="menu_db_tables" name="Table Health &amp; Bloat" parent="menu_db_root" action="action_db_table_stat" sequence="10"/>
     <menuitem id="menu_db_indexes" name="Index Health" parent="menu_db_root" action="action_db_index_stat" sequence="20"/>
+    <menuitem id="menu_db_index_advisor" name="Index Advisor" parent="menu_db_root" action="action_db_index_advisor" sequence="25"/>
     <menuitem id="menu_db_activity" name="Active Sessions" parent="menu_db_root" action="action_db_activity" sequence="30"/>
     <menuitem id="menu_db_queries" name="Slow Queries (APM)" parent="menu_db_root" action="action_db_query_stat" sequence="40"/>
     

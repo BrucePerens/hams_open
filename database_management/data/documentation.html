@@ -22,6 +22,13 @@
         <li>Select the tables you wish to clean in the list view.</li>
         <li>Click <strong>Vacuum Analyze Selected</strong>. This triggers the PostgreSQL <code>VACUUM ANALYZE</code> command, which removes dead tuples and updates optimizer statistics.</li>
     </ol>
+
+    <h3>Index Advisor:</h3>
+    <p>Tables that are large and have many sequential scans are prime candidates for new indexes.</p>
+    <ul>
+        <li>Navigate to <strong>Database Health > Index Advisor</strong>.</li>
+        <li>The advisor lists tables with high sequential scan counts. Review these and consider if adding an index on columns used in <code>WHERE</code> clauses or <code>JOIN</code>s would improve performance.</li>
+    </ul>
     <p><em>Security Note:</em> Vacuuming is an intensive operation. Only users with <strong>Database Manager</strong> privileges can trigger it.</p>
     <p><em>Proactive Alerting:</em> The system automatically monitors these levels and will trigger a <strong>PagerDuty</strong> incident if critical tables exceed safe bloat thresholds.</p>
 </section>
@@ -41,7 +48,7 @@
     <ul>
         <li>Go to <strong>Database Health > Slow Queries (APM)</strong>.</li>
         <li>Queries are sorted by <strong>Total Time</strong>. This helps you identify which parts of the application are causing the most load, even if individual executions are fast.</li>
-        <li>Use this data to prioritize code optimizations or add missing indexes.</li>
+        <li><strong>Explain Plan:</strong> Click the <strong>Explain</strong> (search icon) next to any query to generate a detailed <code>EXPLAIN (ANALYZE, BUFFERS)</code> plan. This reveals exactly how PostgreSQL is executing the query and where the bottlenecks are.</li>
     </ul>
 </section>
 

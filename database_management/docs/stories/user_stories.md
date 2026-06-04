@@ -8,8 +8,13 @@
 
 ### Track Slow Queries
 **As a** System Engineer
-**I want** to see a list of the most time-consuming SQL queries `[@ANCHOR: db_slow_queries]`
+**I want** to see a list of the most time-consuming SQL queries `[@ANCHOR: db_slow_queries]` and generate deep-dive explain plans `[@ANCHOR: db_explain_query]`
 **So that** I can optimize the application code or add missing indexes.
+
+### Proactive Index Advice
+**As a** Database Administrator
+**I want** the system to suggest tables that might benefit from additional indexing `[@ANCHOR: db_index_advisor]`
+**So that** I can proactively improve query performance for large tables.
 
 ## Incident Remediation
 ### Manually Reclaim Disk Space

@@ -11,6 +11,8 @@ The `database_management` module provides a comprehensive suite of Database Admi
 *   **Stat Tracking:** Real-time visibility into table bloat, index usage, and cache hit ratios.
 *   **Slow Query Monitoring (APM):** Identifies the most resource-intensive SQL queries using `pg_stat_statements`.
 *   **Active Session Management:** View and terminate runaway database sessions.
+*   **Slow Query Explain:** Generate `EXPLAIN (ANALYZE, BUFFERS)` plans for slow queries to diagnose performance bottlenecks.
+*   **Index Advisor:** Recommends potentially missing indexes based on sequential scan statistics and table size.
 *   **Performance Tuning Wizard:** Automatically calculates optimal PostgreSQL parameters based on hardware specifications and applies them via `ALTER SYSTEM`.
 *   **High Availability Orchestrator:** Generates production-ready configurations for Patroni, etcd, and PgBouncer clusters.
 *   **Automated Alerts:** Integrates with PagerDuty to notify SREs when table bloat exceeds critical thresholds.
