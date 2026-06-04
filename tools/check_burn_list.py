@@ -207,8 +207,8 @@ ODOO_ERROR_RULES = [
     ),
     (
         r"\.py$",
-        re.compile(r" get_module_resource "),
-        "CRITICAL DEPRECATION: 'get_module_resource' was removed in Odoo 19.",
+        re.compile(r"\bget_module_resource\b"),
+        "CRITICAL DEPRECATION: 'get_module_resource' was removed in Odoo 19. Use 'odoo.tools.file_open'.",
     ),
     (
         r"controllers/.*\.py$",
@@ -984,7 +984,12 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                     "CRITICAL RCE: The use of exec() is strictly forbidden.",
                 )
             elif self.is_odoo_module:
-                if fid == "_sign_token":
+                if fid == "get_module_resource":
+                    self.add_error(
+                        node.lineno,
+                        "CRITICAL DEPRECATION: 'get_module_resource' was removed in Odoo 19. Use 'odoo.tools.file_open'.",
+                    )
+                elif fid == "_sign_token":
                     self.add_error(
                         node.lineno,
                         "Verify '_sign_token' is not called on models lacking an 'access_token' field...",

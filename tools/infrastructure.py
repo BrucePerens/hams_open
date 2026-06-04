@@ -192,6 +192,13 @@ MANIFEST = {
             "shell": "/bin/bash",
             "add_to_users": ["odoo"],
             "environments": ["prod", "test"],
+        },
+        {
+            "user": "rabbitmq",
+            "group": "rabbitmq",
+            "home": "/var/lib/rabbitmq",
+            "shell": "/bin/false",
+            "environments": ["prod", "test"],
         }
     ],
     "directories": [
@@ -370,6 +377,13 @@ MANIFEST = {
             "path": "/var/lib/rabbitmq",
             "owner": "rabbitmq:rabbitmq",
             "provision_mode": "750",
+            "runtime_mount": "rw",
+            "environments": ["prod", "test"],
+        },
+        {
+            "path": "/var/spool/rabbitmq",
+            "owner": "rabbitmq:rabbitmq",
+            "provision_mode": "770",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
         },
