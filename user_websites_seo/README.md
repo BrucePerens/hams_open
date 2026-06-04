@@ -1,49 +1,50 @@
 # User Websites SEO
 
-This module allows users to optimize their blog pages for search engines (like Google) directly from the website.
+This module allows users to optimize their personal and group blogs for search engines (like Google) and social media directly from the website or backend.
 
 ## Overview
-We integrate search engine optimization (SEO) tools into personal and group blogs. When you visit your blog, you can use the "Optimize SEO" tool to change how your page appears in search results.
+Search Engine Optimization (SEO) is critical for making your content discoverable. This module integrates Odoo's powerful SEO tools into the `user_websites` framework, allowing blog owners and group members to manage their online presence securely.
 
 ## Key Features
-- **Easy SEO Management:** Change your blog's title and description without needing technical skills.
-- **Social Media Previews:** Set a custom image that appears when your blog is shared on social media.
-- **Group Collaboration:** Members of a group can work together to improve their shared blog's visibility.
-- **Secure & Private:** Our "Zero-Sudo" security ensures that you can only edit SEO data for your own blog or your groups.
+- **Frontend SEO Widget:** Edit meta titles, descriptions, and keywords directly while viewing your blog.
+- **Social Media Previews:** Customize the images and titles that appear when your blog is shared on platforms like Facebook or X (Twitter).
+- **Secure Editing:** Our "Zero-Sudo" architecture ensures you can only edit SEO data for your own blog or groups you belong to.
+- **Backend Management:** SEO fields are conveniently located in a dedicated tab on your user profile and group records.
+
+## How to Use
+
+### From the Website
+1. Log in and navigate to your blog page (e.g., `/your-slug/blog`).
+2. Click the **Site** menu in the top bar.
+3. Select **Optimize SEO**.
+4. Update your metadata and click **Save**.
+
+### From the Backend
+1. Go to your **User Profile** or **Group** record.
+2. Click on the **SEO Metadata** tab.
+3. Modify the fields as needed.
+4. Click **Save**.
+
+---
 
 # Technical Documentation
 
 <system_role>
-**Context:** Technical documentation for Integrators.
+**Context:** Technical documentation for Integrators and Developers.
 </system_role>
 
 ## 1. Architecture
-This module extends `user_websites` by adding SEO metadata to users and groups.
+This module extends `user_websites` by adding SEO metadata to users and groups through inheritance of `website.seo.metadata`.
 
-## 2. Implementation Details
-* **Model Extension:** Inherits `website.seo.metadata` into `res.users` and `user.websites.group`.
-* **Access Control:** Whitelists SEO fields in `SELF_WRITEABLE_FIELDS` so users can edit their own metadata. `[@ANCHOR: res_users_self_writeable_fields]`
-* **Controller:** Overrides the blog index to set the `main_object`. This enables the frontend SEO widget. `[@ANCHOR: controller_user_blog_index_seo_override]`
-* **Security (Zero-Sudo):** Uses service accounts instead of `.sudo()` for database writes.
-    * User: `[@ANCHOR: res_users_seo_write_elevation]`
-    * Group: `[@ANCHOR: user_websites_group_seo_write_elevation]`
-* **SSTI Mitigation:** Controllers ensure recordsets are not elevated when passed to the template engine.
+## 2. Security & Zero-Sudo
+We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a dedicated service account: `user_websites.user_websites_service_account`.
 
----
+*   **Model Mixin:** `user.websites.seo.metadata.mixin` centralizes the secure write logic.
+*   **Self-Writable Fields:** SEO fields are whitelisted in `res.users` to allow users to edit their own profiles without elevated backend rights. `[@ANCHOR: res_users_self_writeable_fields]`
 
-<stories_and_journeys>
-## 3. Architectural Stories & Journeys
-
-For detailed narratives and end-to-end workflows, refer to the following:
-
-### Stories
-* [Individual SEO Control](user_websites_seo/docs/stories/individual_seo_control.md)
-* [Group SEO Collaboration](user_websites_seo/docs/stories/group_seo_collaboration.md)
-* [Seamless Documentation](user_websites_seo/docs/stories/seamless_documentation.md)
-
-### Journeys
-* [User Optimizes Blog SEO](user_websites_seo/docs/journeys/user_optimizes_blog_seo.md)
-</stories_and_journeys>
+## 3. Implementation Details
+*   **Controller Override:** `UserWebsitesSEOController` intercepts the blog index route to inject the `main_object`. This is required for the Odoo frontend SEO widget to function. `[@ANCHOR: controller_user_blog_index_seo_override]`
+*   **Traceability:** All critical logic is mapped to semantic anchors and verified by the test suite.
 
 ## 4. 🔗 Semantic Anchors & Traceability
 
@@ -53,13 +54,11 @@ For detailed narratives and end-to-end workflows, refer to the following:
 | `[@ANCHOR: res_users_seo_write_elevation]` | Elevated write for user SEO metadata. | `test_check_access_rule_res_users` |
 | `[@ANCHOR: user_websites_group_seo_write_elevation]` | Elevated write for group SEO metadata. | `test_check_access_rule_user_websites_group` |
 | `[@ANCHOR: controller_user_blog_index_seo_override]` | Controller override for SEO widget activation. | `test_controller_no_ssti_elevation` |
-| `[@ANCHOR: soft_dependency_docs_installation]` | Automatic documentation installation. | `test_soft_dependency_docs_installation` |
+| `[@ANCHOR: soft_dependency_docs_installation]` | Automatic documentation installation signaling. | `test_soft_dependency_docs_installation` |
 | `[@ANCHOR: test_seo_widget_tour]` | UI tour for SEO optimization. | `test_seo_widget_tour` |
 | `[@ANCHOR: test_xpath_rendering_res_users]` | Backend view rendering for users. | `test_xpath_rendering_res_users` |
 | `[@ANCHOR: test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `test_xpath_rendering_user_websites_group` |
 
 ## 5. Multi-Website & Multi-Tenant Support
-This module is fully multi-website and multi-tenant aware.
-
-*   **Multi-Tenancy:** SEO metadata is stored on `res.users` and `user.websites.group` records. Since these models are company-specific (multi-tenant), the SEO metadata naturally follows the same isolation rules.
-*   **Multi-Website:** It respects the `website_id` field on related records and uses Odoo's native website-switching logic to ensure that SEO metadata is correctly associated with the active website context. All controller logic uses standard Odoo routing which is multi-website aware.
+- **Multi-Tenancy:** Inherits from `res.users` and `user.websites.group`, ensuring natural isolation between organizations.
+- **Multi-Website:** Fully compatible with Odoo's multi-website routing and context switching.
