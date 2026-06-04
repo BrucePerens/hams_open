@@ -19,6 +19,7 @@ class TestDatabaseManagement(HamsTransactionCase):
         stat = self.env["database.table.stat"].search(
             [("table_name", "=", "res_users")], limit=1
         )
+        self.assertTrue(stat, "[!] DIAGNOSTIC FOR AI: res_users table must exist in database.table.stat view.")
         if stat:
             stat.action_vacuum_analyze()
             mock_run.assert_called()
@@ -34,7 +35,7 @@ class TestDatabaseManagement(HamsTransactionCase):
 
         # 1. Missing Binary
         mock_which.return_value = None
-        with self.assertRaises(UserError):
+        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError if binary is missing."):
             stat.action_vacuum_analyze()
 
         # 2. Non-Zero Exit Code
@@ -43,12 +44,12 @@ class TestDatabaseManagement(HamsTransactionCase):
         mock_res.returncode = 1
         mock_res.stderr = "Permission denied"
         mock_run.return_value = mock_res
-        with self.assertRaises(UserError):
+        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError if vacuumdb fails."):
             stat.action_vacuum_analyze()
 
         # 3. Timeout
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="vacuumdb", timeout=300)
-        with self.assertRaises(UserError):
+        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError on timeout."):
             stat.action_vacuum_analyze()
 
     def test_02_bloat_cron(self):
@@ -108,7 +109,7 @@ class TestDatabaseManagement(HamsTransactionCase):
             doc = self.env[model].search(
                 [("name", "=", "Database Management Guide")], limit=1
             )
-            self.assertTrue(doc, "Module documentation was not installed!")
+            self.assertTrue(doc, "[!] DIAGNOSTIC FOR AI: Module documentation was not installed! Check data/documentation.html and _bootstrap_knowledge_docs.")
             self.assertIn("Database Management", doc.body)
         else:
             self.skipTest("No documentation model available")

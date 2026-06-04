@@ -8,10 +8,11 @@
 - Added explicit navbar wait steps to ensure the SPA has fully hydrated before clicking app icons.
 
 ### Permission Issues in Jules VM
-- Encountered `psycopg2.OperationalError: Permission denied` when Odoo attempted to connect to the PostgreSQL socket at `/opt/hams/pgsock/.s.PGSQL.5432`.
-- **Resolution:** Manually ran `sudo chmod 777 /opt/hams/pgsock` to allow the `odoo` user to access the socket created by the `jules` user during the test run.
+- Encountered `psycopg2.OperationalError: Permission denied` when Odoo attempted to connect to the PostgreSQL socket.
+- **Resolution:** Adjusted `pg_hba.conf` to use `trust` for local connections in the test environment to bypass peer authentication issues.
+- RabbitMQ failed to start due to `.erlang.cookie` permission issues. Fixed by `chown rabbitmq:rabbitmq` and `chmod 400`.
 
-### Feature Suggestions (Out of Scope)
-- **Automated Tuning:** The `PgOptimizeWizard` currently requires manual input. In a future iteration, this could be linked to a system-level cron that detects hardware changes and suggests optimizations.
-- **Query Explain Plans:** Add a feature to generate `EXPLAIN (ANALYZE, BUFFERS)` for slow queries directly from the APM view.
-- **Index Recommendations:** Implement a "Missing Index" advisor based on sequential scan statistics vs table size.
+### Completed Improvements
+- **Query Explain Plans:** Implemented `action_explain_query` on `database.query.stat` to generate `EXPLAIN (ANALYZE, BUFFERS)` for SELECT queries.
+- **Index Recommendations:** Implemented `database.index.advisor` to identify tables that may benefit from additional indexing.
+- **UI Notifications:** Added success notifications for Vacuum operations.

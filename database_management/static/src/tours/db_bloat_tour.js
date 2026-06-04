@@ -6,14 +6,6 @@ registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verif
     url: "/odoo?debug=1",
     steps: () => [
         {
-            content: "Initialize Tour and Bypass Dialogs",
-            trigger: 'body',
-            run: function () {
-                window.alert = function (msg) { console.warn("Alert: " + msg); };
-                window.confirm = function (msg) { console.warn("Confirm: " + msg); return true; };
-            },
-        },
-        {
             content: "Wait for navbar",
             trigger: '.o_navbar',
             run: function() {},
@@ -49,8 +41,8 @@ registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verif
             run: 'click',
         },
         {
-            content: "Wait for RPC to complete (neutral wait)",
-            trigger: 'body',
+            content: "Wait for success notification",
+            trigger: '.o_notification_manager',
             run: function() {},
         }
     ],

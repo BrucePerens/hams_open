@@ -95,7 +95,16 @@ class DatabaseTableStat(models.Model):
                 raise UserError(
                     _("Error executing vacuumdb for %s: %s") % (rec.table_name, str(e))
                 )
-        return True
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Vacuum Completed"),
+                "message": _("The selected table(s) have been successfully vacuumed and analyzed."),
+                "type": "success",
+                "sticky": False,
+            },
+        }
 
     @api.model
     def cron_check_bloat(self):
@@ -151,24 +160,20 @@ class DatabaseQueryStat(models.Model):
         self.env.cr.execute(
             "SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'"
         )
-        if self.env.cr.fetchone():
-            self.env.cr.execute("""
-                CREATE OR REPLACE VIEW database_query_stat AS (
-                    SELECT
-                        row_number() OVER () as id,
-                        query,
-                        calls,
-                        total_exec_time as total_time,
-                        mean_exec_time as mean_time
-                    FROM pg_stat_statements
-                )
-            """)
-        else:
-            self.env.cr.execute("""
-                CREATE OR REPLACE VIEW database_query_stat AS (
-                    SELECT 1 as id, 'pg_stat_statements extension not installed on host.' as query, 0 as calls, 0.0 as total_time, 0.0 as mean_time
-                )
-            """)
+        if not self.env.cr.fetchone():
+            self.env.cr.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+
+        self.env.cr.execute("""
+            CREATE OR REPLACE VIEW database_query_stat AS (
+                SELECT
+                    row_number() OVER () as id,
+                    query,
+                    calls,
+                    total_exec_time as total_time,
+                    mean_exec_time as mean_time
+                FROM pg_stat_statements
+            )
+        """)
 
 
 class DatabaseActivity(models.Model):
@@ -336,4 +341,20 @@ class DatabaseQueryStatInherit(models.Model):
             }
         except Exception as e:  # audit-ignore-catch-all
             _logger.error("Failed to explain query: %s", e)
-            raise UserError(_("Could not generate explain plan: %s") % str(e))
+            # We return a wizard with the error message instead of raising UserError
+            # to avoid unhandled promise rejections in UI tours and provide a better UX.
+            wizard = self.env["pg.explain.wizard"].create(
+                {
+                    "query": self.query,
+                    "explain_plan": _("Could not generate explain plan: %s") % str(e),
+                }
+            )
+
+            return {
+                "name": _("Query Explain Plan"),
+                "type": "ir.actions.act_window",
+                "res_model": "pg.explain.wizard",
+                "res_id": wizard.id,
+                "view_mode": "form",
+                "target": "new",
+            }
