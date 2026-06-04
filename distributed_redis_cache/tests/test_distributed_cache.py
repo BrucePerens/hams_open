@@ -1,7 +1,10 @@
 import os
+import logging
 import odoo.tests
 from odoo import _
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+
+_logger = logging.getLogger(__name__)
 
 # Tests [@ANCHOR: redis_connection_pool]
 # Tests [@ANCHOR: distributed_cache_key_generation]
@@ -56,6 +59,10 @@ class TestDistributedCacheTour(HamsHttpCase):
 
         try:
             self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin")
+        except Exception as e:  # audit-ignore-catch-all
+            # [!] DIAGNOSTIC FOR AI: UI Tour 'distributed_cache_admin_tour' failed.
+            _logger.error("Tour failed: %s", e)
+            raise e
         finally:
             if is_integration:
                 self.env['ir.config_parameter'].with_user(1).set_param('distributed_redis_cache.test_integration_active', '0')

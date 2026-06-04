@@ -29,14 +29,14 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", MagicMock())
         mock_client = MagicMock()
         mock_redis.Redis.return_value = mock_client
-        mock_client.get.return_value = b"1"
+        mock_client.set.return_value = False
 
         result = self.incident_model.report_incident(vals)
 
         self.assertFalse(
             result, "Incident engine failed to block rate-limited request."
         )
-        mock_client.get.assert_called_with("pager_rate_limit:test_daemon:global")
+        mock_client.set.assert_called_with("pager_rate_limit:test_daemon:global", "1", ex=60, nx=True)
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
@@ -109,6 +109,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
     def test_06_escalation(self):
         # Tests [@ANCHOR: test_pager_escalation]
+        self.env.user.group_ids = [(4, self.env.ref("pager_duty.group_pager_admin").id)]
         incident = self.incident_model.create(
             {"source": "esc_test", "severity": "high", "description": "desc"}
         )
@@ -118,7 +119,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
             (fields.Datetime.now() - datetime.timedelta(minutes=20), incident.id),
         )
 
-        mock_msg = self.safe_patch_object(type(self.incident_model), "message_post")
+        mock_msg = self.safe_patch_object(type(incident), "message_post")
         self.env.ref("pager_duty.cron_escalate_incidents")._trigger()
         self.incident_model.action_escalate_unacknowledged()
         mock_msg.assert_called()

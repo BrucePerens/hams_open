@@ -133,7 +133,7 @@ class PagerIncident(models.Model):
         # For now, we respect website isolation in the message posting.
         for inc in incidents:
             partners = pager_admin_group.user_ids.filtered(
-                lambda u: not inc.website_id or inc.website_id in u.website_ids
+                lambda u: not inc.website_id or ('website_id' in u._fields and u.website_id == inc.website_id)
             ).mapped("partner_id")
 
             if not partners:
@@ -156,9 +156,9 @@ class PagerIncident(models.Model):
         if redis and redis_pool:
             try:
                 r_client = redis.Redis(connection_pool=redis_pool)
-                if r_client.get(redis_key):
+                # SET with NX=True and EX=60 provides an atomic rate limit check-and-set
+                if not r_client.set(redis_key, "1", ex=60, nx=True):
                     return False
-                r_client.setex(redis_key, 60, "1")
             except (redis.exceptions.RedisError, Exception) as e: # audit-ignore-catch-all
                 _logger.warning("Redis rate limit check failed: %s", e)
 

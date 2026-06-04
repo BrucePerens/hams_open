@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=odoo
-Group=odoo
+# Removing group specification
 WorkingDirectory=/opt/odoo/addons/pager_duty/daemon
 EnvironmentFile=/etc/pager_daemons.env
 Environment="ODOO_USER=pager_service_internal"

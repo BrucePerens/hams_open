@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+from odoo.tools import html2plaintext
 import re
 import unicodedata
 
@@ -63,6 +64,40 @@ class KnowledgeArticle(models.Model):
     # --- Custom Implementation Fields ---
     helpful_count = fields.Integer(string="Helpful Votes", default=0, readonly=True)
     unhelpful_count = fields.Integer(string="Unhelpful Votes", default=0, readonly=True)
+
+    breadcrumb_article_ids = fields.Many2many(
+        "knowledge.article", compute="_compute_breadcrumb_article_ids", string="Breadcrumbs"
+    )
+
+    body_snippet = fields.Text(compute="_compute_body_snippet", string="Body Snippet")
+
+    # --- Compute Methods ---
+    @api.depends("parent_id")
+    def _compute_breadcrumb_article_ids(self):
+        # [@ANCHOR: manual_compute_breadcrumbs]
+        for article in self:
+            breadcrumbs = self.env["knowledge.article"]
+            current = article.parent_id
+            visited = set()
+            while current and current.id not in visited:
+                breadcrumbs |= current
+                visited.add(current.id)
+                current = current.parent_id
+            # Order from root to parent
+            res = self.env["knowledge.article"]
+            for a in reversed(list(breadcrumbs)):
+                res |= a
+            article.breadcrumb_article_ids = res
+
+    @api.depends("body")
+    def _compute_body_snippet(self):
+        for article in self:
+            if article.body:
+                clean_text = html2plaintext(article.body)
+                clean_text = " ".join(clean_text.split())
+                article.body_snippet = clean_text[:300]
+            else:
+                article.body_snippet = ""
 
     # --- Constraints ---
     @api.constrains("parent_id")

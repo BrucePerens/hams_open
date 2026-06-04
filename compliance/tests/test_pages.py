@@ -24,7 +24,11 @@ class TestCompliancePages(HamsTransactionCase):
         pages = self.env["website.page"].search([("url", "in", urls)])
         found_urls = pages.mapped("url")
         for url in urls:
-            self.assertIn(url, found_urls, f"Page for {url} should exist.")
+            self.assertIn(
+                url, found_urls,
+                f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in 'website.page'. "
+                f"Check compliance/data/legal_pages_data.xml for missing records."
+            )
 
         # Non-Destructive Mandate check:
         # Only check our own pages if they are NOT shadowed by custom ones.
@@ -39,11 +43,22 @@ class TestCompliancePages(HamsTransactionCase):
                     not p.view_id.key.startswith("compliance.compliance_")
                 ))
                 if other_page:
-                    self.assertFalse(page.is_published, f"Boilerplate page for {page.url} should be unpublished because a custom one exists in the same scope.")
+                    self.assertFalse(
+                        page.is_published,
+                        f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {page.url} should be unpublished because a custom one exists in the same scope. "
+                        f"Check compliance/hooks.py logic."
+                    )
                 else:
-                    self.assertTrue(page.is_published, f"Boilerplate page for {page.url} should be published since no custom one exists in the same scope.")
+                    self.assertTrue(
+                        page.is_published,
+                        f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {page.url} should be published since no custom one exists in the same scope. "
+                        f"Check compliance/hooks.py logic."
+                    )
             else:
-                self.assertTrue(page.is_published, f"Custom page for {page.url} should be published.")
+                self.assertTrue(
+                    page.is_published,
+                    f"[!] DIAGNOSTIC FOR AI: Custom page for {page.url} should be published."
+                )
 
 @tagged("post_install", "-at_install")
 class TestCompliancePagesHttp(HamsHttpCase):
@@ -61,9 +76,17 @@ class TestCompliancePagesHttp(HamsHttpCase):
         ]
         for url in urls:
             response = self.url_open(url)
-            self.assertEqual(response.status_code, 200, f"Page {url} should be reachable.")
+            self.assertEqual(
+                response.status_code, 200,
+                f"[!] DIAGNOSTIC FOR AI: Page {url} should be reachable (200 OK). Got {response.status_code}. "
+                f"Ensure the website.page record is published and correctly linked to a view."
+            )
             # Use regex to ignore potential tags/whitespace around the text
-            self.assertTrue(re.search(r"Policy|Terms", response.text), f"Page {url} should contain boilerplate content.")
+            self.assertTrue(
+                re.search(r"Policy|Terms", response.text),
+                f"[!] DIAGNOSTIC FOR AI: Page {url} should contain boilerplate content. "
+                f"Check the rendering of {url} and its associated template."
+            )
 
     def test_pages_content(self):
         """Verify that legal pages contain the expected boilerplate content."""
@@ -86,6 +109,15 @@ class TestCompliancePagesHttp(HamsHttpCase):
             # Normalize whitespace for checking
             normalized_arch = re.sub(r'\s+', ' ', arch_str)
 
-            self.assertIn("Last Updated:", normalized_arch)
-            self.assertIn("Warning: This is the default version", normalized_arch)
-            self.assertIn("It was not produced by a lawyer.", normalized_arch)
+            self.assertIn(
+                "Last Updated:", normalized_arch,
+                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing 'Last Updated:' text."
+            )
+            self.assertIn(
+                "Warning: This is the default version", normalized_arch,
+                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory default version warning."
+            )
+            self.assertIn(
+                "It was not produced by a lawyer.", normalized_arch,
+                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory legal disclaimer."
+            )

@@ -15,7 +15,9 @@ registry.category("web_tour.tours").add("compliance_tour", {
                 const text = document.body.textContent;
                 // Check shortened to avoid HTML newline characters breaking the match
                 if (!text.includes('Privacy Policy') || !text.includes('Warning: This is the default') || !text.includes('Data Minimization') || !text.includes('Related')) {
-                    throw new Error('Compliance content missing');
+                    throw new Error('[!] DIAGNOSTIC FOR AI: Compliance content missing from the Privacy Policy page. ' +
+                                     'The page must include "Privacy Policy", "Warning: This is the default", ' +
+                                     '"Data Minimization", and "Related" links.');
                 }
             }
         },

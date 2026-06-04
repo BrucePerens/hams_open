@@ -43,6 +43,14 @@ Browsers give Service Workers a strict storage limit. If a Service Worker tries 
 
 ---
 
+## 🛠 Troubleshooting for Administrators
+
+If you notice that users are seeing old versions of your website after you've updated your custom module's CSS or JS:
+
+1.  **Restart the Odoo Server:** This triggers a new filesystem scan and updates the Service Worker's internal versioning based on the latest file modification times.
+2.  **Manual Invalidation:** Go to **Website Settings** and click **Invalidate Cache Now**. This will force every browser to purge its local cache and download fresh assets on the next page load.
+3.  **Check Browser Quota:** If you've added many large files to `static/`, they might be hitting the **Safe Quota**. Increase the quota in settings if your website has a large amount of essential frontend code.
+
 # Technical Documentation
 
 **Context:** Technical documentation strictly for LLMs and Integrators.

@@ -59,6 +59,7 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             trigger: '.o_form_sheet',
             content: 'Click away to force DOM blur and commit text input',
             run: 'click',
-        }
+        },
+        { trigger: '.o_form_sheet:not(.o_dirty)', run: function() {} }
     ].concat(TourUtils.safeSave()),
 });

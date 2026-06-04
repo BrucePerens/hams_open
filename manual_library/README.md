@@ -73,6 +73,7 @@ Uses a standard parent-child relationship for hierarchy. Inherits from `mail.thr
 * **URL Resolution:** Computes the public website URL path for articles dynamically based on their hierarchy `[@ANCHOR: manual_compute_website_url]`.
 * **Structural Integrity:** Strictly enforces parent-child hierarchy checks to prevent recursive or invalid tree structures using `_has_cycle()` `[@ANCHOR: manual_check_hierarchy]`.
 * **Dynamic TOC:** Automatically parses article HTML on the frontend to generate a dynamic Table of Contents `[@ANCHOR: manual_toc_logic]`.
+* **Recursive Breadcrumbs:** Automatically computes and renders a breadcrumb trail for deep article hierarchies `[@ANCHOR: manual_compute_breadcrumbs]`.
 * **Automated Documentation Installation:** Utilizes the central `_bootstrap_knowledge_docs` facility from the `zero_sudo` module to automatically discover and install documentation for all installed modules via the `knowledge_docs` manifest key. This supports soft dependencies on `knowledge.article` or `manual.article` `[@ANCHOR: manual_doc_auto_install]`. `[@ANCHOR: manual_doc_injection]`
 * **Zero-Sudo Execution:** All automated operations and frontend feedback increments are performed using the `manual_library.user_manual_library_service_account` micro-privilege account.
 * **Multi-Website Isolation:** Articles are isolated by `website_id`. Controllers and sidebar logic strictly filter content to the current website context.

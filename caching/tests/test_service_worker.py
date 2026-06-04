@@ -20,7 +20,11 @@ class TestServiceWorker(HamsHttpCase):
 
         # Verify successful routing
         self.assertEqual(
-            response.status_code, 200, "The /sw.js route must return a 200 OK."
+            response.status_code,
+            200,
+            "[!] DIAGNOSTIC FOR AI: The /sw.js route must return a 200 OK. "
+            "If it returns 404, the controller binding or the file path "
+            "in ServiceWorkerController.service_worker() might be incorrect.",
         )
 
         # Verify correct MIME type so the browser accepts it as a Service Worker
@@ -28,16 +32,23 @@ class TestServiceWorker(HamsHttpCase):
         self.assertIn(
             "application/javascript",
             content_type,
-            "The response must be served as application/javascript.",
+            "[!] DIAGNOSTIC FOR AI: The response must be served as application/javascript. "
+            "Browsers will reject Service Workers with incorrect MIME types.",
         )
 
         # Verify the critical anti-caching headers
         cache_control = response.headers.get("Cache-Control", "")
         self.assertIn(
-            "no-cache", cache_control, "Cache-Control MUST contain 'no-cache'."
+            "no-cache",
+            cache_control,
+            "[!] DIAGNOSTIC FOR AI: Cache-Control MUST contain 'no-cache'. "
+            "This ensures the browser checks for a new Service Worker on every load.",
         )
         self.assertIn(
-            "max-age=0", cache_control, "Cache-Control MUST contain 'max-age=0'."
+            "max-age=0",
+            cache_control,
+            "[!] DIAGNOSTIC FOR AI: Cache-Control MUST contain 'max-age=0'. "
+            "This prevents the browser from using a stale Service Worker script.",
         )
 
     def test_02_xpath_rendering_layout(self):

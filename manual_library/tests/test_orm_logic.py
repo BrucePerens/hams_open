@@ -22,6 +22,7 @@ class TestManualORMLogic(HamsTransactionCase):
     def test_01_prevent_circular_hierarchy(self):
         # [@ANCHOR: test_manual_check_hierarchy]
         # Tests [@ANCHOR: manual_check_hierarchy]
+        # Tests [@ANCHOR: manual_compute_breadcrumbs]
         # Tests [@ANCHOR: story_manual_hierarchy]
         # Tests [@ANCHOR: journey_admin_managing]
         """

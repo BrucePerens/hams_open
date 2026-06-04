@@ -50,7 +50,7 @@
     <!-- [@ANCHOR: UX_NOISY_TABLE_MANAGEMENT] -->
     <menuitem id="menu_noisy_table"
               name="Noisy Tables"
-              parent="base.menu_custom"
+              parent="base.menu_administration"
               action="action_noisy_table"
               sequence="100"/>
 </odoo>

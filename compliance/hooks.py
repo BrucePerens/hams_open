@@ -40,9 +40,10 @@ def post_init_hook(env):
     # ADR-0022: Prevent N+1 queries by pre-fetching outside the loop.
     # Use website_id=False in context to ensure we see pages across all websites.
     # Also use active_test=False to see unpublished pages.
+    # We sort by id to ensure deterministic processing.
     all_pages = env_svc["website.page"].with_context(website_id=False, active_test=False).search([
         ("url", "in", legal_urls)
-    ], limit=1000)
+    ], order="id asc", limit=1000)
 
     def is_boilerplate(page):
         # AI Laziness Fix: Removed overly defensive guards.

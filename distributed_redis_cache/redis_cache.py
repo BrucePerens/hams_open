@@ -62,7 +62,7 @@ def distributed_cache():
 
             # Multi-Tenant awareness: Include website_id and company_id in cache key
             # Force company_id from context if available, else use env.company
-            website_id = self.env.context.get("website_id")
+            website_id = self.env.context.get("website_id") or getattr(self.env, 'website', self.env['website']).id if hasattr(self.env, 'website') else None
             company_id = self.env.context.get("allowed_company_ids", [self.env.company.id])[0]
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}" if website_id else ""
@@ -89,6 +89,7 @@ def distributed_cache():
                     cached = r.get(cache_key)
                     if cached:
                         # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
+                        _logger.debug("Redis cache hit: %s", cache_key)
                         return json.loads(cached)
                 except (redis.RedisError, json.JSONDecodeError) as e:
                     # [!] DIAGNOSTIC FOR AI: Redis cache read failed. Falling back to local/DB.

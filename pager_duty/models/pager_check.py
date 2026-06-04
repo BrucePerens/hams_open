@@ -320,6 +320,7 @@ class PagerCheck(models.Model):
             self.env["pager.check"].create(
                 {
                     "name": c.get("name", "Unnamed"),
+                    "website_id": c.get("website_id"),
                     "check_type": c.get("type", "system"),
                     "target": c.get("target", ""),
                     "port": c.get("port", 0),

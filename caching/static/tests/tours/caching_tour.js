@@ -22,10 +22,14 @@ registry.category("web_tour.tours").add("caching_service_worker_check", {
                             console.log('Service Worker found');
                             document.body.classList.add('sw-registered');
                         } else {
+                            // [!] DIAGNOSTIC FOR AI: No Service Worker found.
+                            // Ensure register.js is correctly loaded and register() is called.
                             throw new Error('No Service Worker found. Registration may have failed or was not initiated.');
                         }
                     });
                 } else {
+                    // [!] DIAGNOSTIC FOR AI: Service Worker is not supported.
+                    // Check browser environment and HTTPS/localhost requirements.
                     throw new Error('Service Worker is not supported by this browser environment.');
                 }
             },

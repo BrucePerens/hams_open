@@ -32,4 +32,12 @@
 
     <h2>6. Troubleshooting</h2>
     <p>If the website layout appears inconsistent or "broken" after a major update, it is possible that some browsers are still holding onto stale cached files. An administrator can resolve this globally by using the <strong>Invalidate Cache Now</strong> button in the Website Settings. For individual users, a simple page refresh is usually enough to trigger the Service Worker's background update mechanism.</p>
+
+    <h2>7. Developer Tips</h2>
+    <p>For developers creating new modules:</p>
+    <ul>
+        <li>Assets in <code>/your_module/static/src/js/</code> and <code>/your_module/static/src/css/</code> are automatically cached.</li>
+        <li>To force a cache refresh during development, you can either restart the Odoo server or use the <strong>Invalidate Cache Now</strong> button in settings.</li>
+        <li>Avoid putting very large files (over 5MB) in the <code>static/</code> folder, as they might be excluded from the cache to preserve the storage quota.</li>
+    </ul>
 </section>

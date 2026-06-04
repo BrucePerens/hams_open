@@ -93,6 +93,18 @@
                         </div>
 
                         <main id="main-content" class="col-12 col-lg-7 col-xl-8 px-lg-5">
+                            <nav aria-label="breadcrumb" class="mb-3">
+                                <ol class="breadcrumb bg-transparent p-0">
+                                    <li class="breadcrumb-item"><a href="/manual">Manuals</a></li>
+                                    <t t-foreach="article.breadcrumb_article_ids" t-as="b_art">
+                                        <li class="breadcrumb-item">
+                                            <a t-att-href="b_art.website_url"><t t-out="b_art.name"/></a>
+                                        </li>
+                                    </t>
+                                    <li class="breadcrumb-item active" aria-current="page"><t t-out="article.name"/></li>
+                                </ol>
+                            </nav>
+
                             <article>
                                 <header class="mb-4 pb-3 border-bottom">
                                     <h1 class="display-4 fw-bold">
@@ -171,6 +183,9 @@
                                             <span t-if="result_art.icon" t-out="result_art.icon" class="me-2" aria-hidden="true"/>
                                             <span t-out="result_art.name"/>
                                         </h5>
+                                        <div t-if="result_art.body_snippet" class="mb-2 text-muted small text-truncate" style="max-height: 3em;">
+                                            <t t-out="result_art.body_snippet"/>
+                                        </div>
                                         <p class="mb-1 text-muted small">
                                             Permission: <span class="text-uppercase" t-out="result_art.internal_permission"/>
                                         </p>

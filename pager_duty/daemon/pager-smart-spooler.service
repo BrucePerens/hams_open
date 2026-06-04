@@ -5,6 +5,6 @@ After=network.target
 [Service]
 Type=oneshot
 User=root
-Group=root
+# Removing group specification
 WorkingDirectory=/opt/odoo/addons/pager_duty/daemon
 ExecStart=/usr/bin/env python3 pager_smart_spooler.py

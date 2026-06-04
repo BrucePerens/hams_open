@@ -36,4 +36,5 @@ Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.
     "installable": True,
     "application": False,
     "auto_install": True,
+    "post_init_hook": "post_init_hook",
 }

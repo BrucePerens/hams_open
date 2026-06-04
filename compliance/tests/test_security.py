@@ -9,11 +9,23 @@ class TestComplianceSecurity(HamsTransactionCase):
     def test_service_account(self):
         """Verify the compliance service account is correctly configured."""
         svc_user = self.env.ref("compliance.user_compliance_service")
-        self.assertTrue(svc_user.active, "Service account should be active.")
-        self.assertTrue(svc_user.is_service_account, "User should be marked as a service account.")
+        self.assertTrue(
+            svc_user.active,
+            "[!] DIAGNOSTIC FOR AI: Service account 'user_compliance_service' should be active. "
+            "Check compliance/security/security_data.xml."
+        )
+        self.assertTrue(
+            svc_user.is_service_account,
+            "[!] DIAGNOSTIC FOR AI: User should be marked as a service account (is_service_account=True). "
+            "Check compliance/security/security_data.xml."
+        )
 
         compliance_group = self.env.ref("compliance.group_compliance_service")
-        self.assertIn(compliance_group, svc_user.group_ids, "Service account should belong to the compliance service group.")
+        self.assertIn(
+            compliance_group, svc_user.group_ids,
+            "[!] DIAGNOSTIC FOR AI: Service account should belong to the compliance service group. "
+            "Check compliance/security/security_data.xml."
+        )
 
     def test_register_hook_idempotency(self):
         """Verify that _register_hook can be called multiple times safely."""

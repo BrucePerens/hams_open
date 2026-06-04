@@ -22,18 +22,30 @@ class TestSettingsAndCache(RealTransactionCase):
         website.caching_safe_quota_mb = 35
 
         response_35 = self.url_open("/sw.js")
-        self.assertEqual(response_35.status_code, 200)
+        self.assertEqual(
+            response_35.status_code,
+            200,
+            "[!] DIAGNOSTIC FOR AI: Failed to fetch /sw.js with 35MB quota.",
+        )
 
         # Change quota
         website.caching_safe_quota_mb = 10
         response_10 = self.url_open("/sw.js")
-        self.assertEqual(response_10.status_code, 200)
+        self.assertEqual(
+            response_10.status_code,
+            200,
+            "[!] DIAGNOSTIC FOR AI: Failed to fetch /sw.js with 10MB quota.",
+        )
 
         # We can test that it evaluates dynamically by setting it extremely low
         website.caching_safe_quota_mb = 0
         response_0 = self.url_open("/sw.js")
 
-        self.assertEqual(response_0.status_code, 200)
+        self.assertEqual(
+            response_0.status_code,
+            200,
+            "[!] DIAGNOSTIC FOR AI: Failed to fetch /sw.js with 0MB quota.",
+        )
 
     def test_06_quota_edge_cases(self):
         """Test quota calculation edge cases with mocked filesystem data."""
@@ -54,7 +66,11 @@ class TestSettingsAndCache(RealTransactionCase):
         )
         website.caching_safe_quota_mb = 35
         mtime, max_size = controller._get_global_static_info()
-        self.assertEqual(max_size, str(10 * 1024 * 1024))
+        self.assertEqual(
+            max_size,
+            str(10 * 1024 * 1024),
+            "[!] DIAGNOSTIC FOR AI: Default max size should be 10MB when no files are found.",
+        )
 
         # Case 2: Files fit within quota
         # Total size: 15MB. Quota: 35MB.
@@ -64,7 +80,11 @@ class TestSettingsAndCache(RealTransactionCase):
             return_value=(1000.0, [10 * 1024 * 1024, 5 * 1024 * 1024]),
         )
         mtime, max_size = controller._get_global_static_info()
-        self.assertEqual(max_size, str(10 * 1024 * 1024 + 1024))
+        self.assertEqual(
+            max_size,
+            str(10 * 1024 * 1024 + 1024),
+            "[!] DIAGNOSTIC FOR AI: Max size should be largest file + 1024 when everything fits.",
+        )
 
         # Case 3: Files exceed quota
         # Total size: 40MB. Quota: 35MB.
@@ -77,7 +97,11 @@ class TestSettingsAndCache(RealTransactionCase):
             ),
         )
         mtime, max_size = controller._get_global_static_info()
-        self.assertEqual(max_size, str(30 * 1024 * 1024 - 1))
+        self.assertEqual(
+            max_size,
+            str(30 * 1024 * 1024 - 1),
+            "[!] DIAGNOSTIC FOR AI: Max size should be adjusted to reject the largest file when over quota.",
+        )
 
     def test_02_force_invalidation(self):
         """

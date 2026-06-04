@@ -6,6 +6,7 @@ Requires=redis-server.service
 [Service]
 Type=simple
 User=root
+# Removing group specification
 WorkingDirectory=/opt/odoo/addons/pager_duty/daemon
 EnvironmentFile=/etc/pager_daemons.env
 ExecStart=/usr/bin/env python3 pager_log_analyzer.py

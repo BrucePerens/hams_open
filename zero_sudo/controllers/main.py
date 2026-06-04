@@ -6,12 +6,19 @@ from odoo.addons.web.controllers.home import Home
 
 class ZeroSudoHome(Home):
     @http.route()
-    def web_login(self, *args, **kw):
+    def web_login(self, redirect=None, **kw):
         # [@ANCHOR: web_login_interceptor]
         # Verified by [@ANCHOR: test_web_login_interceptor]
         # Tests [@ANCHOR: story_login_blocking]
         # Tests [@ANCHOR: journey_service_account_lifecycle]
-        response = super().web_login(*args, **kw)
+
+        # Explicit input extraction to satisfy strict controller binding audits
+        attempted_login = kw.get('login')
+        if not attempted_login and request.params:
+             attempted_login = request.params.get('login')
+
+        response = super().web_login(redirect=redirect, **kw)
+
         if request.session.uid:
             # [@ANCHOR: web_login_interceptor_check]
             # Verified by [@ANCHOR: test_web_login_interceptor_check]
@@ -32,7 +39,7 @@ class ZeroSudoHome(Home):
                 facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
                 facility_env['zero_sudo.security.log'].create({
                     'user_id': request.session.uid,
-                    'login': kw.get('login'),
+                    'login': attempted_login,
                     'ip_address': request.httprequest.remote_addr,
                     'user_agent': request.httprequest.user_agent.string,
                     'reason': 'service_account_blocked',

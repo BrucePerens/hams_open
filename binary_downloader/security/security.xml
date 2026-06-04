@@ -4,6 +4,27 @@
         <record id="group_binary_downloader_manager" model="res.groups">
             <field name="name">Binary Downloader Manager</field>
         </record>
+
+        <record id="rule_binary_manifest_multi_company" model="ir.rule">
+            <field name="name">Binary Manifest: Multi-Company</field>
+            <field name="model_id" ref="model_binary_manifest"/>
+            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="rule_binary_version_multi_company" model="ir.rule">
+            <field name="name">Binary Version: Multi-Company</field>
+            <field name="model_id" ref="model_binary_version"/>
+            <field name="domain_force">['|', ('manifest_id.company_id', '=', False), ('manifest_id.company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="rule_binary_tenant_link_multi_tenant" model="ir.rule">
+            <field name="name">Binary Tenant Link: Multi-Tenant</field>
+            <field name="model_id" ref="model_binary_tenant_link"/>
+            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
     </data>
     <data>
         <record id="user_binary_downloader_service" model="res.users">

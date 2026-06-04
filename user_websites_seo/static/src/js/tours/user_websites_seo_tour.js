@@ -38,24 +38,9 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
             run: "click",
         },
         {
-            content: "Wait for the specific user row to load from RPC (Deferred to Virtual CPU Clock)",
-            trigger: 'body',
-            run: function () {
-                return new Promise((resolve) => {
-                    // Unbounded loop: defer timeout authority to Python VirtualClock
-                    const interval = setInterval(() => {
-                        const items = document.querySelectorAll('td.o_data_cell');
-                        for (const item of items) {
-                            if (item.textContent.includes('SEO UI Test User')) {
-                                clearInterval(interval);
-                                item.click();
-                                resolve();
-                                return;
-                            }
-                        }
-                    }, 250);
-                });
-            }
+            content: "Click the specific user row",
+            trigger: '.o_data_row .o_data_cell[name="name"]',
+            run: 'click',
         },
         { trigger: '.o_form_sheet a[name="user_websites_seo_settings"]', content: 'Wait for: Wait for form sheet and SEO tab to hydrate', run: function() {} },
         {

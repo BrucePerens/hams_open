@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
+
+        <template id="compliance_legal_links" name="Legal Pages Links">
+            <!-- audit-ignore-view -->
+            <div class="mt-5 border-top pt-3">
+                <p class="text-muted small">
+                    Related:
+                    <a href="/privacy" class="me-2">Privacy Policy</a>
+                    <a href="/cookie-policy" class="me-2">Cookie Policy</a>
+                    <a href="/terms" class="me-2">Terms of Service</a>
+                </p>
+            </div>
+        </template>
         
         <template id="compliance_privacy_policy_template" name="Privacy Policy Template">
             <!-- [@ANCHOR: compliance_privacy_policy_template] -->
@@ -8,7 +20,6 @@
             <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
             <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
             <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
-            <!-- Verified by [@ANCHOR: test_compliance_views] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
@@ -45,14 +56,7 @@
                             <h3 class="mt-4">5. Community Safety &amp; Reporting</h3>
                             <p>To ensure a safe environment, we operate an abuse reporting system. If you report content, your identity and email address are shielded strictly from the content owner to prevent retaliation, and are visible only to platform administrators.</p>
 
-                            <div class="mt-5 border-top pt-3">
-                                <p class="text-muted small">
-                                    Related:
-                                    <a href="/privacy" class="me-2">Privacy Policy</a>
-                                    <a href="/cookie-policy" class="me-2">Cookie Policy</a>
-                                    <a href="/terms" class="me-2">Terms of Service</a>
-                                </p>
-                            </div>
+                            <t t-call="compliance.compliance_legal_links"/>
                         </div>
                     </section>
                 </div>
@@ -103,14 +107,7 @@
                             <h3 class="mt-4">3. Managing Your Preferences</h3>
                             <p>You can manage or withdraw your consent for optional cookies at any time by interacting with the Cookie Consent Manager visible on our website, or by clearing the cookies in your browser settings.</p>
 
-                            <div class="mt-5 border-top pt-3">
-                                <p class="text-muted small">
-                                    Related:
-                                    <a href="/privacy" class="me-2">Privacy Policy</a>
-                                    <a href="/cookie-policy" class="me-2">Cookie Policy</a>
-                                    <a href="/terms" class="me-2">Terms of Service</a>
-                                </p>
-                            </div>
+                            <t t-call="compliance.compliance_legal_links"/>
                         </div>
                     </section>
                 </div>
@@ -161,14 +158,7 @@
                             <h3 class="mt-4">5. Limitation of Liability</h3>
                             <p>This service is provided "as is" without warranty of any kind. We are not responsible for the user-generated content hosted on personal or group pages, nor are we liable for data loss or service interruptions.</p>
 
-                            <div class="mt-5 border-top pt-3">
-                                <p class="text-muted small">
-                                    Related:
-                                    <a href="/privacy" class="me-2">Privacy Policy</a>
-                                    <a href="/cookie-policy" class="me-2">Cookie Policy</a>
-                                    <a href="/terms" class="me-2">Terms of Service</a>
-                                </p>
-                            </div>
+                            <t t-call="compliance.compliance_legal_links"/>
                         </div>
                     </section>
                 </div>

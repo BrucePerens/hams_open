@@ -28,17 +28,9 @@ registry.category("web_tour.tours").add("cf_ip_ban_tour", {
             run: "click"
         },
         {
-            trigger: 'tr.o_data_row td',
-            content: "Wait for and click on the IP Ban record to open form view",
-            run: function () {
-                const items = document.querySelectorAll('tr.o_data_row td');
-                for (const item of items) {
-                    if (item.textContent.includes('192.168.9.9')) {
-                        item.click();
-                        break;
-                    }
-                }
-            }
+            trigger: 'tr.o_data_row td:first-child',
+            content: "Wait for and click on the first IP Ban record to open form view",
+            run: 'click',
         },
         { trigger: 'button[name="action_lift_ban"]', content: 'Wait for: Verify Lift Ban button is rendered', run: function() {} },
 

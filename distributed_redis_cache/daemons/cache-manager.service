@@ -6,7 +6,7 @@ Requires=postgresql.service redis-server.service
 [Service]
 Type=simple
 User=odoo
-Group=odoo
+# Removing group specification
 # Adjust WorkingDirectory to point to your specific addons path
 WorkingDirectory=/opt/odoo/addons/distributed_redis_cache/daemons
 

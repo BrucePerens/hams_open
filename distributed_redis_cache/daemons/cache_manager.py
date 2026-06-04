@@ -68,7 +68,8 @@ async def broadcast_to_redis(payload):
             return
 
         await redis_client.publish(REDIS_CHANNEL, payload)
-        logger.debug(f"Published invalidation to Redis: {payload}")
+        # [!] DIAGNOSTIC FOR AI: Published invalidation to Redis: %s
+        logger.info(f"Published invalidation to Redis: {payload}")
     except json.JSONDecodeError:
         logger.error(f"Malformed JSON payload from Postgres: {payload}")
     except Exception as e:

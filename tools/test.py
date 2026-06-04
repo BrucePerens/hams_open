@@ -117,15 +117,16 @@ class FailureExtractor:
         base_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY") or os.path.abspath(
             os.path.expanduser(log_dir)
         )
-        os.makedirs(base_dir, exist_ok=True)
-        try:
-            os.chmod(base_dir, 0o1777)
-        except OSError as e:
-            _logger.debug("Ignored OSError: %s", e)
+        if os.environ.get("HAMS_ISOLATED_NS") != "1":
+            os.makedirs(base_dir, exist_ok=True)
+            try:
+                os.chmod(base_dir, 0o777)
+            except OSError as e:
+                _logger.debug("Ignored OSError: %s", e)
         self.display_path = os.path.join(base_dir, "filtered_test.txt")
 
         if os.environ.get("HAMS_ISOLATED_NS") == "1":
-            self.output_path = "/opt/hams/spool/filtered_test.txt"
+            self.output_path = "/var/tmp/filtered_test.txt"
         else:
             self.output_path = self.display_path
 
@@ -330,12 +331,13 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     env.setdefault("REDIS_HOST", "localhost")
     env.setdefault("RMQ_USER", "guest")
     env.setdefault("RMQ_PASS", "guest")
-    host_tmp_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
-    os.makedirs(host_tmp_dir, exist_ok=True)
-    try:
-        os.chmod(host_tmp_dir, 0o1777)
-    except OSError as e:
-        _logger.debug("Ignored OSError: %s", e)
+    host_tmp_dir = "/var/tmp" if os.environ.get("HAMS_ISOLATED_NS") == "1" else os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
+    if os.environ.get("HAMS_ISOLATED_NS") != "1":
+        os.makedirs(host_tmp_dir, exist_ok=True)
+        try:
+            os.chmod(host_tmp_dir, 0o777)
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
     env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
     env.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
@@ -635,11 +637,15 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     host_tmp_dir = real_log_dir if real_log_dir else "/var/tmp"
     os.makedirs(host_tmp_dir, exist_ok=True)
     try:
-        os.chmod(host_tmp_dir, 0o1777)
+        os.chmod(host_tmp_dir, 0o777)
     except OSError as e:
         _logger.debug("Ignored OSError: %s", e)
     os.makedirs("/var/tmp", exist_ok=True)
     subprocess.run(["mount", "--bind", host_tmp_dir, "/var/tmp"], check=True)
+
+    if os.path.exists("/var/run/postgresql"):
+        os.makedirs("/var/run/postgresql", exist_ok=True)
+        subprocess.run(["mount", "--bind", "/var/run/postgresql", "/var/run/postgresql"], check=True)
 
     subprocess.run(["mount", "--bind", base_dir, base_dir], check=True)
     subprocess.run(["mount", "-o", "remount,bind,ro", base_dir], check=True)
@@ -667,23 +673,25 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
 
     # 3. PostgreSQL Sandboxing
     try:
-        initdb_cmd = get_pg_bin("initdb")
-        pg_ctl_cmd = get_pg_bin("pg_ctl")
         psql_cmd = get_pg_bin("psql")
     except FileNotFoundError as e:
         print(f"❌ ERROR: {e}")
         sys.exit(1)
 
-    pg_data, pg_sock = "/opt/hams/pgdata", "/opt/hams/pgsock"
+    pg_sock = "/var/run/postgresql"
+    if not os.path.exists(pg_sock):
+        pg_sock = "/tmp"
 
     orig_user = os.environ.get("SUDO_USER", "odoo")
-    pg_user = pwd.getpwnam("postgres")
+
+    try:
+        pg_user = pwd.getpwnam("postgres")
+    except KeyError:
+        pg_user = pwd.getpwnam("root")
+
     def preexec_pg():
         os.setresgid(pg_user.pw_gid, pg_user.pw_gid, pg_user.pw_gid)
         os.setresuid(pg_user.pw_uid, pg_user.pw_uid, pg_user.pw_uid)
-
-    subprocess.run([initdb_cmd, "-D", pg_data], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
-    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_sock} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], preexec_fn=preexec_pg, check=True, stdout=subprocess.DEVNULL)
 
     wait_for_socket(f"{pg_sock}/.s.PGSQL.5432", "PostgreSQL")
 
@@ -732,12 +740,9 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     os.environ["HAMS_ISOLATED_NS"] = "1"
     os.environ["PGHOST"] = pg_sock
-    host_tmp_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
-    os.makedirs(host_tmp_dir, exist_ok=True)
-    try:
-        os.chmod(host_tmp_dir, 0o1777)
-    except OSError as e:
-        _logger.debug("Ignored OSError: %s", e)
+
+    # Inside the namespace, /var/tmp is perfectly bound to the real log dir.
+    host_tmp_dir = "/var/tmp"
     os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,dbus --user-data-dir={host_tmp_dir} --single-process"
     os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
     os.environ["HOME"] = "/var/lib/odoo"
@@ -745,6 +750,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
 
     odoo_user = pwd.getpwnam("odoo")
     def preexec_odoo():
+        os.initgroups("odoo", odoo_user.pw_gid)
         os.setresgid(odoo_user.pw_gid, odoo_user.pw_gid, odoo_user.pw_gid)
         os.setresuid(odoo_user.pw_uid, odoo_user.pw_uid, odoo_user.pw_uid)
 
@@ -754,19 +760,18 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     # 7. Graceful Ephemeral Teardown
     subprocess.run(["rabbitmqctl", "stop"], preexec_fn=preexec_rmq, check=False, stdout=subprocess.DEVNULL)
     redis_proc.terminate()
-    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], preexec_fn=preexec_pg, check=False, stdout=subprocess.DEVNULL)
 
-    if os.path.exists("/opt/hams/spool/filtered_test.txt"):
-        os.makedirs(real_log_dir, exist_ok=True)
-        dest_file = os.path.join(real_log_dir, "filtered_test.txt")
-        shutil.copy2("/opt/hams/spool/filtered_test.txt", dest_file)
+    try:
         orig_uid = pwd.getpwnam(orig_user).pw_uid
-        os.chown(dest_file, orig_uid, -1)
+    except KeyError:
+        orig_uid = -1
 
-    for prof in glob.glob("/opt/hams/spool/*.prof"):
-        dst = os.path.join(real_log_dir, os.path.basename(prof))
-        shutil.copy2(prof, dst)
-        os.chown(dst, orig_uid, -1)
+    if os.path.exists("/var/tmp/filtered_test.txt") and orig_uid != -1:
+        os.chown("/var/tmp/filtered_test.txt", orig_uid, -1)
+
+    if orig_uid != -1:
+        for prof in glob.glob("/var/tmp/*.prof"):
+            os.chown(prof, orig_uid, -1)
 
     sys.exit(ret)
 
@@ -777,37 +782,23 @@ def start_jules_daemons():
 
     print("[*] Configuring local PostgreSQL...")
     try:
-        initdb_cmd = get_pg_bin("initdb")
-        pg_ctl_cmd = get_pg_bin("pg_ctl")
         psql_cmd = get_pg_bin("psql")
     except FileNotFoundError as err:
         print(f"❌ ERROR: {err}")
         sys.exit(1)
 
-    pg_data, pg_socket = "/opt/hams/pgdata", "/opt/hams/pgsock"
+    subprocess.run(["sudo", "systemctl", "start", "postgresql"], check=False, stderr=subprocess.DEVNULL)
 
-    subprocess.run(["sudo", "systemctl", "stop", "postgresql"], check=False, stderr=subprocess.DEVNULL)
+    pg_socket = "/var/run/postgresql"
+    if not os.path.exists(pg_socket):
+        pg_socket = "/tmp"
 
-    os.makedirs(pg_data, exist_ok=True)
-    os.makedirs(pg_socket, exist_ok=True)
-
-    if not os.listdir(pg_data):
-        subprocess.run([initdb_cmd, "-D", pg_data], check=True)
-
-    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], check=False, stderr=subprocess.DEVNULL)
-
-    try:
-        os.remove(f"{pg_data}/postmaster.pid")
-    except OSError as err:
-        _logger.debug("Ignored OSError: %s", err)
-
-    subprocess.run([pg_ctl_cmd, "-D", pg_data, "-o", f"-c listen_addresses= -c unix_socket_directories={pg_socket} -c fsync=off -c synchronous_commit=off -c full_page_writes=off", "start"], check=True)
     wait_for_socket(f"{pg_socket}/.s.PGSQL.5432", "PostgreSQL")
 
     orig_user = os.environ.get("USER") or "odoo"
     custom_env = dict(os.environ)
-    custom_env["PGUSER"] = orig_user
-    p = subprocess.Popen([psql_cmd, "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, env=custom_env, text=True, stdout=subprocess.DEVNULL)
+    custom_env["PGUSER"] = "postgres"
+    p = subprocess.Popen(["sudo", "-u", "postgres", psql_cmd, "-h", pg_socket, "-d", "postgres"], stdin=subprocess.PIPE, env=custom_env, text=True, stdout=subprocess.DEVNULL)
     sql_create_roles = f"""
     DO $$
     BEGIN
@@ -840,13 +831,6 @@ def start_jules_daemons():
         wait_for_port(5672, "RabbitMQ")
 
     os.environ["PGHOST"] = pg_socket
-
-    def teardown():
-        try:
-            subprocess.run([pg_ctl_cmd, "-D", pg_data, "-m", "fast", "stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:  # audit-ignore-catch-all
-            _logger.warning("Teardown exception occurred.")
-    atexit.register(teardown)
 
 
 def main():
@@ -883,7 +867,7 @@ def main():
         real_log_dir = os.path.abspath(os.path.expanduser(args.log_directory))
         os.makedirs(real_log_dir, exist_ok=True)
         try:
-            os.chmod(real_log_dir, 0o1777)
+            os.chmod(real_log_dir, 0o777)
         except OSError as e:
             _logger.debug("Ignored OSError: %s", e)
         print("[*] Routing test execution to isolated Python namespace...")
@@ -901,12 +885,13 @@ def main():
         return
 
     os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
-    host_tmp_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
-    os.makedirs(host_tmp_dir, exist_ok=True)
-    try:
-        os.chmod(host_tmp_dir, 0o1777)
-    except OSError as e:
-        _logger.debug("Ignored OSError: %s", e)
+    host_tmp_dir = "/var/tmp" if os.environ.get("HAMS_ISOLATED_NS") == "1" else os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
+    if os.environ.get("HAMS_ISOLATED_NS") != "1":
+        os.makedirs(host_tmp_dir, exist_ok=True)
+        try:
+            os.chmod(host_tmp_dir, 0o777)
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
     os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
     os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
 
@@ -967,7 +952,7 @@ def main():
     def get_odoo_test_cmd(suffix=""):
         cmd = [venv_python]
         if args.profile:
-            cmd.extend(["-m", "cProfile", "-o", f"/opt/hams/spool/odoo_test{suffix}.prof"])
+            cmd.extend(["-m", "cProfile", "-o", f"/var/tmp/odoo_test{suffix}.prof"])
         return cmd
 
     extractor = FailureExtractor(args.log_directory)

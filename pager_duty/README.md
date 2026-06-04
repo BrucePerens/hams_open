@@ -2,6 +2,11 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
+---
+
+### ⚠️ IMPORTANT: JULES VM ENVIRONMENT NOTE
+If you are developing or testing this module within the Jules VM environment, please consult [docs/JULES_ISSUES.md](docs/JULES_ISSUES.md) for critical information regarding PostgreSQL socket permissions and Many2many field name sensitivities.
+
 [@ANCHOR: pager_duty_module_root]
 
 The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) suite designed to keep your Odoo infrastructure running smoothly. It provides active monitoring, intelligent alerting, and automated incident management.

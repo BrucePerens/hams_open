@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 # Requires root to execute bubblewrap with new user namespaces depending on OS constraints
 User=root
+# Removing group specification
 WorkingDirectory=/opt/odoo/addons/pager_duty/daemon
 ExecStart=/usr/bin/env python3 pager_synthetic_spooler.py
 Restart=always

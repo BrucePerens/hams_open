@@ -21,6 +21,11 @@ This module links all your servers to a single, high-speed shared memory (Redis)
 ## Configuration
 Administrators can check connection status via the **Distributed Cache** menu in Odoo settings. The system is designed to "fail-open," meaning it will never crash your site if Redis is unavailable—it will simply work like a standard Odoo installation until the connection is restored.
 
+### How to Use the Dashboard
+1. Go to **Settings** > **Technical** > **Distributed Cache**.
+2. Click **Check Redis Status** to verify the connection.
+3. To manually clear the cache for a specific model (e.g., if you've done a bulk SQL import), select the model in the dropdown and click **Invalidate Cache**.
+
 ---
 
 # Technical Documentation

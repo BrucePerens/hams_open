@@ -22,6 +22,7 @@ Upon installation, it:
         "security/security_data.xml",
         "security/ir.model.access.csv",
         "data/legal_pages_data.xml",
+        "views/website_templates.xml",
     ],
     "knowledge_docs": [
         {
@@ -35,6 +36,9 @@ Upon installation, it:
         "web.assets_tests": [
             "compliance/static/tests/**/*",
         ],
+    },
+    "anchors": {
+        "compliance_footer_links": "Compliance Footer Links Coverage",
     },
     "demo": [],
     "installable": True,

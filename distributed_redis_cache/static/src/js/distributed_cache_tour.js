@@ -38,15 +38,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
         {
             trigger: '.o-autocomplete--dropdown-item',
             content: "Wait for autocomplete dropdown and click the item",
-            run: function () {
-                const items = document.querySelectorAll('.o-autocomplete--dropdown-item, .dropdown-item');
-                for (const item of items) {
-                    if (item.textContent.includes('User')) {
-                        item.click();
-                        return;
-                    }
-                }
-            }
+            run: 'click',
         },
         {
             trigger: '.o_form_sheet',
@@ -57,6 +49,10 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             trigger: 'button[name="action_invalidate_model_cache"]',
             content: "Invalidate the cache",
             run: "click",
+        },
+        {
+            trigger: '.o_notification',
+            content: 'Wait for notification',
         },
         TourUtils.waitForAbsence('.o_notification', 'Wait for notification to disappear'),
     ]

@@ -22,7 +22,6 @@ This module acts as the command center for your Cloudflare CDN and Web Applicati
    * `CF API Token` (Requires `Zone.Cache Purge`, `Zone.Firewall Services`, and `Account.Cloudflare Tunnel` permissions)
    * `CF Zone ID`
    * `CF Account ID` (Required for Zero Trust Tunnels)
-3. For global defaults, you can also set `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, and `CLOUDFLARE_ACCOUNT_ID` in your server's `.env` file.
 
 ---
 
