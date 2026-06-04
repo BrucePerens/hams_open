@@ -8,58 +8,80 @@
     <main class="container py-4">
         <h2>User Websites Portal Feature Documentation</h2>
 
-        <section id="site-creation">
-            <h4>Site Provisioning Wizard</h4>
+        <section id="site-creation" class="mb-5">
+            <h2 class="fw-bold"><i class="fa fa-magic text-primary me-2" aria-hidden="true"></i> Creating Your Site</h2>
+            <p>Every user is entitled to a personal website. To get started:</p>
+            <ol>
+                <li>Click on your profile name or avatar in the main navigation menu.</li>
+                <li>If your site isn't set up yet, you'll see a <strong>"Create Your Site"</strong> button.</li>
+                <li>Clicking this button will initialize your home page with a default layout.</li>
+                <li>Use the <strong>"Edit"</strong> button in the top right to start adding content!</li>
+            </ol>
             <span style="display:none;">[@ANCHOR: UX_CREATE_SITE]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_group_site_creation]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_group_site_routing]</span>
         </section>
 
-        <section id="subscriptions">
-            <h4>Subscribing to Updates</h4>
+        <section id="blogging" class="mb-5">
+            <h2 class="fw-bold"><i class="fa fa-pencil text-primary me-2" aria-hidden="true"></i> Blogging & Subscriptions</h2>
+            <p>Share your stories and updates with the community through your personal blog.</p>
+            <ul>
+                <li>Access your blog at <code>/your-username/blog</code>.</li>
+                <li>Initialize it by clicking <strong>"Create Your Blog"</strong>.</li>
+                <li>New posts can be created directly from the blog index page when you are logged in.</li>
+                <li><strong>Subscriptions:</strong> Users can subscribe to your site to receive email notifications when you post new content.</li>
+            </ul>
+            <span style="display:none;">[@ANCHOR: UX_CREATE_BLOG_POST]</span>
+            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_tour_create_blog]</span>
+            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_group_blog_post_creation]</span>
             <span style="display:none;">[@ANCHOR: UX_SUBSCRIBE]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_subscribe_to_site]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_subscription_creation]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_unsubscribe_secret]</span>
         </section>
 
-        <section id="blogging">
-            <h4>Blog Composition Tool</h4>
-            <span style="display:none;">[@ANCHOR: UX_CREATE_BLOG_POST]</span>
-            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_tour_create_blog]</span>
-            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_group_blog_post_creation]</span>
-        </section>
-
-        <section id="directory">
-            <h4>Community Registry Index</h4>
+        <section id="directory" class="mb-5">
+            <h2 class="fw-bold"><i class="fa fa-users text-primary me-2" aria-hidden="true"></i> Community Directory</h2>
+            <p>The <a href="/community">Community Directory</a> is where you can discover websites created by others.</p>
+            <ul>
+                <li>To appear in the directory, go to your <strong>Settings</strong> and check <strong>"Show in Public Directory"</strong>.</li>
+                <li>The directory shows the total view count for each site, giving you an idea of what's popular.</li>
+            </ul>
             <span style="display:none;">[@ANCHOR: UX_COMMUNITY_DIRECTORY]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_tour_community_directory]</span>
         </section>
 
-        <section id="privacy-export">
-            <h4>GDPR Portability Vault</h4>
-            <span style="display:none;">[@ANCHOR: UX_GDPR_EXPORT]</span>
-            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_gdpr_export_api]</span>
-            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_documentation_route]</span>
-        </section>
-
-        <section id="privacy-erasure">
-            <h4>Right to be Forgotten Erasure</h4>
-            <span style="display:none;">[@ANCHOR: UX_GDPR_ERASURE]</span>
-        </section>
-
-        <section id="moderation">
-            <h4>2.6. Reporting Inappropriate Content</h4>
+        <section id="moderation" class="mb-5">
+            <h2 class="fw-bold"><i class="fa fa-flag text-danger me-2" aria-hidden="true"></i> Content Reporting & Safety</h2>
+            <p>We are committed to maintaining a safe environment for everyone.</p>
+            <ul>
+                <li><strong>Report Violation:</strong> If you find any content that is inappropriate or violates our guidelines, click the <strong>"Report Violation"</strong> button at the bottom of the page.</li>
+                <li><strong>Moderation:</strong> Our team reviews all reports. Users who repeatedly violate guidelines may receive strikes. After 3 strikes, website features will be suspended.</li>
+            </ul>
             <span style="display:none;">[@ANCHOR: UX_REPORT_VIOLATION]</span>
         </section>
 
-        <section id="appeals">
-            <h4>System Remediation Appeals Portal</h4>
+        <section id="appeals" class="mb-5">
+            <h2 class="fw-bold"><i class="fa fa-gavel text-warning me-2" aria-hidden="true"></i> Account Appeals</h2>
+            <p>If your account has been suspended, you can submit a one-time appeal through your <strong>Portal Dashboard</strong>. Explain clearly why you believe the suspension should be lifted.</p>
             <span style="display:none;">[@ANCHOR: UX_SUBMIT_APPEAL]</span>
             <span style="display:none;"># Tests [@ANCHOR: user_websites:test_tour_moderation_appeal]</span>
         </section>
 
-        <section id="xpath-rendering">
+        <section id="privacy" class="mb-5">
+            <h2 class="fw-bold"><i class="fa fa-shield text-success me-2" aria-hidden="true"></i> Your Data & Privacy (GDPR)</h2>
+            <p>You have full control over your data:</p>
+            <ul>
+                <li><strong>Data Export:</strong> Download all your pages and posts in a JSON format for your own records.</li>
+                <li><strong>Right to Erasure:</strong> Permanently delete all your content from our system. <em>Warning: This action is irreversible.</em></li>
+            </ul>
+            <span style="display:none;">[@ANCHOR: UX_GDPR_EXPORT]</span>
+            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_gdpr_export_api]</span>
+            <span style="display:none;"># Tests [@ANCHOR: user_websites:test_documentation_route]</span>
+            <span style="display:none;">[@ANCHOR: UX_GDPR_ERASURE]</span>
+        </section>
+
+        <section id="xpath-rendering" class="d-none">
             <h4>XPath Rendering Elements</h4>
             <span style="display:none;"># Documents [@ANCHOR: user_websites:xpath_rendering_appeal]</span>
             <span style="display:none;"># Documents [@ANCHOR: user_websites:xpath_rendering_portal_docs]</span>

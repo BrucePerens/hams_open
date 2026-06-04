@@ -2,28 +2,37 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-This Odoo 19 module lets users build their own personal or group websites and blogs right inside your Odoo instance.
+Welcome to User Websites! This Odoo 19 module allows you to build and manage your own personal or group websites and blogs directly within Odoo. Whether you're a beginner or an expert, you'll find everything you need to create a professional online presence.
 
 **Open Source Rule:** We built this for the open-source community. It runs perfectly on its own and does not rely on any proprietary code.
 
-## 🌟 Key Features
+## 🌟 What Can I Do?
 
-* **Personal Sites & Blogs:** Give every user their own URL (like `/<username>/home`) where they can drag and drop pages or write blog posts.
-* **Group Sites:** Let teams or clubs share a website. Anyone in the group can edit pages or post to the group's blog.
-* **Community Directory:** A public list where users can show off their sites (if they choose to opt-in).
-* **Built-in Moderation:** Every page has a "Report Violation" button. If users post bad content, admins can review it, hand out strikes, and automatically suspend accounts that break the rules. These records are multi-tenant and partitioned by company.
-* **Page Limits:** Stop spam by setting limits on how many pages a single user can create.
-* **GDPR Compliance:** Built-in Data Portability (Export) and Right to Erasure (Delete) features for user-generated content.
-* **Security-First Sanitization:** Automated neutralization of malicious code (SSTI/XSS) attempting to execute on user-managed pages.
+*   **Create Your Personal Site:** Get a unique URL (like `/yourname/home`) and use our easy drag-and-drop editor to build your pages.
+*   **Start a Blog:** Share your thoughts and stories with the community. Everyone gets their own blog section.
+*   **Collaborate with Groups:** Create shared websites for your team, club, or project.
+*   **Join the Community:** Choose to show off your site in our public directory and discover what others are building.
+*   **Control Your Privacy:** You decide what's public. We also provide full GDPR-compliant data export and deletion tools.
 
-## 🛠️ Installation
+## 🚀 Getting Started
 
-1. Drop the `user_websites` folder into your Odoo `addons` directory.
-2. Restart your Odoo server.
-3. Turn on Developer Mode, go to **Apps**, and click **Update Apps List**.
-4. Search for `User Websites` and click **Install**.
+### 1. Initialize Your Site
+The first time you visit your personal URL (e.g., click on your name in the navbar), you'll see a "Create Your Site" button. Click it to set up your initial layout.
 
-## ⚙️ Configuration
+### 2. Customize Your Pages
+Once initialized, use the **Edit** button in the top right corner of any of your pages. You can drag and drop different "snippets" (blocks of content like text, images, or contact forms) onto your page.
+
+### 3. Start Blogging
+Visit your blog page (e.g., `/yourname/blog`) and click "Create Your Blog" to start posting. You can manage all your posts from this central location.
+
+## 🛡️ Community & Safety
+
+We want to keep our community safe and professional.
+*   **Report Violations:** If you see content that breaks our rules, every page has a "Report Violation" button. Our admins will review reports promptly.
+*   **Moderation:** We use a 3-strike system. If a user repeatedly violates our community guidelines, their account may be suspended from using website features.
+*   **Automated Security:** Our system automatically scans for and removes malicious code to protect all users.
+
+## ⚙️ Configuration (For Administrators)
 
 Go to **Settings > General Settings > User Websites** to configure the app.
 * **Global Page Limit:** Set the default maximum number of pages a user is allowed to build.
