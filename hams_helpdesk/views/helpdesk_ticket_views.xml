@@ -62,5 +62,7 @@
     </record>
 
     <menuitem id="menu_hams_helpdesk_root" name="Helpdesk" sequence="50"/>
+    <!-- [@ANCHOR: helpdesk_menu_root] -->
+    <!-- Verified by [@ANCHOR: test_helpdesk_operator_tour] -->
     <menuitem id="menu_hams_helpdesk_tickets" name="Tickets" parent="menu_hams_helpdesk_root" action="action_hams_helpdesk_ticket" sequence="10"/>
 </odoo>

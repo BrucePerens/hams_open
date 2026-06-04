@@ -76,3 +76,14 @@ This repository uses a specialized test environment with the following character
 - **Test Runner Flags**: You must use the `--already-provisioned` flag with `tools/test.py` if the environment is already bootstrapped.
 - **Python Execution**: Use `/usr/bin/python3` to ensure access to system-installed Odoo dependencies.
 - **Linter Overrides**: Use a custom ignore file (`-c <file>`) to bypass fragile tours in other modules if they block testing of this module.
+
+## Security & Multi-tenant Isolation
+Hams Helpdesk implements strict isolation:
+- Record rules ensure users only see tickets for their company.
+- Website-level filtering ensures portal users only see tickets created on that specific website.
+- Controllers strictly validate ownership and website context before rendering ticket details.
+
+## Recent Improvements
+- Verified and linked all semantic anchors for traceability.
+- Added shift handoff verification to operator tours.
+- Enhanced portal UI visibility for tickets.
