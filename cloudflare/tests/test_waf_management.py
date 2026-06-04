@@ -28,12 +28,12 @@ class TestWafManagement(HamsTransactionCase):
             .with_user(self.svc_uid)
             ._execute_ban("10.0.0.1", notes="Test Spam", website_id=self.website.id)
         )
-        self.assertTrue(res)
+        self.assertTrue(res, "[!] DIAGNOSTIC FOR AI: _execute_ban returned False, indicating an API or credential failure.")
 
         ban_record = self.env["cloudflare.ip.ban"].search(
             [("ip_address", "=", "10.0.0.1")], limit=1
         )
-        self.assertTrue(ban_record)
+        self.assertTrue(ban_record, "[!] DIAGNOSTIC FOR AI: No cloudflare.ip.ban record was created after _execute_ban.")
         self.assertEqual(ban_record.state, "active")
         self.assertEqual(ban_record.cf_rule_id, "fake_rule_123")
         self.assertEqual(ban_record.website_id.id, self.website.id)
@@ -59,7 +59,7 @@ class TestWafManagement(HamsTransactionCase):
 
         mock_unban_ip.return_value = (True, "Success")
         ban_record.action_lift_ban()
-        self.assertEqual(ban_record.state, "lifted")
+        self.assertEqual(ban_record.state, "lifted", "[!] DIAGNOSTIC FOR AI: action_lift_ban failed to transition state to 'lifted'. Check API mock and logic.")
 
     def test_03_cf_action_pull_waf_rules(self):
         # Tests [@ANCHOR: cf_action_pull_waf_rules]
@@ -89,12 +89,12 @@ class TestWafManagement(HamsTransactionCase):
             .with_user(self.svc_uid)
             .action_pull_waf_rules(website_id=self.website.id)
         )
-        self.assertTrue(success)
+        self.assertTrue(success, "[!] DIAGNOSTIC FOR AI: action_pull_waf_rules failed. Check get_zone_ruleset mock.")
 
         rules = self.env["cloudflare.waf.rule"].search(
             [("website_id", "=", self.website.id)]
         )
-        self.assertEqual(len(rules), 1)
+        self.assertEqual(len(rules), 1, "[!] DIAGNOSTIC FOR AI: Pulling rules should have resulted in exactly 1 rule.")
         self.assertEqual(rules[0].name, "Cloudflare Rule 1")
 
     def test_04_cf_action_push_waf_rules(self):
@@ -121,7 +121,7 @@ class TestWafManagement(HamsTransactionCase):
             .with_user(self.svc_uid)
             .action_push_waf_rules(website_id=self.website.id)
         )
-        self.assertTrue(success)
+        self.assertTrue(success, "[!] DIAGNOSTIC FOR AI: action_push_waf_rules failed. Check update_zone_ruleset mock.")
         mock_update.assert_called_once()
 
         payload = mock_update.call_args[0][1]

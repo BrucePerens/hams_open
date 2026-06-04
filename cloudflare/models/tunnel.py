@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-import os
 from ..utils.cloudflare_api import delete_cfd_tunnel, list_cfd_tunnels
 
 
@@ -25,7 +24,7 @@ class CloudflareTunnel(models.Model):
         # Verified by [@ANCHOR: test_cf_delete_tunnel]
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
-            account_id = tunnel.website_id.cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+            account_id = tunnel.website_id.cloudflare_account_id
 
             if not token or not account_id:
                 raise UserError(_("Missing Cloudflare API Token or Account ID for the website."))
@@ -52,7 +51,7 @@ class CloudflareTunnel(models.Model):
 
         for website in websites:
             token, _zone = website._get_cloudflare_credentials()
-            account_id = website.cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+            account_id = website.cloudflare_account_id
 
             if not token or not account_id:
                 continue
