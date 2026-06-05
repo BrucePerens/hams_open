@@ -386,6 +386,7 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
+            "recursive_permissions": False,
         },
         {
             "path": "/var/spool/rabbitmq",
@@ -393,6 +394,7 @@ MANIFEST = {
             "provision_mode": "770",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
+            "recursive_permissions": False,
         },
         {
             "path": "/var/log/odoo",
@@ -407,6 +409,7 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
+            "recursive_permissions": False,
         },
         {
             "path": "/opt/hams/systemd/odoo.service.d",
@@ -421,6 +424,7 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
+            "recursive_permissions": False,
         },
         {
             "path": "/var/log/rabbitmq",
@@ -428,6 +432,7 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
+            "recursive_permissions": False,
         },
         {
             "path": "/var/lib/redis",
@@ -435,6 +440,7 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
+            "recursive_permissions": False,
         },
         {
             "path": "/tmp/odoo_test_home",
@@ -1172,7 +1178,8 @@ def apply_production_directories(run_cmd_func, environment="prod", dest_dir=""):
             path = os.path.join(dest_dir, d["path"].lstrip("/")) if dest_dir else d["path"]
             mode = int(d["provision_mode"], 8)
             os.makedirs(path, mode=mode, exist_ok=True)
-            apply_permissions(path, d.get("owner"), mode, recursive=True)
+            recursive = d.get("recursive_permissions", True)
+            apply_permissions(path, d.get("owner"), mode, recursive=recursive)
 
 
 def write_env_files(base_etc_dir, env_vars, run_cmd_func, dest_dir=""):

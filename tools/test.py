@@ -834,12 +834,12 @@ def start_jules_daemons():
     subprocess.run(["sudo", "systemctl", "start", "redis-server"], check=False, stderr=subprocess.DEVNULL)
     subprocess.run(["sudo", "systemctl", "start", "rabbitmq-server"], check=False, stderr=subprocess.DEVNULL)
 
-    if not wait_for_port(6379, "Redis", timeout=5.0):
+    if not wait_for_port(6379, "Redis", timeout=15.0):
         print("[*] Redis systemctl failed, attempting direct daemonize...")
         subprocess.Popen(["redis-server", "--daemonize", "yes"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         wait_for_port(6379, "Redis")
 
-    if not wait_for_port(5672, "RabbitMQ", timeout=5.0):
+    if not wait_for_port(5672, "RabbitMQ", timeout=20.0):
         print("[*] RabbitMQ systemctl failed, attempting direct daemonize...")
         os.makedirs("/tmp/rabbitmq", exist_ok=True)
         custom_rmq = dict(os.environ)
@@ -910,7 +910,7 @@ def main():
         except OSError as e:
             _logger.debug("Ignored OSError: %s", e)
     os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus --user-data-dir={host_tmp_dir}")
-    os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "/dev/null")
+    os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
     # Force system site-packages resolution for Odoo core in restricted venvs
     sys_paths = os.environ.get("PYTHONPATH", "")

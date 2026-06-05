@@ -2033,7 +2033,7 @@ def _verify_test_ast(
 
     if not is_valid:
         print(
-            f"  ❌ ERROR: Invalid Test Implementation (AST). {b_type} cites anchor '{anchor}'. {msg}"
+            f"  ❌ ERROR: Invalid Test Implementation (AST) in {target_file}. {b_type} cites anchor '{anchor}'. {msg}"
         )
         return verification_errors + 1, total_errors + 1
     return verification_errors, total_errors
