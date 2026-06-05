@@ -1337,6 +1337,19 @@ def provision_jules_environment(run_cmd_func, env_vars, orig_user):
             except KeyError as e:
                 _logger.debug("Original user %s not found: %s", orig_user, e)
 
+        _logger.info("[*] Linking custom systemd units...")
+        try:
+            systemd_dir = "/opt/hams/systemd"
+            if os.path.exists(systemd_dir):
+                for item in os.listdir(systemd_dir):
+                    if item.endswith(".service") or item.endswith(".timer"):
+                        src = os.path.join(systemd_dir, item)
+                        dst = os.path.join("/etc/systemd/system", item)
+                        if not os.path.exists(dst):
+                            os.symlink(src, dst)
+        except OSError as e:
+            _logger.warning("Failed to link systemd units: %s", e)
+
         run_post_provision_smoketest()
 
     except subprocess.CalledProcessError as e:
