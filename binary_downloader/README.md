@@ -18,6 +18,14 @@ This module acts as a "package manager" for Odoo. When another part of the syste
 2. You will see a list of required tools. The **Installed** column shows if they are ready.
 3. If a tool is missing, click the **Install** button.
 
+### Tenant-Specific Binaries
+In a multi-tenant environment, you can assign specific versions of software to different websites:
+1. Go to **Settings -> Technical -> Tenant Executables**.
+2. Create a new link between a **Website** and a **Software Manifest**.
+3. Select the **Active Version** you wish to use.
+4. The system will automatically create a secure "shortcut" (symlink) for that website to use.
+5. Use the **1-Click Upgrade to Latest** button to quickly move a tenant to the newest available version.
+
 ---
 
 # Technical Documentation

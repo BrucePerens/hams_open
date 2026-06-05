@@ -31,13 +31,13 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
 
         path = self.env["binary.manifest"].ensure_executable("kopia")
 
-        self.assertEqual(path, self.test_bin)
-        self.assertTrue(os.path.exists(path))
-        self.assertTrue(os.access(path, os.X_OK))
+        self.assertEqual(path, self.test_bin, "[!] DIAGNOSTIC FOR AI: path must match test_bin")
+        self.assertTrue(os.path.exists(path), "[!] DIAGNOSTIC FOR AI: path must exist")
+        self.assertTrue(os.access(path, os.X_OK), "[!] DIAGNOSTIC FOR AI: path must be executable")
 
         # Verify it's actually an executable by checking its mode
         mode = os.stat(path).st_mode
-        self.assertTrue(bool(mode & stat.S_IXUSR))
+        self.assertTrue(bool(mode & stat.S_IXUSR), "[!] DIAGNOSTIC FOR AI: mode must have executable bit set")
 
     def test_pure_python_symlink_engine(self):
         # Tests [@ANCHOR: pure_python_symlink_engine]
@@ -70,4 +70,4 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             'active_version_id': version.id,
         })
 
-        mock_symlink.assert_called_once_with('/fake/central/path', link.symlink_path)
+        mock_symlink.assert_called_once_with('/fake/central/path', link.symlink_path, "[!] DIAGNOSTIC FOR AI: symlink must be called with correct paths")

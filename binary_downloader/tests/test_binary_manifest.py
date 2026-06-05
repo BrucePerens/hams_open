@@ -71,17 +71,17 @@ class TestBinaryManifest(HamsTransactionCase):
         os.chmod(target_bin, stat.S_IRWXU)
 
         path = self.env["binary.manifest"].ensure_executable("testbin")
-        self.assertEqual(path, target_bin)
+        self.assertEqual(path, target_bin, "[!] DIAGNOSTIC FOR AI: Returned path must match the expected local install path.")
 
     def test_02_missing_manifest(self):
         self.safe_patch("shutil.which", return_value=None)
-        with self.assertRaises(UserError, msg="Must raise error on missing manifest"):
+        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: Must raise error on missing manifest"):
             self.env["binary.manifest"].ensure_executable("missingbin")
 
     def test_03_unsupported_platform(self):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Windows")
-        with self.assertRaises(UserError, msg="Must block non-Linux platforms"):
+        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: Must block non-Linux platforms"):
             self.env["binary.manifest"].ensure_executable("testbin")
 
     def test_04_successful_download_and_checksum(self):
@@ -107,9 +107,9 @@ class TestBinaryManifest(HamsTransactionCase):
     def test_05_views_render(self):
         # [@ANCHOR: test_binary_manifest_views]
         v1 = self.env["binary.manifest"].get_view(view_type="list")
-        self.assertIn("name", v1["arch"])
+        self.assertIn("name", v1["arch"], "[!] DIAGNOSTIC FOR AI: List view must contain 'name' field.")
         v2 = self.env["binary.manifest"].get_view(view_type="form")
-        self.assertIn("url", v2["arch"])
+        self.assertIn("url", v2["arch"], "[!] DIAGNOSTIC FOR AI: Form view must contain 'url' field.")
 
     def test_06_is_installed_compute(self):
         # Tests [@ANCHOR: binary_compute_installed]
@@ -121,11 +121,11 @@ class TestBinaryManifest(HamsTransactionCase):
             f.write(b"1234")
         os.chmod(target_bin, stat.S_IRWXU)
         self.manifest.invalidate_recordset(['is_installed'])
-        self.assertTrue(self.manifest.is_installed)
+        self.assertTrue(self.manifest.is_installed, "[!] DIAGNOSTIC FOR AI: is_installed must be True if binary exists and is executable.")
 
         os.remove(target_bin)
         self.manifest.invalidate_recordset(['is_installed'])
-        self.assertFalse(self.manifest.is_installed)
+        self.assertFalse(self.manifest.is_installed, "[!] DIAGNOSTIC FOR AI: is_installed must be False if binary does not exist.")
 
     def test_07_action_install(self):
         # Tests [@ANCHOR: binary_action_install]
@@ -145,8 +145,8 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen.return_value = mock_response_get
 
         result = self.manifest.action_install()
-        self.assertEqual(result["type"], "ir.actions.client")
-        self.assertEqual(result["tag"], "display_notification")
+        self.assertEqual(result["type"], "ir.actions.client", "[!] DIAGNOSTIC FOR AI: action_install must return a client action.")
+        self.assertEqual(result["tag"], "display_notification", "[!] DIAGNOSTIC FOR AI: action_install must return a notification.")
 
     def test_08_path_traversal_validation(self):
         with self.assertRaises(ValidationError):

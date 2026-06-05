@@ -38,6 +38,17 @@
         <li><strong>Extract Member:</strong> For tarballs and zip files, specify the filename within the archive that should be extracted as the executable. This is required for <code>.tar.gz</code> and <code>.zip</code> files.</li>
     </ol>
 
+    <h3>2.3. Managing Tenant-Specific Versions</h3>
+    <p>
+        For more granular control, especially in multi-tenant hosting scenarios, you can manage specific versions and assign them to individual websites:
+    </p>
+    <ul>
+        <li><strong>Version Pool:</strong> Found under <strong>Settings -> Technical -> Version Pool</strong>. This allows you to define multiple versions of the same software (e.g., Kopia v0.10.0 and v0.11.0) with their respective download links and checksums.</li>
+        <li><strong>Tenant Executables:</strong> Found under <strong>Settings -> Technical -> Tenant Executables</strong>. Here you link a specific <strong>Website</strong> to a <strong>Software Manifest</strong> and choose an <strong>Active Version</strong>. The system automatically creates a secure OS-level symlink (shortcut) that the website's processes can use.</li>
+        <li><strong>Upgrading Tenants:</strong> Administrators can use the <strong>1-Click Upgrade</strong> button on the Tenant Executable form to instantly repoint a tenant's shortcut to the newest version available in the pool.</li>
+        <li><strong>Notifications:</strong> If the <code>pager_duty</code> module is installed, you can use the <strong>Alert Tenants</strong> button on a Version record to notify all affected tenants that a new version is available for upgrade.</li>
+    </ul>
+
     <h2 id="binary_security">3. Security Architecture</h2>
     <p>
         Security is at the core of the Binary Downloader design:

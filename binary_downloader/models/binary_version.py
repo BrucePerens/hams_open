@@ -10,7 +10,7 @@ import urllib.request
 import urllib.error
 import zipfile
 from odoo import models, fields, api, tools, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -53,6 +53,31 @@ class BinaryVersion(models.Model):
         'unique(manifest_id, version_number)',
         'This version number already exists for this software.'
     )
+    _url_not_empty = models.Constraint(
+        "CHECK(LENGTH(TRIM(url)) > 0)", "The download URL cannot be empty."
+    )
+    _chksum_not_empty = models.Constraint(
+        "CHECK(LENGTH(TRIM(checksum)) > 0)", "The checksum cannot be empty."
+    )
+
+    @api.constrains("url")
+    def _check_url_scheme(self):
+        for record in self:
+            if record.url:
+                if not record.url.startswith(("http://", "https://")):
+                    raise ValidationError(
+                        _(
+                            "Only http:// and https:// URLs are allowed for security reasons."
+                        )
+                    )
+
+    @api.constrains("archive_type", "extract_member")
+    def _check_extract_member(self):
+        for record in self:
+            if record.archive_type in ("tar.gz", "zip") and not record.extract_member:
+                raise ValidationError(
+                    _("Extract Member is required for %s archives.") % record.archive_type
+                )
 
     def _get_central_path(self):
         """Returns the deterministic central storage path for this specific version."""
