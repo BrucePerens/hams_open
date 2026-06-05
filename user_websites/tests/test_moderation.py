@@ -78,18 +78,18 @@ class TestModeration(HamsHttpCase):
             report.action_take_action_and_strike()
 
         # Verify final state
-        self.assertEqual(self.bad_user.violation_strike_count, 3)
+        self.assertEqual(self.bad_user.violation_strike_count, 3, "[!] DIAGNOSTIC FOR AI: Strike count mismatch. Ensure action_take_action_and_strike increments the count.")
         self.assertTrue(
             self.bad_user.is_suspended_from_websites,
-            "User should be suspended after 3 strikes.",
+            "User should be suspended after 3 strikes. [!] DIAGNOSTIC FOR AI: is_suspended_from_websites flag not set. Check action_suspend_user_websites trigger logic.",
         )
 
         # Verify Content was unpublished
         self.assertFalse(
-            self.spam_page.is_published, "Page should be forcefully unpublished."
+            self.spam_page.is_published, "Page should be forcefully unpublished. [!] DIAGNOSTIC FOR AI: spam_page.is_published is still True. Ensure action_suspend_user_websites unpublishes pages."
         )
         self.assertFalse(
-            self.spam_post.is_published, "Blog post should be forcefully unpublished."
+            self.spam_post.is_published, "Blog post should be forcefully unpublished. [!] DIAGNOSTIC FOR AI: spam_post.is_published is still True. Ensure action_suspend_user_websites unpublishes blog posts."
         )
 
     def test_02_pardon_functionality(self):
@@ -97,13 +97,13 @@ class TestModeration(HamsHttpCase):
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
 
-        self.assertTrue(self.bad_user.is_suspended_from_websites)
+        self.assertTrue(self.bad_user.is_suspended_from_websites, "[!] DIAGNOSTIC FOR AI: Failed to suspend user before pardon test.")
 
         # Admin pardons user
         self.bad_user.action_pardon_user_websites()
 
-        self.assertEqual(self.bad_user.violation_strike_count, 0)
-        self.assertFalse(self.bad_user.is_suspended_from_websites)
+        self.assertEqual(self.bad_user.violation_strike_count, 0, "[!] DIAGNOSTIC FOR AI: Pardon failed to reset strike count.")
+        self.assertFalse(self.bad_user.is_suspended_from_websites, "[!] DIAGNOSTIC FOR AI: Pardon failed to lift suspension flag.")
         # Note: We intentionally do NOT automatically republish content during a pardon.
         # The user must do that manually to ensure they reviewed it.
         self.assertFalse(self.spam_page.is_published)
