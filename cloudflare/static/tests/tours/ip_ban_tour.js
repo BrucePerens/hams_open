@@ -28,9 +28,19 @@ registry.category("web_tour.tours").add("cf_ip_ban_tour", {
             run: "click"
         },
         {
-            trigger: 'tr.o_data_row td:first-child',
-            content: "Wait for and click on the first IP Ban record to open form view",
+            content: "Wait for IP Bans list to render",
+            trigger: '.o_list_renderer',
+            run: function () {}
+        },
+        {
+            trigger: 'tr.o_data_row td[name="ip_address"]',
+            content: "Wait for data row and click to open form view",
             run: 'click',
+        },
+        {
+            trigger: '.o_form_sheet',
+            content: "Wait for form view to render",
+            run: function () {}
         },
         { trigger: 'button[name="action_lift_ban"]', content: 'Wait for: Verify Lift Ban button is rendered', run: function() {} },
 

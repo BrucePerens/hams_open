@@ -15,6 +15,10 @@ This module acts as the command center for your Cloudflare CDN and Web Applicati
 * **Turnstile Integration:** Backend validator for Cloudflare's invisible Turnstile CAPTCHA.
 * **Zone Settings Control:** Adjust security levels, development mode, and cache TTL per website.
 
+## 🚀 Odoo 19 & Zero-Trust Ready
+
+This module is fully optimized for Odoo 19 and adheres to a strict Zero-Sudo architecture. All Cloudflare edge operations are delegated to specific service accounts, ensuring that even in a multi-tenant environment, credentials and operations remain isolated and secure.
+
 ## 🛠️ How to Set It Up
 
 1. Ensure the `cloudflare` module is in your Odoo `addons` directory.
@@ -49,6 +53,9 @@ Strictly adheres to Zero-Sudo architecture using dedicated service accounts:
 * `cloudflare.user_cloudflare_purge`: Cache purging.
 * `cloudflare.user_cloudflare_waf`: WAF and IP banning.
 * `cloudflare.user_cloudflare_tunnel`: Tunnel management.
+
+## 🔐 Security & Multi-Tenancy
+The module enforces strict website-level isolation. Users can only manage Cloudflare settings and records for websites they are authorized to access. API tokens and Zone IDs are never exposed to the frontend and are handled exclusively by backend service accounts.
 
 ---
 
