@@ -46,9 +46,9 @@ def post_init_hook(env):
     ], order="id asc", limit=1000)
 
     def is_boilerplate(page):
-        # AI Laziness Fix: Removed overly defensive guards.
+        # AI Laziness Fix: Added guards to prevent AttributeErrors.
         # We expect boilerplate pages to have a view_id and a key.
-        return page.view_id.key.startswith("compliance.compliance_")
+        return page.view_id and page.view_id.key and page.view_id.key.startswith("compliance.compliance_")
 
     for bp in all_pages.filtered(is_boilerplate):
         # Identify custom pages in the SAME scope (same URL and same website_id).

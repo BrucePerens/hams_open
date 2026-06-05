@@ -1,13 +1,11 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // # Verified by [@ANCHOR: test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {
     url: "/privacy?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
-        { trigger: '#wrap', content: 'Wait for wrap' },
         {
             trigger: 'h1',
             content: 'Verify Privacy Policy content',

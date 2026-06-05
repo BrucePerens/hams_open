@@ -19,7 +19,8 @@ class TestCompliancePages(HamsTransactionCase):
         urls = [
             "/privacy",
             "/cookie-policy",
-            "/terms"
+            "/terms",
+            "/accessibility"
         ]
         pages = self.env["website.page"].search([("url", "in", urls)])
         found_urls = pages.mapped("url")
@@ -72,7 +73,8 @@ class TestCompliancePagesHttp(HamsHttpCase):
         urls = [
             "/privacy",
             "/cookie-policy",
-            "/terms"
+            "/terms",
+            "/accessibility"
         ]
         for url in urls:
             response = self.url_open(url)
@@ -97,7 +99,8 @@ class TestCompliancePagesHttp(HamsHttpCase):
         # Tests [@ANCHOR: story_automatic_legal_pages]
         for xml_id in ["compliance.compliance_privacy_policy_template",
                        "compliance.compliance_cookie_policy_template",
-                       "compliance.compliance_terms_of_service_template"]:
+                       "compliance.compliance_terms_of_service_template",
+                       "compliance.compliance_accessibility_statement_template"]:
             view = self.env.ref(xml_id)
             # Use get_combined_arch to verify the view is well-formed
             arch_node = view._get_combined_arch()
@@ -109,15 +112,17 @@ class TestCompliancePagesHttp(HamsHttpCase):
             # Normalize whitespace for checking
             normalized_arch = re.sub(r'\s+', ' ', arch_str)
 
+            if xml_id != "compliance.compliance_accessibility_statement_template":
+                self.assertIn(
+                    "Warning: This is the default version", normalized_arch,
+                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory default version warning."
+                )
+                self.assertIn(
+                    "It was not produced by a lawyer.", normalized_arch,
+                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory legal disclaimer."
+                )
+
             self.assertIn(
                 "Last Updated:", normalized_arch,
                 f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing 'Last Updated:' text."
-            )
-            self.assertIn(
-                "Warning: This is the default version", normalized_arch,
-                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory default version warning."
-            )
-            self.assertIn(
-                "It was not produced by a lawyer.", normalized_arch,
-                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory legal disclaimer."
             )

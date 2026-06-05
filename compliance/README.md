@@ -31,6 +31,8 @@ We provide four standard pages that you can edit to fit your needs:
 * **Terms of Service:** `/terms`
 * **Accessibility Statement:** `/accessibility`
 
+These pages are automatically linked in your website's footer for global visibility.
+
 **To edit these pages:**
 1. Navigate to the page URL on your website.
 2. Click the **Edit** button in the top-right corner of the screen.

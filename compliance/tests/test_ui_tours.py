@@ -16,4 +16,14 @@ class TestComplianceUITour(HamsHttpCase):
         # Tests [@ANCHOR: compliance_cookie_policy_template]
         # Tests [@ANCHOR: compliance_terms_of_service_template]
         # Tests [@ANCHOR: compliance_accessibility_statement_template]
-        self.start_tour("/privacy?debug=1", "compliance_tour")
+
+        # Disable cookie bar for the duration of this tour to avoid interaction issues in headless mode
+        website = self.env['website'].get_current_website()
+        website.cookies_bar = False
+        self.env.flush_all()
+
+        try:
+            self.start_tour("/privacy?debug=1", "compliance_tour")
+        finally:
+            website.cookies_bar = True
+            self.env.flush_all()

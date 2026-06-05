@@ -193,7 +193,7 @@
                             <h3 class="mt-4">3. Feedback</h3>
                             <p>We welcome your feedback on the accessibility of our website. Please let us know if you encounter accessibility barriers:</p>
                             <ul>
-                                <li>E-mail: <a href="mailto:admin@example.com">admin@example.com</a></li>
+                                <li>E-mail: <a t-attf-href="mailto:#{res_company.email}"><t t-out="res_company.email or 'admin@example.com'"/></a></li>
                             </ul>
 
                             <t t-call="compliance.compliance_legal_links"/>
