@@ -111,6 +111,16 @@
                                         <span t-if="article.icon" t-out="article.icon" class="me-2" aria-hidden="true"/>
                                         <span t-field="article.name"/>
                                     </h1>
+                                    <div class="text-muted small d-flex align-items-center mt-2">
+                                        <span t-if="article.reading_time" class="me-3">
+                                            <i class="fa fa-clock-o me-1" aria-hidden="true"/>
+                                            <t t-out="article.reading_time"/> min read
+                                        </span>
+                                        <span>
+                                            <i class="fa fa-calendar me-1" aria-hidden="true"/>
+                                            Last updated: <span t-field="article.write_date" t-options='{"widget": "date"}'/>
+                                        </span>
+                                    </div>
                                 </header>
 
                                 <section class="article-body lh-lg o_manual_body" style="font-size: 1.1rem;">

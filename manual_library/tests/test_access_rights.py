@@ -77,13 +77,13 @@ class TestManualAccessRights(HamsTransactionCase):
     def test_01_admin_full_crud(self):
         """Admin should have full Create, Read, Update, Delete access to all articles."""
         # Read
-        self.assertTrue(self.private_article.with_user(self.admin_user).name)
+        self.assertTrue(self.private_article.with_user(self.admin_user).name, "[!] DIAGNOSTIC FOR AI: Admin MUST be able to read all articles regardless of internal_permission.")
 
         # Write
         self.private_article.with_user(self.admin_user).write(
             {"name": "Updated Secret"}
         )
-        self.assertEqual(self.private_article.name, "Updated Secret")
+        self.assertEqual(self.private_article.name, "Updated Secret", "[!] DIAGNOSTIC FOR AI: Admin MUST be able to write to all articles.")
 
         # Create
         new_article = (
@@ -91,11 +91,11 @@ class TestManualAccessRights(HamsTransactionCase):
             .with_user(self.admin_user)
             .create({"name": "Admin Created"})
         )
-        self.assertTrue(new_article.id)
+        self.assertTrue(new_article.id, "[!] DIAGNOSTIC FOR AI: Admin MUST be able to create articles.")
 
         # Delete
         new_article.with_user(self.admin_user).unlink()
-        self.assertFalse(new_article.exists())
+        self.assertFalse(new_article.exists(), "[!] DIAGNOSTIC FOR AI: Admin MUST be able to delete articles.")
 
     def test_02_internal_user_contextual_read(self):
         """Internal users can read workspace articles, but not private ones with 'none' permission."""

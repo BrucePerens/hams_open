@@ -70,6 +70,7 @@ class KnowledgeArticle(models.Model):
     )
 
     body_snippet = fields.Text(compute="_compute_body_snippet", string="Body Snippet")
+    reading_time = fields.Integer(compute="_compute_reading_time", string="Reading Time (min)")
 
     # --- Compute Methods ---
     @api.depends("parent_id")
@@ -98,6 +99,19 @@ class KnowledgeArticle(models.Model):
                 article.body_snippet = clean_text[:300]
             else:
                 article.body_snippet = ""
+
+    @api.depends("body")
+    def _compute_reading_time(self):
+        # [@ANCHOR: manual_compute_reading_time]
+        # Verified by [@ANCHOR: test_manual_reading_time]
+        # Verified by [@ANCHOR: test_manual_ui_rendering]
+        for article in self:
+            if article.body:
+                words = html2plaintext(article.body).split()
+                # Average reading speed is ~200 words per minute
+                article.reading_time = max(1, round(len(words) / 200))
+            else:
+                article.reading_time = 0
 
     # --- Constraints ---
     @api.constrains("parent_id")
