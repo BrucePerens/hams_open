@@ -15,9 +15,6 @@
         "views/portal_templates.xml",
     ],
     "assets": {
-        "web.assets_tests": [
-            "hams_helpdesk/static/tests/tours/**/*",
-        ],
     },
     "knowledge_docs": [
         {

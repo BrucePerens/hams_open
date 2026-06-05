@@ -48,6 +48,7 @@
             <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager'), ref('base.group_user')])]"/>
         </record>
     </data>

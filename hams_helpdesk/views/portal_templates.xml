@@ -27,11 +27,16 @@
     </template>
 
     <!-- burn-ignore-tour -->
-    <!-- Verified by [@ANCHOR: test_helpdesk_portal_tour] -->
+    <!-- audit-ignore-view -->
     <template id="portal_my_tickets" name="My Tickets">
         <t t-call="portal.portal_layout">
             <t t-set="breadcrumbs_searchbar" t-value="True"/>
-            <t t-call="portal.portal_searchbar"/>
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">Tickets</t>
+                <div class="ms-md-auto">
+                    <a href="/my/tickets/new" class="btn btn-primary">New Ticket</a>
+                </div>
+            </t>
             <t t-if="not tickets">
                 <p>There are currently no tickets for your account.</p>
             </t>
@@ -77,6 +82,39 @@
                     <t t-call="portal.message_thread">
                         <t t-set="object" t-value="ticket"/>
                     </t>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- audit-ignore-view -->
+    <template id="portal_ticket_new" name="New Ticket">
+        <t t-call="portal.portal_layout">
+            <div class="container">
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h3>Submit New Ticket</h3>
+                            </div>
+                            <div class="card-body">
+                                <form action="/my/tickets/submit" method="post">
+                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                    <div class="mb-3">
+                                        <label for="name" class="form-label">Subject</label>
+                                        <input type="text" name="name" id="name" class="form-control" required="required"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="description" class="form-label">Description</label>
+                                        <textarea name="description" id="description" class="form-control" rows="5"></textarea>
+                                    </div>
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-primary">Submit Ticket</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </t>

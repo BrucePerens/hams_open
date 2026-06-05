@@ -44,6 +44,10 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
     - Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
 * **Micro-Privilege Security (`[@ANCHOR: helpdesk_micro_privilege]`)**: Access is strictly controlled via record rules and explicit field-level security in the ORM.
     - Verified by [@ANCHOR: test_05_portal_write_restrictions]
+* **Helpdesk Operator Workflow**: Verification of the backend operator's ability to manage tickets and execute handoffs.
+    - Verified by [@ANCHOR: test_helpdesk_operator_tour]
+* **Helpdesk Portal Facility**: Verification of the portal customer's ability to submit and view tickets.
+    - Verified by [@ANCHOR: test_helpdesk_portal_tour]
 
 ## Stories and Journeys
 

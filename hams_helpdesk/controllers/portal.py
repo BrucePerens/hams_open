@@ -7,17 +7,22 @@ class HelpdeskPortal(CustomerPortal):
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
         if "ticket_count" in counters:
+            utils = request.env["zero_sudo.security.utils"]
+            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             domain = [("partner_id", "=", request.env.user.partner_id.id)]
             if request.website:
                 domain += [("website_id", "in", [False, request.website.id])]
-            values["ticket_count"] = request.env["hams_helpdesk.ticket"].search_count(domain)
+            values["ticket_count"] = request.env["hams_helpdesk.ticket"].with_env(hd_env).search_count(domain)
         return values
 
     @http.route(["/my/tickets", "/my/tickets/page/<int:page>"], type="http", auth="user", website=True)
     def portal_my_tickets(self, page=1, **kw):
         # [@ANCHOR: multi_website_segregation]
         values = self._prepare_portal_layout_values()
-        Ticket = request.env["hams_helpdesk.ticket"]
+        utils = request.env["zero_sudo.security.utils"]
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        Ticket = request.env["hams_helpdesk.ticket"].with_env(hd_env)
+
         domain = [("partner_id", "=", request.env.user.partner_id.id)]
         if request.website:
             domain += [("website_id", "in", [False, request.website.id])]
@@ -41,15 +46,41 @@ class HelpdeskPortal(CustomerPortal):
 
     @http.route(["/my/ticket/<int:ticket_id>"], type="http", auth="user", website=True)
     def portal_ticket_detail(self, ticket_id, **kw):
-        ticket = request.env["hams_helpdesk.ticket"].browse(ticket_id)
-        if not ticket.exists() or ticket.partner_id != request.env.user.partner_id:
+        utils = request.env["zero_sudo.security.utils"]
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        ticket_sudo = request.env["hams_helpdesk.ticket"].with_env(hd_env).browse(ticket_id)
+
+        if not ticket_sudo.exists() or ticket_sudo.partner_id != request.env.user.partner_id:
             return request.redirect("/my")
 
-        if request.website and ticket.website_id and ticket.website_id != request.website:
+        if request.website and ticket_sudo.website_id and ticket_sudo.website_id != request.website:
             return request.redirect("/my")
 
         values = {
-            "ticket": ticket,
+            "ticket": ticket_sudo.with_user(request.env.user),
             "page_name": "ticket_detail",
         }
         return request.render("hams_helpdesk.portal_ticket_detail", values)
+
+    @http.route(["/my/tickets/new"], type="http", auth="user", website=True)
+    def portal_ticket_new(self, **kw):
+        return request.render("hams_helpdesk.portal_ticket_new", {"page_name": "ticket_new"})
+
+    @http.route(["/my/tickets/submit"], type="http", auth="user", methods=["POST"], website=True, csrf=True)
+    def portal_ticket_submit(self, **kw):
+        # Verified by [@ANCHOR: test_helpdesk_portal_tour]
+        if not kw.get("name"):
+            return request.redirect("/my/tickets/new")
+
+        utils = request.env["zero_sudo.security.utils"]
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+
+        vals = {
+            "name": kw.get("name"),
+            "description": kw.get("description"),
+            "partner_id": request.env.user.partner_id.id,
+            "website_id": request.website.id if request.website else False,
+            "company_id": request.website.company_id.id if request.website else request.env.company.id,
+        }
+        ticket = request.env["hams_helpdesk.ticket"].with_env(hd_env).create(vals)
+        return request.redirect("/my/ticket/%s" % ticket.id)

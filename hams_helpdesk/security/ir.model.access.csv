@@ -5,3 +5,7 @@ access_hams_helpdesk_shift_handoff_user,hams_helpdesk.shift_handoff.user,model_h
 access_hams_helpdesk_ticket_portal,hams_helpdesk.ticket.portal,model_hams_helpdesk_ticket,base.group_portal,1,1,0,0
 access_res_users_helpdesk_service,res.users helpdesk service,base.model_res_users,group_helpdesk_manager,1,0,0,0
 access_calendar_event_helpdesk_service,calendar.event helpdesk service,calendar.model_calendar_event,group_helpdesk_manager,1,0,0,0
+access_website_helpdesk_user,website helpdesk user,website.model_website,group_helpdesk_user,1,0,0,0
+access_res_lang_helpdesk_user,res.lang helpdesk user,base.model_res_lang,group_helpdesk_user,1,0,0,0
+access_website_menu_helpdesk_user,website menu helpdesk user,website.model_website_menu,group_helpdesk_user,1,0,0,0
+access_res_partner_helpdesk_user,res.partner helpdesk user,base.model_res_partner,group_helpdesk_user,1,0,0,0
