@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import hashlib
 import os
-import subprocess
-import sys
 import shutil
 import logging
 from odoo import models, api, tools, _
@@ -216,37 +214,6 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             KV.browse(row[0]).write({'value': value})
         else:
             KV.create({'key': key, 'value': value})
-
-    @api.model
-    def _update_python_venv(self):
-        # [@ANCHOR: update_python_venv]
-        # Verified by [@ANCHOR: test_update_python_venv]
-        # Tests [@ANCHOR: story_venv_management]
-        if not self.env.user.has_group("base.group_system"):
-            raise AccessError(_("Only administrators can update the Python environment."))
-
-        # Securely resolve the requirements path relative to the repository root
-        root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        req_path = os.path.join(root_path, "requirements.txt")
-
-        # Verify that the path is still within the expected repository tree to prevent path traversal
-        if not req_path.startswith(root_path) or not os.path.exists(req_path):
-            raise UserError(_("Requirements file not found or access denied at %s") % req_path)
-
-        try:
-            # We use --break-system-packages because Odoo 19 is installed globally via APT
-            # and we need to ensure dependencies are available to the global python environment.
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--break-system-packages", "-r", req_path],
-                capture_output=True,
-                text=True,
-                check=True,
-                shell=False,
-            )
-            return True
-        except subprocess.CalledProcessError as e:
-            _logger.warning("VENV update failed: %s", e.stderr)
-            raise UserError(_("VENV update failed:\n%s") % e.stderr)
 
     @api.model
     @tools.ormcache()

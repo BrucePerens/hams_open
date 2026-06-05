@@ -3,7 +3,6 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError
 from unittest.mock import MagicMock, mock_open
-import subprocess
 import os
 import odoo
 
@@ -178,39 +177,6 @@ class TestSecurityUtils(HamsTransactionCase):
         self.assertNotEqual(hash1, hash3, "Different inputs should yield different hashes")
         self.assertIsInstance(hash4, int, "Should handle non-string inputs gracefully")
         self.assertTrue(0 <= hash1 <= 2147483647, "Hash should be within 32-bit integer range")
-
-    def test_07_update_python_venv(self):
-        # [@ANCHOR: test_update_python_venv]
-        # Tests [@ANCHOR: update_python_venv]
-        # Tests [@ANCHOR: story_venv_management]
-        """Test the _update_python_venv method."""
-        mock_exists = self.safe_patch("os.path.exists")
-        mock_run = self.safe_patch("subprocess.run")
-        utils = self.env["zero_sudo.security.utils"]
-
-        # Test 1: requirements.txt not found
-        mock_exists.return_value = False
-        with self.assertRaises(UserError):
-            utils._update_python_venv()
-
-        # Test 2: requirements.txt exists, subprocess succeeds
-        mock_exists.return_value = True
-        mock_run.return_value.returncode = 0
-        self.assertTrue(utils._update_python_venv())
-
-        # Test 3: subprocess fails
-        mock_run.side_effect = subprocess.CalledProcessError(1, "cmd", stderr="pip error")
-        with self.assertRaises(UserError) as cm:
-            utils._update_python_venv()
-        self.assertIn("pip error", str(cm.exception))
-
-        # Test 4: AccessError for non-admin
-        non_admin = self.env["res.users"].create({
-            "name": "Non Admin",
-            "login": "non_admin_no_groups",
-        })
-        with self.assertRaises(AccessError):
-            utils.with_user(non_admin)._update_python_venv()
 
     def test_08_get_crypto_secret(self):
         # [@ANCHOR: test_get_crypto_secret]

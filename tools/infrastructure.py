@@ -92,7 +92,7 @@ def safe_remove(path):
         except OSError as e:
             _logger.debug("OSError removing file: %s", e)
 
-def apply_permissions(path, owner_str, mode_int, recursive=False):
+def apply_permissions(path, owner_str, mode_int)
     uid, gid = -1, -1
     if owner_str:
         try:
@@ -112,10 +112,6 @@ def apply_permissions(path, owner_str, mode_int, recursive=False):
             _logger.debug("Failed chown/chmod on %s: %s", p, e)
 
     _apply(path)
-    if recursive and os.path.isdir(path):
-        for root, dirs, files in os.walk(path):
-            for item in dirs + files:
-                _apply(os.path.join(root, item))
 
 def download_file(url, path, mode, env_vars):
     ua = env_vars.get("SYSTEM_USER_AGENT", "Hams.com Bruce Perens K6BP <bruce@perens.com> +1 510-394-5627")
@@ -390,20 +386,11 @@ MANIFEST = {
             "environments": ["prod", "test"],
         },
         {
-            "path": "/var/lib/rabbitmq",
-            "owner": "rabbitmq:rabbitmq",
-            "provision_mode": "750",
-            "runtime_mount": "rw",
-            "environments": ["prod", "test"],
-            "recursive_permissions": False,
-        },
-        {
             "path": "/var/spool/rabbitmq",
             "owner": "rabbitmq:rabbitmq",
             "provision_mode": "770",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
-            "recursive_permissions": False,
         },
         {
             "path": "/var/log/odoo",
@@ -418,7 +405,6 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
-            "recursive_permissions": False,
         },
         {
             "path": "/opt/hams/systemd/odoo.service.d",
@@ -433,7 +419,6 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
-            "recursive_permissions": False,
         },
         {
             "path": "/var/log/rabbitmq",
@@ -441,7 +426,6 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
-            "recursive_permissions": False,
         },
         {
             "path": "/var/lib/redis",
@@ -449,7 +433,6 @@ MANIFEST = {
             "provision_mode": "750",
             "runtime_mount": "rw",
             "environments": ["prod", "test"],
-            "recursive_permissions": False,
         },
         {
             "path": "/tmp/odoo_test_home",
@@ -1169,8 +1152,7 @@ def apply_production_directories(run_cmd_func=None, environment="prod", dest_dir
             path = os.path.join(dest_dir, d["path"].lstrip("/")) if dest_dir else d["path"]
             mode = int(d["provision_mode"], 8)
             os.makedirs(path, mode=mode, exist_ok=True)
-            recursive = d.get("recursive_permissions", True)
-            apply_permissions(path, d.get("owner"), mode, recursive=recursive)
+            apply_permissions(path, d.get("owner"), mode)
 
 
 def write_env_files(base_etc_dir, env_vars, run_cmd_func, dest_dir=""):
@@ -1208,7 +1190,7 @@ def provision_custom_addons(run_cmd_func, env_vars, environment="prod", dest_dir
                 os.makedirs(target, exist_ok=True)
                 shutil.copytree(item_path, target, dirs_exist_ok=True)
 
-    apply_permissions(custom_addons_dir, "odoo:odoo", None, recursive=True)
+    apply_permissions(custom_addons_dir, "odoo:odoo", None)
 
 
 def provision_static_files(run_cmd_func, env_vars, environment="prod", dest_dir=""):
@@ -1252,7 +1234,7 @@ def provision_static_files(run_cmd_func, env_vars, environment="prod", dest_dir=
             with open(fd, "w", encoding="utf-8") as f:
                 f.write(content)
 
-        apply_permissions(path, file_spec.get("owner"), mode, recursive=os.path.isdir(path))
+        apply_permissions(path, file_spec.get("owner"), mode)
 
         if "post_provision_hooks" in file_spec:
             for hook in file_spec["post_provision_hooks"]:
