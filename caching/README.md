@@ -28,7 +28,7 @@ The caching system is fully aware of Odoo's multi-website architecture. Each web
 This module eliminates the need for manual version bumping or complex cache-busting query parameters.
 
 **Filesystem-Linked Invalidation:**
-- **Boot Scan:** During server startup, the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: caching_fs_scan_logic]).
+- **Boot Scan:** During server startup, the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: caching_fs_scan_logic]). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files.
 - **MTime Tracking:** It identifies the latest modification timestamp (`mtime`) among all discovered assets.
 - **Dynamic SW Generation:** This timestamp is injected into the `/sw.js` payload, effectively versioning the Service Worker script itself.
 - **Automatic Refresh:** When any static file is modified and the server restarts, the Service Worker's signature changes. Browsers detect this update on the next visit, triggering a background installation of the new worker and an immediate purge of the stale cache.
@@ -49,6 +49,7 @@ If you notice that users are seeing old versions of your website after you've up
 
 1.  **Restart the Odoo Server:** This triggers a new filesystem scan and updates the Service Worker's internal versioning based on the latest file modification times.
 2.  **Manual Invalidation:** Go to **Website Settings** and click **Invalidate Cache Now**. This will force every browser to purge its local cache and download fresh assets on the next page load.
+3.  **Check for Hidden Files:** Ensure your assets do not start with a dot (`.`), as the scanner intentionally ignores them.
 3.  **Check Browser Quota:** If you've added many large files to `static/`, they might be hitting the **Safe Quota**. Increase the quota in settings if your website has a large amount of essential frontend code.
 
 # Technical Documentation

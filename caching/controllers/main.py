@@ -68,6 +68,8 @@ class ServiceWorkerController(http.Controller):
                 try:
                     with os.scandir(path) as it:
                         for entry in it:
+                            if entry.name.startswith("."):
+                                continue
                             if entry.is_dir(follow_symlinks=False):
                                 _scan_recursive(entry.path)
                             elif entry.is_file(follow_symlinks=False):
@@ -101,10 +103,15 @@ class ServiceWorkerController(http.Controller):
         Calculates the safe dynamic max file size based on quota.
         Returns tuple: (latest_mtime_string, dynamic_max_size_string).
         """
-        max_mtime, file_sizes = self._get_fs_stats()
-
         # Multi-Website Awareness: Get quota.
         website = getattr(request, "website", None)
+
+        # Clear FS cache if requested (e.g., during tests or manual refresh)
+        if request.env.context.get("force_fs_scan"):
+            type(self)._fs_cache = None
+
+        max_mtime, file_sizes = self._get_fs_stats()
+
         if website:
             quota_mb = website.caching_safe_quota_mb
         else:

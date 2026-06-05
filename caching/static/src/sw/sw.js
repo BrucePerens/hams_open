@@ -1,7 +1,8 @@
 const CACHE_NAME = '__CACHE_NAME__';
 
 // Matches /web/assets/ OR /any_module_name/static/
-const CACHE_URL_REGEX = /(\/web\/assets\/|\/[a-zA-Z0-9_-]+\/static\/)/;
+// Anchored to the start of the path for precision.
+const CACHE_URL_REGEX = /^(\/web\/assets\/|\/[a-zA-Z0-9_-]+\/static\/)/;
 
 // Dynamically calculated by the Python backend to prevent quota exhaustion
 const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;

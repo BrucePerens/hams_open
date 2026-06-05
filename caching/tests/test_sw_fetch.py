@@ -61,3 +61,11 @@ class TestServiceWorkerFetch(HamsHttpCase):
                 pattern.search("/api/v1/data"),
                 "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX incorrectly matched /api path.",
             )
+            self.assertFalse(
+                pattern.search("/odoo/content/123/file.pdf"),
+                "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX should not match /odoo/content.",
+            )
+            self.assertFalse(
+                pattern.search("/other/path/web/assets/test.js"),
+                "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX should only match at the beginning of the path.",
+            )
