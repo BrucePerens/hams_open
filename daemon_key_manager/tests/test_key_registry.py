@@ -162,6 +162,13 @@ class TestKeyRegistry(HamsTransactionCase):
         self.assertEqual(registry.env_file_path, env_file_path)
         self.assertTrue(os.path.exists(env_file_path))
 
+        # Verify usage group assignment
+        usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
+        target_user = self.env["res.users"].search([('login', '=', user_xml_id)])
+        if not target_user:
+            target_user = self.env.ref(user_xml_id)
+        self.assertIn(usage_group, target_user.group_ids)
+
     def test_documentation_installed(self):
         """Verify that documentation is installed in knowledge.article or manual.article."""
         # # Tests [@ANCHOR: documentation_installed]
