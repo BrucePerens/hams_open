@@ -92,7 +92,7 @@ def safe_remove(path):
         except OSError as e:
             _logger.debug("OSError removing file: %s", e)
 
-def apply_permissions(path, owner_str, mode_int)
+def apply_permissions(path, owner_str, mode_int):
     uid, gid = -1, -1
     if owner_str:
         try:

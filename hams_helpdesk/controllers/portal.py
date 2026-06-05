@@ -67,17 +67,17 @@ class HelpdeskPortal(CustomerPortal):
         return request.render("hams_helpdesk.portal_ticket_new", {"page_name": "ticket_new"})
 
     @http.route(["/my/tickets/submit"], type="http", auth="user", methods=["POST"], website=True, csrf=True)
-    def portal_ticket_submit(self, **kw):
+    def portal_ticket_submit(self, name=None, description=None, **kw):
         # Verified by [@ANCHOR: test_helpdesk_portal_tour]
-        if not kw.get("name"):
+        if not name:
             return request.redirect("/my/tickets/new")
 
         utils = request.env["zero_sudo.security.utils"]
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
 
         vals = {
-            "name": kw.get("name"),
-            "description": kw.get("description"),
+            "name": name,
+            "description": description,
             "partner_id": request.env.user.partner_id.id,
             "website_id": request.website.id if request.website else False,
             "company_id": request.website.company_id.id if request.website else request.env.company.id,
