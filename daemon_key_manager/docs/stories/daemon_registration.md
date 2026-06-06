@@ -16,3 +16,4 @@ so that it receives a secure, auto-rotating API key without me having to manage 
 ## Key Logic
 - The registration is idempotent; calling it again updates the existing registration [@ANCHOR: register_daemon_idempotency].
 - Security constraints ensure that only service accounts can be used [@ANCHOR: security_constraints_user] and files are written to allowed paths [@ANCHOR: security_constraints_path].
+- Automated privilege assignment ensures the daemon has the correct permissions for long-lived keys [@ANCHOR: privilege_escalation_bypass].

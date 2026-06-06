@@ -24,7 +24,7 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         {
             trigger: 'div[name="user_id"] input',
             content: 'Type service account name',
-            run: 'edit facility',
+            run: (helpers) => TourUtils.deterministicInput(helpers, 'facility'),
         },
         {
             trigger: 'body',

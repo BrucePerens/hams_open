@@ -96,6 +96,10 @@ class DaemonKeyRegistry(models.Model):
         # Verified by [@ANCHOR: test_daemon_key_manager_tour]
         # [@ANCHOR: register_daemon_api]
 
+        # Authorization Check: register_daemon is a privileged API
+        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager") and not self.env.user.is_service_account:
+            raise AccessError(_("Unauthorized attempt to register daemon: %s") % daemon_name)
+
         # Elevate to the internal service account to perform registration
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "daemon_key_manager.user_daemon_key_manager_service"
@@ -147,6 +151,7 @@ class DaemonKeyRegistry(models.Model):
             # Directly assigning to group_ids via .write() requires base.group_erp_manager.
             # We insert directly into the relationship table as our service account is
             # the authority for daemon key management.
+            # [@ANCHOR: privilege_escalation_bypass]
             self.env.cr.execute(
                 "INSERT INTO res_groups_users_rel (uid, gid) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                 (user.id, usage_group.id)
@@ -229,9 +234,9 @@ class DaemonKeyRegistry(models.Model):
         expiration_date = fields.Datetime.now() + datetime.timedelta(days=90)
 
         # Odoo enforces a strict expiration limit on API keys based on the user's groups.
-        # We execute as the target service account but use sudo() to bypass the duration constraint,
-        # retaining explicit ownership to the service account rather than system root.
-        raw_key = self.env["res.users.apikeys"].with_user(self.user_id.id).sudo()._generate("rpc", key_name, expiration_date)  # burn-ignore-sudo: API key rotation requires elevated privileges  # fmt: skip
+        # We execute as the target service account. The required duration (90 days)
+        # is granted by the 'group_daemon_key_usage' group assigned in register_daemon.
+        raw_key = self.env["res.users.apikeys"].with_user(self.user_id.id)._generate("rpc", key_name, expiration_date)
 
         # Write to secure file
         self._write_secure_env_file(self.env_file_path, self.user_id.login, raw_key)
@@ -304,6 +309,7 @@ class DaemonKeyRegistry(models.Model):
         registries = self.env["daemon.key.registry"].search(
             ["|", ("last_rotated", "=", False), ("last_rotated", "<", threshold)],
             limit=10,
+            order="last_rotated asc"
         )
 
         for reg in registries:

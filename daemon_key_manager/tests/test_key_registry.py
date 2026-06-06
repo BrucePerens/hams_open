@@ -163,6 +163,7 @@ class TestKeyRegistry(HamsTransactionCase):
         self.assertTrue(os.path.exists(env_file_path))
 
         # Verify usage group assignment
+        # Tests [@ANCHOR: privilege_escalation_bypass]
         usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
         target_user = self.env["res.users"].search([('login', '=', user_xml_id)])
         if not target_user:

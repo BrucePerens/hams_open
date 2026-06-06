@@ -14,6 +14,7 @@ model._cron_rotate_all_keys()
             <field name="interval_number">60</field>
             <field name="interval_type">days</field>
             <field name="active" eval="True"/>
+            <field name="nextcall" eval="(datetime.now() + datetime.timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')"/>
         </record>
     </data>
 </odoo>
