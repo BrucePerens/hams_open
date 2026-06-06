@@ -6,24 +6,24 @@ This module allows users to optimize their personal and group blogs for search e
 Search Engine Optimization (SEO) is critical for making your content discoverable. This module integrates Odoo's powerful SEO tools into the `user_websites` framework, allowing blog owners and group members to manage their online presence securely.
 
 ## Key Features
-- **Frontend SEO Widget:** Edit meta titles, descriptions, and keywords directly while viewing your blog.
-- **Social Media Previews:** Customize the images and titles that appear when your blog is shared on platforms like Facebook or X (Twitter).
-- **SEO Keywords:** Add specific keywords to help search engines understand the topics of your blog.
-- **Secure Editing:** Our "Zero-Sudo" architecture ensures you can only edit SEO data for your own blog or groups you belong to.
-- **Backend Management:** SEO fields are conveniently located in a dedicated tab on your user profile and group records.
+- **Frontend SEO Widget:** Edit meta titles, descriptions, and keywords directly while viewing your blog, individual pages, or specific blog posts.
+- **Social Media Previews:** Customize the images and titles that appear when your content is shared on platforms like Facebook or X (Twitter).
+- **SEO Keywords:** Add specific keywords to help search engines understand the topics of your site.
+- **Secure Editing:** Our "Zero-Sudo" architecture ensures you can only edit SEO data for content you own or groups you belong to.
+- **Backend Management:** SEO fields are conveniently located in a dedicated tab on user profiles, groups, website pages, and blog posts.
 
 ## How to Use
 
 ### From the Website
-1. Log in and navigate to your blog page (e.g., `/your-slug/blog`).
+1. Log in and navigate to the page or blog post you want to optimize (e.g., `/your-slug/home` or `/your-slug/blog/post/1`).
 2. Click the **Site** menu in the top bar.
 3. Select **Optimize SEO**.
 4. Update your **Title**, **Description**, and **Keywords** in the dialog.
 5. Click **Save**.
 
 ### From the Backend
-1. Go to your **User Profile** or **Group** record.
-2. Click on the **SEO Metadata** tab.
+1. Open the record you wish to edit (User Profile, Group, Website Page, or Blog Post).
+2. Click on the **SEO Metadata** tab (or the equivalent section for pages/posts).
 3. Modify the fields as needed (Title, Description, Keywords, Social Media Image).
 4. Click **Save**.
 

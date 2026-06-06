@@ -3,3 +3,6 @@
 from . import seo_metadata_mixin
 from . import res_users
 from . import user_websites_group
+from . import website_page
+from . import blog_post
+from . import blog_blog
