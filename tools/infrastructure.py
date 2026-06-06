@@ -980,7 +980,7 @@ WantedBy=multi-user.target
         {"name": "build-essential", "debian_name": "build-essential", "environments": ["early_prod"]},
         {"name": "libpq-dev", "debian_name": "libpq-dev", "environments": ["early_prod"]},
         {"name": "python3-dev", "debian_name": "python3-dev", "environments": ["early_prod"]},
-        {"name": "bind9-dnsutils", "debian_name": "dnsutils", "environments": ["early_prod"]},
+        {"name": "bind9-dnsutils", "debian_name": "bind9-dnsutils", "environments": ["early_prod"]},
         {"name": "python3-stdeb", "debian_name": "python3-stdeb", "environments": ["early_prod"]},
         {"name": "fakeroot", "debian_name": "fakeroot", "environments": ["early_prod"]},
         {"name": "python3-all", "debian_name": "python3-all", "environments": ["early_prod"]},
