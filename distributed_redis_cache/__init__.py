@@ -20,5 +20,5 @@ if missing:
     _logger.error(msg)
     raise ImportError(msg)
 
-from . import models
-from .hooks import post_init_hook
+from . import models  # noqa: E402
+from .hooks import post_init_hook  # noqa: E402
