@@ -181,6 +181,10 @@ def hook_install_cloudflared(env_vars, dest_dir, path, run_cmd_func):
         run_cmd_func(['cloudflared', 'service', 'install', token])
     safe_remove(path)
 
+def hook_daemons_perms(env_vars, dest_dir, path, run_cmd_func):
+    target = os.path.join(dest_dir, path.lstrip('/')) if dest_dir else path
+    run_cmd_func(['chown', '-R', 'hams_com:hams_com', target])
+    run_cmd_func(['chmod', '-R', 'a+rX', target])
 
 MANIFEST = {
     "system_accounts": [
@@ -506,9 +510,10 @@ WantedBy=multi-user.target
             "post_provision_hooks": [hook_install_cloudflared],
         },
         {
-            "src": "{REPO_ROOT}/daemons",
+            "src": "{HAMS_COM_DIR}/daemons",
             "path": "/opt/hams/daemons",
             "environments": ["prod", "test"],
+            "post_provision_hooks": [hook_daemons_perms],
         },
         {
             "path": "/opt/hams/systemd/system-startup.service",
@@ -558,10 +563,12 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=logbook_api_service_internal"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/adif_processor/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/adif_processor/adif_processor.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/adif_processor/main.py
 
 Restart=always
 RestartSec=10
@@ -604,12 +611,14 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="WS_PORT=8765"
-Environment="DAEMON_ARGS="
 
 LimitNOFILE=65535
 
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/dx_firehose/main.py --start-test
+
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/dx_firehose/dx_firehose.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/dx_firehose/main.py
 
 Restart=always
 RestartSec=10
@@ -651,10 +660,12 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=dx_daemon_service"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/ham_dx_daemon/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/ham_dx_daemon/dx_daemon.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/ham_dx_daemon/main.py
 
 Restart=always
 RestartSec=10
@@ -698,10 +709,12 @@ EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=space_weather_service"
 Environment="POLL_INTERVAL=14400"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/noaa_swpc_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/noaa_swpc_sync/noaa_swpc_sync.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/noaa_swpc_sync/main.py
 
 # Resiliency
 Restart=always
@@ -716,7 +729,6 @@ WantedBy=multi-user.target
             "mode": "644",
             "environments": ["prod", "test"],
         },
-
         {
             "path": "/opt/hams/systemd/pdns.sync.service",
             "content": """\
@@ -745,10 +757,12 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=dns_api_service_internal"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/pdns_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/pdns_sync/pdns_sync.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/pdns_sync/main.py
 
 Restart=always
 RestartSec=10
@@ -791,10 +805,12 @@ EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=logbook_api_service_internal"
 Environment="POLL_INTERVAL=86400"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/lotw_eqsl_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/lotw_eqsl_sync/lotw_eqsl_sync.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/lotw_eqsl_sync/main.py
 
 Restart=always
 RestartSec=60
@@ -836,10 +852,12 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=satellite_sync_service_internal"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/amsat_tle_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/amsat_tle_sync/amsat_sync.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/amsat_tle_sync/main.py
 
 StandardOutput=journal
 StandardError=journal
@@ -895,10 +913,12 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=onboarding_service_internal"
-Environment="DAEMON_ARGS="
+
+# Smoketest Resource Verification
+ExecStartPre=/usr/bin/python3 /opt/hams/daemons/qrz_scraper/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/qrz_scraper/qrz_scraper.py $DAEMON_ARGS
+ExecStart=/usr/bin/python3 /opt/hams/daemons/qrz_scraper/main.py
 
 Restart=always
 RestartSec=10
@@ -1186,7 +1206,6 @@ def run_post_provision_smoketest(has_hams_com=True):
     _logger.info("[*] Running post-provisioning smoketest on all services...")
 
     try:
-        subprocess.run(["systemctl", "set-environment", "DAEMON_ARGS=--start-test"], check=False)
         subprocess.run(["systemctl", "daemon-reload"], check=False)
     except OSError as e:
         _logger.debug("Ignored OSError during daemon-reload: %s", e)
@@ -1226,8 +1245,8 @@ def run_post_provision_smoketest(has_hams_com=True):
             _logger.error("--- LOGS FOR %s ---\n%s\n-------------------", svc, logs.stdout)
             sys.exit(1)
 
-    _logger.info("[*] Waiting for services to stabilize (10 seconds)...")
-    time.sleep(10)
+    _logger.info("[*] Waiting for services to stabilize (5 seconds)...")
+    time.sleep(5)
 
     failed = False
     for svc in started_services:
@@ -1248,17 +1267,67 @@ def run_post_provision_smoketest(has_hams_com=True):
         _logger.info("    Stopping %s...", svc)
         subprocess.run(["systemctl", "stop", svc], capture_output=True)
 
-    try:
-        subprocess.run(["systemctl", "unset-environment", "DAEMON_ARGS"], check=False)
-    except OSError as e:
-        _logger.debug("Ignored OSError: %s", e)
-
     _logger.info("[*] Smoketest complete.")
 
 def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None):
     os_id = os_id or get_os_identifier()
     repo_root = env_vars.get("REPO_ROOT", "/app")
     has_hams_com = os.path.exists(os.path.join(repo_root, "ham_base", "__manifest__.py"))
+
+    hams_com_dir = None
+    hams_community_dir = None
+
+    if os.path.exists(os.path.join(repo_root, "daemons")):
+        hams_com_dir = repo_root
+    elif os.path.exists(os.path.join(repo_root, "..", "hams_com", "daemons")):
+        hams_com_dir = os.path.abspath(os.path.join(repo_root, "..", "hams_com"))
+    elif os.path.exists("/hams_com/daemons"):
+        hams_com_dir = "/hams_com"
+
+    if os.path.exists(os.path.join(repo_root, "zero_sudo")):
+        hams_community_dir = repo_root
+    elif os.path.exists(os.path.join(repo_root, "..", "hams_community", "zero_sudo")):
+        hams_community_dir = os.path.abspath(os.path.join(repo_root, "..", "hams_community"))
+    elif os.path.exists("/hams_community/zero_sudo"):
+        hams_community_dir = "/hams_community"
+
+    if not hams_com_dir:
+        hams_com_dir = "/hams_com"
+        _logger.info("[*] Primary repository not found. Cloning hams_com to %s...", hams_com_dir)
+        try:
+            clone_env = dict(env_vars)
+            clone_env["GIT_TERMINAL_PROMPT"] = "0"
+            run_cmd_func(["git", "clone", "https://github.com/BrucePerens/hams_com", hams_com_dir], env=clone_env)
+            if orig_user:
+                try:
+                    u_info = pwd.getpwnam(orig_user)
+                    run_cmd_func(["chown", "-R", f"{u_info.pw_uid}:{u_info.pw_gid}", hams_com_dir])
+                except KeyError as e:
+                    _logger.debug("Original user %s not found: %s", orig_user, e)
+        except subprocess.CalledProcessError as e:
+            _logger.warning("[*] Failed to clone hams_com: %s", e)
+
+    if not hams_community_dir:
+        hams_community_dir = "/hams_community"
+        _logger.info("[*] Sibling repository not found. Cloning hams_community to %s...", hams_community_dir)
+        try:
+            clone_env = dict(env_vars)
+            clone_env["GIT_TERMINAL_PROMPT"] = "0"
+            run_cmd_func(["git", "clone", "https://github.com/BrucePerens/hams_community", hams_community_dir], env=clone_env)
+            if orig_user:
+                try:
+                    u_info = pwd.getpwnam(orig_user)
+                    run_cmd_func(["chown", "-R", f"{u_info.pw_uid}:{u_info.pw_gid}", hams_community_dir])
+                except KeyError as e:
+                    _logger.debug("Original user %s not found: %s", orig_user, e)
+        except subprocess.CalledProcessError as e:
+            _logger.warning("[*] Failed to clone hams_community: %s", e)
+            _logger.error("[!] DIAGNOSTIC FOR AI: The sibling repository could not be cloned due to GitHub authentication restrictions in this headless VM.")
+            _logger.error("    If required modules are not present, tests will crash. Document this in JULES_ISSUES.md.")
+
+    env_vars["HAMS_COM_DIR"] = hams_com_dir
+    env_vars["HAMS_COMMUNITY_DIR"] = hams_community_dir
+
     try:
         with open("/etc/hosts", "r") as f:
             hosts_content = f.read()
@@ -1268,27 +1337,6 @@ def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None):
                 f.write("\n127.0.1.1 redis rabbitmq postgres pdns memcached\n")
     except OSError as e:
         _logger.warning("[*] Failed to update /etc/hosts: %s", e)
-
-    is_hams_community = os.path.exists(os.path.join(repo_root, "zero_sudo", "__manifest__.py"))
-    if not is_hams_community:
-        target_clone = "/hams_community"
-        if not os.path.exists(target_clone):
-            _logger.info("[*] Sibling repository not found. Cloning hams_community to %s...", target_clone)
-            try:
-                clone_env = dict(env_vars)
-                clone_env["GIT_TERMINAL_PROMPT"] = "0"
-                run_cmd_func(["git", "clone", "https://github.com/BrucePerens/hams_community", target_clone], env=clone_env)
-                if orig_user:
-                    try:
-                        u_info = pwd.getpwnam(orig_user)
-                        run_cmd_func(["chown", "-R", f"{u_info.pw_uid}:{u_info.pw_gid}", target_clone])
-                    except KeyError as e:
-                        _logger.debug("Original user %s not found: %s", orig_user, e)
-            except subprocess.CalledProcessError as e:
-                _logger.warning("[*] Failed to clone to %s: %s", target_clone, e)
-                _logger.error("[!] DIAGNOSTIC FOR AI: The hams_community repository could not be cloned due to GitHub authentication restrictions in this headless VM.")
-                _logger.error("    If the required 'zero_sudo' module is not present in your current working directory, the tests will fatally crash.")
-                _logger.error("    ACTION: Document this blocker in JULES_ISSUES.md and gracefully conclude your session.")
 
     _logger.info("[*] Provisioning APT Sources and Packages...")
     try:
