@@ -60,10 +60,14 @@ class UserWebsitesSEOController(UserWebsitesController):
             if user:
                 if request and request.env:
                     user = user.with_env(request.env)
+                # ADR-0078: Pre-fetch SEO fields to prevent N+1 queries during widget rendering
+                user.read(list(user._get_seo_fields()))
                 qcontext["main_object"] = user
             elif group:
                 if request and request.env:
                     group = group.with_env(request.env)
+                # ADR-0078: Pre-fetch SEO fields to prevent N+1 queries during widget rendering
+                group.read(list(group._get_seo_fields()))
                 qcontext["main_object"] = group
 
         return response

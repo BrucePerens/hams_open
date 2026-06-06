@@ -19,6 +19,8 @@ Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.
     "data": [
         "views/res_users_views.xml",
         "views/user_websites_group_views.xml",
+        "views/blog_views.xml",
+        "views/website_page_views.xml",
     ],
     "knowledge_docs": [
         {

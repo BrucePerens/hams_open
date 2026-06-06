@@ -144,3 +144,29 @@ class TestSEOModels(HamsTransactionCase):
             res["arch"],
             "The Social Media (Open Graph Image) field must exist in the compiled user.websites.group arch.",
         )
+
+    def test_xpath_rendering_pages_posts(self):
+        # [@ANCHOR: test_xpath_rendering_pages_posts]
+        # Verified by test_xpath_rendering_pages_posts
+        """Prove that the SEO notebook page correctly renders in website.page and blog.post."""
+        # Test website.page
+        res_page = self.env["website.page"].get_view(
+            view_id=self.env.ref("website.website_pages_form_view").id,
+            view_type="form"
+        )
+        self.assertIn(
+            'name="seo_settings"',
+            res_page["arch"],
+            "The SEO notebook page must exist in the compiled website.page arch.",
+        )
+
+        # Test blog.post
+        res_post = self.env["blog.post"].get_view(
+            view_id=self.env.ref("website_blog.view_blog_post_form").id,
+            view_type="form"
+        )
+        self.assertIn(
+            'name="seo_settings"',
+            res_post["arch"],
+            "The SEO notebook page must exist in the compiled blog.post arch.",
+        )
