@@ -6,6 +6,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 @tagged("post_install", "-at_install")
 class TestComplianceUITour(HamsHttpCase):
     def test_compliance_tour(self):
+        # [@ANCHOR: test_compliance_ui_tour]
         """Run the compliance tour to verify cookie bar and legal pages."""
         # Tests [@ANCHOR: compliance_footer_links]
         # Tests [@ANCHOR: story_cookie_consent]
