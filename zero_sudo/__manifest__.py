@@ -24,6 +24,7 @@ Verified by [@ANCHOR: test_documentation_injection]
         "data/security_data.xml",
         "security/ir.model.access.csv",
         "views/res_users_views.xml",
+        "views/security_log_views.xml",
         "data/noisy_table_data.xml",
         "views/noisy_table_views.xml"
     ],

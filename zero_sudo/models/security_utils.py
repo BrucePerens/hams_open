@@ -35,7 +35,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Verified by [@ANCHOR: test_get_service_uid]
         # Tests [@ANCHOR: story_secure_escalation]
         if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
-            raise AccessError(_("Invalid XML ID format: %s") % xml_id)
+            raise AccessError(_("Invalid XML ID format: %s. Expected 'module.name'.") % xml_id)
         module, name = xml_id.split(".", 1)
 
         # STRICT ZERO-SUDO MANDATE: Resolve the ID using raw SQL to prevent any ORM/sudo bypasses

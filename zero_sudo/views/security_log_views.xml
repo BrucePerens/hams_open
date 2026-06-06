@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zero_sudo_security_log_list" model="ir.ui.view">
+        <!-- audit-ignore-view: Standard list view for auditing -->
+        <field name="name">zero_sudo.security.log.list</field>
+        <field name="model">zero_sudo.security.log</field>
+        <field name="arch" type="xml">
+            <list string="Security Logs" create="false" edit="false">
+                <field name="create_date" string="Attempt Date"/>
+                <field name="user_id"/>
+                <field name="login"/>
+                <field name="ip_address"/>
+                <field name="reason"/>
+                <field name="user_agent" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_zero_sudo_security_log_form" model="ir.ui.view">
+        <!-- audit-ignore-view: Standard form view for auditing -->
+        <field name="name">zero_sudo.security.log.form</field>
+        <field name="model">zero_sudo.security.log</field>
+        <field name="arch" type="xml">
+            <form string="Security Log" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date" string="Attempt Date"/>
+                            <field name="user_id"/>
+                            <field name="login"/>
+                        </group>
+                        <group>
+                            <field name="ip_address"/>
+                            <field name="reason"/>
+                        </group>
+                    </group>
+                    <group name="technical_details">
+                        <field name="user_agent"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_zero_sudo_security_log" model="ir.actions.act_window">
+        <field name="name">Security Audit Logs</field>
+        <field name="res_model">zero_sudo.security.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No security logs found.
+            </p>
+            <p>
+                Blocked login attempts by Service Accounts will appear here.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_zero_sudo_root"
+              name="Zero-Sudo Security"
+              parent="base.menu_administration"
+              sequence="100"/>
+
+    <menuitem id="menu_zero_sudo_security_log"
+              name="Security Audit Logs"
+              parent="menu_zero_sudo_root"
+              action="action_zero_sudo_security_log"
+              sequence="10"/>
+</odoo>

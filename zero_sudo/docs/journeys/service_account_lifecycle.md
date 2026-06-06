@@ -17,7 +17,7 @@ The developer attempts to log in as `my_daemon_service` in the web browser. The 
 
 ## 3. Secure Retrieval
 In the module's Python code, the developer needs to perform an operation with elevated rights. They call `_get_service_uid` `[@ANCHOR: get_service_uid]`.
-The system verifies that the account is indeed a service account and does not have dangerous global admin rights.
+The system verifies that the account is indeed a service account and does not have dangerous global admin rights. It also utilizes lightweight Key-Value storage `[@ANCHOR: set_kv_sql_check]` for internal state tracking during the retrieval lifecycle.
 
 ## 4. Execution
 The developer uses the retrieved UID to create a new environment and execute the logic.

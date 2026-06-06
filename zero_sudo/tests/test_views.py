@@ -33,3 +33,8 @@ class TestZeroSudoViews(HamsHttpCase):
         """
         self.env['zero_sudo.noisy_table'].get_view(view_type='form')
         self.env['zero_sudo.noisy_table'].get_view(view_type='list')
+
+    def test_04_security_log_views(self):
+        """Verify that the security.log views compile and render correctly."""
+        self.env['zero_sudo.security.log'].get_view(view_type='form')
+        self.env['zero_sudo.security.log'].get_view(view_type='list')
