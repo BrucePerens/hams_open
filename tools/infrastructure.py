@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import datetime from datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -1310,9 +1311,10 @@ def run_post_provision_smoketest(has_hams_com=True, is_test_env=False):
         _logger.info("    Stopping %s...", svc)
         subprocess.run(["systemctl", "stop", svc], capture_output=True)
 
-    _logger.info("[*] Smoketest complete.")
+    _logger.info("[*] Smoketest complete: %s", datetime())
 
 def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None, skip_apt=False):
+    _logger.info("[*] Provision version 1")
     os_id = os_id or get_os_identifier()
     repo_root = env_vars.get("REPO_ROOT", "/app")
     has_hams_com = os.path.exists(os.path.join(repo_root, "ham_base", "__manifest__.py"))
