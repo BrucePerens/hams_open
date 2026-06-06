@@ -455,7 +455,7 @@ Environment="HAMS_KEYS_DIR=/opt/hams/etc/keys"
 EnvironmentFile=-/opt/hams/etc/odoo.env
 EnvironmentFile=-/opt/hams/etc/core.env
 EnvironmentFile=-/opt/hams/etc/db.env
-ExecStart=/bin/bash -c "echo \\"env['daemon.key.registry'].action_force_provision_all(); env.cr.commit()\\" | /usr/bin/python3 /usr/bin/odoo shell -c /etc/odoo/odoo.conf -d {DB_NAME} --no-http"
+ExecStart=/bin/bash -c "DB=${DB_NAME}; if [ -z \\"$$DB\\" ]; then DB=hams_test; fi; echo \\"env['daemon.key.registry'].action_force_provision_all(); env.cr.commit()\\" | /usr/bin/python3 /usr/bin/odoo shell -c /etc/odoo/odoo.conf -d $$DB --no-http"
 RemainAfterExit=yes
 
 [Install]
@@ -1305,6 +1305,11 @@ def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None):
             run_cmd_func(["bash", "-c", "sed -i 's/peer/trust/g; s/md5/trust/g; s/scram-sha-256/trust/g' /etc/postgresql/*/main/pg_hba.conf"])
             run_cmd_func(["bash", "-c", "echo \"shared_preload_libraries = 'pg_stat_statements'\" >> /etc/postgresql/*/main/postgresql.conf"])
             run_cmd_func(["systemctl", "restart", "postgresql"])
+
+            _logger.info("[*] Bootstrapping initial Odoo PostgreSQL role and test database...")
+            sql_create_roles = "DO $$BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'odoo') THEN CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo'; END IF; END$$;"
+            run_cmd_func(["sudo", "-u", "postgres", "psql", "-c", sql_create_roles])
+            run_cmd_func(["bash", "-c", "sudo -u postgres createdb hams_test || true"])
         except Exception as e: # audit-ignore-catch-all
             _logger.warning("[*] Failed to configure PostgreSQL settings: %s", e)
 
