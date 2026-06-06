@@ -63,7 +63,13 @@ def distributed_cache():
 
             # Multi-Tenant awareness: Include website_id and company_id in cache key
             # Force company_id from context if available, else use env.company
-            website_id = self.env.context.get("website_id") or getattr(self.env, 'website', self.env['website']).id if hasattr(self.env, 'website') else None
+            website_id = self.env.context.get("website_id")
+            if not website_id and hasattr(self.env, 'website'):
+                # Handle cases where website might be a recordset or a lazy object
+                website = getattr(self.env, 'website')
+                if website:
+                    website_id = website.id
+
             company_id = self.env.context.get("allowed_company_ids", [self.env.company.id])[0]
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}" if website_id else ""
@@ -85,6 +91,8 @@ def distributed_cache():
                     use_redis = False
 
             if use_redis:
+                # Required to prevent Odoo from having invalid or out-of-phase data,
+                # the "split brain" phenomenon, during a network partition.
                 while True:
                     try:
                         r = redis.Redis(connection_pool=redis_pool)
@@ -96,7 +104,7 @@ def distributed_cache():
                         break  # Successful miss, break loop to query database
                     except redis.RedisError as e:
                         _logger.warning("Network partition detected. Pausing worker until Redis is reachable: %s", e)
-                        time.sleep(2)
+                        time.sleep(2)  # audit-ignore-sleep
                     except json.JSONDecodeError as e:
                         _logger.warning("Redis cache corrupted JSON payload: %s", e)
                         use_redis = False
@@ -109,6 +117,8 @@ def distributed_cache():
             result = func(self, *args, **kwargs)
 
             if use_redis:
+                # Required to prevent Odoo from having invalid or out-of-phase data,
+                # the "split brain" phenomenon, during a network partition.
                 while True:
                     try:
                         serialized_result = json.dumps(result)
@@ -117,7 +127,7 @@ def distributed_cache():
                         return result
                     except redis.RedisError as e:
                         _logger.warning("Network partition detected during cache write. Pausing worker: %s", e)
-                        time.sleep(2)
+                        time.sleep(2)  # audit-ignore-sleep
                     except (TypeError, json.JSONDecodeError) as e:
                         _logger.warning("Redis cache write serialization failed, falling back to local: %s", e)
                         _local_cache[cache_key] = result
