@@ -483,7 +483,7 @@ WantedBy=multi-user.target
         },
         {
             "path": "/etc/apt/sources.list.d/pgdg.list",
-            "content": "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ {DEB_CODENAME}-pgdg main\n",
+            "content": "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] https://apt.postgresql.org/pub/repos/apt/ {DEB_CODENAME}-pgdg main\n",
             "owner": "root:root",
             "mode": "644",
             "environments": ["prod"],
