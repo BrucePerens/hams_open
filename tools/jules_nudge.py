@@ -64,36 +64,31 @@ def process_session(session, headers):
     if not session_name or not state:
         return
 
-    # 1. Jules has a question for the user
-    if state == "AWAITING_USER_INPUT":
-        send_message(
-            session_name, 
-            "The user is not available for input. Make the decision autonomously, to the best of your ability.", 
-            headers
-        )
+    match state:
+        case "AWAITING_USER_FEEDBACK":
+            send_message(
+                session_name, 
+                "The user is not available for input. Make the decision autonomously, to the best of your ability.", 
+                headers
+            )
+    
+        case "AWAITING_PLAN_APPROVAL":
+            approve_plan(session_name, headers)
+    
+        case "PAUSED" | "FAILED" | "STUCK":
+            if "Jules encountered an error when cloning the repo" in str(session):
+                logging.info(f"{session_name}: Skipping 'Proceed' because a repo cloning error was detected.")
+            else:
+                send_message(session_name, "Proceed", headers)
+    
+        case "QUEUED" | "IN_PROGRESS" | "PR_READY":
+            pass
 
-    # 2. Jules has failed or is stuck
-    elif state in ["FAILED", "STUCK"]:
-        send_message(session_name, "Proceed", headers)
-
-    # 3. Jules is asking for approval
-    elif state == "AWAITING_APPROVAL":
-        approve_plan(session_name, headers)
-
-    # 4. Jules has a PR ready
-    elif state == "PR_READY":
-        pass
-
-    # 5. Jules has submitted the PR
-    elif state == "PR_SUBMITTED":
-        pass
-    elif state == "IN_PROGRESS":
-        pass
-    elif state == "COMPLETED":
-        pass
-    else:
-        logging.info(f"{session_name} is in state '{state}'. No action needed.")
- 
+        case "PR_SUBMITTED" | "COMPLETED":
+            pass
+    
+        case _:
+            logging.warning(f"{session_name} is in unexpected state '{state}'.")
 
 def main():
     logging.info("Starting Jules Nudger... (Press Ctrl-C to stop)")

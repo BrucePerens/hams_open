@@ -1433,7 +1433,7 @@ def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None, skip_ap
             run_cmd_func(["apt-get", "install", "-y"] + apt_opts + all_packages)
 
             _logger.info("[*] Installing pip packages...")
-            run_cmd_func(["pip3", "install", "pgeocode", "--break-system-packages"])
+            run_cmd_func(["pip3", "install", "pgeocode", "telnetlib3", "--break-system-packages"])
         else:
             _logger.info("[*] Bypassing APT phase (skip_apt=True)...")
 
