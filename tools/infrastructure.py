@@ -565,13 +565,15 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=logbook_api_service_internal"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/logbook_api_service_internal.key"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/adif_processor/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/adif_processor/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/adif_processor/main.py $DAEMON_ARGS
 
 Restart=always
 RestartSec=10
@@ -615,6 +617,7 @@ EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="WS_PORT=8765"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 LimitNOFILE=65535
 
@@ -622,7 +625,7 @@ LimitNOFILE=65535
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/dx_firehose/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/dx_firehose/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/dx_firehose/main.py $DAEMON_ARGS
 
 Restart=always
 RestartSec=10
@@ -664,13 +667,15 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=dx_daemon_service"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/dx_daemon_service.key"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/ham_dx_daemon/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/ham_dx_daemon/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/ham_dx_daemon/main.py $DAEMON_ARGS
 
 Restart=always
 RestartSec=10
@@ -713,14 +718,16 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=space_weather_service"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/space_weather_service.key"
 Environment="POLL_INTERVAL=14400"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/noaa_swpc_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/noaa_swpc_sync/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/noaa_swpc_sync/main.py $DAEMON_ARGS
 
 # Resiliency
 Restart=always
@@ -763,13 +770,15 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=dns_api_service_internal"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/dns_api_service_internal.key"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/pdns_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/pdns_sync/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/pdns_sync/main.py $DAEMON_ARGS
 
 Restart=always
 RestartSec=10
@@ -811,14 +820,16 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=logbook_api_service_internal"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/logbook_api_service_internal.key"
 Environment="POLL_INTERVAL=86400"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/lotw_eqsl_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/lotw_eqsl_sync/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/lotw_eqsl_sync/main.py $DAEMON_ARGS
 
 Restart=always
 RestartSec=60
@@ -860,13 +871,15 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=satellite_sync_service_internal"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/satellite_sync_service_internal.key"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/amsat_tle_sync/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/amsat_tle_sync/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/amsat_tle_sync/main.py $DAEMON_ARGS
 
 StandardOutput=journal
 StandardError=journal
@@ -922,13 +935,15 @@ EnvironmentFile=-/opt/hams/etc/rabbitmq.env
 EnvironmentFile=-/opt/hams/etc/pdns.env
 EnvironmentFile=-/opt/hams/etc/odoo.env
 Environment="ODOO_USER=onboarding_service_internal"
+Environment="ODOO_KEY_FILE=/opt/hams/etc/keys/onboarding_service_internal.key"
 Environment="PYTHONPATH=/opt/hams/daemons"
+Environment="DAEMON_ARGS="
 
 # Smoketest Resource Verification
 ExecStartPre=/usr/bin/python3 /opt/hams/daemons/qrz_scraper/main.py --start-test
 
 # Execution via system Python
-ExecStart=/usr/bin/python3 /opt/hams/daemons/qrz_scraper/main.py
+ExecStart=/usr/bin/python3 /opt/hams/daemons/qrz_scraper/main.py $DAEMON_ARGS
 
 Restart=always
 RestartSec=10
@@ -1379,10 +1394,12 @@ def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None):
 
         all_packages = []
 
+        jules_provided = {"curl", "python3-pip", "build-essential"}
         for pkg_spec in MANIFEST.get("apt_packages", []):
             if "early_prod" in pkg_spec["environments"]:
                 pkg_name = pkg_spec.get("debian_name", pkg_spec["name"]) if os_id == "debian" else pkg_spec["name"]
-                all_packages.append(pkg_name)
+                if pkg_spec["name"] not in jules_provided and pkg_name not in jules_provided:
+                    all_packages.append(pkg_name)
 
         pg_res = subprocess.run(
             ["bash", "-c", "apt-cache depends postgresql | grep -Eo 'postgresql-[0-9]+' | head -n1 | grep -Eo '[0-9]+'"],
