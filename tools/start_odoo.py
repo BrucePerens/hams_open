@@ -42,8 +42,6 @@ def main():
 
     # 1. Check Executable & Environment
     cwd = os.getcwd()
-    venv_path = os.path.join(cwd, ".venv")
-    success &= check_path(venv_path, "Virtual Environment (.venv)")
 
     odoo_exec = shutil.which("odoo-bin") or shutil.which("odoo")
     if not odoo_exec:

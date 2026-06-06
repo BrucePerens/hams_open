@@ -22,4 +22,3 @@ All external Python libraries utilized anywhere within a module MUST be explicit
 ## Consequences
 * **Deterministic Deployments:** By declaring dependencies in the manifest, the Odoo core engine will physically refuse to start the server or load the module if the dependency is missing on the host OS or within the virtual environment.
 * **Shift-Left Error Handling:** Errors are shifted from unpredictable, silent runtime exceptions to immediate, highly visible deployment-time halts.
-* **Infrastructure Parity:** Forces developers to ensure that the deployment scripts (`setup_venv.sh`, `requirements.txt`) are perfectly synchronized with the codebase before a module can be successfully deployed.

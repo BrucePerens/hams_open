@@ -3,7 +3,6 @@ import logging
 import os
 import signal
 import subprocess
-import sys
 import time
 import urllib.request
 from odoo import models, api, _
@@ -18,7 +17,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
     @api.model
     def start_daemon_process(self, script_path, args=None, env_vars=None):
         """Starts a python daemon script as a subprocess."""
-        python_exec = os.environ.get("VENV_PYTHON", sys.executable)
+        python_exec = "/usr/bin/python3"
         cmd = [python_exec, script_path] + (args or [])
         env = os.environ.copy()
 

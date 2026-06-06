@@ -48,12 +48,6 @@ Using the legacy '# burn-ignore-test-commit' tag is now an unauthorized bypass.
 **The Trap:** Using single-letter variables like 'l', 'O', or 'I' triggers a 'flake8' E741 violation.
 **The Solution:** Use descriptive names like 'line_item', 'chunk', or 'rec'.
 
-## 14. The System Package '.venv' Bridge Trap
-**The Trap:** Odoo is an OS-level package ('apt').
-Executing it via standard shell commands ignores the local Python '.venv' where external daemon packages (like 'pika') are installed.
-Conversely, trying to 'pip install odoo' locally triggers a nightmare of C-extension compilations.
-**The Solution:** Set 'export PYTHONPATH="/usr/lib/python3/dist-packages:$PYTHONPATH"' in the execution shell to bridge the OS-level Odoo framework into the isolated '.venv', and explicitly execute '"$VENV_PYTHON" /usr/bin/odoo'.
-
 ## 15. The Upstream Core Test Suite Trap
 **The Trap:** Running test scripts with target module 'all' forces Odoo to test its own core framework, which fails on local development machines missing specific system binaries (like 'wkhtmltopdf' or exact MIME setups).
 **The Solution:** Dynamically scan the workspace for custom modules ('find . -name "__manifest__.py"') and exclusively target those modules via the '-i' and '-u' execution flags.

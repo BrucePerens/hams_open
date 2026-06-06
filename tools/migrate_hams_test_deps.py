@@ -21,7 +21,7 @@ def migrate_dependencies(root_dir):
 
     for dirpath, dirnames, filenames in os.walk(root_dir):
         # Ignore version control and environment directories
-        dirnames[:] = [d for d in dirnames if not d.startswith('.') and d != '__pycache__' and d != 'venv']
+        dirnames[:] = [d for d in dirnames if not d.startswith('.') and d != '__pycache__']
 
         for filename in filenames:
             ext = os.path.splitext(filename)[1]
@@ -40,9 +40,8 @@ def migrate_dependencies(root_dir):
                         print(f"[UPDATED] {filepath} ({num_subs} replacements)")
                         total_files_updated += 1
                         total_replacements += num_subs
-                except UnicodeDecodeError:
-                    # Safely skip binary files or non-utf-8 files that slip through extensions
-                    pass
+                except UnicodeDecodeError as e:
+                    _logger.warning("Skipped binary or non-utf8 file %s: %s", filepath, e)
                 except Exception as e: # audit-ignore-catch-all
                    _logger.error(f"[ERROR] Failed to process {filepath}: {e}")
 

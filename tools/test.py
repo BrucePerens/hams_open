@@ -494,16 +494,16 @@ def get_addons_path(base_dir):
     return ",".join(paths)
 
 
-def check_linters(venv_python, base_dir, ignore_filepath, extractor=None, target_modules=None):
+def check_linters(python_exec, base_dir, ignore_filepath, extractor=None, target_modules=None):
     print("[*] Running Manifest Dependency Graph Linter...")
-    res_manifest = subprocess.run([venv_python, os.path.join(base_dir, "tools", "check_manifest_dependencies.py"), base_dir])
+    res_manifest = subprocess.run([python_exec, os.path.join(base_dir, "tools", "check_manifest_dependencies.py"), base_dir])
     if res_manifest.returncode != 0:
         print("🛑 Halting due to manifest load-order violations.")
         sys.exit(1)
 
     print("[*] Running AST Burn List Linter...")
     burn_script = os.path.join(base_dir, "tools", "check_burn_list.py")
-    cmd_burn = [venv_python, burn_script, os.path.join(base_dir, target_modules[0]), "--ignore-file", ignore_filepath] if target_modules and len(target_modules) == 1 else [venv_python, burn_script, base_dir, "--ignore-file", ignore_filepath]
+    cmd_burn = [python_exec, burn_script, os.path.join(base_dir, target_modules[0]), "--ignore-file", ignore_filepath] if target_modules and len(target_modules) == 1 else [python_exec, burn_script, base_dir, "--ignore-file", ignore_filepath]
 
     res_burn = subprocess.run(cmd_burn, capture_output=True, text=True)
     if res_burn.returncode != 0:
@@ -515,7 +515,7 @@ def check_linters(venv_python, base_dir, ignore_filepath, extractor=None, target
         print(res_burn.stdout)
 
     print("[*] Scanning for Semantic Anchors...")
-    res_anchor = subprocess.run([venv_python, os.path.join(base_dir, "tools", "verify_anchors.py"), base_dir], capture_output=True, text=True)
+    res_anchor = subprocess.run([python_exec, os.path.join(base_dir, "tools", "verify_anchors.py"), base_dir], capture_output=True, text=True)
     if res_anchor.returncode != 0:
         print(res_anchor.stdout)
         print(res_anchor.stderr)
@@ -527,7 +527,7 @@ def check_linters(venv_python, base_dir, ignore_filepath, extractor=None, target
     print("[*] Running JavaScript Syntax Linter...")
     js_linter = os.path.join(base_dir, "tools", "check_js_syntax.py")
     target_dirs = [os.path.join(base_dir, m) for m in target_modules]
-    cmd_js = [venv_python, js_linter, "--ignore-file", ignore_filepath] + target_dirs
+    cmd_js = [python_exec, js_linter, "--ignore-file", ignore_filepath] + target_dirs
     res_js = subprocess.run(cmd_js, capture_output=True, text=True)
     if res_js.returncode != 0:
         print(res_js.stdout)
@@ -911,11 +911,6 @@ def main():
     os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading --user-data-dir={host_tmp_dir}")
     os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
-    # Force system site-packages resolution for Odoo core in restricted venvs
-    sys_paths = os.environ.get("PYTHONPATH", "")
-    if "/usr/lib/python3/dist-packages" not in sys_paths:
-        os.environ["PYTHONPATH"] = f"/usr/lib/python3/dist-packages:{sys_paths}".strip(":")
-
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     env_path = os.path.join(base_dir, "deploy", "env")
     if os.path.exists(env_path):
@@ -946,7 +941,7 @@ def main():
     if is_jules:
         start_jules_daemons()
 
-    venv_python = "/usr/bin/python3" if is_jules else os.path.join(base_dir, ".venv", "bin", "python")
+    python_exec = "/usr/bin/python3"
     odoo_bin = "/usr/bin/odoo"
     addons_path = get_addons_path(base_dir)
 
@@ -966,7 +961,7 @@ def main():
     test_tags = ",".join([f"/{m}" for m in target_modules])
 
     def get_odoo_test_cmd(suffix=""):
-        cmd = [venv_python]
+        cmd = [python_exec]
         if args.profile:
             cmd.extend(["-m", "cProfile", "-o", f"/var/tmp/odoo_test{suffix}.prof"])
         return cmd
@@ -974,7 +969,7 @@ def main():
     extractor = FailureExtractor(args.log_directory)
     print(f"==========================================================\n 🧪 ODOO TEST RUNNER [{args.mode.upper()} MODE]\n==========================================================")
 
-    check_linters(venv_python, base_dir, ignore_filepath, extractor, target_modules)
+    check_linters(python_exec, base_dir, ignore_filepath, extractor, target_modules)
 
     final_rc = 0
 

@@ -2,12 +2,6 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_PYTHON="$DIR/.venv/bin/python"
-
-if [ ! -f "$VENV_PYTHON" ]; then
-    echo "[*] Common virtual environment not found. Building it now..."
-    bash "$DIR/tools/setup_venv.sh"
-fi
 
 echo "========================================================"
 echo " 🎨 RUNNING BLACK FORMATTER"

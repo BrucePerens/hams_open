@@ -77,7 +77,6 @@ def micro_privilege(username):
         os.setresuid(orig_ruid, orig_euid, orig_suid)
         os.setresgid(orig_rgid, orig_egid, orig_sgid)
 
-
 def format_env(text, env_vars):
     if not text: return ""
     try:
@@ -129,7 +128,6 @@ def download_file(url, path, mode, env_vars):
     with open(fd, "wb") as f:
         f.write(data)
 
-
 def hook_generate_ssl(env_vars, dest_dir, path, run_cmd_func):
     domain = env_vars.get('DOMAIN', 'localhost')
     ssl_dir = os.path.join(dest_dir, path.lstrip('/')) if dest_dir else path
@@ -144,7 +142,6 @@ def hook_generate_ssl(env_vars, dest_dir, path, run_cmd_func):
         if os.path.exists(fullchain):
             shutil.copy2(fullchain, lotw)
 
-
 def hook_clear_pycache(env_vars, dest_dir, path, run_cmd_func):
     pycache = os.path.join(dest_dir, 'opt/hams/pycache') if dest_dir else '/opt/hams/pycache'
     daemons = os.path.join(dest_dir, 'opt/hams/daemons') if dest_dir else '/opt/hams/daemons'
@@ -155,20 +152,17 @@ def hook_clear_pycache(env_vars, dest_dir, path, run_cmd_func):
     if os.path.isdir(daemons):
         compileall.compile_dir(daemons, quiet=1)
 
-
 def hook_install_odoo_key(env_vars, dest_dir, path, run_cmd_func):
     out = os.path.join(dest_dir, 'usr/share/keyrings/odoo-archive-keyring.gpg') if dest_dir else '/usr/share/keyrings/odoo-archive-keyring.gpg'
     os.makedirs(os.path.dirname(out), exist_ok=True)
     run_cmd_func(['gpg', '--dearmor', '-o', out, '--yes', path])
     safe_remove(path)
 
-
 def hook_install_pg_key(env_vars, dest_dir, path, run_cmd_func):
     out = os.path.join(dest_dir, 'usr/share/keyrings/postgresql-keyring.gpg') if dest_dir else '/usr/share/keyrings/postgresql-keyring.gpg'
     os.makedirs(os.path.dirname(out), exist_ok=True)
     run_cmd_func(['gpg', '--dearmor', '-o', out, '--yes', path])
     safe_remove(path)
-
 
 def hook_install_kopia_binary(env_vars, dest_dir, path, run_cmd_func):
     try:
@@ -180,13 +174,16 @@ def hook_install_kopia_binary(env_vars, dest_dir, path, run_cmd_func):
         _logger.warning("Kopia binary install failed: %s", e)
     safe_remove(path)
 
-
 def hook_install_cloudflared(env_vars, dest_dir, path, run_cmd_func):
     token = env_vars.get('CLOUDFLARE_TUNNEL_TOKEN')
     run_cmd_func(['dpkg', '-i', path])
     if token:
         run_cmd_func(['cloudflared', 'service', 'install', token])
     safe_remove(path)
+
+def hook_bootstrap_keys_perms(env_vars, dest_dir, path, run_cmd_func):
+    target = os.path.join(dest_dir, 'opt/hams/deploy/bootstrap_daemon_keys.py'.lstrip('/')) if dest_dir else '/opt/hams/deploy/bootstrap_daemon_keys.py'
+    apply_permissions(target, "odoo:hams_com", 0o440)
 
 
 MANIFEST = {
@@ -514,18 +511,14 @@ WantedBy=multi-user.target
         },
         {
             "src": "{REPO_ROOT}/daemons",
-            "path": "/opt/hams/",
+            "path": "/opt/hams/daemons",
             "environments": ["prod", "test"],
         },
         {
             "src": "{REPO_ROOT}/deploy",
-            "path": "/opt/hams/",
+            "path": "/opt/hams/deploy",
             "environments": ["prod", "test"],
-        },
-        {
-            "src": "{REPO_ROOT}/requirements.txt",
-            "path": "/opt/hams/",
-            "environments": ["prod", "test"],
+            "post_provision_hooks": [hook_bootstrap_keys_perms],
         },
         {
             "path": "/opt/hams/systemd/system-startup.service",
@@ -938,7 +931,6 @@ WantedBy=multi-user.target
         {"name": "pgbackrest", "debian_name": "pgbackrest", "environments": ["early_prod"]},
         {"name": "certbot", "debian_name": "certbot", "environments": ["early_prod"]},
         {"name": "python3-certbot-nginx", "debian_name": "python3-certbot-nginx", "environments": ["early_prod"]},
-        {"name": "python3-venv", "debian_name": "python3-venv", "environments": ["early_prod"]},
         {"name": "python3-passlib", "debian_name": "python3-passlib", "environments": ["early_prod"]},
         {"name": "python3-cryptography", "debian_name": "python3-cryptography", "environments": ["early_prod"]},
         {"name": "build-essential", "debian_name": "build-essential", "environments": ["early_prod"]},
@@ -948,14 +940,14 @@ WantedBy=multi-user.target
         {"name": "python3-stdeb", "debian_name": "python3-stdeb", "environments": ["early_prod"]},
         {"name": "fakeroot", "debian_name": "fakeroot", "environments": ["early_prod"]},
         {"name": "python3-all", "debian_name": "python3-all", "environments": ["early_prod"]},
-        # Debian deprecated pypdf2 and moved all development to the pypdf package.
-        # We might have to create a bridge package to satisfy the python3-pypdf2
-        # dependency, if we install the Ubuntu odoo package on Debian.
         {"name": "python3-pypdf2", "debian_name": "python3-pypdf", "environments": ["early_prod"]},
         {"name": "python3-setuptools", "debian_name": "python3-setuptools", "environments": ["early_prod"]},
         {"name": "dh-python", "debian_name": "dh-python", "environments": ["early_prod"]},
         {"name": "jing", "debian_name": "jing", "environments": ["early_prod"]},
         {"name": "dbus-x11", "debian_name": "dbus-x11", "environments": ["early_prod"]},
+        {"name": "python3-asyncpg", "debian_name": "python3-asyncpg", "environments": ["early_prod"]},
+        {"name": "black", "debian_name": "black", "environments": ["early_prod"]},
+        {"name": "python3-psutil", "debian_name": "python3-psutil", "environments": ["early_prod"]},
     ],
     "env_defaults": {
         "DB_PORT": "5432",
@@ -993,7 +985,6 @@ WantedBy=multi-user.target
     },
 }
 
-
 def scaffold_test_environment(args_db, provision_dirs=True):
     for k, v in MANIFEST["env_defaults"].items():
         os.environ.setdefault(k, v)
@@ -1015,10 +1006,8 @@ def scaffold_test_environment(args_db, provision_dirs=True):
             print("[*] Note: 'sudo' fallback removed per strict DevSecOps mandates.")
             raise
 
-
 def get_mount_paths(environment, mount_type):
     return [d["path"] for d in MANIFEST["directories"] if environment in d["environments"] and d.get("runtime_mount") == mount_type]
-
 
 def provision_system_accounts(run_cmd_func, environment="prod", dest_dir=""):
     for acc in MANIFEST.get("system_accounts", []):
@@ -1048,7 +1037,6 @@ def provision_system_accounts(run_cmd_func, environment="prod", dest_dir=""):
             except KeyError:
                 _logger.debug("User %s not found, skipping group addition.", extra_user)
 
-
 def execute_hooks(environment, run_cmd_func, env_vars=None, dest_dir=""):
     if dest_dir and dest_dir.endswith("/"):
         dest_dir = dest_dir[:-1]
@@ -1058,7 +1046,6 @@ def execute_hooks(environment, run_cmd_func, env_vars=None, dest_dir=""):
             for hook in d["post_provision_hooks"]:
                 hook(env_vars or {}, dest_dir, d["path"], run_cmd_func)
 
-
 def apply_production_directories(run_cmd_func=None, environment="prod", dest_dir=""):
     for d in MANIFEST["directories"]:
         if environment in d["environments"]:
@@ -1066,7 +1053,6 @@ def apply_production_directories(run_cmd_func=None, environment="prod", dest_dir
             mode = int(d["provision_mode"], 8)
             os.makedirs(path, mode=mode, exist_ok=True)
             apply_permissions(path, d.get("owner"), mode)
-
 
 def write_env_files(base_etc_dir, env_vars, run_cmd_func, dest_dir=""):
     if dest_dir:
@@ -1083,7 +1069,6 @@ def write_env_files(base_etc_dir, env_vars, run_cmd_func, dest_dir=""):
             f.write(content)
 
         apply_permissions(filepath, "root:root", 0o400)
-
 
 def provision_custom_addons(run_cmd_func, env_vars, environment="prod", dest_dir=""):
     if environment not in ["prod", "test"]:
@@ -1104,7 +1089,6 @@ def provision_custom_addons(run_cmd_func, env_vars, environment="prod", dest_dir
                 shutil.copytree(item_path, target, dirs_exist_ok=True)
 
     apply_permissions(custom_addons_dir, "odoo:odoo", None)
-
 
 def provision_static_files(run_cmd_func, env_vars, environment="prod", dest_dir=""):
     for file_spec in MANIFEST.get("static_files", []):

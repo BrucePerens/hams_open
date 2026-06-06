@@ -1,20 +1,20 @@
- # Zero-Sudo Security Core [@ANCHOR: zero_sudo_main] (`zero_sudo`)
+# Zero-Sudo Security Core [@ANCHOR: zero_sudo_main] (`zero_sudo`)
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
 This is the core security cop for our Odoo ecosystem. It enforces our strict **Zero-Sudo Architecture** (ADR-0002) to stop privilege escalation hacks, and it physically locks down background service accounts so they can't be used to log into the website (ADR-0005).
 
-## 🌟 What It Does
+## 🛡️ What It Does
 
 * **Safe Privilege Escalation:** Instead of letting developers use Odoo's dangerous `.sudo()` command, this module provides safe, cached functions (like `_get_service_uid`) to run background tasks securely.
-* **Blocks System Hacks:** It forces developers to hardcode a \"whitelist\" of safe configuration settings. If an attacker tries to trick the system into handing over a cryptographic secret (like a database password), this module blocks it.
+* **Blocks System Hacks:** It forces developers to hardcode a "whitelist" of safe configuration settings. If an attacker tries to trick the system into handing over a cryptographic secret (like a database password), this module blocks it.
 * **Locks Out Daemons:** It adds an `is_service_account` checkbox to users. If an account is running a background daemon and someone tries to log into the web browser with that account, this module instantly destroys the session and kicks them out.
 * **Security Auditing:** Every blocked login attempt by a service account is recorded in a centralized security log for review by administrators.
 * **Platform-Wide Data:** It manages global system settings that are shared across all your websites and companies.
 
 ---
 
-## 👩‍💼 User Guide (Non-Technical)
+## 📖 User Guide (Non-Technical)
 
 ### What is a Service Account?
 A "Service Account" is a special type of user account used by background programs and automated bots. To keep your system safe, these accounts are **forbidden** from being used to log into the website through a browser.
@@ -48,14 +48,14 @@ The module utilizes several key patterns to secure the system:
 ## Security Design (ADR-0002, ADR-0005)
 
 -   **Anti-IDOR & Privilege Escalation**: The `_get_service_uid` method performs direct SQL lookups and strictly rejects any service account with global administrative groups (`base.group_system`, `base.group_erp_manager`).
--   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce a hardcoded `PARAM_WHITELIST` and block keys matching cryptographic patterns (e.g., \"secret\", \"token\") to prevent SSTI exfiltration.
+-   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce a hardcoded `PARAM_WHITELIST` and block keys matching cryptographic patterns (e.g., "secret", "token") to prevent SSTI exfiltration.
 -   **Coherent Cache Signaling**: Uses PostgreSQL `NOTIFY` (`pg_notify`) to synchronize in-memory caches across distributed worker nodes.
 </security_design>
 
 ---
 
 <migration_instructions>
-## 🚨 MIGRATION INSTRUCTIONS FOR DEPENDENT MODULES
+## 🚀 MIGRATION INSTRUCTIONS FOR DEPENDENT MODULES
 
 If you are an AI or developer working on downstream modules, you **MUST** perform the following migrations to integrate with this core:
 
@@ -64,7 +64,7 @@ If you are an AI or developer working on downstream modules, you **MUST** perfor
 3. **Update Security Utility Calls:** Globally find-and-replace your utility calls to use the new centralized namespace:
    * **Change:** `self.env['custom.security.utils']._get_service_uid(...)`
    * **To:** `self.env['zero_sudo.security.utils']._get_service_uid(...)`
-4. **Service Account XML Provisioning:** You may safely continue to use `<field name=\"is_service_account\" eval=\"True\"/>` in your XML data files without crashing, as the structural field is natively defined by this module.
+4. **Service Account XML Provisioning:** You may safely continue to use `<field name="is_service_account" eval="True"/>` in your XML data files without crashing, as the structural field is natively defined by this module.
 5. **Context Management:** When using `_get_service_env`, note that `prefetch_fields=False` is no longer automatically applied to avoid performance regressions. If you require it for specific high-volume operations, you must apply it manually in your calling context.
 </migration_instructions>
 
@@ -74,7 +74,7 @@ If you are an AI or developer working on downstream modules, you **MUST** perfor
 ## 1. The Service Account Pattern
 
 You are strictly FORBIDDEN from using `.sudo()` inline. To escalate privileges:
-1. Define your service account in your module's XML data and set `<field name=\"is_service_account\" eval=\"True\"/>`.
+1. Define your service account in your module's XML data and set `<field name="is_service_account" eval="True"/>`.
 2. Retrieve its UID securely:
    `svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('your_module.user_xml_id')`
 3. Execute using the impersonation idiom:
@@ -136,7 +136,6 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * **Multi-Website Awareness** `[@ANCHOR: story_multi_website]`: How the security core behaves in multi-website environments. [Read Story](zero_sudo/docs/stories/multi_website.md)
 * **Coherent Cache Signaling** `[@ANCHOR: story_cache_signaling]`: Ensuring cache consistency across multiple Odoo workers using Postgres NOTIFY. [Read Story](zero_sudo/docs/stories/cache_signaling.md)
 * **Deterministic Hashing** `[@ANCHOR: story_deterministic_hash]`: Generation of stable integer hashes for PostgreSQL advisory locks. [Read Story](zero_sudo/docs/stories/deterministic_hashing.md)
-* **Python VENV Management** `[@ANCHOR: story_venv_management]`: How administrators can trigger updates of system Python dependencies safely. [Read Story](zero_sudo/docs/stories/venv_management.md)
 * **Centralized Documentation Bootstrap** `[@ANCHOR: story_zero_sudo_doc_installer]`: How documentation is centrally installed across the platform. [Read Story](zero_sudo/docs/stories/documentation_bootstrap.md)
 
 ### Journeys
@@ -171,9 +170,6 @@ Safely retrieves a whitelisted system configuration parameter.
 Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
 * **Arguments:** `model_name` (str): The Odoo model. `key_value` (str): The unique identifier.
 
-#### `_update_python_venv()` `[@ANCHOR: update_python_venv]`
-Triggers `pip install` for module dependencies (restricted to Administrators). It utilizes the `--break-system-packages` flag to ensure compatibility with global Odoo installations on Debian/Ubuntu systems.
-
 #### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
 Retrieves the root cryptographic key from environment or local file, bypassing DB. This is the only approved way to access the master system secret without risking exposure via the database's `ir.config_parameter` table.
 
@@ -198,15 +194,15 @@ Sets a key-value pair in a lightweight service account storage.
 The `zero_sudo` module provides a centralized facility to inject standalone HTML documentation into the `knowledge.article` or `manual.article` APIs. This structurally eliminates the need to maintain fragile ad-hoc `post_init_hook` scripts in every downstream module.
 
 **How to use it:**
-1. Add a hard dependency on `\"zero_sudo\"` in your module's `__manifest__.py`.
-2. Add the `\"knowledge_docs\"` configuration array directly to your `__manifest__.py`:
+1. Add a hard dependency on `"zero_sudo"` in your module's `__manifest__.py`.
+2. Add the `"knowledge_docs"` configuration array directly to your `__manifest__.py`:
 ```python
-    \"knowledge_docs\": [
+    "knowledge_docs": [
         {
-            \"name\": \"Your Module Guide\",
-            \"path\": \"your_module/data/documentation.html\",
-            \"icon\": \"🤖\",
-            \"category\": \"workspace\"
+            "name": "Your Module Guide",
+            "path": "your_module/data/documentation.html",
+            "icon": "📄",
+            "category": "workspace"
         }
     ],
 ```

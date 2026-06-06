@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api, _
+from odoo import models, fields, api
 
 
 class ResConfigSettings(models.TransientModel):
@@ -53,26 +53,3 @@ class ResConfigSettings(models.TransientModel):
             admin_group.with_user(svc_uid).write(
                 {"user_ids": [(6, 0, self.user_websites_administrators_ids.ids)]}
             )
-
-    def action_update_python_venv(self):
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
-        )
-        res = (
-            self.env["zero_sudo.security.utils"]
-            .with_user(svc_uid)
-            ._update_python_venv()
-        )
-        if res:
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": _("Environment Updated"),
-                    "message": _(
-                        "Python dependencies have been successfully updated. Restart the Odoo service for changes to take effect."
-                    ),
-                    "type": "success",
-                    "sticky": True,
-                },
-            }

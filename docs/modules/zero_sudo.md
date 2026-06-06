@@ -121,7 +121,6 @@ For detailed narratives and end-to-end workflows, refer to the following:
 * **Multi-Website Awareness** `[@ANCHOR: story_multi_website]`: How the security core behaves in multi-website environments. [Read Story](zero_sudo/docs/stories/multi_website.md)
 * **Coherent Cache Signaling** `[@ANCHOR: story_cache_signaling]`: Ensuring cache consistency across multiple Odoo workers using Postgres NOTIFY. [Read Story](zero_sudo/docs/stories/cache_signaling.md)
 * **Deterministic Hashing** `[@ANCHOR: story_deterministic_hash]`: Generation of stable integer hashes for PostgreSQL advisory locks. [Read Story](zero_sudo/docs/stories/deterministic_hashing.md)
-* **Python VENV Management** `[@ANCHOR: story_venv_management]`: How administrators can trigger updates of system Python dependencies safely. [Read Story](zero_sudo/docs/stories/venv_management.md)
 * **Centralized Documentation Bootstrap** `[@ANCHOR: story_zero_sudo_doc_installer]`: How documentation is centrally installed across the platform. [Read Story](zero_sudo/docs/stories/documentation_bootstrap.md)
 
 ### Journeys
@@ -155,9 +154,6 @@ Safely retrieves a whitelisted system configuration parameter.
 #### `_notify_cache_invalidation(model_name, key_value)` `[@ANCHOR: coherent_cache_signal]`
 Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
 * **Arguments:** `model_name` (str): The Odoo model. `key_value` (str): The unique identifier.
-
-#### `_update_python_venv()` `[@ANCHOR: update_python_venv]`
-Triggers `pip install` for module dependencies (restricted to Administrators). It utilizes the `--break-system-packages` flag to ensure compatibility with global Odoo installations on Debian/Ubuntu systems.
 
 #### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
 Retrieves the root cryptographic key from environment or local file, bypassing DB. This is the only approved way to access the master system secret without risking exposure via the database's `ir.config_parameter` table.

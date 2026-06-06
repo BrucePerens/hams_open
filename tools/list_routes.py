@@ -13,11 +13,6 @@ import sys
 import os
 import threading
 
-# Ensure OS-level Odoo package is in the path if running from an isolated venv (Trap 14)
-if "/usr/lib/python3/dist-packages" not in sys.path:
-    sys.path.append("/usr/lib/python3/dist-packages")
-
-
 def main():
     parser = argparse.ArgumentParser(description="List all active Odoo web routes.")
     parser.add_argument(

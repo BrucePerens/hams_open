@@ -2142,8 +2142,6 @@ def main():
                 "node_modules",
                 "tools",
                 "daemons",
-                "venv",
-                "env",
                 "hams_local_relay",
                 "hams_community",
                 "hams_com",
@@ -2267,7 +2265,7 @@ def main():
     xml_content_all = ""
     js_content_all = ""
     for root, dirs, files in os.walk(target_dir):
-        if "node_modules" in root or "venv" in root: continue
+        if "node_modules" in root: continue
         for file in files:
             filepath = os.path.join(root, file)
             if file.endswith('.xml'):

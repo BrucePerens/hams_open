@@ -73,7 +73,7 @@ def find_anchors_in_docs(root_dir, repo_root):
     doc_anchors = {}
     contract_anchors = {}
     pattern = re.compile(r"\[@ANCHOR:\s*([a-zA-Z0-9_:]+)\s*\]")
-    exclude_dirs = {"tools", "scripts", "hams_community", "hams_com", ".git", "venv", "__pycache__"}
+    exclude_dirs = {"tools", "scripts", "hams_community", "hams_com", ".git", "__pycache__"}
 
     for root, dirs, files in os.walk(root_dir):
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
@@ -195,7 +195,7 @@ def find_anchors_in_code(root_dir, repo_root):
     verified_by_links, cross_references = {}, {}
     duplicates = []
     pattern = re.compile(r"\[@ANCHOR:\s*([a-zA-Z0-9_:]+)\s*\]")
-    exclude_dirs = {"docs", ".git", "venv", "__pycache__", "tools", "scripts", "hams_community", "hams_com"}
+    exclude_dirs = {"docs", ".git", "__pycache__", "tools", "scripts", "hams_community", "hams_com"}
 
     for root, dirs, files in os.walk(root_dir):
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
@@ -535,7 +535,7 @@ def main():
         duplicates.extend(dups)
 
         for root, dirs, files in os.walk(target_dir):
-            dirs[:] = [d for d in dirs if d not in {"tools", "scripts", "hams_community", "hams_com", ".git", "venv", "__pycache__"}]
+            dirs[:] = [d for d in dirs if d not in {"tools", "scripts", "hams_community", "hams_com", ".git", "__pycache__"}]
             if "documentation.html" in files:
                 full_doc_path = os.path.join(root, "documentation.html")
                 try:

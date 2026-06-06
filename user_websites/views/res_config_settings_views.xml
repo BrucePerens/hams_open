@@ -22,11 +22,6 @@
                         <setting help="Email address where content violation reports will be sent.">
                             <field name="company_abuse_email" placeholder="abuse@yourcompany.com"/>
                         </setting>
-                        <setting title="System Environment" help="Manually synchronize the Python Virtual Environment with requirements.txt.">
-                            <div class="mt8">
-                                <button name="action_update_python_venv" type="object" string="Update Dependencies" class="btn-warning" icon="fa-cogs" confirm="This will run pip install -r requirements.txt. You must manually restart the server afterward. Proceed?"/>
-                            </div>
-                        </setting>
                     </block>
                 </app>
             </xpath>
