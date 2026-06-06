@@ -183,8 +183,9 @@ def hook_install_cloudflared(env_vars, dest_dir, path, run_cmd_func):
 
 def hook_daemons_perms(env_vars, dest_dir, path, run_cmd_func):
     target = path
-    run_cmd_func(['chown', '-R', 'hams_com:hams_com', target])
-    run_cmd_func(['chmod', '-R', 'a+rX', target])
+    if os.path.exists(target):
+        run_cmd_func(['chown', '-R', 'hams_com:hams_com', target])
+        run_cmd_func(['chmod', '-R', 'a+rX', target])
 
 MANIFEST = {
     "system_accounts": [
@@ -1005,6 +1006,8 @@ WantedBy=multi-user.target
         {"name": "python3-websockets", "debian_name": "python3-websockets", "environments": ["early_prod"]},
         {"name": "flake8", "debian_name": "flake8", "environments": ["early_prod"]},
         {"name": "python3-pip", "debian_name": "python3-pip", "environments": ["early_prod"]},
+        {"name": "python3-pandas", "debian_name": "python3-pandas", "environments": ["early_prod"]},
+        {"name": "python3-numpy", "debian_name": "python3-numpy", "environments": ["early_prod"]},
     ],
     "env_defaults": {
         "DB_PORT": "5432",
