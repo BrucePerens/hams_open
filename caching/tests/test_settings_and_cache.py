@@ -27,6 +27,8 @@ class TestSettingsAndCache(RealTransactionCase):
             200,
             "[!] DIAGNOSTIC FOR AI: Failed to fetch /sw.js with 35MB quota.",
         )
+        # Content should contain MAX_FILE_SIZE_BYTES
+        self.assertIn("MAX_FILE_SIZE_BYTES", response_35.text)
 
         # Change quota
         website.caching_safe_quota_mb = 10
@@ -36,6 +38,7 @@ class TestSettingsAndCache(RealTransactionCase):
             200,
             "[!] DIAGNOSTIC FOR AI: Failed to fetch /sw.js with 10MB quota.",
         )
+        self.assertIn("MAX_FILE_SIZE_BYTES", response_10.text)
 
         # We can test that it evaluates dynamically by setting it extremely low
         website.caching_safe_quota_mb = 0
@@ -46,6 +49,8 @@ class TestSettingsAndCache(RealTransactionCase):
             200,
             "[!] DIAGNOSTIC FOR AI: Failed to fetch /sw.js with 0MB quota.",
         )
+        # Even with 0MB quota, we expect some value for MAX_FILE_SIZE_BYTES
+        self.assertIn("MAX_FILE_SIZE_BYTES", response_0.text)
 
     def test_06_quota_edge_cases(self):
         """Test quota calculation edge cases with mocked filesystem data."""

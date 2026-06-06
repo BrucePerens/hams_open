@@ -137,11 +137,10 @@ class ServiceWorkerController(http.Controller):
             )  # Default 10MB
 
         if total_size <= SAFE_QUOTA:
-            # Everything fits.
-            dynamic_max_size = (
-                file_sizes[0] + 1024
-                if file_sizes
-                else 10 * 1024 * 1024
+            # Everything fits. Ensure we allow at least 10MB for bundles.
+            dynamic_max_size = max(
+                file_sizes[0] + 1024 if file_sizes else 0,
+                10 * 1024 * 1024,
             )
         else:
             # Drop largest files until remaining sum fits quota.
@@ -156,7 +155,9 @@ class ServiceWorkerController(http.Controller):
 
         return (str(int(max_mtime)), str(dynamic_max_size))
 
-    @http.route("/sw.js", type="http", auth="public", sitemap=False)
+    @http.route(
+        "/sw.js", type="http", auth="public", sitemap=False, website=True
+    )
     def service_worker(self):
         # [@ANCHOR: caching_sw_serve_route]
         # Verified by [@ANCHOR: test_service_worker_01]
