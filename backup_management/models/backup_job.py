@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import datetime
 from odoo import models, fields
 
 
@@ -33,3 +34,33 @@ class BackupJob(models.Model):
         required=True,
     )
     output_log = fields.Text(string="Live Output Log")
+
+    def _auto_refresh_status(self):
+        """
+        Cleanup abandoned jobs that have been stuck in 'processing' for too long.
+        This ensures the UI doesn't show them as active forever if a worker dies.
+        """
+        # [@ANCHOR: backup_management:auto_refresh_status]
+        timeout_limit = fields.Datetime.now() - datetime.timedelta(hours=2)
+        abandoned_jobs = self.env["backup.job"].search(
+            [
+                ("state", "=", "processing"),
+                ("write_date", "<", timeout_limit),
+            ],
+            limit=100,
+        )
+        if abandoned_jobs:
+            abandoned_jobs.write(
+                {
+                    "state": "failed",
+                    "output_log": (abandoned_jobs[0].output_log or "")
+                    + "\n[SYSTEM] Job timed out after 2 hours of inactivity.",
+                }
+            )
+
+    def action_refresh_status(self):
+        """
+        Manually trigger a status refresh.
+        In this implementation, it's a no-op that just returns True to allow the UI to refresh.
+        """
+        return True

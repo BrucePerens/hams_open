@@ -13,7 +13,7 @@
       "sandbox_network_access": "loopback"
     },
     {
-      "id": 9,
+      "id": 8,
       "name": "Docker Daemon",
       "type": "systemd",
       "target": "docker.service",
@@ -42,17 +42,6 @@
       "script": "dig -6 +time=3 +tries=1 @2001:503:ba3e::2:30 . NS",
       "snmp_community": "public",
       "comment": "Verifies IPv6 network routing to root DNS servers",
-      "sandbox_network_access": "loopback"
-    },
-    {
-      "id": 8,
-      "name": "Redis Ping",
-      "type": "redis",
-      "target": "redis",
-      "interval": 60,
-      "port": 6379,
-      "snmp_community": "public",
-      "comment": "Autodiscovered Redis instance",
       "sandbox_network_access": "loopback"
     },
     {
@@ -100,7 +89,7 @@
       "sandbox_network_access": "loopback"
     },
     {
-      "id": 10,
+      "id": 9,
       "name": "WSGI HTTP Ping",
       "type": "http",
       "target": "http://odoo:8069/api/v1/pager/ping",

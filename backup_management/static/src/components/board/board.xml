@@ -21,13 +21,22 @@
                                     </h3>
                                     <h6 class="card-subtitle mb-3 text-secondary"><t t-out="conf.engine.toUpperCase()"/> - <t t-out="conf.target_path"/></h6>
                                     <div class="mb-3">
-                                        <button class="btn btn-sm btn-danger me-2" t-on-click="() => this.triggerBackup(conf.id)">
-                                            <i class="fa fa-play me-1" aria-hidden="true"/> Backup
+                                        <button class="btn btn-sm btn-danger me-2" t-on-click="() => this.triggerBackup(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
+                                            <i t-attf-class="fa {{ (conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)) ? 'fa-spinner fa-spin' : 'fa-play' }} me-1" aria-hidden="true"/> Backup
                                         </button>
-                                        <button class="btn btn-sm btn-primary" t-on-click="() => this.syncSnapshots(conf.id)">
-                                            <i class="fa fa-refresh me-1" aria-hidden="true"/> Sync
+                                        <button class="btn btn-sm btn-primary" t-on-click="() => this.syncSnapshots(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
+                                            <i t-attf-class="fa {{ (conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)) ? 'fa-spinner fa-spin' : 'fa-refresh' }} me-1" aria-hidden="true"/> Sync
                                         </button>
                                     </div>
+                                    <t t-if="conf.latest_job">
+                                        <div class="mb-3 p-2 rounded" style="background: rgba(255,255,255,0.05);">
+                                            <small class="text-secondary d-block">Latest Job Status:</small>
+                                            <span t-attf-class="badge {{ conf.latest_job.state === 'done' ? 'bg-success' : (conf.latest_job.state === 'failed' ? 'bg-danger' : 'bg-info') }}">
+                                                <t t-out="conf.latest_job.job_type.toUpperCase()"/>: <t t-out="conf.latest_job.state.toUpperCase()"/>
+                                            </span>
+                                            <small class="ms-2 text-muted"><t t-out="conf.latest_job.create_date"/></small>
+                                        </div>
+                                    </t>
                                     <t t-if="conf.latest_snapshot">
                                         <p class="mb-1"><strong>Last Snapshot:</strong> <t t-out="conf.latest_snapshot.start_time"/></p>
                                         <p class="mb-1"><strong>ID:</strong> <t t-out="conf.latest_snapshot.snapshot_id"/></p>

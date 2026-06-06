@@ -320,6 +320,8 @@ class BackupConfig(models.Model):
         Triggers a connection test for Kopia or pgBackRest.
         For Kopia, it tries to list snapshots. For pgBackRest, it runs 'info'.
         """
+        # [@ANCHOR: backup_management:action_test_connection]
+        # Verified by [@ANCHOR: backup_management:test_backup_orchestration]
         for rec in self:
             rec.action_sync_snapshots()
         return {
@@ -333,6 +335,8 @@ class BackupConfig(models.Model):
         }
 
     def action_view_latest_job(self):
+        # [@ANCHOR: backup_management:action_view_latest_job]
+        # Verified by [@ANCHOR: backup_management:test_backup_view]
         self.ensure_one()
         job = self.env['backup.job'].search([('config_id', '=', self.id)], limit=1)
         if not job:
@@ -419,6 +423,21 @@ class BackupConfig(models.Model):
         )
         snap_map = {s["config_id"][0]: s for s in latest_snaps if s.get("config_id")}
 
+        # Get latest job status for each config efficiently
+        # Using a subquery/grouping approach if possible, or just a limited search
+        job_map = {}
+        if configs:
+            # Efficiently fetch only the latest job for each config
+            self.env.cr.execute("""
+                SELECT DISTINCT ON (config_id)
+                    config_id, state, job_type, create_date
+                FROM backup_job
+                WHERE config_id IN %s
+                ORDER BY config_id, create_date DESC
+            """, (tuple([c["id"] for c in configs]),))
+            for row in self.env.cr.dictfetchall():
+                job_map[row["config_id"]] = row
+
         for c in configs:
             snap = snap_map.get(c["id"])
             if snap:
@@ -435,6 +454,9 @@ class BackupConfig(models.Model):
             else:
                 c["latest_snapshot"] = False
                 c["is_stale"] = True
+
+            c["latest_job"] = job_map.get(c["id"], False)
+
         return configs
 
     def _process_snapshot_data(self, data, engine):

@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <form string="Backup Job" create="false" edit="false">
                 <header>
+                    <button name="action_refresh_status" string="Refresh Status" type="object" invisible="state in ['done', 'failed']" class="oe_highlight"/>
                     <field name="state" widget="statusbar" statusbar_visible="pending,processing,done,failed"/>
                 </header>
                 <sheet>
@@ -51,5 +52,15 @@
         <field name="name">Backup Jobs (Active)</field>
         <field name="res_model">backup.job</field>
         <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="ir_cron_auto_refresh_backup_jobs" model="ir.cron">
+        <field name="name">Backup Job Auto-Refresh</field>
+        <field name="model_id" ref="model_backup_job"/>
+        <field name="state">code</field>
+        <field name="code">model._auto_refresh_status()</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
     </record>
 </odoo>

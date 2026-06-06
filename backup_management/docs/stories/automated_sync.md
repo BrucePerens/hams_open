@@ -11,3 +11,12 @@ The system maintains a synchronized view of offsite backup states through a poll
 5. **Dashboard Update**: The aggregated data is made available for the NOC dashboard `[@ANCHOR: backup_management:backup_board_data]`.
 
 Documentation for this module is automatically bootstrapped into the system. `[@ANCHOR: backup_doc_injection]`
+
+## Connection Verification [@ANCHOR: backup_management:action_test_connection]
+Administrators can manually trigger a connection test and snapshot synchronization from the configuration view.
+
+## Job Monitoring [@ANCHOR: backup_management:action_view_latest_job]
+Each configuration provides a direct link to view the logs and status of its most recent backup job.
+
+## Status Auto-Refresh [@ANCHOR: backup_management:auto_refresh_status]
+The system automatically monitors active jobs and cleans up any that have been abandoned by the worker.

@@ -22,6 +22,6 @@ class BackupLatestSnapshotView(models.Model):
                 SELECT DISTINCT ON (config_id)
                     id, config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status
                 FROM backup_snapshot
-                ORDER BY config_id, start_time DESC
+                ORDER BY config_id, start_time DESC, id DESC
             )
         """)

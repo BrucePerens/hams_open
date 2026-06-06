@@ -88,8 +88,7 @@ class TestBackupSecurity(RealTransactionCase):
 
     def test_symlink_traversal(self):
         # Create a symlink to a forbidden path
-        symlink_path = "/var/lib/odoo/backups/evil_link"
-        os.makedirs(os.path.dirname(symlink_path), exist_ok=True)
+        symlink_path = "/var/lib/odoo/backups/evil_link_test"
         if os.path.exists(symlink_path):
             os.remove(symlink_path)
 
@@ -101,7 +100,7 @@ class TestBackupSecurity(RealTransactionCase):
                 self.config.write({"target_path": symlink_path})
                 self.env.flush_all()
         finally:
-            if os.path.exists(symlink_path):
+            if os.path.lexists(symlink_path):
                 os.remove(symlink_path)
 
     def test_field_security_groups(self):

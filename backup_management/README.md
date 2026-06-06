@@ -6,6 +6,7 @@ This module provides a unified interface for managing system backups using Kopia
 
 - **Multi-Engine Support:** Manage both Kopia and pgBackRest from a single dashboard.
 - **Asynchronous Execution:** Backup and restore jobs are offloaded to a background worker via RabbitMQ to prevent UI blocking.
+- **Auto-Refresh Status:** Backup job status is automatically updated via a periodic cron job.
 - **Multi-Tenant Aware:** Backups and snapshots are isolated by website and company.
 - **Automated Retention:** Configure daily, weekly, and monthly retention policies.
 - **Health Monitoring:** Automated stale backup detection and size anomaly alerts via PagerDuty.

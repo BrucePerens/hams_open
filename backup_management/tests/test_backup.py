@@ -174,8 +174,20 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_09_board_data_rpc(self):
         # Tests [@ANCHOR: backup_management:backup_board_data]
+        # Tests [@ANCHOR: backup_management:action_test_connection]
+        # Tests [@ANCHOR: backup_management:action_view_latest_job]
+        # Tests [@ANCHOR: backup_management:auto_refresh_status]
         data = self.env["backup.config"].get_board_data()
         self.assertIsInstance(data, list)
+
+        # Test action_test_connection
+        self.config_kopia.action_test_connection()
+
+        # Test action_view_latest_job
+        self.config_kopia.action_view_latest_job()
+
+        # Test auto_refresh_status
+        self.env['backup.job']._auto_refresh_status()
 
     def test_10_restore_command_computation(self):
         # Tests [@ANCHOR: backup_management:backup_restore_command]
