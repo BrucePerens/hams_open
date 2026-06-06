@@ -74,6 +74,7 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, a
 *   **Hierarchy Integrity:** Recursive cycle detection using `_has_cycle()` `[@ANCHOR: manual_check_hierarchy]`.
 *   **Recursive Breadcrumbs:** Path computation from root to current node `[@ANCHOR: manual_compute_breadcrumbs]`.
 *   **Reading Time Calculation:** Automatic estimation of reading time based on word count `[@ANCHOR: manual_compute_reading_time]`.
+*   **Author Attribution:** Automatically identifies and displays the article author based on the last editor.
 </features>
 
 <security>

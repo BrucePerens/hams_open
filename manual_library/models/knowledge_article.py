@@ -72,7 +72,16 @@ class KnowledgeArticle(models.Model):
     body_snippet = fields.Text(compute="_compute_body_snippet", string="Body Snippet")
     reading_time = fields.Integer(compute="_compute_reading_time", string="Reading Time (min)")
 
+    author_id = fields.Many2one(
+        "res.users", string="Author", compute="_compute_author_id", store=True
+    )
+
     # --- Compute Methods ---
+    @api.depends("create_uid", "write_uid")
+    def _compute_author_id(self):
+        for article in self:
+            article.author_id = article.write_uid or article.create_uid
+
     @api.depends("parent_id")
     def _compute_breadcrumb_article_ids(self):
         # [@ANCHOR: manual_compute_breadcrumbs]
@@ -122,6 +131,13 @@ class KnowledgeArticle(models.Model):
         """Prevent circular references in the article tree."""
         if self._has_cycle():
             raise ValidationError(_("Error! You cannot create recursive articles."))
+
+    def copy(self, default=None):
+        """Override copy to ensure hierarchy is maintained but names are distinct."""
+        default = default or {}
+        if "name" not in default:
+            default["name"] = _("%s (copy)") % (self.name)
+        return super(KnowledgeArticle, self).copy(default)
 
     # --- Compute Methods ---
     @api.depends("name")

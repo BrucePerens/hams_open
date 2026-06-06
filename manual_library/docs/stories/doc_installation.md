@@ -1,5 +1,7 @@
 # Story: Automated Documentation Installation
 [@ANCHOR: story_manual_doc_installation]
+[@ANCHOR: manual_doc_injection]
+[@ANCHOR: manual_doc_auto_install]
 
 This story describes how the system automatically discovers and installs documentation from other modules.
 

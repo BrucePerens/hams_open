@@ -116,9 +116,13 @@
                                             <i class="fa fa-clock-o me-1" aria-hidden="true"/>
                                             <t t-out="article.reading_time"/> min read
                                         </span>
-                                        <span>
+                                        <span class="me-3">
                                             <i class="fa fa-calendar me-1" aria-hidden="true"/>
                                             Last updated: <span t-field="article.write_date" t-options='{"widget": "date"}'/>
+                                        </span>
+                                        <span t-if="article.author_id">
+                                            <i class="fa fa-user me-1" aria-hidden="true"/>
+                                            By: <span t-out="article.author_id.name"/>
                                         </span>
                                     </div>
                                 </header>

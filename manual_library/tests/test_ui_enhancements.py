@@ -38,3 +38,16 @@ class TestManualUIEnhancements(HamsTransactionCase):
         # but here we can check the computed fields which are then used in the template.
         self.assertTrue(article.reading_time >= 0)
         self.assertTrue(article.write_date)
+        self.assertTrue(article.author_id)
+        self.assertEqual(article.author_id, self.env.user)
+
+    def test_03_copy_article(self):
+        """Verify that copying an article preserves hierarchy and updates name."""
+        parent = self.env["knowledge.article"].create({"name": "Parent"})
+        child = self.env["knowledge.article"].create({
+            "name": "Child",
+            "parent_id": parent.id,
+        })
+        child_copy = child.copy()
+        self.assertEqual(child_copy.parent_id, parent)
+        self.assertIn("(copy)", child_copy.name)
