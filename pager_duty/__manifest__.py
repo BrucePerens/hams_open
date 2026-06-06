@@ -18,7 +18,7 @@
         "hams_helpdesk",
     ],
     "external_dependencies": {
-        "python": ["redis", "psutil", "ntplib", "pymysql", "ldap3"],
+        "python": [],
     },
     "data": [
         "security/security.xml",

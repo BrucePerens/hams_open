@@ -15,7 +15,7 @@
         "website",
     ],
     "external_dependencies": {
-        "python": ["pika", "cryptography"],
+        "python": [],
     },
     "data": [
         "security/security.xml",

@@ -26,7 +26,7 @@ This module enables:
         "cloudflare",
     ],
     "external_dependencies": {
-        "python": ["redis"],
+        "python": [],
     },
     "data": [
         # Security
