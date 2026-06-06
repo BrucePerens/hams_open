@@ -258,6 +258,10 @@ class FailureExtractor:
         for context, block in self.captured_blocks:
             if context not in grouped_blocks:
                 grouped_blocks[context] = []
+            grouped_blocks[context].extendgrouped_blocks = {}
+        for context, block in self.captured_blocks:
+            if context not in grouped_blocks:
+                grouped_blocks[context] = []
             grouped_blocks[context].extend(block)
 
         if os.path.dirname(self.output_path):
@@ -301,8 +305,7 @@ class FailureExtractor:
 
         except PermissionError as e:
             print(f"\n❌ [ERROR] FailureExtractor could not write to {self.output_path} due to permission denied: {e}")
-            print("To resolve this, delete the file manually: sudo rm -f " + self.output_path + "\n")
-            print("\n==========================================================")
+            print("To resolve this, delete the file manually: sudo rm -f " + self.output_path + "\n")("\n==========================================================")
             if num_failures == 0:
                 print("🎉 TEST RUN COMPLETE: No test failures detected.")
             else:
