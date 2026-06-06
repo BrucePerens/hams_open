@@ -1412,12 +1412,10 @@ def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None, skip_ap
 
             all_packages = []
 
-            jules_provided = {"curl", "python3-pip", "build-essential"}
             for pkg_spec in MANIFEST.get("apt_packages", []):
                 if "early_prod" in pkg_spec["environments"]:
                     pkg_name = pkg_spec.get("debian_name", pkg_spec["name"]) if os_id == "debian" else pkg_spec["name"]
-                    if pkg_spec["name"] not in jules_provided and pkg_name not in jules_provided:
-                        all_packages.append(pkg_name)
+                    all_packages.append(pkg_name)
 
             pg_res = subprocess.run(
                 ["bash", "-c", "apt-cache depends postgresql | grep -Eo 'postgresql-[0-9]+' | head -n1 | grep -Eo '[0-9]+'"],
