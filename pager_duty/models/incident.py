@@ -146,6 +146,7 @@ class PagerIncident(models.Model):
         website_id = vals.get("website_id") or self.env.context.get("website_id")
         if not website_id and hasattr(self.env, "website") and self.env.website:
             website_id = self.env.website.id
+        # [@ANCHOR: pd_redis_rate_limit]
         redis_key = f"pager_rate_limit:{source}:{website_id or 'global'}"
 
         if redis and redis_pool:

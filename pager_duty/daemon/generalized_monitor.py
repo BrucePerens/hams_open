@@ -1280,8 +1280,8 @@ if __name__ == "__main__":
 
     def log_anomaly_proxy(cl):
         r = redis_lib.Redis(
-            host=os.getenv("REDIS_HOST") or "redis",
-            port=int(os.getenv("REDIS_PORT") or "6379"),
+            host=os.environ.get("REDIS_HOST") or "redis",
+            port=int(os.environ.get("REDIS_PORT") or "6379"),
             db=0,
             decode_responses=True,
         )

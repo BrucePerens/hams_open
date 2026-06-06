@@ -124,7 +124,8 @@ class TestPagerSecurity(HamsTransactionCase):
         Verify that documentation is correctly injected during post_init_hook.
         Tests [@ANCHOR: doc_inject_pager_duty]
         """
-        # The documentation is created in post_init_hook, so it should exist if tests are running.
+        # The documentation is created by _bootstrap_knowledge_docs, so it should exist if tests are running.
+        self.env["ir.module.module"]._bootstrap_knowledge_docs()
         article_model = self.env.get("knowledge.article")
         if not article_model:
             # Skip if knowledge.article is not available (e.g. standard Odoo without manual_library)

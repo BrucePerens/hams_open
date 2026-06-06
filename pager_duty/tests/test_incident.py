@@ -19,6 +19,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
     def test_01_rate_limiting_blocks_spam_standard(self):
         # Tests [@ANCHOR: report_incident_rate_limit]
+        # Tests [@ANCHOR: pd_redis_rate_limit]
         vals = {
             "source": "test_daemon",
             "severity": "high",

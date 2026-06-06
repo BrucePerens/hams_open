@@ -18,7 +18,7 @@ The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) 
 *   **Automated Escalation:** Escalates unacknowledged incidents to wider groups or management.
 *   **Incident Analytics:** Tracks Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).
 *   **Helpdesk Integration:** Automatically creates tickets in the Helpdesk module for incoming incidents.
-*   **Multi-Website Support:** Partition monitoring checks and incidents by website to support multi-tenant Odoo deployments.
+*   **Multi-Website Support:** Partition monitoring checks and incidents by website to support multi-tenant Odoo deployments. This includes record-level security rules for data isolation.
 
 ## 🛠️ How to Set It Up
 

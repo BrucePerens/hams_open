@@ -43,7 +43,7 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: function () {
                 const items = document.querySelectorAll('.o_select_menu_item');
                 for (const item of items) {
-                    if (item.textContent.includes('High')) {
+                    if (item.innerText.includes('High')) {
                         item.click();
                         break;
                     }

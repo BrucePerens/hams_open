@@ -10,7 +10,7 @@ It's 2:00 AM on a Tuesday. Alice is fast asleep, but the `pager_duty` module is 
 A sudden database lock contention causes the Odoo XML-RPC interface to stop responding. The `generalized_monitor.py` daemon, running in its isolated execution loop, detects the failure during its "WSGI HTTP Ping" check.
 
 1.  **Detection:** The daemon attempts a ping and fails. It recognizes that the system is down.
-2.  **Notification:** The daemon calls the Odoo RPC to report the incident. Because the internal XML-RPC might be flaky, it also has direct SMTP fallbacks. In Odoo, the `report_incident` method is triggered [@ANCHOR: report_incident_rate_limit].
+2.  **Notification:** The daemon calls the Odoo RPC to report the incident. Because the internal XML-RPC might be flaky, it also has direct SMTP fallbacks. In Odoo, the `report_incident` method is triggered [@ANCHOR: report_incident_rate_limit], utilizing an atomic Redis-based rate limit to prevent alert floods [@ANCHOR: pd_redis_rate_limit].
 3.  **On-Duty Lookup:** The system queries the `calendar.event` model to find out who is currently assigned to the "Pager Duty Shift" [@ANCHOR: test_pager_notification]. It finds Alice's record because her shift was marked with `is_pager_duty=True`.
 4.  **Alerting Alice:** An urgent message is posted to the incident chatter, and a notification is dispatched to Alice's mobile device via the mail service.
 
