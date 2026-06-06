@@ -1311,7 +1311,7 @@ def run_post_provision_smoketest(has_hams_com=True, is_test_env=False):
         _logger.info("    Stopping %s...", svc)
         subprocess.run(["systemctl", "stop", svc], capture_output=True)
 
-    _logger.info("[*] Smoketest complete: %s", datetime())
+    _logger.info("[*] Smoketest complete: %s", datetime.now())
 
 def provision_environment(run_cmd_func, env_vars, orig_user, os_id=None, skip_apt=False):
     _logger.info("[*] Provision version 1")
