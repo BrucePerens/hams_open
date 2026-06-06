@@ -181,10 +181,6 @@ def hook_install_cloudflared(env_vars, dest_dir, path, run_cmd_func):
         run_cmd_func(['cloudflared', 'service', 'install', token])
     safe_remove(path)
 
-def hook_bootstrap_keys_perms(env_vars, dest_dir, path, run_cmd_func):
-    target = os.path.join(dest_dir, 'opt/hams/deploy/bootstrap_daemon_keys.py'.lstrip('/')) if dest_dir else '/opt/hams/deploy/bootstrap_daemon_keys.py'
-    apply_permissions(target, "odoo:hams_com", 0o440)
-
 
 MANIFEST = {
     "system_accounts": [
@@ -459,7 +455,7 @@ Environment="HAMS_KEYS_DIR=/opt/hams/etc/keys"
 EnvironmentFile=-/opt/hams/etc/odoo.env
 EnvironmentFile=-/opt/hams/etc/core.env
 EnvironmentFile=-/opt/hams/etc/db.env
-ExecStart=/bin/bash -c "/usr/bin/python3 /usr/bin/odoo shell -c /etc/odoo/odoo.conf -d {DB_NAME} --no-http < /opt/hams/deploy/bootstrap_daemon_keys.py"
+ExecStart=/bin/bash -c "echo \\"env['daemon.key.registry'].action_force_provision_all(); env.cr.commit()\\" | /usr/bin/python3 /usr/bin/odoo shell -c /etc/odoo/odoo.conf -d {DB_NAME} --no-http"
 RemainAfterExit=yes
 
 [Install]
@@ -513,12 +509,6 @@ WantedBy=multi-user.target
             "src": "{REPO_ROOT}/daemons",
             "path": "/opt/hams/daemons",
             "environments": ["prod", "test"],
-        },
-        {
-            "src": "{REPO_ROOT}/deploy",
-            "path": "/opt/hams/deploy",
-            "environments": ["prod", "test"],
-            "post_provision_hooks": [hook_bootstrap_keys_perms],
         },
         {
             "path": "/opt/hams/systemd/system-startup.service",
