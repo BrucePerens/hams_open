@@ -15,7 +15,7 @@
     <h2 id="how_to_use">2. Operating the Module</h2>
     <!-- [@ANCHOR: UX_BINARY_INSTALL] -->
     <p>
-        While most operations happen automatically when other Odoo modules require them, administrators can monitor, configure, and trigger installations manually:
+        While most operations happen automatically when other Odoo modules require them, administrators can monitor, configure, and trigger installations manually. This module supports both system-wide "Manifests" (simple, automatic) and fine-grained "Tenant Versions" (advanced control).
     </p>
     <h3>2.1. Monitoring and Manual Installation</h3>
     <ol>
@@ -25,7 +25,17 @@
         <li>If an installation fails, a detailed notification will explain the cause (e.g., network error, checksum mismatch, or missing member in archive).</li>
     </ol>
 
-    <h3>2.2. Adding New Binaries</h3>
+    <h3>2.2. Versioned Binaries and Tenant Assignments</h3>
+    <p>
+        In advanced multi-tenant environments, you may need different websites to use different versions of the same tool.
+    </p>
+    <ol>
+        <li><strong>Version Management:</strong> Under <strong>Settings -> Technical -> Binary Versions</strong>, you can define multiple specific releases for a Software Manifest (e.g., Kopia 0.12.1, 0.13.0).</li>
+        <li><strong>Tenant Links:</strong> Under <strong>Settings -> Technical -> Tenant Executables</strong>, you can link a specific <strong>Website</strong> to a <strong>Software</strong> and select an <strong>Active Version</strong>.</li>
+        <li><strong>Automatic Symlinks:</strong> The system automatically creates a secure "shortcut" (symlink) in a website-specific directory (<code>tenant_bins/site_ID/</code>). This allows your website-specific scripts to always find the correct version of the tool.</li>
+    </ol>
+
+    <h3>2.3. Adding New Binaries</h3>
     <p>
         If you need to add a new tool for a custom module:
     </p>

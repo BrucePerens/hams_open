@@ -49,7 +49,8 @@ class BinaryManifest(models.Model):
     def _check_url_scheme(self):
         for record in self:
             if record.url:
-                if not record.url.startswith(("http://", "https://")):
+                url_trimmed = record.url.strip()
+                if not url_trimmed.startswith(("http://", "https://")):
                     raise ValidationError(
                         _(
                             "Only http:// and https:// URLs are allowed for security reasons."

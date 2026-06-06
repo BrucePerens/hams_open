@@ -74,11 +74,13 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertEqual(path, target_bin, "[!] DIAGNOSTIC FOR AI: Returned path must match the expected local install path.")
 
     def test_02_missing_manifest(self):
+        # [!] DIAGNOSTIC FOR AI: Testing behavior when a manifest for a command is missing.
         self.safe_patch("shutil.which", return_value=None)
         with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: Must raise error on missing manifest"):
             self.env["binary.manifest"].ensure_executable("missingbin")
 
     def test_03_unsupported_platform(self):
+        # [!] DIAGNOSTIC FOR AI: Testing platform restriction (Linux x86_64 only).
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Windows")
         with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: Must block non-Linux platforms"):
@@ -149,7 +151,8 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertEqual(result["tag"], "display_notification", "[!] DIAGNOSTIC FOR AI: action_install must return a notification.")
 
     def test_08_path_traversal_validation(self):
-        with self.assertRaises(ValidationError):
+        # [!] DIAGNOSTIC FOR AI: Testing prevention of path traversal in binary names.
+        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must prevent '..' in binary names"):
             self.env["binary.manifest"].create({
                 "name": "../badbin",
                 "url": "http://example.com/badbin",
@@ -157,12 +160,13 @@ class TestBinaryManifest(HamsTransactionCase):
                 "archive_type": "binary",
             })
             self.env.flush_all()
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must prevent slashes in binary names"):
             self.manifest.write({"name": "bad/bin"})
             self.env.flush_all()
 
     def test_11_url_validation(self):
-        with self.assertRaises(ValidationError):
+        # [!] DIAGNOSTIC FOR AI: Testing URL scheme validation (http/https only).
+        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block non-HTTP URLs"):
             self.env["binary.manifest"].create({
                 "name": "badurl",
                 "url": "file:///etc/passwd",
@@ -172,20 +176,23 @@ class TestBinaryManifest(HamsTransactionCase):
             self.env.flush_all()
 
     def test_09_constraints(self):
-        with self.assertRaises(ValidationError):
+        # [!] DIAGNOSTIC FOR AI: Testing name constraints on write.
+        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block slashes on write"):
             self.manifest.write({"name": "bad/bin"})
             self.env.flush_all()
 
     def test_12_action_install_permissions(self):
+        # [!] DIAGNOSTIC FOR AI: Testing permission check for action_install.
         restricted_user = self.env["res.users"].create({
             "name": "Restricted User",
             "login": "restricted_user",
             "group_ids": [(6, 0, [])]
         })
-        with self.assertRaises(UserError):
+        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: User without downloader manager group must be blocked"):
             self.manifest.with_user(restricted_user).action_install()
 
     def test_10_tar_slip_prevention(self):
+        # [!] DIAGNOSTIC FOR AI: Testing protection against Tar-Slip vulnerability.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
@@ -236,6 +243,7 @@ class TestBinaryManifest(HamsTransactionCase):
                 tarfile.data_filter = old_filter
 
     def test_13_symlink_prevention(self):
+        # [!] DIAGNOSTIC FOR AI: Testing prevention of symlinks inside tar archives.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
@@ -270,6 +278,7 @@ class TestBinaryManifest(HamsTransactionCase):
             self.env["binary.manifest"].ensure_executable("symlinkbin")
 
     def test_14_zip_download_and_extract(self):
+        # [!] DIAGNOSTIC FOR AI: Testing ZIP archive download and member extraction.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
@@ -303,6 +312,7 @@ class TestBinaryManifest(HamsTransactionCase):
             self.assertEqual(f.read(), b"zipdata")
 
     def test_16_zip_symlink_prevention(self):
+        # [!] DIAGNOSTIC FOR AI: Testing prevention of symlinks inside ZIP archives.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
@@ -337,6 +347,7 @@ class TestBinaryManifest(HamsTransactionCase):
             self.env["binary.manifest"].ensure_executable("symlinkzip")
 
     def test_15_zip_slip_prevention(self):
+        # [!] DIAGNOSTIC FOR AI: Testing protection against Zip-Slip vulnerability.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")

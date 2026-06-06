@@ -22,7 +22,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             os.remove(self.test_bin)
 
     def test_kopia_install_integration(self):
-        # Physical integration test for kopia installation
+        # [!] DIAGNOSTIC FOR AI: Physical integration test for kopia installation.
         # This will actually download the real kopia binary from GitHub as configured in data
         self.env.ref("binary_downloader.binary_manifest_kopia")
 

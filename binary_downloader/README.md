@@ -117,4 +117,6 @@ For detailed narratives and end-to-end workflows, refer to the following:
 - `[@ANCHOR: test_binary_manifest_integration]` - Unmocked physical integration tests.
 - `[@ANCHOR: test_binary_install_tour]` - UI tour for binary installation.
 - `[@ANCHOR: test_binary_manifest_views]` - View rendering tests.
+- `[@ANCHOR: binary_version_download_pool]` - Versioned binary download.
+- `[@ANCHOR: test_binary_version_standard]` - Standard unit tests for versioning.
 </semantic_anchors>

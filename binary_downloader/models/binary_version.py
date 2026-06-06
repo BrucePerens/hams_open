@@ -60,11 +60,20 @@ class BinaryVersion(models.Model):
         "CHECK(LENGTH(TRIM(checksum)) > 0)", "The checksum cannot be empty."
     )
 
+    @api.constrains("version_number")
+    def _check_version_no_slashes(self):
+        for record in self:
+            if "/" in record.version_number or "\\" in record.version_number:
+                raise ValidationError(
+                    _("The version number cannot contain slashes or backslashes.")
+                )
+
     @api.constrains("url")
     def _check_url_scheme(self):
         for record in self:
             if record.url:
-                if not record.url.startswith(("http://", "https://")):
+                url_trimmed = record.url.strip()
+                if not url_trimmed.startswith(("http://", "https://")):
                     raise ValidationError(
                         _(
                             "Only http:// and https:// URLs are allowed for security reasons."
@@ -98,8 +107,16 @@ class BinaryVersion(models.Model):
             record.is_downloaded = os.path.exists(path) and os.access(path, os.X_OK)
 
     def action_download_to_pool(self):
+        # [@ANCHOR: binary_version_download_pool]
         """Downloads and verifies the binary into the central version pool."""
         self.ensure_one()
+
+        # Deterministic advisory lock to prevent concurrent downloads of the SAME version
+        lock_id = self.env["zero_sudo.security.utils"]._get_deterministic_hash(
+            f"binary_version_install_{self.manifest_id.name}_{self.version_number}_{self.checksum}"
+        )
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(%s)", (lock_id,))
+
         target_bin = self._get_central_path()
         bin_dir = os.path.dirname(target_bin)
 
@@ -144,7 +161,7 @@ class BinaryVersion(models.Model):
                     raise UserError(_("Security Alert: Checksum mismatch for downloaded version %s.") % self.version_number)
 
                 if self.archive_type == "tar.gz":
-                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path
+                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
                         found = False
                         extract_target = self.extract_member or self.manifest_id.name
                         for member in tar.getmembers():

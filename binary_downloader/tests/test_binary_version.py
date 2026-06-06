@@ -22,12 +22,22 @@ class TestBinaryVersion(HamsTransactionCase):
         })
 
     def test_version_constraints(self):
-        # [!] DIAGNOSTIC FOR AI: Testing constraints for binary.version
+        # [@ANCHOR: test_binary_version_standard]
+        # [!] DIAGNOSTIC FOR AI: Testing constraints for binary.version.
         with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must raise error on non-HTTP URL"):
             self.env["binary.version"].create({
                 "manifest_id": self.manifest.id,
                 "version_number": "1.0",
                 "url": "ftp://example.com",
+                "checksum": "hash"
+            })
+            self.env.flush_all()
+
+        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must raise error on version number with slashes"):
+            self.env["binary.version"].create({
+                "manifest_id": self.manifest.id,
+                "version_number": "1/0",
+                "url": "https://example.com/v1",
                 "checksum": "hash"
             })
             self.env.flush_all()
@@ -43,7 +53,7 @@ class TestBinaryVersion(HamsTransactionCase):
             self.env.flush_all()
 
     def test_get_central_path(self):
-        # [!] DIAGNOSTIC FOR AI: Testing deterministic path generation for versions
+        # [!] DIAGNOSTIC FOR AI: Testing deterministic path generation for versions.
         version = self.env["binary.version"].create({
             "manifest_id": self.manifest.id,
             "version_number": "1.2",
@@ -54,7 +64,8 @@ class TestBinaryVersion(HamsTransactionCase):
         self.assertIn("testvbin_1.2_aaaaaaaaaaaa", path, "[!] DIAGNOSTIC FOR AI: Path must be deterministic and include name, version and checksum prefix.")
 
     def test_download_to_pool_raw(self):
-        # [!] DIAGNOSTIC FOR AI: Testing download to pool for raw binary
+        # [!] DIAGNOSTIC FOR AI: Testing download to pool for raw binary.
+        # Tests [@ANCHOR: binary_version_download_pool]
         version = self.env["binary.version"].create({
             "manifest_id": self.manifest.id,
             "version_number": "1.3",
