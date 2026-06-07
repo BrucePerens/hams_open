@@ -56,10 +56,17 @@ class CloudflareConfigManager(models.AbstractModel):
 
         # ADR-0064: The Cloudflare Purge account lacks base.group_user and cannot read ir.module.module.
         # We must use the generalized facility service account for deep framework reads.
-        facility_uid = utils._get_service_uid("zero_sudo.odoo_facility_service_internal")
+        facility_uid = utils._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
+        )
 
-        # ADR-0002: Use ORM for module list, but ensure we use limit=False for exhaustive scan
-        installed_modules = self.env['ir.module.module'].with_user(facility_uid).search([('state', '=', 'installed')], limit=1000).mapped('name')
+        # ADR-0002: Use ORM for module list, but ensure we use limit=None for exhaustive scan
+        installed_modules = (
+            self.env["ir.module.module"]
+            .with_user(facility_uid)
+            .search([("state", "=", "installed")], limit=None)
+            .mapped("name")
+        )
 
         for module_name in installed_modules:
             mod_path = get_module_path(module_name)
@@ -81,11 +88,15 @@ class CloudflareConfigManager(models.AbstractModel):
 
         try:
             # Use centralized config utilities instead of manual service environments
-            last_mtime = int(utils._get_system_param("cloudflare.last_static_mtime", "0"))
+            last_mtime = int(
+                utils._get_system_param("cloudflare.last_static_mtime", "0")
+            )
 
             if latest_mtime > last_mtime:
                 # Update the system parameter using the centralized utility
-                utils._set_system_param("cloudflare.last_static_mtime", str(latest_mtime))
+                utils._set_system_param(
+                    "cloudflare.last_static_mtime", str(latest_mtime)
+                )
 
                 # Trigger the purge using the specific purger environment
                 env_purger = utils._get_service_env("cloudflare.user_cloudflare_purge")
@@ -102,7 +113,8 @@ class CloudflareConfigManager(models.AbstractModel):
 
                 _logger.info(
                     "[*] Static assets modified (%s > %s). Triggered Cloudflare purge for 'odoo-static-assets' across all websites.",
-                    latest_mtime, last_mtime
+                    latest_mtime,
+                    last_mtime,
                 )
         except (ValueError, OSError, RuntimeError) as e:
             _logger.exception(f"Failed to process static mtime purge: {e}")
@@ -140,9 +152,9 @@ class CloudflareConfigManager(models.AbstractModel):
                 vals = dict(rule_vals)
                 vals["website_id"] = website.id
                 # ADR-0001: Headless Mutation Context
-                self.env["cloudflare.waf.rule"].with_context(
-                    mail_notrack=True
-                ).create(vals)
+                self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(
+                    vals
+                )
 
             self.action_push_waf_rules(website_id=website.id)
 
@@ -166,18 +178,14 @@ class CloudflareConfigManager(models.AbstractModel):
             )
 
         # ADR-0001: Headless Mutation Context
-        self.env["cloudflare.waf.rule"].with_context(
-            mail_notrack=True
-        ).search(
+        self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).search(
             [("website_id", "=", website.id)], limit=1000
         ).unlink()
 
         rules = existing_ruleset.get("rules", [])
         for i, r in enumerate(rules):
             # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.waf.rule"].with_context(
-                mail_notrack=True
-            ).create(
+            self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(
                 {
                     "sequence": (i + 1) * 10,
                     "name": r.get(

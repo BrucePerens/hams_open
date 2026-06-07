@@ -97,7 +97,6 @@ class ResConfigSettings(models.TransientModel):
                 )
             )
 
-
         tunnel_name = f"odoo-edge-tunnel-{int(time.time())}"
 
         success, result = create_cfd_tunnel(account_id, token, tunnel_name)

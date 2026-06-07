@@ -25,7 +25,7 @@
             "name": "Cloudflare Edge Orchestration Documentation",
             "path": "data/documentation.html",
             "icon": "☁️",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "assets": {

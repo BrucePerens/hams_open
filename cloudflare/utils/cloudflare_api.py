@@ -200,6 +200,7 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
         _logger.error(f"Cloudflare Tunnel Token API failed: {e}")
         return False, str(e)
 
+
 def purge_everything(token, zone_id):
     if not token or not zone_id:
         return False
@@ -239,7 +240,9 @@ def update_zone_setting(setting_name, value, token, zone_id):
     if not token or not zone_id:
         return False, "Missing credentials"
 
-    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/{setting_name}"
+    endpoint = (
+        f"https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/{setting_name}"
+    )
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {"value": value}
 

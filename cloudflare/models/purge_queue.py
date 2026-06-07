@@ -112,14 +112,18 @@ class CloudflarePurgeQueue(models.Model):
                     tag_records.write({"state": "failed"})
             else:
                 if url_records:
-                    if not purge_urls(url_records.mapped("target_item"), token, zone_id):
+                    if not purge_urls(
+                        url_records.mapped("target_item"), token, zone_id
+                    ):
                         success = False
                         url_records.write({"state": "failed"})
                     else:
                         url_records.unlink()
 
                 if tag_records:
-                    if not purge_tags(tag_records.mapped("target_item"), token, zone_id):
+                    if not purge_tags(
+                        tag_records.mapped("target_item"), token, zone_id
+                    ):
                         success = False
                         tag_records.write({"state": "failed"})
                     else:

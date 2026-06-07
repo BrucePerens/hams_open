@@ -46,7 +46,7 @@ Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPT
 * **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers via `ir.http._post_dispatch` `[@ANCHOR: ir_http_post_dispatch_headers]`. Dynamic and sensitive routes `[@ANCHOR: cf_nocache_routes]` are excluded.
 * **Request Context Safety:** Safely extracts edge headers even in non-HTTP or unbound request contexts `[@ANCHOR: cf_get_request_context]`.
 * **Boot-time Sync:** Scans `static/` folders on boot and invalidates `odoo-static-assets` across all zones if changes are detected.
-* **Content Hooks:** Automatically enqueues purges for `website.page`, `blog.post`, and `product.template` modifications.
+* **Content Hooks:** Automatically enqueues purges for `website.page`, `blog.post`, `product.template`, and `website.menu` modifications.
 
 ## 4. Zero-Sudo & Micro-Privilege Architecture
 Strictly adheres to Zero-Sudo architecture using dedicated service accounts:

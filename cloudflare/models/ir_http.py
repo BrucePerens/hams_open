@@ -31,14 +31,30 @@ class IrHttp(models.AbstractModel):
         # 1. Media & Assets (Max aggressive caching: 1 year)
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
         # as it bypasses Odoo ACLs and causes Edge Cache IDORs for private attachments.
-        if any(path.startswith(prefix) for prefix in ("/web/static", "/web/assets")): # burn-ignore-route
+        if any(
+            path.startswith(prefix) for prefix in ("/web/static", "/web/assets")
+        ):  # burn-ignore-route
             response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=31536000"
             response.headers["Cache-Tag"] = "odoo-static-assets"
             return res
 
         # 2. Hardcoded Dynamic or API Routes (Zero caching)
         # [@ANCHOR: cf_nocache_routes]
-        if any(path.startswith(prefix) for prefix in ("/my/", "/web/", "/api/", "/shop/cart", "/shop/checkout", "/shop/confirm_order", "/helpdesk/")): # burn-ignore-route
+        # CRITICAL: /web/ is maintained for technical routes like /web/image and /web/content
+        # even in Odoo 19, to prevent Edge Cache IDORs.
+        if any(
+            path.startswith(prefix)
+            for prefix in (
+                "/my/",
+                "/odoo",
+                "/web/",  # burn-ignore-route
+                "/api/",
+                "/shop/cart",
+                "/shop/checkout",
+                "/shop/confirm_order",
+                "/helpdesk/",
+            )
+        ):  # burn-ignore-route
             response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
             return res
 

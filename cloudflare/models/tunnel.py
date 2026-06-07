@@ -16,7 +16,7 @@ class CloudflareTunnel(models.Model):
         "website",
         string="Website",
         default=lambda self: self.env["website"].get_current_website().id,
-        readonly=True
+        readonly=True,
     )
 
     def action_delete_tunnel(self):
@@ -27,8 +27,9 @@ class CloudflareTunnel(models.Model):
             account_id = tunnel.website_id.cloudflare_account_id
 
             if not token or not account_id:
-                raise UserError(_("Missing Cloudflare API Token or Account ID for the website."))
-
+                raise UserError(
+                    _("Missing Cloudflare API Token or Account ID for the website.")
+                )
 
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
@@ -36,7 +37,6 @@ class CloudflareTunnel(models.Model):
                 tunnel.with_context(mail_notrack=True).unlink()
             else:
                 raise UserError(_("Failed to delete tunnel: %s") % msg)
-
 
     @api.model
     def action_sync_tunnels(self):
@@ -46,7 +46,10 @@ class CloudflareTunnel(models.Model):
         synced_tunnel_ids = []
 
         # Load all existing tunnels into a dict
-        existing_tunnels = {t.cf_tunnel_id: t for t in self.env["cloudflare.tunnel"].search([], limit=10000)}
+        existing_tunnels = {
+            t.cf_tunnel_id: t
+            for t in self.env["cloudflare.tunnel"].search([], limit=10000)
+        }
         tunnels_to_create = []
 
         for website in websites:
@@ -65,7 +68,7 @@ class CloudflareTunnel(models.Model):
                 created_at = False
                 if created_at_raw:
                     # Cloudflare returns ISO 8601 like 2021-01-01T00:00:00Z
-                    created_at = created_at_raw[:19].replace('T', ' ')
+                    created_at = created_at_raw[:19].replace("T", " ")
 
                 vals = {
                     "cf_tunnel_id": tunnel_id,
@@ -84,9 +87,9 @@ class CloudflareTunnel(models.Model):
 
         if tunnels_to_create:
             # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.tunnel"].with_context(
-                mail_notrack=True
-            ).create(tunnels_to_create)
+            self.env["cloudflare.tunnel"].with_context(mail_notrack=True).create(
+                tunnels_to_create
+            )
 
         return {
             "type": "ir.actions.client",
