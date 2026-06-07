@@ -31,7 +31,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
         website = self.env["website"].get_current_website()
         website.write({"cloudflare_turnstile_secret": "my_super_secret_key"})
 
-        mock_post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"
+        )
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True}
         mock_post.return_value = mock_response
@@ -48,8 +50,12 @@ class TestCloudflareAPIs(HamsTransactionCase):
     def test_03_tunnel_setup(self):
         # [@ANCHOR: test_cf_tunnel_setup]
         # Tests [@ANCHOR: cf_tunnel_setup]
-        mock_create = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.create_cfd_tunnel")
-        mock_get_token = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.get_cfd_tunnel_token")
+        mock_create = self.safe_patch(
+            "odoo.addons.cloudflare.models.res_config_settings.create_cfd_tunnel"
+        )
+        mock_get_token = self.safe_patch(
+            "odoo.addons.cloudflare.models.res_config_settings.get_cfd_tunnel_token"
+        )
 
         mock_create.return_value = (True, "tunnel_id_123")
         mock_get_token.return_value = (True, "mock_token_xyz")
@@ -69,9 +75,16 @@ class TestCloudflareAPIs(HamsTransactionCase):
     def test_04_sync_tunnels(self):
         # [@ANCHOR: test_cf_sync_tunnels]
         # Tests [@ANCHOR: cf_sync_tunnels]
-        mock_list = self.safe_patch("odoo.addons.cloudflare.models.tunnel.list_cfd_tunnels")
+        mock_list = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.list_cfd_tunnels"
+        )
         mock_list.return_value = [
-            {"id": "t1", "name": "Tunnel 1", "status": "healthy", "created_at": "2021-01-01T00:00:00Z"}
+            {
+                "id": "t1",
+                "name": "Tunnel 1",
+                "status": "healthy",
+                "created_at": "2021-01-01T00:00:00Z",
+            }
         ]
         website = self.env["website"].get_current_website()
         website.write(
@@ -86,17 +99,17 @@ class TestCloudflareAPIs(HamsTransactionCase):
     def test_05_delete_tunnel(self):
         # [@ANCHOR: test_cf_delete_tunnel]
         # Tests [@ANCHOR: cf_delete_tunnel]
-        mock_delete = self.safe_patch("odoo.addons.cloudflare.models.tunnel.delete_cfd_tunnel")
+        mock_delete = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.delete_cfd_tunnel"
+        )
         mock_delete.return_value = (True, "Success")
         website = self.env["website"].get_current_website()
         website.write(
             {"cloudflare_account_id": "acc123", "cloudflare_api_token": "tok123"}
         )
-        tunnel = self.env["cloudflare.tunnel"].create({
-            "cf_tunnel_id": "t1",
-            "name": "Tunnel 1",
-            "website_id": website.id
-        })
+        tunnel = self.env["cloudflare.tunnel"].create(
+            {"cf_tunnel_id": "t1", "name": "Tunnel 1", "website_id": website.id}
+        )
         tunnel.action_delete_tunnel()
         self.assertFalse(tunnel.exists())
 
@@ -104,7 +117,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
         # [@ANCHOR: test_purge_urls_api]
         # # Verified by [@ANCHOR: test_purge_urls_api]
 
-        mock_post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"
+        )
 
         # Case 1: Missing credentials
         self.assertFalse(purge_urls(["https://a.com"], None, "zone1"))
@@ -146,7 +161,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
         # [@ANCHOR: test_purge_tags_api]
         # # Verified by [@ANCHOR: test_purge_tags_api]
 
-        mock_post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"
+        )
 
         # Case 1: Missing credentials
         self.assertFalse(purge_tags(["tag1"], None, "zone1"))

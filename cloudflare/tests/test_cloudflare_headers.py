@@ -25,15 +25,22 @@ class TestCloudflareHeaders(HamsHttpCase):
         # # Verified by [@ANCHOR: test_cf_static_asset_caching]
         """Verify media and assets receive the correct cache headers."""
 
-        company_id = self.env.company.id
-
         # 1. Test Private Attachment (MUST NOT CACHE)
-        response_img = self.url_open(f"/web/image/res.company/{company_id}/logo") # burn-ignore-route
-        self.assertEqual(response_img.status_code, 200)
+        # Using a route that is explicitly in the nocache list
+        # We test both /odoo and /web prefixes
+        response_odoo = self.url_open("/odoo/login", allow_redirects=False)  # burn-ignore-route
         self.assertEqual(
-            response_img.headers.get("Cloudflare-CDN-Cache-Control"),
+            response_odoo.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",
-            "Private media MUST NOT be cached aggressively.",
+            "Backend routes MUST NOT be cached at the edge.",
+        )
+
+        company_id = self.env.company.id
+        response_web = self.url_open(f"/web/image/res.company/{company_id}/logo")  # burn-ignore-route
+        self.assertEqual(
+            response_web.headers.get("Cloudflare-CDN-Cache-Control"),
+            "no-cache, no-store",
+            "Technical /web/ routes MUST NOT be cached aggressively.",
         )
 
         # 2. Test Core Asset (MUST CACHE)
@@ -51,13 +58,15 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_response = Response()
         mock_request = type("MockRequest", (object,), {})()
         mock_request.httprequest = type("MockHttpRequest", (object,), {})()
-        mock_request.httprequest.path = "/web/assets/1/dummy.js" # burn-ignore-route
+        mock_request.httprequest.path = "/web/assets/1/dummy.js"  # burn-ignore-route
 
         # FIX: The middleware relies on _get_current_object() to resolve the LocalProxy.
         # Without this, it throws an AttributeError and skips header injection.
         mock_request._get_current_object = lambda: mock_request
 
-        self.safe_patch("odoo.addons.cloudflare.models.ir_http.request", new=mock_request)
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+        )
         res = DummyIrHttp._post_dispatch(mock_response)
 
         self.assertEqual(

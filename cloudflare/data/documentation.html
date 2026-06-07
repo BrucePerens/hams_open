@@ -14,7 +14,7 @@
     <p>This module uses Cloudflare to store copies of your website content around the world, so it loads instantly for users everywhere.</p>
     <ul>
         <li><strong>Smart Caching:</strong> Odoo automatically tells Cloudflare how long to keep different types of content. Static files (like images and scripts) are cached for a year, while website pages are cached for 24 hours for public visitors.</li>
-        <li><strong>Automatic Updates:</strong> When you edit a page, blog post, or product, Odoo automatically tells Cloudflare to clear the old version from its cache. This happens in the background, ensuring your visitors always see the latest content without slowing down your work.</li>
+        <li><strong>Automatic Updates:</strong> When you edit a page, blog post, product, or website menu, Odoo automatically tells Cloudflare to clear the old version from its cache. Page and post edits clear individual URLs, while menu changes trigger a full website cache refresh to ensure headers and footers are updated immediately. This all happens in the background, ensuring your visitors always see the latest content without slowing down your work.</li>
         <li><strong>Static File Sync:</strong> Every time your Odoo server starts, it checks if any of your theme or module files have changed. If they have, it triggers a global cache clear for those files across all your websites.</li>
         <li><strong>Manual Control:</strong> If you ever need to clear the cache manually, you can use the <strong>Purge Cache</strong> wizard under <strong>Website > Configuration > Cloudflare</strong>. You can clear everything, specific pages, or groups of content using tags.</li>
     </ul>

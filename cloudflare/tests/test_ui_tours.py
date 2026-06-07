@@ -44,12 +44,13 @@ class TestCloudflareUITours(HamsHttpCase):
         """Executes the JS tour for the Manual Cache Purge Wizard."""
         # Seed credentials so the wizard doesn't crash
         website = self.env["website"].get_current_website()
-        website.write({
-            "cloudflare_api_token": "fake_token",
-            "cloudflare_zone_id": "fake_zone"
-        })
+        website.write(
+            {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
+        )
 
-        mock_purge = self.safe_patch("odoo.addons.cloudflare.models.purge_wizard.purge_everything")
+        mock_purge = self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_wizard.purge_everything"
+        )
         mock_purge.return_value = True
 
         self.authenticate(self.admin.login, self.admin.login)

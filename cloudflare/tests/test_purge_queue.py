@@ -6,6 +6,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 _logger = logging.getLogger(__name__)
 
+
 @tagged("post_install", "-at_install")
 class TestPurgeQueue(HamsTransactionCase):
     def setUp(self):
@@ -20,7 +21,9 @@ class TestPurgeQueue(HamsTransactionCase):
         # [@ANCHOR: test_queue_batching_and_rate_limiting]
         # Tests [@ANCHOR: ir_cron_process_cf_purge_queue]
         # Tests [@ANCHOR: cf_process_queue_logic]
-        mock_post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"
+        )
         mock_sleep = self.safe_patch("time.sleep")
 
         mock_response = MagicMock()
@@ -30,11 +33,13 @@ class TestPurgeQueue(HamsTransactionCase):
         QueueModel = self.env["cloudflare.purge.queue"]
         vals = []
         for i in range(310):
-            vals.append({
-                "target_item": f"https://example.com/page-{i}",
-                "purge_type": "url",
-                "website_id": self.website.id,
-            })
+            vals.append(
+                {
+                    "target_item": f"https://example.com/page-{i}",
+                    "purge_type": "url",
+                    "website_id": self.website.id,
+                }
+            )
         QueueModel.create(vals)
         self.assertEqual(QueueModel.search_count([]), 310)
 
@@ -46,9 +51,7 @@ class TestPurgeQueue(HamsTransactionCase):
 
         QueueModel.process_queue()
 
-        self.assertEqual(
-            mock_post.call_count, 10, "MUST batch exactly 10 requests."
-        )
+        self.assertEqual(mock_post.call_count, 10, "MUST batch exactly 10 requests.")
         self.assertEqual(
             mock_sleep.call_count,
             10,
@@ -95,7 +98,9 @@ class TestPurgeQueue(HamsTransactionCase):
     def test_04_purge_queue_tags_processing(self):
         # Tests [@ANCHOR: cf_enqueue_tags_api]
         """Verify that tag purges in the queue are processed correctly."""
-        mock_post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200

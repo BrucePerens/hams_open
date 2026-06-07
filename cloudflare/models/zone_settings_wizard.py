@@ -47,11 +47,20 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
             settings = get_zone_settings(token, zone_id)
             if settings:
                 for setting in settings:
-                    if setting.get("id") == "security_level" and "security_level" in fields_list:
+                    if (
+                        setting.get("id") == "security_level"
+                        and "security_level" in fields_list
+                    ):
                         res["security_level"] = setting.get("value")
-                    elif setting.get("id") == "development_mode" and "development_mode" in fields_list:
+                    elif (
+                        setting.get("id") == "development_mode"
+                        and "development_mode" in fields_list
+                    ):
                         res["development_mode"] = setting.get("value")
-                    elif setting.get("id") == "browser_cache_ttl" and "browser_cache_ttl" in fields_list:
+                    elif (
+                        setting.get("id") == "browser_cache_ttl"
+                        and "browser_cache_ttl" in fields_list
+                    ):
                         res["browser_cache_ttl"] = setting.get("value")
 
         return res
@@ -60,27 +69,36 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
         self.ensure_one()
         token, zone_id = self.website_id._get_cloudflare_credentials()
         if not token or not zone_id:
-            raise UserError(_("Missing Cloudflare API Token or Zone ID for the selected website."))
-
+            raise UserError(
+                _("Missing Cloudflare API Token or Zone ID for the selected website.")
+            )
 
         errors = []
         if self.security_level:
-            success, msg = update_zone_setting("security_level", self.security_level, token, zone_id)
+            success, msg = update_zone_setting(
+                "security_level", self.security_level, token, zone_id
+            )
             if not success:
                 errors.append(f"Security Level: {msg}")
 
         if self.development_mode:
-            success, msg = update_zone_setting("development_mode", self.development_mode, token, zone_id)
+            success, msg = update_zone_setting(
+                "development_mode", self.development_mode, token, zone_id
+            )
             if not success:
                 errors.append(f"Development Mode: {msg}")
 
         if self.browser_cache_ttl is not False:
-            success, msg = update_zone_setting("browser_cache_ttl", self.browser_cache_ttl, token, zone_id)
+            success, msg = update_zone_setting(
+                "browser_cache_ttl", self.browser_cache_ttl, token, zone_id
+            )
             if not success:
                 errors.append(f"Browser Cache TTL: {msg}")
 
         if errors:
-            raise UserError(_("Failed to update some settings:\n%s") % "\n".join(errors))
+            raise UserError(
+                _("Failed to update some settings:\n%s") % "\n".join(errors)
+            )
 
         return {
             "type": "ir.actions.client",
