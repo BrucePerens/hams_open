@@ -66,4 +66,71 @@
             <field name="group_ids" eval="[(6, 0, [])]"/>
         </record>
     </data>
+
+    <data noupdate="1">
+        <!-- Multi-Tenant Record Rules -->
+        <record id="cloudflare_purge_queue_rule" model="ir.rule">
+            <field name="name">Cloudflare Purge Queue: Website Isolation</field>
+            <field name="model_id" ref="model_cloudflare_purge_queue"/>
+            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', 'in', user.with_context(active_test=False).env['website'].search([]).ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="cloudflare_waf_rule_rule" model="ir.rule">
+            <field name="name">Cloudflare WAF Rule: Website Isolation</field>
+            <field name="model_id" ref="model_cloudflare_waf_rule"/>
+            <field name="domain_force">[('website_id', 'in', user.with_context(active_test=False).env['website'].search([]).ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="cloudflare_ip_ban_rule" model="ir.rule">
+            <field name="name">Cloudflare IP Ban: Website Isolation</field>
+            <field name="model_id" ref="model_cloudflare_ip_ban"/>
+            <field name="domain_force">[('website_id', 'in', user.with_context(active_test=False).env['website'].search([]).ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="cloudflare_config_backup_rule" model="ir.rule">
+            <field name="name">Cloudflare Config Backup: Website Isolation</field>
+            <field name="model_id" ref="model_cloudflare_config_backup"/>
+            <field name="domain_force">[('website_id', 'in', user.with_context(active_test=False).env['website'].search([]).ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="cloudflare_tunnel_rule" model="ir.rule">
+            <field name="name">Cloudflare Tunnel: Website Isolation</field>
+            <field name="model_id" ref="model_cloudflare_tunnel"/>
+            <field name="domain_force">[('website_id', 'in', user.with_context(active_test=False).env['website'].search([]).ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- Service Account Global Access (Bypass isolation for operations) -->
+        <record id="cloudflare_purge_queue_rule_service" model="ir.rule">
+            <field name="name">Cloudflare Purge Queue: Service Account Global</field>
+            <field name="model_id" ref="model_cloudflare_purge_queue"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('cloudflare.group_cloudflare_purge'))]"/>
+        </record>
+
+        <record id="cloudflare_waf_rule_rule_service" model="ir.rule">
+            <field name="name">Cloudflare WAF Rule: Service Account Global</field>
+            <field name="model_id" ref="model_cloudflare_waf_rule"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('cloudflare.group_cloudflare_waf'))]"/>
+        </record>
+
+        <record id="cloudflare_ip_ban_rule_service" model="ir.rule">
+            <field name="name">Cloudflare IP Ban: Service Account Global</field>
+            <field name="model_id" ref="model_cloudflare_ip_ban"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('cloudflare.group_cloudflare_waf'))]"/>
+        </record>
+
+        <record id="cloudflare_tunnel_rule_service" model="ir.rule">
+            <field name="name">Cloudflare Tunnel: Service Account Global</field>
+            <field name="model_id" ref="model_cloudflare_tunnel"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('cloudflare.group_cloudflare_tunnel'))]"/>
+        </record>
+    </data>
 </odoo>

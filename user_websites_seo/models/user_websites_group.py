@@ -3,17 +3,21 @@
 from odoo import models, _
 from odoo.exceptions import AccessError
 
+
 class UserWebsitesGroupSEO(models.Model):
-    # This model is multi-tenant and multi-website. It represents a group
-    # of users managing a specific website. Since groups are company-specific
-    # and link to specific website content, multi-tenancy is required to
-    # maintain data isolation between different organizations or websites.
     _name = "user.websites.group"
-    _inherit = ["user.websites.group", "website.seo.metadata", "user.websites.seo.metadata.mixin"]
+    _inherit = [
+        "user.websites.group",
+        "website.seo.metadata",
+        "user.websites.seo.metadata.mixin"
+    ]
 
     def _check_seo_write_permission(self):
         if not all(self.env.user.id in group.member_ids.ids for group in self):
             # [@ANCHOR: user_websites_group_seo_write_elevation]
             # Verified by [@ANCHOR: test_seo_widget_tour]
             # Verified by [@ANCHOR: test_check_access_rule_user_websites_group]
-            raise AccessError(_("You can only modify SEO metadata for groups you are a member of."))
+            raise AccessError(_(
+                "You can only modify SEO metadata for groups "
+                "you are a member of."
+            ))

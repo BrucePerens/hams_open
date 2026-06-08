@@ -26,3 +26,6 @@ This journey tracks the technical state transitions of an incident from initial 
 - **Finalization:** The `status` moves to `resolved`. `time_resolved` is recorded.
 - **Metric Computation:** `mttr` (Mean Time To Resolve) is calculated as the delta between `create_date` and `time_resolved`.
 - **Board Cleanup:** The incident moves from the "Active" to "Resolved" section on the NOC Dashboard [@ANCHOR: pager_board_data].
+
+## 5. Performance Optimization
+- **Data Retrieval:** High-performance dashboard retrieval is handled via the `pager_get_board_data` Postgres procedure. [@ANCHOR: pager_duty_postgres_procedures]

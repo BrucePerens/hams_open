@@ -18,7 +18,7 @@ The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) 
 *   **Automated Escalation:** Escalates unacknowledged incidents to wider groups or management.
 *   **Incident Analytics:** Tracks Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).
 *   **Helpdesk Integration:** Automatically creates tickets in the Helpdesk module for incoming incidents.
-*   **Multi-Website Support:** Partition monitoring checks and incidents by website to support multi-tenant Odoo deployments. This includes record-level security rules for data isolation.
+*   **Multi-Website Support:** Partition monitoring checks and incidents by website to support multi-tenant Odoo deployments. This includes record-level security rules and optimized indices for strict data isolation.
 
 ## 🛠️ How to Set It Up
 
@@ -41,7 +41,7 @@ Create diverse checks for your infrastructure:
 - **Custom Scripts:** Execute sandboxed Bash or Playwright scripts for synthetic journeys.
 
 ### Incident Management
-- **Dashboard:** The NOC Dashboard provides a real-time overview of active and resolved incidents. It includes burn-in protection for long-term display.
+- **Dashboard:** The NOC Dashboard provides a real-time overview of active and resolved incidents. It is powered by a high-performance PostgreSQL procedure to minimize latency and includes burn-in protection for long-term display.
 - **Acknowledgement:** Engineers can acknowledge incidents to stop further escalation.
 - **Auto-Resolution:** The system automatically resolves incidents when the underlying check returns to a healthy state.
 - **Escalation:** Unacknowledged incidents are automatically escalated after 15 minutes to ensure attention.

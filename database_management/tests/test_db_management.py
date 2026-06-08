@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase
-from unittest.mock import MagicMock
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from unittest.mock import MagicMock, PropertyMock
 from odoo.exceptions import UserError
 import subprocess
 
@@ -10,17 +10,21 @@ import subprocess
 class TestDatabaseManagement(HamsTransactionCase):
     def test_01_vacuum_analyze(self):
         # Tests [@ANCHOR: vacuum_analyze]
-        self.assertTrue(hasattr(self.env["database.table.stat"], "action_vacuum_analyze"), "[!] DIAGNOSTIC FOR AI: database.table.stat model missing action_vacuum_analyze method.")
+        self.assertTrue(
+            hasattr(self.env["database.table.stat"], "action_vacuum_analyze"),
+            "[!] DIAGNOSTIC FOR AI: database.table.stat model missing action_vacuum_analyze method.",
+        )
         mock_run = self.safe_patch("subprocess.run")
         self.safe_patch("shutil.which", return_value="/bin/mock")
         mock_res = MagicMock()
         mock_res.returncode = 0
         mock_run.return_value = mock_res
 
-        stat = self.env["database.table.stat"].search(
-            [("table_name", "=", "res_users")], limit=1
+        stat = self.env["database.table.stat"].search([("table_name", "=", "res_users")], limit=1)
+        self.assertTrue(
+            stat,
+            "[!] DIAGNOSTIC FOR AI: res_users table must exist in database.table.stat view.",
         )
-        self.assertTrue(stat, "[!] DIAGNOSTIC FOR AI: res_users table must exist in database.table.stat view.")
         if stat:
             stat.action_vacuum_analyze()
             mock_run.assert_called()
@@ -28,15 +32,16 @@ class TestDatabaseManagement(HamsTransactionCase):
     def test_01b_vacuum_analyze_failures(self):
         mock_run = self.safe_patch("subprocess.run")
         mock_which = self.safe_patch("shutil.which")
-        stat = self.env["database.table.stat"].search(
-            [("table_name", "=", "res_users")], limit=1
-        )
+        stat = self.env["database.table.stat"].search([("table_name", "=", "res_users")], limit=1)
         if not stat:
             return
 
         # 1. Missing Binary
         mock_which.return_value = None
-        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError if binary is missing."):
+        with self.assertRaises(
+            UserError,
+            msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError if binary is missing.",
+        ):
             stat.action_vacuum_analyze()
 
         # 2. Non-Zero Exit Code
@@ -45,12 +50,18 @@ class TestDatabaseManagement(HamsTransactionCase):
         mock_res.returncode = 1
         mock_res.stderr = "Permission denied"
         mock_run.return_value = mock_res
-        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError if vacuumdb fails."):
+        with self.assertRaises(
+            UserError,
+            msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError if vacuumdb fails.",
+        ):
             stat.action_vacuum_analyze()
 
         # 3. Timeout
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="vacuumdb", timeout=300)
-        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError on timeout."):
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="vacuumdb", timeout=600)
+        with self.assertRaises(
+            UserError,
+            msg="[!] DIAGNOSTIC FOR AI: action_vacuum_analyze should raise UserError on timeout.",
+        ):
             stat.action_vacuum_analyze()
 
     def test_02_bloat_cron(self):
@@ -60,17 +71,21 @@ class TestDatabaseManagement(HamsTransactionCase):
 
     def test_03_db_index_stats(self):
         # Tests [@ANCHOR: db_index_stats]
-        self.assertTrue(hasattr(self.env["database.table.stat"], "cron_check_bloat"), "[!] DIAGNOSTIC FOR AI: database.table.stat model missing cron_check_bloat method.")
-        mock_search = self.safe_patch_object(
-            type(self.env["database.table.stat"]), "search"
+        self.assertTrue(
+            hasattr(self.env["database.table.stat"], "cron_check_bloat"),
+            "[!] DIAGNOSTIC FOR AI: database.table.stat model missing cron_check_bloat method.",
         )
-        mock_search.return_value = []
+        mock_search = self.safe_patch_object(type(self.env["database.table.stat"]), "search")
+        mock_search.return_value = self.env["database.table.stat"].browse()
         self.env["database.table.stat"].cron_check_bloat()
         mock_search.assert_called_once()
 
     def test_03_terminate_backend(self):
         # Tests [@ANCHOR: db_terminate_backend]
-        self.assertTrue(hasattr(self.env["database.activity"], "action_terminate_backend"), "[!] DIAGNOSTIC FOR AI: database.activity model missing action_terminate_backend method.")
+        self.assertTrue(
+            hasattr(self.env["database.activity"], "action_terminate_backend"),
+            "[!] DIAGNOSTIC FOR AI: database.activity model missing action_terminate_backend method.",
+        )
         # We test termination with a non-existent dummy PID to prevent killing the test runner
         # pg_terminate_backend(pid) returns False if the pid doesn't exist, safely proving execution.
         self.env.cr.execute("SELECT pg_terminate_backend(999999)")
@@ -109,32 +124,38 @@ class TestDatabaseManagement(HamsTransactionCase):
             model = "manual.article"
 
         if model:
-            doc = self.env[model].search(
-                [("name", "=", "Database Management Guide")], limit=1
+            doc = self.env[model].search([("name", "=", "Database Management Guide")], limit=1)
+            self.assertTrue(
+                doc,
+                "[!] DIAGNOSTIC FOR AI: Module documentation was not installed! Check data/documentation.html and _bootstrap_knowledge_docs.",
             )
-            self.assertTrue(doc, "[!] DIAGNOSTIC FOR AI: Module documentation was not installed! Check data/documentation.html and _bootstrap_knowledge_docs.")
             self.assertIn("Database Management", doc.body)
         else:
             self.skipTest("No documentation model available")
 
-
-@tagged("post_install", "-at_install")
-class TestDatabaseTours(HamsHttpCase):
-    def test_db_bloat_tour(self):
-        # [@ANCHOR: test_db_bloat_tour]
-        # Tests [@ANCHOR: db_index_stats]
-        # Tests [@ANCHOR: vacuum_analyze]
-        self.start_tour(
-            "/odoo?debug=1&action=database_management.action_db_table_stat",
-            "db_management_bloat_tour",
-            login="admin",
-        )
-
-    def test_db_slow_query_tour(self):
-        # [@ANCHOR: test_db_slow_query_tour]
+    def test_06_query_stats_ops(self):
         # Tests [@ANCHOR: db_slow_queries]
-        self.start_tour(
-            "/odoo?debug=1&action=database_management.action_db_query_stat",
-            "db_management_slow_query_tour",
-            login="admin",
-        )
+        model = self.env["database.query.stat"]
+        self.assertTrue(hasattr(model, "action_reset_stats"))
+
+        mock_cr = MagicMock()
+        mock_env = MagicMock(cr=mock_cr)
+
+        with self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
+            return_value=mock_env,
+        ):
+            model.action_reset_stats()
+
+        mock_cr.execute.assert_any_call("SELECT pg_stat_statements_reset()")
+
+    def test_07_explain_query_security(self):
+        # Tests [@ANCHOR: db_explain_query]
+        stat = self.env["database.query.stat"].search([], limit=1)
+        if not stat:
+            stat = self.env["database.query.stat"].browse(1)
+
+        type(stat).query = PropertyMock(return_value="DELETE FROM res_users")
+
+        with self.assertRaises(UserError, msg="Only SELECT queries can be analyzed via Explain."):
+            stat.action_explain_query()

@@ -56,45 +56,46 @@ class DatabaseTableStat(models.Model):
     def action_vacuum_analyze(self):
         # [@ANCHOR: vacuum_analyze]
         # Tests [@ANCHOR: vacuum_analyze]
-        if getattr(self.env.registry, "in_test", False) or self.env.context.get(
-            "test_mode"
-        ):
-            _logger.info(
-                "Skipping vacuumdb execution in test mode to avoid transaction locks."
-            )
-            return True
         exe = self._get_executable("vacuumdb")
         db_name = self.env.cr.dbname
-        env_vars = os.environ.copy()
+        # ADR-0044: Use minimal environment for subprocess to prevent secret leakage
+        env_vars = {
+            "PATH": os.environ.get("PATH", ""),
+            "PGHOST": os.environ.get("PGHOST", "postgres"),
+            "PGPORT": os.environ.get("PGPORT", "5432"),
+            "PGUSER": os.environ.get("PGUSER", "odoo"),
+        }
+        if "PGPASSWORD" in os.environ:
+            env_vars["PGPASSWORD"] = os.environ["PGPASSWORD"]
 
-        for rec in self:
-            try:
-                # The subprocess bypasses the active ORM transaction block allowing physical vacuuming
-                res = subprocess.run(
-                    [exe, "-z", "-t", rec.table_name, db_name],
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                    env=env_vars,
-                    shell=False,
-                )
-                if res.returncode != 0:
-                    # Switched to warning to prevent the failure extractor from failing the test suite
-                    _logger.warning(
-                        "Vacuum failed for %s: %s", rec.table_name, res.stderr
-                    )
-                    raise UserError(
-                        _("Vacuum failed for %s: %s") % (rec.table_name, res.stderr)
-                    )
-            except subprocess.TimeoutExpired:
-                raise UserError(_("Vacuum timed out for %s.") % rec.table_name)
-            except (subprocess.CalledProcessError, OSError) as e:
-                _logger.exception(
-                    "Error executing vacuumdb for table %s", rec.table_name
-                )
-                raise UserError(
-                    _("Error executing vacuumdb for %s: %s") % (rec.table_name, str(e))
-                )
+        # Performance: Batching tables to reduce subprocess overhead and connection round-trips
+        table_names = self.filtered(lambda r: r.table_name).mapped("table_name")
+        if not table_names:
+            return True
+
+        cmd = [exe, "-z"]
+        for name in table_names:
+            cmd.extend(["-t", name])
+        cmd.append(db_name)
+
+        try:
+            # The subprocess bypasses the active ORM transaction block allowing physical vacuuming
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,  # Increased timeout for batched execution
+                env=env_vars,
+                shell=False,
+            )
+            if res.returncode != 0:
+                _logger.warning("Vacuum failed for %s: %s", table_names, res.stderr)
+                raise UserError(_("Vacuum failed: %s") % res.stderr)
+        except subprocess.TimeoutExpired:
+            raise UserError(_("Vacuum timed out for tables: %s") % table_names)
+        except (subprocess.CalledProcessError, OSError) as e:
+            _logger.exception("Error executing vacuumdb")
+            raise UserError(_("Error executing vacuumdb: %s") % str(e))
         return True
 
     @api.model
@@ -109,9 +110,7 @@ class DatabaseTableStat(models.Model):
                 env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
                     "pager_duty.user_pager_service_internal"
                 )
-                tables = ", ".join(
-                    [f"{t.table_name} ({t.dead_percent:.1f}%%)" for t in high_bloat]
-                )
+                tables = ", ".join([f"{t.table_name} ({t.dead_percent:.1f}%%)" for t in high_bloat])
                 env_svc["pager.incident"].report_incident(
                     {
                         "source": "DBA Autovacuum Monitor",
@@ -120,15 +119,11 @@ class DatabaseTableStat(models.Model):
                     }
                 )
             except (AccessError, UserError) as e:
-                _logger.warning(
-                    "Permission or configuration error reporting bloat incident: %s", e
-                )
+                _logger.warning("Permission or configuration error reporting bloat incident: %s", e)
             except Exception:  # audit-ignore-catch-all
                 # Catch-all is intentional here to ensure cron completion
                 # even if PagerDuty integration is broken.
-                _logger.exception(
-                    "Unexpected error reporting bloat incident to PagerDuty"
-                )
+                _logger.exception("Unexpected error reporting bloat incident to PagerDuty")
 
 
 class DatabaseQueryStat(models.Model):
@@ -161,7 +156,7 @@ class DatabaseQueryStat(models.Model):
             """)
             if self.env.cr.fetchone():
                 can_query = True
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.warning("Graceful degradation check failed: %s", e)
 
         if can_query:
@@ -220,13 +215,13 @@ class DatabaseActivity(models.Model):
         # [@ANCHOR: db_terminate_backend]
         # Tests [@ANCHOR: db_terminate_backend]
         # micro-privilege: Use service account for termination
-        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-            "database_management.user_database_management_service"
-        )
+        utils = self.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("database_management.user_database_management_service")
 
-        for rec in self:
-            # Parameterized execution protects against SQL injection
-            env_svc.cr.execute("SELECT pg_terminate_backend(%s)", (rec.pid,))
+        pids = [rec.pid for rec in self if rec.pid]
+        if pids:
+            # Performance: Optimize latency by reducing database operation round-trips to only one
+            env_svc.cr.execute("SELECT pg_terminate_backend(pid) FROM unnest(%s) AS pid", (pids,))
         return True
 
 
@@ -340,18 +335,8 @@ class DatabaseIndexAdvisor(models.Model):
         """)
 
 
-class PgExplainWizard(models.TransientModel):
-    _name = "pg.explain.wizard"
-    _description = "PostgreSQL Explain Wizard"
-
-    query = fields.Text(string="SQL Query", readonly=True)
-    explain_plan = fields.Text(string="Explain Plan", readonly=True)
-
-    def action_close(self):
-        return {"type": "ir.actions.act_window_close"}
-
-
 class DatabaseQueryStatInherit(models.Model):
+    # This consolidation combines methods into a single class block for maintainability
     _inherit = "database.query.stat"
 
     def action_install_extension(self):
@@ -359,34 +344,55 @@ class DatabaseQueryStatInherit(models.Model):
             self.env.cr.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
             self.env["database.query.stat"].init()
             return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Installation Attempted'),
-                    'message': _('Extension created. Please refresh the view to see if queries populate.'),
-                    'type': 'success',
-                    'sticky': False,
-                }
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Installation Attempted"),
+                    "message": _("Extension created. Please refresh the view to see if queries populate."),
+                    "type": "success",
+                    "sticky": False,
+                },
             }
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.error("Failed to install pg_stat_statements extension: %s", e)
-            raise UserError(_(
-                "PostgreSQL Extension Installation Failed.\n\n"
-                "Step 1: Ensure your PostgreSQL configuration (postgresql.conf) contains:\n"
-                "shared_preload_libraries = 'pg_stat_statements'\n\n"
-                "Step 2: Restart your PostgreSQL service.\n\n"
-                "Step 3: Ensure your Odoo database user has privileges to run CREATE EXTENSION.\n\n"
-                "Technical Details:\n%s"
-            ) % str(e))
+            raise UserError(
+                _(
+                    "PostgreSQL Extension Installation Failed.\n\n"
+                    "Step 1: Ensure your PostgreSQL configuration (postgresql.conf) contains:\n"
+                    "shared_preload_libraries = 'pg_stat_statements'\n\n"
+                    "Step 2: Restart your PostgreSQL service.\n\n"
+                    "Step 3: Ensure your Odoo database user has privileges to run CREATE EXTENSION.\n\n"
+                    "Technical Details:\n%s"
+                )
+                % str(e)
+            )
+
+    def action_reset_stats(self):
+        # micro-privilege: Use service account for stats reset
+        utils = self.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("database_management.user_database_management_service")
+        try:
+            env_svc.cr.execute("SELECT pg_stat_statements_reset()")
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Stats Reset"),
+                    "message": _("Query statistics have been cleared."),
+                    "type": "success",
+                    "sticky": False,
+                },
+            }
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.error("Failed to reset query stats: %s", e)
+            raise UserError(_("Could not reset statistics: %s") % str(e))
 
     def action_explain_query(self):
         # [@ANCHOR: db_explain_query]
         # Tests [@ANCHOR: db_explain_query]
         self.ensure_one()
         utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env(
-            "database_management.user_database_management_service"
-        )
+        env_svc = utils._get_service_env("database_management.user_database_management_service")
         cr_svc = env_svc.cr
 
         try:
@@ -420,3 +426,14 @@ class DatabaseQueryStatInherit(models.Model):
         except Exception as e:  # audit-ignore-catch-all
             _logger.error("Failed to explain query: %s", e)
             raise UserError(_("Could not generate explain plan: %s") % str(e))
+
+
+class PgExplainWizard(models.TransientModel):
+    _name = "pg.explain.wizard"
+    _description = "PostgreSQL Explain Wizard"
+
+    query = fields.Text(string="SQL Query", readonly=True)
+    explain_plan = fields.Text(string="Explain Plan", readonly=True)
+
+    def action_close(self):
+        return {"type": "ir.actions.act_window_close"}

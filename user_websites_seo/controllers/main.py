@@ -4,6 +4,7 @@ from odoo import http
 from odoo.http import request, Response
 from odoo.addons.user_websites.controllers.main import UserWebsitesController
 
+
 class UserWebsitesSEOController(UserWebsitesController):
 
     @http.route(
@@ -27,8 +28,7 @@ class UserWebsitesSEOController(UserWebsitesController):
         # Verified by [@ANCHOR: test_controller_no_ssti_elevation]
         """
         Overrides the base blog routing to inject the SEO-aware user profile
-        into the QWeb rendering dictionary. This reactivates the interactive
-        'Optimize SEO' frontend widget for the blog owner.
+        into the QWeb rendering dictionary.
         """
         # Execute the base controller logic
         response = super().user_blog_index(
@@ -41,9 +41,8 @@ class UserWebsitesSEOController(UserWebsitesController):
             **kwargs
         )
 
-        # Intercept and modify the rendering dictionary before it hits the templating engine.
+        # Intercept and modify the rendering dictionary
         if isinstance(response, Response):
-            # Accessing .qcontext is safe on a Response object, but it may be None.
             qcontext = getattr(response, "qcontext", None)
             if qcontext is None:
                 return response
@@ -52,21 +51,16 @@ class UserWebsitesSEOController(UserWebsitesController):
             group = qcontext.get("profile_group")
 
             # We de-elevate the recordset to the current request's environment
-            # if the base controller provided an elevated one, but only if we are
-            # running in a real request context (to support unit tests).
-            # This is a critical SSTI vulnerability mitigation.
-            # The models' check_access_rule methods have been enhanced to allow
-            # legitimate users to read/write SEO fields without sudo.
             if user:
                 if request and request.env:
                     user = user.with_env(request.env)
-                # ADR-0078: Pre-fetch SEO fields to prevent N+1 queries during widget rendering
+                # ADR-0078: Pre-fetch SEO fields
                 user.read(list(user._get_seo_fields()))
                 qcontext["main_object"] = user
             elif group:
                 if request and request.env:
                     group = group.with_env(request.env)
-                # ADR-0078: Pre-fetch SEO fields to prevent N+1 queries during widget rendering
+                # ADR-0078: Pre-fetch SEO fields
                 group.read(list(group._get_seo_fields()))
                 qcontext["main_object"] = group
 

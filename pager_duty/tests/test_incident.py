@@ -139,6 +139,16 @@ class TestPagerIncidentStandard(HamsTransactionCase):
             self.assertIn("arch", v2)
             self.assertIn("arch", v3)
 
+    def test_07_board_data_procedure(self):
+        # Tests [@ANCHOR: pager_duty_postgres_procedures]
+        # Tests [@ANCHOR: test_pager_duty_procedures]
+        self.incident_model.report_incident(
+            {"source": "Dashboard Test", "severity": "medium", "description": "test"}
+        )
+        data = self.incident_model.get_board_data()
+        self.assertTrue(len(data["active"]) > 0)
+        self.assertEqual(data["active"][0]["source"], "Dashboard Test")
+
 
 @tagged("integration", "post_install", "-at_install")
 class TestPagerIncidentIntegration(HamsTransactionCase):

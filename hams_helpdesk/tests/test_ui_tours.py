@@ -53,7 +53,7 @@ class TestHelpdeskTours(HamsHttpCase):
             'stage': 'new'
         })
         self.authenticate("portal_cust_tour", "password")
-        res = self.url_open(f"/my/ticket/{ticket.id}/close", data={'csrf_token': http.Request.csrf_token(self)})
+        self.url_open(f"/my/ticket/{ticket.id}/close", data={'csrf_token': http.Request.csrf_token(self)})
         self.assertEqual(ticket.stage, 'closed', "Ticket should be closed after portal action.")
 
     def test_helpdesk_operator_tour(self):

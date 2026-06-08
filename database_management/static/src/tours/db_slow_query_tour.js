@@ -5,11 +5,6 @@ registry.category("web_tour.tours").add("db_management_slow_query_tour", { // # 
     url: "/odoo?debug=1",
     steps: () => [
         {
-            content: "Wait for navbar",
-            trigger: '.o_navbar',
-            run: function() {},
-        },
-        {
             content: "Open Apps Menu",
             trigger: '.o_navbar_apps_menu button',
             run: 'click',
@@ -29,6 +24,9 @@ registry.category("web_tour.tours").add("db_management_slow_query_tour", { // # 
             trigger: '[data-menu-xmlid="database_management.menu_db_queries"]',
             run: 'click',
         },
-        { trigger: '.o_list_renderer' },
+        {
+            trigger: '.o_list_renderer',
+            run: function () {},
+        },
     ],
 });

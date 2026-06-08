@@ -19,7 +19,7 @@ class PagerIncident(models.Model):
     name = fields.Char(
         string="Incident ID", required=True, copy=False, readonly=True, default="New"
     )
-    website_id = fields.Many2one("website", string="Website", ondelete="cascade")
+    website_id = fields.Many2one("website", string="Website", ondelete="cascade", index=True)
     # Added index=True to prevent sequential scans during daemon polling
     source = fields.Char(string="Source", required=True, index=True, tracking=True)
     severity = fields.Selection(
@@ -64,6 +64,8 @@ class PagerIncident(models.Model):
         string="Ticket Model",
         help="The Odoo model used for the ticket (e.g. hams_helpdesk.ticket or helpdesk.ticket).",
     )
+
+    _website_source_index = models.Index("(website_id, source)")
 
     def write(self, vals):
         now = fields.Datetime.now()
@@ -236,61 +238,8 @@ class PagerIncident(models.Model):
     @api.model
     def get_board_data(self):
         # [@ANCHOR: pager_board_data]
-        on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
-        duty_name = on_duty_user.name if on_duty_user else "None"
-
-        domain = [("status", "in", ["open", "acknowledged"])]
-        check_domain = []
-        if self.env.context.get("website_id"):
-            domain.append(("website_id", "=", self.env.context.get("website_id")))
-            check_domain.append(("website_id", "=", self.env.context.get("website_id")))
-
-        active = self.search_read(
-            domain,
-            [
-                "name",
-                "source",
-                "severity",
-                "status",
-                "acknowledged_by_id",
-                "create_date",
-            ],
-            order="create_date desc",
-            limit=50,
-        )
-
-        for a in active:
-            a["ack_name"] = (
-                a["acknowledged_by_id"][1] if a["acknowledged_by_id"] else False
-            )
-
-        res_domain = [("status", "=", "resolved")]
-        if self.env.context.get("website_id"):
-            res_domain.append(("website_id", "=", self.env.context.get("website_id")))
-
-        resolved = self.search_read(
-            res_domain,
-            ["name", "source", "severity", "time_resolved"],
-            order="time_resolved desc",
-            limit=10,
-        )
-
+        # Performance optimization: Use Postgres procedure to fetch dashboard data in one round-trip.
         # [@ANCHOR: pager_board_stats]
-        # Aggregate stats for the health summary component
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "pager_duty.user_pager_service_internal"
-        )
-        checks = self.env["pager.check"].with_user(svc_uid).read_group(
-            check_domain, ["status"], ["status"]
-        )
-        stats = {"passing": 0, "failing": 0, "maintenance": 0}
-        for c in checks:
-            if c["status"] in stats:
-                stats[c["status"]] = c["status_count"]
-
-        return {
-            "on_duty": duty_name,
-            "active": active,
-            "resolved": resolved,
-            "stats": stats
-        }
+        website_id = self.env.context.get("website_id")
+        self.env.cr.execute("SELECT pager_get_board_data(%s)", [website_id])
+        return self.env.cr.fetchone()[0]

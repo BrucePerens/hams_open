@@ -3,12 +3,14 @@
 from odoo import models, _
 from odoo.exceptions import AccessError
 
+
 class ResUsersSEO(models.Model):
-    # This model is multi-tenant as it inherits from res.users, which is a core
-    # multi-tenant model in Odoo. Each record represents a specific user
-    # in a specific company context.
     _name = "res.users"
-    _inherit = ["res.users", "website.seo.metadata", "user.websites.seo.metadata.mixin"]
+    _inherit = [
+        "res.users",
+        "website.seo.metadata",
+        "user.websites.seo.metadata.mixin"
+    ]
 
     @property
     def SELF_WRITEABLE_FIELDS(self):
