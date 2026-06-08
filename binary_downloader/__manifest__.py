@@ -17,7 +17,7 @@
             "name": "Binary Downloader Facility",
             "path": "data/documentation.html",
             "icon": "📦",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "assets": {

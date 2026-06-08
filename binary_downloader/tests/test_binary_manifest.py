@@ -14,6 +14,7 @@ from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
+
 @tagged("post_install", "-at_install", "standard")
 class TestBinaryManifest(HamsTransactionCase):
 
@@ -22,7 +23,9 @@ class TestBinaryManifest(HamsTransactionCase):
         bin_dir = os.path.join(data_dir, "hams_bin")
         if os.path.exists(bin_dir):
             for f in os.listdir(bin_dir):
-                if f.startswith(("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")):
+                if f.startswith(
+                    ("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")
+                ):
                     try:
                         os.remove(os.path.join(bin_dir, f))
                     except OSError as e:
@@ -35,12 +38,16 @@ class TestBinaryManifest(HamsTransactionCase):
         bin_dir = os.path.join(data_dir, "hams_bin")
         if os.path.exists(bin_dir):
             for f in os.listdir(bin_dir):
-                if f.startswith(("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")):
+                if f.startswith(
+                    ("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")
+                ):
                     try:
                         os.remove(os.path.join(bin_dir, f))
                     except OSError as e:
                         _logger.warning("Failed to remove path %s: %s", f, e)
-        self.service_user = self.env.ref("binary_downloader.user_binary_downloader_service")
+        self.service_user = self.env.ref(
+            "binary_downloader.user_binary_downloader_service"
+        )
 
         # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
         base_url = os.environ.get("ODOO_URL", "http://odoo:8069")
@@ -63,7 +70,9 @@ class TestBinaryManifest(HamsTransactionCase):
         # [!] DIAGNOSTIC FOR AI: Testing resolution when binary already exists in hams_bin.
 
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
-        target_bin = os.path.join(data_dir, "hams_bin", self.manifest._get_target_filename())
+        target_bin = os.path.join(
+            data_dir, "hams_bin", self.manifest._get_target_filename()
+        )
         if not os.path.exists(os.path.dirname(target_bin)):
             os.makedirs(os.path.dirname(target_bin))
         with open(target_bin, "wb") as f:
@@ -71,19 +80,27 @@ class TestBinaryManifest(HamsTransactionCase):
         os.chmod(target_bin, stat.S_IRWXU)
 
         path = self.env["binary.manifest"].ensure_executable("testbin")
-        self.assertEqual(path, target_bin, "[!] DIAGNOSTIC FOR AI: Returned path must match the expected local install path.")
+        self.assertEqual(
+            path,
+            target_bin,
+            "[!] DIAGNOSTIC FOR AI: Returned path must match the expected local install path.",
+        )
 
     def test_02_missing_manifest(self):
         # [!] DIAGNOSTIC FOR AI: Testing behavior when a manifest for a command is missing.
         self.safe_patch("shutil.which", return_value=None)
-        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: Must raise error on missing manifest"):
+        with self.assertRaises(
+            UserError, msg="[!] DIAGNOSTIC FOR AI: Must raise error on missing manifest"
+        ):
             self.env["binary.manifest"].ensure_executable("missingbin")
 
     def test_03_unsupported_platform(self):
         # [!] DIAGNOSTIC FOR AI: Testing platform restriction (Linux x86_64 only).
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Windows")
-        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: Must block non-Linux platforms"):
+        with self.assertRaises(
+            UserError, msg="[!] DIAGNOSTIC FOR AI: Must block non-Linux platforms"
+        ):
             self.env["binary.manifest"].ensure_executable("testbin")
 
     def test_04_successful_download_and_checksum(self):
@@ -101,33 +118,59 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen.return_value = mock_response_get
 
         path = self.env["binary.manifest"].ensure_executable("testbin")
-        self.assertTrue(os.path.basename(path).startswith("testbin"), "[!] DIAGNOSTIC FOR AI: Binary filename must start with command name.")
-        self.assertTrue(os.path.exists(path), "[!] DIAGNOSTIC FOR AI: Binary file must physically exist after installation.")
+        self.assertTrue(
+            os.path.basename(path).startswith("testbin"),
+            "[!] DIAGNOSTIC FOR AI: Binary filename must start with command name.",
+        )
+        self.assertTrue(
+            os.path.exists(path),
+            "[!] DIAGNOSTIC FOR AI: Binary file must physically exist after installation.",
+        )
         with open(path, "rb") as f:
-            self.assertEqual(f.read(), b"1234", "[!] DIAGNOSTIC FOR AI: Content of installed binary must match downloaded content.")
+            self.assertEqual(
+                f.read(),
+                b"1234",
+                "[!] DIAGNOSTIC FOR AI: Content of installed binary must match downloaded content.",
+            )
 
     def test_05_views_render(self):
         # [@ANCHOR: test_binary_manifest_views]
         v1 = self.env["binary.manifest"].get_view(view_type="list")
-        self.assertIn("name", v1["arch"], "[!] DIAGNOSTIC FOR AI: List view must contain 'name' field.")
+        self.assertIn(
+            "name",
+            v1["arch"],
+            "[!] DIAGNOSTIC FOR AI: List view must contain 'name' field.",
+        )
         v2 = self.env["binary.manifest"].get_view(view_type="form")
-        self.assertIn("url", v2["arch"], "[!] DIAGNOSTIC FOR AI: Form view must contain 'url' field.")
+        self.assertIn(
+            "url",
+            v2["arch"],
+            "[!] DIAGNOSTIC FOR AI: Form view must contain 'url' field.",
+        )
 
     def test_06_is_installed_compute(self):
         # Tests [@ANCHOR: binary_compute_installed]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
-        target_bin = os.path.join(data_dir, "hams_bin", self.manifest._get_target_filename())
+        target_bin = os.path.join(
+            data_dir, "hams_bin", self.manifest._get_target_filename()
+        )
         if not os.path.exists(os.path.dirname(target_bin)):
             os.makedirs(os.path.dirname(target_bin))
         with open(target_bin, "wb") as f:
             f.write(b"1234")
         os.chmod(target_bin, stat.S_IRWXU)
-        self.manifest.invalidate_recordset(['is_installed'])
-        self.assertTrue(self.manifest.is_installed, "[!] DIAGNOSTIC FOR AI: is_installed must be True if binary exists and is executable.")
+        self.manifest.invalidate_recordset(["is_installed"])
+        self.assertTrue(
+            self.manifest.is_installed,
+            "[!] DIAGNOSTIC FOR AI: is_installed must be True if binary exists and is executable.",
+        )
 
         os.remove(target_bin)
-        self.manifest.invalidate_recordset(['is_installed'])
-        self.assertFalse(self.manifest.is_installed, "[!] DIAGNOSTIC FOR AI: is_installed must be False if binary does not exist.")
+        self.manifest.invalidate_recordset(["is_installed"])
+        self.assertFalse(
+            self.manifest.is_installed,
+            "[!] DIAGNOSTIC FOR AI: is_installed must be False if binary does not exist.",
+        )
 
     def test_07_action_install(self):
         # Tests [@ANCHOR: binary_action_install]
@@ -147,48 +190,75 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen.return_value = mock_response_get
 
         result = self.manifest.action_install()
-        self.assertEqual(result["type"], "ir.actions.client", "[!] DIAGNOSTIC FOR AI: action_install must return a client action.")
-        self.assertEqual(result["tag"], "display_notification", "[!] DIAGNOSTIC FOR AI: action_install must return a notification.")
+        self.assertEqual(
+            result["type"],
+            "ir.actions.client",
+            "[!] DIAGNOSTIC FOR AI: action_install must return a client action.",
+        )
+        self.assertEqual(
+            result["tag"],
+            "display_notification",
+            "[!] DIAGNOSTIC FOR AI: action_install must return a notification.",
+        )
 
     def test_08_path_traversal_validation(self):
         # [!] DIAGNOSTIC FOR AI: Testing prevention of path traversal in binary names.
-        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must prevent '..' in binary names"):
-            self.env["binary.manifest"].create({
-                "name": "../badbin",
-                "url": "http://example.com/badbin",
-                "checksum": "fakehash",
-                "archive_type": "binary",
-            })
+        with self.assertRaises(
+            ValidationError,
+            msg="[!] DIAGNOSTIC FOR AI: Must prevent '..' in binary names",
+        ):
+            self.env["binary.manifest"].create(
+                {
+                    "name": "../badbin",
+                    "url": "http://example.com/badbin",
+                    "checksum": "fakehash",
+                    "archive_type": "binary",
+                }
+            )
             self.env.flush_all()
-        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must prevent slashes in binary names"):
+        with self.assertRaises(
+            ValidationError,
+            msg="[!] DIAGNOSTIC FOR AI: Must prevent slashes in binary names",
+        ):
             self.manifest.write({"name": "bad/bin"})
             self.env.flush_all()
 
     def test_11_url_validation(self):
         # [!] DIAGNOSTIC FOR AI: Testing URL scheme validation (http/https only).
-        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block non-HTTP URLs"):
-            self.env["binary.manifest"].create({
-                "name": "badurl",
-                "url": "file:///etc/passwd",
-                "checksum": "fakehash",
-                "archive_type": "binary",
-            })
+        with self.assertRaises(
+            ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block non-HTTP URLs"
+        ):
+            self.env["binary.manifest"].create(
+                {
+                    "name": "badurl",
+                    "url": "file:///etc/passwd",
+                    "checksum": "fakehash",
+                    "archive_type": "binary",
+                }
+            )
             self.env.flush_all()
 
     def test_09_constraints(self):
         # [!] DIAGNOSTIC FOR AI: Testing name constraints on write.
-        with self.assertRaises(ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block slashes on write"):
+        with self.assertRaises(
+            ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block slashes on write"
+        ):
             self.manifest.write({"name": "bad/bin"})
             self.env.flush_all()
 
     def test_12_action_install_permissions(self):
         # [!] DIAGNOSTIC FOR AI: Testing permission check for action_install.
-        restricted_user = self.env["res.users"].create({
-            "name": "Restricted User",
-            "login": "restricted_user",
-            "group_ids": [(6, 0, [])]
-        })
-        with self.assertRaises(UserError, msg="[!] DIAGNOSTIC FOR AI: User without downloader manager group must be blocked"):
+        restricted_user = self.env["res.users"].create(
+            {
+                "name": "Restricted User",
+                "login": "restricted_user",
+                "group_ids": [(6, 0, [])],
+            }
+        )
+        with self.assertRaises(
+            UserError,
+            msg="[!] DIAGNOSTIC FOR AI: User without downloader manager group must be blocked",
+        ):
             self.manifest.with_user(restricted_user).action_install()
 
     def test_10_tar_slip_prevention(self):
@@ -198,13 +268,15 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("platform.machine", return_value="x86_64")
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
 
-        self.env["binary.manifest"].create({
-            "name": "slippy",
-            "url": "http://example.com/slippy.tar.gz",
-            "checksum": hashlib.sha256(b"data").hexdigest(),
-            "archive_type": "tar.gz",
-            "extract_member": "slippy"
-        })
+        self.env["binary.manifest"].create(
+            {
+                "name": "slippy",
+                "url": "http://example.com/slippy.tar.gz",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "tar.gz",
+                "extract_member": "slippy",
+            }
+        )
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -212,9 +284,9 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_response_get.__enter__.return_value = mock_response_get
         mock_urlopen.return_value = mock_response_get
 
-        has_filter = hasattr(tarfile, 'data_filter')
+        has_filter = hasattr(tarfile, "data_filter")
         if has_filter:
-            old_filter = getattr(tarfile, 'data_filter')
+            old_filter = getattr(tarfile, "data_filter")
             del tarfile.data_filter
 
         try:
@@ -229,14 +301,23 @@ class TestBinaryManifest(HamsTransactionCase):
 
             mock_tar.getmembers.return_value = [mock_member]
 
+            # Mock tar.extractfile to return a stream of bytes
+            mock_tar.extractfile.return_value = io.BytesIO(b"extracted-data")
+
             original_abspath = os.path.abspath
+
             def mock_abspath(p):
                 if isinstance(p, str) and "slippy" in p:
                     return "/etc/passwd"
                 return original_abspath(p)
 
-            self.safe_patch("odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath", side_effect=mock_abspath)
-            with self.assertRaisesRegex(UserError, "Security Alert: Tar slip attempt detected."):
+            self.safe_patch(
+                "odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath",
+                side_effect=mock_abspath,
+            )
+            with self.assertRaisesRegex(
+                UserError, "Security Alert: Tar slip attempt detected."
+            ):
                 self.env["binary.manifest"].ensure_executable("slippy")
         finally:
             if has_filter:
@@ -249,13 +330,15 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("platform.machine", return_value="x86_64")
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
 
-        self.env["binary.manifest"].create({
-            "name": "symlinkbin",
-            "url": "http://example.com/symlink.tar.gz",
-            "checksum": hashlib.sha256(b"data").hexdigest(),
-            "archive_type": "tar.gz",
-            "extract_member": "symlinkbin"
-        })
+        self.env["binary.manifest"].create(
+            {
+                "name": "symlinkbin",
+                "url": "http://example.com/symlink.tar.gz",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "tar.gz",
+                "extract_member": "symlinkbin",
+            }
+        )
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -274,7 +357,9 @@ class TestBinaryManifest(HamsTransactionCase):
 
         mock_tar.getmembers.return_value = [mock_member]
 
-        with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
+        with self.assertRaisesRegex(
+            UserError, "Security Alert: Links are not allowed in the archive."
+        ):
             self.env["binary.manifest"].ensure_executable("symlinkbin")
 
     def test_14_zip_download_and_extract(self):
@@ -286,18 +371,22 @@ class TestBinaryManifest(HamsTransactionCase):
 
         # Create a real zip in memory
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:  # audit-ignore-path
+        with zipfile.ZipFile(
+            zip_buffer, "a", zipfile.ZIP_DEFLATED, False
+        ) as zip_file:  # audit-ignore-path
             zip_file.writestr("zippybin", b"zipdata")
 
         zip_data = zip_buffer.getvalue()
 
-        self.env["binary.manifest"].create({
-            "name": "zippy",
-            "url": "http://example.com/zippy.zip",
-            "checksum": hashlib.sha256(zip_data).hexdigest(),
-            "archive_type": "zip",
-            "extract_member": "zippybin"
-        })
+        self.env["binary.manifest"].create(
+            {
+                "name": "zippy",
+                "url": "http://example.com/zippy.zip",
+                "checksum": hashlib.sha256(zip_data).hexdigest(),
+                "archive_type": "zip",
+                "extract_member": "zippybin",
+            }
+        )
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -318,13 +407,15 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("platform.machine", return_value="x86_64")
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
 
-        self.env["binary.manifest"].create({
-            "name": "symlinkzip",
-            "url": "http://example.com/symlink.zip",
-            "checksum": hashlib.sha256(b"data").hexdigest(),
-            "archive_type": "zip",
-            "extract_member": "symlinkbin"
-        })
+        self.env["binary.manifest"].create(
+            {
+                "name": "symlinkzip",
+                "url": "http://example.com/symlink.zip",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "zip",
+                "extract_member": "symlinkbin",
+            }
+        )
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -343,7 +434,9 @@ class TestBinaryManifest(HamsTransactionCase):
 
         mock_zip.infolist.return_value = [mock_zinfo]
 
-        with self.assertRaisesRegex(UserError, "Security Alert: Links are not allowed in the archive."):
+        with self.assertRaisesRegex(
+            UserError, "Security Alert: Links are not allowed in the archive."
+        ):
             self.env["binary.manifest"].ensure_executable("symlinkzip")
 
     def test_15_zip_slip_prevention(self):
@@ -353,13 +446,15 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("platform.machine", return_value="x86_64")
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
 
-        self.env["binary.manifest"].create({
-            "name": "zip_slip",
-            "url": "http://example.com/slip.zip",
-            "checksum": hashlib.sha256(b"data").hexdigest(),
-            "archive_type": "zip",
-            "extract_member": "slip"
-        })
+        self.env["binary.manifest"].create(
+            {
+                "name": "zip_slip",
+                "url": "http://example.com/slip.zip",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "zip",
+                "extract_member": "slip",
+            }
+        )
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -377,13 +472,22 @@ class TestBinaryManifest(HamsTransactionCase):
 
         mock_zip.infolist.return_value = [mock_zinfo]
 
+        # Mock zip_ref.open to return a stream of bytes
+        mock_zip.open.return_value = io.BytesIO(b"extracted-data")
+
         original_abspath = os.path.abspath
+
         def mock_abspath(p):
             if isinstance(p, str) and "slip" in p:
                 return "/etc/passwd"
             return original_abspath(p)
 
-        self.safe_patch("odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath", side_effect=mock_abspath)
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath",
+            side_effect=mock_abspath,
+        )
 
-        with self.assertRaisesRegex(UserError, "Security Alert: Zip slip attempt detected."):
+        with self.assertRaisesRegex(
+            UserError, "Security Alert: Zip slip attempt detected."
+        ):
             self.env["binary.manifest"].ensure_executable("zip_slip")

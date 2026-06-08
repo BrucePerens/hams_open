@@ -8,6 +8,7 @@ from odoo.tests import tagged
 
 _logger = logging.getLogger(__name__)
 
+
 class BinaryDownloaderTestController(http.Controller):
     @http.route("/test/dummy_bin", type="http", auth="none", csrf=False)
     def download_dummy_bin(self, **kwargs):

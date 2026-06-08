@@ -87,7 +87,8 @@ class BinaryManifest(models.Model):
         for record in self:
             if record.archive_type in ("tar.gz", "zip") and not record.extract_member:
                 raise ValidationError(
-                    _("Extract Member is required for %s archives.") % record.archive_type
+                    _("Extract Member is required for %s archives.")
+                    % record.archive_type
                 )
 
     @api.depends("name")
@@ -178,7 +179,10 @@ class BinaryManifest(models.Model):
         manifest_record = (
             self.env["binary.manifest"]
             .with_user(svc_uid)
-            .search([("name", "=", cmd_name), ("company_id", "=", self.env.company.id)], limit=1)
+            .search(
+                [("name", "=", cmd_name), ("company_id", "=", self.env.company.id)],
+                limit=1,
+            )
         )
         if not manifest_record:
             manifest_record = (
@@ -222,7 +226,9 @@ class BinaryManifest(models.Model):
             # Checksum verification for existing binary
             hasher = hashlib.sha256()
             try:
-                with open(target_bin, "rb") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                with open(
+                    target_bin, "rb"
+                ) as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
                 if hasher.hexdigest() == manifest_record.checksum:
@@ -232,7 +238,9 @@ class BinaryManifest(models.Model):
                     return target_bin
                 else:
                     _logger.info("Checksum mismatch for %s, re-downloading...", cmd_name)
-                    os.unlink(target_bin)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                    os.unlink(
+                        target_bin
+                    )  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
             except OSError as e:
                 _logger.warning("Failed to check existing binary %s: %s", target_bin, e)
 
@@ -252,30 +260,35 @@ class BinaryManifest(models.Model):
                         shutil.copyfileobj(response, tmp)
 
                 hasher = hashlib.sha256()
-                with open(tmp_path, "rb") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                with open(
+                    tmp_path, "rb"
+                ) as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
 
                 if hasher.hexdigest() != manifest_record.checksum:
                     # [!] DIAGNOSTIC FOR AI: Downloaded checksum mismatch. Expected %s, got %s
-                    _logger.error("Checksum mismatch for %s. Expected %s, got %s", cmd_name, manifest_record.checksum, hasher.hexdigest())
+                    _logger.error(
+                        "Checksum mismatch for %s. Expected %s, got %s",
+                        cmd_name,
+                        manifest_record.checksum,
+                        hasher.hexdigest(),
+                    )
                     raise UserError(
                         _("Security Alert: Checksum mismatch for downloaded %s binary.")
                         % cmd_name
                     )
 
                 if manifest_record.archive_type == "tar.gz":
-                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                    with tarfile.open(
+                        tmp_path, "r:gz"
+                    ) as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                         found = False
                         extract_target = manifest_record.extract_member or cmd_name
                         for member in tar.getmembers():
-                            if (
-                                member.name.endswith(f"/{extract_target}")
-                                or member.name == extract_target
-                            ):
-                                # Ensure we don't extract anywhere else
-                                member.name = os.path.basename(cmd_name)
-
+                            if member.name.endswith(
+                                f"/{extract_target}"
+                            ) or member.name == extract_target:
                                 # Deep link/symlink protection
                                 if member.islnk() or member.issym():
                                     raise UserError(
@@ -284,36 +297,42 @@ class BinaryManifest(models.Model):
                                         )
                                     )
 
-                                # Provide `data` filter if available in python version to prevent slip
-                                if hasattr(tarfile, "data_filter"):
-                                    tar.extract(member, path=bin_dir, filter="data")
-                                else:
-                                    # Fallback for older python: manual path check
-                                    target_path = os.path.abspath(
-                                        os.path.join(bin_dir, member.name)
-                                    )
-                                    if not target_path.startswith(
-                                        os.path.abspath(bin_dir)
-                                    ):
-                                        raise UserError(
-                                            _(
-                                                "Security Alert: Tar slip attempt detected."
-                                            )
+                                # Path traversal protection
+                                target_path = os.path.abspath(
+                                    os.path.join(bin_dir, os.path.basename(member.name))
+                                )
+                                if not target_path.startswith(
+                                    os.path.abspath(bin_dir)
+                                ):
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Tar slip attempt detected."
                                         )
-                                    tar.extract(member, path=bin_dir)
-                                found = True
-                                break
+                                    )
+
+                                source = tar.extractfile(member)
+                                if source:
+                                    with source:
+                                        with open(target_bin, "wb") as target:
+                                            shutil.copyfileobj(source, target)
+                                    found = True
+                                    break
                         if not found:
                             raise UserError(
                                 _("Member %s not found in archive.") % extract_target
                             )
                 elif manifest_record.archive_type == "zip":
-                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                    with zipfile.ZipFile(
+                        tmp_path, "r"
+                    ) as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                         extract_target = manifest_record.extract_member or cmd_name
                         found = False
                         for zinfo in zip_ref.infolist():
                             name = zinfo.filename
-                            if name.endswith(f"/{extract_target}") or name == extract_target:
+                            if (
+                                name.endswith(f"/{extract_target}")
+                                or name == extract_target
+                            ):
                                 # Security: Check for symlinks (external attributes)
                                 # ZIP external attributes: bits 16-31 for Unix permissions
                                 if (zinfo.external_attr >> 16) & stat.S_IFLNK:
@@ -324,23 +343,29 @@ class BinaryManifest(models.Model):
                                     )
 
                                 # Path traversal protection for ZIP
-                                target_path = os.path.join(bin_dir, manifest_record._get_target_filename())
-
-                                if not os.path.abspath(target_path).startswith(
+                                target_path = os.path.abspath(
+                                    os.path.join(bin_dir, os.path.basename(zinfo.filename))
+                                )
+                                if not target_path.startswith(
                                     os.path.abspath(bin_dir)
                                 ):
                                     raise UserError(
                                         _("Security Alert: Zip slip attempt detected.")
                                     )
 
-                                with zip_ref.open(zinfo) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                                    with open(target_path, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                                with zip_ref.open(
+                                    zinfo
+                                ) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                                    with open(
+                                        target_bin, "wb"
+                                    ) as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                                         shutil.copyfileobj(source, target)
                                 found = True
                                 break
                         if not found:
                             raise UserError(
-                                _("Member %s not found in zip archive.") % extract_target
+                                _("Member %s not found in zip archive.")
+                                % extract_target
                             )
                 else:
                     shutil.copy2(tmp_path, target_bin)
@@ -350,9 +375,13 @@ class BinaryManifest(models.Model):
             finally:
                 if tmp_path and os.path.exists(tmp_path):
                     try:
-                        os.unlink(tmp_path)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
+                        os.unlink(
+                            tmp_path
+                        )  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                     except OSError as e:
-                        _logger.warning("Failed to remove temporary file %s: %s", tmp_path, e)
+                        _logger.warning(
+                            "Failed to remove temporary file %s: %s", tmp_path, e
+                        )
         except (UserError, ValidationError):
             raise
         except (

@@ -14,6 +14,7 @@ from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
+
 class BinaryVersion(models.Model):
     _name = "binary.version"
     _description = "Specific Binary Version Release"
@@ -23,7 +24,7 @@ class BinaryVersion(models.Model):
         "binary.manifest",
         string="Software Manifest",
         required=True,
-        ondelete="cascade"
+        ondelete="cascade",
     )
     version_number = fields.Char(string="Version", required=True)
     release_date = fields.Date(string="Upstream Release Date")
@@ -45,13 +46,12 @@ class BinaryVersion(models.Model):
     )
 
     is_downloaded = fields.Boolean(
-        string="Downloaded to Central Pool",
-        compute="_compute_is_downloaded"
+        string="Downloaded to Central Pool", compute="_compute_is_downloaded"
     )
 
     _version_uniq = models.Constraint(
-        'unique(manifest_id, version_number)',
-        'This version number already exists for this software.'
+        "unique(manifest_id, version_number)",
+        "This version number already exists for this software.",
     )
     _url_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(url)) > 0)", "The download URL cannot be empty."
@@ -85,7 +85,8 @@ class BinaryVersion(models.Model):
         for record in self:
             if record.archive_type in ("tar.gz", "zip") and not record.extract_member:
                 raise ValidationError(
-                    _("Extract Member is required for %s archives.") % record.archive_type
+                    _("Extract Member is required for %s archives.")
+                    % record.archive_type
                 )
 
     def _get_central_path(self):
@@ -138,7 +139,9 @@ class BinaryVersion(models.Model):
                 else:
                     os.unlink(target_bin)
             except OSError as e:
-                _logger.warning("Failed to verify existing central binary %s: %s", target_bin, e)
+                _logger.warning(
+                    "Failed to verify existing central binary %s: %s", target_bin, e
+                )
 
         # Standard secure download and extraction protocol
         try:
@@ -158,47 +161,95 @@ class BinaryVersion(models.Model):
                         hasher.update(chunk)
 
                 if hasher.hexdigest() != self.checksum:
-                    raise UserError(_("Security Alert: Checksum mismatch for downloaded version %s.") % self.version_number)
+                    raise UserError(
+                        _(
+                            "Security Alert: Checksum mismatch for downloaded version %s."
+                        )
+                        % self.version_number
+                    )
 
                 if self.archive_type == "tar.gz":
-                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
+                    with tarfile.open(
+                        tmp_path, "r:gz"
+                    ) as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
                         found = False
                         extract_target = self.extract_member or self.manifest_id.name
                         for member in tar.getmembers():
-                            if member.name.endswith(f"/{extract_target}") or member.name == extract_target:
-                                member.name = os.path.basename(target_bin)
+                            if (
+                                member.name.endswith(f"/{extract_target}")
+                                or member.name == extract_target
+                            ):
                                 if member.islnk() or member.issym():
-                                    raise UserError(_("Security Alert: Links are not allowed in the archive."))
-                                if hasattr(tarfile, "data_filter"):
-                                    tar.extract(member, path=bin_dir, filter="data")
-                                else:
-                                    target_path = os.path.abspath(os.path.join(bin_dir, member.name))
-                                    if not target_path.startswith(os.path.abspath(bin_dir)):
-                                        raise UserError(_("Security Alert: Tar slip attempt detected."))
-                                    tar.extract(member, path=bin_dir)
-                                found = True
-                                break
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Links are not allowed in the archive."
+                                        )
+                                    )
+
+                                # Path traversal protection
+                                target_path = os.path.abspath(
+                                    os.path.join(bin_dir, os.path.basename(member.name))
+                                )
+                                if not target_path.startswith(
+                                    os.path.abspath(bin_dir)
+                                ):
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Tar slip attempt detected."
+                                        )
+                                    )
+
+                                source = tar.extractfile(member)
+                                if source:
+                                    with source:
+                                        with open(target_bin, "wb") as target:
+                                            shutil.copyfileobj(source, target)
+                                    found = True
+                                    break
                         if not found:
-                            raise UserError(_("Member %s not found in archive.") % extract_target)
+                            raise UserError(
+                                _("Member %s not found in archive.") % extract_target
+                            )
                 elif self.archive_type == "zip":
                     with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path
                         extract_target = self.extract_member or self.manifest_id.name
                         found = False
                         for zinfo in zip_ref.infolist():
                             name = zinfo.filename
-                            if name.endswith(f"/{extract_target}") or name == extract_target:
+                            if (
+                                name.endswith(f"/{extract_target}")
+                                or name == extract_target
+                            ):
                                 if (zinfo.external_attr >> 16) & stat.S_IFLNK:
-                                    raise UserError(_("Security Alert: Links are not allowed in the archive."))
-                                target_path = os.path.join(bin_dir, os.path.basename(target_bin))
-                                if not os.path.abspath(target_path).startswith(os.path.abspath(bin_dir)):
-                                    raise UserError(_("Security Alert: Zip slip attempt detected."))
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Links are not allowed in the archive."
+                                        )
+                                    )
+
+                                # Path traversal protection
+                                target_path = os.path.abspath(
+                                    os.path.join(bin_dir, os.path.basename(zinfo.filename))
+                                )
+                                if not target_path.startswith(
+                                    os.path.abspath(bin_dir)
+                                ):
+                                    raise UserError(
+                                        _(
+                                            "Security Alert: Zip slip attempt detected."
+                                        )
+                                    )
+
                                 with zip_ref.open(zinfo) as source:
-                                    with open(target_path, "wb") as target:
+                                    with open(target_bin, "wb") as target:
                                         shutil.copyfileobj(source, target)
                                 found = True
                                 break
                         if not found:
-                            raise UserError(_("Member %s not found in zip archive.") % extract_target)
+                            raise UserError(
+                                _("Member %s not found in zip archive.")
+                                % extract_target
+                            )
                 else:
                     shutil.copy2(tmp_path, target_bin)
 
@@ -209,6 +260,16 @@ class BinaryVersion(models.Model):
                     try:
                         os.unlink(tmp_path)
                     except OSError as e:
-                        _logger.warning("Failed to clean up temporary file %s: %s", tmp_path, e)
-        except (urllib.error.URLError, OSError, tarfile.TarError, zipfile.BadZipFile, UserError) as e:
-            raise UserError(_("Failed to download version %s: %s") % (self.version_number, str(e)))
+                        _logger.warning(
+                            "Failed to clean up temporary file %s: %s", tmp_path, e
+                        )
+        except (
+            urllib.error.URLError,
+            OSError,
+            tarfile.TarError,
+            zipfile.BadZipFile,
+            UserError,
+        ) as e:
+            raise UserError(
+                _("Failed to download version %s: %s") % (self.version_number, str(e))
+            )
