@@ -13,6 +13,7 @@ import infrastructure
 import argparse
 import atexit
 import contextlib
+import ctypes
 import glob
 import logging
 import os
@@ -241,6 +242,8 @@ class FailureExtractor:
 
             for line in block:
                 for match in addon_pattern.findall(line): modules.add(match)
+        return modules
+
     def finish_and_write(self):
         if getattr(self, "_written", False):
             return
@@ -638,10 +641,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     Pure-Python OS-level namespace bootstrapping.
     Executes entirely without Bash wrappers, leveraging `os.setuid` for micro-privileges.
     """
-    # 1. Loopback Network
-    subprocess.run(["ip", "link", "set", "lo", "up"], check=True)
-
-    # 2. Ephemeral OverlayFS File System
+    # 1. Ephemeral OverlayFS File System
     subprocess.run(["mount", "--make-rprivate", "/"], check=True)
     subprocess.run(["mount", "-t", "tmpfs", "tmpfs", "/mnt"], check=True)
     for d in ["/mnt/upper", "/mnt/work", "/mnt/host_test_dir", "/opt/hams/test"]:
@@ -672,6 +672,17 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     os.makedirs("/mnt/real_tmp", exist_ok=True)
     subprocess.run(["mount", "--bind", host_tmp_dir, "/mnt/real_tmp"], check=True)
 
+    # Explicitly prepare the host log directory (~/tmp/log) before overlay
+    host_log_dir = os.path.join(host_tmp_dir, "log")
+    os.makedirs(host_log_dir, exist_ok=True)
+    try:
+        os.chown(host_log_dir, 0, 0)
+        os.chmod(host_log_dir, 0o755)
+    except OSError as e:
+        _logger.debug("Ignored OSError setting permissions on host log dir: %s", e)
+    os.makedirs("/mnt/real_log", exist_ok=True)
+    subprocess.run(["mount", "--bind", host_log_dir, "/mnt/real_log"], check=True)
+
     print("[*] Creating overlay filesystem for isolated testing...")
     for item in ["etc", "opt", "var", "usr", "home", "tmp", "run"]:
         if not os.path.exists(f"/{item}"): continue
@@ -695,9 +706,27 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
 
     infrastructure.provision_environment(_safe_run, env_vars, orig_user, skip_apt=True)
 
+    print("[*] Isolating network namespace for test daemons...")
+    CLONE_NEWNET = 0x40000000
+    try:
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+    except OSError:
+        libc = ctypes.CDLL(None, use_errno=True)
+
+    if libc.unshare(CLONE_NEWNET) != 0:
+        print(f"❌ ERROR: Failed to dynamically isolate network namespace: {ctypes.get_errno()}")
+        sys.exit(1)
+
+    # Bring up the isolated loopback interface now that we are in the new network namespace
+    subprocess.run(["ip", "link", "set", "lo", "up"], check=True)
+
     # Bind the preserved host directory to the overlay's /var/tmp
     os.makedirs("/var/tmp", exist_ok=True)
     subprocess.run(["mount", "--bind", "/mnt/real_tmp", "/var/tmp"], check=True)
+
+    # Bind the preserved host log directory to the overlay's /var/log
+    os.makedirs("/var/log", exist_ok=True)
+    subprocess.run(["mount", "--bind", "/mnt/real_log", "/var/log"], check=True)
 
     if os.path.exists("/var/run/postgresql"):
         os.makedirs("/var/run/postgresql", exist_ok=True)
@@ -765,7 +794,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     p.wait()
 
     # 4. Redis Sandboxing
-    subprocess.run(["pkill", "redis-server"], check=False)
+    # No pkill required: network namespace isolation prevents port collision with host
     redis_user = pwd.getpwnam("redis")
 
     redis_dir = "/var/lib/redis"
@@ -792,7 +821,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
                         log_file = parts[1].strip('"\'')
 
     # Explicitly grant the redis user ownership over its dynamic production directories
-    for d in [redis_dir, "/var/log/redis", "/run/redis", os.path.dirname(log_file) if log_file and log_file != '""' else ""]:
+    for d in [redis_dir, "/var/log/redis", "/run/redis", "/etc/redis", os.path.dirname(log_file) if log_file and log_file != '""' else ""]:
         if d:
             os.makedirs(d, exist_ok=True)
             try:
@@ -800,6 +829,13 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
                 os.chmod(d, 0o750)
             except OSError as e:
                 _logger.debug("Ignored OSError when setting directory permissions: %s", e)
+
+    if os.path.exists(conf_path):
+        try:
+            os.chown(conf_path, redis_user.pw_uid, redis_user.pw_gid)
+            os.chmod(conf_path, 0o640)
+        except OSError as e:
+            _logger.debug("Ignored OSError when setting redis.conf permissions: %s", e)
 
     # Ensure the DB snapshot file is writable to prevent BGSAVE failures
     db_path = os.path.join(redis_dir, db_filename)
@@ -820,18 +856,22 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
 
     # Run redis-server strictly using its production configuration,
     # overriding only 'daemonize' so subprocess.Popen can track its lifetime.
+    # Specify the directory to prevent BGSAVE permissions errors (MISCONF).
     cmd = ["redis-server"]
     if os.path.exists(conf_path):
         cmd.append(conf_path)
-    cmd.extend(["--daemonize", "no"])
+    cmd.extend(["--daemonize", "no", "--dir", redis_dir])
 
-    redis_proc = subprocess.Popen(cmd, preexec_fn=lambda: (os.setresgid(redis_user.pw_gid, redis_user.pw_gid, redis_user.pw_gid), os.setresuid(redis_user.pw_uid, redis_user.pw_uid, redis_user.pw_uid)))
+    def preexec_redis():
+        os.initgroups("redis", redis_user.pw_gid)
+        os.setresgid(redis_user.pw_gid, redis_user.pw_gid, redis_user.pw_gid)
+        os.setresuid(redis_user.pw_uid, redis_user.pw_uid, redis_user.pw_uid)
+
+    redis_proc = subprocess.Popen(cmd, cwd=redis_dir, preexec_fn=preexec_redis)
     wait_for_port(6379, "Redis")
 
     # 5. RabbitMQ Sandboxing
-    subprocess.run(["pkill", "-u", "rabbitmq"], check=False)
-    subprocess.run(["pkill", "epmd"], check=False)
-
+    # No pkill required: network namespace isolation prevents port collision with host
     rmq_user = pwd.getpwnam("rabbitmq")
 
     for d in ["/var/lib/rabbitmq", "/var/log/rabbitmq", "/run/rabbitmq"]:
@@ -1006,6 +1046,7 @@ def main():
         print("[*] Routing test execution to isolated Python namespace...")
 
         os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
+        # Isolate mount (-m) namespace. Network isolation happens dynamically post-provisioning.
         exec_cmd = ["unshare", "-m", sys.executable, os.path.abspath(__file__), "--internal-ns-init"] + sys.argv[1:]
 
         if os.geteuid() != 0:
