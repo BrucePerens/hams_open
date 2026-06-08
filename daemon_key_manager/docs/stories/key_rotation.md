@@ -16,6 +16,14 @@ so that the security risk of a leaked key is limited in time and I don't have to
 4.  The external daemon, upon its next JSON-RPC call, may receive an `AccessError`.
 5.  The daemon's error handler re-reads the `.env` file, acquires the new key, and retries the request successfully [@ANCHOR: daemon_self_healing].
 
+## Manual Rotation
+
+If a specific daemon's credentials are suspected of being compromised, a manager can manually trigger a rotation for that specific daemon via the "Rotate Key" button on the registry form [@ANCHOR: action_rotate_key_api].
+
+## Safety Safeguards
+
+The system strictly prevents key rotation for service accounts that have been archived or disabled to prevent accidental reactivation of unauthorized access [@ANCHOR: rotation_safety_archived_user].
+
 ## Security Benefits
 - Even if a backup of the `.env` file is stolen, the key will expire and be revoked within 60 days.
 - The 90-day expiration on the Odoo side provides a 30-day buffer for the rotation to succeed.

@@ -24,7 +24,8 @@
         <field name="arch" type="xml">
             <form string="Daemon Key Registry">
                 <header>
-                    <button name="action_force_provision_all" type="object" string="Force Provision All" class="oe_highlight"/>
+                    <button name="action_rotate_key" type="object" string="Rotate Key" class="oe_highlight"/>
+                    <button name="action_force_provision_all" type="object" string="Force Provision All"/>
                 </header>
                 <sheet>
                     <group>

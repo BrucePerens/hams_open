@@ -97,9 +97,11 @@ class DaemonKeyRegistry(models.Model):
         # [@ANCHOR: register_daemon_api]
 
         # Authorization Check: register_daemon is a privileged API
-        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager") and not self.env.user.is_service_account:
-            if self.env.uid != SUPERUSER_ID and not self.env.is_admin() and not self.env.is_superuser():
-                raise AccessError(_("Unauthorized attempt to register daemon: %s") % daemon_name)
+        if not (self.env.user.has_group("daemon_key_manager.group_daemon_key_manager") or
+                self.env.user.is_service_account or
+                self.env.is_admin() or
+                self.env.is_superuser()):
+            raise AccessError(_("Unauthorized attempt to register daemon: %s") % daemon_name)
 
         # Elevate to the internal service account to perform registration
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -163,7 +165,6 @@ class DaemonKeyRegistry(models.Model):
         registry._rotate_key_and_write_file()
         return True
 
-    @api.model
     def action_force_provision_all(self, *args, **kwargs):
         # Tested by [@ANCHOR: test_force_provisioning]
         # [@ANCHOR: action_force_provision_all_api]
@@ -189,13 +190,52 @@ class DaemonKeyRegistry(models.Model):
             _logger.info("Synchronously provisioning key for daemon: %s", reg.name)
             try:
                 reg._rotate_key_and_write_file()
+            except (UserError, ValidationError, AccessError):
+                # Allow validation and authorization errors to bubble up naturally
+                raise
             except OSError:
                 # [@ANCHOR: force_provision_error_handling]
                 raise UserError(
                     _("Cannot write key file for '%s' at '%s'. Check permissions.")
                     % (reg.name, reg.env_file_path)
                 )
-        return True
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Success"),
+                "message": _("All keys provisioned successfully."),
+                "sticky": False,
+                "type": "success",
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
+    def action_rotate_key(self):
+        """
+        Manually rotate the key for a single daemon.
+        """
+        # [@ANCHOR: action_rotate_key_api]
+        # Verified by [@ANCHOR: test_action_rotate_key]
+        self.ensure_one()
+
+        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
+            raise AccessError(_("Only Daemon Key Managers can rotate keys."))
+
+        self._rotate_key_and_write_file()
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Success"),
+                "message": _("Key for '%s' rotated successfully.") % self.name,
+                "sticky": False,
+                "type": "success",
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
 
     def _rotate_key_and_write_file(self):
         # Tested by [@ANCHOR: test_force_provisioning]
@@ -205,7 +245,12 @@ class DaemonKeyRegistry(models.Model):
         if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
             raise AccessError(_("Only Daemon Key Managers can rotate keys."))
 
-        if self.user_id.id == SUPERUSER_ID:
+        if not self.user_id.active:
+            # [@ANCHOR: rotation_safety_archived_user]
+            # Verified by [@ANCHOR: test_rotation_safety_archived_user]
+            raise UserError(_("Cannot rotate key for archived service account: %s") % self.user_id.login)
+
+        if self.user_id.id == SUPERUSER_ID or self.user_id.has_group('base.group_system'):
             raise UserError(
                 _(
                     "Security Alert: The __system__ user ID cannot be used to provision a key. "

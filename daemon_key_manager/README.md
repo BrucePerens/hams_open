@@ -59,6 +59,11 @@ In containerized/orchestrated environments:
 * **`env_file_path`**: The absolute path where the `.env` file should be written. It must reside within `/var/lib/odoo/daemon_keys/`.
 * **Behavior**: This method is idempotent. If a daemon with the same name exists, its service account and path are updated. It immediately triggers the generation of the first API key and writes the file. It also ensures the registry is associated with the service account's company [@ANCHOR: register_daemon_logic] [@ANCHOR: register_daemon_idempotency].
 
+#### `action_rotate_key()` [@ANCHOR: action_rotate_key_api]
+* **Use Case**: Manually rotate the key for a specific daemon. This is the preferred method for rotating individual credentials if they are suspected of being compromised.
+* **Behavior**: Revokes the existing key and generates a new one synchronously.
+* **Security**: Only accessible to members of the `Daemon Key Management / Manager` group.
+
 #### `action_force_provision_all()` [@ANCHOR: action_force_provision_all_api]
 * **Use Case**: Used during system bootstrapping (e.g., via systemd or Kubernetes init containers) to ensure all keys are present on disk before daemons start. Also used for emergency rotation of all keys.
 * **Shell Invocation**:
