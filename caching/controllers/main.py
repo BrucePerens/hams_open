@@ -88,7 +88,7 @@ class ServiceWorkerController(http.Controller):
                     continue
 
                 static_path = os.path.join(mod_path, "static")
-                if os.path.exists(static_path):
+                if os.path.isdir(static_path):
                     _scan_recursive(static_path)
 
             file_sizes.sort(reverse=True)
@@ -125,10 +125,13 @@ class ServiceWorkerController(http.Controller):
                 or 35
             )
 
-        # Reserve 15MB for compiled bundles and overhead.
-        SAFE_QUOTA = quota_mb * 1024 * 1024
+        # Reserve 10MB for compiled bundles and overhead.
+        SAFE_QUOTA = max(0, quota_mb - 10) * 1024 * 1024
 
         total_size = sum(file_sizes)
+
+        if SAFE_QUOTA <= 0:
+            return (str(int(max_mtime)), "0")
 
         if not file_sizes:
             return (
@@ -140,7 +143,7 @@ class ServiceWorkerController(http.Controller):
             # Everything fits. Ensure we allow at least 10MB for bundles.
             dynamic_max_size = max(
                 file_sizes[0] + 1024 if file_sizes else 0,
-                10 * 1024 * 1024,
+                10 * 1024 * 1024 if SAFE_QUOTA > 0 else 0,
             )
         else:
             # Drop largest files until remaining sum fits quota.

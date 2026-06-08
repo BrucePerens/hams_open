@@ -15,7 +15,7 @@
 
     <h2>3. Important Safety Features</h2>
     <ul>
-        <li><strong>Intelligent Quota Management:</strong> Browsers limit how much data a Service Worker can save. To prevent the browser from "panicking" and deleting the entire cache, our assistant calculates exactly how much space is safe. It prioritizes small, essential UI files and automatically skips very large media files, while always ensuring space for critical system bundles.</li>
+        <li><strong>Intelligent Quota Management:</strong> Browsers limit how much data a Service Worker can save. To prevent the browser from "panicking" and deleting the entire cache, our assistant calculates exactly how much space is safe. It prioritizes small, essential UI files and automatically skips very large media files, while always reserving at least 10MB for critical system bundles and overhead.</li>
         <li><strong>Privacy-First Architecture:</strong> The module only saves public technical assets required to display the website. It never saves your personal information, login credentials, or private data.</li>
         <li><strong>Real-time Compatibility:</strong> Live communication features like chat and notifications are explicitly bypassed by the caching system to ensure they always provide real-time updates.</li>
     </ul>

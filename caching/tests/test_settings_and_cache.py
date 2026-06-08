@@ -108,6 +108,16 @@ class TestSettingsAndCache(RealTransactionCase):
             "[!] DIAGNOSTIC FOR AI: Max size should be adjusted to reject the largest file when over quota.",
         )
 
+        # Case 4: Quota is less than reservation (e.g. 5MB)
+        # Reservation is 10MB.
+        website.caching_safe_quota_mb = 5
+        mtime, max_size = controller._get_global_static_info()
+        self.assertEqual(
+            max_size,
+            str(0),
+            "[!] DIAGNOSTIC FOR AI: Max size should be 0 if quota is less than reservation.",
+        )
+
     def test_02_force_invalidation(self):
         """
         Verify that action_force_cache_invalidation updates the version.

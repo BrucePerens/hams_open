@@ -54,8 +54,11 @@ self.addEventListener('fetch', (event) => {
                     }
 
                     // SIZE LIMIT SAFETY VALVE
+                    // Odoo bundles are exempt from the dynamic module quota,
+                    // as they fit within the 10MB system reservation.
+                    const isBundle = url.pathname.startsWith('/web/assets/');
                     const contentLength = networkResponse.headers.get('Content-Length');
-                    if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
+                    if (!isBundle && contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
                         console.warn(`[Caching SW] Skipping cache for large file: ${request.url} (${contentLength} bytes)`);
                         return networkResponse;
                     }
