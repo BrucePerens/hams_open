@@ -9,6 +9,7 @@ This module automatically handles the annoying parts of running a legal website.
 * **Turns on the Cookie Banner:** As soon as you install this, it flips the switch to turn on Odoo's native Cookie Consent Bar across all your websites. It also ensures that any **new** websites created later have this enabled by default. This stops optional tracking scripts until the user clicks "Accept."
 * **Writes Your Legal Pages:** It automatically creates standard, editable pages for your Privacy Policy (`/privacy`), Cookie Policy (`/cookie-policy`), Terms of Service (`/terms`), and Accessibility Statement (`/accessibility`).
 * **Automatic Footer Links:** It injects links to all legal pages into your website's footer automatically, ensuring global visibility and regulatory compliance.
+* **Privacy Dashboard Link:** Adds a direct link to the Privacy & Data Management dashboard (`/my/privacy`) in the footer, making it easy for users to exercise their data rights.
 * **Doesn't Break Your Edits:** If you've already written a privacy policy at `/privacy`, the module detects it and leaves yours alone. If you edit the pages it creates, it won't overwrite your work when you update the module.
 
 ## ⚖️ Included Policy Coverage
@@ -31,7 +32,7 @@ We provide four standard pages that you can edit to fit your needs:
 * **Terms of Service:** `/terms`
 * **Accessibility Statement:** `/accessibility`
 
-These pages are automatically linked in your website's footer for global visibility.
+These pages, along with a link to the **My Privacy** dashboard (`/my/privacy`), are automatically linked in your website's footer for global visibility.
 
 **To edit these pages:**
 1. Navigate to the page URL on your website.

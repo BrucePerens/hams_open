@@ -33,6 +33,10 @@ registry.category("web_tour.tours").add("compliance_tour", {
             trigger: "footer a[href='/accessibility']",
             content: 'Verify Accessibility Statement link in footer',
         },
+        {
+            trigger: "footer a[href='/my/privacy']",
+            content: 'Verify My Privacy link in footer',
+        },
         // Navigate to Cookie Policy
         {
             trigger: "footer a[href='/cookie-policy']",
