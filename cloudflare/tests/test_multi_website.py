@@ -38,8 +38,9 @@ class TestMultiWebsiteCloudflare(HamsTransactionCase):
         self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True
         )
+        # Patch exactly where it is imported/used, not where it is defined.
         self.safe_patch(
-            "odoo.addons.cloudflare.utils.cloudflare_api.purge_everything", return_value=True
+            "odoo.addons.cloudflare.models.purge_queue.purge_everything", return_value=True
         )
 
         # Enqueue URLs for both websites

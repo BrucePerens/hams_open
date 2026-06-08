@@ -55,16 +55,19 @@ class UserWebsitesSEOController(UserWebsitesController):
                 if request and request.env:
                     user = user.with_env(request.env)
                 # ADR-0078: Pre-fetch SEO fields
-                # micro-privilege: use sudo so public users can resolve the SEO fields
-                user_sudo = user.sudo()
-                user_sudo.read(list(user_sudo._get_seo_fields()))
-                qcontext["main_object"] = user_sudo
+                # micro-privilege: use facility service account so public users can resolve the SEO fields
+                # Use user.env to avoid RuntimeError: object is not bound on request.env in tests
+                svc_uid = user.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.odoo_facility_service_internal")
+                user_svc = user.with_user(svc_uid)
+                user_svc.read(list(user_svc._get_seo_fields()))
+                qcontext["main_object"] = user_svc
             elif group:
                 if request and request.env:
                     group = group.with_env(request.env)
                 # ADR-0078: Pre-fetch SEO fields
-                group_sudo = group.sudo()
-                group_sudo.read(list(group_sudo._get_seo_fields()))
-                qcontext["main_object"] = group_sudo
+                svc_uid = group.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.odoo_facility_service_internal")
+                group_svc = group.with_user(svc_uid)
+                group_svc.read(list(group_svc._get_seo_fields()))
+                qcontext["main_object"] = group_svc
 
         return response

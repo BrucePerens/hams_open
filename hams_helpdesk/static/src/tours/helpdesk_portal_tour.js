@@ -9,7 +9,6 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
             content: "Click on New Ticket",
             trigger: '.o_tour_new_ticket',
             run: 'click',
-            expectUnloadPage: true,
         },
         {
             content: "Fill Subject",
@@ -20,6 +19,11 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
             content: "Fill Description",
             trigger: 'textarea[name="description"]',
             run: 'edit This is a ticket created by a tour.',
+        },
+        {
+            content: "Blur inputs to prevent RPC abort during navigation",
+            trigger: '#wrapwrap',
+            run: 'click',
         },
         {
             content: "Submit Ticket",
