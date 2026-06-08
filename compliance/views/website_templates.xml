@@ -8,7 +8,8 @@
                 <a href="/privacy" class="me-3">Privacy Policy</a>
                 <a href="/cookie-policy" class="me-3">Cookie Policy</a>
                 <a href="/terms" class="me-3">Terms of Service</a>
-                <a href="/accessibility">Accessibility Statement</a>
+                <a href="/accessibility" class="me-3">Accessibility Statement</a>
+                <a href="/my/privacy">My Privacy</a>
             </div>
         </xpath>
     </template>
