@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo import models
 
+
 class SEOMetadataMixin(models.AbstractModel):
     _name = "user.websites.seo.metadata.mixin"
     _description = "User Websites SEO Metadata Mixin"
@@ -20,7 +21,9 @@ class SEOMetadataMixin(models.AbstractModel):
         To be overridden by models using this mixin to define
         who can edit SEO metadata.
         """
-        raise NotImplementedError("Each model must implement its own permission check.")
+        raise NotImplementedError(
+            "Each model must implement its own permission check."
+        )
 
     def write(self, vals):
         seo_fields = self._get_seo_fields()
@@ -39,10 +42,11 @@ class SEOMetadataMixin(models.AbstractModel):
                 res = res and super().write(seo_vals)
             else:
                 self._check_seo_write_permission()
-                # Escalate strictly for the write operation using the domain service account
+                # Escalate strictly for the write operation using service acc
                 # ADR-0001: Use with_context(mail_notrack=True)
-                # LLM_EXPERIENCE: NEVER use prefetch_fields=False during .create() or on models without chatter.
-                svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                # LLM_EXPERIENCE: NEVER use prefetch_fields=False
+                utils = self.env["zero_sudo.security.utils"]
+                svc_uid = utils._get_service_uid(
                     "user_websites.user_websites_service_account"
                 )
                 res = res and super(

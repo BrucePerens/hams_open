@@ -4,6 +4,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 _logger = logging.getLogger(__name__)
 
+
 class TestSEOPagesPosts(HamsTransactionCase):
 
     @classmethod
@@ -12,7 +13,9 @@ class TestSEOPagesPosts(HamsTransactionCase):
         cls.regular_user = cls.env['res.users'].create({
             'name': 'Page Owner',
             'login': 'page_owner',
-            'group_ids': [(6, 0, [cls.env.ref('user_websites.group_user_websites_user').id])]
+            'group_ids': [(6, 0, [
+                cls.env.ref('user_websites.group_user_websites_user').id
+            ])]
         })
 
         cls.page = cls.env['website.page'].with_user(cls.regular_user).create({
@@ -40,10 +43,9 @@ class TestSEOPagesPosts(HamsTransactionCase):
         page_by_user.write({'website_meta_title': 'Page SEO Title'})
 
         # Odoo 19: Check if the field was correctly written.
-        # If user_websites whitelist is missing, this will be False.
         if self.page.website_meta_title != 'Page SEO Title':
-             _logger.warning("SEO field write failed. This is expected if user_websites whitelist is not updated yet. See JULES_ISSUES.md")
-             return
+            _logger.warning("SEO field write failed.")
+            return
 
         self.assertEqual(self.page.website_meta_title, 'Page SEO Title')
 
@@ -53,7 +55,7 @@ class TestSEOPagesPosts(HamsTransactionCase):
         post_by_user.write({'website_meta_title': 'Post SEO Title'})
 
         if self.post.website_meta_title != 'Post SEO Title':
-             _logger.warning("SEO field write failed. This is expected if user_websites whitelist is not updated yet. See JULES_ISSUES.md")
-             return
+            _logger.warning("SEO field write failed.")
+            return
 
         self.assertEqual(self.post.website_meta_title, 'Post SEO Title')
