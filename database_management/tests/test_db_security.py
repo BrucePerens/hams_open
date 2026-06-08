@@ -17,41 +17,41 @@ class TestDbSecurity(HamsTransactionCase):
             }
         )
 
-        web_grp = self.env.ref(
-            "user_websites.group_user_websites_user", raise_if_not_found=False
-        )
-        groups_web = [self.env.ref("base.group_portal").id] + (
-            [web_grp.id] if web_grp else []
-        )
+        web_grp = self.env.ref("user_websites.group_user_websites_user", raise_if_not_found=False)
+        groups_web = [self.env.ref("base.group_portal").id] + ([web_grp.id] if web_grp else [])
         self.user_web = self.env["res.users"].create(
-            {"name": "Web", "login": "web_db", "group_ids": [(6, 0, groups_web)]}
+            {
+                "name": "Web",
+                "login": "web_db",
+                "group_ids": [(6, 0, groups_web)],
+            }
         )
 
         ham_grp = self.env.ref("base.group_portal", raise_if_not_found=False)
-        groups_ham = [self.env.ref("base.group_portal").id] + (
-            [ham_grp.id] if ham_grp else []
-        )
+        groups_ham = [self.env.ref("base.group_portal").id] + ([ham_grp.id] if ham_grp else [])
         self.user_ham = self.env["res.users"].create(
-            {"name": "Ham", "login": "ham_db", "group_ids": [(6, 0, groups_ham)]}
+            {
+                "name": "Ham",
+                "login": "ham_db",
+                "group_ids": [(6, 0, groups_ham)],
+            }
         )
 
         swl_grp = self.env.ref("base.group_portal", raise_if_not_found=False)
-        groups_swl = [self.env.ref("base.group_portal").id] + (
-            [swl_grp.id] if swl_grp else []
-        )
+        groups_swl = [self.env.ref("base.group_portal").id] + ([swl_grp.id] if swl_grp else [])
         self.user_swl = self.env["res.users"].create(
-            {"name": "Swl", "login": "swl_db", "group_ids": [(6, 0, groups_swl)]}
+            {
+                "name": "Swl",
+                "login": "swl_db",
+                "group_ids": [(6, 0, groups_swl)],
+            }
         )
 
         self.public_user = self.env.ref("base.public_user")
 
         # Fetch existing SQL View records for testing read isolation
-        self.table_stat = (
-            self.env["database.table.stat"].with_user(self.admin).search([], limit=1)
-        )
-        self.pg_setting = (
-            self.env["database.pg.setting"].with_user(self.admin).search([], limit=1)
-        )
+        self.table_stat = self.env["database.table.stat"].with_user(self.admin).search([], limit=1)
+        self.pg_setting = self.env["database.pg.setting"].with_user(self.admin).search([], limit=1)
 
     def test_01_multi_persona_isolation(self):
         # Tests [@ANCHOR: db_security_prefetch]
@@ -93,7 +93,5 @@ class TestDbSecurity(HamsTransactionCase):
                 AccessError,
                 msg=f"{user.name} MUST NOT be able to access the HA Wizard.",
             ):
-                self.env["pg.ha.wizard"].with_user(user).create(
-                    {"primary_ip": "10.0.0.1"}
-                )
+                self.env["pg.ha.wizard"].with_user(user).create({"primary_ip": "10.0.0.1"})
                 self.env.flush_all()

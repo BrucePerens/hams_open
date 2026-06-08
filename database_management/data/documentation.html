@@ -20,7 +20,8 @@
     <h3>How to reclaim space:</h3>
     <ol>
         <li>Select the tables you wish to clean in the list view.</li>
-        <li>Click <strong>Vacuum Analyze Selected</strong>. This triggers the PostgreSQL <code>VACUUM ANALYZE</code> command, which removes dead tuples and updates optimizer statistics.</li>
+        <li>Click <strong>Vacuum Analyze Selected</strong>. This triggers the PostgreSQL <code>VACUUM ANALYZE</code> command, which removes dead tuples and updates optimizer statistics.
+            <br/><em>Performance Note:</em> The system automatically batches these requests to minimize overhead.</li>
     </ol>
 
     <h3>Index Advisor:</h3>
@@ -48,6 +49,7 @@
     <ul>
         <li>Go to <strong>Database Health > Slow Queries (APM)</strong>.</li>
         <li>Queries are sorted by <strong>Total Time</strong>. This helps you identify which parts of the application are causing the most load, even if individual executions are fast.</li>
+        <li><strong>Reset Statistics:</strong> If you have resolved performance issues and want to start fresh, use the <strong>Reset Statistics</strong> button in the header.</li>
         <li><strong>Explain Plan:</strong> Click the <strong>Explain</strong> (search icon) next to any query to generate a detailed <code>EXPLAIN (ANALYZE, BUFFERS)</code> plan. This reveals exactly how PostgreSQL is executing the query and where the bottlenecks are.</li>
     </ul>
 </section>

@@ -52,9 +52,7 @@ class PgOptimizeWizard(models.TransientModel):
         required=True,
         default="ssd",
     )
-    max_connections = fields.Integer(
-        string="Max Connections", required=True, default=200
-    )
+    max_connections = fields.Integer(string="Max Connections", required=True, default=200)
 
     def action_apply_optimizations(self):
         # [@ANCHOR: pg_optimize_wizard]
@@ -64,9 +62,7 @@ class PgOptimizeWizard(models.TransientModel):
 
         # micro-privilege: Use service account cursor for sensitive operations
         utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env(
-            "database_management.user_database_management_service"
-        )
+        env_svc = utils._get_service_env("database_management.user_database_management_service")
         cr_svc = env_svc.cr
 
         # Standard DBA Tuning Algorithms
@@ -92,9 +88,7 @@ class PgOptimizeWizard(models.TransientModel):
 
         for param, val in settings.items():
             # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
-            query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
-                sql.Identifier(param), sql.Literal(val)
-            )
+            query = sql.SQL("ALTER SYSTEM SET {} = {}").format(sql.Identifier(param), sql.Literal(val))
             cr_svc.execute(query)
 
         cr_svc.execute("SELECT pg_reload_conf()")
@@ -117,40 +111,34 @@ class PgHaWizard(models.TransientModel):
     _name = "pg.ha.wizard"
     _description = "High Availability Failover Wizard"
 
-    cluster_name = fields.Char(
-        string="Cluster Name", required=True, default="hams_cluster"
-    )
-    primary_ip = fields.Char(
-        string="Primary Node IP", required=True, default="10.0.0.1"
-    )
-    secondary_ip = fields.Char(
-        string="Secondary Node IP", required=True, default="10.0.0.2"
-    )
+    cluster_name = fields.Char(string="Cluster Name", required=True, default="hams_cluster")
+    primary_ip = fields.Char(string="Primary Node IP", required=True, default="10.0.0.1")
+    secondary_ip = fields.Char(string="Secondary Node IP", required=True, default="10.0.0.2")
     etcd_hosts = fields.Char(
         string="Etcd Hosts",
         required=True,
         default="etcd:2379",
         help="Comma-separated list of etcd hosts (e.g., 10.0.0.1:2379,10.0.0.2:2379)",
     )
-    replication_user = fields.Char(
-        string="Replication User", required=True, default="replicator"
-    )
+    replication_user = fields.Char(string="Replication User", required=True, default="replicator")
     replication_pass = fields.Char(
-        string="Replication Password", required=True, default="SecureRepPass123!"
+        string="Replication Password",
+        required=True,
+        default="SecureRepPass123!",
     )
-    superuser_user = fields.Char(
-        string="Superuser Name", required=True, default="postgres"
-    )
+    superuser_user = fields.Char(string="Superuser Name", required=True, default="postgres")
 
-    state = fields.Selection(
-        [("input", "Input"), ("generated", "Generated")], default="input"
-    )
+    state = fields.Selection([("input", "Input"), ("generated", "Generated")], default="input")
     patroni_primary = fields.Text(string="Primary Patroni YAML", readonly=True)
     patroni_secondary = fields.Text(string="Secondary Patroni YAML", readonly=True)
     pgbouncer_ini = fields.Text(string="PgBouncer INI", readonly=True)
 
     def _get_executable(self, cmd_name):
-        pkg_map = {"patroni": "patroni", "pgbouncer": "pgbouncer", "etcd": "etcd"}
+        pkg_map = {
+            "patroni": "patroni",
+            "pgbouncer": "pgbouncer",
+            "etcd": "etcd",
+        }
         return self.env["zero_sudo.security.utils"]._ensure_executable(
             cmd_name,
             svc_xml_id="database_management.user_database_management_service",
@@ -164,26 +152,18 @@ class PgHaWizard(models.TransientModel):
         if not self.secondary_ip or not ip_pattern.match(self.secondary_ip):
             raise UserError(_("Invalid Secondary Node IP format."))
         if not self.replication_pass or len(self.replication_pass) < 8:
-            raise UserError(
-                _("Replication Password must be at least 8 characters long.")
-            )
+            raise UserError(_("Replication Password must be at least 8 characters long."))
 
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
         # Tests [@ANCHOR: pg_ha_wizard]
         self._validate_inputs()
-        if not getattr(
-            self.env.registry, "in_test", False
-        ) and not self.env.context.get("test_mode"):
+        if not getattr(self.env.registry, "in_test", False) and not self.env.context.get("test_mode"):
             self._get_executable("etcd")
             self._get_executable("patroni")
             self._get_executable("pgbouncer")
 
-        etcd_config = (
-            "host: " + self.etcd_hosts
-            if "," not in self.etcd_hosts
-            else "hosts: [" + self.etcd_hosts + "]"
-        )
+        etcd_config = "host: " + self.etcd_hosts if "," not in self.etcd_hosts else "hosts: [" + self.etcd_hosts + "]"
 
         self.patroni_primary = f"""scope: {self.cluster_name}
 namespace: /db/
