@@ -13,29 +13,21 @@ class ManualLibraryController(http.Controller):
 
     def _get_sidebar_articles(self):
         """Helper to fetch and group root articles for the sidebar."""
-        # Domain-based search is more efficient than .filtered() for large datasets
+        # [@ANCHOR: manual_sidebar_search_optimization]
+        # Performance: Reducing 3 RPC/DB round-trips to 1 by using a combined domain.
+        user_id = request.env.user.id
         base_domain = [("parent_id", "=", False), ("website_id", "in", (False, request.website.id))]
 
-        workspace_articles = request.env["knowledge.article"].search(
-            base_domain + [("internal_permission", "in", ("read", "write"))], limit=5000
-        )
+        # Combined domain to fetch all relevant root articles in one go
+        combined_domain = base_domain + ["|", ("internal_permission", "in", ("read", "write")),
+                          "|", ("member_ids", "in", [user_id]),
+                          "&", ("internal_permission", "=", "none"), ("create_uid", "=", user_id)]
 
-        # Shared articles: permission is 'none' but user is in member_ids
-        shared_articles = request.env["knowledge.article"].search(
-            base_domain + [
-                ("internal_permission", "=", "none"),
-                ("member_ids", "in", [request.env.user.id])
-            ], limit=5000
-        )
+        all_roots = request.env["knowledge.article"].search(combined_domain, limit=5000)
 
-        # Private articles: permission is 'none', user is creator, and no other members
-        private_articles = request.env["knowledge.article"].search(
-            base_domain + [
-                ("internal_permission", "=", "none"),
-                ("create_uid", "=", request.env.user.id),
-                ("member_ids", "=", False)
-            ], limit=5000
-        )
+        workspace_articles = all_roots.filtered(lambda a: a.internal_permission in ("read", "write"))
+        shared_articles = all_roots.filtered(lambda a: a.internal_permission == "none" and user_id in a.member_ids.ids)
+        private_articles = all_roots.filtered(lambda a: a.internal_permission == "none" and a.create_uid.id == user_id and not a.member_ids)
 
         return workspace_articles, shared_articles, private_articles
 

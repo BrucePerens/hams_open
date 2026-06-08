@@ -75,6 +75,7 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, a
 *   **Recursive Breadcrumbs:** Path computation from root to current node `[@ANCHOR: manual_compute_breadcrumbs]`.
 *   **Reading Time Calculation:** Automatic estimation of reading time based on word count `[@ANCHOR: manual_compute_reading_time]`.
 *   **Author Attribution:** Automatically identifies and displays the article author based on the last editor.
+*   **Optimized Sidebar Search:** Combined ORM domain to fetch all root articles in a single database round-trip `[@ANCHOR: manual_sidebar_search_optimization]`.
 </features>
 
 <security>

@@ -150,6 +150,7 @@ class TestManualControllers(HamsHttpCase):
         )
 
     def test_05_dynamic_sidebar_categorization(self):
+        # Tests [@ANCHOR: manual_sidebar_search_optimization]
         """Verify the controller groups articles properly based on member_ids and permissions."""
         self.authenticate(self.internal_user.login, self.internal_user.login)
 
