@@ -5,23 +5,39 @@ from odoo import models, fields, api, tools
 
 _logger = logging.getLogger(__name__)
 
+
 class BinaryTenantLink(models.Model):
     _name = "binary.tenant.link"
     _description = "Tenant to Binary Version Assignment"
 
-    website_id = fields.Many2one("website", string="Tenant / Website", required=True, ondelete="cascade")
-    manifest_id = fields.Many2one("binary.manifest", string="Software", required=True, ondelete="cascade")
+    website_id = fields.Many2one(
+        "website",
+        string="Tenant / Website",
+        required=True,
+        ondelete="cascade",
+        index=True,
+    )
+    manifest_id = fields.Many2one(
+        "binary.manifest",
+        string="Software",
+        required=True,
+        ondelete="cascade",
+        index=True,
+    )
     active_version_id = fields.Many2one(
         "binary.version",
         string="Active Version",
         required=True,
-        domain="[('manifest_id', '=', manifest_id)]"
+        domain="[('manifest_id', '=', manifest_id)]",
+        index=True,
     )
-    symlink_path = fields.Char(string="Tenant Execution Path", compute="_compute_symlink_path")
+    symlink_path = fields.Char(
+        string="Tenant Execution Path", compute="_compute_symlink_path"
+    )
 
     _tenant_manifest_uniq = models.Constraint(
-        'unique(website_id, manifest_id)',
-        'A tenant can only have one active version of a specific binary at a time.'
+        "unique(website_id, manifest_id)",
+        "A tenant can only have one active version of a specific binary at a time.",
     )
 
     @api.depends("website_id", "manifest_id")
@@ -32,7 +48,9 @@ class BinaryTenantLink(models.Model):
                 record.symlink_path = False
                 continue
             # Isolate tenant binaries in their own namespace
-            tenant_dir = os.path.join(data_dir, "tenant_bins", f"site_{record.website_id.id}")
+            tenant_dir = os.path.join(
+                data_dir, "tenant_bins", f"site_{record.website_id.id}"
+            )
             record.symlink_path = os.path.join(tenant_dir, record.manifest_id.name)
 
     def apply_symlink(self):
@@ -51,9 +69,11 @@ class BinaryTenantLink(models.Model):
             os.chmod(tenant_dir, 0o750)
 
         if os.path.lexists(link_path):
-            current_target = os.readlink(link_path) if os.path.islink(link_path) else None
+            current_target = (
+                os.readlink(link_path) if os.path.islink(link_path) else None
+            )
             if current_target == central_target:
-                return True # Link is already correct
+                return True  # Link is already correct
             os.unlink(link_path)
 
         os.symlink(central_target, link_path)
@@ -69,7 +89,7 @@ class BinaryTenantLink(models.Model):
 
     def write(self, vals):
         res = super().write(vals)
-        if 'active_version_id' in vals:
+        if "active_version_id" in vals:
             for record in self:
                 record.apply_symlink()
         return res
@@ -80,5 +100,9 @@ class BinaryTenantLink(models.Model):
                 try:
                     os.unlink(record.symlink_path)
                 except OSError as e:
-                    _logger.warning("Failed to clean up tenant symlink %s: %s", record.symlink_path, e)
+                    _logger.warning(
+                        "Failed to clean up tenant symlink %s: %s",
+                        record.symlink_path,
+                        e,
+                    )
         return super().unlink()
