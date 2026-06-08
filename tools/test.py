@@ -241,12 +241,6 @@ class FailureExtractor:
 
             for line in block:
                 for match in addon_pattern.findall(line): modules.add(match)
-                for match in filepath_pattern.findall(line): modules.add(match)
-                for match in daemon_pattern.findall(line): modules.add(f"daemons/{match}")
-
-        ignore_list = {"base", "web", "mail", "website", "bus"}
-        return sorted([m for m in modules if m not in ignore_list])
-
     def finish_and_write(self):
         if getattr(self, "_written", False):
             return
@@ -254,11 +248,10 @@ class FailureExtractor:
 
         if self.capturing and self.current_block:
             self.captured_blocks.append((self.current_context, self.current_block))
+            self.capturing = False
+            self.current_block = []
+
         grouped_blocks = {}
-        for context, block in self.captured_blocks:
-            if context not in grouped_blocks:
-                grouped_blocks[context] = []
-            grouped_blocks[context].extendgrouped_blocks = {}
         for context, block in self.captured_blocks:
             if context not in grouped_blocks:
                 grouped_blocks[context] = []
@@ -305,16 +298,16 @@ class FailureExtractor:
 
         except PermissionError as e:
             print(f"\n❌ [ERROR] FailureExtractor could not write to {self.output_path} due to permission denied: {e}")
-            print("To resolve this, delete the file manually: sudo rm -f " + self.output_path + "\n")("\n==========================================================")
-            if num_failures == 0:
-                print("🎉 TEST RUN COMPLETE: No test failures detected.")
-            else:
-                print(f"🚨 TEST RUN COMPLETE: {num_failures} test failure(s) detected!")
-                print(f"📄 Failure details extracted and saved to: {self.display_path}")
-            print("==========================================================\n")
-        except PermissionError as e:
-            print(f"\n❌ [ERROR] FailureExtractor could not write to {self.output_path} due to permission denied: {e}")
             print("To resolve this, delete the file manually: sudo rm -f " + self.output_path + "\n")
+            return
+
+        print("\n==========================================================")
+        if num_failures == 0:
+            print("🎉 TEST RUN COMPLETE: No test failures detected.")
+        else:
+            print(f"🚨 TEST RUN COMPLETE: {num_failures} test failure(s) detected!")
+            print(f"📄 Failure details extracted and saved to: {self.display_path}")
+        print("==========================================================\n")
 
 
 def robust_reap(pid):
@@ -601,6 +594,10 @@ def rebuild_db(db_name):
     print(f"[*] Dropping and Rebuilding Database Schema ({db_name})...")
     env = dict(os.environ)
 
+    print("[*] Starting core daemons before testing...")
+    for svc in ["postgresql", "redis-server", "rabbitmq-server", "pdns"]:
+        subprocess.run(["sudo", "systemctl", "start", svc], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     print("[*] Flushing persistent daemons (Redis / RabbitMQ)...")
     subprocess.run(["redis-cli", "flushall"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
 
@@ -610,7 +607,7 @@ def rebuild_db(db_name):
             subprocess.run(["rabbitmqctl", "stop_app"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["rabbitmqctl", "reset"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["rabbitmqctl", "start_app"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["systemctl", "stop", "dx.firehose.service", "adif.processor.service", "qrz.scraper.service"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["sudo", "systemctl", "stop", "dx.firehose.service", "adif.processor.service", "qrz.scraper.service"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["pkill", "-f", "dx_firehose.py"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["pkill", "-f", "adif_processor.py"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["pkill", "-f", "qrz_scraper.py"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -626,6 +623,7 @@ def rebuild_db(db_name):
         sys.exit(1)
 
     subprocess.run([psql_cmd, "postgres", "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}';"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+    subprocess.run([psql_cmd, "postgres", "-c", f"DROP DATABASE IF EXISTS {db_name} WITH (FORCE);"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
     subprocess.run([dropdb_cmd, "--if-exists", "--force", db_name], check=False, stderr=subprocess.DEVNULL, env=env)
     subprocess.run([createdb_cmd, db_name], check=True, env=env)
     subprocess.run([psql_cmd, db_name, "-c", "CREATE EXTENSION IF NOT EXISTS vector;"], check=True, env=env)
@@ -660,6 +658,16 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
             subprocess.run(["mount", "--bind", sock, temp_sock], check=True)
             preserved_socks.append((temp_sock, sock))
 
+    # Anchor the true host path to an un-overlaid tmpfs directory BEFORE overlaying /home
+    host_tmp_dir = real_log_dir if real_log_dir else "/var/tmp"
+    os.makedirs(host_tmp_dir, exist_ok=True)
+    try:
+        os.chmod(host_tmp_dir, 0o777)
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
+    os.makedirs("/mnt/real_tmp", exist_ok=True)
+    subprocess.run(["mount", "--bind", host_tmp_dir, "/mnt/real_tmp"], check=True)
+
     print("[*] Creating overlay filesystem for isolated testing...")
     for item in ["etc", "opt", "var", "usr", "home", "tmp", "run"]:
         if not os.path.exists(f"/{item}"): continue
@@ -683,15 +691,9 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
 
     infrastructure.provision_environment(_safe_run, env_vars, orig_user, skip_apt=True)
 
-    # Bind mount host tmp directory AFTER overlayfs so it isnt shadowed
-    host_tmp_dir = real_log_dir if real_log_dir else "/var/tmp"
-    os.makedirs(host_tmp_dir, exist_ok=True)
-    try:
-        os.chmod(host_tmp_dir, 0o777)
-    except OSError as e:
-        _logger.debug("Ignored OSError: %s", e)
+    # Bind the preserved host directory to the overlay's /var/tmp
     os.makedirs("/var/tmp", exist_ok=True)
-    subprocess.run(["mount", "--bind", host_tmp_dir, "/var/tmp"], check=True)
+    subprocess.run(["mount", "--bind", "/mnt/real_tmp", "/var/tmp"], check=True)
 
     if os.path.exists("/var/run/postgresql"):
         os.makedirs("/var/run/postgresql", exist_ok=True)
@@ -761,7 +763,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
     # 4. Redis Sandboxing
     subprocess.run(["pkill", "redis-server"], check=False, stderr=subprocess.DEVNULL)
     redis_user = pwd.getpwnam("redis")
-    redis_proc = subprocess.Popen(["redis-server", "--daemonize", "no"], preexec_fn=lambda: (os.setresgid(redis_user.pw_gid, redis_user.pw_gid, redis_user.pw_gid), os.setresuid(redis_user.pw_uid, redis_user.pw_uid, redis_user.pw_uid)), stdout=subprocess.DEVNULL)
+    redis_proc = subprocess.Popen(["redis-server", "--daemonize", "no", "--save", '""'], preexec_fn=lambda: (os.setresgid(redis_user.pw_gid, redis_user.pw_gid, redis_user.pw_gid), os.setresuid(redis_user.pw_uid, redis_user.pw_uid, redis_user.pw_uid)), stdout=subprocess.DEVNULL)
     wait_for_port(6379, "Redis")
 
     # 5. RabbitMQ Sandboxing
