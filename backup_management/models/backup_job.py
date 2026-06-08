@@ -47,7 +47,7 @@ class BackupJob(models.Model):
                 ("state", "=", "processing"),
                 ("write_date", "<", timeout_limit),
             ],
-            limit=100,
+            limit=1,
         )
         if abandoned_jobs:
             abandoned_jobs.write(
@@ -57,6 +57,9 @@ class BackupJob(models.Model):
                     + "\n[SYSTEM] Job timed out after 2 hours of inactivity.",
                 }
             )
+            # Re-trigger to process the next one in the next cron run or via _trigger if available
+            if hasattr(self.env["ir.cron"], "_trigger"):
+                self.env.ref("backup_management.ir_cron_auto_refresh_backup_jobs")._trigger()
 
     def action_refresh_status(self):
         """
