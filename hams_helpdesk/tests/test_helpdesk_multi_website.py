@@ -49,20 +49,31 @@ class TestHelpdeskMultiWebsite(HamsTransactionCase):
             'company_id': self.env.company.id,
         })
 
-        # Test portal user on Website 1
-        self.portal_user.website_id = self.website_1
-        Ticket_portal = self.env['hams_helpdesk.ticket'].with_user(self.portal_user).with_company(self.env.company)
+        # Ensure all data is flushed and cache is cleared
+        self.env.flush_all()
+        self.env.invalidate_all()
 
-        visible_w1 = Ticket_portal.search([])
-        self.assertIn(ticket_w1, visible_w1)
-        self.assertIn(ticket_no_w, visible_w1)
+        # Test portal user on Website 1
+        self.portal_user.write({'website_id': self.website_1.id})
+        self.env.flush_all()
+        self.env.invalidate_all()
+
+        Ticket_portal_w1 = self.env['hams_helpdesk.ticket'].with_user(self.portal_user.id).with_company(self.env.company.id).with_context(website_id=self.website_1.id)
+
+        visible_w1 = Ticket_portal_w1.search([])
+        self.assertIn(ticket_w1, visible_w1, "Portal user on Website 1 should see Website 1 ticket")
+        self.assertIn(ticket_no_w, visible_w1, "Portal user should see tickets with no website")
         self.assertNotIn(ticket_w2, visible_w1, "Portal user on Website 1 should NOT see tickets from Website 2")
 
         # Test portal user on Website 2
-        self.portal_user.website_id = self.website_2
-        visible_w2 = Ticket_portal.search([])
-        self.assertIn(ticket_w2, visible_w2)
-        self.assertIn(ticket_no_w, visible_w2)
+        self.portal_user.write({'website_id': self.website_2.id})
+        self.env.flush_all()
+        self.env.invalidate_all()
+
+        Ticket_portal_w2 = self.env['hams_helpdesk.ticket'].with_user(self.portal_user.id).with_company(self.env.company.id).with_context(website_id=self.website_2.id)
+        visible_w2 = Ticket_portal_w2.search([])
+        self.assertIn(ticket_w2, visible_w2, "Portal user on Website 2 should see Website 2 ticket")
+        self.assertIn(ticket_no_w, visible_w2, "Portal user should see tickets with no website")
         self.assertNotIn(ticket_w1, visible_w2, "Portal user on Website 2 should NOT see tickets from Website 1")
 
     def test_07_ticket_creation_from_context(self):
