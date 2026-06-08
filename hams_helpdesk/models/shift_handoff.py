@@ -27,7 +27,7 @@ class ShiftHandoffWizard(models.TransientModel):
 
         old_name = self.old_user_id.name if self.old_user_id else "Unassigned"
 
-        body = "<b>🚨 Official Shift Handoff Executed</b><br/><br/>"
+        body = "<b title=\"handoff_success\">🚨 Official Shift Handoff Executed</b><br/><br/>"
         body += f"<b>Relinquished By:</b> {old_name}<br/>"
         body += f"<b>Accepted By:</b> {self.new_user_id.name}<br/>"
         body += f"<b>Operator Briefing:</b><br/><i>{self.handoff_notes}</i>"

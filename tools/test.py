@@ -191,6 +191,7 @@ class FailureExtractor:
                 or "Cloudflare Tag purge API failed" in line_clean
                 or "[BACKUP_WORKER]" in line_clean
                 or "[LOG_ANALYZER]" in line_clean
+                or "odoo.tests.result:" in line_clean
                 or "discuss_channel_member" in "\n".join(self.current_block)
             )
 

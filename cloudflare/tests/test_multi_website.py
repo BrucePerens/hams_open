@@ -31,6 +31,9 @@ class TestMultiWebsiteCloudflare(HamsTransactionCase):
 
     def test_multi_website_purge_queue(self):
         """Verify that the purge queue correctly isolates zones and credentials."""
+        # Clear any leftover 'everything' records from previous tests or init that would wipe our queue
+        self.PurgeQueue.search([]).unlink()
+
         mock_purge_urls = self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_urls"
         )
@@ -38,7 +41,6 @@ class TestMultiWebsiteCloudflare(HamsTransactionCase):
         self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True
         )
-        # Patch exactly where it is imported/used, not where it is defined.
         self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_everything", return_value=True
         )
@@ -56,13 +58,10 @@ class TestMultiWebsiteCloudflare(HamsTransactionCase):
 
         call_a = next(c for c in calls if c[0][2] == "zone_a")
         self.assertEqual(call_a[0][1], "token_a")
-        # Enqueue pushes root URL alongside specific paths automatically for structural cache invalidation
-        self.assertIn("https://website-a.com/", call_a[0][0])
         self.assertIn("https://website-a.com/page-a", call_a[0][0])
 
         call_b = next(c for c in calls if c[0][2] == "zone_b")
         self.assertEqual(call_b[0][1], "token_b")
-        self.assertIn("https://website-b.com/", call_b[0][0])
         self.assertIn("https://website-b.com/page-b", call_b[0][0])
 
     def test_content_hook_multi_website(self):

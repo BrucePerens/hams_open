@@ -50,24 +50,21 @@ class UserWebsitesSEOController(UserWebsitesController):
             user = qcontext.get("profile_user")
             group = qcontext.get("profile_group")
 
-            # We de-elevate the recordset to the current request's environment
+            # ADR-0078: Pre-fetch SEO fields using the existing service account environment
+            # This primes the ORM cache safely before we de-elevate the recordset.
             if user:
+                user.read(list(user._get_seo_fields()))
+                # We de-elevate the recordset to the current request's environment to prevent SSTI
                 if request and request.env:
                     user = user.with_env(request.env)
-                # ADR-0078: Pre-fetch SEO fields
-                # micro-privilege: use facility service account so public users can resolve the SEO fields
-                # Use user.env to avoid RuntimeError: object is not bound on request.env in tests
-                svc_uid = user.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.odoo_facility_service_internal")
-                user_svc = user.with_user(svc_uid)
-                user_svc.read(list(user_svc._get_seo_fields()))
-                qcontext["main_object"] = user_svc
+                qcontext["main_object"] = user
+                qcontext["profile_user"] = user
             elif group:
+                group.read(list(group._get_seo_fields()))
+                # We de-elevate the recordset to the current request's environment to prevent SSTI
                 if request and request.env:
                     group = group.with_env(request.env)
-                # ADR-0078: Pre-fetch SEO fields
-                svc_uid = group.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.odoo_facility_service_internal")
-                group_svc = group.with_user(svc_uid)
-                group_svc.read(list(group_svc._get_seo_fields()))
-                qcontext["main_object"] = group_svc
+                qcontext["main_object"] = group
+                qcontext["profile_group"] = group
 
         return response

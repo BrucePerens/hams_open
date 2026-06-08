@@ -9,6 +9,7 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
             content: "Click on New Ticket",
             trigger: '.o_tour_new_ticket',
             run: 'click',
+            expectUnloadPage: true,
         },
         {
             content: "Fill Subject",
