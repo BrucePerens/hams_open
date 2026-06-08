@@ -107,6 +107,7 @@ def verify_turnstile(token, remote_ip, secret):
 
     try:
         response = requests.post(endpoint, data=data, timeout=10)
+        response.raise_for_status()
         return response.json().get("success", False)
     except requests.exceptions.RequestException as e:
         _logger.error(f"Cloudflare Turnstile verification failed: {e}")

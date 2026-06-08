@@ -74,4 +74,14 @@ class IrHttp(models.AbstractModel):
         # 4. Semi-Static Content (Public Website Pages, Blogs, Classifieds)
         # Cache heavily at the edge. The purge_queue will invalidate individual URLs when edited.
         response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=86400"
+
+        # Inject Website-specific Cache-Tag for granular site-wide purging if needed.
+        website_id = getattr(request, "website", False) and request.website.id
+        if website_id:
+            existing_tags = response.headers.get("Cache-Tag", "")
+            new_tag = f"odoo-website-{website_id}"
+            response.headers["Cache-Tag"] = (
+                f"{existing_tags}, {new_tag}" if existing_tags else new_tag
+            )
+
         return res

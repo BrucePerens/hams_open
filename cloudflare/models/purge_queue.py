@@ -3,7 +3,7 @@ import time
 import os
 import logging
 from odoo import models, fields, api, tools
-from ..utils.cloudflare_api import purge_urls, purge_tags
+from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 
 _logger = logging.getLogger(__name__)
 
@@ -12,9 +12,11 @@ class CloudflarePurgeQueue(models.Model):
     _name = "cloudflare.purge.queue"
     _description = "Cloudflare Cache Purge Queue"
 
-    target_item = fields.Char(string="Target Payload", required=True)
+    target_item = fields.Char(string="Target Payload", required=False)
     purge_type = fields.Selection(
-        [("url", "URL"), ("tag", "Cache-Tag")], default="url", required=True
+        [("url", "URL"), ("tag", "Cache-Tag"), ("everything", "Everything")],
+        default="url",
+        required=True,
     )
     state = fields.Selection(
         [("pending", "Pending"), ("failed", "Failed")], default="pending", index=True
@@ -72,6 +74,16 @@ class CloudflarePurgeQueue(models.Model):
             self.env["cloudflare.purge.queue"].create(create_vals)
 
     @api.model
+    def enqueue_everything(self, website_id=None):
+        # [@ANCHOR: cf_enqueue_everything]
+        if not website_id:
+            website_id = self.env["cloudflare.utils"].get_current_website_id()
+
+        self.env["cloudflare.purge.queue"].create(
+            {"purge_type": "everything", "website_id": website_id}
+        )
+
+    @api.model
     def process_queue(self):
         # [@ANCHOR: cf_process_queue_logic]
         limit = 30
@@ -98,20 +110,40 @@ class CloudflarePurgeQueue(models.Model):
                 token = None
                 zone_id = None
 
-            url_records = batch_records.filtered(lambda r: r.purge_type == "url")
-            tag_records = batch_records.filtered(lambda r: r.purge_type == "tag")
+            everything_records = batch_records.filtered(
+                lambda r: r.purge_type == "everything"
+            )
 
             success = True
 
             if not token or not zone_id:
                 # Missing credentials, immediately fail the batch to prevent infinite loops
                 success = False
-                if url_records:
-                    url_records.write({"state": "failed"})
-                if tag_records:
-                    tag_records.write({"state": "failed"})
+                batch_records.write({"state": "failed"})
             else:
-                if url_records:
+                # If we are purging everything for this website, we can drop all other pending records for it.
+                if everything_records:
+                    if not purge_everything(token, zone_id):
+                        success = False
+                        everything_records.write({"state": "failed"})
+                    else:
+                        everything_records.unlink()
+                        # Optimization: Clear all other pending records for this website since we just wiped everything
+                        self.env["cloudflare.purge.queue"].search(
+                            [
+                                ("website_id", "=", first_website.id),
+                                ("state", "=", "pending"),
+                            ],
+                            limit=10000,
+                        ).unlink()
+
+                # Refresh batch_records by filtering out non-existent ones before further processing
+                batch_records = batch_records.filtered(lambda r: r.exists())
+
+                url_records = batch_records.filtered(lambda r: r.purge_type == "url")
+                tag_records = batch_records.filtered(lambda r: r.purge_type == "tag")
+
+                if success and url_records:
                     if not purge_urls(
                         url_records.mapped("target_item"), token, zone_id
                     ):
@@ -120,7 +152,7 @@ class CloudflarePurgeQueue(models.Model):
                     else:
                         url_records.unlink()
 
-                if tag_records:
+                if success and tag_records:
                     if not purge_tags(
                         tag_records.mapped("target_item"), token, zone_id
                     ):
@@ -132,7 +164,6 @@ class CloudflarePurgeQueue(models.Model):
             if not success:
                 if not tools.config.get("test_enable"):
                     self.env.cr.commit()
-                break
 
             batches_processed += 1
             if not tools.config.get("test_enable"):

@@ -133,8 +133,8 @@ class WebsiteMenu(models.Model):
         sterile_env = self.env(context={})
         QueueModel = sterile_env["cloudflare.purge.queue"].with_user(svc_uid)
         for wid in set(website_ids):
-            # Menu changes affect HTML content. We must purge everything for the website.
-            QueueModel.enqueue_urls(["/"], website_id=wid)
+            # Menu changes affect HTML content globally. We must purge everything for the website.
+            QueueModel.enqueue_everything(website_id=wid)
 
         return res
 
@@ -154,8 +154,8 @@ class WebsiteMenu(models.Model):
         sterile_env = self.env(context={})
         QueueModel = sterile_env["cloudflare.purge.queue"].with_user(svc_uid)
         for wid in set(website_ids):
-            # Menu changes affect HTML content. We must purge everything for the website.
-            QueueModel.enqueue_urls(["/"], website_id=wid)
+            # Menu changes affect HTML content globally. We must purge everything for the website.
+            QueueModel.enqueue_everything(website_id=wid)
 
         return res
 
