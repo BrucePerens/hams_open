@@ -68,7 +68,7 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, a
 
 <features>
 ## 3. Core Features & Logic
-*   **Article Feedback:** Atomic helpfulness increments via raw SQL and service accounts `[@ANCHOR: controller_manual_feedback]`.
+*   **Article Feedback:** Atomic helpfulness increments via Postgres Procedures and service accounts `[@ANCHOR: controller_manual_feedback]`.
 *   **Search Engine:** Full-text search with multi-tenant filtering `[@ANCHOR: controller_manual_search]`.
 *   **URL Resolution:** Dynamic slug generation including ID prefix `[@ANCHOR: manual_compute_website_url]`.
 *   **Hierarchy Integrity:** Recursive cycle detection using `_has_cycle()` `[@ANCHOR: manual_check_hierarchy]`.

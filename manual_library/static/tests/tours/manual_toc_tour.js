@@ -8,8 +8,13 @@ import { TourUtils } from "@zero_sudo/js/tour_utils";
 registry.category("web_tour.tours").add("manual_toc_tour", {
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
-        { trigger: '#manual_toc_container ul.nav', content: 'Wait for: Wait for the TOC container to render' },
-        { trigger: '#manual_toc_container a[href^="#toc-heading-"]', content: 'Wait for: Verify that a heading link was dynamically generated' },
-        
+        {
+            trigger: '#manual_toc_container:has(ul.nav)',
+            content: 'Wait for the TOC container to render and contain a list'
+        },
+        {
+            trigger: '#manual_toc_container a[href^="#toc-heading-"]',
+            content: 'Verify that a heading link was dynamically generated'
+        },
     ],
 });

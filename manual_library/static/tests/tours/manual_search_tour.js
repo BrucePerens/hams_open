@@ -14,6 +14,11 @@ registry.category("web_tour.tours").add("manual_search_tour", {
             run: 'edit Odoo'
         },
         {
+            trigger: '#wrap',
+            run: 'click',
+            content: 'Click away to blur'
+        },
+        {
             content: 'Submit form and trigger page reload',
             trigger: 'button[aria-label="Submit search"]',
             run: 'click',

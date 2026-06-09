@@ -24,6 +24,7 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
     "data": [
         "security/manual_library_security.xml",
         "security/ir.model.access.csv",
+        "data/procedures.xml",
         "views/knowledge_article_views.xml",
         "views/knowledge_article_templates.xml",
     ],

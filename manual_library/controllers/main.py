@@ -168,18 +168,11 @@ class ManualLibraryController(http.Controller):
                 )
                 svc_env = request.env(user=svc_uid)
 
-                # Utilize raw SQL to ensure absolute atomic increments and prevent 'Lost Update' race conditions.
-                # Identifiers are hardcoded for security as they are not user-controlled.
-                if is_helpful == "1":
-                    svc_env.cr.execute(
-                        'UPDATE "knowledge_article" SET "helpful_count" = COALESCE("helpful_count", 0) + 1 WHERE "id" = %s',
-                        (article.id,),
-                    )
-                else:
-                    svc_env.cr.execute(
-                        'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
-                        (article.id,),
-                    )
+                # Utilize Postgres Procedure to ensure absolute atomic increments and reduce round-trips.
+                svc_env.cr.execute(
+                    "SELECT manual_library_increment_helpful(%s, %s)",
+                    (article.id, is_helpful == "1"),
+                )
         except (ValueError, AccessError) as e:
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery
             _logger.warning("Feedback submission failed gracefully: %s", e)
