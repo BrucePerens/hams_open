@@ -1,0 +1,14 @@
+# -*- coding: utf-8 -*-
+from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+
+@tagged('post_install', '-at_install')
+class TestTours(HamsHttpCase):
+
+    def test_01_db_bloat_tour(self):
+        # [@ANCHOR: test_db_bloat_tour]
+        self.start_tour("/odoo?debug=1", 'db_management_bloat_tour', login="admin")
+
+    def test_02_db_slow_query_tour(self):
+        # [@ANCHOR: test_db_slow_query_tour]
+        self.start_tour("/odoo?debug=1", 'db_management_slow_query_tour', login="admin")

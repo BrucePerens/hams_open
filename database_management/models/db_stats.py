@@ -220,8 +220,19 @@ class DatabaseActivity(models.Model):
 
         pids = [rec.pid for rec in self if rec.pid]
         if pids:
-            # Performance: Optimize latency by reducing database operation round-trips to only one
-            env_svc.cr.execute("SELECT pg_terminate_backend(pid) FROM unnest(%s) AS pid", (pids,))
+            # Performance: Optimize latency by reducing database operation round-trips to only one.
+            # We use a DO block to ensure the termination logic runs entirely on the DB server.
+            env_svc.cr.execute("""
+                DO $$
+                DECLARE
+                    p integer;
+                BEGIN
+                    FOREACH p IN ARRAY %s
+                    LOOP
+                        PERFORM pg_terminate_backend(p);
+                    END LOOP;
+                END $$;
+            """, (pids,))
         return True
 
 
