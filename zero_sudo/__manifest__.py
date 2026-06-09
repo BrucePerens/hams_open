@@ -24,6 +24,7 @@ Verified by [@ANCHOR: test_documentation_injection]
     },
     "data": [
         "data/security_data.xml",
+        "data/postgres_procedures.xml",
         "security/ir.model.access.csv",
         "views/res_users_views.xml",
         "views/security_log_views.xml",
@@ -53,6 +54,12 @@ Verified by [@ANCHOR: test_documentation_injection]
             "name": "Multi-Website Security Story",
             "path": "docs/stories/multi_website.md",
             "icon": "🌐",
+            "category": "workspace"
+        },
+        {
+            "name": "High-Performance Atomic KV Storage",
+            "path": "docs/stories/set_kv_procedure.md",
+            "icon": "⚡",
             "category": "workspace"
         }
     ],

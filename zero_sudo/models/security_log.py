@@ -15,4 +15,7 @@ class SecurityLog(models.Model):
     user_agent = fields.Char(string='User Agent')
     reason = fields.Selection([
         ('service_account_blocked', 'Service Account Web Login Attempt'),
+        ('god_mode_trip', 'God-Mode Security Block Tripped'),
+        ('param_access_denied', 'Unauthorized System Parameter Access'),
+        ('cache_invalidation', 'Model Cache Invalidation'),
     ], string='Reason', required=True)

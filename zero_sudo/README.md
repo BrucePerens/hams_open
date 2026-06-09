@@ -10,6 +10,7 @@ This module is the foundational security layer for our Odoo ecosystem. It enforc
 2.  **Web Isolation:** Automated background tasks (Service Accounts) are strictly prohibited from logging into the website interface, preventing session hijacking or accidental human interference.
 3.  **Mechanical Whitelisting:** Critical system parameters (like cryptographic keys) are blocked from being accessed or modified through the UI unless they are explicitly registered in a secure code-level whitelist.
 4.  **Security Audit Trail:** All blocked login attempts and security events are logged for administrator review.
+5.  **High-Performance Security Interop:** Critical security lookups and atomic KV operations are optimized via PostgreSQL procedures to minimize latency and ensure transaction-safe execution.
 
 ---
 
@@ -22,6 +23,13 @@ A "Service Account" is a special user profile used only by background programs, 
 1.  **Restricting an Account:** Go to **Settings > Users**, select a user, and check the **"Is Service Account"** box.
 2.  **Access Denied:** Once flagged, any login attempt with that account via the browser will result in an "Access Denied" error. This is a deliberate security feature.
 3.  **Automatic Protection:** Every Service Account is automatically assigned an extremely long, randomized password that is impossible to guess, ensuring it can only be accessed by the automated system intended to use it.
+
+### Security Audit Logs:
+Administrators can monitor security events in **Settings > Security Logs**. The following events are tracked:
+*   **Service Account Web Login Attempt:** Logs when a background account tries to access the UI.
+*   **God-Mode Security Block Tripped:** Logs when an automated account attempts to escalate to global administrative privileges.
+*   **Unauthorized System Parameter Access:** Logs when a process attempts to read or write a restricted system setting.
+*   **Model Cache Invalidation:** Logs when a user or process manually triggers a system-wide cache refresh.
 
 ---
 
@@ -98,7 +106,10 @@ Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
 Retrieves the root cryptographic key from environment or local file, bypassing DB.
 
 #### `_invalidate_model_cache(model_name)` `[@ANCHOR: invalidate_model_cache]`
-Securely invalidates the entire cache for a specific model. Requires the user to have write access to the model.
+Securely invalidates the entire cache for a specific model. Requires the user to have write access to the model. Events are audited.
+
+#### `_set_kv(key, value)` `[@ANCHOR: set_kv_procedure]`
+High-performance atomic key-value update using an optimized Postgres procedure.
 </python_api>
 
 ---
