@@ -175,6 +175,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "distributed_redis_cache.redis_host",
             "distributed_redis_cache.redis_password",
             "distributed_redis_cache.redis_port",
+            "distributed_redis_cache.test_integration_active",
             "pager_duty.helpdesk_model",
             "user_websites.company_abuse_email",
             "user_websites.enable_blog_comments",
