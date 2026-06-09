@@ -36,50 +36,38 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Tests [@ANCHOR: story_secure_escalation]
         if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
             raise AccessError(_("Invalid XML ID format: %s. Expected 'module.name'.") % xml_id)
-        module, name = xml_id.split(".", 1)
 
-        # STRICT ZERO-SUDO MANDATE: Resolve the ID using raw SQL to prevent any ORM/sudo bypasses
+        # STRICT ZERO-SUDO MANDATE: Resolve and verify via optimized Postgres procedure
         # [@ANCHOR: get_service_uid_sql_resolve]
         # Verified by [@ANCHOR: test_get_service_uid_sql_resolve]
-        self.env.cr.execute(
-            "SELECT res_id FROM ir_model_data WHERE module = %s AND name = %s AND model = 'res.users'",
-            (module, name)
-        )
-        res_id_row = self.env.cr.fetchone()
-        if not res_id_row:
-            raise AccessError(_("Security Alert: Service Account '%s' not found.") % xml_id)
-        uid = res_id_row[0]
-
-        # Verify the account is active AND is explicitly flagged as a service account
-        # [@ANCHOR: get_service_uid_sql_verify]
         # Verified by [@ANCHOR: test_get_service_uid_sql_verify]
-        self.env.cr.execute(
-            "SELECT active, is_service_account FROM res_users WHERE id = %s", (uid,)
-        )
-        res = self.env.cr.fetchone()
-
-        if not res or not res[0]:
-            raise AccessError(_("Security Alert: Service Account '%s' is disabled.") % xml_id)
-        if not res[1]:
-            raise AccessError(_("Security Alert: '%s' is a human user, not a Service Account. Privilege escalation denied.") % xml_id)
-
-        # THE MECHANICAL GOD-MODE BLOCK: Ensure the service account does not possess global administrative privileges.
-        # This mathematically forces downstream modules to utilize the Micro-Service Account CSV pattern.
-        # [@ANCHOR: god_mode_block_sql]
         # Verified by [@ANCHOR: test_god_mode_block_sql]
-        self.env.cr.execute(
-            """
-            SELECT 1 FROM res_groups_users_rel rel
-            JOIN ir_model_data imd ON imd.res_id = rel.gid AND imd.model = 'res.groups'
-            WHERE rel.uid = %s AND imd.module = 'base' AND imd.name IN ('group_system', 'group_erp_manager')
-        """,
-            (uid,),
-        )
+        try:
+            # We use a sub-transaction (SAVEPOINT) to allow catching the DB-level RAISE EXCEPTION
+            # without poisoning the entire transaction, especially important for test stability.
+            with self.env.cr.savepoint():
+                self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))
+                return self.env.cr.fetchone()[0]
+        except Exception as e: # audit-ignore-catch-all
+            # Postgres procedure raises an exception on security failure.
+            # We catch it and re-raise as a proper Odoo AccessError if it's a security alert.
+            if "Security Alert" in str(e):
+                _logger.warning("Zero-Sudo Security Exception for %s: %s", xml_id, e)
 
-        if self.env.cr.fetchone():
-            raise AccessError(_("Security Alert: Service Account '%s' violates the Zero-Sudo mandate by possessing global administrative groups (group_system or group_erp_manager). You must use domain-specific Micro-Privilege ACLs instead.") % xml_id)
+                # Log the god-mode trip if applicable
+                if "violates the Zero-Sudo mandate" in str(e):
+                    try:
+                        facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
+                        facility_env['zero_sudo.security.log'].create({
+                            'user_id': self.env.user.id,
+                            'reason': 'god_mode_trip',
+                            'login': xml_id,
+                        })
+                    except Exception as log_e: # audit-ignore-catch-all
+                        _logger.warning("Failed to log god-mode trip: %s", log_e) # Prevent recursion or secondary failure during logging
 
-        return uid
+                raise AccessError(str(e))
+            raise e
 
     @api.model
     def _get_service_env(self, xml_id):
@@ -131,6 +119,14 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # to perform the registry-level cache clearing.
         env_svc = self._get_service_env("zero_sudo.cache_invalidation_service_internal")
         env_svc.registry.clear_cache()
+
+        # Log the invalidation event
+        facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
+        facility_env['zero_sudo.security.log'].create({
+            'user_id': self.env.user.id,
+            'reason': 'cache_invalidation',
+            'login': f"Model: {model_name}",
+        })
 
         # Also signal distributed caches via pg_notify
         self._notify_cache_invalidation(model_name, "CLEAR_ALL")
@@ -196,31 +192,20 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         lower_key = key.lower()
 
         if key not in whitelist:
+            # Log the unauthorized access attempt
+            facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
+            facility_env['zero_sudo.security.log'].create({
+                'user_id': self.env.user.id,
+                'reason': 'param_access_denied',
+                'login': key,
+            })
+
             if any(banned in lower_key for banned in banned_substrings):
                 raise AccessError(_("Security Alert: Parameter '%s' matches restricted cryptographic patterns and cannot be extracted via Zero-Sudo.") % key)
             raise AccessError(_("Security Alert: Parameter '%s' is not in the Zero-Sudo PARAM_WHITELIST. You must explicitly register it in zero_sudo/models/security_utils.py.") % key)
 
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
         return env_svc["ir.config_parameter"].get_param(key, default)
-
-    @api.model
-    def _set_system_param(self, key, value):
-        # [@ANCHOR: set_system_param]
-        whitelist = self._get_param_whitelist()
-
-        banned_substrings = [
-            "secret", "key", "password", "token", "auth", "crypt", "cert",
-        ]
-        lower_key = key.lower()
-
-        if key not in whitelist:
-            if any(banned in lower_key for banned in banned_substrings):
-                raise AccessError(_("Security Alert: Parameter '%s' matches restricted cryptographic patterns and cannot be modified via Zero-Sudo.") % key)
-            raise AccessError(_("Security Alert: Parameter '%s' is not in the Zero-Sudo PARAM_WHITELIST. You must explicitly register it in zero_sudo/models/security_utils.py.") % key)
-
-        env_svc = self._get_service_env("zero_sudo.config_service_internal")
-        env_svc["ir.config_parameter"].set_param(key, value)
-        return True
 
     @api.model
     def _get_kv(self, key):
@@ -230,17 +215,21 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
     @api.model
     def _set_kv(self, key, value):
-        env_svc = self._get_service_env("zero_sudo.odoo_facility_service_internal")
-        KV = env_svc['zero_sudo.kv']
-        # We use raw SQL for the existence check to avoid prefetch overhead in this high-frequency utility
-        # [@ANCHOR: set_kv_sql_check]
+        # [@ANCHOR: set_kv_procedure]
+        # Verified by [@ANCHOR: test_set_kv_procedure]
         # Verified by [@ANCHOR: test_set_kv_sql_check]
-        self.env.cr.execute("SELECT id FROM zero_sudo_kv WHERE key = %s", (key,))
-        row = self.env.cr.fetchone()
-        if row:
-            KV.browse(row[0]).write({'value': value})
-        else:
-            KV.create({'key': key, 'value': value})
+        # Tests [@ANCHOR: story_set_kv_procedure]
+        """
+        High-performance atomic KV update using a single Postgres procedure call.
+        Eliminates Python-side existence checks and round-trips.
+        """
+        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))
+        # Ensure changes are visible to other transactions/round-trips
+        if not tools.config.get("test_enable"):
+            self.env.cr.commit()
+        # Direct SQL bypasses the ORM cache. We must invalidate it.
+        if "zero_sudo.kv" in self.env:
+            self.env["zero_sudo.kv"].invalidate_recordset()
 
     @api.model
     @tools.ormcache()

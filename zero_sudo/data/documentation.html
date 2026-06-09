@@ -16,7 +16,13 @@
     <p>To prevent sensitive data leaks, the system uses a strict whitelist for configuration parameters. Parameters like encryption keys or master passwords cannot be accessed or modified via standard tools unless they are explicitly registered in the security core. This protects against several classes of system-level attacks.</p>
 
     <h3>Centralized Security Logs</h3>
-    <p>Every blocked login attempt is recorded in a centralized audit log. Administrators can review these logs to identify potential unauthorized access attempts or misconfigured automated services.</p>
+    <p>The system maintains a centralized audit trail for critical security events. Administrators can monitor these in <strong>Settings > Security Logs</strong>. Tracked events include:</p>
+    <ul>
+        <li><strong>Blocked Login Attempts:</strong> When a Service Account attempts to access the web UI.</li>
+        <li><strong>God-Mode Violations:</strong> When an automated process attempts to gain full system administrator rights.</li>
+        <li><strong>Restricted Parameter Access:</strong> When an unauthorized attempt is made to read or write sensitive system configurations.</li>
+        <li><strong>Cache Invalidation:</strong> Records system-wide data refreshes.</li>
+    </ul>
 
     <!-- [@ANCHOR: UX_CACHE_INVALIDATION] -->
     <h3>Safe Cache Invalidation</h3>

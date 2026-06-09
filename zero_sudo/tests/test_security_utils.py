@@ -305,7 +305,9 @@ class TestSecurityUtils(HamsTransactionCase):
                 self.env.registry.models.pop('binary.manifest', None)
 
     def test_12_kv_store(self):
+        # [@ANCHOR: test_set_kv_procedure]
         # [@ANCHOR: test_set_kv_sql_check]
+        # Tests [@ANCHOR: set_kv_procedure]
         # Tests [@ANCHOR: set_kv_sql_check]
         """Verify the lightweight Service Account Key-Value storage abstraction."""
         utils = self.env["zero_sudo.security.utils"]

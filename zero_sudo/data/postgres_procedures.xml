@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <record id="zero_sudo_procedures" model="ir.actions.server">
+            <field name="name">Zero-Sudo: Install Postgres Procedures</field>
+            <field name="model_id" ref="base.model_ir_actions_server"/>
+            <field name="state">code</field>
+            <field name="code">
+# Procedure for optimized service account resolution and security verification
+sql_get_uid = """
+CREATE OR REPLACE FUNCTION zero_sudo_get_service_uid(p_xml_id TEXT)
+RETURNS INTEGER AS $$
+DECLARE
+    v_module TEXT;
+    v_name TEXT;
+    v_uid INTEGER;
+    v_active BOOLEAN;
+    v_is_svc BOOLEAN;
+    v_has_god_mode BOOLEAN;
+BEGIN
+    v_module := split_part(p_xml_id, '.', 1);
+    v_name := split_part(p_xml_id, '.', 2);
+
+    SELECT res_id INTO v_uid
+    FROM ir_model_data
+    WHERE module = v_module AND name = v_name AND model = 'res.users';
+
+    IF v_uid IS NULL THEN
+        RAISE EXCEPTION 'Security Alert: Service Account % not found.', p_xml_id;
+    END IF;
+
+    SELECT active, is_service_account INTO v_active, v_is_svc
+    FROM res_users WHERE id = v_uid;
+
+    IF v_active IS NOT TRUE THEN
+        RAISE EXCEPTION 'Security Alert: Service Account % is disabled.', p_xml_id;
+    END IF;
+
+    IF v_is_svc IS NOT TRUE THEN
+        RAISE EXCEPTION 'Security Alert: % is a human user, not a Service Account.', p_xml_id;
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1 FROM res_groups_users_rel rel
+        JOIN ir_model_data imd ON imd.res_id = rel.gid AND imd.model = 'res.groups'
+        WHERE rel.uid = v_uid AND imd.module = 'base' AND imd.name IN ('group_system', 'group_erp_manager')
+    ) INTO v_has_god_mode;
+
+    IF v_has_god_mode THEN
+        RAISE EXCEPTION 'Security Alert: Service Account % violates the Zero-Sudo mandate by possessing global administrative groups.', p_xml_id;
+    END IF;
+
+    RETURN v_uid;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+# Function for high-performance atomic KV storage
+sql_set_kv = """
+CREATE OR REPLACE FUNCTION zero_sudo_set_kv(p_key TEXT, p_value TEXT)
+RETURNS VOID AS $$
+BEGIN
+    INSERT INTO zero_sudo_kv (key, value)
+    VALUES (p_key, p_value)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+env.cr.execute(sql_get_uid)
+env.cr.execute(sql_set_kv)
+            </field>
+        </record>
+
+        <!-- Trigger the procedure installation during module update -->
+        <function model="ir.actions.server" name="run">
+            <value eval="[ref('zero_sudo_procedures')]"/>
+        </function>
+    </data>
+</odoo>

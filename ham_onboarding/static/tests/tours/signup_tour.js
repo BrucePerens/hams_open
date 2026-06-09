@@ -1,27 +1,10 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-
-const removeOverlays = () => {
-    const overlays = document.querySelectorAll('.o_cookie_compliance, .modal-backdrop, .modal, #cookie-banner, .cookie-consent-banner');
-    overlays.forEach(el => {
-        el.style.display = 'none';
-        el.style.pointerEvents = 'none';
-        el.style.visibility = 'hidden';
-        el.style.opacity = '0';
-    });
-    document.body.classList.remove('modal-open');
-    document.body.style.overflow = 'auto';
-    document.body.style.position = 'static';
-};
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add('ham_signup_tour', {
     url: '/web/signup',
     steps: () => [
-        {
-            content: "Force remove overlays",
-            trigger: 'body',
-            run: removeOverlays,
-        },
         {
             content: "Ensure Ham is selected",
             trigger: "input#type_ham",
@@ -69,11 +52,6 @@ registry.category("web_tour.tours").add('ham_signup_tour', {
 registry.category("web_tour.tours").add('swl_signup_tour', {
     url: '/web/signup',
     steps: () => [
-        {
-            content: "Force remove overlays",
-            trigger: 'body',
-            run: removeOverlays,
-        },
         {
             content: "Select SWL Type",
             trigger: "input#type_swl",
