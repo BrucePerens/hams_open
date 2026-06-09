@@ -8,3 +8,4 @@ access_pg_optimize_manager,pg.optimize manager,model_pg_optimize_wizard,group_da
 access_pg_ha_manager,pg.ha manager,model_pg_ha_wizard,group_database_management_manager,1,1,1,1
 access_pg_explain_manager,pg.explain manager,model_pg_explain_wizard,group_database_management_manager,1,1,1,1
 access_db_index_advisor_manager,db.index advisor manager,model_database_index_advisor,group_database_management_manager,1,1,1,1
+access_db_replication_stat_manager,db.replication manager,model_database_replication_stat,group_database_management_manager,1,1,1,1

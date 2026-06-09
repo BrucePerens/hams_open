@@ -10,7 +10,7 @@ The `database_management` module provides a comprehensive suite of Database Admi
 
 *   **Stat Tracking:** Real-time visibility into table bloat, index usage, and cache hit ratios.
 *   **Slow Query Monitoring (APM):** Identifies the most resource-intensive SQL queries using `pg_stat_statements`.
-*   **Active Session Management:** View and terminate runaway database sessions.
+*   **Active Session Management:** View and terminate runaway database sessions using batch operations for improved performance.
 *   **Slow Query Explain:** Generate `EXPLAIN (ANALYZE, BUFFERS)` plans for slow queries to diagnose performance bottlenecks.
 *   **Index Advisor:** Recommends potentially missing indexes based on sequential scan statistics and table size.
 *   **Replication Monitoring:** Real-time tracking of PostgreSQL replication lag and status across the cluster.
