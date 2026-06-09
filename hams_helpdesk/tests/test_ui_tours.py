@@ -56,6 +56,11 @@ class TestHelpdeskTours(HamsHttpCase):
         self.url_open(f"/my/ticket/{ticket.id}/close", data={'csrf_token': http.Request.csrf_token(self)})
         self.assertEqual(ticket.stage, 'closed', "Ticket should be closed after portal action.")
 
+    def test_helpdesk_operator_tour(self):
+        """Test operator backend ticket lifecycle and handoff via JS tour."""
+        # [@ANCHOR: helpdesk_operator_tour]
+        self.start_tour("/odoo?debug=1&action=hams_helpdesk.action_hams_helpdesk_ticket", "helpdesk_operator_tour", login="hd_manager_tour")
+
     def test_helpdesk_operator_rendering(self):
         """Test operator backend facility rendering."""
         # Tests [@ANCHOR: helpdesk_ticket_form]

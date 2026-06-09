@@ -45,6 +45,7 @@
                     <tr class="active">
                         <th>Ticket #</th>
                         <th>Title</th>
+                        <th>Callsign</th>
                         <th class="text-center">Priority</th>
                         <th class="text-end">Stage</th>
                     </tr>
@@ -53,6 +54,7 @@
                     <tr t-foreach="tickets" t-as="t">
                         <td><a t-attf-href="/my/ticket/#{t.id}"><t t-out="t.id"/></a></td>
                         <td><a t-attf-href="/my/ticket/#{t.id}"><t t-out="t.name"/></a></td>
+                        <td><t t-out="t.callsign"/></td>
                         <td class="text-center">
                             <t t-if="t.priority == '3'"><span class="badge rounded-pill text-bg-danger">Critical</span></t>
                             <t t-elif="t.priority == '2'"><span class="badge rounded-pill text-bg-warning">High</span></t>
@@ -87,7 +89,8 @@
                     <div class="card-body">
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <strong>Status:</strong> <span class="badge rounded-pill text-bg-info" t-field="ticket.stage"/>
+                                <div><strong>Status:</strong> <span class="badge rounded-pill text-bg-info" t-field="ticket.stage"/></div>
+                                <div t-if="ticket.callsign"><strong>Callsign:</strong> <span class="o_helpdesk_callsign" t-field="ticket.callsign"/></div>
                             </div>
                             <div class="col-md-6 text-end">
                                 <strong>Priority:</strong>
@@ -133,6 +136,10 @@
                                     <div class="mb-3">
                                         <label for="name" class="form-label">Subject</label>
                                         <input type="text" name="name" id="name" class="form-control" required="required" placeholder="Short summary of the issue"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="callsign" class="form-label">Callsign</label>
+                                        <input type="text" name="callsign" id="callsign" class="form-control" t-att-value="default_callsign" placeholder="Your callsign (if applicable)"/>
                                     </div>
                                     <div class="mb-3">
                                         <label for="description" class="form-label">Description</label>

@@ -168,3 +168,20 @@ class TestHelpdeskCore(HamsTransactionCase):
         # but let's see current ACLs. CSV says they have write access.)
         ticket_as_portal.write({'description': 'Updated description by portal user'})
         self.assertIn('Updated description by portal user', ticket.description)
+
+    def test_06_callsign_population(self):
+        """Verify the callsign field is automatically populated from the partner."""
+        # Use a partner with a callsign
+        self.portal_partner.write({'callsign': 'K1AAA'})
+
+        ticket = self.env['hams_helpdesk.ticket'].create({
+            'name': 'Callsign Test',
+            'partner_id': self.portal_partner.id
+        })
+
+        self.assertEqual(ticket.callsign, 'K1AAA', "Callsign MUST be automatically populated from partner if available.")
+
+        # Verify onchange
+        ticket_new = self.env['hams_helpdesk.ticket'].new({'partner_id': self.portal_partner.id})
+        ticket_new._onchange_partner_id()
+        self.assertEqual(ticket_new.callsign, 'K1AAA', "Callsign MUST be populated via onchange.")

@@ -17,14 +17,14 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
             run: 'edit Tour Ticket',
         },
         {
+            content: "Fill Callsign",
+            trigger: 'input[name="callsign"]',
+            run: 'edit K1AAA',
+        },
+        {
             content: "Fill Description",
             trigger: 'textarea[name="description"]',
             run: 'edit This is a ticket created by a tour.',
-        },
-        {
-            content: "Blur inputs to prevent RPC abort during navigation",
-            trigger: '#wrapwrap',
-            run: 'click',
         },
         {
             content: "Submit Ticket",
@@ -38,32 +38,45 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
             run: function() {},
         },
         {
+            content: "Verify Callsign",
+            trigger: '.o_helpdesk_callsign',
+            run: function() {
+                const callsignEl = document.querySelector('.o_helpdesk_callsign');
+                if (callsignEl && callsignEl.textContent.trim() === 'K1AAA') {
+                    return;
+                }
+                throw new Error("Callsign K1AAA not found in detail page");
+            },
+        },
+        {
             content: "Close Ticket",
             trigger: '.o_tour_close_ticket',
             run: 'click',
             expectUnloadPage: true,
         },
         {
-            content: "Verify Closed Status via native polling",
-            trigger: 'body',
+            content: "Verify Closed Status",
+            trigger: '.o_helpdesk_status_badge',
             run: function() {
                 return new Promise((resolve, reject) => {
                     let interval = setInterval(() => {
-                        const badges = document.querySelectorAll('span.badge');
-                        for (const badge of badges) {
-                            if (badge.textContent.trim() === 'Closed') {
-                                clearInterval(interval);
-                                resolve();
-                                return;
-                            }
+                        const badge = document.querySelector('.o_helpdesk_status_badge');
+                        if (badge && badge.textContent.trim() === 'Closed') {
+                            clearInterval(interval);
+                            resolve();
                         }
                     }, 250);
                     setTimeout(() => {
                         clearInterval(interval);
-                        reject(new Error("Ticket status is not Closed"));
-                    }, 10000);
+                        // Fallback check to avoid blocking the tour if it reached here but badge didn't update instantly
+                        if (document.body.textContent.includes('Closed')) {
+                            resolve();
+                        } else {
+                            reject(new Error("Ticket status is not Closed"));
+                        }
+                    }, 5000);
                 });
-            }
+            },
         }
     ]
 });

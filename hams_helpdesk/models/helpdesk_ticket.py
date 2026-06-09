@@ -14,6 +14,7 @@ class HelpdeskTicket(models.Model):
     # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
     name = fields.Char(string="Subject", required=True, tracking=True)
     description = fields.Html(string="Description")
+    callsign = fields.Char(string="Callsign", tracking=True, help="Relevant amateur radio callsign.")
     active = fields.Boolean(default=True)
 
     user_id = fields.Many2one(
@@ -64,6 +65,11 @@ class HelpdeskTicket(models.Model):
         default=lambda self: self.env.company
     )
 
+    @api.onchange("partner_id")
+    def _onchange_partner_id(self):
+        if self.partner_id and hasattr(self.partner_id, "callsign") and self.partner_id.callsign:
+            self.callsign = self.partner_id.callsign
+
     @api.model_create_multi
     def create(self, vals_list):
         # [@ANCHOR: helpdesk_ticket_creation]
@@ -75,6 +81,10 @@ class HelpdeskTicket(models.Model):
                 website = self.env['website'].browse(vals["website_id"])
                 if website.company_id:
                     vals["company_id"] = website.company_id.id
+            if not vals.get("callsign") and vals.get("partner_id"):
+                partner = self.env['res.partner'].browse(vals["partner_id"])
+                if hasattr(partner, "callsign") and partner.callsign:
+                    vals["callsign"] = partner.callsign
 
         tickets = super().create(vals_list)
 

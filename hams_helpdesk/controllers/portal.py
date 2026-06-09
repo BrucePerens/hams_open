@@ -76,10 +76,15 @@ class HelpdeskPortal(CustomerPortal):
 
     @http.route(["/my/tickets/new"], type="http", auth="user", website=True)
     def portal_ticket_new(self, **kw):
-        return request.render("hams_helpdesk.portal_ticket_new", {"page_name": "ticket_new"})
+        partner = request.env.user.partner_id
+        callsign = getattr(partner, 'callsign', '')
+        return request.render("hams_helpdesk.portal_ticket_new", {
+            "page_name": "ticket_new",
+            "default_callsign": callsign,
+        })
 
     @http.route(["/my/tickets/submit"], type="http", auth="user", methods=["POST"], website=True, csrf=True)
-    def portal_ticket_submit(self, name=None, description=None, **kw):
+    def portal_ticket_submit(self, name=None, description=None, callsign=None, **kw):
         # Verified by [@ANCHOR: test_helpdesk_portal_tour]
         if not name:
             return request.redirect("/my/tickets/new")
@@ -90,6 +95,7 @@ class HelpdeskPortal(CustomerPortal):
         vals = {
             "name": name,
             "description": description,
+            "callsign": callsign,
             "partner_id": request.env.user.partner_id.id,
             "website_id": request.website.id if request.website else False,
             "company_id": request.website.company_id.id if request.website else request.env.company.id,
