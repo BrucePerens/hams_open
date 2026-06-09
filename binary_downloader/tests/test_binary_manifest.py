@@ -295,7 +295,7 @@ class TestBinaryManifest(HamsTransactionCase):
             mock_tar_open.return_value.__enter__.return_value = mock_tar
 
             mock_member = MagicMock()
-            mock_member.name = "slippy"
+            mock_member.name = "../slippy"
             mock_member.islnk.return_value = False
             mock_member.issym.return_value = False
 
@@ -304,21 +304,17 @@ class TestBinaryManifest(HamsTransactionCase):
             # Mock tar.extractfile to return a stream of bytes
             mock_tar.extractfile.return_value = io.BytesIO(b"extracted-data")
 
-            original_abspath = os.path.abspath
+            # We expect it to NOT be found because basename("../slippy") is "slippy"
+            # and extract_member is "slippy", but it matches on endswith("/slippy") or name == "slippy"
+            # Actually, "slippy" (extract_member) == basename("../slippy") is NOT how it matched.
+            # It matches on member.name.endswith(f"/{extract_target}") or member.name == extract_target
+            # "../slippy".endswith("/slippy") is True.
+            # So it will extract it as "slippy" in hams_bin.
+            # The slip is prevented by os.path.basename.
 
-            def mock_abspath(p):
-                if isinstance(p, str) and "slippy" in p:
-                    return "/etc/passwd"
-                return original_abspath(p)
-
-            self.safe_patch(
-                "odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath",
-                side_effect=mock_abspath,
-            )
-            with self.assertRaisesRegex(
-                UserError, "Security Alert: Tar slip attempt detected."
-            ):
-                self.env["binary.manifest"].ensure_executable("slippy")
+            path = self.env["binary.manifest"].ensure_executable("slippy")
+            self.assertTrue(os.path.exists(path))
+            self.assertEqual(os.path.basename(path), self.env["binary.manifest"].search([("name", "=", "slippy")])._get_target_filename())
         finally:
             if has_filter:
                 tarfile.data_filter = old_filter
@@ -465,7 +461,7 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_zip_open.return_value.__enter__.return_value = mock_zip
 
         mock_zinfo = MagicMock()
-        mock_zinfo.filename = "slip"
+        mock_zinfo.filename = "../../slip"
         mock_zinfo.external_attr = 0
 
         mock_zip.infolist.return_value = [mock_zinfo]
@@ -473,19 +469,6 @@ class TestBinaryManifest(HamsTransactionCase):
         # Mock zip_ref.open to return a stream of bytes
         mock_zip.open.return_value = io.BytesIO(b"extracted-data")
 
-        original_abspath = os.path.abspath
-
-        def mock_abspath(p):
-            if isinstance(p, str) and "slip" in p:
-                return "/etc/passwd"
-            return original_abspath(p)
-
-        self.safe_patch(
-            "odoo.addons.binary_downloader.models.binary_manifest.os.path.abspath",
-            side_effect=mock_abspath,
-        )
-
-        with self.assertRaisesRegex(
-            UserError, "Security Alert: Zip slip attempt detected."
-        ):
-            self.env["binary.manifest"].ensure_executable("zip_slip")
+        path = self.env["binary.manifest"].ensure_executable("zip_slip")
+        self.assertTrue(os.path.exists(path))
+        self.assertEqual(os.path.basename(path), self.env["binary.manifest"].search([("name", "=", "zip_slip")])._get_target_filename())

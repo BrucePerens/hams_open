@@ -25,6 +25,7 @@ class BinaryVersion(models.Model):
         string="Software Manifest",
         required=True,
         ondelete="cascade",
+        index=True,
     )
     version_number = fields.Char(string="Version", required=True)
     release_date = fields.Date(string="Upstream Release Date")
@@ -185,17 +186,9 @@ class BinaryVersion(models.Model):
                                     )
 
                                 # Path traversal protection
-                                target_path = os.path.abspath(
-                                    os.path.join(bin_dir, os.path.basename(member.name))
-                                )
-                                if not target_path.startswith(
-                                    os.path.abspath(bin_dir)
-                                ):
-                                    raise UserError(
-                                        _(
-                                            "Security Alert: Tar slip attempt detected."
-                                        )
-                                    )
+                                member_filename = os.path.basename(member.name)
+                                if not member_filename:
+                                    continue
 
                                 source = tar.extractfile(member)
                                 if source:
@@ -226,17 +219,9 @@ class BinaryVersion(models.Model):
                                     )
 
                                 # Path traversal protection
-                                target_path = os.path.abspath(
-                                    os.path.join(bin_dir, os.path.basename(zinfo.filename))
-                                )
-                                if not target_path.startswith(
-                                    os.path.abspath(bin_dir)
-                                ):
-                                    raise UserError(
-                                        _(
-                                            "Security Alert: Zip slip attempt detected."
-                                        )
-                                    )
+                                member_filename = os.path.basename(zinfo.filename)
+                                if not member_filename:
+                                    continue
 
                                 with zip_ref.open(zinfo) as source:
                                     with open(target_bin, "wb") as target:

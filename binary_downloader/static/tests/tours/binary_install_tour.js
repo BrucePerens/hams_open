@@ -17,14 +17,24 @@ registry.category("web_tour.tours").add("binary_install_tour", {
             run: 'edit tourbin',
         },
         {
+            trigger: 'div[name="url"] input',
+            run: function (helpers) {
+                // Ensure focus for deterministicInput
+                document.querySelector('div[name="url"] input').focus();
+            }
+        },
+        {
             content: "Provide a valid downloadable URL pointing to the test controller",
             trigger: 'div[name="url"] input',
-            run: function () {
-                const input = document.querySelector('div[name="url"] input');
-                input.value = document.location.origin + '/test/dummy_bin';
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
+            run: function (helpers) {
+                TourUtils.deterministicInput(helpers, document.location.origin + '/test/dummy_bin');
             },
+        },
+        {
+            trigger: 'div[name="checksum"] input',
+            run: function (helpers) {
+                document.querySelector('div[name="checksum"] input').focus();
+            }
         },
         {
             content: "Provide the exact SHA256 hash for the string '1234'",
@@ -39,24 +49,20 @@ registry.category("web_tour.tours").add("binary_install_tour", {
     ].concat(TourUtils.safeSave()).concat([
         {
             content: "Click Install Now using immutable name attribute",
-            trigger: 'button[name="action_install"]',
+            trigger: 'button[name="action_install"]:not(:disabled)',
             run: 'click',
         },
         {
-            trigger: '.o_notification',
+            trigger: '.o_notification_manager .o_notification',
             content: "Wait for the success notification to ensure the RPC resolved",
             run: function () {
-                const els = document.querySelectorAll('.o_notification');
-                let found = false;
-                for (const el of els) {
-                    if (el.textContent.includes('Success')) {
-                        found = true;
-                        break;
+                const notifications = document.querySelectorAll('.o_notification');
+                for (const note of notifications) {
+                    if (note.innerText.includes('Success')) {
+                        return;
                     }
                 }
-                if (!found) {
-                    throw new Error('Success notification not found');
-                }
+                throw new Error('Success notification not found');
             }
         },
     ]),
