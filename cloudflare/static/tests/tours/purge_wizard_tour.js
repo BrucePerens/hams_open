@@ -2,6 +2,7 @@
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
+// [@ANCHOR: test_tour_cf_purge_wizard]
 registry.category("web_tour.tours").add("cf_purge_wizard_tour", {
     url: "/odoo?debug=1",
     steps: () => [

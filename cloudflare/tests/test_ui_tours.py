@@ -56,7 +56,28 @@ class TestCloudflareUITours(HamsHttpCase):
         self.authenticate(self.admin.login, self.admin.login)
         self.start_tour("/odoo?debug=1", "cf_purge_wizard_tour", login=self.admin.login)
 
-    def test_04_backend_views_rendering(self):
+    def test_04_zone_settings_tour(self):
+        """Executes the JS tour for the Zone Settings Wizard."""
+        # Seed credentials so the wizard doesn't crash/timeout on API calls
+        website = self.env["website"].get_current_website()
+        website.write(
+            {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
+        )
+
+        # Mock the API calls in the wizard's default_get and action_apply_settings
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.zone_settings_wizard.get_zone_settings",
+            return_value=[],
+        )
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.zone_settings_wizard.update_zone_setting",
+            return_value=(True, "Success"),
+        )
+
+        self.authenticate(self.admin.login, self.admin.login)
+        self.start_tour("/odoo?debug=1", "cf_zone_settings_tour", login=self.admin.login)
+
+    def test_05_backend_views_rendering(self):
         # [@ANCHOR: test_cf_backend_views_rendering]
         v1 = self.env["cloudflare.config.backup"].get_view(view_type="list")
         self.assertIn("create_date", v1["arch"])

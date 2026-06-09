@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_cloudflare_config_backup_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_cf_backend_views_rendering] -->
+    <!-- Verified by [@ANCHOR: test_cf_backend_views_rendering] -->
+    <record id="view_cloudflare_config_backup_list" model="ir.ui.view">
         <field name="name">cloudflare.config.backup.list</field>
         <field name="model">cloudflare.config.backup</field>
         <field name="arch" type="xml">
