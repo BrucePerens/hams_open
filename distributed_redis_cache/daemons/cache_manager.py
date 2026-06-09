@@ -42,9 +42,9 @@ DB_PASS = os.getenv("DB_PASS", "odoo")
 if os.getenv("PGHOST"):
     DB_HOST = os.getenv("PGHOST")
 
-REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-REDIS_PASS = os.getenv("REDIS_PASSWORD")
+REDIS_HOST = os.getenv("REDIS_HOST") or os.getenv("redis_host") or "127.0.0.1"
+REDIS_PORT = int(os.getenv("REDIS_PORT") or os.getenv("redis_port") or "6379")
+REDIS_PASS = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
 
 PG_CHANNEL = "distributed_cache_invalidation"
 REDIS_CHANNEL = "odoo_cache_invalidation_bus"

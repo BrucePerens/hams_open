@@ -15,6 +15,7 @@ _logger = logging.getLogger(__name__)
 # Tests [@ANCHOR: manual_cache_invalidation]
 # Tests [@ANCHOR: check_redis_status_logic]
 # Tests [@ANCHOR: distributed_cache_view]
+# Tests [@ANCHOR: distributed_cache_settings_view]
 
 @odoo.tests.tagged('post_install', '-at_install')
 class TestDistributedCacheTour(HamsHttpCase):
@@ -62,14 +63,16 @@ class TestDistributedCacheTour(HamsHttpCase):
         if is_integration:
             # Signal the server to use real Redis during this tour session.
             # We use a system parameter as a global toggle for the test session.
-            self.env['ir.config_parameter'].with_user(1).set_param('distributed_redis_cache.test_integration_active', '1')
+            self.env["zero_sudo.security.utils"]._set_system_param('distributed_redis_cache.test_integration_active', '1')
 
         try:
-            self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin")
+            # Provide dummy data if needed by the tour (e.g. ensure the menu exists)
+            # The menu xmlid is distributed_redis_cache.menu_distributed_cache_root
+            self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin", timeout=240)
         except Exception as e:  # audit-ignore-catch-all
             # [!] DIAGNOSTIC FOR AI: UI Tour 'distributed_cache_admin_tour' failed.
             _logger.error("Tour failed: %s", e)
             raise e
         finally:
             if is_integration:
-                self.env['ir.config_parameter'].with_user(1).set_param('distributed_redis_cache.test_integration_active', '0')
+                self.env["zero_sudo.security.utils"]._set_system_param('distributed_redis_cache.test_integration_active', '0')

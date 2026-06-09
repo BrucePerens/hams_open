@@ -7,7 +7,11 @@ import datetime
 import time
 from functools import wraps
 from odoo import models, tools
-from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
+from odoo.addons.distributed_redis_cache.redis_pool import (
+    redis,
+    redis_pool,
+    get_redis_connection,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -84,9 +88,8 @@ def distributed_cache():
             # to prevent cross-test ghost cache poisoning after Postgres rollbacks.
             # RealTransactionCase and integration tests can re-enable it via system parameter.
             if tools.config.get("test_enable"):
-                # Use with_user(1) for system parameter read to comply with zero-sudo linter
-                param_obj = self.env['ir.config_parameter'].with_user(1)
-                integration_active = param_obj.get_param('distributed_redis_cache.test_integration_active')
+                # Use zero_sudo security utils for system parameter read to comply with security mandates
+                integration_active = self.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
                 if not integration_active:
                     use_redis = False
 
@@ -95,7 +98,7 @@ def distributed_cache():
                 # the "split brain" phenomenon, during a network partition.
                 while True:
                     try:
-                        r = redis.Redis(connection_pool=redis_pool)
+                        r = get_redis_connection(self.env)
                         cached = r.get(cache_key)
                         if cached:
                             # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
@@ -122,7 +125,7 @@ def distributed_cache():
                 while True:
                     try:
                         serialized_result = json.dumps(result)
-                        r = redis.Redis(connection_pool=redis_pool)
+                        r = get_redis_connection(self.env)
                         r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                         return result
                     except redis.RedisError as e:
@@ -155,7 +158,7 @@ def invalidate_model_cache(env, model_name, local_only=False):
         use_redis = bool(redis and redis_pool)
         if use_redis:
             try:
-                r = redis.Redis(connection_pool=redis_pool)
+                r = get_redis_connection(env)
                 # Use SCAN instead of KEYS for production safety
                 # Process in batches to avoid blocking Redis or consuming too much memory
                 keys = []

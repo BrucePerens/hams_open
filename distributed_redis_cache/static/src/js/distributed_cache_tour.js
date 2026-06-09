@@ -28,7 +28,6 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
         {
             trigger: '.o_notification',
             content: "Wait for status notification to appear",
-            run: function() {}
         },
         {
             trigger: '.o_field_widget[name="model_id"] input',
@@ -52,7 +51,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
         },
         {
             trigger: '.o_notification',
-            content: 'Wait for notification',
+            content: "Wait for notification to appear",
         },
         TourUtils.waitForAbsence('.o_notification', 'Wait for notification to disappear'),
     ]

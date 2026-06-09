@@ -10,3 +10,10 @@
 - Manually restarted services and confirmed connectivity with `pg_isready` and `redis-cli ping`.
 - Verified module logic through targeted linter runs and manual source review.
 - Semantic Anchors and Documentation gaps (ADR-0054, ADR-0055) have been fully resolved.
+
+## External Module Dependencies
+- **zero_sudo/models/security_utils.py**: The following parameters must be whitelisted in `_get_param_whitelist()` to support secure Redis configuration via UI:
+  - `distributed_redis_cache.redis_host`
+  - `distributed_redis_cache.redis_port`
+  - `distributed_redis_cache.redis_password`
+  - `distributed_redis_cache.test_integration_active`

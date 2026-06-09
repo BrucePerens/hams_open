@@ -20,6 +20,7 @@ Distributed Redis Cache
         "security/distributed_redis_cache_security.xml",
         "security/ir.model.access.csv",
         "views/distributed_cache_views.xml",
+        "views/res_config_settings_views.xml",
     ],
     "assets": {
         "web.assets_tests": [
