@@ -33,10 +33,14 @@ Because this is a standalone Open Source module that spawns external Python daem
 
 1. Ensure the Python dependencies (`redis`, `asyncpg`) are installed on your host.
 2. Install the `distributed_redis_cache` module from the Odoo Apps menu.
-3. Start the background sync daemon:
+3. Configure Redis settings:
+   * Navigate to **Settings > Technical > Distributed Redis Cache** (or use the Distributed Cache Manager UI).
+   * Enter your Redis host, port, and password. These are stored securely in `ir.config_parameter`.
+4. Start the background sync daemon:
    * Execute `daemons/cache_manager.py` as a systemd service.
    * The daemon requires read access to `/var/lib/odoo/daemon_keys/cache_manager.env` (managed automatically by the Daemon Key Manager module).
-4. Navigate to **Settings > Technical > Distributed Cache** in Odoo to verify the connection status.
+   * The daemon will use configurations from the environment file if available, or fall back to standard defaults.
+5. Navigate to **Settings > Technical > Distributed Cache** in Odoo to verify the connection status.
 
 ## 🏗️ Architecture (CQRS)
 

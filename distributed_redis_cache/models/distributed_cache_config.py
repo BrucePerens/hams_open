@@ -4,7 +4,11 @@ from odoo import models, fields, tools, _
 from odoo.addons.distributed_redis_cache.redis_cache import (
     notify_model_invalidation,
 )
-from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
+from odoo.addons.distributed_redis_cache.redis_pool import (
+    redis,
+    redis_pool,
+    get_redis_connection,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -43,9 +47,8 @@ class DistributedCacheConfig(models.TransientModel):
         use_redis = bool(redis and redis_pool)
 
         if tools.config.get("test_enable"):
-            # Use super-user ID directly for system parameter read to comply with zero-sudo linter
-            param_obj = self.env['ir.config_parameter'].with_user(1)
-            integration_active = param_obj.get_param('distributed_redis_cache.test_integration_active')
+            # Use zero_sudo security utils for system parameter read to comply with security mandates
+            integration_active = self.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
             if not integration_active:
                 use_redis = False
 
@@ -56,7 +59,7 @@ class DistributedCacheConfig(models.TransientModel):
 
         if use_redis:
             try:
-                r = redis.Redis(connection_pool=redis_pool)
+                r = get_redis_connection(self.env)
                 r.ping()
                 status_msg = _("Redis connection is healthy.")
                 msg_type = "success"

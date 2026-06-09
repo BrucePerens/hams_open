@@ -7,16 +7,58 @@ import redis
 _logger = logging.getLogger(__name__)
 
 # [@ANCHOR: redis_connection_pool]
-redis_host = os.getenv("REDIS_HOST") or "redis"
-redis_port = int(os.getenv("REDIS_PORT") or "6379")
-redis_password = os.getenv("REDIS_PASSWORD")  # burn-ignore-env
+# Default values used as fallback when the Odoo registry is not yet available
+# or during initial module loading.
+REDIS_HOST_DEFAULT = os.getenv("REDIS_HOST") or "redis"
+REDIS_PORT_DEFAULT = int(os.getenv("REDIS_PORT") or "6379")
+REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # burn-ignore-env
+
+# Centralized connection pool for the default Redis settings
 redis_pool = redis.ConnectionPool(
-    host=redis_host,
-    port=redis_port,
-    password=redis_password,
+    host=REDIS_HOST_DEFAULT,
+    port=REDIS_PORT_DEFAULT,
+    password=REDIS_PASS_DEFAULT,
     db=0,
     decode_responses=True,
     socket_timeout=1.0,
     socket_connect_timeout=1.0,
 )
+
+# Registry to cache connection pools for custom configurations to avoid connection churn
+_custom_pools = {}
+
+
+def get_redis_connection(env=None):
+    """
+    Returns a Redis client using settings from the environment if available,
+    otherwise falling back to the centralized connection pool.
+    """
+    if env:
+        # Configuration is loaded via zero_sudo security utils to comply with security mandates
+        security_utils = env["zero_sudo.security.utils"]
+        host = security_utils._get_system_param("distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT)
+        port_raw = security_utils._get_system_param("distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT))
+        port = int(port_raw)
+        password = security_utils._get_system_param("distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT)
+
+        # Check if the environment config differs from the default pool
+        if (
+            host != REDIS_HOST_DEFAULT
+            or port != REDIS_PORT_DEFAULT
+            or password != REDIS_PASS_DEFAULT
+        ):
+            pool_key = (host, port, password)
+            if pool_key not in _custom_pools:
+                _custom_pools[pool_key] = redis.ConnectionPool(
+                    host=host,
+                    port=port,
+                    password=password,
+                    db=0,
+                    decode_responses=True,
+                    socket_timeout=1.0,
+                    socket_connect_timeout=1.0,
+                )
+            return redis.Redis(connection_pool=_custom_pools[pool_key])
+
+    return redis.Redis(connection_pool=redis_pool)
 _logger.debug("Initialized Centralized Redis Connection Pool.")

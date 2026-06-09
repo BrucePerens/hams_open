@@ -12,6 +12,9 @@ from odoo.http import request
 from odoo.addons.distributed_redis_cache.redis_pool import (
     redis,
     redis_pool,
+    REDIS_HOST_DEFAULT,
+    REDIS_PORT_DEFAULT,
+    REDIS_PASS_DEFAULT,
 )
 from odoo.addons.distributed_redis_cache.redis_cache import (
     invalidate_model_cache,
@@ -38,12 +41,25 @@ def _stop_listener():
 atexit.register(_stop_listener)
 
 
-def _redis_listener_thread():
+def _redis_listener_thread(conn_params=None):
     global _listener_started
     if not redis or not redis_pool:
         return
     try:
-        r_client = redis.Redis(connection_pool=redis_pool, socket_timeout=2.0)
+        if conn_params:
+            # We use a custom connection pool for the background thread to avoid
+            # sharing the Odoo worker's pool and potential lifecycle issues.
+            r_client = redis.Redis(
+                host=conn_params.get('host'),
+                port=conn_params.get('port'),
+                password=conn_params.get('password'),
+                db=0,
+                decode_responses=True,
+                socket_timeout=2.0,
+            )
+        else:
+            r_client = redis.Redis(connection_pool=redis_pool, socket_timeout=2.0)
+
         pubsub = r_client.pubsub()
         pubsub.subscribe("odoo_cache_invalidation_bus")
 
@@ -100,8 +116,8 @@ class IrHttp(models.AbstractModel):
         if test_mode:
             # We use a try-except to handle cases where the registry might not be fully initialized
             try:
-                # We use the ORM if available, but wrap in try-except for safety
-                param = request.env['ir.config_parameter'].with_user(1).get_param('distributed_redis_cache.test_integration_active')
+                # Use zero_sudo security utils for system parameter read to comply with security mandates
+                param = request.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
                 integration_active = bool(param)
             except Exception as e: # audit-ignore-catch-all
                 # Fail silently during initialization/teardown if request context is unstable
@@ -123,7 +139,24 @@ class IrHttp(models.AbstractModel):
                                 thread_name_prefix="RedisListener",
                             )
                         _stop_event.clear()
-                        _executor.submit(_redis_listener_thread)
+
+                        # Extract connection parameters from the environment once to pass
+                        # them safely to the background thread, avoiding thread-safety issues with request.env.
+                        conn_params = None
+                        try:
+                            security_utils = request.env["zero_sudo.security.utils"]
+                            host = security_utils._get_system_param("distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT)
+                            port_raw = security_utils._get_system_param("distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT))
+                            password = security_utils._get_system_param("distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT)
+                            conn_params = {
+                                'host': host,
+                                'port': int(port_raw),
+                                'password': password
+                            }
+                        except Exception as e: # audit-ignore-catch-all
+                            _logger.warning("Failed to extract Redis connection parameters for listener: %s", e)
+
+                        _executor.submit(_redis_listener_thread, conn_params)
                         _listener_started = True
 
         if _invalidation_queue:

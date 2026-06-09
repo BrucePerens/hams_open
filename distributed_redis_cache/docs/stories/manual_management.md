@@ -7,6 +7,9 @@ The module provides a dedicated UI ([@ANCHOR: distributed_cache_view]) where adm
 - **Monitor Status**: Verify that Odoo is successfully communicating with the Redis backend.
 - **Targeted Invalidation**: Select a specific Odoo model and trigger a manual cache flush ([@ANCHOR: manual_cache_invalidation]).
 
+## Redis Configuration
+The Redis connection settings can be configured via the **Settings** menu under the **Distributed Redis Cache** section ([@ANCHOR: distributed_cache_settings_view]).
+
 ## Safety First
 Manual invalidation still follows the standard invalidation pipeline, ensuring that the cache is cleared across the *entire* cluster, not just on the administrator's current worker.
 

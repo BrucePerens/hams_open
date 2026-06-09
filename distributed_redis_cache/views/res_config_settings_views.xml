@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- [@ANCHOR: distributed_cache_settings_view] -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.distributed_redis_cache</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="Distributed Redis Cache" data-string="Distributed Redis Cache" name="distributed_redis_cache">
+                    <block title="Redis Configuration" name="redis_config">
+                        <setting string="Redis Host" help="The hostname or IP of your Redis server.">
+                            <field name="redis_host"/>
+                        </setting>
+                        <setting string="Redis Port" help="The port your Redis server is listening on.">
+                            <field name="redis_port"/>
+                        </setting>
+                        <setting string="Redis Password" help="Password for Redis authentication.">
+                            <field name="redis_password" password="True"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
