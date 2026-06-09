@@ -25,3 +25,35 @@ class BackupLatestSnapshotView(models.Model):
                 ORDER BY config_id, start_time DESC, id DESC
             )
         """)
+
+        # Performance: Postgres procedure to upsert snapshots in a single round-trip
+        # [@ANCHOR: backup_management:upsert_snapshots_procedure]
+        self.env.cr.execute("""
+            CREATE OR REPLACE FUNCTION upsert_backup_snapshots(
+                p_config_id INTEGER,
+                p_website_id INTEGER,
+                p_company_id INTEGER,
+                p_snapshots JSONB,
+                p_user_id INTEGER
+            ) RETURNS TABLE(snapshot_id TEXT) AS $$
+            BEGIN
+                RETURN QUERY
+                INSERT INTO backup_snapshot (
+                    config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status,
+                    create_uid, create_date, write_uid, write_date
+                )
+                SELECT
+                    p_config_id,
+                    p_website_id,
+                    p_company_id,
+                    s->>'snapshot_id',
+                    (s->>'start_time')::timestamp,
+                    (s->>'size_bytes')::float,
+                    s->>'status',
+                    p_user_id, NOW(), p_user_id, NOW()
+                FROM jsonb_array_elements(p_snapshots) s
+                ON CONFLICT (config_id, snapshot_id) DO NOTHING
+                RETURNING backup_snapshot.snapshot_id;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)

@@ -7,6 +7,7 @@ This module provides a unified interface for managing system backups using Kopia
 - **Multi-Engine Support:** Manage both Kopia and pgBackRest from a single dashboard.
 - **Asynchronous Execution:** Backup and restore jobs are offloaded to a background worker via RabbitMQ to prevent UI blocking.
 - **Auto-Refresh Status:** Backup job status is automatically updated via a periodic cron job.
+- **Performance Optimized:** Bulk snapshot synchronization uses PostgreSQL stored procedures for single-roundtrip updates.
 - **Multi-Tenant Aware:** Backups and snapshots are isolated by website and company.
 - **Automated Retention:** Configure daily, weekly, and monthly retention policies.
 - **Health Monitoring:** Automated stale backup detection and size anomaly alerts via PagerDuty.
@@ -20,6 +21,7 @@ Handles the execution loops for continuous file system snapshots and system stor
 * **Core Sync Anchor:** `[@ANCHOR: backup_management:backup_sync_kopia]`
 * **Database Target Sync Anchor:** `[@ANCHOR: backup_management:backup_sync_pgbackrest]`
 * **Cron Routine Orchestration:** `[@ANCHOR: backup_management:cron_sync_all_backups]`
+* **Performance Bulk Upsert:** `[@ANCHOR: backup_management:upsert_snapshots_procedure]`
 
 ### 2. Retention & Purge Governance
 Ensures structural space recovery processes comply with multi-website tenant data privacy mandates.

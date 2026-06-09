@@ -460,18 +460,15 @@ class BackupConfig(models.Model):
         return configs
 
     def _process_snapshot_data(self, data, engine):
-        Snapshot = self.env["backup.snapshot"]
-        existing_snaps = Snapshot.search([("config_id", "=", self.id)], limit=5000)
-        existing_map = {s.snapshot_id: s for s in existing_snaps}
-
-        creates = []
+        # Performance: Use Postgres procedure to reduce round-trips for batch insertion
+        # [@ANCHOR: backup_management:upsert_snapshots_roundtrip_optimization]
+        snapshot_list = []
         if engine == "kopia":
             for snap in data:
                 sid = snap.get("id")
-                if sid and sid not in existing_map:
-                    creates.append(
+                if sid:
+                    snapshot_list.append(
                         {
-                            "config_id": self.id,
                             "snapshot_id": sid,
                             "start_time": snap.get("startTime", "")[:19].replace(
                                 "T", " "
@@ -484,7 +481,7 @@ class BackupConfig(models.Model):
             for stanza in data:
                 for snap in stanza.get("backup", []):
                     sid = snap.get("label")
-                    if sid and sid not in existing_map:
+                    if sid:
                         ts = snap.get("timestamp", {}).get("start", 0)
                         dt = (
                             datetime.datetime.utcfromtimestamp(ts).strftime(
@@ -493,9 +490,8 @@ class BackupConfig(models.Model):
                             if ts
                             else False
                         )
-                        creates.append(
+                        snapshot_list.append(
                             {
-                                "config_id": self.id,
                                 "snapshot_id": sid,
                                 "start_time": dt,
                                 "size_bytes": snap.get("info", {}).get("size", 0),
@@ -503,12 +499,27 @@ class BackupConfig(models.Model):
                             }
                         )
 
-        if creates:
-            # Sort by start_time to ensure we check the absolute latest if multiple are created
-            creates.sort(key=lambda x: x["start_time"], reverse=True)
-            Snapshot.create(creates)
-            if self.minimum_size_mb > 0:
-                for c in creates:
+        if snapshot_list:
+            # Use the Postgres procedure for efficient bulk upsert
+            # Returns the snapshot_id of newly inserted records to avoid duplicate alerting
+            self.env.cr.execute(
+                "SELECT snapshot_id FROM upsert_backup_snapshots(%s, %s, %s, %s, %s)",
+                (
+                    self.id,
+                    self.website_id.id or None,
+                    self.company_id.id,
+                    json.dumps(snapshot_list),
+                    self.env.uid,
+                ),
+            )
+            new_snapshot_ids = [row[0] for row in self.env.cr.fetchall()]
+
+            # Verification and anomaly reporting only for NEW snapshots to prevent alert spam
+            if self.minimum_size_mb > 0 and new_snapshot_ids:
+                new_snaps = [s for s in snapshot_list if s['snapshot_id'] in new_snapshot_ids]
+                # Sort by start_time to check the absolute latest
+                new_snaps.sort(key=lambda x: x["start_time"], reverse=True)
+                for c in new_snaps:
                     snap_mb = c.get("size_bytes", 0) / (1024 * 1024)
                     if snap_mb < self.minimum_size_mb:
                         self._report_backup_failure(

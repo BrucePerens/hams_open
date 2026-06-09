@@ -1,49 +1,12 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-
-// Inlined TourUtils to avoid cross-module asset resolution issues in headless tests
-const LocalTourUtils = {
-    safeSave: function (saveButtonTrigger, waitTrigger) {
-        saveButtonTrigger = saveButtonTrigger || '.o_form_button_save';
-        waitTrigger = waitTrigger || '.o_form_button_create';
-        return [
-            {
-                content: "[MACRO] Click the save button",
-                trigger: saveButtonTrigger,
-                run: 'click',
-            },
-            {
-                content: "[MACRO] Wait for DOM element: RPC resolution / Dirty Form safe save (" + waitTrigger + ")",
-                trigger: waitTrigger,
-                run: function() {}
-            }
-        ];
-    },
-    bypassDialogs: function () {
-        return {
-            content: "[MACRO] Bypass native blocking dialogs",
-            trigger: 'body',
-            run: function () {
-                if (!window.__dialogsBypassed) {
-                    window.alert = function (msg) {
-                        console.warn("[ALARM] Native window.alert intercepted! Message: " + msg);
-                    };
-                    window.confirm = function (msg) {
-                        console.warn("[ALARM] Native window.confirm intercepted! Message: " + msg);
-                        return true;
-                    };
-                    window.__dialogsBypassed = true;
-                }
-            }
-        };
-    }
-};
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("backup_dashboard_tour", {
     url: "/odoo?debug=1",
     steps: () => [
-        LocalTourUtils.bypassDialogs(),
+        TourUtils.bypassDialogs(),
         { trigger: 'body', content: 'Initialize Tour' },
         {
             trigger: '.o_navbar_apps_menu button',
@@ -107,5 +70,5 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: 'Click away to force DOM blur and commit text input',
             run: 'click',
         }
-    ].concat(LocalTourUtils.safeSave('.o_form_button_save', '.o_form_saved, .o_form_button_create, .o_list_button_add')),
+    ].concat(TourUtils.safeSave('.o_form_button_save', '.o_form_saved, .o_form_button_create, .o_list_button_add')),
 });

@@ -65,6 +65,8 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_01b_sync_kopia_triggered(self):
         # Tests [@ANCHOR: backup_management:backup_sync_kopia]
+        # Tests [@ANCHOR: backup_management:upsert_snapshots_procedure]
+        # Tests [@ANCHOR: backup_management:upsert_snapshots_roundtrip_optimization]
         self.config_kopia.action_sync_snapshots()
         job = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
