@@ -134,6 +134,7 @@ class TestSettingsAndCache(RealTransactionCase):
             {"website_id": website.id}
         )
         settings.action_force_cache_invalidation()
+        self.env.flush_all() # Ensure data is written to DB
 
         # To safely bypass the Odoo test cursor constraint (which blocks self.env.cr.commit),
         # we will mock the website retrieval in the controller to directly read our uncommitted
@@ -195,6 +196,34 @@ class TestSettingsAndCache(RealTransactionCase):
         mtime, sizes = controller._get_fs_stats()
         self.assertGreater(mtime, 0)
         self.assertIsInstance(sizes, list)
+
+    def test_07_postgres_procedures(self):
+        # [@ANCHOR: test_caching_postgres_procedures]
+        # Tests [@ANCHOR: caching_postgres_procedures]
+        """Verify that the Postgres procedure returns correct values."""
+        website = self.env["website"].get_current_website()
+        website.caching_safe_quota_mb = 42
+        website.caching_invalidation_version = 7
+        self.env.flush_all() # Ensure data is written to DB
+
+        # We need to ensure the procedure is actually installed in the test DB
+        # although it should be via the manifest and data/procedures.xml
+        self.env.cr.execute(
+            "SELECT quota_mb, invalidation_version FROM caching_get_sw_params(%s)",
+            (website.id,),
+        )
+        res = self.env.cr.fetchone()
+        self.assertEqual(res[0], 42)
+        self.assertEqual(res[1], 7)
+
+        # Test fallback
+        self.env.cr.execute(
+            "SELECT quota_mb, invalidation_version FROM caching_get_sw_params(%s)",
+            (-1,),
+        )
+        res = self.env.cr.fetchone()
+        self.assertEqual(res[0], 35)
+        self.assertEqual(res[1], 1)
 
     def test_04_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_caching_settings]

@@ -9,6 +9,7 @@
         "manual_library", "base", "website", "zero_sudo"],
     "data": [
         "data/security_data.xml",
+        "data/procedures.xml",
         "security/ir.model.access.csv",
         "views/layout_inherit.xml",
         "views/res_config_settings_views.xml",

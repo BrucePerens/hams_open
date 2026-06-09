@@ -15,17 +15,9 @@ registry.category("web_tour.tours").add("caching_service_worker_check", {
             run: function () {
                 // Tests [@ANCHOR: caching_sw_fetch_interceptor]
                 // Verified by [@ANCHOR: test_caching_service_worker_tour]
-                console.log('Tour started');
                 if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.getRegistrations().then(registrations => {
-                        if (registrations.length > 0) {
-                            console.log('Service Worker found');
-                            document.body.classList.add('sw-registered');
-                        } else {
-                            // [!] DIAGNOSTIC FOR AI: No Service Worker found.
-                            // Ensure register.js is correctly loaded and register() is called.
-                            throw new Error('No Service Worker found. Registration may have failed or was not initiated.');
-                        }
+                    navigator.serviceWorker.ready.then(() => {
+                        document.body.classList.add('sw-registered');
                     });
                 } else {
                     // [!] DIAGNOSTIC FOR AI: Service Worker is not supported.
@@ -34,7 +26,10 @@ registry.category("web_tour.tours").add("caching_service_worker_check", {
                 }
             },
         },
-        { trigger: 'body.sw-registered', content: 'Wait for: Wait for SW status to be updated', run: function() {} },
-        
+        {
+            content: "Wait for SW status to be updated",
+            trigger: 'body.sw-registered',
+            run: function() {}
+        },
     ],
 });

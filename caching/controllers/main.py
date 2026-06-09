@@ -96,34 +96,36 @@ class ServiceWorkerController(http.Controller):
             type(self)._fs_cache = res
             return res
 
-    def _get_global_static_info(self):
+    def _get_global_static_info(self, quota_override=None):
         # [@ANCHOR: caching_quota_calculation]
         # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
         Calculates the safe dynamic max file size based on quota.
         Returns tuple: (latest_mtime_string, dynamic_max_size_string).
         """
-        # Multi-Website Awareness: Get quota.
-        website = getattr(request, "website", None)
-
         # Clear FS cache if requested (e.g., during tests or manual refresh)
         if request.env.context.get("force_fs_scan"):
             type(self)._fs_cache = None
 
         max_mtime, file_sizes = self._get_fs_stats()
 
-        if website:
-            quota_mb = website.caching_safe_quota_mb
+        if quota_override is not None:
+            quota_mb = quota_override
         else:
-            # Fallback to system param.
-            # Tested by [@ANCHOR: test_caching_sudo_params]
-            utils = request.env["zero_sudo.security.utils"]
-            quota_mb = int(
-                utils._get_system_param(
-                    "caching.safe_quota_mb", "35"
+            # Multi-Website Awareness: Get quota.
+            website = getattr(request, "website", None)
+            if website:
+                quota_mb = website.caching_safe_quota_mb
+            else:
+                # Fallback to system param.
+                # Tested by [@ANCHOR: test_caching_sudo_params]
+                utils = request.env["zero_sudo.security.utils"]
+                quota_mb = int(
+                    utils._get_system_param(
+                        "caching.safe_quota_mb", "35"
+                    )
+                    or 35
                 )
-                or 35
-            )
 
         # Reserve 10MB for compiled bundles and overhead.
         SAFE_QUOTA = max(0, quota_mb - 10) * 1024 * 1024
@@ -177,19 +179,24 @@ class ServiceWorkerController(http.Controller):
         except FileNotFoundError:
             return request.not_found()
 
-        latest_mtime, max_file_size = self._get_global_static_info()
-
-        # Multi-Website Awareness: Get version from current website.
+        # Multi-Website Awareness: Get params using high-performance procedure.
         website = getattr(request, "website", None)
-        if website:
-            in_v = website.caching_invalidation_version
+        website_id = website.id if website else None
+
+        # Optimization: Single database round-trip via Postgres procedure.
+        # Verified by [@ANCHOR: test_caching_postgres_procedures]
+        request.env.cr.execute(
+            "SELECT quota_mb, invalidation_version FROM caching_get_sw_params(%s)",
+            (website_id,),
+        )
+        proc_res = request.env.cr.fetchone()
+        if proc_res:
+            quota_mb, in_v = proc_res
         else:
-            # Fallback to system param.
-            # Tested by [@ANCHOR: test_caching_sudo_params]
-            utils = request.env["zero_sudo.security.utils"]
-            in_v = utils._get_system_param(
-                "caching.invalidation_version", "1"
-            )
+            quota_mb, in_v = 35, 1
+
+        # Calculate max file size based on quota from procedure.
+        latest_mtime, max_file_size = self._get_global_static_info(quota_override=quota_mb)
 
         # Build cache name with version.
         cache_name = (

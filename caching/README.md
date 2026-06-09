@@ -30,6 +30,7 @@ This module eliminates the need for manual version bumping or complex cache-bust
 **Filesystem-Linked Invalidation:**
 - **Boot Scan:** During server startup, the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: caching_fs_scan_logic]). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files.
 - **MTime Tracking:** It identifies the latest modification timestamp (`mtime`) among all discovered assets.
+- **Postgres Performance Procedures:** High-frequency configuration lookups are optimized using a dedicated Postgres procedure (`caching_get_sw_params`), reducing database round-trips to a single call ([@ANCHOR: caching_postgres_procedures]).
 - **Dynamic SW Generation:** This timestamp is injected into the `/sw.js` payload, effectively versioning the Service Worker script itself.
 - **Automatic Refresh:** When any static file is modified and the server restarts, the Service Worker's signature changes. Browsers detect this update on the next visit, triggering a background installation of the new worker and an immediate purge of the stale cache.
 
