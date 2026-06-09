@@ -26,6 +26,9 @@ class SEOMetadataMixin(models.AbstractModel):
         )
 
     def write(self, vals):
+        if self.env.context.get("skip_seo_metadata_mixin"):
+            return super().write(vals)
+
         seo_fields = self._get_seo_fields()
         seo_vals = {k: v for k, v in vals.items() if k in seo_fields}
         other_vals = {k: v for k, v in vals.items() if k not in seo_fields}
@@ -39,7 +42,7 @@ class SEOMetadataMixin(models.AbstractModel):
             if self.env.su or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             ):
-                res = res and super().write(seo_vals)
+                res = super().write(seo_vals) and res
             else:
                 self._check_seo_write_permission()
                 # Escalate strictly for the write operation using service acc
@@ -54,4 +57,4 @@ class SEOMetadataMixin(models.AbstractModel):
                     self.with_user(svc_uid).with_context(mail_notrack=True),
                 ).write(seo_vals)
 
-        return res
+        return True
