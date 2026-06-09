@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Verified by [@ANCHOR: test_tour_cf_waf_rule] -->
-    <record id="view_cloudflare_waf_rule_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_cf_backend_views_rendering] -->
+    <record id="view_cloudflare_waf_rule_list" model="ir.ui.view">
         <field name="name">cloudflare.waf.rule.list</field>
         <field name="model">cloudflare.waf.rule</field>
         <field name="arch" type="xml">
@@ -15,7 +15,8 @@
             </list>
         </field>
     </record>
-    <record id="view_cloudflare_waf_rule_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_cf_backend_views_rendering] -->
+    <!-- Verified by [@ANCHOR: test_tour_cf_waf_rule] -->
+    <record id="view_cloudflare_waf_rule_form" model="ir.ui.view">
         <field name="name">cloudflare.waf.rule.form</field>
         <field name="model">cloudflare.waf.rule</field>
         <field name="arch" type="xml">

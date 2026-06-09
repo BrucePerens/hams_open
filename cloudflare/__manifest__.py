@@ -33,6 +33,7 @@
             "cloudflare/static/tests/tours/ip_ban_tour.js",
             "cloudflare/static/tests/tours/purge_wizard_tour.js",
             "cloudflare/static/tests/tours/waf_rule_tour.js",
+            "cloudflare/static/tests/tours/zone_settings_tour.js",
         ],
     },
     "post_init_hook": "post_init_hook",

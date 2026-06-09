@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_cloudflare_tunnel_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by manual execution -->
+    <!-- Verified by [@ANCHOR: test_cf_sync_tunnels] -->
+    <record id="view_cloudflare_tunnel_list" model="ir.ui.view">
         <field name="name">cloudflare.tunnel.list</field>
         <field name="model">cloudflare.tunnel</field>
         <field name="arch" type="xml">

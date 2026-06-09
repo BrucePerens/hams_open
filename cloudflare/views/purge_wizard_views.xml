@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_cloudflare_purge_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by manual execution -->
+    <!-- Verified by [@ANCHOR: test_tour_cf_purge_wizard] -->
+    <record id="view_cloudflare_purge_wizard_form" model="ir.ui.view">
         <field name="name">cloudflare.purge.wizard.form</field>
         <field name="model">cloudflare.purge.wizard</field>
         <field name="arch" type="xml">
