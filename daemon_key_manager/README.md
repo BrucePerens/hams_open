@@ -2,7 +2,7 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
-The **Daemon Key Manager** is the centralized authority for managing Odoo API keys for external background services (daemons). It implements the **Service Account Pattern** by generating native Odoo API keys and exporting them to highly restricted local `.env` files, eliminating the need for hardcoded credentials or manual token rotation. This module is a critical component of the **Zero-Sudo Architecture**, ensuring that background processes operate with minimum privilege and without human intervention for credential management.
+The **Daemon Key Manager** is the centralized authority for managing Odoo API keys for external background programs (daemons). It generates secure API keys and saves them to local `.env` files, which the external programs can read. This removes the need for manual password management or insecure hardcoded credentials. It is a core part of the system's security, ensuring that background tasks have exactly the permissions they need and nothing more.
 
 ## 🚀 Quick Start: Integration API
 
@@ -21,13 +21,13 @@ def setup_daemon_credentials(env):
 
 ## 🛡️ Security Architecture
 
-### Zero-Sudo Compliance
-The module operates strictly under the `user_daemon_key_manager_service` account using the **Service Account Pattern**. All administrative operations—including API key allocation, revocation, and filesystem writes—execute with the minimum privilege required via explicit model access (ACLs) and `with_user()` context elevation.
+### Minimum Privilege Architecture
+The module follows a strict "minimum privilege" policy. It uses a dedicated service account to perform its tasks, and every API key it generates belongs to a specific "Service Account" with limited rights.
 
-**Strict No-Sudo Policy:**
-* Key generation is performed in the context of the target service account.
-* Extended API key durations (90 days) are enabled by the `group_daemon_key_usage` group, which must be assigned to the service account.
-* If the group is missing, the system automatically falls back to a 24-hour key and logs a warning, maintaining functionality without compromising security or using `.sudo()`.
+**Security Principles:**
+* **No Administrative Overreach:** Keys are generated specifically for the program that will use them.
+* **Automatic Expiration:** Keys are set to expire in 90 days. The system rotates them every 60 days to ensure there is always a valid key.
+* **Safety Fallback:** If a service account isn't configured for long-term keys, the system provides a 24-hour temporary key and logs a warning so an administrator can fix it.
 
 ### OS-Level Sandboxing
 * **Strict Permissions:** `.env` files are created with `0600` (read/write only for the Odoo server process user).

@@ -97,11 +97,11 @@ class DaemonKeyRegistry(models.Model):
         # [@ANCHOR: register_daemon_api]
 
         # Authorization Check: register_daemon is a privileged API
-        if not (self.env.user.has_group("daemon_key_manager.group_daemon_key_manager") or
-                self.env.user.is_service_account or
-                self.env.is_admin() or
-                self.env.is_superuser()):
-            raise AccessError(_("Unauthorized attempt to register daemon: %s") % daemon_name)
+        # Any service account can register its own daemon, or a Manager can register any daemon.
+        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
+            if not self.env.user.is_service_account:
+                if self.env.uid != SUPERUSER_ID and not self.env.is_admin() and not self.env.is_superuser():
+                    raise AccessError(_("Unauthorized attempt to register daemon: %s") % daemon_name)
 
         # Elevate to the internal service account to perform registration
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
