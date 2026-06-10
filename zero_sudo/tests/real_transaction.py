@@ -56,7 +56,10 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
 
         # Provision a true PostgreSQL cursor for the test thread
         self.cr = self.registry.cursor()
-        self.env = odoo.api.Environment(self.cr, odoo.SUPERUSER_ID, {})
+        self.cr.execute("SELECT id FROM res_users WHERE login = 'odoo_facility_service_internal'")
+        row = self.cr.fetchone()
+        svc_id = row[0] if row else 2
+        self.env = odoo.api.Environment(self.cr, svc_id, {})
 
         # 2. Snapshot exact table counts
         # [@ANCHOR: leak_snapshotting]

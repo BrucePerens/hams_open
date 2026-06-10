@@ -26,7 +26,10 @@ def _async_unpublish_content(db_name, user_ids):
     cr = registry.cursor()
     try:
         # ADR-0001: Execute operations under a dedicated service account instead of SUPERUSER_ID
-        env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+        row = cr.fetchone()
+        svc_id = row[0] if row else 2
+        env = odoo.api.Environment(cr, svc_id, {})
         try:
             env_svc = env["zero_sudo.security.utils"]._get_service_env(
                 "user_websites.user_websites_service_account"
@@ -78,9 +81,9 @@ def _async_unpublish_content(db_name, user_ids):
         except (odoo.exceptions.AccessError, odoo.exceptions.ValidationError) as e:
             env.cr.rollback()
             logging.getLogger(__name__).warning("Background unpublish business logic failure: %s", e)
-        except Exception: # audit-ignore-catch-all
+        except Exception as e: # audit-ignore-catch-all
             env.cr.rollback()
-            logging.getLogger(__name__).exception("Fatal error during background unpublish")
+            logging.getLogger(__name__).error("Fatal error during background unpublish: %s", e)
     finally:
         cr.close()
 
@@ -214,7 +217,7 @@ class ResUsers(models.Model):
                     env_user = env_svc["res.users"]
                     env_group = env_svc["user.websites.group"]
                 except AccessError as e:
-                    if "not found" in str(e):
+                    if "not found" in str(e).lower():
                          env_user = self.env["res.users"]
                          env_group = self.env["user.websites.group"]
                     else:
@@ -289,7 +292,7 @@ class ResUsers(models.Model):
                         "user_websites.user_websites_service_account"
                     )
                 except AccessError as e:
-                    if "not found" in str(e):
+                    if "not found" in str(e).lower():
                         env_svc = self.env
                     else:
                         raise
@@ -340,7 +343,7 @@ class ResUsers(models.Model):
                 )
                 redirect_env = env_svc["website.rewrite"]
             except AccessError as e:
-                if "not found" in str(e):
+                if "not found" in str(e).lower():
                     env_svc = self.env
                     redirect_env = env_svc["website.rewrite"]
                 else:
@@ -435,7 +438,10 @@ class ResUsers(models.Model):
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        row = cr.fetchone()
+                        svc_id = row[0] if row else 2
+                        env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
                         batch = env_svc["website.page"].search([("owner_user_id", "=", user_id)], limit=1000, offset=offset)
                         items = [{"name": p.name, "url": p.url, "content": p.arch} for p in batch]
@@ -448,7 +454,10 @@ class ResUsers(models.Model):
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        row = cr.fetchone()
+                        svc_id = row[0] if row else 2
+                        env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
                         batch = env_svc["blog.post"].search([("owner_user_id", "=", user_id)], limit=1000, offset=offset)
                         items = [{"name": b.name, "content": b.content, "published_date": str(b.post_date)} for b in batch]
@@ -461,7 +470,10 @@ class ResUsers(models.Model):
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        row = cr.fetchone()
+                        svc_id = row[0] if row else 2
+                        env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
                         batch = env_svc["content.violation.report"].search([("reported_by_user_id", "=", user_id)], limit=1000, offset=offset)
                         items = [{"target_url": r.target_url, "description": r.description, "status": r.state, "submitted_date": str(r.create_date)} for r in batch]
@@ -474,7 +486,10 @@ class ResUsers(models.Model):
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        row = cr.fetchone()
+                        svc_id = row[0] if row else 2
+                        env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
                         batch = env_svc["content.violation.appeal"].search([("user_id", "=", user_id)], limit=1000, offset=offset)
                         items = [{"reason": a.reason, "status": a.state, "submitted_date": str(a.create_date)} for a in batch]
