@@ -37,6 +37,12 @@ def main():
                             manifest_dict = ast.literal_eval(node.value)
                             manifests[mod_name] = manifest_dict.get('depends', [])
 
+                            if 'description' not in manifest_dict:
+                                print(f"🚨 MANIFEST DESCRIPTION VIOLATION in {mod_name}")
+                                print(f"  File: {manifest_path}")
+                                print("  Error: __manifest__.py MUST contain a 'description' key to prevent Odoo from falling back to RST parsing on README.md during module installation.")
+                                errors_found = True
+
                             assets = manifest_dict.get('assets', {})
                             for bundle_name, file_list in assets.items():
                                 for asset_path in file_list:

@@ -113,7 +113,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                             with self.env.cr.savepoint(), mute_logger("odoo.sql_db"), mute_logger("odoo.models.unlink"):
                                 records = self.env[model_name].with_context(active_test=False).browse(list(ids)).exists()
                                 if records:
-                                    records.unlink()
+                                    records.sudo().unlink()  # burn-ignore-sudo: Administrative test environment cleanup
                             self._tracked_records[model_name] = set()
                         except (psycopg2.IntegrityError, psycopg2.OperationalError, odoo.exceptions.AccessError, odoo.exceptions.UserError, odoo.exceptions.RedirectWarning, odoo.exceptions.ValidationError) as e:
                             pending_deletes = True

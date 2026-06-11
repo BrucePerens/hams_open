@@ -661,4 +661,3 @@ theme_hams/tests/test_tours.py
 theme_hams/__init__.py
 theme_hams/docs/stories/theme.md
 ham_onboarding/tests/test_verification.py
-f

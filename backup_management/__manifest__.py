@@ -2,6 +2,7 @@
 {
     "name": "Backup Management",
     "summary": "Unified Backup Management Facility (Kopia & pgBackRest)",
+    "description": "Unified Backup Management Facility (Kopia & pgBackRest).",
     "author": "Bruce Perens K6BP",
     "category": "Ham Radio",
     "license": "AGPL-3",

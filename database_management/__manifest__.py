@@ -2,6 +2,7 @@
 {
     "name": "Database Management",
     "summary": "DBA Toolkit for Autovacuum, Dead Tuples, and Slow Queries",
+    "description": "DBA Toolkit for Autovacuum, Dead Tuples, and Slow Queries.",
     "author": "Bruce Perens K6BP",
     "category": "Ham Radio",
     "license": "AGPL-3",

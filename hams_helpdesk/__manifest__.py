@@ -3,6 +3,7 @@
     "version": "1.0",
     "category": "Operations/Helpdesk",
     "summary": "Zero-Sudo compliant, lightweight helpdesk management.",
+    "description": "Zero-Sudo compliant, lightweight helpdesk management.",
     "author": "Bruce Perens K6BP",
     "depends": [
         "manual_library", "base", "mail", "calendar", "portal", "zero_sudo", "website"],

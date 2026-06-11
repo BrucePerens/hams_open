@@ -1,6 +1,7 @@
 {
     "name": "Cloudflare Edge Orchestration",
     "summary": "Generalized CDN Edge Orchestration, Proactive Purging, and WAF Management.",
+    "description": "Generalized CDN Edge Orchestration, Proactive Purging, and WAF Management.",
     "author": "Open Source Community",
     "category": "Website",
     "version": "1.3",

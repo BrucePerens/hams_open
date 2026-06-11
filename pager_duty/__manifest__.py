@@ -2,6 +2,7 @@
 {
     "name": "Pager Duty",
     "summary": "Pager duty scheduling and incident management.",
+    "description": "Pager duty scheduling and incident management.",
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "category": "Ham Radio",

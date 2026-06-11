@@ -1,6 +1,7 @@
 {
     "name": "Binary Downloader",
     "summary": "Secure, DB-backed binary dependency provisioner",
+    "description": "Secure, DB-backed binary dependency provisioner.",
     "version": "1.0",
     "category": "Hidden",
     "author": "Bruce Perens K6BP",
