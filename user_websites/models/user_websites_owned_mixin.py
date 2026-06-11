@@ -62,7 +62,7 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         if group_ids and not is_admin:
             try:
                 svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                    "zero_sudo.user_websites_service_account"
+                    "user_websites.user_websites_service_account"
                 )
                 groups = (
                     self.env["user.websites.group"]

@@ -58,7 +58,7 @@
             <!-- audit-ignore-cron: Tested by [@ANCHOR: test_cron_pending_reports] -->
             <field name="name">User Websites: Notify Admins of Pending Reports</field>
             <field name="model_id" ref="user_websites.model_content_violation_report"/>
-            <field name="user_id" ref="zero_sudo.user_websites_service_account"/>
+            <field name="user_id" ref="user_websites.user_websites_service_account"/>
             <field name="state">code</field>
             <field name="code">model._cron_notify_pending_reports()</field>
             <field name="interval_number">1</field>
@@ -93,7 +93,7 @@
             <!-- audit-ignore-cron: Tested by [@ANCHOR: test_cron_batching_resumption] -->
             <field name="name">User Websites: Send Weekly Subscriptions Digest</field>
             <field name="model_id" ref="website_blog.model_blog_post"/>
-            <field name="user_id" ref="zero_sudo.user_websites_service_account"/>
+            <field name="user_id" ref="user_websites.user_websites_service_account"/>
             <field name="state">code</field>
             <field name="code">model.send_weekly_digest()</field>
             <field name="interval_number">1</field>
@@ -106,7 +106,7 @@
             <!-- audit-ignore-cron: Tested by [@ANCHOR: test_cron_redis_flush] -->
             <field name="name">User Websites: Flush Redis View Counters</field>
             <field name="model_id" ref="website.model_website_page"/>
-            <field name="user_id" ref="zero_sudo.user_websites_service_account"/>
+            <field name="user_id" ref="user_websites.user_websites_service_account"/>
             <field name="state">code</field>
             <field name="code">model._flush_redis_view_counters()</field>
             <field name="interval_number">15</field>

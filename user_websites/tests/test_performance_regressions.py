@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-import odoo.tests
 from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 import logging
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
-class TestPerformanceORM(odoo.tests.common.TransactionCase):
+class TestPerformanceORM(RealTransactionCase):
 
     def setUp(self):
         super().setUp()
@@ -46,7 +46,7 @@ class TestPerformanceORM(odoo.tests.common.TransactionCase):
         """
         query_counts = []
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
 
         for user in self.test_users:
@@ -92,7 +92,7 @@ class TestPerformanceORM(odoo.tests.common.TransactionCase):
 
 
 @tagged("post_install", "-at_install")
-class TestPerformanceRouting(odoo.tests.common.HttpCase):
+class TestPerformanceRouting(RealTransactionCase):
 
     def setUp(self):
         super().setUp()
@@ -129,7 +129,7 @@ class TestPerformanceRouting(odoo.tests.common.HttpCase):
         AccessError loops against the `ir.ui.view` model.
         """
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
 
         for user in self.test_users:
@@ -194,7 +194,7 @@ class TestPerformanceRouting(odoo.tests.common.HttpCase):
         user_b = self.test_users[1]
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
 
         for user in [user_a, user_b]:

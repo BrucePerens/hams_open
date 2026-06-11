@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestModeration(HamsHttpCase):
+class TestModeration(RealTransactionCase):
 
     def setUp(self):
         super(TestModeration, self).setUp()

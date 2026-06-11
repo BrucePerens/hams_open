@@ -22,5 +22,5 @@ This journey describes the path a new user takes to establish their presence on 
 
 ## Path: Identity Verification
 
-1. **QRZ Token Generation**: The system provisions a QRZ linkage token for the user ([@ANCHOR: action_generate_qrz_token]).
-2. **Official OTP Verification**: The system verifies the identity using an official OTP pass-code ([@ANCHOR: action_verify_official_otp]).
+1. **QRZ Token Generation**: The system provisions a QRZ linkage token for the user ([@ANCHOR: ham_onboarding:action_generate_qrz_token]).
+2. **Official OTP Verification**: The system verifies the identity using an official OTP pass-code ([@ANCHOR: ham_onboarding:action_verify_official_otp]).

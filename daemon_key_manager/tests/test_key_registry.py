@@ -2,14 +2,15 @@
 import logging
 import os
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError, AccessError
 from odoo import SUPERUSER_ID
 
 _logger = logging.getLogger(__name__)
 
 @tagged('post_install', '-at_install')
-class TestKeyRegistry(HamsTransactionCase):
+class TestKeyRegistry(RealTransactionCase):
     def setUp(self):
         super().setUp()
         self.registry_model = self.env["daemon.key.registry"]

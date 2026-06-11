@@ -39,7 +39,7 @@ Search Engine Optimization (SEO) is critical for making your content discoverabl
 This module extends `user_websites` by adding SEO metadata to users and groups through inheritance of `website.seo.metadata`.
 
 ## 2. Security & Zero-Sudo
-We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a dedicated service account: `zero_sudo.user_websites_service_account`.
+We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a dedicated service account: `user_websites.user_websites_service_account`.
 
 *   **Model Mixin:** `user.websites.seo.metadata.mixin` centralizes the secure write logic.
 *   **Self-Writable Fields:** SEO fields are whitelisted in `res.users` to allow users to edit their own profiles without elevated backend rights. `[@ANCHOR: res_users_self_writeable_fields]`

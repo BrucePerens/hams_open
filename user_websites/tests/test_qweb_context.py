@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import odoo.tests
 from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestQWebContext(odoo.tests.common.HttpCase):
+class TestQWebContext(RealTransactionCase):
     """
     Tests focused on ensuring the controllers inject the correct context variables
     into QWeb templates to prevent KeyErrors and rendering crashes.

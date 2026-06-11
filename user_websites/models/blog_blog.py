@@ -35,7 +35,7 @@ class BlogBlog(models.Model):
                         del vals[k]
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
         return super(BlogBlog, self.with_user(svc_uid)).create(vals_list)
 
@@ -52,7 +52,7 @@ class BlogBlog(models.Model):
                 member_map = {}
                 if group_ids:
                     svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                        "zero_sudo.user_websites_service_account"
+                        "user_websites.user_websites_service_account"
                     )
                     groups = (
                         self.env["user.websites.group"]
@@ -100,13 +100,13 @@ class BlogBlog(models.Model):
                     del vals[k]
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
         return super(BlogBlog, self.with_user(svc_uid)).write(vals)
 
     def unlink(self):
         self.check_access("unlink")
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
         return super(BlogBlog, self.with_user(svc_uid)).unlink()

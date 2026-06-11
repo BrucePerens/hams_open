@@ -2,13 +2,13 @@
 import logging
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
-class TestPurgeQueue(HamsTransactionCase):
+class TestPurgeQueue(RealTransactionCase):
     def setUp(self):
         super().setUp()
         self.env["cloudflare.purge.queue"].search([]).unlink()

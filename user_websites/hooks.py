@@ -38,6 +38,6 @@ def post_init_hook(env):
     cf_svc = env.ref("cloudflare.user_cloudflare_purge", raise_if_not_found=False)
     if cf_svc:
         env.cr.execute("UPDATE res_users SET is_service_account = true WHERE id = %s", (cf_svc.id,))
-    uw_svc = env.ref("zero_sudo.user_websites_service_account", raise_if_not_found=False)
+    uw_svc = env.ref("user_websites.user_websites_service_account", raise_if_not_found=False)
     if uw_svc:
          env.cr.execute("UPDATE res_users SET is_service_account = true WHERE id = %s", (uw_svc.id,))

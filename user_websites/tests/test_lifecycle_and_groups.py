@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-import odoo.tests
+import odoo
 from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 import logging
+import time
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged('post_install', '-at_install')
-class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
+class TestLifecycleAndGroups(RealTransactionCase):
     def setUp(self):
         super(TestLifecycleAndGroups, self).setUp()
 
@@ -140,6 +142,8 @@ class TestLifecycleAndGroups(odoo.tests.common.HttpCase):
         self.authenticate("admin", "admin")
 
         self.user_a.active = False
+        self.env.cr.commit()
+        time.sleep(1) # Allow background executor to complete
 
         page.invalidate_recordset()
         post.invalidate_recordset()

@@ -625,7 +625,6 @@ zero_sudo/daemon/json_rpc_client.py
 zero_sudo/__init__.py
 zero_sudo/README.md
 zero_sudo/__manifest__.py
-FILES
 hams_helpdesk/models/shift_handoff.py
 hams_helpdesk/models/calendar_event.py
 hams_helpdesk/models/__init__.py
@@ -662,3 +661,4 @@ theme_hams/tests/test_tours.py
 theme_hams/__init__.py
 theme_hams/docs/stories/theme.md
 ham_onboarding/tests/test_verification.py
+f

@@ -38,7 +38,7 @@ class TestCacheCoherence(RealTransactionCase):
         route traffic to User B without serving a stale 404 or User A's old content.
         """
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.user_websites_service_account"
+            "user_websites.user_websites_service_account"
         )
 
         # 1. User A creates content

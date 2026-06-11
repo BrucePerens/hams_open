@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged('post_install', '-at_install')
-class TestSEOPagesPosts(HamsTransactionCase):
+class TestSEOPagesPosts(RealTransactionCase):
 
     @classmethod
     def setUpClass(cls):

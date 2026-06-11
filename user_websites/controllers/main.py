@@ -45,7 +45,7 @@ class UserWebsitesController(http.Controller):
 
         # micro-privilege: Use service env wrapper to securely process the public submission
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         try:
             create_vals = {
@@ -66,7 +66,7 @@ class UserWebsitesController(http.Controller):
     @http.route(["/<string:website_slug>/blog", "/<string:website_slug>/blog/page/<int:page>"], type="http", auth="public", website=True)
     def user_blog_index(self, website_slug, tag=None, search=None, date_begin=None, date_end=None, page=1, **kwargs):
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         profile_user = env_svc["res.users"].with_context(active_test=False).search([("website_slug", "=", website_slug)], limit=1)
         profile_group = env_svc["user.websites.group"].with_context(active_test=False).search([("website_slug", "=", website_slug)], limit=1)
@@ -122,7 +122,7 @@ class UserWebsitesController(http.Controller):
     def user_home_fallback(self, website_slug, **kwargs):
         """Fallback router for missing /home pages to serve the placeholder layout."""
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         profile_user = env_svc["res.users"].with_context(active_test=False).search([("website_slug", "=", website_slug)], limit=1)
         profile_group = env_svc["user.websites.group"].with_context(active_test=False).search([("website_slug", "=", website_slug)], limit=1)
@@ -171,7 +171,7 @@ class UserWebsitesController(http.Controller):
         user = request.env.user
 
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         profile_user = env_svc["res.users"].search([("website_slug", "=", website_slug)], limit=1)
         profile_group = env_svc["user.websites.group"].search([("website_slug", "=", website_slug)], limit=1)
@@ -212,7 +212,7 @@ class UserWebsitesController(http.Controller):
     def create_blog(self, website_slug, **kwargs):
         user = request.env.user
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         profile_user = env_svc["res.users"].search([("website_slug", "=", website_slug)], limit=1)
         profile_group = env_svc["user.websites.group"].search([("website_slug", "=", website_slug)], limit=1)
@@ -266,7 +266,7 @@ class UserWebsitesController(http.Controller):
 
         # Load directory entries (Users who opted in)
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
         entries = env_svc["user_websites.public_directory_view"].search([], limit=1000)
 
         return request.render("user_websites.community_directory", {"pager": pager, "entries": entries})
@@ -303,7 +303,7 @@ class UserWebsitesController(http.Controller):
             return request.redirect("/my/home?error=missing_reason")
 
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         try:
             env_svc["content.violation.appeal"].create({
@@ -325,7 +325,7 @@ class UserWebsitesController(http.Controller):
             return request.make_response(json.dumps({"count": 0, "error": "Forbidden"}), status=200, headers=[("Content-Type", "application/json")])
 
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
         count = env_svc["content.violation.report"].search_count([("state", "=", "new")], limit=1000)
 
         return request.make_response(json.dumps({"count": count}), status=200, headers=[("Content-Type", "application/json")])
@@ -334,7 +334,7 @@ class UserWebsitesController(http.Controller):
     def subscribe(self, website_slug, **kwargs):
         # [@ANCHOR: UX_SUBSCRIBE]
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         profile_user = env_svc["res.users"].search([("website_slug", "=", website_slug)], limit=1)
         profile_group = env_svc["user.websites.group"].search([("website_slug", "=", website_slug)], limit=1)
@@ -352,7 +352,7 @@ class UserWebsitesController(http.Controller):
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
         # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("zero_sudo.user_websites_service_account")
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
         try:
             record = env_svc[model].browse(record_id)
             if not record.exists():

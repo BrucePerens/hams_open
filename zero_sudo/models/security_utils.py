@@ -33,7 +33,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_service_uid(self, xml_id):
         # [@ANCHOR: get_service_uid]
         # Verified by [@ANCHOR: test_get_service_uid]
-        # Verified by [@ANCHOR: test_otp_mail_template]
+        # Verified by [@ANCHOR: ham_onboarding:test_otp_mail_template]
         # Tests [@ANCHOR: story_secure_escalation]
         if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
             raise AccessError(_("Invalid XML ID format: %s. Expected 'module.name'.") % xml_id)
@@ -174,6 +174,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "distributed_redis_cache.redis_port",
             "distributed_redis_cache.test_integration_active",
             "pager_duty.helpdesk_model",
+            "backup_management.rmq_host",
+            "backup_management.rmq_user",
+            "backup_management.rmq_pass",
             "user_websites.company_abuse_email",
             "user_websites.enable_blog_comments",
             "user_websites.global_website_page_limit",

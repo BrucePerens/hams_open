@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import AccessError
 
 
 @tagged("post_install", "-at_install")
-class TestSecurityEdgeCases(HamsTransactionCase):
+class TestSecurityEdgeCases(RealTransactionCase):
 
     def setUp(self):
         super(TestSecurityEdgeCases, self).setUp()

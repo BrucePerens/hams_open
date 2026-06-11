@@ -61,5 +61,6 @@
             <field name="active" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_cache_invalidator')])]"/>
         </record>
+
     </data>
 </odoo>

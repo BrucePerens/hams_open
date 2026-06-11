@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestPurgeEverything(HamsTransactionCase):
+class TestPurgeEverything(RealTransactionCase):
 
     def setUp(self):
         super().setUp()

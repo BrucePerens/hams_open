@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import AccessError
 
 
 from odoo.tests import tagged
 
 @tagged('post_install', '-at_install')
-class TestSEOModels(HamsTransactionCase):
+class TestSEOModels(RealTransactionCase):
 
     @classmethod
     def setUpClass(cls):

@@ -17,5 +17,6 @@ class SecurityLog(models.Model):
         ('service_account_blocked', 'Service Account Web Login Attempt'),
         ('god_mode_trip', 'God-Mode Security Block Tripped'),
         ('param_access_denied', 'Unauthorized System Parameter Access'),
+        ('param_write_denied', 'Unauthorized System Parameter Write'),
         ('cache_invalidation', 'Model Cache Invalidation'),
     ], string='Reason', required=True)

@@ -143,7 +143,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             fallback_tables = {
                 "bus_bus", "ir_logging", "base_registry_signaling", "ir_cron",
                 "mail_message", "mail_notification", "mail_followers", "mail_tracking_value",
-                "res_groups_users_rel", "res_company_users_rel", "res_users_log",
+                "mail_mail", "res_groups_users_rel", "res_company_users_rel", "res_users_log",
                 "http_session", "database_pg_setting", "database_table_stat", "database_query_stat",
                 "database_activity", "database_index_stat", "ir_attachment", "ir_model_data",
                 "website_visitor", "website_track", "ir_ui_view",

@@ -4,6 +4,602 @@
 [*] Creating overlay filesystem for isolated testing...
 [*] Restoring host daemon sockets...
 [*] Provisioning isolated environment via infrastructure.py...
-Network partition fallback safety hit fetching https://nightly.odoo.com/odoo.key: <urlopen error [Errno -3] Temporary failure in name resolution>
-gpg: no valid OpenPGP data found.
-Failed to provision system packages: Command '['gpg', '--dearmor', '-o', '/usr/share/keyrings/odoo-archive-keyring.gpg', '--yes', '/tmp/odoo.key']' returned non-zero exit status 2.
+[*] Isolating network namespace for test daemons...
+[*] Waiting for PostgreSQL unix socket /var/run/postgresql/.s.PGSQL.5432 to open...
+[*] PostgreSQL socket is ready.
+DO
+[*] Waiting for Redis on 127.0.0.1:6379 to open...
+[*] Redis is ready.
+[*] Waiting for RabbitMQ on 127.0.0.1:5672 to open...
+[*] RabbitMQ is ready.
+==========================================================
+ 🧪 ODOO TEST RUNNER [STANDARD MODE]
+==========================================================
+[*] Running Manifest Dependency Graph Linter...
+[*] Running AST Burn List Linter...
+
+[*] Scanning for Semantic Anchors...
+[*] Scanning documentation and codebase for Semantic Anchors...
+
+[+] SUCCESS: Verified 453 Semantic Anchors and 282 API Contracts. (Module Bounds Secure & Explicit Targeting Profile Operational)
+
+[*] Running JavaScript Syntax Linter...
+[*] JS Syntax Linter: Checking 36 JS files...
+[+] JS Syntax Linter: All 36 files passed.
+
+[*] Dropping and Rebuilding Database Schema (hams_test)...
+[*] Flushing persistent daemons (Redis / RabbitMQ)...
+OK
+dir
+/var/lib/redis
+dbfilename
+dump.rdb
+ pg_terminate_backend 
+----------------------
+(0 rows)
+
+DROP DATABASE
+NOTICE:  database "hams_test" does not exist, skipping
+CREATE EXTENSION
+
+[*] [DEBUG-RUNNER] Subprocess spawned: PID 709152, PGID 709152
+[*] [DEBUG-RUNNER] Executing command: /usr/bin/python3 /usr/bin/odoo --load=base,web,zero_sudo --addons-path /usr/lib/python3/dist-packages/odoo/addons,/home/bruce/workspace/hams_community,/home/bruce/workspace/hams_com --dev=all -d hams_test -i base,backup_management,binary_downloader,cloudflare,compliance,daemon_key_manager,database_management,distributed_redis_cache,hams_helpdesk,manual_library,pager_duty,user_websites,user_websites_seo,zero_sudo --test-enable --test-tags /backup_management,/binary_downloader,/cloudflare,/compliance,/daemon_key_manager,/database_management,/distributed_redis_cache,/hams_helpdesk,/manual_library,/pager_duty,/user_websites,/user_websites_seo,/zero_sudo --stop-after-init --workers=0 --max-cron-threads=0 --http-interface 127.0.0.1 --http-port 8069
+[*] [DEBUG-RUNNER] IO Reader thread started for PID 709152
+2026-06-11 04:08:56,230 709152 INFO ? odoo: Odoo version 19.0-20260606 
+2026-06-11 04:08:56,230 709152 INFO ? odoo: addons paths: _NamespacePath(['/usr/lib/python3/dist-packages/odoo/addons', '/var/lib/odoo/.local/share/Odoo/addons/19.0', '/home/bruce/workspace/hams_community', '/home/bruce/workspace/hams_com', '/usr/lib/python3/dist-packages/addons']) 
+2026-06-11 04:08:56,230 709152 INFO ? odoo: database: odoo@/var/run/postgresql:default 
+2026-06-11 04:08:56,374 709152 WARNING ? odoo.service.server: 'inotify' module not installed. Code autoreload feature is disabled 
+2026-06-11 04:08:56,375 709152 INFO ? odoo.service.server: HTTP service (werkzeug) running on localhost:8069 
+2026-06-11 04:08:56,389 709152 INFO hams_test odoo.tests.common: Importing test framework 
+2026-06-11 04:08:56,407 709152 INFO hams_test odoo.modules.loading: Initializing database hams_test 
+2026-06-11 04:08:56,499 709152 WARNING hams_test odoo.modules.module: Missing `author` key in manifest for 'ham_relay_bridge', defaulting to '' 
+2026-06-11 04:08:56,499 709152 WARNING hams_test odoo.modules.module: Missing `author` key in manifest for 'ham_relay_bridge', defaulting to '' 
+2026-06-11 04:08:56,807 709152 INFO hams_test odoo.modules.loading: loading 1 modules... 
+2026-06-11 04:08:56,808 709152 INFO hams_test odoo.modules.loading: Loading module base (1/1) 
+2026-06-11 04:08:56,820 709152 INFO hams_test odoo.registry: module base: creating or updating database tables 
+2026-06-11 04:08:56,929 709152 INFO hams_test odoo.models: Prepare computation of ir.module.module.menus_by_module 
+2026-06-11 04:08:56,929 709152 INFO hams_test odoo.models: Prepare computation of ir.module.module.reports_by_module 
+2026-06-11 04:08:56,929 709152 INFO hams_test odoo.models: Prepare computation of ir.module.module.views_by_module 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.user_id 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.commercial_partner_id 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.complete_name 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.lang 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.company_registry 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.commercial_company_name 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.properties 
+2026-06-11 04:08:56,966 709152 INFO hams_test odoo.models: Prepare computation of res.partner.partner_share 
+2026-06-11 04:08:56,978 709152 INFO hams_test odoo.models: Prepare computation of res.currency.decimal_places 
+2026-06-11 04:08:56,986 709152 INFO hams_test odoo.models: Prepare computation of res.company.uses_default_logo 
+2026-06-11 04:08:56,986 709152 INFO hams_test odoo.models: Prepare computation of res.company.logo_web 
+2026-06-11 04:08:56,987 709152 INFO hams_test odoo.models: Computing parent_path for table res_company... 
+2026-06-11 04:08:57,000 709152 INFO hams_test odoo.models: Prepare computation of res.users.signature 
+2026-06-11 04:08:57,000 709152 INFO hams_test odoo.models: Prepare computation of res.users.share 
+2026-06-11 04:08:57,567 709152 INFO hams_test odoo.modules.loading: loading base/data/res_bank.xml 
+2026-06-11 04:08:57,569 709152 INFO hams_test odoo.modules.loading: loading base/data/res.lang.csv 
+2026-06-11 04:08:57,584 709152 INFO hams_test odoo.modules.loading: loading base/data/res_lang_data.xml 
+2026-06-11 04:08:57,598 709152 INFO hams_test odoo.modules.loading: loading base/data/res_partner_data.xml 
+2026-06-11 04:08:57,621 709152 INFO hams_test odoo.modules.loading: loading base/data/res_currency_data.xml 
+2026-06-11 04:08:57,767 709152 INFO hams_test odoo.modules.loading: loading base/data/res_company_data.xml 
+2026-06-11 04:08:57,770 709152 INFO hams_test odoo.modules.loading: loading base/data/res_users_data.xml 
+2026-06-11 04:08:58,214 709152 INFO hams_test odoo.modules.loading: loading base/data/report_paperformat_data.xml 
+2026-06-11 04:08:58,218 709152 INFO hams_test odoo.modules.loading: loading base/data/res_country_data.xml 
+2026-06-11 04:08:58,402 709152 INFO hams_test odoo.modules.loading: loading base/data/ir_demo_data.xml 
+2026-06-11 04:08:58,408 709152 INFO hams_test odoo.modules.loading: loading base/security/base_groups.xml 
+2026-06-11 04:08:58,486 709152 INFO hams_test odoo.modules.loading: loading base/security/base_security.xml 
+2026-06-11 04:08:58,548 709152 INFO hams_test odoo.modules.loading: loading base/wizard/wizard_ir_model_menu_create_views.xml 
+2026-06-11 04:08:58,554 709152 INFO hams_test odoo.modules.loading: loading base/views/base_menus.xml 
+2026-06-11 04:08:58,595 709152 INFO hams_test odoo.modules.loading: loading base/views/decimal_precision_views.xml 
+2026-06-11 04:08:58,605 709152 INFO hams_test odoo.modules.loading: loading base/views/res_config_views.xml 
+2026-06-11 04:08:58,610 709152 INFO hams_test odoo.modules.loading: loading base/data/res.country.state.csv 
+2026-06-11 04:08:58,796 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_actions_views.xml 
+2026-06-11 04:08:58,859 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_asset_views.xml 
+2026-06-11 04:08:58,867 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_config_parameter_views.xml 
+2026-06-11 04:08:58,874 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_cron_views.xml 
+2026-06-11 04:08:58,887 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_cron_trigger_views.xml 
+2026-06-11 04:08:58,894 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_filters_views.xml 
+2026-06-11 04:08:58,905 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_mail_server_views.xml 
+2026-06-11 04:08:58,914 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_model_views.xml 
+2026-06-11 04:08:58,994 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_attachment_views.xml 
+2026-06-11 04:08:59,004 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_rule_views.xml 
+2026-06-11 04:08:59,014 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_sequence_views.xml 
+2026-06-11 04:08:59,025 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_ui_menu_views.xml 
+2026-06-11 04:08:59,034 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_ui_view_views.xml 
+2026-06-11 04:08:59,058 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_default_views.xml 
+2026-06-11 04:08:59,067 709152 INFO hams_test odoo.modules.loading: loading base/data/ir_config_parameter_data.xml 
+2026-06-11 04:08:59,069 709152 INFO hams_test odoo.modules.loading: loading base/data/ir_cron_data.xml 
+2026-06-11 04:08:59,074 709152 INFO hams_test odoo.modules.loading: loading base/report/ir_model_report.xml 
+2026-06-11 04:08:59,076 709152 INFO hams_test odoo.modules.loading: loading base/report/ir_model_templates.xml 
+2026-06-11 04:08:59,082 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_logging_views.xml 
+2026-06-11 04:08:59,092 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_qweb_widget_templates.xml 
+2026-06-11 04:08:59,101 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_module_views.xml 
+2026-06-11 04:08:59,133 709152 INFO hams_test odoo.modules.loading: loading base/data/ir_module_category_data.xml 
+2026-06-11 04:08:59,150 709152 INFO hams_test odoo.modules.loading: loading base/data/ir_module_module.xml 
+2026-06-11 04:08:59,175 709152 INFO hams_test odoo.modules.loading: loading base/report/ir_module_reports.xml 
+2026-06-11 04:08:59,177 709152 INFO hams_test odoo.modules.loading: loading base/report/ir_module_report_templates.xml 
+2026-06-11 04:08:59,184 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_module_update_views.xml 
+2026-06-11 04:08:59,193 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_language_install_views.xml 
+2026-06-11 04:08:59,204 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_import_language_views.xml 
+2026-06-11 04:08:59,213 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_module_upgrade_views.xml 
+2026-06-11 04:08:59,221 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_module_uninstall_views.xml 
+2026-06-11 04:08:59,228 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_export_language_views.xml 
+2026-06-11 04:08:59,234 709152 INFO hams_test odoo.modules.loading: loading base/wizard/base_partner_merge_views.xml 
+2026-06-11 04:08:59,241 709152 INFO hams_test odoo.modules.loading: loading base/data/ir_demo_failure_data.xml 
+2026-06-11 04:08:59,250 709152 INFO hams_test odoo.modules.loading: loading base/views/ir_profile_views.xml 
+2026-06-11 04:08:59,264 709152 INFO hams_test odoo.modules.loading: loading base/views/res_company_views.xml 
+2026-06-11 04:08:59,282 709152 INFO hams_test odoo.modules.loading: loading base/views/res_lang_views.xml 
+2026-06-11 04:08:59,298 709152 INFO hams_test odoo.modules.loading: loading base/views/res_partner_views.xml 
+2026-06-11 04:08:59,339 709152 INFO hams_test odoo.modules.loading: loading base/views/res_bank_views.xml 
+2026-06-11 04:08:59,356 709152 INFO hams_test odoo.modules.loading: loading base/views/res_country_views.xml 
+2026-06-11 04:08:59,381 709152 INFO hams_test odoo.modules.loading: loading base/views/res_currency_views.xml 
+2026-06-11 04:08:59,403 709152 INFO hams_test odoo.modules.loading: loading base/views/res_groups_views.xml 
+2026-06-11 04:08:59,430 709152 INFO hams_test odoo.modules.loading: loading base/views/res_users_views.xml 
+2026-06-11 04:08:59,499 709152 INFO hams_test odoo.modules.loading: loading base/views/res_users_apikeys_views.xml 
+2026-06-11 04:08:59,503 709152 INFO hams_test odoo.modules.loading: loading base/views/res_device_views.xml 
+2026-06-11 04:08:59,516 709152 INFO hams_test odoo.modules.loading: loading base/views/res_users_identitycheck_views.xml 
+2026-06-11 04:08:59,521 709152 INFO hams_test odoo.modules.loading: loading base/views/res_config_settings_views.xml 
+2026-06-11 04:08:59,528 709152 INFO hams_test odoo.modules.loading: loading base/views/report_paperformat_views.xml 
+2026-06-11 04:08:59,544 709152 INFO hams_test odoo.modules.loading: loading base/security/ir.model.access.csv 
+2026-06-11 04:08:59,695 709152 INFO hams_test odoo.modules.loading: Module base loaded in 2.89s, 8591 queries (+8591 other) 
+2026-06-11 04:08:59,696 709152 INFO hams_test odoo.modules.loading: 1 modules loaded in 2.89s, 8591 queries (+8591 extra) 
+2026-06-11 04:08:59,698 709152 INFO hams_test odoo.modules.loading: updating modules list 
+2026-06-11 04:08:59,699 709152 INFO hams_test odoo.addons.base.models.ir_module: ALLOW access to module.update_list on [] to user __system__ #1 via n/a 
+2026-06-11 04:08:59,787 709152 WARNING hams_test odoo.modules.module: Missing `author` key in manifest for 'ham_relay_bridge', defaulting to '' 
+2026-06-11 04:09:00,014 709152 INFO hams_test odoo.addons.base.models.ir_module: ALLOW access to module.button_install on ['Hams Helpdesk', 'Manual Library', 'User Websites', 'Backup Management', 'Binary Downloader', 'Cloudflare Edge Orchestration', 'Global Compliance & Privacy', 'Daemon Key Manager', 'Database Management', 'Distributed Redis Cache', 'Pager Duty', 'User Websites SEO', 'Zero-Sudo Security Core'] to user __system__ #1 via n/a 
+2026-06-11 04:09:00,085 709152 INFO hams_test odoo.modules.loading: loading 87 modules... 
+2026-06-11 04:09:00,085 709152 INFO hams_test odoo.modules.loading: Loading module rpc (2/87) 
+2026-06-11 04:09:00,110 709152 INFO hams_test odoo.modules.loading: Module rpc loaded in 0.02s, 9 queries (+9 other) 
+2026-06-11 04:09:00,110 709152 INFO hams_test odoo.modules.loading: Loading module social_media (3/87) 
+2026-06-11 04:09:00,112 709152 INFO hams_test odoo.registry: module social_media: creating or updating database tables 
+2026-06-11 04:09:00,131 709152 INFO hams_test odoo.modules.loading: loading social_media/views/res_company_views.xml 
+2026-06-11 04:09:00,151 709152 INFO hams_test odoo.modules.loading: Module social_media loaded in 0.04s, 78 queries (+78 other) 
+2026-06-11 04:09:00,151 709152 INFO hams_test odoo.modules.loading: Loading module uom (4/87) 
+2026-06-11 04:09:00,153 709152 INFO hams_test odoo.registry: module uom: creating or updating database tables 
+2026-06-11 04:09:00,173 709152 INFO hams_test odoo.modules.loading: loading uom/data/uom_data.xml 
+2026-06-11 04:09:00,210 709152 INFO hams_test odoo.modules.loading: loading uom/security/uom_security.xml 
+2026-06-11 04:09:00,211 709152 INFO hams_test odoo.modules.loading: loading uom/security/ir.model.access.csv 
+2026-06-11 04:09:00,216 709152 INFO hams_test odoo.modules.loading: loading uom/views/uom_uom_views.xml 
+2026-06-11 04:09:00,236 709152 INFO hams_test odoo.modules.loading: Module uom loaded in 0.09s, 233 queries (+233 other) 
+2026-06-11 04:09:00,236 709152 INFO hams_test odoo.modules.loading: Loading module web (5/87) 
+2026-06-11 04:09:00,251 709152 INFO hams_test odoo.registry: module web: creating or updating database tables 
+2026-06-11 04:09:00,472 709152 INFO hams_test odoo.modules.loading: loading web/security/ir.model.access.csv 
+2026-06-11 04:09:00,478 709152 INFO hams_test odoo.modules.loading: loading web/security/web_security.xml 
+2026-06-11 04:09:00,491 709152 INFO hams_test odoo.modules.loading: loading web/views/webclient_templates.xml 
+2026-06-11 04:09:00,558 709152 INFO hams_test odoo.modules.loading: loading web/views/report_templates.xml 
+2026-06-11 04:09:00,647 709152 INFO hams_test odoo.modules.loading: loading web/views/base_document_layout_views.xml 
+2026-06-11 04:09:00,655 709152 INFO hams_test odoo.modules.loading: loading web/views/partner_view.xml 
+2026-06-11 04:09:00,658 709152 INFO hams_test odoo.modules.loading: loading web/views/speedscope_template.xml 
+2026-06-11 04:09:00,662 709152 INFO hams_test odoo.modules.loading: loading web/views/memory_template.xml 
+2026-06-11 04:09:00,668 709152 INFO hams_test odoo.modules.loading: loading web/views/speedscope_config_wizard.xml 
+2026-06-11 04:09:00,674 709152 INFO hams_test odoo.modules.loading: loading web/views/neutralize_views.xml 
+2026-06-11 04:09:00,679 709152 INFO hams_test odoo.modules.loading: loading web/views/ir_ui_view_views.xml 
+2026-06-11 04:09:00,685 709152 INFO hams_test odoo.modules.loading: loading web/data/ir_attachment.xml 
+2026-06-11 04:09:00,687 709152 INFO hams_test odoo.modules.loading: loading web/data/report_layout.xml 
+2026-06-11 04:09:00,732 709152 INFO hams_test odoo.modules.loading: Module web loaded in 0.50s, 1323 queries (+1323 other) 
+2026-06-11 04:09:00,732 709152 INFO hams_test odoo.modules.loading: Loading module api_doc (6/87) 
+2026-06-11 04:09:00,735 709152 INFO hams_test odoo.registry: module api_doc: creating or updating database tables 
+2026-06-11 04:09:00,744 709152 INFO hams_test odoo.modules.loading: loading api_doc/security/res_groups.xml 
+2026-06-11 04:09:00,756 709152 INFO hams_test odoo.modules.loading: loading api_doc/views/docclient.xml 
+2026-06-11 04:09:00,770 709152 INFO hams_test odoo.modules.loading: Module api_doc loaded in 0.04s, 65 queries (+65 other) 
+2026-06-11 04:09:00,770 709152 INFO hams_test odoo.modules.loading: Loading module auth_totp (7/87) 
+2026-06-11 04:09:00,778 709152 INFO hams_test odoo.registry: module auth_totp: creating or updating database tables 
+2026-06-11 04:09:00,811 709152 INFO hams_test odoo.modules.loading: loading auth_totp/security/security.xml 
+2026-06-11 04:09:00,821 709152 INFO hams_test odoo.modules.loading: loading auth_totp/security/ir.model.access.csv 
+2026-06-11 04:09:00,825 709152 INFO hams_test odoo.modules.loading: loading auth_totp/data/ir_action_data.xml 
+2026-06-11 04:09:00,829 709152 INFO hams_test odoo.modules.loading: loading auth_totp/views/res_users_views.xml 
+2026-06-11 04:09:00,850 709152 INFO hams_test odoo.modules.loading: loading auth_totp/views/templates.xml 
+2026-06-11 04:09:00,854 709152 INFO hams_test odoo.modules.loading: loading auth_totp/wizard/auth_totp_wizard_views.xml 
+2026-06-11 04:09:00,873 709152 INFO hams_test odoo.modules.loading: Module auth_totp loaded in 0.10s, 231 queries (+231 other) 
+2026-06-11 04:09:00,873 709152 INFO hams_test odoo.modules.loading: Loading module base_import (8/87) 
+2026-06-11 04:09:00,890 709152 INFO hams_test odoo.registry: module base_import: creating or updating database tables 
+2026-06-11 04:09:01,102 709152 INFO hams_test odoo.modules.loading: loading base_import/security/ir.model.access.csv 
+2026-06-11 04:09:01,124 709152 INFO hams_test odoo.modules.loading: Module base_import loaded in 0.25s, 966 queries (+966 other) 
+2026-06-11 04:09:01,124 709152 INFO hams_test odoo.modules.loading: Loading module base_import_module (9/87) 
+2026-06-11 04:09:01,128 709152 INFO hams_test odoo.registry: module base_import_module: creating or updating database tables 
+2026-06-11 04:09:01,160 709152 INFO hams_test odoo.modules.loading: loading base_import_module/security/ir.model.access.csv 
+2026-06-11 04:09:01,163 709152 INFO hams_test odoo.modules.loading: loading base_import_module/views/base_import_module_view.xml 
+2026-06-11 04:09:01,172 709152 INFO hams_test odoo.modules.loading: loading base_import_module/views/ir_module_views.xml 
+2026-06-11 04:09:01,214 709152 INFO hams_test odoo.modules.loading: Module base_import_module loaded in 0.09s, 185 queries (+185 other) 
+2026-06-11 04:09:01,214 709152 INFO hams_test odoo.modules.loading: Loading module base_setup (10/87) 
+2026-06-11 04:09:01,219 709152 INFO hams_test odoo.registry: module base_setup: creating or updating database tables 
+2026-06-11 04:09:01,241 709152 INFO hams_test odoo.modules.loading: loading base_setup/data/base_setup_data.xml 
+2026-06-11 04:09:01,243 709152 INFO hams_test odoo.modules.loading: loading base_setup/views/res_config_settings_views.xml 
+2026-06-11 04:09:01,259 709152 INFO hams_test odoo.modules.loading: loading base_setup/views/res_partner_views.xml 
+2026-06-11 04:09:01,279 709152 INFO hams_test odoo.modules.loading: Module base_setup loaded in 0.07s, 158 queries (+158 other) 
+2026-06-11 04:09:01,279 709152 INFO hams_test odoo.modules.loading: Loading module bus (11/87) 
+2026-06-11 04:09:01,288 709152 INFO hams_test odoo.registry: module bus: creating or updating database tables 
+2026-06-11 04:09:01,331 709152 INFO hams_test odoo.modules.loading: loading bus/security/ir.model.access.csv 
+2026-06-11 04:09:01,346 709152 INFO hams_test odoo.modules.loading: Module bus loaded in 0.07s, 155 queries (+155 other) 
+2026-06-11 04:09:01,346 709152 INFO hams_test odoo.modules.loading: Loading module http_routing (12/87) 
+2026-06-11 04:09:01,348 709152 INFO hams_test odoo.registry: module http_routing: creating or updating database tables 
+2026-06-11 04:09:01,358 709152 INFO hams_test odoo.modules.loading: loading http_routing/views/http_routing_template.xml 
+2026-06-11 04:09:01,391 709152 INFO hams_test odoo.modules.loading: loading http_routing/views/res_lang_views.xml 
+2026-06-11 04:09:01,411 709152 INFO hams_test odoo.modules.loading: Module http_routing loaded in 0.06s, 141 queries (+141 other) 
+2026-06-11 04:09:01,411 709152 INFO hams_test odoo.modules.loading: Loading module onboarding (13/87) 
+2026-06-11 04:09:01,414 709152 INFO hams_test odoo.registry: module onboarding: creating or updating database tables 
+2026-06-11 04:09:01,466 709152 INFO hams_test odoo.modules.loading: loading onboarding/views/onboarding_templates.xml 
+2026-06-11 04:09:01,478 709152 INFO hams_test odoo.modules.loading: loading onboarding/views/onboarding_views.xml 
+2026-06-11 04:09:01,492 709152 INFO hams_test odoo.modules.loading: loading onboarding/views/onboarding_menus.xml 
+2026-06-11 04:09:01,495 709152 INFO hams_test odoo.modules.loading: loading onboarding/security/ir.model.access.csv 
+2026-06-11 04:09:01,557 709152 INFO hams_test odoo.modules.loading: Module onboarding loaded in 0.15s, 256 queries (+256 other) 
+2026-06-11 04:09:01,557 709152 INFO hams_test odoo.modules.loading: Loading module resource (14/87) 
+2026-06-11 04:09:01,568 709152 INFO hams_test odoo.registry: module resource: creating or updating database tables 
+2026-06-11 04:09:01,631 709152 INFO hams_test odoo.modules.loading: loading resource/data/resource_data.xml 
+2026-06-11 04:09:01,639 709152 INFO hams_test odoo.modules.loading: loading resource/security/ir.model.access.csv 
+2026-06-11 04:09:01,645 709152 INFO hams_test odoo.modules.loading: loading resource/security/resource_security.xml 
+2026-06-11 04:09:01,655 709152 INFO hams_test odoo.modules.loading: loading resource/views/resource_resource_views.xml 
+2026-06-11 04:09:01,669 709152 INFO hams_test odoo.modules.loading: loading resource/views/resource_calendar_leaves_views.xml 
+2026-06-11 04:09:01,684 709152 INFO hams_test odoo.modules.loading: loading resource/views/resource_calendar_attendance_views.xml 
+2026-06-11 04:09:01,690 709152 INFO hams_test odoo.modules.loading: loading resource/views/resource_calendar_views.xml 
+2026-06-11 04:09:01,702 709152 INFO hams_test odoo.modules.loading: loading resource/views/menuitems.xml 
+2026-06-11 04:09:01,727 709152 INFO hams_test odoo.modules.loading: Module resource loaded in 0.17s, 426 queries (+426 other) 
+2026-06-11 04:09:01,727 709152 INFO hams_test odoo.modules.loading: Loading module utm (15/87) 
+2026-06-11 04:09:01,731 709152 INFO hams_test odoo.registry: module utm: creating or updating database tables 
+2026-06-11 04:09:01,773 709152 INFO hams_test odoo.modules.loading: loading utm/data/utm_medium_data.xml 
+2026-06-11 04:09:01,782 709152 INFO hams_test odoo.modules.loading: loading utm/data/utm_source_data.xml 
+2026-06-11 04:09:01,788 709152 INFO hams_test odoo.modules.loading: loading utm/data/utm_stage_data.xml 
+2026-06-11 04:09:01,790 709152 INFO hams_test odoo.modules.loading: loading utm/data/utm_tag_data.xml 
+2026-06-11 04:09:01,791 709152 INFO hams_test odoo.modules.loading: loading utm/views/utm_campaign_views.xml 
+2026-06-11 04:09:01,806 709152 INFO hams_test odoo.modules.loading: loading utm/views/utm_medium_views.xml 
+2026-06-11 04:09:01,814 709152 INFO hams_test odoo.modules.loading: loading utm/views/utm_source_views.xml 
+2026-06-11 04:09:01,820 709152 INFO hams_test odoo.modules.loading: loading utm/views/utm_stage_views.xml 
+2026-06-11 04:09:01,828 709152 INFO hams_test odoo.modules.loading: loading utm/views/utm_tag_views.xml 
+2026-06-11 04:09:01,832 709152 INFO hams_test odoo.modules.loading: loading utm/views/utm_menus.xml 
+2026-06-11 04:09:01,842 709152 INFO hams_test odoo.modules.loading: loading utm/security/ir.model.access.csv 
+2026-06-11 04:09:01,857 709152 INFO hams_test odoo.modules.loading: Module utm loaded in 0.13s, 424 queries (+424 other) 
+2026-06-11 04:09:01,857 709152 INFO hams_test odoo.modules.loading: Loading module web_tour (16/87) 
+2026-06-11 04:09:01,861 709152 INFO hams_test odoo.registry: module web_tour: creating or updating database tables 
+2026-06-11 04:09:01,864 709152 INFO hams_test odoo.models: Prepare computation of res.users.tour_enabled 
+2026-06-11 04:09:01,896 709152 INFO hams_test odoo.modules.loading: loading web_tour/security/ir.model.access.csv 
+2026-06-11 04:09:01,899 709152 INFO hams_test odoo.modules.loading: loading web_tour/views/tour_views.xml 
+2026-06-11 04:09:01,923 709152 INFO hams_test odoo.modules.loading: Module web_tour loaded in 0.07s, 183 queries (+183 other) 
+2026-06-11 04:09:01,923 709152 INFO hams_test odoo.modules.loading: Loading module auth_passkey (17/87) 
+2026-06-11 04:09:01,940 709152 INFO hams_test odoo.registry: module auth_passkey: creating or updating database tables 
+2026-06-11 04:09:01,969 709152 INFO hams_test odoo.modules.loading: loading auth_passkey/views/auth_passkey_key_views.xml 
+2026-06-11 04:09:01,980 709152 INFO hams_test odoo.modules.loading: loading auth_passkey/views/auth_passkey_login_templates.xml 
+2026-06-11 04:09:01,990 709152 INFO hams_test odoo.modules.loading: loading auth_passkey/views/res_users_identitycheck_views.xml 
+2026-06-11 04:09:01,996 709152 INFO hams_test odoo.modules.loading: loading auth_passkey/views/res_users_views.xml 
+2026-06-11 04:09:02,012 709152 INFO hams_test odoo.modules.loading: loading auth_passkey/security/ir.model.access.csv 
+2026-06-11 04:09:02,015 709152 INFO hams_test odoo.modules.loading: loading auth_passkey/security/security.xml 
+2026-06-11 04:09:02,032 709152 INFO hams_test odoo.modules.loading: Module auth_passkey loaded in 0.11s, 239 queries (+239 other) 
+2026-06-11 04:09:02,032 709152 INFO hams_test odoo.modules.loading: Loading module google_recaptcha (18/87) 
+2026-06-11 04:09:02,034 709152 INFO hams_test odoo.registry: module google_recaptcha: creating or updating database tables 
+2026-06-11 04:09:02,047 709152 INFO hams_test odoo.modules.loading: loading google_recaptcha/views/res_config_settings_view.xml 
+2026-06-11 04:09:02,068 709152 INFO hams_test odoo.modules.loading: Module google_recaptcha loaded in 0.04s, 74 queries (+74 other) 
+2026-06-11 04:09:02,068 709152 INFO hams_test odoo.modules.loading: Loading module html_editor (19/87) 
+2026-06-11 04:09:02,132 709152 INFO hams_test odoo.registry: module html_editor: creating or updating database tables 
+2026-06-11 04:09:02,399 709152 INFO hams_test odoo.modules.loading: loading html_editor/security/ir.model.access.csv 
+2026-06-11 04:09:02,424 709152 INFO hams_test odoo.modules.loading: Module html_editor loaded in 0.36s, 1160 queries (+1160 other) 
+2026-06-11 04:09:02,424 709152 INFO hams_test odoo.modules.loading: Loading module iap (20/87) 
+2026-06-11 04:09:02,427 709152 INFO hams_test odoo.registry: module iap: creating or updating database tables 
+2026-06-11 04:09:02,467 709152 INFO hams_test odoo.modules.loading: loading iap/data/services.xml 
+2026-06-11 04:09:02,470 709152 INFO hams_test odoo.modules.loading: loading iap/security/ir.model.access.csv 
+2026-06-11 04:09:02,476 709152 INFO hams_test odoo.modules.loading: loading iap/security/ir_rule.xml 
+2026-06-11 04:09:02,482 709152 INFO hams_test odoo.modules.loading: loading iap/views/iap_views.xml 
+2026-06-11 04:09:02,498 709152 INFO hams_test odoo.modules.loading: loading iap/views/res_config_settings.xml 
+2026-06-11 04:09:02,521 709152 INFO hams_test odoo.modules.loading: Module iap loaded in 0.10s, 196 queries (+196 other) 
+2026-06-11 04:09:02,521 709152 INFO hams_test odoo.modules.loading: Loading module mail (21/87) 
+2026-06-11 04:09:02,570 709152 INFO hams_test odoo.registry: module mail: creating or updating database tables 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.partner_ids 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_user_id 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_type_id 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.template_id 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_date_deadline_range 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_summary 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.followers_type 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.followers_partner_field_name 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.mail_post_method 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_date_deadline_range_type 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_user_type 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_user_field_name 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.activity_note 
+2026-06-11 04:09:02,664 709152 INFO hams_test odoo.models: Prepare computation of ir.actions.server.mail_post_autofollow 
+2026-06-11 04:09:02,698 709152 INFO hams_test odoo.models: Prepare computation of res.users.notification_type 
+2026-06-11 04:09:02,730 709152 INFO hams_test odoo.models: Prepare computation of res.partner.email_normalized 
+<string>:38: (ERROR/3) Unexpected indentation.
+<string>:43: (WARNING/2) Block quote ends without a blank line; unexpected unindent.
+2026-06-11 04:09:03,456 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_groups.xml 
+2026-06-11 04:09:03,466 709152 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_activity_schedule_views.xml 
+2026-06-11 04:09:03,472 709152 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_blacklist_remove_views.xml 
+2026-06-11 04:09:03,476 709152 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_compose_message_views.xml 
+2026-06-11 04:09:03,485 709152 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_template_preview_views.xml 
+2026-06-11 04:09:03,490 709152 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_followers_edit_views.xml 
+2026-06-11 04:09:03,500 709152 INFO hams_test odoo.modules.loading: loading mail/wizard/mail_template_reset_views.xml 
+2026-06-11 04:09:03,508 709152 INFO hams_test odoo.modules.loading: loading mail/views/fetchmail_views.xml 
+2026-06-11 04:09:03,518 709152 INFO hams_test odoo.modules.loading: loading mail/views/ir_cron_views.xml 
+2026-06-11 04:09:03,527 709152 INFO hams_test odoo.modules.loading: loading mail/views/ir_filters_views.xml 
+2026-06-11 04:09:03,537 709152 INFO hams_test odoo.modules.loading: loading mail/views/ir_mail_server_views.xml 
+2026-06-11 04:09:03,543 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_subtype_views.xml 
+2026-06-11 04:09:03,549 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_tracking_value_views.xml 
+2026-06-11 04:09:03,555 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_notification_views.xml 
+2026-06-11 04:09:03,561 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_views.xml 
+2026-06-11 04:09:03,574 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_schedule_views.xml 
+2026-06-11 04:09:03,582 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_mail_views.xml 
+2026-06-11 04:09:03,594 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_followers_views.xml 
+2026-06-11 04:09:03,600 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_ice_server_views.xml 
+2026-06-11 04:09:03,611 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss_channel_member_views.xml 
+2026-06-11 04:09:03,617 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss_channel_rtc_session_views.xml 
+2026-06-11 04:09:03,625 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_link_preview_views.xml 
+2026-06-11 04:09:03,634 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss/discuss_gif_favorite_views.xml 
+2026-06-11 04:09:03,641 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss_channel_views.xml 
+2026-06-11 04:09:03,658 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_canned_response_views.xml 
+2026-06-11 04:09:03,671 709152 INFO hams_test odoo.modules.loading: loading mail/views/res_role_views.xml 
+2026-06-11 04:09:03,679 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_activity_views.xml 
+2026-06-11 04:09:03,727 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_activity_plan_views.xml 
+2026-06-11 04:09:03,746 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_activity_plan_template_views.xml 
+2026-06-11 04:09:03,751 709152 INFO hams_test odoo.modules.loading: loading mail/views/res_config_settings_views.xml 
+2026-06-11 04:09:03,765 709152 INFO hams_test odoo.modules.loading: loading mail/data/ir_config_parameter_data.xml 
+2026-06-11 04:09:03,767 709152 INFO hams_test odoo.modules.loading: loading mail/data/res_partner_data.xml 
+2026-06-11 04:09:03,798 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_message_subtype_data.xml 
+2026-06-11 04:09:03,801 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_chatter.xml 
+2026-06-11 04:09:03,813 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_email_layouts.xml 
+2026-06-11 04:09:03,826 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_mailgateway.xml 
+2026-06-11 04:09:03,836 709152 INFO hams_test odoo.modules.loading: loading mail/data/discuss_channel_data.xml 
+2026-06-11 04:09:03,853 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_activity_type_data.xml 
+2026-06-11 04:09:03,857 709152 INFO hams_test odoo.modules.loading: loading mail/data/security_notifications_templates.xml 
+2026-06-11 04:09:03,861 709152 INFO hams_test odoo.modules.loading: loading mail/data/ir_cron_data.xml 
+2026-06-11 04:09:03,902 709152 INFO hams_test odoo.modules.loading: loading mail/data/ir_actions_client.xml 
+2026-06-11 04:09:03,904 709152 INFO hams_test odoo.modules.loading: loading mail/security/mail_security.xml 
+2026-06-11 04:09:03,960 709152 INFO hams_test odoo.modules.loading: loading mail/security/ir.model.access.csv 
+2026-06-11 04:09:03,977 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss_public_templates.xml 
+2026-06-11 04:09:03,980 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_alias_domain_views.xml 
+2026-06-11 04:09:03,987 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_alias_views.xml 
+2026-06-11 04:09:03,996 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_gateway_allowed_views.xml 
+2026-06-11 04:09:04,002 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_guest_views.xml 
+2026-06-11 04:09:04,012 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_message_reaction_views.xml 
+2026-06-11 04:09:04,022 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_templates_public.xml 
+2026-06-11 04:09:04,029 709152 INFO hams_test odoo.modules.loading: loading mail/views/res_users_views.xml 
+2026-06-11 04:09:04,050 709152 INFO hams_test odoo.modules.loading: loading mail/views/res_users_settings_views.xml 
+2026-06-11 04:09:04,059 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_template_views.xml 
+2026-06-11 04:09:04,074 709152 INFO hams_test odoo.modules.loading: loading mail/views/ir_actions_server_views.xml 
+2026-06-11 04:09:04,087 709152 INFO hams_test odoo.modules.loading: loading mail/views/ir_model_views.xml 
+2026-06-11 04:09:04,107 709152 INFO hams_test odoo.modules.loading: loading mail/views/res_partner_views.xml 
+2026-06-11 04:09:04,134 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_blacklist_views.xml 
+2026-06-11 04:09:04,142 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_menus.xml 
+2026-06-11 04:09:04,184 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss/discuss_menus.xml 
+2026-06-11 04:09:04,186 709152 INFO hams_test odoo.modules.loading: loading mail/views/discuss/discuss_call_history_views.xml 
+2026-06-11 04:09:04,194 709152 INFO hams_test odoo.modules.loading: loading mail/views/res_company_views.xml 
+2026-06-11 04:09:04,202 709152 INFO hams_test odoo.modules.loading: loading mail/views/mail_scheduled_message_views.xml 
+2026-06-11 04:09:04,206 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_canned_response_data.xml 
+2026-06-11 04:09:04,209 709152 INFO hams_test odoo.modules.loading: loading mail/data/mail_templates_invite.xml 
+2026-06-11 04:09:04,221 709152 INFO hams_test odoo.modules.loading: loading mail/data/web_tour_tour.xml 
+2026-06-11 04:09:04,247 709152 INFO hams_test odoo.modules.loading: Module mail loaded in 1.73s, 5309 queries (+5310 other) 
+2026-06-11 04:09:04,247 709152 INFO hams_test odoo.modules.loading: Loading module web_unsplash (22/87) 
+2026-06-11 04:09:04,253 709152 INFO hams_test odoo.registry: module web_unsplash: creating or updating database tables 
+2026-06-11 04:09:04,273 709152 INFO hams_test odoo.modules.loading: loading web_unsplash/views/res_config_settings_view.xml 
+2026-06-11 04:09:04,300 709152 INFO hams_test odoo.modules.loading: Module web_unsplash loaded in 0.05s, 117 queries (+117 other) 
+2026-06-11 04:09:04,300 709152 INFO hams_test odoo.modules.loading: Loading module analytic (23/87) 
+2026-06-11 04:09:04,305 709152 INFO hams_test odoo.registry: module analytic: creating or updating database tables 
+2026-06-11 04:09:04,374 709152 INFO hams_test odoo.modules.loading: loading analytic/security/analytic_security.xml 
+2026-06-11 04:09:04,382 709152 INFO hams_test odoo.modules.loading: loading analytic/security/ir.model.access.csv 
+2026-06-11 04:09:04,387 709152 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_line_views.xml 
+2026-06-11 04:09:04,406 709152 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_account_views.xml 
+2026-06-11 04:09:04,419 709152 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_plan_views.xml 
+2026-06-11 04:09:04,427 709152 INFO hams_test odoo.modules.loading: loading analytic/views/analytic_distribution_model_views.xml 
+2026-06-11 04:09:04,433 709152 INFO hams_test odoo.modules.loading: loading analytic/data/analytic_data.xml 
+2026-06-11 04:09:04,466 709152 INFO hams_test odoo.modules.loading: Module analytic loaded in 0.17s, 440 queries (+440 other) 
+2026-06-11 04:09:04,466 709152 INFO hams_test odoo.modules.loading: Loading module auth_signup (24/87) 
+2026-06-11 04:09:04,473 709152 INFO hams_test odoo.registry: module auth_signup: creating or updating database tables 
+2026-06-11 04:09:04,507 709152 INFO hams_test odoo.modules.loading: loading auth_signup/data/ir_config_parameter_data.xml 
+2026-06-11 04:09:04,510 709152 INFO hams_test odoo.modules.loading: loading auth_signup/data/ir_cron_data.xml 
+2026-06-11 04:09:04,521 709152 INFO hams_test odoo.modules.loading: loading auth_signup/data/mail_template_data.xml 
+2026-06-11 04:09:04,560 709152 INFO hams_test odoo.modules.loading: loading auth_signup/views/res_config_settings_views.xml 
+2026-06-11 04:09:04,573 709152 INFO hams_test odoo.modules.loading: loading auth_signup/views/res_users_views.xml 
+2026-06-11 04:09:04,591 709152 INFO hams_test odoo.modules.loading: loading auth_signup/views/auth_signup_login_templates.xml 
+2026-06-11 04:09:04,605 709152 INFO hams_test odoo.modules.loading: loading auth_signup/views/auth_signup_templates_email.xml 
+2026-06-11 04:09:04,610 709152 INFO hams_test odoo.modules.loading: loading auth_signup/views/webclient_templates.xml 
+2026-06-11 04:09:04,629 709152 INFO hams_test odoo.modules.loading: Module auth_signup loaded in 0.16s, 291 queries (+291 other) 
+2026-06-11 04:09:04,629 709152 INFO hams_test odoo.modules.loading: Loading module auth_totp_mail (25/87) 
+2026-06-11 04:09:04,635 709152 INFO hams_test odoo.registry: module auth_totp_mail: creating or updating database tables 
+2026-06-11 04:09:04,657 709152 INFO hams_test odoo.modules.loading: loading auth_totp_mail/data/ir_action_data.xml 
+2026-06-11 04:09:04,669 709152 INFO hams_test odoo.modules.loading: loading auth_totp_mail/data/mail_template_data.xml 
+2026-06-11 04:09:04,687 709152 INFO hams_test odoo.modules.loading: loading auth_totp_mail/data/security_notifications_template.xml 
+2026-06-11 04:09:04,692 709152 INFO hams_test odoo.modules.loading: loading auth_totp_mail/views/res_config_settings_views.xml 
+2026-06-11 04:09:04,707 709152 INFO hams_test odoo.modules.loading: loading auth_totp_mail/views/res_users_views.xml 
+2026-06-11 04:09:04,724 709152 INFO hams_test odoo.modules.loading: loading auth_totp_mail/views/templates.xml 
+2026-06-11 04:09:04,745 709152 INFO hams_test odoo.modules.loading: Module auth_totp_mail loaded in 0.12s, 217 queries (+217 other) 
+2026-06-11 04:09:04,745 709152 INFO hams_test odoo.modules.loading: Loading module base_install_request (26/87) 
+2026-06-11 04:09:04,748 709152 INFO hams_test odoo.registry: module base_install_request: creating or updating database tables 
+2026-06-11 04:09:04,777 709152 INFO hams_test odoo.modules.loading: loading base_install_request/security/ir.model.access.csv 
+2026-06-11 04:09:04,782 709152 INFO hams_test odoo.modules.loading: loading base_install_request/wizard/base_module_install_request_views.xml 
+2026-06-11 04:09:04,792 709152 INFO hams_test odoo.modules.loading: loading base_install_request/data/mail_template_data.xml 
+2026-06-11 04:09:04,795 709152 INFO hams_test odoo.modules.loading: loading base_install_request/data/mail_templates_module_install.xml 
+2026-06-11 04:09:04,799 709152 INFO hams_test odoo.modules.loading: loading base_install_request/views/ir_module_module_views.xml 
+2026-06-11 04:09:04,819 709152 INFO hams_test odoo.modules.loading: Module base_install_request loaded in 0.07s, 161 queries (+161 other) 
+2026-06-11 04:09:04,819 709152 INFO hams_test odoo.modules.loading: Loading module calendar (27/87) 
+2026-06-11 04:09:04,837 709152 INFO hams_test odoo.registry: module calendar: creating or updating database tables 
+2026-06-11 04:09:04,966 709152 INFO hams_test odoo.modules.loading: loading calendar/security/ir.model.access.csv 
+2026-06-11 04:09:04,972 709152 INFO hams_test odoo.modules.loading: loading calendar/security/calendar_security.xml 
+2026-06-11 04:09:04,980 709152 INFO hams_test odoo.modules.loading: loading calendar/data/calendar_cron.xml 
+2026-06-11 04:09:04,993 709152 INFO hams_test odoo.modules.loading: loading calendar/data/mail_template_data.xml 
+2026-06-11 04:09:05,005 709152 INFO hams_test odoo.modules.loading: loading calendar/data/calendar_data.xml 
+2026-06-11 04:09:05,010 709152 INFO hams_test odoo.modules.loading: loading calendar/data/mail_activity_type_data.xml 
+2026-06-11 04:09:05,012 709152 INFO hams_test odoo.modules.loading: loading calendar/data/mail_message_subtype_data.xml 
+2026-06-11 04:09:05,013 709152 INFO hams_test odoo.modules.loading: loading calendar/views/mail_activity_views.xml 
+2026-06-11 04:09:05,023 709152 INFO hams_test odoo.modules.loading: loading calendar/views/calendar_templates.xml 
+2026-06-11 04:09:05,027 709152 INFO hams_test odoo.modules.loading: loading calendar/views/calendar_views.xml 
+2026-06-11 04:09:05,081 709152 INFO hams_test odoo.modules.loading: loading calendar/views/res_config_settings_views.xml 
+2026-06-11 04:09:05,094 709152 INFO hams_test odoo.modules.loading: loading calendar/views/res_partner_views.xml 
+2026-06-11 04:09:05,103 709152 INFO hams_test odoo.modules.loading: loading calendar/views/res_users_views.xml 
+2026-06-11 04:09:05,116 709152 INFO hams_test odoo.modules.loading: loading calendar/wizard/calendar_provider_config.xml 
+2026-06-11 04:09:05,119 709152 INFO hams_test odoo.modules.loading: loading calendar/wizard/calendar_popover_delete_wizard.xml 
+2026-06-11 04:09:05,125 709152 INFO hams_test odoo.modules.loading: loading calendar/wizard/mail_activity_schedule_views.xml 
+2026-06-11 04:09:05,160 709152 INFO hams_test odoo.modules.loading: Module calendar loaded in 0.34s, 931 queries (+931 other) 
+2026-06-11 04:09:05,160 709152 INFO hams_test odoo.modules.loading: Loading module google_gmail (28/87) 
+2026-06-11 04:09:05,167 709152 INFO hams_test odoo.registry: module google_gmail: creating or updating database tables 
+2026-06-11 04:09:05,193 709152 INFO hams_test odoo.modules.loading: loading google_gmail/views/fetchmail_server_views.xml 
+2026-06-11 04:09:05,204 709152 INFO hams_test odoo.modules.loading: loading google_gmail/views/ir_mail_server_views.xml 
+2026-06-11 04:09:05,212 709152 INFO hams_test odoo.modules.loading: loading google_gmail/views/res_config_settings_views.xml 
+2026-06-11 04:09:05,231 709152 INFO hams_test odoo.modules.loading: loading google_gmail/views/templates.xml 
+2026-06-11 04:09:05,243 709152 INFO hams_test odoo.modules.loading: Module google_gmail loaded in 0.08s, 177 queries (+177 other) 
+2026-06-11 04:09:05,243 709152 INFO hams_test odoo.modules.loading: Loading module html_builder (29/87) 
+2026-06-11 04:09:05,259 709152 INFO hams_test odoo.modules.loading: Module html_builder loaded in 0.02s, 10 queries (+10 other) 
+2026-06-11 04:09:05,260 709152 INFO hams_test odoo.modules.loading: Loading module iap_mail (30/87) 
+2026-06-11 04:09:05,262 709152 INFO hams_test odoo.registry: module iap_mail: creating or updating database tables 
+2026-06-11 04:09:05,276 709152 INFO hams_test odoo.modules.loading: loading iap_mail/data/mail_templates.xml 
+2026-06-11 04:09:05,287 709152 INFO hams_test odoo.modules.loading: loading iap_mail/views/iap_views.xml 
+2026-06-11 04:09:05,303 709152 INFO hams_test odoo.modules.loading: Module iap_mail loaded in 0.04s, 77 queries (+77 other) 
+2026-06-11 04:09:05,303 709152 INFO hams_test odoo.modules.loading: Loading module mail_bot (31/87) 
+2026-06-11 04:09:05,309 709152 INFO hams_test odoo.registry: module mail_bot: creating or updating database tables 
+2026-06-11 04:09:05,333 709152 INFO hams_test odoo.modules.loading: loading mail_bot/views/res_users_views.xml 
+2026-06-11 04:09:05,347 709152 INFO hams_test odoo.modules.loading: loading mail_bot/data/mailbot_data.xml 
+2026-06-11 04:09:05,358 709152 INFO hams_test odoo.modules.loading: Module mail_bot loaded in 0.05s, 113 queries (+113 other) 
+2026-06-11 04:09:05,358 709152 INFO hams_test odoo.modules.loading: Loading module microsoft_outlook (32/87) 
+2026-06-11 04:09:05,365 709152 INFO hams_test odoo.registry: module microsoft_outlook: creating or updating database tables 
+2026-06-11 04:09:05,393 709152 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/fetchmail_server_views.xml 
+2026-06-11 04:09:05,402 709152 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/ir_mail_server_views.xml 
+2026-06-11 04:09:05,410 709152 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/res_config_settings_views.xml 
+2026-06-11 04:09:05,427 709152 INFO hams_test odoo.modules.loading: loading microsoft_outlook/views/templates.xml 
+2026-06-11 04:09:05,439 709152 INFO hams_test odoo.modules.loading: Module microsoft_outlook loaded in 0.08s, 180 queries (+180 other) 
+2026-06-11 04:09:05,439 709152 INFO hams_test odoo.modules.loading: Loading module phone_validation (33/87) 
+2026-06-11 04:09:05,478 709152 INFO hams_test odoo.registry: module phone_validation: creating or updating database tables 
+2026-06-11 04:09:05,484 709152 INFO hams_test odoo.models: Prepare computation of res.partner.phone_sanitized 
+2026-06-11 04:09:05,904 709152 INFO hams_test odoo.modules.loading: loading phone_validation/security/ir.model.access.csv 
+2026-06-11 04:09:05,909 709152 INFO hams_test odoo.modules.loading: loading phone_validation/views/phone_blacklist_views.xml 
+2026-06-11 04:09:05,925 709152 INFO hams_test odoo.modules.loading: loading phone_validation/views/res_partner_views.xml 
+2026-06-11 04:09:05,933 709152 INFO hams_test odoo.modules.loading: loading phone_validation/wizard/phone_blacklist_remove_view.xml 
+2026-06-11 04:09:05,957 709152 INFO hams_test odoo.modules.loading: Module phone_validation loaded in 0.52s, 1861 queries (+1861 other) 
+2026-06-11 04:09:05,957 709152 INFO hams_test odoo.modules.loading: Loading module privacy_lookup (34/87) 
+2026-06-11 04:09:05,966 709152 INFO hams_test odoo.registry: module privacy_lookup: creating or updating database tables 
+2026-06-11 04:09:06,026 709152 INFO hams_test odoo.modules.loading: loading privacy_lookup/wizard/privacy_lookup_wizard_views.xml 
+2026-06-11 04:09:06,059 709152 INFO hams_test odoo.modules.loading: loading privacy_lookup/views/privacy_log_views.xml 
+2026-06-11 04:09:06,070 709152 INFO hams_test odoo.modules.loading: loading privacy_lookup/security/ir.model.access.csv 
+2026-06-11 04:09:06,078 709152 INFO hams_test odoo.modules.loading: loading privacy_lookup/data/ir_actions_server_data.xml 
+2026-06-11 04:09:06,113 709152 INFO hams_test odoo.modules.loading: Module privacy_lookup loaded in 0.16s, 300 queries (+300 other) 
+2026-06-11 04:09:06,113 709152 INFO hams_test odoo.modules.loading: Loading module product (35/87) 
+2026-06-11 04:09:06,136 709152 INFO hams_test odoo.registry: module product: creating or updating database tables 
+2026-06-11 04:09:06,386 709152 INFO hams_test odoo.modules.loading: loading product/data/product_data.xml 
+2026-06-11 04:09:06,400 709152 INFO hams_test odoo.modules.loading: loading product/security/product_security.xml 
+2026-06-11 04:09:06,430 709152 INFO hams_test odoo.modules.loading: loading product/security/ir.model.access.csv 
+2026-06-11 04:09:06,437 709152 INFO hams_test odoo.modules.loading: loading product/wizard/product_label_layout_views.xml 
+2026-06-11 04:09:06,443 709152 INFO hams_test odoo.modules.loading: loading product/wizard/update_product_attribute_value_views.xml 
+2026-06-11 04:09:06,446 709152 INFO hams_test odoo.modules.loading: loading product/views/product_tag_views.xml 
+2026-06-11 04:09:06,452 709152 INFO hams_test odoo.modules.loading: loading product/views/product_views.xml 
+2026-06-11 04:09:06,513 709152 INFO hams_test odoo.modules.loading: loading product/views/res_config_settings_views.xml 
+2026-06-11 04:09:06,530 709152 INFO hams_test odoo.modules.loading: loading product/views/product_attribute_views.xml 
+2026-06-11 04:09:06,553 709152 INFO hams_test odoo.modules.loading: loading product/views/product_attribute_value_views.xml 
+2026-06-11 04:09:06,555 709152 INFO hams_test odoo.modules.loading: loading product/views/product_category_views.xml 
+2026-06-11 04:09:06,565 709152 INFO hams_test odoo.modules.loading: loading product/views/product_combo_views.xml 
+2026-06-11 04:09:06,573 709152 INFO hams_test odoo.modules.loading: loading product/views/product_document_views.xml 
+2026-06-11 04:09:06,584 709152 INFO hams_test odoo.modules.loading: loading product/views/product_pricelist_item_views.xml 
+2026-06-11 04:09:06,603 709152 INFO hams_test odoo.modules.loading: loading product/views/product_pricelist_views.xml 
+2026-06-11 04:09:06,617 709152 INFO hams_test odoo.modules.loading: loading product/views/product_supplierinfo_views.xml 
+2026-06-11 04:09:06,631 709152 INFO hams_test odoo.modules.loading: loading product/views/product_template_attribute_line_views.xml 
+2026-06-11 04:09:06,634 709152 INFO hams_test odoo.modules.loading: loading product/views/product_template_views.xml 
+2026-06-11 04:09:06,664 709152 INFO hams_test odoo.modules.loading: loading product/views/res_country_group_views.xml 
+2026-06-11 04:09:06,670 709152 INFO hams_test odoo.modules.loading: loading product/views/res_partner_views.xml 
+2026-06-11 04:09:06,681 709152 INFO hams_test odoo.modules.loading: loading product/views/uom_views.xml 
+2026-06-11 04:09:06,691 709152 INFO hams_test odoo.modules.loading: loading product/report/product_reports.xml 
+2026-06-11 04:09:06,703 709152 INFO hams_test odoo.modules.loading: loading product/report/product_product_templates.xml 
+2026-06-11 04:09:06,728 709152 INFO hams_test odoo.modules.loading: loading product/report/product_template_templates.xml 
+2026-06-11 04:09:06,742 709152 INFO hams_test odoo.modules.loading: loading product/report/product_packaging.xml 
+2026-06-11 04:09:06,747 709152 INFO hams_test odoo.modules.loading: loading product/report/product_pricelist_report_templates.xml 
+2026-06-11 04:09:06,792 709152 INFO hams_test odoo.modules.loading: Module product loaded in 0.68s, 1745 queries (+1745 other) 
+2026-06-11 04:09:06,792 709152 INFO hams_test odoo.modules.loading: Loading module rating (36/87) 
+2026-06-11 04:09:06,819 709152 INFO hams_test odoo.registry: module rating: creating or updating database tables 
+2026-06-11 04:09:06,946 709152 INFO hams_test odoo.modules.loading: loading rating/views/rating_rating_views.xml 
+2026-06-11 04:09:06,978 709152 INFO hams_test odoo.modules.loading: loading rating/views/rating_templates.xml 
+2026-06-11 04:09:06,989 709152 INFO hams_test odoo.modules.loading: loading rating/views/mail_message_views.xml 
+2026-06-11 04:09:06,997 709152 INFO hams_test odoo.modules.loading: loading rating/security/ir.model.access.csv 
+2026-06-11 04:09:07,023 709152 INFO hams_test odoo.modules.loading: Module rating loaded in 0.23s, 474 queries (+474 other) 
+2026-06-11 04:09:07,023 709152 INFO hams_test odoo.modules.loading: Loading module resource_mail (37/87) 
+2026-06-11 04:09:07,029 709152 INFO hams_test odoo.registry: module resource_mail: creating or updating database tables 
+2026-06-11 04:09:07,058 709152 INFO hams_test odoo.modules.loading: Module resource_mail loaded in 0.04s, 36 queries (+36 other) 
+2026-06-11 04:09:07,058 709152 INFO hams_test odoo.modules.loading: Loading module sales_team (38/87) 
+2026-06-11 04:09:07,071 709152 INFO hams_test odoo.registry: module sales_team: creating or updating database tables 
+2026-06-11 04:09:07,082 709152 INFO hams_test odoo.models: Prepare computation of res.users.sale_team_id 
+2026-06-11 04:09:07,138 709152 INFO hams_test odoo.modules.loading: loading sales_team/security/sales_team_security.xml 
+2026-06-11 04:09:07,166 709152 INFO hams_test odoo.modules.loading: loading sales_team/security/ir.model.access.csv 
+2026-06-11 04:09:07,170 709152 INFO hams_test odoo.modules.loading: loading sales_team/data/crm_team_data.xml 
+2026-06-11 04:09:07,193 709152 INFO hams_test odoo.modules.loading: loading sales_team/views/crm_tag_views.xml 
+2026-06-11 04:09:07,204 709152 INFO hams_test odoo.modules.loading: loading sales_team/views/crm_team_views.xml 
+2026-06-11 04:09:07,225 709152 INFO hams_test odoo.modules.loading: loading sales_team/views/crm_team_member_views.xml 
+2026-06-11 04:09:07,252 709152 INFO hams_test odoo.modules.loading: loading sales_team/views/mail_activity_views.xml 
+2026-06-11 04:09:07,265 709152 INFO hams_test odoo.modules.loading: Module sales_team loaded in 0.21s, 379 queries (+379 other) 
+2026-06-11 04:09:07,266 709152 INFO hams_test odoo.modules.loading: Loading module zero_sudo (39/87) 
+2026-06-11 04:09:07,273 709152 INFO hams_test odoo.registry: module zero_sudo: creating or updating database tables 
+2026-06-11 04:09:07,324 709152 INFO hams_test odoo.modules.loading: loading zero_sudo/data/security_data.xml 
+2026-06-11 04:09:08,384 709152 WARNING hams_test odoo.modules.loading: Transient module states were reset 
+2026-06-11 04:09:08,390 709152 ERROR hams_test odoo.registry: Failed to load registry 
+2026-06-11 04:09:08,390 709152 CRITICAL hams_test odoo.service.server: Failed to initialize database `hams_test`. 
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 605, in _tag_root
+    f(rec)
+    ~^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 351, in _tag_record
+    self._test_xml_id(rec_id)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 246, in _test_xml_id
+    assert modcnt == 1, """The ID "%s" refers to an uninstalled module""" % (xml_id,)
+           ^^^^^^^^^^^
+AssertionError: The ID "user_websites.user_websites_service_account" refers to an uninstalled module
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/odoo/service/server.py", line 1544, in preload_registries
+    registry = Registry.new(dbname, update_module=update_module, install_modules=config['init'], upgrade_modules=config['update'], reinit_modules=config['reinit'])
+  File "/usr/lib/python3/dist-packages/odoo/tools/func.py", line 88, in locked
+    return func(inst, *args, **kwargs)
+  File "/usr/lib/python3/dist-packages/odoo/orm/registry.py", line 199, in new
+    load_modules(
+    ~~~~~~~~~~~~^
+        registry,
+        ^^^^^^^^^
+    ...<5 lines>...
+        models_to_check=models_to_check,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 464, in load_modules
+    load_module_graph(
+    ~~~~~~~~~~~~~~~~~^
+        env, graph, update_module=update_module,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        report=report, models_to_check=models_to_check)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 217, in load_module_graph
+    load_data(env, idref, 'init', kind='data', package=package)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 59, in load_data
+    convert_file(env, package.name, filename, idref, mode, noupdate=kind == 'demo')
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 693, in convert_file
+    convert_xml_import(env, module, fp, idref, mode, noupdate)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 792, in convert_xml_import
+    obj.parse(doc.getroot())
+    ~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 663, in parse
+    self._tag_root(de)
+    ~~~~~~~~~~~~~~^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 605, in _tag_root
+    f(rec)
+    ~^^^^^
+  File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 618, in _tag_root
+    raise ParseError('while parsing %s:%s, somewhere inside\n%s' % (
+    ...<3 lines>...
+    )) from e
+odoo.tools.convert.ParseError: while parsing /home/bruce/workspace/hams_community/zero_sudo/data/security_data.xml:66, somewhere inside
+<record id="user_websites.user_websites_service_account" model="res.users">
+            <field name="name">System Provisioner</field>
+            <field name="login">sys_provisioner</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+2026-06-11 04:09:08,392 709152 INFO hams_test odoo.service.server: Initiating shutdown 
+2026-06-11 04:09:08,392 709152 INFO hams_test odoo.service.server: Hit CTRL-C again or send a second signal to force the shutdown. 
+2026-06-11 04:09:08,396 709152 INFO hams_test odoo.sql_db: ConnectionPool(read/write;used=0/count=0/max=64): Closed 1 connections  
+[*] [DEBUG-RUNNER] IO Reader thread concluded for PID 709152
+[*] [DEBUG-RUNNER] Received EOF sentinel from IO Reader thread.
+[*] [DEBUG-RUNNER] Waiting for process 709152 to cleanly terminate...
+[*] [DEBUG-RUNNER] Process 709152 terminated with return code 255.
+
+==========================================================
+🚨 TEST RUN COMPLETE: 1 test failure(s) detected!
+📄 Failure details extracted and saved to: /home/bruce/tmp/filtered_test.txt
+==========================================================
+
+Stopping and halting node rabbit@bruce16 ...

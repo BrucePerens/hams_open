@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-import odoo.tests
 from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import AccessError
 from psycopg2 import IntegrityError
 from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
-class TestORMSecurity(odoo.tests.common.TransactionCase):
+class TestORMSecurity(RealTransactionCase):
     """
     Tests focused on preventing malicious authenticated users from bypassing
     the controllers and exploiting the ORM/RPC layer.

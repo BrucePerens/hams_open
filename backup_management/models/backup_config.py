@@ -241,14 +241,10 @@ class BackupConfig(models.Model):
 
             def publish_task(msg=payload):
                 try:
-                    # Use Service ID for security & audit trails
-                    svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                        "backup_management.user_backup_service_internal"
-                    )
-                    get_param = self.env["ir.config_parameter"].with_user(svc_uid).get_param
-                    rmq_host = get_param("backup_management.rmq_host") or os.environ.get("RMQ_HOST") or "rabbitmq"
-                    rmq_user = get_param("backup_management.rmq_user") or os.environ.get("RMQ_USER") or "guest"
-                    rmq_pass = get_param("backup_management.rmq_pass") or os.environ.get("RMQ_PASS") or "guest"  # burn-ignore-env
+                    utils = self.env["zero_sudo.security.utils"]
+                    rmq_host = utils._get_system_param("backup_management.rmq_host") or os.environ.get("RMQ_HOST") or "rabbitmq"
+                    rmq_user = utils._get_system_param("backup_management.rmq_user") or os.environ.get("RMQ_USER") or "guest"
+                    rmq_pass = utils._get_system_param("backup_management.rmq_pass") or os.environ.get("RMQ_PASS") or "guest"  # burn-ignore-env
                     credentials = pika.PlainCredentials(rmq_user, rmq_pass)
                     conn_params = pika.ConnectionParameters(
                         host=rmq_host, credentials=credentials
