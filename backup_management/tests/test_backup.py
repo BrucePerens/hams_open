@@ -225,16 +225,13 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_12_documentation_installation(self):
         # Tests [@ANCHOR: backup_doc_injection]
-        try:
-            article = self.env["manual.article"].search(
-                [("name", "=", "Backup Management")], limit=1
-            )
-            self.assertTrue(
-                article.exists(), "[!] DIAGNOSTIC FOR AI: Backup documentation article 'Backup Management' not found. Verify the 'knowledge_docs' manifest entry and the bootstrap mechanism."
-            )
-            self.assertIn("Backup Management User Guide", article.body, "[!] DIAGNOSTIC FOR AI: Backup documentation body content is missing expected headers. Check data/documentation.html.")
-        except KeyError as e:
-            _logger.info("Skipping documentation test; manual.article is a soft-dependency: %s", e)
+        article = self.env["manual.article"].search(
+            [("name", "=", "Backup Management")], limit=1
+        )
+        self.assertTrue(
+            article.exists(), "[!] DIAGNOSTIC FOR AI: Backup documentation article 'Backup Management' not found. Verify the 'knowledge_docs' manifest entry and the bootstrap mechanism."
+        )
+        self.assertIn("Backup Management User Guide", article.body, "[!] DIAGNOSTIC FOR AI: Backup documentation body content is missing expected headers. Check data/documentation.html.")
 
     def test_13_restore_action(self):
         # Tests [@ANCHOR: test_restore_action]

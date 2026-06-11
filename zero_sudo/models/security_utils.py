@@ -239,10 +239,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))
 
-        # Ensure changes are visible to other transactions/round-trips
-        is_test = tools.config.get('test_enable', False)
-        if not is_test:
-            self.env.cr.commit()
+        # Ensure changes are visible to other transactions/round-trips.
+        # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,
+        # so test evasion logic is purged.
+        self.env.cr.commit()
 
         # Direct SQL bypasses the ORM cache. We must invalidate it.
         self.env["zero_sudo.kv"].invalidate_recordset()

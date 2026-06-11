@@ -108,28 +108,22 @@ class IrHttp(models.AbstractModel):
         init_mode = tools.config.get("init")
         update_mode = tools.config.get("update")
         stop_after_init = tools.config.get("stop_after_init")
-        try:
-            is_test_cr = request.env.registry.test_cr
-        except AttributeError:
-            is_test_cr = False
 
         # Allow integration tests to use the Redis listener if explicitly enabled
         integration_active = False
-        if is_test_cr:
-            # We use a try-except to handle cases where the registry might not be fully initialized
-            try:
-                # Use zero_sudo security utils for system parameter read to comply with security mandates
-                param = request.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
-                integration_active = bool(param)
-            except Exception as e: # audit-ignore-catch-all
-                # Fail silently during initialization/teardown if request context is unstable
-                _logger.info("Failed to read integration status from request env: %s", e)
+        try:
+            # Use zero_sudo security utils for system parameter read to comply with security mandates
+            param = request.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
+            integration_active = bool(param)
+        except Exception as e: # audit-ignore-catch-all
+            # Fail silently during initialization/teardown if request context is unstable
+            _logger.info("Failed to read integration status from request env: %s", e)
 
         if integration_active or not (
-            is_test_cr
-            or init_mode
+            init_mode
             or update_mode
             or stop_after_init
+            or request.env.context.get("test_mode")
         ):
             if not _listener_started:
                 with _listener_lock:
@@ -176,13 +170,11 @@ class IrHttp(models.AbstractModel):
 
             for m in to_process:
                 if m and isinstance(m, str):
-                    try:
-                        _ = request.env[m]
-                        # Pass local_only=True to prevent infinite pub/sub loops
-                        invalidate_model_cache(request.env, m, local_only=True)
-                        info_msg = """Cache cleared for model: %s on %s"""
-                        _logger.info(info_msg, m, current_db)
-                    except KeyError as e:
-                        _logger.debug("Model not found in env for cache clear: %s", e)
+                    # Enforce schema contract: model must exist in env, otherwise fail loudly
+                    _ = request.env[m]
+                    # Pass local_only=True to prevent infinite pub/sub loops
+                    invalidate_model_cache(request.env, m, local_only=True)
+                    info_msg = """Cache cleared for model: %s on %s"""
+                    _logger.info(info_msg, m, current_db)
 
         return super()._authenticate(endpoint)

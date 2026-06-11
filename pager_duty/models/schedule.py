@@ -27,14 +27,13 @@ class PagerSchedule(models.Model):
             ("start", "<=", now),
             ("stop", ">=", now),
         ]
+
+        # Enforce strict schema contract. We do not mask missing dependencies.
         if self.env.context.get("website_id"):
             domain.append(("website_id", "=", self.env.context.get("website_id")))
         else:
-            try:
-                if self.env.website:
-                    domain.append(("website_id", "=", self.env.website.id))
-            except AttributeError as err:
-                _logger.debug("No website found in environment: %s", err)
+            if self.env.website:
+                domain.append(("website_id", "=", self.env.website.id))
 
         event = self.env["calendar.event"].search(domain, limit=1)
         if event and event.user_id:

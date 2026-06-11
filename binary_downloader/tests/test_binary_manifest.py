@@ -2,7 +2,6 @@
 import hashlib
 import io
 import os
-import tarfile
 import zipfile
 import stat
 import logging
@@ -284,42 +283,24 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_response_get.__enter__.return_value = mock_response_get
         mock_urlopen.return_value = mock_response_get
 
-        try:
-            old_filter = getattr(tarfile, "data_filter")
-            del tarfile.data_filter
-            has_filter = True
-        except AttributeError:
-            has_filter = False
+        mock_tar_open = self.safe_patch("tarfile.open")  # audit-ignore-path
+        mock_tar = MagicMock()
+        mock_tar_open.return_value.__enter__.return_value = mock_tar
 
-        try:
-            mock_tar_open = self.safe_patch("tarfile.open")  # audit-ignore-path
-            mock_tar = MagicMock()
-            mock_tar_open.return_value.__enter__.return_value = mock_tar
+        mock_member = MagicMock()
+        mock_member.name = "../slippy"
+        mock_member.islnk.return_value = False
+        mock_member.issym.return_value = False
 
-            mock_member = MagicMock()
-            mock_member.name = "../slippy"
-            mock_member.islnk.return_value = False
-            mock_member.issym.return_value = False
+        mock_tar.getmembers.return_value = [mock_member]
 
-            mock_tar.getmembers.return_value = [mock_member]
+        # Mock tar.extractfile to return a stream of bytes
+        mock_tar.extractfile.return_value = io.BytesIO(b"extracted-data")
 
-            # Mock tar.extractfile to return a stream of bytes
-            mock_tar.extractfile.return_value = io.BytesIO(b"extracted-data")
-
-            # We expect it to NOT be found because basename("../slippy") is "slippy"
-            # and extract_member is "slippy", but it matches on endswith("/slippy") or name == "slippy"
-            # Actually, "slippy" (extract_member) == basename("../slippy") is NOT how it matched.
-            # It matches on member.name.endswith(f"/{extract_target}") or member.name == extract_target
-            # "../slippy".endswith("/slippy") is True.
-            # So it will extract it as "slippy" in hams_bin.
-            # The slip is prevented by os.path.basename.
-
-            path = self.env["binary.manifest"].ensure_executable("slippy")
-            self.assertTrue(os.path.exists(path))
-            self.assertEqual(os.path.basename(path), self.env["binary.manifest"].search([("name", "=", "slippy")])._get_target_filename())
-        finally:
-            if has_filter:
-                tarfile.data_filter = old_filter
+        # The slip is prevented by os.path.basename in the core logic.
+        path = self.env["binary.manifest"].ensure_executable("slippy")
+        self.assertTrue(os.path.exists(path))
+        self.assertEqual(os.path.basename(path), self.env["binary.manifest"].search([("name", "=", "slippy")])._get_target_filename())
 
     def test_13_symlink_prevention(self):
         # [!] DIAGNOSTIC FOR AI: Testing prevention of symlinks inside tar archives.

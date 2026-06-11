@@ -9,7 +9,7 @@
     "category": "Security",
     "version": "1.0",
     "license": "AGPL-3",
-    "depends": ["base", "web", "mail", "binary_downloader", "manual_library"],
+    "depends": ["base", "web", "mail"],
     "assets": {
       "web.assets_tests": [
         "zero_sudo/static/src/js/tour_utils.js",

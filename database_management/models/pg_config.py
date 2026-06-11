@@ -158,11 +158,8 @@ class PgHaWizard(models.TransientModel):
         # [@ANCHOR: pg_ha_wizard]
         # Tests [@ANCHOR: pg_ha_wizard]
         self._validate_inputs()
-        try:
-            in_test = self.env.registry.in_test
-        except AttributeError:
-            in_test = False
-        if not in_test and not self.env.context.get("test_mode"):
+
+        if not self.env.context.get("test_mode"):
             self._get_executable("etcd")
             self._get_executable("patroni")
             self._get_executable("pgbouncer")

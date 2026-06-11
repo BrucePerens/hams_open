@@ -235,24 +235,17 @@ class ResUsers(models.Model):
                 user_domain.append(("id", "!=", record_id))
 
             try:
-                try:
-                    env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                        "user_websites.user_websites_service_account"
-                    )
-                    env_user = env_svc["res.users"]
-                    env_group = env_svc["user.websites.group"]
-                except AccessError as e:
-                    if "not found" in str(e).lower():
-                         env_user = self.env["res.users"]
-                         env_group = self.env["user.websites.group"]
-                    else:
-                         raise
-            except AccessError:
-                if self.env.su:
-                    env_user = self.env["res.users"]
-                    env_group = self.env["user.websites.group"]
+                env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                    "user_websites.user_websites_service_account"
+                )
+                env_user = env_svc["res.users"]
+                env_group = env_svc["user.websites.group"]
+            except AccessError as e:
+                if "not found" in str(e).lower():
+                     env_user = self.env["res.users"]
+                     env_group = self.env["user.websites.group"]
                 else:
-                    raise
+                     raise
 
             user_collision = env_user.search_count(user_domain)
             group_collision = env_group.search_count([("website_slug", "=", slug)])
@@ -306,10 +299,7 @@ class ResUsers(models.Model):
         # --- Content Lifecycle Policy ---
         if "active" in vals and not vals["active"]:
             users_to_archive = self.ids
-            try:
-                is_test = self.env.registry.test_cr
-            except AttributeError:
-                is_test = False
+            is_test = self.env.context.get("test_mode")
             if not is_test:
                 db_name = self.env.cr.dbname
                 BACKGROUND_EXECUTOR.submit(
@@ -436,10 +426,8 @@ class ResUsers(models.Model):
         self.ensure_one()
         user_id = self.id
         db_name = self.env.cr.dbname
-        try:
-            is_test = self.env.registry.test_cr
-        except AttributeError:
-            is_test = False
+
+        is_test = self.env.context.get("test_mode")
 
         if is_test:
             env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
@@ -530,10 +518,8 @@ class ResUsers(models.Model):
                     if len(items) < 1000: break
                     offset += 1000
 
-        try:
-            res = super()._get_gdpr_streamed_keys()
-        except AttributeError:
-            res = {}
+        # Enforce strict contract, don't mask missing methods
+        res = super()._get_gdpr_streamed_keys()
         res.update({
             "pages": generate_pages,
             "blog_posts": generate_blogs,
@@ -585,10 +571,8 @@ class ResUsers(models.Model):
                     time.sleep(0.5) # audit-ignore-sleep: Retry backoff
                     continue
                 raise
-            try:
-                is_test = self.env.registry.test_cr
-            except AttributeError:
-                is_test = False
+
+            is_test = self.env.context.get("test_mode")
             if not is_test:
                 self.env.cr.commit()
             if len(pages) < 5000:
@@ -611,10 +595,8 @@ class ResUsers(models.Model):
                     time.sleep(0.5) # audit-ignore-sleep: Retry backoff
                     continue
                 raise
-            try:
-                is_test = self.env.registry.test_cr
-            except AttributeError:
-                is_test = False
+
+            is_test = self.env.context.get("test_mode")
             if not is_test:
                 self.env.cr.commit()
             if len(posts) < 5000:
@@ -637,10 +619,8 @@ class ResUsers(models.Model):
                     time.sleep(0.5) # audit-ignore-sleep: Retry backoff
                     continue
                 raise
-            try:
-                is_test = self.env.registry.test_cr
-            except AttributeError:
-                is_test = False
+
+            is_test = self.env.context.get("test_mode")
             if not is_test:
                 self.env.cr.commit()
             if len(blogs) < 5000:
@@ -651,9 +631,5 @@ class ResUsers(models.Model):
         # ADR-0001: All service account mutations must include appropriate context
         self.with_env(env_svc).write({"privacy_show_in_directory": False})
 
-        try:
-            super()._execute_gdpr_erasure()
-        except AttributeError:
-            # ADR-0002: Base res.users doesn't have this method; this is normal
-            # and only exists if other modules (like manual_library) provide it.
-            _logger.debug("Base res.users has no _execute_gdpr_erasure to call")
+        # Enforce strict contract, let missing methods fail loudly
+        super()._execute_gdpr_erasure()

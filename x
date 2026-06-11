@@ -1,3 +1,7 @@
+@@BOUNDARY_BROWSER_FIX@@
+Path: zero_sudo/tests/common.py
+Operation: overwrite
+
 # -*- coding: utf-8 -*-
 import glob
 import logging
@@ -9,8 +13,6 @@ import time
 import urllib.request
 import threading
 import json
-import unittest
-import concurrent.futures
 from unittest.mock import MagicMock, patch
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser
 from . import watchdog_shared
@@ -18,10 +20,15 @@ from . import watchdog_shared
 _logger = logging.getLogger(__name__)
 
 def _apply_cdp_hook(browser_instance):
+    """
+    Applies the V8 hunger trace hook to the browser instance if available.
+    """
     if not browser_instance:
         return
     watchdog_shared.global_captured_stack = None
     watchdog_shared.global_active_browser = browser_instance
+    
+    # Strictly enforce schema contract: _websocket must exist on browser_instance
     websocket = browser_instance._websocket
     if websocket:
         original_recv = websocket.recv
@@ -44,46 +51,14 @@ def _apply_cdp_hook(browser_instance):
                 except Exception as e: # audit-ignore-catch-all
                     _logger.error("Failed to parse Debugger.paused event: %s", e)
             return msg
-        browser_instance._websocket.recv = _intercepted_recv
-
-# 🚨 PLAYWRIGHT BROWSER LAUNCH INJECTION 🚨
-original_browser_launch = ChromeBrowser.launch
-def _patched_launch(self, *args, **kwargs):
-    for attempt in range(4):
-        try:
-            res = original_browser_launch(self, *args, **kwargs)
-            _apply_cdp_hook(self)
-            return res
-        except unittest.SkipTest:
-            raise
-        except Exception as e: # audit-ignore-catch-all
-            if attempt == 3:
-                raise
-            _logger.warning("TRACING: Chrome launch failed on attempt %d (%s). Retrying...", attempt + 1, e)
-            time.sleep(1.0) # audit-ignore-sleep
-ChromeBrowser.launch = _patched_launch
-
-# 🚨 BENIGN ERROR SCRUBBER 🚨
-original_browser_stop = ChromeBrowser.stop
-def _patched_browser_stop(self, *args, **kwargs):
-    # Strictly enforce schema presence
-    error_list = self._browser_errors
-    if isinstance(error_list, list):
-        filtered = []
-        for e in error_list:
-            msg = str(e).lower()
-            if "owl is running in 'dev' mode" in msg or "resizeobserver" in msg:
-                continue
-            filtered.append(e)
-        self._browser_errors = filtered
-    return original_browser_stop(self, *args, **kwargs)
-ChromeBrowser.stop = _patched_browser_stop
+        websocket.recv = _intercepted_recv
 
 # 🚨 NATIVE SCREENSHOT RESCUE 🚨
 original_take_screenshot = ChromeBrowser.take_screenshot
 def _patched_take_screenshot(self, *args, **kwargs):
     try:
         path = original_take_screenshot(self, *args, **kwargs)
+        # Enforce contract: Path returned by Odoo might be a Future if async
         if isinstance(path, concurrent.futures.Future):
             path = path.result(timeout=20.0)
 
@@ -116,6 +91,7 @@ def _patched_take_screenshot(self, *args, **kwargs):
         return path
     except Exception as ss_e: # audit-ignore-catch-all
         _logger.warning("TRACING: Native screenshot failed: %s", repr(ss_e))
+        return None
 ChromeBrowser.take_screenshot = _patched_take_screenshot
 
 class DiagnosticMock(MagicMock):
@@ -213,6 +189,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         with patch.object(threading.Thread, 'start', new=_daemonized_start):
             super().setUpClass()
 
+    def setUp(self):
+        super().setUp()
+        # Initialize CDP hook after super() creates self.browser
+        if self.browser:
+            _apply_cdp_hook(self.browser)
+
     @classmethod
     def tearDownClass(cls):
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
@@ -246,7 +228,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         cls.browser.chrome_process.kill()
                     except OSError as kill_e:
                         _logger.warning("TRACING: Ignored OSError killing chrome process: %s", repr(kill_e))
-
+                
+                # Direct attribute access. Fail fast if missing.
                 if cls.browser._websocket_thread:
                     cls.browser._websocket_thread.join = lambda *args, **kwargs: None
 
@@ -274,6 +257,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     except OSError as kill_e:
                         _logger.warning("TRACING: Ignored OSError killing instance chrome process: %s", repr(kill_e))
 
+                # Direct attribute access
                 if self.browser._websocket_thread:
                     self.browser._websocket_thread.join = lambda *args, **kwargs: None
 
@@ -357,10 +341,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 if "socket is already closed" in str(current_exc) or "BrokenPipeError" in type(current_exc).__name__:
                     is_watchdog = True
                     break
+                # Accessing __context__ directly per mandates
                 current_exc = current_exc.__context__
 
             if not is_watchdog and self.browser:
                 try:
+                    # Enforce schema contract
                     self.browser.take_screenshot()
                 except Exception as ss_e: # audit-ignore-catch-all
                     _logger.warning("TRACING: Ignored Exception taking fallback screenshot: %s", repr(ss_e))
@@ -410,3 +396,5 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 raise e from None
             else:
                 raise e from None
+
+@@BOUNDARY_BROWSER_FIX@@--

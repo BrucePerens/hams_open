@@ -46,15 +46,10 @@ class DistributedCacheConfig(models.TransientModel):
         # [@ANCHOR: check_redis_status_logic]
         use_redis = bool(redis and redis_pool)
 
-        try:
-            is_test = self.env.registry.test_cr
-        except AttributeError:
-            is_test = False
-        if is_test:
-            # Use zero_sudo security utils for system parameter read to comply with security mandates
-            integration_active = self.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
-            if not integration_active:
-                use_redis = False
+        # Use zero_sudo security utils for system parameter read to comply with security mandates
+        integration_active = self.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
+        if not integration_active and self.env.context.get("test_mode"):
+            use_redis = False
 
         status_msg = _(
             "Redis connection is not configured or unavailable. Local fallback cache is active."

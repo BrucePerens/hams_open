@@ -3,9 +3,6 @@ from odoo import http
 from odoo.http import request
 import json
 import logging
-import hmac
-import hashlib
-import odoo
 import os
 import redis
 
@@ -192,10 +189,8 @@ class UserWebsitesController(http.Controller):
             </t>
         </t>"""
 
-        try:
-            req_website_id = request.website.id if request.website else False
-        except AttributeError:
-            req_website_id = False
+        req_website_id = request.website.id if request.website else False
+
         create_vals = {
             "url": f"/{website_slug}/home",
             "name": f"{entity_name} Home",
@@ -231,10 +226,8 @@ class UserWebsitesController(http.Controller):
 
         entity_name = profile_user.name if profile_user else profile_group.name
 
-        try:
-            req_website_id = request.website.id if request.website else False
-        except AttributeError:
-            req_website_id = False
+        req_website_id = request.website.id if request.website else False
+
         create_vals = {
             "name": f"{entity_name}'s Blog",
             "website_id": req_website_id,
@@ -250,24 +243,18 @@ class UserWebsitesController(http.Controller):
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     def documentation(self, **kwargs):
         # Tested by [@ANCHOR: user_websites:test_documentation_route]
-        try:
-            # We explicitly use request.env here instead of env_svc to ensure
-            # the current user has the correct portal/public access rights to view the article,
-            # avoiding artificial AccessErrors from the backend service account.
-            try:
-                article = request.env['manual.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
-                if article and article.website_url:
-                    return request.redirect(article.website_url)
-            except KeyError as e:
-                _logger.debug("manual.article not found: %s", e)
-            try:
-                article = request.env['knowledge.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
-                if article and article.website_url:
-                    return request.redirect(article.website_url)
-            except KeyError as e:
-                _logger.debug("knowledge.article not found: %s", e)
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Failed to redirect to documentation article: %s", e)
+        # We explicitly use request.env here instead of env_svc to ensure
+        # the current user has the correct portal/public access rights to view the article,
+        # avoiding artificial AccessErrors from the backend service account.
+
+        # Enforce strict schema contract. Let missing models fail loudly.
+        article = request.env['manual.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
+        if article and article.website_url:
+            return request.redirect(article.website_url)
+
+        article = request.env['knowledge.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
+        if article and article.website_url:
+            return request.redirect(article.website_url)
 
         return request.render("user_websites.documentation_page", {})
 
@@ -365,28 +352,17 @@ class UserWebsitesController(http.Controller):
         # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
-        try:
-            record = env_svc[model].browse(record_id)
-            if not record.exists():
-                return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
 
-            # Validate token using object method or fallback to HMAC
-            is_valid = False
-            try:
-                is_valid = record._verify_unsubscribe_token(partner_id, token)
-            except AttributeError:
-                secret = utils._get_crypto_secret()
-                msg = f"{model}-{record_id}-{partner_id}-{timestamp}"
-                expected = hmac.new(secret.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256).hexdigest()
-                if odoo.tools.consteq(token, expected):
-                    is_valid = True
-
-            if not is_valid:
-                return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
-
-            record.message_unsubscribe([partner_id])
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Unsubscribe failed for %s id %s: %s", model, record_id, e)
+        record = env_svc[model].browse(record_id)
+        if not record.exists():
             return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
+
+        # Validate token using object method strictly enforcing schema
+        is_valid = record._verify_unsubscribe_token(partner_id, token)
+
+        if not is_valid:
+            return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
+
+        record.message_unsubscribe([partner_id])
 
         return request.render("user_websites.unsubscribe_success", {"record_name": model})

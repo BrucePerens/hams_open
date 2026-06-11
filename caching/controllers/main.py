@@ -24,10 +24,7 @@ class ServiceWorkerController(http.Controller):
         """
         # Gating for Jules VM stability during Odoo initialization.
         # Prevent scanner during --init phase of tests.
-        try:
-            is_test = request.env.registry.test_cr
-        except AttributeError:
-            is_test = False
+        is_test = request.env.registry.test_cr
         is_boot = tools.config.get("init") or tools.config.get(
             "stop_after_init"
         )
@@ -116,10 +113,7 @@ class ServiceWorkerController(http.Controller):
             quota_mb = quota_override
         else:
             # Multi-Website Awareness: Get quota.
-            try:
-                website = request.website
-            except AttributeError:
-                website = None
+            website = request.website
             if website:
                 quota_mb = website.caching_safe_quota_mb
             else:
@@ -186,10 +180,7 @@ class ServiceWorkerController(http.Controller):
             return request.not_found()
 
         # Multi-Website Awareness: Get params using high-performance procedure.
-        try:
-            website = request.website
-        except AttributeError:
-            website = None
+        website = request.website
         website_id = website.id if website else None
 
         # Optimization: Single database round-trip via Postgres procedure.

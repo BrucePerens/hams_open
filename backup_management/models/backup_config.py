@@ -384,8 +384,6 @@ class BackupConfig(models.Model):
                     "description": message,
                 }
             )
-        except KeyError as e:
-            logging.getLogger(__name__).debug("PagerDuty not installed: %s", e)
         except (UserError, AccessError, ValueError) as e:
             logging.getLogger(__name__).warning("An error occurred: %s", e)
 

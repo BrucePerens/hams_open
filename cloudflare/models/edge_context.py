@@ -15,16 +15,10 @@ class CloudflareUtils(models.AbstractModel):
         """
         Unified helper to resolve the active website ID across HTTP and Cron contexts.
         """
-        try:
-            if request:
-                request_obj = request._get_current_object()
-                try:
-                    if request_obj.website:
-                        return request_obj.website.id
-                except AttributeError as err:
-                    _logger.debug("No website attribute found: %s", err)
-        except (RuntimeError, AttributeError) as e:
-            _logger.warning("Failed to resolve current website: %s", e)
+        if request:
+            request_obj = request._get_current_object()
+            if request_obj.website:
+                return request_obj.website.id
         return self.env["website"].get_current_website().id
 
     @api.model
@@ -35,15 +29,11 @@ class CloudflareUtils(models.AbstractModel):
         Parses Cloudflare-specific geographic and threat headers injected at the edge.
         Returns a dictionary to be used by proprietary modules for default routing.
         """
-        try:
-            if not request:
-                return {}
-            # Check if request is bound to a current thread/context
-            request_obj = request._get_current_object()
-            headers = request_obj.httprequest.headers
-        except (RuntimeError, AttributeError) as e:
-            _logger.warning("Failed to get request context: %s", e)
+        if not request:
             return {}
+
+        request_obj = request._get_current_object()
+        headers = request_obj.httprequest.headers
 
         return {
             "ip": headers.get("CF-Connecting-IP") or request_obj.httprequest.remote_addr,

@@ -239,33 +239,23 @@ class TestSecurityUtils(HamsTransactionCase):
         # Scenario 2: Missing binary, no manifest available (should raise UserError)
         mock_which.return_value = None
 
-        # Pop only the specific model to prevent test runner teardown crashes
-        manifest_model = self.env.registry.models.pop('binary.manifest', None)
-        try:
-            with self.assertRaises(UserError) as cm:
-                utils._ensure_executable("missing_bin", pkg_name="apt-pkg-missing")
-            self.assertIn("Missing dependency", str(cm.exception))
-            self.assertIn("apt-pkg-missing", str(cm.exception))
+        with self.assertRaises(UserError) as cm:
+            utils._ensure_executable("missing_bin", pkg_name="apt-pkg-missing")
+        self.assertIn("Missing dependency", str(cm.exception))
+        self.assertIn("apt-pkg-missing", str(cm.exception))
 
-            # Scenario 3: Fallback dynamically invokes the manifest downloader module
-            mock_manifest = MagicMock()
-            mock_manifest.ensure_executable.return_value = "/var/lib/odoo/hams_bin/kopia"
-            mock_env = MagicMock()
-            # Mocking __getitem__ to handle 'binary.manifest'
-            mock_env.__getitem__.side_effect = lambda k: mock_manifest if k == "binary.manifest" else None
+        # Scenario 3: Fallback dynamically invokes the manifest downloader module
+        mock_manifest = MagicMock()
+        mock_manifest.ensure_executable.return_value = "/var/lib/odoo/hams_bin/kopia"
+        mock_env = MagicMock()
+        # Mocking __getitem__ to handle 'binary.manifest'
+        mock_env.__getitem__.side_effect = lambda k: mock_manifest if k == "binary.manifest" else None
 
-            self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env)
-            # Make "binary.manifest in self.env" return True
-            self.env.registry.models["binary.manifest"] = MagicMock()
-            res = utils._ensure_executable("kopia", svc_xml_id="zero_sudo.mail_service_internal")
-            self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
-            mock_manifest.ensure_executable.assert_called_once_with("kopia")
-        finally:
-            # Restore the individual model cleanly to protect the global registry
-            if manifest_model is not None:
-                self.env.registry.models['binary.manifest'] = manifest_model
-            else:
-                self.env.registry.models.pop('binary.manifest', None)
+        self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env)
+
+        res = utils._ensure_executable("kopia", svc_xml_id="zero_sudo.mail_service_internal")
+        self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
+        mock_manifest.ensure_executable.assert_called_once_with("kopia")
 
     def test_12_kv_store(self):
         # [@ANCHOR: test_set_kv_procedure]

@@ -18,19 +18,15 @@ class IrHttp(models.AbstractModel):
         """
         res = super()._post_dispatch(response)
 
-        try:
-            _ = response.headers
-        except AttributeError:
+        # Fail loudly if headers are missing, enforcing framework contract
+        _ = response.headers
+
+        if not request:
             return res
 
-        try:
-            if not request:
-                return res
-
-            request_obj = request._get_current_object()
-            path = request_obj.httprequest.path
-        except (RuntimeError, AttributeError):
-            return res
+        # Fail loudly if request lacks _get_current_object or httprequest
+        request_obj = request._get_current_object()
+        path = request_obj.httprequest.path
 
         # 1. Media & Assets (Max aggressive caching: 1 year)
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
@@ -65,11 +61,9 @@ class IrHttp(models.AbstractModel):
 
         # 3. Dynamic State Isolation (Protecting Authenticated User Data)
         is_public = True
-        try:
-            if request.env and request.env.user:
-                is_public = request.env.user._is_public()
-        except AttributeError as err:
-            _logger.debug("AttributeError checking is_public: %s", err)
+        if request.env and request.env.user:
+            # Enforce schema contract: user must have _is_public method
+            is_public = request.env.user._is_public()
 
         if not is_public:
             response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
@@ -80,10 +74,9 @@ class IrHttp(models.AbstractModel):
         response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=86400"
 
         # Inject Website-specific Cache-Tag for granular site-wide purging if needed.
-        try:
-            website_id = request.website.id if request.website else False
-        except AttributeError:
-            website_id = False
+        # Direct attribute access enforces schema contract
+        website_id = request.website.id if request.website else False
+
         if website_id:
             existing_tags = response.headers.get("Cache-Tag", "")
             new_tag = f"odoo-website-{website_id}"
