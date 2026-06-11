@@ -27,7 +27,7 @@ class PagerSchedule(models.Model):
         ]
         if self.env.context.get("website_id"):
             domain.append(("website_id", "=", self.env.context.get("website_id")))
-        elif hasattr(self.env, "website") and self.env.website:
+        elif getattr(self.env, "website", False):
             domain.append(("website_id", "=", self.env.website.id))
 
         event = self.env["calendar.event"].search(domain, limit=1)

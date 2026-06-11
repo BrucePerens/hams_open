@@ -93,7 +93,7 @@ class TestDocumentation(RealTransactionCase):
             )
 
             # Check if the article model has the website_url routing capability
-            if hasattr(article, "website_url") and article.website_url:
+            if getattr(article, "website_url", False):
                 self.assertIn(
                     article.website_url.encode(),
                     response.url.encode(),

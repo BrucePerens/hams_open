@@ -65,7 +65,7 @@ You MUST use explicit kwargs (e.g., `fields=[...]`).
 * **Cache Purging:** `.clear_caches()` is deprecated in Odoo 19. You MUST use `self.env.registry.clear_cache()` or `self.method_name.clear_cache(self)`.
 * **Test Cursor Corruption:** Odoo 19 tests run in a single transaction.
 Calling `env.cr.commit()` or `env.cr.rollback()` inside a `test_` file will raise an `AssertionError`.
-If testing background loop functions, you MUST conditionally bypass commits using `if not odoo.tools.config.get('test_enable'):` or utilize the `RealTransactionCase`.
+If testing background loop functions, you MUST utilize the `RealTransactionCase`. You are strictly **FORBIDDEN** from using `odoo.tools.config.get('test_enable')` or similar checks to bypass logic during a test.
 * **Controller Caching:** Using `@tools.ormcache` on an `@http.route` controller method is banned.
 </database_rules>
 
@@ -98,7 +98,7 @@ Flake8 will fatally reject this. (LLM Generation Bias).
 * **String Concatenation Ban:** Using the `+` operator to concatenate two string literals or f-strings together (e.g., `"a" + "b"`) is strictly forbidden to prevent linter evasion.
 Concatenating strings with variables is permitted.
 * **Constraints:** `_sql_constraints = [...]` is banned. Use `models.Constraint(...)` class attributes.
-* **File Reading:** `get_module_resource` is banned. Use `odoo.tools.file_open`.
+* **File Reading & Resources (Odoo 19):** `get_module_resource` is completely removed in Odoo 19 and will crash the server. You MUST use `odoo.tools.file_open`.
 * **Security Groups Mapping:** When mapping users to groups in Python dictionaries or XML, you MUST use `group_ids` (for `res.users`) and `user_ids` (for `res.groups`).
 Legacy `groups_id` and `users` strings are hard-blocked.
 * **Hierarchy Recursion:** `_check_recursion()` is banned. Use `_has_cycle()`.
@@ -116,9 +116,11 @@ If used in a background daemon for rate-limiting, it MUST be appended with `# au
 * **Thread Spawning:** `threading.Thread` is banned as a DoS vector. Use `concurrent.futures.ThreadPoolExecutor`.
 * **Import Error Evasion:** Wrapping imports in `try...except ImportError` blocks is strictly forbidden (ADR-0073).
 You MUST declare dependencies in `__manifest__.py` and let the system fail-fast.
+* **Dynamic Data-Type Introspection Banned:** The use of `hasattr()` or `getattr(..., 'column_type')` to dynamically check for fields, methods, or database columns at runtime is strictly forbidden ("CRITICAL AI LAZINESS"). You MUST rely on explicit schema contracts and hard dependencies. If a module requires a method or field from another module, declare it in the `depends` array of your `__manifest__.py`.
 * **Hallucinatory sys.path Manipulation:** You MUST NOT use `sys.path.append` or `sys.path.insert` to resolve sibling imports using `..` or to redundantly append the script directory (using `__file__`).
 Python naturally resolves local imports. Isolated background daemons are the only permitted exception.
 * **The AI Laziness Catch-All Trap:** Using a bare `except:` or `except Exception:` block is strictly forbidden and is flagged as AI laziness. You MUST target specific exceptions (e.g., `KeyError`, `ValueError`, `urllib.error.URLError`).
+* **The AI Laziness hasattr Trap:** The use of `hasattr()` is strictly forbidden. AI models frequently use it to mask type uncertainties or architectural flaws. Use explicit type checking or strict contracts instead.
 * **Catch-All Exception Bypass:** If you are writing a top-level daemon loop or external RPC boundary where an operation must continue past failure, you MUST append the `# audit-ignore-catch-all` bypass tag to the except line. Furthermore, even with this bypass, the block MUST contain a `logging` method call (e.g. `_logger.exception(...)`) to prevent silently swallowed tracebacks.
 </python_standards>
 

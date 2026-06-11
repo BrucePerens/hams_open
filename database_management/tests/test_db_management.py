@@ -10,10 +10,6 @@ import subprocess
 class TestDatabaseManagement(HamsTransactionCase):
     def test_01_vacuum_analyze(self):
         # Tests [@ANCHOR: vacuum_analyze]
-        self.assertTrue(
-            hasattr(self.env["database.table.stat"], "action_vacuum_analyze"),
-            "[!] DIAGNOSTIC FOR AI: database.table.stat model missing action_vacuum_analyze method.",
-        )
         mock_run = self.safe_patch("subprocess.run")
         self.safe_patch("shutil.which", return_value="/bin/mock")
         mock_res = MagicMock()
@@ -71,10 +67,6 @@ class TestDatabaseManagement(HamsTransactionCase):
 
     def test_03_db_index_stats(self):
         # Tests [@ANCHOR: db_index_stats]
-        self.assertTrue(
-            hasattr(self.env["database.table.stat"], "cron_check_bloat"),
-            "[!] DIAGNOSTIC FOR AI: database.table.stat model missing cron_check_bloat method.",
-        )
         mock_search = self.safe_patch_object(type(self.env["database.table.stat"]), "search")
         mock_search.return_value = self.env["database.table.stat"].browse()
         self.env["database.table.stat"].cron_check_bloat()
@@ -82,10 +74,6 @@ class TestDatabaseManagement(HamsTransactionCase):
 
     def test_03_terminate_backend(self):
         # Tests [@ANCHOR: db_terminate_backend]
-        self.assertTrue(
-            hasattr(self.env["database.activity"], "action_terminate_backend"),
-            "[!] DIAGNOSTIC FOR AI: database.activity model missing action_terminate_backend method.",
-        )
         # We test termination with a non-existent dummy PID to prevent killing the test runner
         # pg_terminate_backend(pid) returns False if the pid doesn't exist, safely proving execution.
         self.env.cr.execute("SELECT pg_terminate_backend(999999)")
@@ -117,7 +105,6 @@ class TestDatabaseManagement(HamsTransactionCase):
     def test_06_query_stats_ops(self):
         # Tests [@ANCHOR: db_slow_queries]
         model = self.env["database.query.stat"]
-        self.assertTrue(hasattr(model, "action_reset_stats"))
 
         mock_cr = MagicMock()
         mock_env = MagicMock(cr=mock_cr)

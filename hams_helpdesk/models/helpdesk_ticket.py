@@ -67,7 +67,7 @@ class HelpdeskTicket(models.Model):
 
     @api.onchange("partner_id")
     def _onchange_partner_id(self):
-        if self.partner_id and hasattr(self.partner_id, "callsign") and self.partner_id.callsign:
+        if self.partner_id and self.partner_id.callsign:
             self.callsign = self.partner_id.callsign
 
     @api.model_create_multi
@@ -83,7 +83,7 @@ class HelpdeskTicket(models.Model):
                     vals["company_id"] = website.company_id.id
             if not vals.get("callsign") and vals.get("partner_id"):
                 partner = self.env['res.partner'].browse(vals["partner_id"])
-                if hasattr(partner, "callsign") and partner.callsign:
+                if partner.callsign:
                     vals["callsign"] = partner.callsign
 
         tickets = super().create(vals_list)
@@ -118,10 +118,9 @@ class HelpdeskTicket(models.Model):
             _logger.info("PagerDuty service env not loaded (optional integration): %s", e)
 
         # Discover On-Duty Admin
-        if hasattr(Calendar, "get_current_on_duty_admin"):
-            on_duty_admin = Calendar.get_current_on_duty_admin()
-            if on_duty_admin:
-                on_duty_user_id = on_duty_admin.id
+        on_duty_admin = Calendar.get_current_on_duty_admin()
+        if on_duty_admin:
+            on_duty_user_id = on_duty_admin.id
 
         # Discover upcoming shifts (within 30 minutes) if PagerDuty is installed
         if "is_pager_duty" in Calendar._fields:

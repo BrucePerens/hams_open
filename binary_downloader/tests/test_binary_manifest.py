@@ -284,10 +284,12 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_response_get.__enter__.return_value = mock_response_get
         mock_urlopen.return_value = mock_response_get
 
-        has_filter = hasattr(tarfile, "data_filter")
-        if has_filter:
+        try:
             old_filter = getattr(tarfile, "data_filter")
             del tarfile.data_filter
+            has_filter = True
+        except AttributeError:
+            has_filter = False
 
         try:
             mock_tar_open = self.safe_patch("tarfile.open")  # audit-ignore-path

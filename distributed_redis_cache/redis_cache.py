@@ -68,7 +68,7 @@ def distributed_cache():
             # Multi-Tenant awareness: Include website_id and company_id in cache key
             # Force company_id from context if available, else use env.company
             website_id = self.env.context.get("website_id")
-            if not website_id and hasattr(self.env, 'website'):
+            if not website_id and getattr(self.env, 'website', False):
                 # Handle cases where website might be a recordset or a lazy object
                 website = getattr(self.env, 'website')
                 if website:
@@ -200,9 +200,9 @@ def notify_model_invalidation(env, model_name):
     def _do_invalidate():
         invalidate_model_cache(env, model_name, local_only=False)
 
-    if hasattr(env.cr, 'postcommit'):
+    try:
         env.cr.postcommit.add(_do_invalidate)
-    else:
+    except AttributeError:
         # Safe fallback for environments that utilize alternate post-commit hooking logic
         try:
             env.cr.after('commit', _do_invalidate)

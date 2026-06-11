@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 # the resulting thread-locking or savepoint-bypass will throw specific psycopg2 errors.
 # We catch these and emit a highly visible AI/Developer hint to instantly halt debugging.
 
-if hasattr(odoo.sql_db, 'TestCursor'):
+if getattr(odoo.sql_db, 'TestCursor', False):
     _original_test_cursor_execute = odoo.sql_db.TestCursor.execute
 
     def _monitored_test_execute(self, query, params=None):

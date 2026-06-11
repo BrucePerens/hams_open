@@ -58,8 +58,7 @@ class BackupJob(models.Model):
                 }
             )
             # Re-trigger to process the next one in the next cron run or via _trigger if available
-            if hasattr(self.env["ir.cron"], "_trigger"):
-                self.env.ref("backup_management.ir_cron_auto_refresh_backup_jobs")._trigger()
+            self.env.ref("backup_management.ir_cron_auto_refresh_backup_jobs")._trigger()
 
     def action_refresh_status(self):
         """

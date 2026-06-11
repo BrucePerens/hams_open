@@ -113,7 +113,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
         )
 
         # Interact with the manual library
-        if hasattr(self, "article"):
+        if getattr(self, "article", False):
             track(
                 "User: Manual Feedback",
                 self.url_open,

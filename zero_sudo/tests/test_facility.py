@@ -180,6 +180,6 @@ class TestRealTransactionFacility(RealTransactionCase):
     @classmethod
     def tearDownClass(cls):
         # Stop integration daemon if active
-        if hasattr(cls, '_integration_daemon_process'):
+        if getattr(cls, '_integration_daemon_process', False):
             cls._integration_daemon_process.terminate()
         super().tearDownClass()

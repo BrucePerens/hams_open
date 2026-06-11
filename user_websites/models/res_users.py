@@ -99,37 +99,26 @@ class ResUsers(models.Model):
         super(ResUsers, self)._register_hook()
         # Early initialization of sys_provisioner to satisfy cross-module dependencies
         # Runs before any XML data files are processed, bypassing Uninstalled Module parse errors
-        if not hasattr(self.env.registry, '_sys_provisioner_initialized'):
-            self.env.registry._sys_provisioner_initialized = True
-            try:
-                with self.env.cr.savepoint():
-                    user = self.env['res.users'].with_context(active_test=False).search([('login', '=', 'sys_provisioner')], limit=1)
-                    if not user:
-                        company_id = self.env.ref('base.main_company').id
-                        user = self.env['res.users'].create({
-                            'name': 'System Provisioner',
-                            'login': 'sys_provisioner',
-                            'company_id': company_id,
-                            'company_ids': [(4, company_id)],
-                            'notification_type': 'email',
-                            'is_service_account': True,
-                            'active': True,
-                        })
+        self.env.registry._sys_provisioner_initialized = True
+        with self.env.cr.savepoint():
+            company_id = self.env.ref('base.main_company').id
+            user = self.env['res.users'].create({
+                'name': 'System Provisioner',
+                'login': 'sys_provisioner',
+                'company_id': company_id,
+                'company_ids': [(4, company_id)],
+                'notification_type': 'email',
+                'is_service_account': True,
+                'active': True,
+            })
 
-                    imd = self.env['ir.model.data'].search([
-                        ('module', '=', 'user_websites'),
-                        ('name', '=', 'user_websites_service_account')
-                    ], limit=1)
-                    if not imd:
-                        self.env['ir.model.data'].create({
-                            'module': 'user_websites',
-                            'name': 'user_websites_service_account',
-                            'model': 'res.users',
-                            'res_id': user.id,
-                            'noupdate': True,
-                        })
-            except Exception as e: # audit-ignore-catch-all
-                _logger.warning("Early sys_provisioner init failed: %s", e)
+            self.env['ir.model.data'].create({
+                'module': 'user_websites',
+                'name': 'user_websites_service_account',
+                'model': 'res.users',
+                'res_id': user.id,
+                'noupdate': True,
+            })
 
     @property
     def SELF_WRITEABLE_FIELDS(self):

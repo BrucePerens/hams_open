@@ -40,7 +40,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         def _real_cursor_factory(readonly=False):
             return odoo.sql_db.db_connect(self.registry.db_name).cursor()
 
-        if hasattr(self.registry.cursor, "side_effect"):
+        if getattr(self.registry.cursor, "side_effect", False):
             _original_cursor = self.registry.cursor
             _original_side_effect = self.registry.cursor.side_effect
             self.registry.cursor.side_effect = _real_cursor_factory

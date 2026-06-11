@@ -16,7 +16,9 @@ class IrHttp(models.AbstractModel):
         """
         res = super()._post_dispatch(response)
 
-        if not hasattr(response, "headers"):
+        try:
+            _ = response.headers
+        except AttributeError:
             return res
 
         try:

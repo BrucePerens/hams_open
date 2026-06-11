@@ -1079,7 +1079,12 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
             if not isinstance(node.func, ast.Name):
                 return
             fid = node.func.id
-            if fid == "hash":
+            if fid == "hasattr":
+                self.add_error(
+                    node.lineno,
+                    "CRITICAL AI LAZINESS: The use of hasattr() is strictly forbidden to prevent masking architectural type uncertainties.",
+                )
+            elif fid == "hash":
                 self.add_error(
                     node.lineno,
                     "CRITICAL NON-DETERMINISM: Python's native `hash()` is salted...",
@@ -1092,7 +1097,12 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                     "CRITICAL RCE: The use of exec() is strictly forbidden.",
                 )
             elif self.is_odoo_module:
-                if fid == "get_module_resource":
+                if fid == "hasattr":
+                    self.add_error(
+                        node.lineno,
+                        "CRITICAL AI LAZINESS: The use of hasattr() is strictly forbidden to prevent masking architectural type uncertainties.",
+                    )
+                elif fid == "get_module_resource":
                     self.add_error(
                         node.lineno,
                         "CRITICAL DEPRECATION: 'get_module_resource' was removed in Odoo 19. Use 'odoo.tools.file_open'.",
@@ -1109,15 +1119,18 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                     )
                 elif fid == "_check_recursion":
                     self.add_error(node.lineno, "Odoo 18+ Hierarchy: Use '_has_cycle()'...")
-                elif (
-                    fid == "getattr"
-                    and len(node.args) >= 2
-                    and getattr(node.args[1], "value", None) == "sudo"
-                ):
-                    self.add_error(
-                        node.lineno,
-                        "[!] DIAGNOSTIC FOR AI: Obfuscated use of sudo via getattr() detected and blocked.",
-                    )
+                elif fid == "getattr" and len(node.args) >= 2:
+                    arg_val = getattr(node.args[1], "value", None)
+                    if arg_val == "sudo":
+                        self.add_error(
+                            node.lineno,
+                            "[!] DIAGNOSTIC FOR AI: Obfuscated use of sudo via getattr() detected and blocked.",
+                        )
+                    elif arg_val == "column_type":
+                        self.add_error(
+                            node.lineno,
+                            "CRITICAL AI LAZINESS: Dynamic data-type introspection via getattr(..., 'column_type') is forbidden. Rely on strict schema contracts.",
+                        )
                 elif (
                     fid == "setattr"
                     and len(node.args) >= 2
