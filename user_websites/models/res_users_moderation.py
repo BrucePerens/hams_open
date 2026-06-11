@@ -42,7 +42,7 @@ class ResUsersModeration(models.Model):
         # We lowercase the slug in the controller to ensure cache hits.
         svc_uid = override_svc_uid or self.env[
             "zero_sudo.security.utils"
-        ]._get_service_uid("user_websites.user_websites_service_account")
+        ]._get_service_uid("zero_sudo.user_websites_service_account")
         user = (
             self.env["res.users"]
             .with_user(svc_uid)
@@ -118,7 +118,7 @@ class ResUsersModeration(models.Model):
             )
         else:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_websites_service_account"
+                "zero_sudo.user_websites_service_account"
             )
             while True:
                 pages = (

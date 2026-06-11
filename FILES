@@ -656,7 +656,9 @@ hams_helpdesk/README.md
 hams_helpdesk/__manifest__.py
 hams_helpdesk/static/src/tours/helpdesk_operator_tour.js
 hams_helpdesk/static/src/tours/helpdesk_portal_tour.js
+i18n/hams_master.pot
 JULES_NOTES.txt
 theme_hams/tests/test_tours.py
 theme_hams/__init__.py
 theme_hams/docs/stories/theme.md
+ham_onboarding/tests/test_verification.py

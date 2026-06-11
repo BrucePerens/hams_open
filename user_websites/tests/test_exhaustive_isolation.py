@@ -88,7 +88,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         )
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
 
         self.victim_page = (
@@ -179,7 +179,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         Expected: Odoo's safe-eval or the HTTP controller MUST NOT render the stolen data.
         """
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
 
         # Create a base page for Malice

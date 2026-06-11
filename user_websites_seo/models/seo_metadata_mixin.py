@@ -50,7 +50,7 @@ class SEOMetadataMixin(models.AbstractModel):
                 # LLM_EXPERIENCE: NEVER use prefetch_fields=False
                 utils = self.env["zero_sudo.security.utils"]
                 svc_uid = utils._get_service_uid(
-                    "user_websites.user_websites_service_account"
+                    "zero_sudo.user_websites_service_account"
                 )
                 res = res and super(
                     SEOMetadataMixin,

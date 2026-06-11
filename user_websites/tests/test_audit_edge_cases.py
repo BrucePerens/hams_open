@@ -76,7 +76,7 @@ class TestAuditEdgeCases(HamsTransactionCase):
         self.env.ref("user_websites.ir_cron_send_weekly_digest")._trigger()
         # Ensure a clean state for the system parameter
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
         self.env["ir.config_parameter"].with_user(svc_uid).set_param(
             "user_websites.last_digest_key", ""
@@ -121,7 +121,7 @@ class TestAuditEdgeCases(HamsTransactionCase):
         the proxy ownership mixin fails closed securely.
         """
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
         svc_user = self.env["res.users"].browse(svc_uid)
 

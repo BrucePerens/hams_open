@@ -65,7 +65,7 @@ class ContentViolationReport(models.Model):
         # [@ANCHOR: cron_notify_pending_reports]
         # Verified by [@ANCHOR: test_cron_pending_reports]
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
         count = self.with_user(svc_uid).search_count([("state", "=", "new")])
 

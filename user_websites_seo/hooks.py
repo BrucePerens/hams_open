@@ -13,7 +13,7 @@ def post_init_hook(env):
         if not utils._get_system_param("user_websites_seo.docs_installed"):
             # Ensure the service account exists before signaling
             utils._get_service_uid(
-                "user_websites.user_websites_service_account"
+                "zero_sudo.user_websites_service_account"
             )
             # Signal completion or perform SEO-specific bootstrap tasks.
             utils._set_system_param("user_websites_seo.docs_installed", "True")

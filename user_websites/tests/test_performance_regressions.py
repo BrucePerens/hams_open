@@ -46,7 +46,7 @@ class TestPerformanceORM(odoo.tests.common.TransactionCase):
         """
         query_counts = []
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
 
         for user in self.test_users:
@@ -129,7 +129,7 @@ class TestPerformanceRouting(odoo.tests.common.HttpCase):
         AccessError loops against the `ir.ui.view` model.
         """
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
 
         for user in self.test_users:
@@ -194,7 +194,7 @@ class TestPerformanceRouting(odoo.tests.common.HttpCase):
         user_b = self.test_users[1]
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.user_websites_service_account"
         )
 
         for user in [user_a, user_b]:

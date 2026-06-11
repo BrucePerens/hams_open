@@ -107,10 +107,7 @@ class BackupConfig(models.Model):
         key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env
         if not key:
             return None
-        try:
-            return Fernet(key.encode("utf-8"))
-        except (ValueError, TypeError):
-            return None
+        return Fernet(key.encode("utf-8"))
 
     def _crypt_field(self, value, decrypt=False):
         f = self._get_fernet()
