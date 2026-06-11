@@ -240,6 +240,11 @@ GENERAL_ERROR_RULES = [
 ODOO_ERROR_RULES = [
     (
         r"\.py$",
+        re.compile(r"['\"]test_enable['\"]"),
+        "CRITICAL TEST EVASION: The use of 'test_enable' to bypass code execution during tests is strictly forbidden. Use RealTransactionCase for commit handling.",
+    ),
+    (
+        r"\.py$",
         re.compile(r"\bEnvironment\s*\(\s*[^,]+,\s*(?:uid\s*=\s*)?(?:1|odoo\.SUPERUSER_ID|SUPERUSER_ID)\b"),
         "CRITICAL ZERO-SUDO VIOLATION: Instantiating Environment with SUPERUSER_ID or 1 is a sudo bypass cheat. Query for a service account ID instead.",
     ),
