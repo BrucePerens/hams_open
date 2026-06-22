@@ -131,7 +131,7 @@ class TestSecurityUtils(HamsTransactionCase):
             utils = self.env["zero_sudo.security.utils"]
             utils._get_service_uid("rogue_module.sneaky_admin_service")
             self.fail("Must block Service Accounts with group_system from escalating privileges.")
-        except Exception as e: # audit-ignore-catch-all
+        except (AccessError, UserError, psycopg2.errors.RaiseException) as e:
             self.assertTrue(str(e))
 
     def test_05_notify_cache_invalidation_list(self):
@@ -295,15 +295,15 @@ class TestSecurityUtils(HamsTransactionCase):
         utils = self.env["zero_sudo.security.utils"]
 
         # 1. Invalid XML ID Format
-        with self.assertRaises(Exception): # audit-ignore-catch-all
+        with self.assertRaises((AccessError, UserError, psycopg2.errors.RaiseException)):
             utils._get_service_uid("invalid_format_no_dot")
 
         # 2. Account Not Found
-        with self.assertRaises(Exception): # audit-ignore-catch-all
+        with self.assertRaises((AccessError, UserError, psycopg2.errors.RaiseException)):
             utils._get_service_uid("base.non_existent_xml_id")
 
         # 3. Deny Human Admin Pass-through
-        with self.assertRaises(Exception): # audit-ignore-catch-all
+        with self.assertRaises((AccessError, UserError, psycopg2.errors.RaiseException)):
             utils._get_service_uid("base.user_admin")
 
         # 4. Deny Disabled Accounts
@@ -319,7 +319,7 @@ class TestSecurityUtils(HamsTransactionCase):
             "model": "res.users",
             "res_id": disabled_user.id,
         })
-        with self.assertRaises(Exception): # audit-ignore-catch-all
+        with self.assertRaises((AccessError, UserError, psycopg2.errors.RaiseException)):
             utils._get_service_uid("test_module.disabled_sa_xml")
 
     def test_14_service_account_password_generation(self):

@@ -153,6 +153,7 @@ class FailureExtractor:
         self.captured_blocks = []
         self.current_block = []
         self._written = False
+        self.aborted = False
 
         if not disable_atexit:
             atexit.register(self.finish_and_write)
@@ -306,7 +307,9 @@ class FailureExtractor:
             return
 
         print("\n==========================================================")
-        if num_failures == 0:
+        if getattr(self, "aborted", False):
+            print("🛑 TEST RUN ABORTED: Did not complete due to pre-flight linter errors.")
+        elif num_failures == 0:
             print("🎉 TEST RUN COMPLETE: No test failures detected.")
         else:
             print(f"🚨 TEST RUN COMPLETE: {num_failures} test failure(s) detected!")
@@ -360,7 +363,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
             os.chmod(host_tmp_dir, 0o777)
         except OSError as e:
             _logger.debug("Ignored OSError: %s", e)
-    env.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading --user-data-dir={host_tmp_dir}")
+    env.setdefault("ODOO_TEST_CHROME_ARGS", "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading")
     env.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
     process = subprocess.Popen(
@@ -510,6 +513,7 @@ def check_linters(python_exec, base_dir, ignore_filepath, extractor=None, target
     res_manifest = subprocess.run([python_exec, os.path.join(base_dir, "tools", "check_manifest_dependencies.py"), base_dir])
     if res_manifest.returncode != 0:
         print("🛑 Halting due to manifest load-order violations.")
+        if extractor: extractor.aborted = True
         sys.exit(1)
 
     print("[*] Running AST Burn List Linter...")
@@ -521,6 +525,7 @@ def check_linters(python_exec, base_dir, ignore_filepath, extractor=None, target
         print(res_burn.stdout)
         print(res_burn.stderr)
         print("🛑 Halting due to burn list violations.")
+        if extractor: extractor.aborted = True
         sys.exit(1)
     else:
         print(res_burn.stdout)
@@ -531,6 +536,7 @@ def check_linters(python_exec, base_dir, ignore_filepath, extractor=None, target
         print(res_anchor.stdout)
         print(res_anchor.stderr)
         print("🛑 Halting due to anchor violations.")
+        if extractor: extractor.aborted = True
         sys.exit(1)
     else:
         print(res_anchor.stdout)
@@ -544,6 +550,7 @@ def check_linters(python_exec, base_dir, ignore_filepath, extractor=None, target
         print(res_js.stdout)
         print(res_js.stderr)
         print("🛑 Halting due to JavaScript syntax errors.")
+        if extractor: extractor.aborted = True
         sys.exit(1)
     else:
         print(res_js.stdout)
@@ -906,7 +913,7 @@ def setup_namespace_and_run_tests(real_log_dir, sys_args):
 
     # Inside the namespace, /var/tmp is perfectly bound to the real log dir.
     host_tmp_dir = "/var/tmp"
-    os.environ["ODOO_TEST_CHROME_ARGS"] = f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,dbus,OptimizationGuideModelDownloading --user-data-dir={host_tmp_dir} --single-process"
+    os.environ["ODOO_TEST_CHROME_ARGS"] = "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,dbus,OptimizationGuideModelDownloading"
     os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
     os.environ["HOME"] = "/var/lib/odoo"
     os.environ["XDG_DATA_HOME"] = "/var/lib/odoo/.local/share"
@@ -1066,7 +1073,7 @@ def main():
             os.chmod(host_tmp_dir, 0o777)
         except OSError as e:
             _logger.debug("Ignored OSError: %s", e)
-    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", f"--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading --user-data-dir={host_tmp_dir}")
+    os.environ.setdefault("ODOO_TEST_CHROME_ARGS", "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading")
     os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

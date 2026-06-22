@@ -82,6 +82,24 @@ export const TourUtils = {
         };
     },
 
+    waitForElement: function (selector, description) {
+        description = description || "";
+        return {
+            content: "[MACRO] Wait for DOM element: " + (description || selector),
+            trigger: 'body',
+            run: function () {
+                return new Promise((resolve) => {
+                    const interval = setInterval(() => {
+                        if (document.querySelector(selector)) {
+                            clearInterval(interval);
+                            resolve();
+                        }
+                    }, 250);
+                });
+            }
+        };
+    },
+
     deterministicInput: function (helpers, text) {
         // Find the active element (typically focused by the previous 'click' step)
         const el = document.activeElement;
