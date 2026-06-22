@@ -393,20 +393,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         try:
             super().start_tour(*args, **kwargs)
             _logger.info("TRACING: super().start_tour completed successfully.")
-        except Exception as e:  # audit-ignore-catch-all
+        except Exception as e:
             self.__class__._hams_tour_failed = True
-            _logger.error("\n=== TOUR FAILED OR HUNG. DUMPING COMPILED ASSETS ===")
-            try:
-                dump_path = '/var/tmp/failed_tour_bundle.js'
-
-                prefix = f"/*\n{watchdog_shared.global_captured_stack}\n*/\n\n" if watchdog_shared.global_captured_stack else "/* No V8 CDP stack trace available (Thread did not hang; failed via standard JS Error or Assertion). */\n\n"
-
-                with open(dump_path, 'w') as f:
-                    f.write(prefix)
-                _logger.error("Dumped compiled JS bundle to %s", dump_path)
-            except Exception as inner_e:  # audit-ignore-catch-all
-                _logger.warning("TRACING: Ignored Exception dumping bundle to /var/tmp: %s", repr(inner_e))
-
             if isinstance(e, AssertionError):
                 raise e from None
             else:
