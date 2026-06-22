@@ -32,6 +32,7 @@ class TestSDKExtensibility(RealTransactionCase):
                 ],
             }
         )
+        self.env.cr.commit()
 
     def test_01_gdpr_export_hook(self):
         # [@ANCHOR: test_gdpr_export_hook]

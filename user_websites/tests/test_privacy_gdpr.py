@@ -56,6 +56,7 @@ class TestPrivacyGDPR(RealTransactionCase):
                 "owner_user_id": self.user_privacy.id,
             }
         )
+        self.env.cr.commit()
 
     def test_01_data_portability_export(self):
         # [@ANCHOR: test_gdpr_export_api]

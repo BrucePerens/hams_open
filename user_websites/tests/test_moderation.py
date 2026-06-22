@@ -52,6 +52,7 @@ class TestModeration(RealTransactionCase):
                 "is_published": True,
             }
         )
+        self.env.cr.commit()
 
     def test_01_three_strikes_suspension(self):
         # [@ANCHOR: test_moderation_suspension]

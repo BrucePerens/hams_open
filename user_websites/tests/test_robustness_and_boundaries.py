@@ -30,6 +30,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             }
         )
 
+
     def test_01_slug_generation_exhaustion(self):
         """Verify that if the slug namespace is completely exhausted (1000 retries), it raises a ValidationError."""
         # We mock the search_count to always return 1 (simulating a permanent collision across both users and groups)

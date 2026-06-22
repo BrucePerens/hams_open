@@ -99,6 +99,7 @@ class TestQWebContext(RealTransactionCase):
                 "arch": group_arch,
             }
         )
+        self.env.cr.commit()
 
     def test_01_blog_rendering_context(self):
         """

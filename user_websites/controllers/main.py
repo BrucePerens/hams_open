@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import redis
+import hashlib
+import hmac
 
 _logger = logging.getLogger(__name__)
 
@@ -349,7 +351,7 @@ class UserWebsitesController(http.Controller):
         env_svc[model].browse(record_id).message_subscribe([request.env.user.partner_id.id])
         return request.make_response(json.dumps({"success": True}), headers=[("Content-Type", "application/json")])
 
-    @http.route("/website/unsubscribe/<string:model>/<int:record_id>/<int:partner_id>/<int:timestamp>/<string:token>", type="http", auth="public", website=True)
+    @http.route("/website/unsubscribe/<string:model>/<int:record_id>/<int:partner_id>/<int:timestamp>/<string:token>", type="http", auth="public", website=True, csrf=False)  # burn-ignore-route
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
         # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
@@ -359,10 +361,13 @@ class UserWebsitesController(http.Controller):
         if not record.exists():
             return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
 
-        # Validate token using object method strictly enforcing schema
-        is_valid = record._verify_unsubscribe_token(partner_id, token)
-
-        if not is_valid:
+        db_secret = utils._get_crypto_secret()
+        if not db_secret:
+            return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
+        message = f"{model}-{record_id}-{partner_id}-{timestamp}".encode("utf-8")
+        expected_token = hmac.new(db_secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+        
+        if not hmac.compare_digest(expected_token, token):
             return request.make_response(json.dumps({"error": "Forbidden"}), status=403, headers=[("Content-Type", "application/json")])
 
         record.message_unsubscribe([partner_id])

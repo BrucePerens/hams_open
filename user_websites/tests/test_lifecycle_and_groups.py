@@ -42,6 +42,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
                 "website_slug": "test-group-site",
             }
         )
+        self.env.cr.commit()
 
     def test_01_group_creation_and_slug(self):
         self.assertEqual(

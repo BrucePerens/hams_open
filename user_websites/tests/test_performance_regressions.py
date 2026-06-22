@@ -34,6 +34,7 @@ class TestPerformanceORM(RealTransactionCase):
                 }
             )
             self.test_users.append(u)
+        self.env.cr.commit()
 
     def test_01_site_creation_query_scaling(self):
         # [@ANCHOR: test_site_creation_performance_scaling]
