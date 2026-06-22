@@ -17,6 +17,7 @@
         "zero_sudo",
         "distributed_redis_cache",
         "hams_helpdesk",
+        "website",
     ],
     "external_dependencies": {
         "python": [],

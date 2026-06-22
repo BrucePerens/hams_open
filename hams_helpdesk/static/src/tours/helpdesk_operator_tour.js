@@ -60,6 +60,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             content: "Confirm Handoff",
             trigger: 'button[name="action_confirm_handoff"]',
             run: 'click',
+            expectUnloadPage: true,
         },
         TourUtils.waitForAbsence('.modal-body', "Wait for Wizard to close"),
         {

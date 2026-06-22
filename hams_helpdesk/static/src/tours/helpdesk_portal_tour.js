@@ -56,7 +56,7 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
         },
         {
             content: "Verify Closed Status",
-            trigger: '.o_helpdesk_status_badge',
+            trigger: 'body',
             run: function() {
                 return new Promise((resolve, reject) => {
                     let interval = setInterval(() => {

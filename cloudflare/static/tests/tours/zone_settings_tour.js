@@ -15,7 +15,7 @@ registry.category("web_tour.tours").add("cf_zone_settings_tour", {
         { trigger: '[data-menu-xmlid="cloudflare.menu_cloudflare_root"]', content: "Open Cloudflare Edge Menu", run: 'click' },
         {
             content: "Open Zone Settings Menu",
-            trigger: 'a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]',
+            trigger: '.o_main_navbar a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"], header.o_navbar a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]',
             run: "click"
         },
         { trigger: '.modal-content', content: 'Wait for Zone Settings Modal to mount and render', run: function() {} },

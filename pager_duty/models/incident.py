@@ -149,8 +149,9 @@ class PagerIncident(models.Model):
 
         # Strict schema enforcement, no generic error masking
         if not website_id:
-            if self.env.website:
-                website_id = self.env.website.id
+            current_website = self.env["website"].get_current_website()
+            if current_website:
+                website_id = current_website.id
 
         # [@ANCHOR: pd_redis_rate_limit]
         redis_key = f"pager_rate_limit:{source}:{website_id or 'global'}"
@@ -165,7 +166,7 @@ class PagerIncident(models.Model):
                 _logger.warning("Redis rate limit check failed: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "pager_duty.user_pager_service_internal"
+            "pager_duty.user_pager_incident_creator"
         )
         IncidentModel = self.env["pager.incident"].with_user(svc_uid)
 

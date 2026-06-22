@@ -68,10 +68,7 @@ def distributed_cache():
             # Multi-Tenant awareness: Include website_id and company_id in cache key
             # Force company_id from context if available, else use env.company
             website_id = self.env.context.get("website_id")
-            if not website_id:
-                website = self.env.website
-                if website:
-                    website_id = website.id
+
 
             company_id = self.env.context.get("allowed_company_ids", [self.env.company.id])[0]
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.

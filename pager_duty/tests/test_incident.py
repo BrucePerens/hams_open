@@ -37,7 +37,9 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertFalse(
             result, "Incident engine failed to block rate-limited request."
         )
-        mock_client.set.assert_called_with("pager_rate_limit:test_daemon:global", "1", ex=60, nx=True)
+        website = self.env["website"].get_current_website()
+        website_suffix = str(website.id) if website else "global"
+        mock_client.set.assert_called_with(f"pager_rate_limit:test_daemon:{website_suffix}", "1", ex=60, nx=True)
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
@@ -142,11 +144,11 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         # Tests [@ANCHOR: pager_duty_postgres_procedures]
         # Tests [@ANCHOR: test_pager_duty_procedures]
         self.incident_model.report_incident(
-            {"source": "Dashboard Test", "severity": "medium", "description": "test"}
+            {"source": "Dashboard Board Test", "severity": "medium", "description": "test"}
         )
         data = self.incident_model.get_board_data()
         self.assertTrue(len(data["active"]) > 0)
-        self.assertEqual(data["active"][0]["source"], "Dashboard Test")
+        self.assertEqual(data["active"][0]["source"], "Dashboard Board Test")
 
 
 @tagged("integration", "post_install", "-at_install")

@@ -25,6 +25,7 @@ This module enables:
         "distributed_redis_cache",
         "cloudflare",
         "knowledge",
+        "compliance",
     ],
     "external_dependencies": {
         "python": [],

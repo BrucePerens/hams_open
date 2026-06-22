@@ -92,6 +92,23 @@ def _patched_take_screenshot(self, *args, **kwargs):
         return None
 ChromeBrowser.take_screenshot = _patched_take_screenshot
 
+# 🚨 NATIVE CHROME RETRY LAUNCHER 🚨
+original_chrome_init = ChromeBrowser.__init__
+
+def _patched_chrome_init(self, *args, **kwargs):
+    retries = 3
+    for attempt in range(retries):
+        try:
+            original_chrome_init(self, *args, **kwargs)
+            return
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("TRACING: Headless Chrome failed to start (attempt %s/%s): %s", attempt + 1, retries, repr(e))
+            if attempt == retries - 1:
+                raise e
+            time.sleep(2) # audit-ignore-sleep
+
+ChromeBrowser.__init__ = _patched_chrome_init
+
 class DiagnosticMock(MagicMock):
     def __init__(self, *args, **kwargs):
         max_depth = kwargs.pop("max_recursion_depth", 5)

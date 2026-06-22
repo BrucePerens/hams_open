@@ -130,19 +130,23 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         # The creation of a website.page utilizes the service account internally via with_user(svc_uid)
         # to bypass the strict Odoo base UI constraints. It must fail safely if the user is inactive.
-        with self.assertRaises(
-            Exception,
-            msg="System must fail closed if the service account is disabled, denying record creation.",
-        ):
-            self.env["website.page"].with_user(self.test_user).create(
-                {
-                    "url": f"/{self.test_user.website_slug}/fail-test",
-                    "name": "Fail Page",
-                    "type": "qweb",
-                    "owner_user_id": self.test_user.id,
-                }
-            )
-            self.env.flush_all()
+        try:
+            with self.assertRaises(
+                Exception,
+                msg="System must fail closed if the service account is disabled, denying record creation.",
+            ):
+                self.env["website.page"].with_user(self.test_user).create(
+                    {
+                        "url": f"/{self.test_user.website_slug}/fail-test",
+                        "name": "Fail Page",
+                        "website_id": self.test_user.website_id.id,
+                        "owner_user_id": self.test_user.id,
+                    }
+                )
+                self.env.flush_all()
+        finally:
+            # Restore the active state so subsequent tests don't fail!
+            svc_user.active = True
 
     def test_04_bdd_ormcache_query_counting_slugs(self):
         # [@ANCHOR: test_slug_cache_invalidation]

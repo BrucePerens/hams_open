@@ -152,10 +152,10 @@ class TestKeyRegistry(RealTransactionCase):
         user_xml_id = "daemon_key_manager.user_daemon_key_manager_service"
         env_file_path = "/var/lib/odoo/daemon_keys/api_test.env"
 
-        result = self.env["daemon.key.registry"].register_daemon(daemon_name, user_xml_id, env_file_path)
+        result = self.env["daemon.key.registry"].with_user(self.manager_user.id).register_daemon(daemon_name, user_xml_id, env_file_path)
         self.assertTrue(result)
 
-        registry = self.env["daemon.key.registry"].search([('name', '=', daemon_name)])
+        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).search([('name', '=', daemon_name)])
         self.assertTrue(registry)
         self.assertEqual(registry.env_file_path, env_file_path)
         self.assertTrue(os.path.exists(env_file_path))

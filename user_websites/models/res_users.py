@@ -636,5 +636,5 @@ class ResUsers(models.Model):
         # ADR-0001: All service account mutations must include appropriate context
         self.with_env(env_svc).write({"privacy_show_in_directory": False})
 
-        # Enforce strict contract, let missing methods fail loudly
+        # Enforce strict contract, let missing methods fail loudly if expected
         super()._execute_gdpr_erasure()

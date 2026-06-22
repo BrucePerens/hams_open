@@ -30,10 +30,11 @@ class PagerSchedule(models.Model):
 
         # Enforce strict schema contract. We do not mask missing dependencies.
         if self.env.context.get("website_id"):
-            domain.append(("website_id", "=", self.env.context.get("website_id")))
+            domain += ["|", ("website_id", "=", False), ("website_id", "=", self.env.context.get("website_id"))]
         else:
-            if self.env.website:
-                domain.append(("website_id", "=", self.env.website.id))
+            current_website = self.env["website"].get_current_website()
+            if current_website:
+                domain += ["|", ("website_id", "=", False), ("website_id", "=", current_website.id)]
 
         event = self.env["calendar.event"].search(domain, limit=1)
         if event and event.user_id:

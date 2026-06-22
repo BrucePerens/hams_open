@@ -641,6 +641,11 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                                 node.lineno,
                                 "CRITICAL ARCHITECTURE: Soft-dependency checking (`'model' in self.env`) is forbidden. You MUST explicitly declare dependencies in __manifest__.py.",
                             )
+                    if isinstance(comp, ast.Attribute) and comp.attr == "modules" and getattr(comp.value, "id", "") == "sys":
+                        self.add_error(
+                            node.lineno,
+                            "CRITICAL ARCHITECTURE: Probing `sys.modules` for Odoo addons is forbidden (test evasion). Declare dependencies in __manifest__.py.",
+                        )
             self.generic_visit(node)
 
         def visit_BinOp(self, node):
@@ -1106,6 +1111,12 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                             node.lineno,
                             "[!] DIAGNOSTIC FOR AI: `.sudo()` is completely forbidden on this platform to prevent privilege escalation. Use the service account architecture (`with_user()`) instead.",
                         )
+                if node.attr == "testing":
+                    if isinstance(node.value, ast.Call) and getattr(node.value.func, "attr", "") == "current_thread":
+                        self.add_error(
+                            node.lineno,
+                            "CRITICAL ARCHITECTURE: Probing `threading.current_thread().testing` is forbidden test evasion.",
+                        )
                 if getattr(node.value, "id", "") == "self":
                     if node.attr in ("_context", "_uid"):
                         self.add_error(
@@ -1122,10 +1133,15 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                 return
             fid = node.func.id
             if fid == "hasattr":
-                self.add_error(
-                    node.lineno,
-                    "CRITICAL AI LAZINESS: The use of hasattr() is strictly forbidden to prevent masking architectural type uncertainties.",
-                )
+                # Allow hasattr(super(), ...) for cooperative mixin architecture
+                is_super = False
+                if node.args and isinstance(node.args[0], ast.Call) and isinstance(node.args[0].func, ast.Name) and node.args[0].func.id == "super":
+                    is_super = True
+                if not is_super:
+                    self.add_error(
+                        node.lineno,
+                        "CRITICAL AI LAZINESS: The use of hasattr() is strictly forbidden to prevent masking architectural type uncertainties.",
+                    )
             elif fid == "hash":
                 self.add_error(
                     node.lineno,
@@ -1373,10 +1389,40 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
                         f"[!] DIAGNOSTIC FOR AI: SQLi Prevention. Query constructed via {taint_reason} passed to cr.execute(). Use parameterized queries or psycopg2.sql.",
                     )
 
+        def visit_Subscript(self, node):
+            if self.is_odoo_module:
+                val = getattr(node.value, "id", getattr(node.value, "attr", ""))
+                if val == "config" and isinstance(node.slice, ast.Constant) and node.slice.value in ("test_enable", "test_file"):
+                    self.add_error(node.lineno, "CRITICAL ARCHITECTURE: Probing `config['test_enable']` to evade execution is strictly forbidden.")
+            self.generic_visit(node)
+
         def visit_Call(self, node):
             self._check_forbidden_functions(node)
             func_name = getattr(node.func, "id", getattr(node.func, "attr", ""))
             self._check_i18n_messages(node, func_name)
+
+            if func_name == "getattr" and len(node.args) >= 2:
+                arg1, arg2 = node.args[0], node.args[1]
+                if isinstance(arg1, ast.Call) and getattr(arg1.func, "attr", "") == "current_thread":
+                    if isinstance(arg2, ast.Constant) and arg2.value == "testing":
+                        self.add_error(node.lineno, "CRITICAL ARCHITECTURE: Probing `threading.current_thread().testing` via getattr is forbidden test evasion.")
+            
+            if func_name == "get" and isinstance(node.func, ast.Attribute):
+                parent = getattr(node.func.value, "attr", getattr(node.func.value, "id", ""))
+                if parent in ("registry", "models") or (isinstance(node.func.value, ast.Attribute) and getattr(node.func.value.value, "attr", "") in ("registry", "models")):
+                    self.add_error(node.lineno, "CRITICAL ARCHITECTURE: Soft-dependency checking via `registry.get()` is forbidden. Declare dependencies in __manifest__.py.")
+
+            if func_name in ("search", "search_count"):
+                val = getattr(node.func, "value", None)
+                if isinstance(val, ast.Subscript) and getattr(val.value, "attr", getattr(val.value, "id", "")) == "env":
+                    if isinstance(val.slice, ast.Constant) and val.slice.value == "ir.module.module":
+                        self.add_error(node.lineno, "CRITICAL ARCHITECTURE: Dynamic database querying for 'ir.module.module' is forbidden. Declare dependencies in __manifest__.py.")
+
+            if func_name == "get" and isinstance(node.func, ast.Attribute):
+                parent = getattr(node.func.value, "id", getattr(node.func.value, "attr", ""))
+                if parent == "config":
+                    if node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value in ("test_enable", "test_file"):
+                        self.add_error(node.lineno, "CRITICAL ARCHITECTURE: Probing `config.get('test_enable')` to evade execution is strictly forbidden.")
 
             if func_name == "Environment" or (isinstance(node.func, ast.Attribute) and node.func.attr == "Environment"):
                 uid_arg = None

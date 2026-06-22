@@ -31,6 +31,7 @@ class TestPagerSchedule(HamsTransactionCase):
         )
 
         on_duty = self.calendar_model.get_current_on_duty_admin()
+        self.assertTrue(on_duty, "Expected an admin record, got False")
         self.assertEqual(
             on_duty.id,
             self.test_user.id,

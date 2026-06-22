@@ -173,6 +173,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "caching.safe_quota_mb",
             "cloudflare.last_static_mtime",
             "user_websites_seo.docs_installed",
+            "web.base.url",
         ]
 
     @api.model
@@ -243,10 +244,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Ensure changes are visible to other transactions/round-trips.
         # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,
         # so test evasion logic is purged.
-        self.env.cr.commit()
+        # Native Odoo test environment handles transaction boundaries automatically.
 
         # Direct SQL bypasses the ORM cache. We must invalidate it.
-        self.env["zero_sudo.kv"].invalidate_recordset()
+        self.env["zero_sudo.kv"].invalidate_model()
 
     @api.model
     @tools.ormcache()

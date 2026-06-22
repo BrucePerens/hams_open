@@ -19,34 +19,72 @@
             <field name="name">Pager Check Multi-Website</field>
             <field name="model_id" ref="model_pager_check"/>
             <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin')), (4, ref('pager_duty.group_pager_service'))]"/>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
+        </record>
+
+        <record id="pager_check_website_rule_svc" model="ir.rule">
+            <field name="name">Pager Check Multi-Website Service</field>
+            <field name="model_id" ref="model_pager_check"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
 
         <record id="pager_incident_website_rule" model="ir.rule">
             <field name="name">Pager Incident Multi-Website</field>
             <field name="model_id" ref="model_pager_incident"/>
             <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin')), (4, ref('pager_duty.group_pager_service'))]"/>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
+        </record>
+
+        <record id="pager_incident_website_rule_svc" model="ir.rule">
+            <field name="name">Pager Incident Multi-Website Service</field>
+            <field name="model_id" ref="model_pager_incident"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
 
         <record id="pager_log_file_website_rule" model="ir.rule">
             <field name="name">Pager Log File Multi-Website</field>
             <field name="model_id" ref="model_pager_log_file"/>
             <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin')), (4, ref('pager_duty.group_pager_service'))]"/>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
+        </record>
+
+        <record id="pager_log_file_website_rule_svc" model="ir.rule">
+            <field name="name">Pager Log File Multi-Website Service</field>
+            <field name="model_id" ref="model_pager_log_file"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
 
         <record id="pager_log_pattern_website_rule" model="ir.rule">
             <field name="name">Pager Log Pattern Multi-Website</field>
             <field name="model_id" ref="model_pager_log_pattern"/>
             <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin')), (4, ref('pager_duty.group_pager_service'))]"/>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
+        </record>
+
+        <record id="pager_log_pattern_website_rule_svc" model="ir.rule">
+            <field name="name">Pager Log Pattern Multi-Website Service</field>
+            <field name="model_id" ref="model_pager_log_pattern"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
     </data>
     <data>
         <record id="user_pager_service_internal" model="res.users">
             <field name="name">Pager Service Internal</field>
             <field name="login">pager_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('pager_duty.group_pager_service')])]"/>
+        </record>
+
+        <record id="user_pager_incident_creator" model="res.users">
+            <field name="name">Pager Incident Creator</field>
+            <field name="login">pager_incident_creator</field>
             <field name="company_id" ref="base.main_company"/>
             <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
             <field name="notification_type">email</field>
