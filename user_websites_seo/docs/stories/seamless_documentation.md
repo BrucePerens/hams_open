@@ -1,7 +1,7 @@
 # Seamless Documentation Story
 
 ## Scenario
-System Administrator Charlie installs the `user_websites_seo` module on a new Odoo instance. He expects the documentation for the module to be readily available within the system's Knowledge or Manual Library app.
+System Administrator Charlie installs the `user_websites_seo` module on a new Odoo instance. He expects the documentation for the module to be readily available within the system's Knowledge or Knowledge app.
 
 ## Story
 During the installation of the module, or even if the Knowledge application is installed later, the `user_websites_seo` module automatically detects the presence of the `knowledge.article` model.

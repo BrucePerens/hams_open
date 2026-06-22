@@ -44,7 +44,7 @@ Models in this module are designed to be **logically global**. Since they monito
 
 ## 📚 Documentation & Help
 
-User-facing documentation is available directly within the Odoo Knowledge or Manual Library modules.
+User-facing documentation is available directly within the Odoo Knowledge or Knowledge modules.
 *   **Guide:** `Database Management Guide` (installed from `data/documentation.html`).
 
 ---

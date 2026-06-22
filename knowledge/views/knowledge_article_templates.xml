@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="sidebar_article_recursive" name="Sidebar Recursive">
+        <li class="nav-item">
+            <a t-attf-href="#{nav_article.website_url}"
+               t-attf-class="nav-link #{'active fw-bold' if (article and article.id == nav_article.id) else 'text-dark'}"
+               aria-label="Navigate to Article">
+                <span t-if="nav_article.icon" t-out="nav_article.icon" class="me-1" aria-hidden="true"/>
+                <span t-out="nav_article.name"/>
+            </a>
+            <t t-if="nav_article.child_ids">
+                <ul class="nav flex-column ms-3 mt-1 border-start border-2 ps-2">
+                    <t t-foreach="nav_article.child_ids" t-as="child">
+                        <t t-if="is_internal_user or child.is_published">
+                            <t t-set="nav_article" t-value="child"/>
+                            <t t-call="knowledge.sidebar_article_recursive"/>
+                        </t>
+                    </t>
+                </ul>
+            </t>
+        </li>
+    </template>
+
+    <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="manual_sidebar" name="Manual Sidebar Component">
+        <form action="/manual/search" method="GET" class="mb-4">
+            <div class="input-group">
+                <input type="text" name="search" class="form-control" placeholder="Search manuals..." t-att-value="search_term" aria-label="Search manuals"/>
+                <button class="btn btn-outline-secondary" type="submit" aria-label="Submit search"><i class="fa fa-search" aria-hidden="true"/></button>
+            </div>
+        </form>
+
+        <t t-if="workspace_articles">
+            <h5 class="mb-3 text-muted text-uppercase fs-6 tracking-wide">Workspace</h5>
+            <ul class="nav flex-column mb-auto">
+                <t t-foreach="workspace_articles" t-as="root_art">
+                    <t t-if="is_internal_user or root_art.is_published">
+                        <t t-set="nav_article" t-value="root_art"/>
+                        <t t-call="knowledge.sidebar_article_recursive"/>
+                    </t>
+                </t>
+            </ul>
+        </t>
+
+        <t t-if="shared_articles">
+            <h5 class="mt-4 mb-3 text-muted text-uppercase fs-6 tracking-wide">Shared</h5>
+            <ul class="nav flex-column mb-auto">
+                <t t-foreach="shared_articles" t-as="root_art">
+                    <t t-if="is_internal_user or root_art.is_published">
+                        <t t-set="nav_article" t-value="root_art"/>
+                        <t t-call="knowledge.sidebar_article_recursive"/>
+                    </t>
+                </t>
+            </ul>
+        </t>
+
+        <t t-if="private_articles">
+            <h5 class="mt-4 mb-3 text-muted text-uppercase fs-6 tracking-wide">Private</h5>
+            <ul class="nav flex-column mb-auto">
+                <t t-foreach="private_articles" t-as="root_art">
+                    <t t-if="is_internal_user or root_art.is_published">
+                        <t t-set="nav_article" t-value="root_art"/>
+                        <t t-call="knowledge.sidebar_article_recursive"/>
+                    </t>
+                </t>
+            </ul>
+        </t>
+    </template>
+
+    <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="article_template" name="Manual Article">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <div class="container-fluid pt-4 pb-5">
+                    <div class="row">
+
+                        <aside class="col-12 col-lg-3 col-xl-2 border-end d-none d-lg-block">
+                            <nav aria-label="Manual Navigation" class="sticky-top" style="top: 80px; z-index: 10;">
+                                <t t-call="knowledge.manual_sidebar"/>
+                            </nav>
+                        </aside>
+
+                        <div class="col-12 d-lg-none mb-4">
+                            <div class="dropdown d-grid">
+                                <button class="btn btn-outline-secondary dropdown-toggle text-start" type="button" id="mobileMenuButton" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Toggle Manual Navigation">
+                                    <i class="fa fa-bars me-2" aria-hidden="true"/> Document Navigation
+                                </button>
+                                <div class="dropdown-menu w-100 p-3 shadow-sm" aria-labelledby="mobileMenuButton">
+                                    <t t-call="knowledge.manual_sidebar"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <main id="main-content" class="col-12 col-lg-7 col-xl-8 px-lg-5">
+                            <nav aria-label="breadcrumb" class="mb-3">
+                                <ol class="breadcrumb bg-transparent p-0">
+                                    <li class="breadcrumb-item"><a href="/manual">Manuals</a></li>
+                                    <t t-foreach="article.breadcrumb_article_ids" t-as="b_art">
+                                        <li class="breadcrumb-item">
+                                            <a t-att-href="b_art.website_url"><t t-out="b_art.name"/></a>
+                                        </li>
+                                    </t>
+                                    <li class="breadcrumb-item active" aria-current="page"><t t-out="article.name"/></li>
+                                </ol>
+                            </nav>
+
+                            <article>
+                                <header class="mb-4 pb-3 border-bottom">
+                                    <h1 class="display-4 fw-bold">
+                                        <span t-if="article.icon" t-out="article.icon" class="me-2" aria-hidden="true"/>
+                                        <span t-field="article.name"/>
+                                    </h1>
+                                    <div class="text-muted small d-flex align-items-center mt-2">
+                                        <span t-if="article.reading_time" class="me-3">
+                                            <i class="fa fa-clock-o me-1" aria-hidden="true"/>
+                                            <t t-out="article.reading_time"/> min read
+                                        </span>
+                                        <span class="me-3">
+                                            <i class="fa fa-calendar me-1" aria-hidden="true"/>
+                                            Last updated: <span t-field="article.write_date" t-options='{"widget": "date"}'/>
+                                        </span>
+                                        <span t-if="article.author_id">
+                                            <i class="fa fa-user me-1" aria-hidden="true"/>
+                                            By: <span t-out="article.author_id.name"/>
+                                        </span>
+                                    </div>
+                                </header>
+
+                                <section class="article-body lh-lg o_manual_body" style="font-size: 1.1rem;">
+                                    <t t-if="compiled_body">
+                                        <div t-out="compiled_body"/>
+                                    </t>
+                                    <t t-else="">
+                                        <div t-field="article.body"/>
+                                    </t>
+                                </section>
+
+                                <div class="mt-5 pt-4 border-top text-center">
+                                    <h5 class="mb-3">Was this article helpful?</h5>
+                                    <form action="/manual/feedback" method="POST" class="d-inline-block">
+                                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                        <input type="hidden" name="article_id" t-att-value="article.id"/>
+                                        <button type="submit" name="is_helpful" value="1" class="btn btn-outline-success me-2 rounded-pill px-4" aria-label="Yes">
+                                            <i class="fa fa-thumbs-up me-1" aria-hidden="true"/> Yes
+                                        </button>
+                                        <button type="submit" name="is_helpful" value="0" class="btn btn-outline-danger rounded-pill px-4" aria-label="No">
+                                            <i class="fa fa-thumbs-down me-1" aria-hidden="true"/> No
+                                        </button>
+                                    </form>
+                                    <div t-if="request.params.get('feedback_submitted')" class="alert alert-success mt-3 p-2 rounded">
+                                        Thank you for your feedback!
+                                    </div>
+                                </div>
+                            </article>
+                        </main>
+
+                        <aside class="col-lg-2 d-none d-lg-block">
+                            <nav id="manual_toc_container" class="sticky-top" style="top: 80px; z-index: 10; font-size: 0.9rem;">
+                            </nav>
+                        </aside>
+
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_templates_rendering] -->
+    <template id="search_results_template" name="Manual Search Results">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <div class="container-fluid pt-4 pb-5">
+                    <div class="row">
+                        <aside class="col-12 col-lg-3 col-xl-2 border-end d-none d-lg-block">
+                            <nav aria-label="Manual Navigation" class="sticky-top" style="top: 80px; z-index: 10;">
+                                <t t-call="knowledge.manual_sidebar"/>
+                            </nav>
+                        </aside>
+
+                        <div class="col-12 d-lg-none mb-4">
+                            <div class="dropdown d-grid">
+                                <button class="btn btn-outline-secondary dropdown-toggle text-start" type="button" id="mobileMenuButton" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Toggle Manual Navigation">
+                                    <i class="fa fa-bars me-2" aria-hidden="true"/> Document Navigation
+                                </button>
+                                <div class="dropdown-menu w-100 p-3 shadow-sm" aria-labelledby="mobileMenuButton">
+                                    <t t-call="knowledge.manual_sidebar"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <main id="main-content" class="col-12 col-lg-9 col-xl-8 px-lg-5">
+                            <header class="mb-4 pb-3 border-bottom">
+                                <h2>Search Results for: <strong class="text-primary" t-out="search_term"/></h2>
+                                <p class="text-muted"><t t-out="len(articles)"/> articles found.</p>
+                            </header>
+
+                            <div class="list-group list-group-flush">
+                                <t t-foreach="articles" t-as="result_art">
+                                    <a t-attf-href="#{result_art.website_url}" class="list-group-item list-group-item-action py-3" aria-label="View Search Result">
+                                        <h5 class="mb-1">
+                                            <span t-if="result_art.icon" t-out="result_art.icon" class="me-2" aria-hidden="true"/>
+                                            <span t-out="result_art.name"/>
+                                        </h5>
+                                        <div t-if="result_art.body_snippet" class="mb-2 text-muted small text-truncate" style="max-height: 3em;">
+                                            <t t-out="result_art.body_snippet"/>
+                                        </div>
+                                        <p class="mb-1 text-muted small">
+                                            Permission: <span class="text-uppercase" t-out="result_art.internal_permission"/>
+                                        </p>
+                                    </a>
+                                </t>
+                                <t t-if="not articles">
+                                    <div class="alert alert-info">
+                                        We couldn't find any articles matching your search query. Try adjusting your keywords.
+                                    </div>
+                                </t>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

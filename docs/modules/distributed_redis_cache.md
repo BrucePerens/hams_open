@@ -34,7 +34,7 @@ Configure the Redis connection via environment variables:
 Built with the **Zero-Sudo** architecture. Operations are performed by dedicated service accounts with minimal privileges. The `cache_manager_sys` user handles daemon-to-database communication.
 
 ## Documentation
-Comprehensive user documentation is available via the **Manual Library** module after installation.
+Comprehensive user documentation is available via the **Knowledge** module after installation.
 
 ---
 
@@ -96,7 +96,7 @@ Configurable via environment variables or `.env` file at `/var/lib/odoo/daemon_k
 * [Request Caching Lifecycle](distributed_redis_cache/docs/journeys/request_caching_lifecycle.md)
 
 ### Installation
-* **Documentation Injection:** Provisions documentation into `manual.article` upon installation. [@ANCHOR: doc_inject_distributed_redis_cache]
+* **Documentation Injection:** Provisions documentation into `knowledge.article` upon installation. [@ANCHOR: doc_inject_distributed_redis_cache]
 
 ### Zero-Sudo
 * **Micro-Privilege Service Account:** Uses `cache_manager_sys` for daemon operations. [@ANCHOR: story_zero_sudo_cache_manager]

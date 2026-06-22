@@ -21,7 +21,7 @@ This module is a lightweight domain extension for `user_websites`. It connects o
     * User SEO Write Elevation: `[@ANCHOR: res_users_seo_write_elevation]` (Verified by `test_check_access_rule_res_users`)
     * Group SEO Write Elevation: `[@ANCHOR: user_websites_group_seo_write_elevation]` (Verified by `test_check_access_rule_user_websites_group`)
 * **SSTI Protection:** To prevent Server-Side Template Injection, the controller injects the `main_object` into the QWeb context *without* elevating the recordset itself. If the recordset was already elevated by a parent controller, it is explicitly de-elevated. All privilege elevation is deferred to the model's `write()` method where it is strictly bounded.
-* **Soft Dependency Documentation:** The module uses the `zero_sudo` automated installer to dynamically install documentation if `knowledge.article` or `manual.article` is present. Verified by `[@ANCHOR: test_soft_dependency_docs_installation]`.
+* **Soft Dependency Documentation:** The module uses the `zero_sudo` automated installer to dynamically install documentation if `knowledge.article` or `knowledge.article` is present. Verified by `[@ANCHOR: test_soft_dependency_docs_installation]`.
 
 ---
 

@@ -128,7 +128,7 @@ class TestPagerSecurity(HamsTransactionCase):
         self.env["ir.module.module"]._bootstrap_knowledge_docs()
         article_model = self.env.get("knowledge.article")
         if not article_model:
-            # Skip if knowledge.article is not available (e.g. standard Odoo without manual_library)
+            # Skip if knowledge.article is not available (e.g. standard Odoo without knowledge)
             return
 
         article = article_model.search(

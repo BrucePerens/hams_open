@@ -172,6 +172,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "caching.invalidation_version",
             "caching.safe_quota_mb",
             "cloudflare.last_static_mtime",
+            "user_websites_seo.docs_installed",
         ]
 
     @api.model

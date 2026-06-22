@@ -1,4 +1,4 @@
-# Manual Library (`manual_library`)
+# Knowledge (`knowledge`)
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
 
@@ -20,10 +20,10 @@ Because it uses the exact same database structure (`knowledge.article`) as the E
 
 ## 🛠️ Installation
 
-1. Drop the `manual_library` folder into your Odoo `addons` directory.
+1. Drop the `knowledge` folder into your Odoo `addons` directory.
 2. Restart your Odoo server.
 3. Turn on Developer Mode, go to **Apps**, and click **Update Apps List**.
-4. Search for `Manual Library` and click **Install**.
+4. Search for `Knowledge` and click **Install**.
 
 ## 📖 How to Use It
 
@@ -68,8 +68,8 @@ Uses a standard parent-child relationship for hierarchy. Inherits from `mail.thr
 * **URL Resolution:** Computes the public website URL path for articles dynamically based on their hierarchy `[@ANCHOR: manual_compute_website_url]`.
 * **Structural Integrity:** Strictly enforces parent-child hierarchy checks to prevent recursive or invalid tree structures using `_has_cycle()` `[@ANCHOR: manual_check_hierarchy]`.
 * **Dynamic TOC:** Automatically parses article HTML on the frontend to generate a dynamic Table of Contents `[@ANCHOR: manual_toc_logic]`.
-* **Automated Documentation Installation:** Utilizes the central `_bootstrap_knowledge_docs` facility from the `zero_sudo` module to automatically discover and install documentation for all installed modules via the `knowledge_docs` manifest key. This supports soft dependencies on `knowledge.article` or `manual.article` `[@ANCHOR: manual_doc_auto_install]`. `[@ANCHOR: manual_doc_injection]`
-* **Zero-Sudo Execution:** All automated operations and frontend feedback increments are performed using the `manual_library.user_manual_library_service_account` micro-privilege account.
+* **Automated Documentation Installation:** Utilizes the central `_bootstrap_knowledge_docs` facility from the `zero_sudo` module to automatically discover and install documentation for all installed modules via the `knowledge_docs` manifest key. This supports soft dependencies on `knowledge.article` or `knowledge.article` `[@ANCHOR: manual_doc_auto_install]`. `[@ANCHOR: manual_doc_injection]`
+* **Zero-Sudo Execution:** All automated operations and frontend feedback increments are performed using the `knowledge.user_knowledge_service_account` micro-privilege account.
 * **Multi-Website Isolation:** Articles are isolated by `website_id`. Controllers and sidebar logic strictly filter content to the current website context.
 * **Hierarchical Breadcrumbs:** Provides a recursive breadcrumb trail in the frontend view to maintain user context within deep folder structures.
 </features>

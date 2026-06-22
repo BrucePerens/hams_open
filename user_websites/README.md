@@ -147,7 +147,7 @@ If your dependent module (e.g., `cloudflare`, `custom_dns`) needs to programmati
 * **String Utilities:** Safe slugification generation logic `[@ANCHOR: utils_slugify]`.
 * **Limits:** Individual page quota enforcement `[@ANCHOR: website_page_quota_check]`.
 * **GDPR Hooks**: The module extends `_get_gdpr_export_data()` `[@ANCHOR: res_users_gdpr_export]`, tested by `[@ANCHOR: test_gdpr_export_hook]`, and `_execute_gdpr_erasure()` `[@ANCHOR: gdpr_sudo_erasure]`, tested by `[@ANCHOR: test_gdpr_erasure_pages]` and `[@ANCHOR: test_gdpr_erasure_posts]`. Dependent modules storing PII MUST override these to append their data to the export payload and hard-delete it during erasure.
-* **Documentation Injection**: The module follows the soft-dependency pattern for documentation. It attempts to install its `data/documentation.html` into `knowledge.article` or `manual.article` via `res.users._register_hook()`. This ensures compatibility with both Odoo Enterprise and the Community `manual_library` module without hard dependencies `[@ANCHOR: documentation_bootstrap]`.
+* **Documentation Injection**: The module follows the soft-dependency pattern for documentation. It attempts to install its `data/documentation.html` into `knowledge.article` or `knowledge.article` via `res.users._register_hook()`. This ensures compatibility with both Odoo Enterprise and the Community `knowledge` module without hard dependencies `[@ANCHOR: documentation_bootstrap]`.
 </public_api>
 
 ---

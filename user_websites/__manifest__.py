@@ -24,7 +24,7 @@ This module enables:
         "zero_sudo",
         "distributed_redis_cache",
         "cloudflare",
-        "manual_library",
+        "knowledge",
     ],
     "external_dependencies": {
         "python": [],

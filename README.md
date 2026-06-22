@@ -64,6 +64,6 @@ Built to handle high traffic and distributed workloads efficiently.
 Empower users while maintaining legal compliance and moderation capabilities.
 
 * **[User Websites](user_websites/README.md) (`user_websites`):** Allows users to build personal or group websites safely using a Proxy Ownership pattern and shared blog container.
-* **[Manual Library](manual_library/README.md) (`manual_library`):** A clean-room, open-source replacement for the Knowledge app, enabling hierarchical instruction manuals.
+* **[Knowledge](knowledge/README.md) (`knowledge`):** A clean-room, open-source replacement for the Knowledge app, enabling hierarchical instruction manuals.
 * **[Global Compliance](compliance/README.md) (`compliance`):** Automatically provisions GDPR/CCPA privacy pages, terms of service, and enforces cookie consent across the ecosystem.
 

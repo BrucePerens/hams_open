@@ -10,6 +10,7 @@ from . import test_json_rpc_client
 import logging
 import psycopg2
 import odoo.sql_db
+from odoo.tests.test_cursor import TestCursor
 
 _logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ _logger = logging.getLogger(__name__)
 # We catch these and emit a highly visible AI/Developer hint to instantly halt debugging.
 
 # Fail-fast exact dependency enforcement for framework
-test_cursor_cls = odoo.sql_db.TestCursor
+test_cursor_cls = TestCursor
 
 if test_cursor_cls:
-    _original_test_cursor_execute = odoo.sql_db.TestCursor.execute
+    _original_test_cursor_execute = TestCursor.execute
 
     def _monitored_test_execute(self, query, params=None):
         try:
@@ -50,4 +51,4 @@ if test_cursor_cls:
                 _logger.critical(hint)
             raise
 
-    odoo.sql_db.TestCursor.execute = _monitored_test_execute
+    TestCursor.execute = _monitored_test_execute

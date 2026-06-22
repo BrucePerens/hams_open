@@ -176,7 +176,7 @@ Sets a key-value pair in a lightweight service account storage.
 </additional_features>
 
 ## 8. Automated Document Installation Facility
-The `zero_sudo` module provides a centralized facility to inject standalone HTML documentation into the `knowledge.article` or `manual.article` APIs. This structurally eliminates the need to maintain fragile ad-hoc `post_init_hook` scripts in every downstream module.
+The `zero_sudo` module provides a centralized facility to inject standalone HTML documentation into the `knowledge.article` or `knowledge.article` APIs. This structurally eliminates the need to maintain fragile ad-hoc `post_init_hook` scripts in every downstream module.
 
 **How to use it:**
 1. Add a hard dependency on `\"zero_sudo\"` in your module's `__manifest__.py`.

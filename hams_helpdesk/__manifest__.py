@@ -6,7 +6,7 @@
     "description": "Zero-Sudo compliant, lightweight helpdesk management.",
     "author": "Bruce Perens K6BP",
     "depends": [
-        "manual_library", "base", "mail", "calendar", "portal", "zero_sudo", "website"],
+        "knowledge", "base", "mail", "calendar", "portal", "zero_sudo", "website"],
     "data": [
         "security/helpdesk_security.xml",
         "security/ir.model.access.csv",

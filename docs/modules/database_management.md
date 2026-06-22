@@ -38,7 +38,7 @@ This module strictly adheres to a Zero-Sudo policy. Sensitive operations are del
 
 ## 📚 Documentation & Help
 
-User-facing documentation is available directly within the Odoo Knowledge or Manual Library modules.
+User-facing documentation is available directly within the Odoo Knowledge or Knowledge modules.
 *   **Guide:** `Database Management Guide` (installed from `data/documentation.html`).
 
 ---

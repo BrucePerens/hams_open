@@ -113,7 +113,7 @@ msgstr ""
 msgid "Error executing vacuumdb for %s: %s"
 msgstr ""
 
-#: manual_library/models/knowledge_article.py:75
+#: knowledge/models/knowledge_article.py:75
 msgid "Error! You cannot create recursive articles."
 msgstr ""
 

@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
+import psycopg2
 from odoo.modules.registry import Registry
 from ..utils import slugify, RESERVED_SLUGS
 
@@ -99,26 +100,27 @@ class ResUsers(models.Model):
         super(ResUsers, self)._register_hook()
         # Early initialization of sys_provisioner to satisfy cross-module dependencies
         # Runs before any XML data files are processed, bypassing Uninstalled Module parse errors
-        self.env.registry._sys_provisioner_initialized = True
         with self.env.cr.savepoint():
-            company_id = self.env.ref('base.main_company').id
-            user = self.env['res.users'].create({
-                'name': 'System Provisioner',
-                'login': 'sys_provisioner',
-                'company_id': company_id,
-                'company_ids': [(4, company_id)],
-                'notification_type': 'email',
-                'is_service_account': True,
-                'active': True,
-            })
-
-            self.env['ir.model.data'].create({
-                'module': 'user_websites',
-                'name': 'user_websites_service_account',
-                'model': 'res.users',
-                'res_id': user.id,
-                'noupdate': True,
-            })
+            existing = self.env['res.users'].with_context(active_test=False).search([('login', '=', 'sys_provisioner')], limit=1)
+            if not existing:
+                company_id = self.env.ref('base.main_company').id
+                user = self.env['res.users'].create({
+                    'name': 'System Provisioner',
+                    'login': 'sys_provisioner',
+                    'company_id': company_id,
+                    'company_ids': [(4, company_id)],
+                    'notification_type': 'email',
+                    'is_service_account': True,
+                    'active': True,
+                })
+    
+                self.env['ir.model.data'].create({
+                    'module': 'user_websites',
+                    'name': 'user_websites_service_account',
+                    'model': 'res.users',
+                    'res_id': user.id,
+                    'noupdate': True,
+                })
 
     @property
     def SELF_WRITEABLE_FIELDS(self):
@@ -235,12 +237,13 @@ class ResUsers(models.Model):
                 user_domain.append(("id", "!=", record_id))
 
             try:
-                env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                    "user_websites.user_websites_service_account"
-                )
-                env_user = env_svc["res.users"]
-                env_group = env_svc["user.websites.group"]
-            except AccessError as e:
+                with self.env.cr.savepoint():
+                    env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                        "user_websites.user_websites_service_account"
+                    )
+                    env_user = env_svc["res.users"]
+                    env_group = env_svc["user.websites.group"]
+            except (AccessError, psycopg2.Error) as e:
                 if "not found" in str(e).lower():
                      env_user = self.env["res.users"]
                      env_group = self.env["user.websites.group"]
@@ -307,10 +310,11 @@ class ResUsers(models.Model):
                 )
             else:
                 try:
-                    env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                        "user_websites.user_websites_service_account"
-                    )
-                except AccessError as e:
+                    with self.env.cr.savepoint():
+                        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                            "user_websites.user_websites_service_account"
+                        )
+                except (AccessError, psycopg2.Error) as e:
                     if "not found" in str(e).lower():
                         env_svc = self.env
                     else:
@@ -357,11 +361,12 @@ class ResUsers(models.Model):
         # --- 301 Redirect Automation ---
         if "website_slug" in vals:
             try:
-                env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                    "user_websites.user_websites_service_account"
-                )
-                redirect_env = env_svc["website.rewrite"]
-            except AccessError as e:
+                with self.env.cr.savepoint():
+                    env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                        "user_websites.user_websites_service_account"
+                    )
+                    redirect_env = env_svc["website.rewrite"]
+            except (AccessError, psycopg2.Error) as e:
                 if "not found" in str(e).lower():
                     env_svc = self.env
                     redirect_env = env_svc["website.rewrite"]

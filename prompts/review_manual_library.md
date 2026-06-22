@@ -1,6 +1,6 @@
-# Task: Deep Review of the `manual_library` Module
+# Task: Deep Review of the `knowledge` Module
 
-You are tasked with performing a comprehensive, deep review of the `manual_library` module in this Odoo repository.
+You are tasked with performing a comprehensive, deep review of the `knowledge` module in this Odoo repository.
 
 ## Your Objectives:
 
@@ -18,4 +18,4 @@ You are tasked with performing a comprehensive, deep review of the `manual_libra
 
 ## Execution
 
-Begin your deep planning mode to understand the `manual_library` module's purpose. Explore its files, assess what major features might be missing for its target audience, create a plan, and execute it autonomously.
+Begin your deep planning mode to understand the `knowledge` module's purpose. Explore its files, assess what major features might be missing for its target audience, create a plan, and execute it autonomously.

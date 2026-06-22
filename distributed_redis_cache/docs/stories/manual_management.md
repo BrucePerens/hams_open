@@ -14,4 +14,4 @@ The Redis connection settings can be configured via the **Settings** menu under 
 Manual invalidation still follows the standard invalidation pipeline, ensuring that the cache is cleared across the *entire* cluster, not just on the administrator's current worker.
 
 ## Automatic Documentation
-Upon installation, the module automatically injects its comprehensive documentation into the Odoo Knowledge base or Manual Library [@ANCHOR: doc_inject_distributed_redis_cache], ensuring that administrators have immediate access to these instructions.
+Upon installation, the module automatically injects its comprehensive documentation into the Odoo Knowledge base or Knowledge [@ANCHOR: doc_inject_distributed_redis_cache], ensuring that administrators have immediate access to these instructions.

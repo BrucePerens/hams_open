@@ -64,7 +64,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
             self.users.append(u)
 
         # Setup manual library baseline unconditionally since it is a hard dependency
-        self.article = self.env["manual.article"].create(
+        self.article = self.env["knowledge.article"].create(
             {
                 "name": "Simulation Survival Guide",
                 "body": "<p>This is a guide for the simulated environment.</p>",
@@ -89,7 +89,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
         # 1. Unauthenticated / Guest Actions
         self.authenticate(None, None)
         track("Guest: Community Directory", self.url_open, "/community")
-        track("Guest: Manual Library", self.url_open, "/manual")
+        track("Guest: Knowledge", self.url_open, "/manual")
         track("Guest: Privacy Policy", self.url_open, "/privacy")
         track("Guest: Terms of Service", self.url_open, "/terms")
 

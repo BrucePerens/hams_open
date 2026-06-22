@@ -49,7 +49,7 @@ class TestDocumentation(RealTransactionCase):
         post_init_hook(self.env)
         self.env.cr.commit()
 
-        article = self.env["manual.article"].search(
+        article = self.env["knowledge.article"].search(
             [("name", "=", "User Websites Documentation")], limit=1
         )
 
@@ -82,11 +82,11 @@ class TestDocumentation(RealTransactionCase):
         # Sync cursor state
         self.env.cr.commit()
 
-        article = self.env["manual.article"].search(
+        article = self.env["knowledge.article"].search(
             [("name", "=", "User Websites Documentation")]
         )
 
-        # The manual.article model natively implements website_url
+        # The knowledge.article model natively implements website_url
         website_url = article.website_url
 
         if website_url:

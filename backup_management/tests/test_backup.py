@@ -225,7 +225,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_12_documentation_installation(self):
         # Tests [@ANCHOR: backup_doc_injection]
-        article = self.env["manual.article"].search(
+        article = self.env["knowledge.article"].search(
             [("name", "=", "Backup Management")], limit=1
         )
         self.assertTrue(

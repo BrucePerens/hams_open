@@ -18,12 +18,15 @@ class Module(models.Model):
 
     @api.model
     def _bootstrap_knowledge_docs(self):
-        # Dependencies formally guarantee manual.article
-        article_model_name = 'manual.article'
+        # Dependencies formally guarantee knowledge.article
+        article_model_name = 'knowledge.article'
+
+        if article_model_name not in self.env:
+            return
 
         utils = self.env['zero_sudo.security.utils']
 
-        svc_account = "manual_library.user_manual_library_service_account"
+        svc_account = "knowledge.user_knowledge_service_account"
         if not self.env["ir.model.data"]._xmlid_to_res_id(svc_account, raise_if_not_found=False):
              svc_account = "zero_sudo.odoo_facility_service_internal"
 

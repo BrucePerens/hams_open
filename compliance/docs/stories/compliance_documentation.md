@@ -7,7 +7,7 @@
 Charlie needs to understand how the platform handles data to answer a query from a data protection authority.
 
 ## Story
-1. Charlie looks for documentation within the Odoo Knowledge or Manual Library modules.
+1. Charlie looks for documentation within the Odoo Knowledge or Knowledge modules.
 2. He finds an article titled **"Site Owner's Guide to Regulatory Compliance"**.
 4. The guide explains technical details such as:
    - Data minimization practices.

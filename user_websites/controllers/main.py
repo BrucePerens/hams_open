@@ -248,7 +248,7 @@ class UserWebsitesController(http.Controller):
         # avoiding artificial AccessErrors from the backend service account.
 
         # Enforce strict schema contract. Let missing models fail loudly.
-        article = request.env['manual.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
+        article = request.env['knowledge.article'].search([('name', 'ilike', 'User Websites Documentation%')], limit=1)
         if article and article.website_url:
             return request.redirect(article.website_url)
 
