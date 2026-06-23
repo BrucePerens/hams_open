@@ -259,6 +259,14 @@ class FailureExtractor:
             self.capturing = False
             self.current_block = []
 
+        filtered_blocks = []
+        for context, block in self.captured_blocks:
+            block_text = "".join(block)
+            if "ChromeBrowser._chrome_start" in block_text and "psutil.NoSuchProcess" in block_text:
+                continue
+            filtered_blocks.append((context, block))
+        self.captured_blocks = filtered_blocks
+
         grouped_blocks = {}
         for context, block in self.captured_blocks:
             if context not in grouped_blocks:
