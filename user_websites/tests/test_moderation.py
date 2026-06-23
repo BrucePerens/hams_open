@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import time
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
 @tagged("post_install", "-at_install")
-class TestModeration(RealTransactionCase):
+class TestModeration(HamsHttpCase):
 
     def setUp(self):
         super(TestModeration, self).setUp()
@@ -53,7 +53,7 @@ class TestModeration(RealTransactionCase):
                 "is_published": True,
             }
         )
-        self.env.cr.commit()
+        self.env.flush_all()
 
     def test_01_three_strikes_suspension(self):
         # [@ANCHOR: test_moderation_suspension]
@@ -98,7 +98,7 @@ class TestModeration(RealTransactionCase):
         """Verify the pardon action resets strikes and lifts suspension."""
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
-        self.env.cr.commit()
+        self.env.flush_all()
         for _ in range(20):
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
@@ -125,13 +125,14 @@ class TestModeration(RealTransactionCase):
         """
         # Ensure page is public
         self.authenticate(None, None)
+        self.env.flush_all()
         res = self.url_open(f"/{self.bad_user.website_slug}/home")
         self.assertEqual(res.status_code, 200)
 
         # Suspend user
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
-        self.env.cr.commit()
+        self.env.flush_all()
         for _ in range(20):
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
@@ -141,6 +142,7 @@ class TestModeration(RealTransactionCase):
             time.sleep(0.5) # audit-ignore-sleep
 
         # Attempt public access again
+        self.env.flush_all()
         res_after = self.url_open(f"/{self.bad_user.website_slug}/home")
         self.assertEqual(
             res_after.status_code,

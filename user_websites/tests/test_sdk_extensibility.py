@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.exceptions import AccessError, ValidationError
 
 
 @tagged('post_install', '-at_install')
-class TestSDKExtensibility(RealTransactionCase):
+class TestSDKExtensibility(HamsHttpCase):
     """
     Tests the extensibility hooks provided for dependent modules,
     including the GDPR methods, Proxy Ownership Mixin, and QWeb navbar.
@@ -32,7 +32,7 @@ class TestSDKExtensibility(RealTransactionCase):
                 ],
             }
         )
-        self.env.cr.commit()
+        self.env.flush_all()
 
     def test_01_gdpr_export_hook(self):
         # [@ANCHOR: test_gdpr_export_hook]

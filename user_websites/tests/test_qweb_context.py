@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
 @tagged("post_install", "-at_install")
-class TestQWebContext(RealTransactionCase):
+class TestQWebContext(HamsHttpCase):
     """
     Tests focused on ensuring the controllers inject the correct context variables
     into QWeb templates to prevent KeyErrors and rendering crashes.
@@ -99,13 +99,14 @@ class TestQWebContext(RealTransactionCase):
                 "arch": group_arch,
             }
         )
-        self.env.cr.commit()
+        self.env.flush_all()
 
     def test_01_blog_rendering_context(self):
         """
         Ensure that the /blog route injects 'pager', 'blogs', 'main_object',
         and 'blog_url' into the context so standard Odoo templates don't crash.
         """
+        self.env.flush_all()
         response = self.url_open(f"/{self.user_render.website_slug}/blog")
 
         # A 500 error here usually means a KeyError in QWeb (e.g., missing pager)
@@ -126,6 +127,7 @@ class TestQWebContext(RealTransactionCase):
         to ensure standard website blocks and conditional logic function correctly.
         """
         self.authenticate(self.user_render.login, self.user_render.login)
+        self.env.flush_all()
         response = self.url_open(f"/{self.user_render.website_slug}/home")
 
         self.assertEqual(
@@ -145,6 +147,7 @@ class TestQWebContext(RealTransactionCase):
         correctly in the QWeb rendering dictionary.
         """
         self.authenticate(self.user_render.login, self.user_render.login)
+        self.env.flush_all()
         response = self.url_open(f"/{self.group_render.website_slug}/home")
 
         self.assertEqual(
@@ -157,6 +160,7 @@ class TestQWebContext(RealTransactionCase):
         guest-facing layout components.
         """
         self.authenticate(None, None)
+        self.env.flush_all()
         response = self.url_open(f"/{self.user_render.website_slug}/home")
 
         self.assertEqual(response.status_code, 200)
@@ -171,6 +175,7 @@ class TestQWebContext(RealTransactionCase):
         Verify that the universal context provider meta tag is injected into the head
         for downstream JS widgets to consume safely.
         """
+        self.env.flush_all()
         response = self.url_open(f"/{self.user_render.website_slug}/home")
         self.assertEqual(response.status_code, 200)
 

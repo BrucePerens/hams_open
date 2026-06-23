@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import logging
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
-class TestPerformanceORM(RealTransactionCase):
+class TestPerformanceORM(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
@@ -34,7 +34,7 @@ class TestPerformanceORM(RealTransactionCase):
                 }
             )
             self.test_users.append(u)
-        self.env.cr.commit()
+        self.env.flush_all()
 
     def test_01_site_creation_query_scaling(self):
         # [@ANCHOR: test_site_creation_performance_scaling]
@@ -93,7 +93,7 @@ class TestPerformanceORM(RealTransactionCase):
 
 
 @tagged("post_install", "-at_install")
-class TestPerformanceRouting(RealTransactionCase):
+class TestPerformanceRouting(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
@@ -162,7 +162,9 @@ class TestPerformanceRouting(RealTransactionCase):
         logger = logging.getLogger("odoo.addons.base.models.ir_model")
         with self.assertLogs(logger, level="WARNING") as cm:
             try:
+                self.env.flush_all()
                 self.url_open("/")
+                self.env.flush_all()
                 self.url_open("/community")
             except Exception as e: # audit-ignore-catch-all
                 _logger.warning("An error occurred: %s", e)
@@ -243,6 +245,7 @@ class TestPerformanceRouting(RealTransactionCase):
         self.authenticate(None, None)
 
         # Assert User A's content rendered on A's page
+        self.env.flush_all()
         response_a = self.url_open(f"/{user_a.website_slug}/home")
         self.assertEqual(response_a.status_code, 200)
         self.assertIn(
@@ -252,6 +255,7 @@ class TestPerformanceRouting(RealTransactionCase):
         )
 
         # Assert User A's content did NOT bleed into User B's page
+        self.env.flush_all()
         response_b = self.url_open(f"/{user_b.website_slug}/home")
         self.assertEqual(response_b.status_code, 200)
         self.assertNotIn(

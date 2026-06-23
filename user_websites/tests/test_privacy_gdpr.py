@@ -3,12 +3,12 @@
 import odoo
 import odoo.tests
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import json
 
 
 @tagged("post_install", "-at_install")
-class TestPrivacyGDPR(RealTransactionCase):
+class TestPrivacyGDPR(HamsHttpCase):
 
     def setUp(self):
         super(TestPrivacyGDPR, self).setUp()
@@ -56,7 +56,7 @@ class TestPrivacyGDPR(RealTransactionCase):
                 "owner_user_id": self.user_privacy.id,
             }
         )
-        self.env.cr.commit()
+        self.env.flush_all()
 
     def test_01_data_portability_export(self):
         # [@ANCHOR: test_gdpr_export_api]
@@ -65,6 +65,7 @@ class TestPrivacyGDPR(RealTransactionCase):
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
 
         # Hit the export route
+        self.env.flush_all()
         response = self.url_open(
             "/my/privacy/export",
             data={"csrf_token": odoo.http.Request.csrf_token(self)},
@@ -117,6 +118,7 @@ class TestPrivacyGDPR(RealTransactionCase):
         # [@ANCHOR: test_gdpr_erasure_posts]
         # Tests [@ANCHOR: gdpr_sudo_erasure]
         # Tests [@ANCHOR: UX_GDPR_ERASURE]
+        self.env.flush_all()
         response = self.url_open(
             "/my/privacy/delete_content",
             data={"csrf_token": odoo.http.Request.csrf_token(self)},

@@ -58,7 +58,7 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         },
         {
             content: 'Wait for list view to load',
-            trigger: '.o_list_table',
+            trigger: '.o_list_button_add',
         }
     ]),
 });
