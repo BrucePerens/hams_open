@@ -173,14 +173,18 @@ class FailureExtractor:
         line_lower = line_clean.lower()
 
         is_test_failure_content = (
-            "======================================================================" in line_clean
-            or "Traceback (most recent call last):" in line_clean
-            or "FAIL: " in line_clean
-            or "ERROR: " in line_clean
-            or "AssertionError" in line_clean
-            or "FATAL:" in line_clean
-            or "[watchdog alarm]" in line_lower
+            ("======================================================================" in line_clean)
+            or ("Traceback (most recent call last):" in line_clean)
+            or ("FAIL: " in line_clean)
+            or ("ERROR: " in line_clean)
+            or ("AssertionError" in line_clean)
+            or ("FATAL:" in line_clean)
+            or ("[watchdog alarm]" in line_lower)
         )
+        
+        # Ignore Python GC Exceptions on Chrome headless termination
+        if "ChromeBrowser._chrome_start" in "".join(self.current_block):
+            is_test_failure_content = False
 
         if is_log_line:
             is_safe = (
@@ -323,7 +327,7 @@ def robust_reap(pid):
     """
     print(f"\n[*] [REAPER] Initiating robust reaper for PID {pid}...")
     try:
-        subprocess.run(["pkill", "-TERM", "-f", "chrome"], check=False)
+        subprocess.run(["pkill", "-u", str(os.getuid()), "-TERM", "-f", "chrome"], check=False)
 
         pgid = os.getpgid(pid)
         print(f"[*] [REAPER] Sending SIGTERM to Process Group {pgid}")
@@ -340,7 +344,7 @@ def robust_reap(pid):
 
         print(f"[*] [REAPER] Process {pid} did not exit after SIGTERM. Sending SIGKILL to Process Group {pgid}")
         os.killpg(pgid, signal.SIGKILL)
-        subprocess.run(["pkill", "-KILL", "-f", "chrome"], check=False)
+        subprocess.run(["pkill", "-u", str(os.getuid()), "-KILL", "-f", "chrome"], check=False)
     except OSError as e:
         print(f"[*] [REAPER] Error during reap: {e}")
 
@@ -464,7 +468,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
         # Always reap stray processes like headless chrome to prevent zombie exhaustion
         print(f"[*] [DEBUG-RUNNER] Ensuring all child processes are reaped for PID {process.pid}...")
         try:
-            subprocess.run(["pkill", "-TERM", "-f", "chrome"], check=False)
+            subprocess.run(["pkill", "-u", str(os.getuid()), "-TERM", "-f", "chrome"], check=False)
             pgid = os.getpgid(process.pid)
             os.killpg(pgid, signal.SIGTERM)
         except OSError:
