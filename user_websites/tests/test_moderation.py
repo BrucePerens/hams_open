@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import time
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -13,9 +14,9 @@ class TestModeration(RealTransactionCase):
         self.bad_user = self.env["res.users"].create(
             {
                 "name": "Spammer",
-                "login": "spammer",
+                "login": f"spammer_{self.id()}",
                 "email": "spam@example.com",
-                "website_slug": "spammer",
+                "website_slug": f"spammer_{self.id()}",
                 "group_ids": [
                     (
                         6,
@@ -97,6 +98,12 @@ class TestModeration(RealTransactionCase):
         """Verify the pardon action resets strikes and lifts suspension."""
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
+        self.env.cr.commit()
+        for _ in range(20):
+            self.env.invalidate_all()
+            if not self.spam_page.is_published:
+                break
+            time.sleep(0.5) # audit-ignore-sleep
 
         self.assertTrue(self.bad_user.is_suspended_from_websites, "[!] DIAGNOSTIC FOR AI: Failed to suspend user before pardon test.")
 
@@ -122,6 +129,12 @@ class TestModeration(RealTransactionCase):
         # Suspend user
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
+        self.env.cr.commit()
+        for _ in range(20):
+            self.env.invalidate_all()
+            if not self.spam_page.is_published:
+                break
+            time.sleep(0.5) # audit-ignore-sleep
 
         # Attempt public access again
         res_after = self.url_open(f"/{self.bad_user.website_slug}/home")
@@ -139,9 +152,9 @@ class TestModeration(RealTransactionCase):
         user_2 = self.env["res.users"].create(
             {
                 "name": "Spammer 2",
-                "login": "spammer2",
+                "login": f"spammer2_{self.id()}",
                 "email": "spam2@example.com",
-                "website_slug": "spammer2",
+                "website_slug": f"spammer2_{self.id()}",
                 "group_ids": [
                     (
                         6,

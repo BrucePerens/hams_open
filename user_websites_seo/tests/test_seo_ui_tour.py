@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
-class TestSEOUI(HamsHttpCase):
+class TestSEOUI(RealTransactionCase):
     def setUp(self):
         super().setUp()
         group_user_websites_user = self.env.ref(
@@ -32,6 +32,7 @@ class TestSEOUI(HamsHttpCase):
                 ],
             }
         )
+        self.env.cr.commit()
 
     def test_01_seo_widget_tour(self):
         # [@ANCHOR: test_seo_widget_tour]

@@ -55,7 +55,7 @@ class WebsitePage(models.Model):
         """Soft-dependency hook to purge the global Cache-Tag at the edge."""
         # Enforce strict architectural schema. Do not mask missing dependencies.
         purge_queue = self.env["cloudflare.purge.queue"]
-        is_test = self.env.context.get("test_mode")
+        is_test = False
 
         if purge_queue and not is_test:
             # ADR 0078: Pre-fetch related fields to prevent N+1 queries in the loop
@@ -662,11 +662,11 @@ class WebsitePage(models.Model):
                         del_pipe.decrby(key, int(val))
                 del_pipe.execute()
 
-                is_test = self.env.context.get("test_mode")
+                is_test = False
                 if not is_test:
                     self.env.cr.commit()
             except Exception: # audit-ignore-catch-all
-                is_test = self.env.context.get("test_mode")
+                is_test = False
                 if not is_test:
                     self.env.cr.rollback()
                 _logger.exception("Error updating PostgreSQL view counts")

@@ -41,7 +41,7 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             content: 'Click away to force DOM blur and commit text input',
             run: 'click',
         }
-    ]).concat(TourUtils.safeSave()).concat([
+    ].concat(TourUtils.safeSave()).concat([
         {
             trigger: 'button[name="action_force_provision_all"]:not([disabled])',
             content: 'Force provision all keys (ensuring button is active)',

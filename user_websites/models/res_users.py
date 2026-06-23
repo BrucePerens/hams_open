@@ -309,7 +309,7 @@ class ResUsers(models.Model):
         # --- Content Lifecycle Policy ---
         if "active" in vals and not vals["active"]:
             users_to_archive = self.ids
-            is_test = self.env.context.get("test_mode")
+            is_test = False
             if not is_test:
                 db_name = self.env.cr.dbname
                 BACKGROUND_EXECUTOR.submit(
@@ -439,7 +439,7 @@ class ResUsers(models.Model):
         user_id = self.id
         db_name = self.env.cr.dbname
 
-        is_test = self.env.context.get("test_mode")
+        is_test = False
 
         if is_test:
             env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
@@ -586,7 +586,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = self.env.context.get("test_mode")
+            is_test = False
             if not is_test:
                 self.env.cr.commit()
             if len(pages) < 5000:
@@ -610,7 +610,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = self.env.context.get("test_mode")
+            is_test = False
             if not is_test:
                 self.env.cr.commit()
             if len(posts) < 5000:
@@ -634,7 +634,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = self.env.context.get("test_mode")
+            is_test = False
             if not is_test:
                 self.env.cr.commit()
             if len(blogs) < 5000:

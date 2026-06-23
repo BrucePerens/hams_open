@@ -75,8 +75,6 @@ class UserWebsitesController(http.Controller):
 
         if profile_user and profile_user.is_suspended_from_websites:
             return request.not_found()
-        if profile_group and profile_group.is_suspended_from_websites:
-            return request.not_found()
 
         main_object = profile_user or profile_group
 
@@ -130,8 +128,6 @@ class UserWebsitesController(http.Controller):
             return request.not_found()
 
         if profile_user and profile_user.is_suspended_from_websites:
-            return request.not_found()
-        if profile_group and profile_group.is_suspended_from_websites:
             return request.not_found()
 
         # Check if the page actually exists; if it does, let core ir.http route handle it

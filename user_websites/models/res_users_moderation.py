@@ -109,7 +109,7 @@ class ResUsersModeration(models.Model):
         """Forcefully unpublishes all user content and flags them as suspended."""
         user_ids = self.ids
 
-        is_test = self.env.context.get("test_mode")
+        is_test = False
 
         if not is_test:
             db_name = self.env.cr.dbname

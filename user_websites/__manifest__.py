@@ -3,6 +3,7 @@
     "summary": "Allow users to create personal or group websites and blogs.",
     "description": """
 This module enables:
+
 - Users to have a personal website (e.g. /username/home)
 - Users to create shared group websites (e.g. /groupname/home)
 - Users to manage a blog within their site.
