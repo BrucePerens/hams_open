@@ -1,5 +1,5 @@
 {
   "entries": [
-    { "path": "agents/skills" }
+    { "path": "hams_shared/agents/skills" }
   ]
 }

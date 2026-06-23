@@ -29,7 +29,17 @@ class TestRealBackupWorker(RealTransactionCase):
         daemon_script = os.path.join(base_dir, "daemon", "backup_worker.py")
 
         daemon_utils = self.env["zero_sudo.daemon.utils"]
-        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script)
+        
+        env_vars = {}
+        env_file = "/var/lib/odoo/daemon_keys/backup_worker.env"
+        if os.path.exists(env_file):
+            with open(env_file, "r") as f:
+                for line in f:
+                    if "=" in line and not line.startswith("#"):
+                        key, val = line.strip().split("=", 1)
+                        env_vars[key] = val.strip("'\" ")
+        
+        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
 
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
         # System infrastructure variables are permissible in daemon bootstrap hooks

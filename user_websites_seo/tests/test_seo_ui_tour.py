@@ -32,6 +32,7 @@ class TestSEOUI(RealTransactionCase):
                 ],
             }
         )
+        self.env.ref("base.user_admin").lang = "en_US"
         self.env.cr.commit()
 
     def test_01_seo_widget_tour(self):

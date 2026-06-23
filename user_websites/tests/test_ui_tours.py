@@ -4,6 +4,7 @@ import time
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.common import wait_for_werkzeug_threads
 
 _logger = logging.getLogger(__name__)
 
@@ -60,6 +61,9 @@ class TestUserWebsitesUITours(RealTransactionCase):
         ])
         visitors = self.env["website.visitor"].search([])
         tracks = self.env["website.track"].search([])
+
+        # Wait for any lingering backend HTTP threads from the JS tour to finish
+        wait_for_werkzeug_threads(timeout=5.0)
 
         # Explicit resilient cleanup to prevent website_visitor/website_track pollution
         # Absorbs SerializationFailures if Werkzeug threads are still closing

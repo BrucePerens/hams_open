@@ -55,7 +55,7 @@ If you already had a page at `/privacy` before installing this module, we won't 
 To run the tests for this module in the Jules VM environment:
 
 ```bash
-IN_JULES_VM=1 python3 tools/test.py -u compliance --already-provisioned
+IN_JULES_VM=1 python3 hams_shared/tools/test.py -u compliance --already-provisioned
 ```
 
 ## 🛠️ Installation
@@ -80,12 +80,12 @@ A non-interactive configuration module that enforces baseline regulatory complia
 ### 📚 User Stories & Journeys
 
 #### Stories
-* [Automatic Legal Pages Generation](./docs/stories/automatic_legal_pages.md) `[@ANCHOR: story_automatic_legal_pages]`
-* [Enforced Cookie Consent](./docs/stories/cookie_consent.md) `[@ANCHOR: story_cookie_consent]`
-* [Site Owner Documentation](./docs/stories/compliance_documentation.md) `[@ANCHOR: story_compliance_documentation]`
+* [Automatic Legal Pages Generation](./hams_shared/docs/stories/automatic_legal_pages.md) `[@ANCHOR: story_automatic_legal_pages]`
+* [Enforced Cookie Consent](./hams_shared/docs/stories/cookie_consent.md) `[@ANCHOR: story_cookie_consent]`
+* [Site Owner Documentation](./hams_shared/docs/stories/compliance_documentation.md) `[@ANCHOR: story_compliance_documentation]`
 
 #### Journeys
-* [Compliance Setup Journey](./docs/journeys/compliance_setup_journey.md) `[@ANCHOR: journey_compliance_setup]`
+* [Compliance Setup Journey](./hams_shared/docs/journeys/compliance_setup_journey.md) `[@ANCHOR: journey_compliance_setup]`
 
 ## 2. Enforcement Details
 * **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean on install and sets it as the default for new websites. `[@ANCHOR: compliance_post_init_cookie_bar]`

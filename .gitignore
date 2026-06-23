@@ -23,11 +23,13 @@ env/
 Thumbs.db
 
 # Odoo Local Dev
+LOG
 *.log
 filestore/
 sessions/
 
 # Custom Tooling Workspaces
+tmp/
 task_workspace_*/
 *.patch
 *.bak

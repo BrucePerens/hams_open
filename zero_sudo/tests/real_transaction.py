@@ -7,7 +7,7 @@ from odoo.modules.registry import Registry
 import psycopg2
 from psycopg2 import sql
 from odoo.tools import mute_logger, _
-from odoo.addons.zero_sudo.tests.common import SafePatchMixin, wait_for_werkzeug_threads
+
 import unittest.mock
 
 _logger = logging.getLogger(__name__)
@@ -16,7 +16,9 @@ _logger = logging.getLogger(__name__)
 _original_create = odoo.models.BaseModel.create
 
 
-class RealTransactionCase(HttpCase, SafePatchMixin):
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+
+class RealTransactionCase(HamsHttpCase):
     """
     A testing facility that bypasses Odoo's test cursor wrapping (TransactionCase).
     It provides a real, committable PostgreSQL cursor allowing tests to behave
@@ -97,9 +99,6 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     def _real_teardown(self):
         # Guarantee that our raw PostgreSQL cursor is ALWAYS rolled back and closed
         # even if an ORM AccessError occurs during the leak verification phase.
-        # Wait for any lingering backend HTTP threads to finish, preventing teardown serialization failures.
-        wait_for_werkzeug_threads(timeout=5.0)
-
         try:
             # Rollback any lingering, uncommitted test state to drop REPEATABLE READ
             # snapshot locks and abort pending dirty-form submissions.

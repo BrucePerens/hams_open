@@ -41,19 +41,19 @@
         },
         {
             "name": "Developer Integration Journey",
-            "path": "docs/journeys/developer_integration.md",
+            "path": "hams_shared/docs/journeys/developer_integration.md",
             "icon": "🚀",
             "category": "workspace"
         },
         {
             "name": "Multi-Website Security Story",
-            "path": "docs/stories/multi_website.md",
+            "path": "hams_shared/docs/stories/multi_website.md",
             "icon": "🌐",
             "category": "workspace"
         },
         {
             "name": "High-Performance Atomic KV Storage",
-            "path": "docs/stories/set_kv_procedure.md",
+            "path": "hams_shared/docs/stories/set_kv_procedure.md",
             "icon": "⚡",
             "category": "workspace"
         }

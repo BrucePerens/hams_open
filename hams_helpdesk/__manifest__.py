@@ -30,31 +30,31 @@
         },
         {
             "name": "Story: Helpdesk Ticket Lifecycle",
-            "path": "docs/stories/helpdesk_ticket_lifecycle.md",
+            "path": "hams_shared/docs/stories/helpdesk_ticket_lifecycle.md",
             "icon": "🔄",
             "category": "technical",
         },
         {
             "name": "Story: Helpdesk Ticket Creation",
-            "path": "docs/stories/helpdesk_ticket_creation.md",
+            "path": "hams_shared/docs/stories/helpdesk_ticket_creation.md",
             "icon": "🆕",
             "category": "technical",
         },
         {
             "name": "Journey: Incident Resolution",
-            "path": "docs/journeys/incident_resolution.md",
+            "path": "hams_shared/docs/journeys/incident_resolution.md",
             "icon": "🛠️",
             "category": "technical",
         },
         {
             "name": "Journey: Shift Handoff Protocol",
-            "path": "docs/journeys/shift_handoff_protocol.md",
+            "path": "hams_shared/docs/journeys/shift_handoff_protocol.md",
             "icon": "🤝",
             "category": "technical",
         },
         {
             "name": "Story: Multi-Website Segregation",
-            "path": "docs/stories/multi_website_segregation.md",
+            "path": "hams_shared/docs/stories/multi_website_segregation.md",
             "icon": "🌐",
             "category": "technical",
         }

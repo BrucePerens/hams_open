@@ -1,5 +1,5 @@
 Please use file fetcher to do a git check out of changes to
-hams_community/daemon_key_manager/models/key_registry.py
-hams_community/daemon_key_manager/data/cron.xml
-{hams_com,hams_community}/tools/infrastructure.py
+hams_open/daemon_key_manager/models/key_registry.py
+hams_open/daemon_key_manager/data/cron.xml
+{hams_com,hams_open}/tools/infrastructure.py
 that have been made since you started work.

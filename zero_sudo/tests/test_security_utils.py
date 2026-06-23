@@ -7,6 +7,7 @@ import os
 import odoo
 import psycopg2
 import logging
+from odoo.tools import mute_logger
 
 _logger = logging.getLogger(__name__)
 
@@ -131,8 +132,9 @@ class TestSecurityUtils(HamsTransactionCase):
         )
 
         try:
-            utils = self.env["zero_sudo.security.utils"]
-            utils._get_service_uid("rogue_module.sneaky_admin_service")
+            with self.env.cr.savepoint(), mute_logger('odoo.sql_db'):
+                utils = self.env["zero_sudo.security.utils"]
+                utils._get_service_uid("rogue_module.sneaky_admin_service")
             self.fail("Must block Service Accounts with group_system from escalating privileges.")
         except (AccessError, UserError, psycopg2.errors.RaiseException) as e:
             self.assertTrue(str(e))
@@ -299,7 +301,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # 1. Invalid XML ID Format
         try:
-            with self.env.cr.savepoint():
+            with self.env.cr.savepoint(), mute_logger('odoo.sql_db'):
                 utils._get_service_uid("invalid_format_no_dot")
             self.fail("Expected exception")
         except (AccessError, UserError, psycopg2.errors.RaiseException):
@@ -307,7 +309,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # 2. Account Not Found
         try:
-            with self.env.cr.savepoint():
+            with self.env.cr.savepoint(), mute_logger('odoo.sql_db'):
                 utils._get_service_uid("base.non_existent_xml_id")
             self.fail("Expected exception")
         except (AccessError, UserError, psycopg2.errors.RaiseException):
@@ -315,7 +317,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # 3. Deny Human Admin Pass-through
         try:
-            with self.env.cr.savepoint():
+            with self.env.cr.savepoint(), mute_logger('odoo.sql_db'):
                 utils._get_service_uid("base.user_admin")
             self.fail("Expected exception")
         except (AccessError, UserError, psycopg2.errors.RaiseException):
@@ -335,7 +337,7 @@ class TestSecurityUtils(HamsTransactionCase):
             "res_id": disabled_user.id,
         })
         try:
-            with self.env.cr.savepoint():
+            with self.env.cr.savepoint(), mute_logger('odoo.sql_db'):
                 utils._get_service_uid("test_module.disabled_sa_xml")
             self.fail("Expected exception")
         except (AccessError, UserError, psycopg2.errors.RaiseException):

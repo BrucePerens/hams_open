@@ -594,7 +594,7 @@ class WebsitePage(models.Model):
                   _logger.debug("Service account not found during page unlink bypass: %s", e)
                   res = super(WebsitePage, self).unlink()
              else:
-                  _logger.error("Failed page unlink bypass execution: %s", e)
+                  _logger.warning("Failed page unlink bypass execution: %s", e)
                   raise
 
         utils = self.env["zero_sudo.security.utils"]

@@ -2,6 +2,7 @@
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from unittest.mock import MagicMock
+from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
@@ -140,9 +141,10 @@ class TestAuditEdgeCases(RealTransactionCase):
                 Exception,
                 msg="System must fail closed if the service account is disabled, denying record creation.",
             ):
-                self.env["website.page"].with_user(self.test_user).create(
-                    {
-                        "url": f"/{self.test_user.website_slug}/fail-test",
+                with mute_logger("odoo.addons.user_websites.models.website_page"):
+                    self.env["website.page"].with_user(self.test_user).create(
+                        {
+                            "url": f"/{self.test_user.website_slug}/fail-test",
                         "name": "Fail Page",
                         "website_id": self.test_user.website_id.id,
                         "owner_user_id": self.test_user.id,
