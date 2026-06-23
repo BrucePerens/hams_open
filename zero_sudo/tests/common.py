@@ -134,6 +134,9 @@ def _patched_browser_js(self, *args, **kwargs):
             while True:
                 time.sleep(60) # audit-ignore-sleep
         raise e
+    finally:
+        if not os.environ.get("HAMS_PAUSE_ON_FAIL"):
+            
 HttpCase.browser_js = _patched_browser_js
 
 class DiagnosticMock(MagicMock):
@@ -349,6 +352,19 @@ class HamsHttpCase(HamsTestMixin, HttpCase):
                 ws_thread = vars(self.browser).get('_websocket_thread')
                 if ws_thread:
                     ws_thread.join = lambda *args, **kwargs: None
+
+            # Brutally reap any lingering Chrome children of this test process
+            try:
+                import psutil
+                current_process = psutil.Process()
+                for child in current_process.children(recursive=True):
+                    try:
+                        if "chrome" in child.name().lower() or "chrome" in " ".join(child.cmdline()).lower():
+                            child.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+            except Exception as e:
+                _logger.warning("TRACING: Failed to reap chrome zombies: %s", e)
 
             if not self.__class__._hams_tour_failed:
                 host_tmp = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/var/tmp")
