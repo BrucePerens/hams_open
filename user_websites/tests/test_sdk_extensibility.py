@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import AccessError, ValidationError
 
 
 @tagged('post_install', '-at_install')
-class TestSDKExtensibility(HamsHttpCase):
+class TestSDKExtensibility(RealTransactionCase):
     """
     Tests the extensibility hooks provided for dependent modules,
     including the GDPR methods, Proxy Ownership Mixin, and QWeb navbar.
@@ -32,7 +32,7 @@ class TestSDKExtensibility(HamsHttpCase):
                 ],
             }
         )
-        self.env.flush_all()
+        self.env.cr.commit()
 
     def test_01_gdpr_export_hook(self):
         # [@ANCHOR: test_gdpr_export_hook]
@@ -87,6 +87,7 @@ class TestSDKExtensibility(HamsHttpCase):
         # Execute the model-level hook
         self.user._execute_gdpr_erasure()
 
+        page.invalidate_recordset()
         self.assertFalse(
             page.exists(), "The hook must cascade and delete owned records."
         )

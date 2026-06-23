@@ -53,7 +53,7 @@ class TestModeration(HamsHttpCase):
                 "is_published": True,
             }
         )
-        self.env.flush_all()
+        self.env.cr.commit()
 
     def test_01_three_strikes_suspension(self):
         # [@ANCHOR: test_moderation_suspension]
@@ -85,6 +85,15 @@ class TestModeration(HamsHttpCase):
             self.bad_user.is_suspended_from_websites,
             "User should be suspended after 3 strikes. [!] DIAGNOSTIC FOR AI: is_suspended_from_websites flag not set. Check action_suspend_user_websites trigger logic.",
         )
+        # Wait for the background thread to unpublish the content
+        self.env.cr.commit()
+        for _ in range(20):
+            self.env.cr.commit()
+            self.env.invalidate_all()
+            if not self.spam_page.is_published and not self.spam_post.is_published:
+                time.sleep(0.5) # audit-ignore-sleep
+                break
+            time.sleep(0.5) # audit-ignore-sleep
 
         # Verify Content was unpublished
         self.assertFalse(
@@ -98,8 +107,9 @@ class TestModeration(HamsHttpCase):
         """Verify the pardon action resets strikes and lifts suspension."""
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
-        self.env.flush_all()
+        self.env.cr.commit()
         for _ in range(20):
+            self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
                 # Wait for the background transaction to fully commit
@@ -125,15 +135,16 @@ class TestModeration(HamsHttpCase):
         """
         # Ensure page is public
         self.authenticate(None, None)
-        self.env.flush_all()
+        self.env.cr.commit()
         res = self.url_open(f"/{self.bad_user.website_slug}/home")
         self.assertEqual(res.status_code, 200)
 
         # Suspend user
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
-        self.env.flush_all()
+        self.env.cr.commit()
         for _ in range(20):
+            self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
                 # Wait for the background transaction to fully commit
@@ -142,7 +153,7 @@ class TestModeration(HamsHttpCase):
             time.sleep(0.5) # audit-ignore-sleep
 
         # Attempt public access again
-        self.env.flush_all()
+        self.env.cr.commit()
         res_after = self.url_open(f"/{self.bad_user.website_slug}/home")
         self.assertEqual(
             res_after.status_code,

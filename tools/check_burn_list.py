@@ -770,6 +770,8 @@ def check_ast_vulnerabilities(filepath, content, lines, is_odoo_module=False):
             is_real_txn = any(
                 getattr(base, "id", "") == "RealTransactionCase"
                 or getattr(base, "attr", "") == "RealTransactionCase"
+                or getattr(base, "id", "") in ("HamsHttpCase", "HttpCase")
+                or getattr(base, "attr", "") in ("HamsHttpCase", "HttpCase")
                 for base in node.bases
             )
             old_val = self.in_real_transaction_case

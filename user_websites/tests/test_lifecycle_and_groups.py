@@ -43,7 +43,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
                 "website_slug": "test-group-site",
             }
         )
-        self.env.flush_all()
+        self.env.cr.commit()
 
     def test_01_group_creation_and_slug(self):
         self.assertEqual(
@@ -71,7 +71,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
 
         create_url = f"/{self.test_group.website_slug}/create_site"
 
-        self.env.flush_all()
+        self.env.cr.commit()
         response = self.url_open(
             create_url,
             data={"csrf_token": odoo.http.Request.csrf_token(self)},
@@ -97,7 +97,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
         create_url = f"/{self.test_group.website_slug}/create_site"
 
         try:
-            self.env.flush_all()
+            self.env.cr.commit()
             self.url_open(
                 create_url,
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
@@ -145,9 +145,10 @@ class TestLifecycleAndGroups(HamsHttpCase):
         self.authenticate("admin", "admin")
 
         self.user_a.with_context(test_mode=True).active = False
-        self.env.flush_all()
+        self.env.cr.commit()
 
         for _ in range(20):
+            self.env.cr.commit()
             self.env.invalidate_all()
             if not page.website_published:
                 time.sleep(0.5) # audit-ignore-sleep
@@ -167,7 +168,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
     def test_05_community_directory_opt_in(self):
         self.assertFalse(self.user_a.privacy_show_in_directory)
 
-        self.env.flush_all()
+        self.env.cr.commit()
         response = self.url_open("/community")
         self.assertNotIn(
             self.user_a.name, response.text, "User should NOT be visible by default"
@@ -175,7 +176,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
 
         self.user_a.write({"privacy_show_in_directory": True})
 
-        self.env.flush_all()
+        self.env.cr.commit()
         response = self.url_open("/community")
         self.assertIn(
             f"/{self.user_a.website_slug}",
@@ -208,7 +209,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
         url_group = f"/{self.test_group.website_slug}/home"
 
         self.authenticate(self.user_a.login, self.user_a.login)
-        self.env.flush_all()
+        self.env.cr.commit()
         response = self.url_open(url_group)
         self.assertNotIn(
             report_button_text,
@@ -217,7 +218,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
         )
 
         self.logout()
-        self.env.flush_all()
+        self.env.cr.commit()
         response = self.url_open(url_group)
         self.assertIn(
             report_button_text,
@@ -230,7 +231,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
         create_url = f"/{self.test_group.website_slug}/create_site"
 
         try:
-            self.env.flush_all()
+            self.env.cr.commit()
             self.url_open(
                 create_url,
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},

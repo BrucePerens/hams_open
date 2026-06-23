@@ -47,10 +47,11 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             content: 'Force provision all keys (ensuring button is active)',
             run: 'click',
         },
-        { 
-            content: 'Wait for success toast', 
+        {
+            content: 'Wait for success toast',
             trigger: '.o_notification_manager .o_notification',
         },
+        TourUtils.waitForAbsence('.o_notification', 'success toast to disappear'),
         {
             content: 'Go back to list via breadcrumb to close the form',
             trigger: '.o_control_panel .breadcrumb-item a, .o_control_panel .o_back_button, .o_breadcrumb a',
