@@ -364,13 +364,24 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
     env.setdefault("ODOO_TEST_CHROME_ARGS", "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --no-first-run --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading")
     env.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
 
+    def preexec_child():
+        os.setsid()
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            PR_SET_PDEATHSIG = 1
+            libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
+        except Exception: # audit-ignore-catch-all
+            # We are post-fork in preexec_fn; logging is unsafe here.
+            pass
+
     process = subprocess.Popen(
+
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        start_new_session=True,
+        preexec_fn=preexec_child,
         cwd=cwd,
         env=env,
     )

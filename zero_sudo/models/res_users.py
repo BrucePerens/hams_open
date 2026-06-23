@@ -24,6 +24,8 @@ class ResUsersZeroSudo(models.Model):
         # Verified by [@ANCHOR: test_service_account_password]
         for vals in vals_list:
             if vals.get("is_service_account"):
+                # Ensure no password for service accounts
+                vals.pop("password", None)
                 # Inject a cryptographically secure, extremely large password
                 # to guarantee the account cannot be logged into interactively.
                 vals["password"] = secrets.token_urlsafe(128)

@@ -65,10 +65,8 @@ def run_tests(module_names: str) -> str:
                 
             runner = unittest.TextTestRunner(stream=sys.stdout, verbosity=2)
             runner.run(suite)
-        except Exception as e:
-            print(f"Error running tests: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception: # audit-ignore-catch-all
+            _logger.exception("Error running tests:")
 
     return out.getvalue()
 
@@ -93,10 +91,8 @@ def update_modules(module_names: str) -> str:
                     print(f"Successfully triggered update for: {', '.join(mod_records.mapped('name'))}")
                 else:
                     print(f"Modules not found in database: {module_names}")
-        except Exception as e:
-            print(f"Error updating modules: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception: # audit-ignore-catch-all
+            _logger.exception("Error updating modules:")
             
     return out.getvalue()
 
@@ -117,9 +113,26 @@ def reload_test_files(module_names: str) -> str:
                     print(f"Reloaded tests for {mod_name}")
                 except ImportError:
                     print(f"Failed to reload tests for {mod_name}")
-        except Exception as e:
-            print(f"Error reloading test files: {e}")
+        except Exception: # audit-ignore-catch-all
+            _logger.exception("Error reloading test files:")
     return out.getvalue()
+
+@mcp.tool()
+def kill_server() -> str:
+    """
+    Kill the MCP server and Odoo processes entirely.
+    Example: (no arguments)
+    """
+    import os, signal
+    print("Shutting down MCP server and all its subprocesses...")
+    try:
+        # Since the MCP server is spawned in its own session/process group by test.py,
+        # killing the process group will reliably take down Chrome, Odoo, and the server itself.
+        os.killpg(os.getpgid(os.getpid()), signal.SIGKILL)
+    except OSError as e:
+        _logger.error("Error killing process group: %s", e)
+        os._exit(1)
+    return "Killed"
 
 def main():
     setup_odoo()
