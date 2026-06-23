@@ -17,7 +17,7 @@ class TestUIPersonas(HamsHttpCase):
         # 3. User-Websites Administrator
         self.site_admin = self.env["res.users"].create({
             "name": "Persona Site Admin", "login": "siteadmin", "password": "siteadmin",
-            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id, self.env.ref("user_websites.group_user_websites_administrator").id])]
+            "group_ids": [(6, 0, [self.env.ref("user_websites.group_user_websites_administrator").id])]
         })
         # 4. Club Operator
         self.club_op = self.env["res.users"].create({

@@ -9,7 +9,7 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('user_websites.group_user_websites_service_account')])]"/>
+            <field name="group_ids" eval="[(4, ref('user_websites.group_user_websites_service_account'))]"/>
         </record>
     </data>
     <data noupdate="1">

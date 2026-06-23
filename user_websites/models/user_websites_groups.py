@@ -436,7 +436,7 @@ class UserWebsitesGroup(models.Model):
         for group in self:
             group.is_suspended_from_websites = True
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "zero_sudo.mail_service_internal"
+                "user_websites.user_websites_service_account"
             )
             group.with_user(mail_svc).message_post(
                 body=_(
@@ -451,7 +451,7 @@ class UserWebsitesGroup(models.Model):
             group.violation_strike_count = 0
             group.is_suspended_from_websites = False
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "zero_sudo.mail_service_internal"
+                "user_websites.user_websites_service_account"
             )
             group.with_user(mail_svc).message_post(
                 body=_(

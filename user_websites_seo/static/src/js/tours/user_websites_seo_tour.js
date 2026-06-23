@@ -61,8 +61,8 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
         }
     ].concat(TourUtils.safeSave()).concat([
         {
-            content: "Go back to list via breadcrumb to close the form",
-            trigger: '.o_control_panel .breadcrumb-item a, .o_control_panel .o_back_button, .o_breadcrumb a',
+            content: 'Go back to list via breadcrumb to close the form',
+            trigger: '.o_control_panel .breadcrumb-item:not(.active):first, .o_control_panel .o_back_button',
             run: 'click',
         },
         {

@@ -21,14 +21,17 @@ _logger = logging.getLogger(__name__)
 import werkzeug.serving
 
 _active_werkzeug_threads = set()
-_original_process_request_thread = getattr(werkzeug.serving.ThreadedWSGIServer, 'process_request_thread', None)
+if hasattr(werkzeug.serving.ThreadedWSGIServer, 'process_request_thread'):
+    _original_process_request_thread = getattr(werkzeug.serving.ThreadedWSGIServer, 'process_request_thread')
+else:
+    _original_process_request_thread = None
 
 if _original_process_request_thread:
-    def _patched_process_request_thread(self, request, client_address):
+    def _patched_process_request_thread(self, request, client_address, *args, **kwargs):
         t = threading.current_thread()
         _active_werkzeug_threads.add(t)
         try:
-            return _original_process_request_thread(self, request, client_address)
+            return _original_process_request_thread(self, request, client_address, *args, **kwargs)
         finally:
             _active_werkzeug_threads.discard(t)
 

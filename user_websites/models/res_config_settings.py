@@ -35,7 +35,7 @@ class ResConfigSettings(models.TransientModel):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
-            admin_users = admin_group.with_user(svc_uid).user_ids.ids
+            admin_users = [u.id for u in admin_group.with_user(svc_uid).user_ids if u.id != svc_uid]
             res["user_websites_administrators_ids"] = [(6, 0, admin_users)]
         else:
             res["user_websites_administrators_ids"] = [(6, 0, [])]
@@ -50,6 +50,7 @@ class ResConfigSettings(models.TransientModel):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
+            new_ids = self.user_websites_administrators_ids.ids + [svc_uid]
             admin_group.with_user(svc_uid).write(
-                {"user_ids": [(6, 0, self.user_websites_administrators_ids.ids)]}
+                {"user_ids": [(6, 0, new_ids)]}
             )

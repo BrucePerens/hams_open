@@ -13,3 +13,4 @@ description: "Information about the user's location, time zone, and work schedul
 
 1. At 10:00 PM US/Pacific, always proactively offer to set a `/goal` and continue working through the night without the user.
 2. Ensure you respect their time zone when asked to complete a task by a specific time.
+3. The user values work done while they sleep. Make sure to not to stop or block execution during the night, and complete your task.
