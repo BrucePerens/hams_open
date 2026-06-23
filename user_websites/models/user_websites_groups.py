@@ -12,6 +12,67 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
     invalidate_model_cache,
 )
+import logging
+from concurrent.futures import ThreadPoolExecutor
+import time
+import os
+import odoo
+from odoo.modules.registry import Registry
+
+_logger = logging.getLogger(__name__)
+
+def _async_unpublish_group_content(db_name, group_ids):
+    """Unpublishes group content in the background to prevent transaction lock exhaustion."""
+    registry = Registry(db_name)
+    cr = registry.cursor()
+    try:
+        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+        row = cr.fetchone()
+        svc_id = row[0] if row else 2
+        env = odoo.api.Environment(cr, svc_id, {})
+        try:
+            env_svc = env["zero_sudo.security.utils"]._get_service_env(
+                "user_websites.user_websites_service_account"
+            )
+
+            while True:
+                pages = env_svc["website.page"].search(
+                    [
+                        ("user_websites_group_id", "in", group_ids),
+                        ("website_published", "=", True),
+                    ],
+                    limit=5000,
+                )
+                if not pages:
+                    break
+                pages.write({"website_published": False})
+                env.cr.commit()
+                if len(pages) < 5000:
+                    break
+                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+
+            while True:
+                posts = env_svc["blog.post"].search(
+                    [
+                        ("user_websites_group_id", "in", group_ids),
+                        ("is_published", "=", True),
+                    ],
+                    limit=5000,
+                )
+                if not posts:
+                    break
+                posts.write({"is_published": False})
+                env.cr.commit()
+                if len(posts) < 5000:
+                    break
+                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+
+        finally:
+            env.cr.rollback()
+    except psycopg2.Error as e: # audit-ignore-catch-all
+        _logger.error("Async unpublish group content failed: %s", e)
+    finally:
+        cr.close()
 
 
 class UserWebsitesGroup(models.Model):
@@ -25,6 +86,17 @@ class UserWebsitesGroup(models.Model):
 
     # --- Fields Definition ---
     name = fields.Char(string="Group Name", required=True, tracking=True)
+
+    violation_strike_count = fields.Integer(
+        string="Violation Strikes",
+        default=0,
+        help="Number of upheld content violations. Hitting 3 triggers an automatic suspension.",
+    )
+    is_suspended_from_websites = fields.Boolean(
+        string="Suspended from Websites",
+        default=False,
+        help="If True, all group pages and blogs are forcefully unpublished and locked.",
+    )
 
     website_slug = fields.Char(
         string="Website Slug",
@@ -313,3 +385,77 @@ class UserWebsitesGroup(models.Model):
                 "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
             )
         return super(UserWebsitesGroup, self).unlink()
+
+    def action_suspend_group_websites(self):
+        """Forcefully unpublishes all group content and flags them as suspended."""
+        group_ids = self.ids
+        is_test = vars(self.env.registry).get("test_cr") is not None
+
+        if not is_test:
+            db_name = self.env.cr.dbname
+            ThreadPoolExecutor(max_workers=2).submit(
+                _async_unpublish_group_content, db_name, group_ids
+            )
+        else:
+            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "user_websites.user_websites_service_account"
+            )
+            while True:
+                pages = (
+                    self.env["website.page"]
+                    .with_user(svc_uid)
+                    .search(
+                        [
+                            ("user_websites_group_id", "in", group_ids),
+                            "|",
+                            ("is_published", "=", True),
+                            ("website_published", "=", True),
+                        ],
+                        limit=5000,
+                    )
+                )
+                if not pages:
+                    break
+                pages.write({"is_published": False, "website_published": False})
+            while True:
+                posts = (
+                    self.env["blog.post"]
+                    .with_user(svc_uid)
+                    .search(
+                        [
+                            ("user_websites_group_id", "in", group_ids),
+                            ("is_published", "=", True),
+                        ],
+                        limit=5000,
+                    )
+                )
+                if not posts:
+                    break
+                posts.write({"is_published": False})
+
+        for group in self:
+            group.is_suspended_from_websites = True
+            mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "zero_sudo.mail_service_internal"
+            )
+            group.with_user(mail_svc).message_post(
+                body=_(
+                    "🚨 **AUTOMATED ACTION:** The system suspended this group for accumulating 3 or more violation strikes and unpublished their shared content."
+                ),
+                subtype_xmlid="mail.mt_note",
+            )
+
+    def action_pardon_group_websites(self):
+        """Resets strikes and lifts the suspension (Does NOT automatically republish content)."""
+        for group in self:
+            group.violation_strike_count = 0
+            group.is_suspended_from_websites = False
+            mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "zero_sudo.mail_service_internal"
+            )
+            group.with_user(mail_svc).message_post(
+                body=_(
+                    "✅ **MODERATION ACTION:** You pardoned this group. The system lifted their suspension and reset their strike count to 0. (Note: Previously unpublished content remains unpublished until manually restored)."
+                ),
+                subtype_xmlid="mail.mt_note",
+            )

@@ -47,6 +47,7 @@ class TestSDKExtensibility(RealTransactionCase):
                 "owner_user_id": self.user.id,
             }
         )
+        self.env.cr.commit()
 
         data = self.user._get_gdpr_export_data()
         streams = self.user._get_gdpr_streamed_keys()

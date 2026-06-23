@@ -208,7 +208,6 @@ class DaemonKeyRegistry(models.Model):
                 "message": _("All keys provisioned successfully."),
                 "sticky": False,
                 "type": "success",
-                "next": {"type": "ir.actions.client", "tag": "reload"},
             },
         }
 

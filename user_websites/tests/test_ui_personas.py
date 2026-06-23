@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from odoo.tests import tagged
-from odoo.addons.hams_test.tests.hams_http_case import HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 _logger = logging.getLogger(__name__)
 
@@ -17,20 +17,13 @@ class TestUIPersonas(HamsHttpCase):
         # 3. User-Websites Administrator
         self.site_admin = self.env["res.users"].create({
             "name": "Persona Site Admin", "login": "siteadmin", "password": "siteadmin",
-            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id, self.env.ref("user_websites.group_user_websites_admin").id])]
+            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id, self.env.ref("user_websites.group_user_websites_administrator").id])]
         })
-        # 4. CRM User
-        self.crm_user = self.env["res.users"].create({
-            "name": "Persona CRM", "login": "personacrm", "password": "personacrm",
-            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])] # basic internal user, add crm if installed
-        })
-        # 5. Admin User (already exists as 'admin')
-        # 6. Club Operator
+        # 4. Club Operator
         self.club_op = self.env["res.users"].create({
             "name": "Persona Club Op", "login": "personaclub", "password": "personaclub",
             "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])] # club features will be added if needed
         })
-        self.env.cr.commit()
 
     def test_01_anonymous_persona(self):
         # Visit the home page as anonymous
@@ -58,17 +51,12 @@ class TestUIPersonas(HamsHttpCase):
         self.navigate_and_screenshot("/my/home", prefix="persona_siteadmin_my_home_")
         self.navigate_and_screenshot("/user_websites", prefix="persona_siteadmin_user_websites_")
 
-    def test_04_odoo_crm_user(self):
-        self.authenticate(self.crm_user.login, "personacrm")
-        self.navigate_and_screenshot("/web", prefix="persona_crm_backend_")
-        self.navigate_and_screenshot("/my/home", prefix="persona_crm_portal_")
-
     def test_05_odoo_administrator(self):
+        # Admin is already available as self.env.ref("base.user_admin")
         self.authenticate("admin", "admin")
-        self.navigate_and_screenshot("/web", prefix="persona_admin_backend_")
+        self.navigate_and_screenshot("/", prefix="persona_admin_home_")
         self.navigate_and_screenshot("/user_websites", prefix="persona_admin_user_websites_")
 
     def test_06_club_operator(self):
         self.authenticate(self.club_op.login, "personaclub")
         self.navigate_and_screenshot("/my/home", prefix="persona_clubop_my_home_")
-

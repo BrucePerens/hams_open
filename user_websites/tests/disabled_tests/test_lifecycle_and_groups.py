@@ -2,7 +2,7 @@
 import odoo
 import time
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 import logging
 from odoo.exceptions import ValidationError
 
@@ -10,7 +10,7 @@ _logger = logging.getLogger(__name__)
 
 
 @tagged('post_install', '-at_install')
-class TestLifecycleAndGroups(HamsHttpCase):
+class TestLifecycleAndGroups(RealTransactionCase):
     def setUp(self):
         super(TestLifecycleAndGroups, self).setUp()
 
@@ -83,6 +83,8 @@ class TestLifecycleAndGroups(HamsHttpCase):
             "Group member should be able to create group site",
         )
 
+        self.env.cr.commit()
+
         group_home = self.env["website.page"].search(
             [
                 ("url", "=", f"/{self.test_group.website_slug}/home"),
@@ -144,6 +146,7 @@ class TestLifecycleAndGroups(HamsHttpCase):
         self.logout()
         self.authenticate("admin", "admin")
 
+        self.env.cr.commit()
         self.user_a.with_context(test_mode=True).active = False
         self.env.cr.commit()
 

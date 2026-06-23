@@ -43,8 +43,15 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Verified by [@ANCHOR: test_get_service_uid_sql_resolve]
         # Verified by [@ANCHOR: test_get_service_uid_sql_verify]
         # Verified by [@ANCHOR: test_god_mode_block_sql]
+        # PRE-FLIGHT CHECK: Prevent odoo.sql_db from logging expected test errors
+        svc_user = self.env.ref(xml_id, raise_if_not_found=False)
+        if not svc_user:
+            raise AccessError(_("Security Alert: Service Account %s not found.") % xml_id)
+        if not svc_user.active:
+            raise AccessError(_("Security Alert: Service Account %s is disabled.") % xml_id)
+
         # FAIL FAST MANDATE: We execute the procedure natively.
-        # If the service account is missing, the PostgreSQL RAISE EXCEPTION
+        # If the service account is missing or compromised, the PostgreSQL RAISE EXCEPTION
         # will immediately crash the execution, exposing broken deployments.
         self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))
         return self.env.cr.fetchone()[0]

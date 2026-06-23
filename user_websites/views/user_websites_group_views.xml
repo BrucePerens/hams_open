@@ -23,7 +23,23 @@
         <field name="model">user.websites.group</field>
         <field name="arch" type="xml">
             <form string="User Websites Group">
+                <header>
+                    <button name="action_suspend_group_websites"
+                            type="object"
+                            string="Suspend Group Websites"
+                            invisible="is_suspended_from_websites == True"
+                            groups="user_websites.group_user_websites_moderator"
+                            class="btn-danger"
+                            confirm="Are you sure you want to suspend this group and unpublish all their content?"/>
+                    <button name="action_pardon_group_websites"
+                            type="object"
+                            string="Pardon Group"
+                            invisible="is_suspended_from_websites == False"
+                            groups="user_websites.group_user_websites_moderator"
+                            class="btn-success"/>
+                </header>
                 <sheet>
+                    <widget name="web_ribbon" title="Suspended" bg_color="text-bg-danger" invisible="is_suspended_from_websites == False"/>
                     <div class="oe_title">
                         <label for="name" class="oe_edit_only"/>
                         <h1><field name="name" placeholder="e.g. Chess Club"/></h1>
@@ -32,6 +48,10 @@
                         <group>
                             <field name="website_slug"/>
                             <field name="odoo_group_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="violation_strike_count"/>
+                            <field name="is_suspended_from_websites" readonly="1"/>
                         </group>
                     </group>
                     <notebook>

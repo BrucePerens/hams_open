@@ -163,3 +163,9 @@ You are an expert AI developer operating under strict architectural mandates. Th
 * [ ] **Linter Bypass:** If `audit-ignore` was added, is there an exhaustive test proving safety?
 * [ ] **Anchor Preservation:** Pre-existing anchors preserved and correctly placed?
 </definition_of_done>
+
+<goal>
+Look in agents/skills/goal for a memorized goal. Once the goal has been achieved,
+mark it as achieved so that you won't loop trying to perform it again.
+</goal>
+</goal>

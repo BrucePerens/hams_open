@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import time
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestModeration(HamsHttpCase):
+class TestModeration(RealTransactionCase):
 
     def setUp(self):
         super(TestModeration, self).setUp()
@@ -236,6 +236,15 @@ class TestModeration(HamsHttpCase):
             user_2.is_suspended_from_websites,
             "Member 2 should be suspended after 3 strikes.",
         )
+
+        for _ in range(20):
+            self.env.cr.commit()
+            self.env.invalidate_all()
+            if not self.spam_page.is_published:
+                # Wait for the background transaction to fully commit
+                time.sleep(0.5) # audit-ignore-sleep
+                break
+            time.sleep(0.5) # audit-ignore-sleep
 
     def test_05_concurrent_strike_locking(self):
         """

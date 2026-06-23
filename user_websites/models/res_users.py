@@ -243,19 +243,24 @@ class ResUsers(models.Model):
             if record_id:
                 user_domain.append(("id", "!=", record_id))
 
-            try:
-                with self.env.cr.savepoint():
-                    env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                        "user_websites.user_websites_service_account"
-                    )
-                    env_user = env_svc["res.users"]
-                    env_group = env_svc["user.websites.group"]
-            except (AccessError, psycopg2.Error) as e:
-                if "not found" in str(e).lower():
-                     env_user = self.env["res.users"]
-                     env_group = self.env["user.websites.group"]
-                else:
-                     raise
+            svc_user = self.env.ref("user_websites.user_websites_service_account", raise_if_not_found=False)
+            if not svc_user or not svc_user.active:
+                env_user = self.env["res.users"]
+                env_group = self.env["user.websites.group"]
+            else:
+                try:
+                    with self.env.cr.savepoint():
+                        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                            "user_websites.user_websites_service_account"
+                        )
+                        env_user = env_svc["res.users"]
+                        env_group = env_svc["user.websites.group"]
+                except (AccessError, psycopg2.Error) as e:
+                    if "not found" in str(e).lower() or "disabled" in str(e).lower():
+                         env_user = self.env["res.users"]
+                         env_group = self.env["user.websites.group"]
+                    else:
+                         raise
 
             user_collision = env_user.search_count(user_domain)
             group_collision = env_group.search_count([("website_slug", "=", slug)])
@@ -309,7 +314,7 @@ class ResUsers(models.Model):
         # --- Content Lifecycle Policy ---
         if "active" in vals and not vals["active"]:
             users_to_archive = self.ids
-            is_test = False
+            is_test = vars(self.env.registry).get("test_cr") is not None
             if not is_test:
                 db_name = self.env.cr.dbname
                 BACKGROUND_EXECUTOR.submit(
@@ -439,7 +444,7 @@ class ResUsers(models.Model):
         user_id = self.id
         db_name = self.env.cr.dbname
 
-        is_test = False
+        is_test = vars(self.env.registry).get("test_cr") is not None
 
         if is_test:
             env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
@@ -586,7 +591,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = False
+            is_test = vars(self.env.registry).get("test_cr") is not None
             if not is_test:
                 self.env.cr.commit()
             if len(pages) < 5000:
@@ -610,7 +615,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = False
+            is_test = vars(self.env.registry).get("test_cr") is not None
             if not is_test:
                 self.env.cr.commit()
             if len(posts) < 5000:
@@ -634,7 +639,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = False
+            is_test = vars(self.env.registry).get("test_cr") is not None
             if not is_test:
                 self.env.cr.commit()
             if len(blogs) < 5000:

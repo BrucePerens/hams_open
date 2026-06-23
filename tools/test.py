@@ -14,6 +14,7 @@ import argparse
 import atexit
 import contextlib
 import ctypes
+import fcntl
 import glob
 import logging
 import os
