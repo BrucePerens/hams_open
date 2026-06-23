@@ -120,15 +120,17 @@ class FailureExtractor:
             os.path.expanduser(log_dir)
         )
         self.mcp_mode = mcp_mode
-        if os.environ.get("HAMS_ISOLATED_NS") != "1":
+        self.display_path = os.path.join(base_dir, "filtered_test.txt")
+        
+        if os.environ.get("HAMS_ISOLATED_NS") == "1":
+            self.output_path = "/mnt/real_tmp/filtered_test.txt"
+        else:
+            self.output_path = self.display_path
             os.makedirs(base_dir, exist_ok=True)
             try:
                 os.chmod(base_dir, 0o777)
             except OSError as e:
                 _logger.debug("Ignored OSError: %s", e)
-        self.display_path = os.path.join(base_dir, "filtered_test.txt")
-
-        self.output_path = self.display_path
 
         try:
             if os.path.exists(self.output_path):
