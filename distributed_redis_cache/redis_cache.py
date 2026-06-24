@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. AGPL-3.0.
 import json
-import logging
+import logging; import sys
 import hashlib
 import datetime
 import time
@@ -80,13 +80,7 @@ def distributed_cache():
 
             use_redis = bool(redis and redis_pool)
 
-            # Sever Redis connection during standard automated testing
-            # to prevent cross-test ghost cache poisoning after Postgres rollbacks.
-            # RealTransactionCase and integration tests can re-enable it via system parameter.
-            # Use zero_sudo security utils for system parameter read to comply with security mandates
-            integration_active = self.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
-            if not integration_active and self.env.context.get("test_mode"):
-                use_redis = False
+            # Ensure Redis is running in testing environments to maintain production parity.
 
             if use_redis:
                 # Required to prevent Odoo from having invalid or out-of-phase data,
@@ -151,6 +145,8 @@ def invalidate_model_cache(env, model_name, local_only=False):
 
     if not local_only:
         use_redis = bool(redis and redis_pool)
+        # Ensure Redis is running in testing environments to maintain production parity.
+
         if use_redis:
             try:
                 r = get_redis_connection(env)

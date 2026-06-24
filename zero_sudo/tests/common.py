@@ -176,6 +176,16 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
     # [@ANCHOR: hams_transaction_case]
     _active_daemons = []
 
+    def setUp(self):
+        super().setUp()
+        try:
+            from odoo.addons.distributed_redis_cache.redis_cache import get_redis_connection
+            r = get_redis_connection(self.env)
+            if r:
+                r.flushall()
+        except ImportError:
+            pass
+
     @classmethod
     def tearDownClass(cls):
         for p in cls._active_daemons:

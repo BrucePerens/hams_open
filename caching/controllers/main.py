@@ -24,7 +24,7 @@ class ServiceWorkerController(http.Controller):
         """
         # Gating for Jules VM stability during Odoo initialization.
         # Prevent scanner during --init phase of tests.
-        is_test = request.env.registry.test_cr
+        is_test = getattr(request.env.registry, 'test_cr', False)
         is_boot = tools.config.get("init") or tools.config.get(
             "stop_after_init"
         )

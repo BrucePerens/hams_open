@@ -295,6 +295,7 @@ class ResUsers(models.Model):
         return super(ResUsers, self).create(vals_list)
 
     def write(self, vals):
+        import logging
         old_slugs = {}
         if "website_slug" in vals:
             # Safely format the incoming slug directly
