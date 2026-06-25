@@ -110,7 +110,7 @@ class ServiceWorkerController(http.Controller):
         """
         # Clear FS cache if requested (e.g., during tests or manual refresh)
         if request.env.context.get("force_fs_scan"):
-            registry.__dict__.pop("caching_fs_cache", None)
+            request.env.registry.__dict__.pop("caching_fs_cache", None)
 
         max_mtime, file_sizes = self._get_fs_stats()
 
