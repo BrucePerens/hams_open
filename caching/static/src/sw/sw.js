@@ -9,6 +9,74 @@ const CACHE_URL_REGEX = /^(\/web\/assets\/|\/[a-zA-Z0-9_-]+\/static\/)/;
 // Dynamically calculated by the Python backend to prevent quota exhaustion
 const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;
 
+const DB_NAME = 'LRUCacheDB';
+const STORE_NAME = 'LRUMetadata';
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+                store.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function updateLRUMetadata(url) {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put({ url: url, timestamp: Date.now() });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (e) {
+        console.error('[Caching SW] IDB update error:', e);
+    }
+}
+
+async function enforceLRUQuota(cache) {
+    try {
+        if (!navigator.storage || !navigator.storage.estimate) return;
+        
+        const estimate = await navigator.storage.estimate();
+        const MAX_STORAGE_BYTES = 35 * 1024 * 1024; // 35 MB
+        
+        if (estimate.usage <= MAX_STORAGE_BYTES) return;
+
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const index = store.index('timestamp');
+            
+            // Delete oldest 10 items as a batch to quickly free up space
+            let toDelete = 10; 
+            const request = index.openCursor();
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor && toDelete > 0) {
+                    cache.delete(cursor.value.url).catch(console.error);
+                    cursor.delete();
+                    toDelete--;
+                    cursor.continue();
+                } else {
+                    resolve();
+                }
+            };
+        });
+    } catch (e) {
+        console.error('[Caching SW] IDB quota enforcement error:', e);
+    }
+}
+
 self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
@@ -43,11 +111,16 @@ self.addEventListener('fetch', (event) => {
     if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
     if (url.pathname.startsWith('/my/') || url.pathname.startsWith('/api/') || url.pathname.startsWith('/web/image/') || url.pathname.startsWith('/web/content/')) return; // burn-ignore-route
 
+    // Explicitly bypass documentation images
+    if (url.pathname.includes('/static/description/images/')) return;
+
     // We only intercept requests that match our static asset patterns.
     if (CACHE_URL_REGEX.test(url.pathname)) {
         event.respondWith(
             caches.match(request).then((cachedResponse) => {
                 if (cachedResponse) {
+                    const isBundle = url.pathname.startsWith('/web/assets/');
+                    if (!isBundle) updateLRUMetadata(request.url);
                     return cachedResponse;
                 }
                 return fetch(request).then((networkResponse) => {
@@ -70,6 +143,9 @@ self.addEventListener('fetch', (event) => {
                     const responseToCache = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(request, responseToCache).then(() => {
+                            if (!isBundle) {
+                                updateLRUMetadata(request.url).then(() => enforceLRUQuota(cache));
+                            }
                             // SURGICAL ODOO EVICTION:
                             // Odoo bundles follow /web/assets/<hash>/<bundle_name>.js
                             // If we cache a new hash, instantly delete the old hash for the same bundle to prevent gigabytes of cache bloat.
