@@ -246,7 +246,10 @@ class FailureExtractor:
             else:
                 if not self.capturing:
                     self.capturing = True
-                self.current_block.append(line)
+                if len(self.current_block) < 5000:
+                    self.current_block.append(line)
+                elif len(self.current_block) == 5000:
+                    self.current_block.append("[!] TRUNCATED: Block exceeded 5000 lines (possible log spam).")
         else:
             if is_test_failure_content:
                 if not self.capturing:
@@ -267,7 +270,10 @@ class FailureExtractor:
                     self.current_block.append(ai_diagnostic)
 
             if self.capturing:
-                self.current_block.append(line)
+                if len(self.current_block) < 5000:
+                    self.current_block.append(line)
+                elif len(self.current_block) == 5000:
+                    self.current_block.append("[!] TRUNCATED: Block exceeded 5000 lines (possible log spam).")
 
     def _extract_failed_modules(self):
         modules = set()
@@ -371,6 +377,7 @@ def robust_reap(pid):
     print(f"\n[*] [REAPER] Initiating robust reaper for PID {pid}...")
     try:
         subprocess.run(["pkill", "-u", str(os.getuid()), "-TERM", "-f", "chrome"], check=False)
+        subprocess.run(["pkill", "-u", str(os.getuid()), "-TERM", "-f", "chromium"], check=False)
 
         pgid = os.getpgid(pid)
         print(f"[*] [REAPER] Sending SIGTERM to Process Group {pgid}")
@@ -388,6 +395,7 @@ def robust_reap(pid):
         print(f"[*] [REAPER] Process {pid} did not exit after SIGTERM. Sending SIGKILL to Process Group {pgid}")
         os.killpg(pgid, signal.SIGKILL)
         subprocess.run(["pkill", "-u", str(os.getuid()), "-KILL", "-f", "chrome"], check=False)
+        subprocess.run(["pkill", "-u", str(os.getuid()), "-KILL", "-f", "chromium"], check=False)
     except OSError as e:
         print(f"[*] [REAPER] Error during reap: {e}")
 
@@ -512,6 +520,7 @@ def run_cmd(cmd, extractor=None, cwd=None, env=None):
         print(f"[*] [DEBUG-RUNNER] Ensuring all child processes are reaped for PID {process.pid}...")
         try:
             subprocess.run(["pkill", "-u", str(os.getuid()), "-TERM", "-f", "chrome"], check=False)
+            subprocess.run(["pkill", "-u", str(os.getuid()), "-TERM", "-f", "chromium"], check=False)
             pgid = os.getpgid(process.pid)
             os.killpg(pgid, signal.SIGTERM)
         except OSError:
