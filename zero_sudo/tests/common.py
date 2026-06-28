@@ -59,8 +59,12 @@ def _patched_handle_request_paused(self, *args, **kwargs):
         cmd = "Fetch.continueRequest"
         response = {}
     else:
-        cmd = "Fetch.fulfillRequest"
-        response = self.test_case.fetch_proxy(url)
+        if hasattr(self.test_case, "fetch_proxy"):
+            cmd = "Fetch.fulfillRequest"
+            response = self.test_case.fetch_proxy(url)
+        else:
+            cmd = "Fetch.failRequest"
+            response = {"errorReason": "Failed"}
     try:
         self._websocket_send(
             cmd, params={"requestId": params.get("requestId"), **response}
@@ -141,6 +145,11 @@ def _patched_spawn_chrome(self, *args, **kwargs):
         ]:
             if flag not in cmd:
                 cmd.insert(1, flag)
+                
+        # Wrap chrome in a PID namespace to guarantee all descendants (GPU, renderers)
+        # are killed when the test teardown terminates the unshare parent.
+        unshare_cmd = ["unshare", "-c", "-m", "-p", "-f", "--mount-proc", "--kill-child=SIGTERM"]
+        cmd[:] = unshare_cmd + cmd
 
     return _original_spawn_chrome(self, *args, **kwargs)
 
