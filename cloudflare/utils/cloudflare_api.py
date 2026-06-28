@@ -290,22 +290,17 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
         _logger.error(f"Cloudflare Delete Tunnel API failed: {e}")
         return False, str(e)
 
+
 def create_custom_hostname(hostname, token, zone_id):
     if not token or not zone_id or not hostname:
         return False, "Missing credentials or hostname"
 
     endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    
+
     payload = {
         "hostname": hostname,
-        "ssl": {
-            "method": "http",
-            "type": "dv",
-            "settings": {
-                "min_tls_version": "1.2"
-            }
-        }
+        "ssl": {"method": "http", "type": "dv", "settings": {"min_tls_version": "1.2"}},
     }
 
     try:

@@ -6,6 +6,7 @@ from . import test_security_utils
 from . import test_views
 from . import test_controllers
 from . import test_json_rpc_client
+from . import test_integration
 
 import logging
 import psycopg2
@@ -36,7 +37,7 @@ if test_cursor_cls:
             # 55P03: LockNotAvailable (Row-level lock held by another thread)
             # 23505: UniqueViolation (Often happens when raw SQL bypasses the savepoint)
             pgcode = e.pgcode
-            if pgcode in ('40001', '55P03', '23505'):
+            if pgcode in ("40001", "55P03", "23505"):
                 hint = (
                     "\n" + "=" * 80 + "\n"
                     "🚨 [FRAMEWORK HINT] TRANSACTION IMPEDANCE DETECTED 🚨\n"
@@ -45,7 +46,8 @@ if test_cursor_cls:
                     "the uncommitted test savepoint, creating an invisible data collision.\n\n"
                     "💡 FIX: Stop debugging the logic. Convert this test class to inherit from\n"
                     "         `zero_sudo.tests.real_transaction.RealTransactionCase`.\n"
-                    + "=" * 80 + "\n"
+                    + "=" * 80
+                    + "\n"
                 )
                 # Emit directly to the logger so the FailureExtractor catches it instantly
                 _logger.critical(hint)

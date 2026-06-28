@@ -17,7 +17,8 @@ _logger = logging.getLogger(__name__)
 # Tests [@ANCHOR: distributed_cache_view]
 # Tests [@ANCHOR: distributed_cache_settings_view]
 
-@tagged('post_install', '-at_install')
+
+@tagged("post_install", "-at_install")
 class TestDistributedCacheTour(HamsHttpCase):
 
     def test_distributed_cache_admin_tour(self):
@@ -30,7 +31,7 @@ class TestDistributedCacheTour(HamsHttpCase):
 
         if not is_integration:
             # Mock the backend RPC methods to simulate a healthy Redis connection
-            cache_model_cls = type(self.env['distributed.cache.config'])
+            cache_model_cls = type(self.env["distributed.cache.config"])
 
             def mock_check_redis_status(record):
                 return {
@@ -40,7 +41,7 @@ class TestDistributedCacheTour(HamsHttpCase):
                         "title": _("Success"),
                         "message": _("Redis is connected"),
                         "type": "success",
-                        "sticky": False
+                        "sticky": False,
                     },
                 }
 
@@ -52,27 +53,40 @@ class TestDistributedCacheTour(HamsHttpCase):
                         "title": _("Success"),
                         "message": _("Cache invalidated successfully"),
                         "type": "success",
-                        "sticky": False
+                        "sticky": False,
                     },
                 }
 
-            self.safe_patch_object(cache_model_cls, 'check_redis_status', mock_check_redis_status)
-            self.safe_patch_object(cache_model_cls, 'action_invalidate_model_cache', mock_action_invalidate)
+            self.safe_patch_object(
+                cache_model_cls, "check_redis_status", mock_check_redis_status
+            )
+            self.safe_patch_object(
+                cache_model_cls, "action_invalidate_model_cache", mock_action_invalidate
+            )
 
         # Run the tour (Mocked in standard, Real Daemons in integration)
         if is_integration:
             # Signal the server to use real Redis during this tour session.
             # We use a system parameter as a global toggle for the test session.
-            self.env["zero_sudo.security.utils"]._set_system_param('distributed_redis_cache.test_integration_active', '1')
+            self.env["zero_sudo.security.utils"]._set_system_param(
+                "distributed_redis_cache.test_integration_active", "1"
+            )
 
         try:
             # Provide dummy data if needed by the tour (e.g. ensure the menu exists)
             # The menu xmlid is distributed_redis_cache.menu_distributed_cache_root
-            self.start_tour("/odoo?debug=1", "distributed_cache_admin_tour", login="admin", timeout=240)
+            self.start_tour(
+                "/odoo?debug=1",
+                "distributed_cache_admin_tour",
+                login="admin",
+                timeout=240,
+            )
         except Exception as e:  # audit-ignore-catch-all
             # [!] DIAGNOSTIC FOR AI: UI Tour 'distributed_cache_admin_tour' failed.
             _logger.error("Tour failed: %s", e)
             raise e
         finally:
             if is_integration:
-                self.env["zero_sudo.security.utils"]._set_system_param('distributed_redis_cache.test_integration_active', '0')
+                self.env["zero_sudo.security.utils"]._set_system_param(
+                    "distributed_redis_cache.test_integration_active", "0"
+                )

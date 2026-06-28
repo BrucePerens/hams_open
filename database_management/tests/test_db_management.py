@@ -16,7 +16,9 @@ class TestDatabaseManagement(HamsTransactionCase):
         mock_res.returncode = 0
         mock_run.return_value = mock_res
 
-        stat = self.env["database.table.stat"].search([("table_name", "=", "res_users")], limit=1)
+        stat = self.env["database.table.stat"].search(
+            [("table_name", "=", "res_users")], limit=1
+        )
         self.assertTrue(
             stat,
             "[!] DIAGNOSTIC FOR AI: res_users table must exist in database.table.stat view.",
@@ -28,7 +30,9 @@ class TestDatabaseManagement(HamsTransactionCase):
     def test_01b_vacuum_analyze_failures(self):
         mock_run = self.safe_patch("subprocess.run")
         mock_which = self.safe_patch("shutil.which")
-        stat = self.env["database.table.stat"].search([("table_name", "=", "res_users")], limit=1)
+        stat = self.env["database.table.stat"].search(
+            [("table_name", "=", "res_users")], limit=1
+        )
         if not stat:
             return
 
@@ -67,7 +71,9 @@ class TestDatabaseManagement(HamsTransactionCase):
 
     def test_03_db_index_stats(self):
         # Tests [@ANCHOR: db_index_stats]
-        mock_search = self.safe_patch_object(type(self.env["database.table.stat"]), "search")
+        mock_search = self.safe_patch_object(
+            type(self.env["database.table.stat"]), "search"
+        )
         mock_search.return_value = self.env["database.table.stat"].browse()
         self.env["database.table.stat"].cron_check_bloat()
         mock_search.assert_called_once()
@@ -125,5 +131,7 @@ class TestDatabaseManagement(HamsTransactionCase):
 
         type(stat).query = PropertyMock(return_value="DELETE FROM res_users")
 
-        with self.assertRaises(UserError, msg="Only SELECT queries can be analyzed via Explain."):
+        with self.assertRaises(
+            UserError, msg="Only SELECT queries can be analyzed via Explain."
+        ):
             stat.action_explain_query()

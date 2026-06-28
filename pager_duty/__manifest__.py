@@ -38,7 +38,7 @@
             "name": "Pager Duty & Generalized Monitoring",
             "path": "data/documentation.html",
             "icon": "📟",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "assets": {
@@ -50,6 +50,6 @@
         ],
         "web.assets_tests": [
             "pager_duty/static/src/tours/incident_tour.js",
-        ]
+        ],
     },
 }

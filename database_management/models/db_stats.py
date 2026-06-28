@@ -33,7 +33,8 @@ class DatabaseTableStat(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW database_table_stat AS (
                 SELECT
                     row_number() OVER () as id,
@@ -46,7 +47,8 @@ class DatabaseTableStat(models.Model):
                 FROM pg_stat_user_tables t
                 JOIN pg_statio_user_tables i ON t.relid = i.relid
             )
-        """)
+        """
+        )
 
     def _get_executable(self, cmd_name):
         return self.env["zero_sudo.security.utils"]._ensure_executable(
@@ -114,18 +116,13 @@ class DatabaseTableStat(models.Model):
                     "pager_duty.user_pager_service_internal"
                 )
                 tables = ", ".join(
-                    [
-                        f"{t.table_name}"
-                        f" ({t.dead_percent:.1f}%)"
-                        for t in high_bloat
-                    ]
+                    [f"{t.table_name}" f" ({t.dead_percent:.1f}%)" for t in high_bloat]
                 )
                 desc = (
                     "Database Bloat Warning! The"
                     " following tables have >20%"
                     " dead tuples and require a"
-                    " manual Vacuum Analyze: "
-                    + tables
+                    " manual Vacuum Analyze: " + tables
                 )
                 env_svc["pager.incident"].report_incident(
                     {
@@ -166,19 +163,22 @@ class DatabaseQueryStat(models.Model):
             with self.env.cr.savepoint():
                 # Safely check the postgres catalog and settings to confirm the extension
                 # is loaded without triggering a hard 'bad query' ERROR log in odoo.sql_db
-                self.env.cr.execute("""
+                self.env.cr.execute(
+                    """
                     SELECT 1 FROM pg_extension e
                     JOIN pg_settings s ON s.name = 'shared_preload_libraries'
                     WHERE e.extname = 'pg_stat_statements'
                     AND s.setting LIKE '%pg_stat_statements%'
-                """)
+                """
+                )
                 if self.env.cr.fetchone():
                     can_query = True
         except Exception as e:  # audit-ignore-catch-all
             _logger.warning("Graceful degradation check failed: %s", e)
 
         if can_query:
-            self.env.cr.execute("""
+            self.env.cr.execute(
+                """
                 CREATE OR REPLACE VIEW database_query_stat AS (
                     SELECT
                         row_number() OVER () as id,
@@ -188,13 +188,16 @@ class DatabaseQueryStat(models.Model):
                         mean_exec_time as mean_time
                     FROM pg_stat_statements
                 )
-            """)
+            """
+            )
         else:
-            self.env.cr.execute("""
+            self.env.cr.execute(
+                """
                 CREATE OR REPLACE VIEW database_query_stat AS (
                     SELECT 1 as id, 'pg_stat_statements not installed or not loaded via shared_preload_libraries in postgresql.conf.' as query, 0 as calls, 0.0 as total_time, 0.0 as mean_time
                 )
-            """)
+            """
+            )
 
 
 class DatabaseActivity(models.Model):
@@ -215,7 +218,8 @@ class DatabaseActivity(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW database_activity AS (
                 SELECT
                     pid as id,
@@ -227,20 +231,24 @@ class DatabaseActivity(models.Model):
                 FROM pg_stat_activity
                 WHERE datname = current_database() AND pid <> pg_backend_pid()
             )
-        """)
+        """
+        )
 
     def action_terminate_backend(self):
         # [@ANCHOR: db_terminate_backend]
         # Tests [@ANCHOR: db_terminate_backend]
         # micro-privilege: Use service account for termination
         utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("database_management.user_database_management_service")
+        env_svc = utils._get_service_env(
+            "database_management.user_database_management_service"
+        )
 
         pids = [rec.pid for rec in self if rec.pid]
         if pids:
             # Performance: Optimize latency by reducing database operation round-trips to only one.
             # We use a DO block to ensure the termination logic runs entirely on the DB server.
-            env_svc.cr.execute("""
+            env_svc.cr.execute(
+                """
                 DO $$
                 DECLARE
                     p integer;
@@ -250,7 +258,9 @@ class DatabaseActivity(models.Model):
                         PERFORM pg_terminate_backend(p);
                     END LOOP;
                 END $$;
-            """, (pids,))
+            """,
+                (pids,),
+            )
         return True
 
 
@@ -271,7 +281,8 @@ class DatabaseIndexStat(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW database_index_stat AS (
                 SELECT
                     row_number() OVER () as id,
@@ -283,7 +294,8 @@ class DatabaseIndexStat(models.Model):
                 JOIN pg_index USING (indexrelid)
                 WHERE indisunique IS FALSE
             )
-        """)
+        """
+        )
 
 
 class DatabaseReplicationStat(models.Model):
@@ -309,7 +321,8 @@ class DatabaseReplicationStat(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW database_replication_stat AS (
                 SELECT
                     row_number() OVER () as id,
@@ -328,7 +341,8 @@ class DatabaseReplicationStat(models.Model):
                     sync_state
                 FROM pg_stat_replication
             )
-        """)
+        """
+        )
 
 
 class DatabaseIndexAdvisor(models.Model):
@@ -349,7 +363,8 @@ class DatabaseIndexAdvisor(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW database_index_advisor AS (
                 SELECT
                     relid as id,
@@ -361,7 +376,8 @@ class DatabaseIndexAdvisor(models.Model):
                 FROM pg_stat_user_tables
                 WHERE seq_scan > 100 AND pg_total_relation_size(relid) > 10 * 1024 * 1024
             )
-        """)
+        """
+        )
 
 
 class DatabaseQueryStatInherit(models.Model):
@@ -377,7 +393,9 @@ class DatabaseQueryStatInherit(models.Model):
                 "tag": "display_notification",
                 "params": {
                     "title": _("Installation Attempted"),
-                    "message": _("Extension created. Please refresh the view to see if queries populate."),
+                    "message": _(
+                        "Extension created. Please refresh the view to see if queries populate."
+                    ),
                     "type": "success",
                     "sticky": False,
                 },
@@ -399,7 +417,9 @@ class DatabaseQueryStatInherit(models.Model):
     def action_reset_stats(self):
         # micro-privilege: Use service account for stats reset
         utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("database_management.user_database_management_service")
+        env_svc = utils._get_service_env(
+            "database_management.user_database_management_service"
+        )
         try:
             env_svc.cr.execute("SELECT pg_stat_statements_reset()")
             return {
@@ -421,7 +441,9 @@ class DatabaseQueryStatInherit(models.Model):
         # Tests [@ANCHOR: db_explain_query]
         self.ensure_one()
         utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("database_management.user_database_management_service")
+        env_svc = utils._get_service_env(
+            "database_management.user_database_management_service"
+        )
         cr_svc = env_svc.cr
 
         try:
@@ -432,27 +454,16 @@ class DatabaseQueryStatInherit(models.Model):
             query_text = self.query.strip()
             query_upper = query_text.upper()
             if not query_upper.startswith("SELECT"):
-                msg = _(
-                    "Only SELECT queries can"
-                    " be analyzed via Explain."
-                )
+                msg = _("Only SELECT queries can" " be analyzed via Explain.")
                 raise UserError(msg)
 
             # Reject multi-statement payloads
             if re.search(r";\s*\S", query_text):
-                msg = _(
-                    "Multi-statement queries"
-                    " are not permitted."
-                )
+                msg = _("Multi-statement queries" " are not permitted.")
                 raise UserError(msg)
 
-            explain_prefix = psql.SQL(
-                "EXPLAIN (ANALYZE, BUFFERS) "
-            )
-            explain_query = (
-                explain_prefix
-                + psql.SQL(query_text)
-            )
+            explain_prefix = psql.SQL("EXPLAIN (ANALYZE, BUFFERS) ")
+            explain_query = explain_prefix + psql.SQL(query_text)
             cr_svc.execute(explain_query)
             plan = "\n".join([row[0] for row in cr_svc.fetchall()])
 

@@ -30,7 +30,7 @@ Upon installation, it:
             "name": "Site Owner's Guide to Regulatory Compliance",
             "path": "data/documentation.html",
             "icon": "⚖️",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "assets": {

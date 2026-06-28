@@ -39,8 +39,12 @@ class TestPurgeEverything(RealTransactionCase):
             "odoo.addons.cloudflare.models.purge_queue.purge_everything"
         )
         mock_purge_everything.return_value = True
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True)
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True)
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True
+        )
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True
+        )
 
         # 1. Enqueue some URLs and Tags for Website A
         self.PurgeQueue.enqueue_urls(["/a1", "/a2"], website_id=self.website_a.id)
@@ -73,8 +77,12 @@ class TestPurgeEverything(RealTransactionCase):
         mock_purge_everything = self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_everything"
         )
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True)
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True)
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True
+        )
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True
+        )
 
         # Website A fails
         def side_effect(token, zone):

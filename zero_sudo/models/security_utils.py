@@ -8,6 +8,7 @@ from odoo.exceptions import AccessError, UserError
 
 _logger = logging.getLogger(__name__)
 
+
 class ZeroSudoSecurityUtils(models.AbstractModel):
     _name = "zero_sudo.security.utils"
     _description = "Centralized Security and Privilege Utilities"
@@ -35,9 +36,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Verified by [@ANCHOR: test_get_service_uid]
         # Verified by [@ANCHOR: ham_onboarding:test_otp_mail_template]
         # Tests [@ANCHOR: story_secure_escalation]
-        
+
         if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
-            raise AccessError(_("Invalid XML ID format: %s. Expected 'module.name'.") % xml_id)
+            raise AccessError(
+                _("Invalid XML ID format: %s. Expected 'module.name'.") % xml_id
+            )
 
         # STRICT ZERO-SUDO MANDATE: Resolve and verify via optimized Postgres procedure
         # [@ANCHOR: get_service_uid_sql_resolve]
@@ -46,18 +49,25 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Verified by [@ANCHOR: test_god_mode_block_sql]
         # PRE-FLIGHT CHECK: Prevent odoo.sql_db from logging expected test errors
         # Use SQL to bypass ORM access rules, as Portal users cannot read Internal Service Accounts
-        module, name = xml_id.split('.')
-        self.env.cr.execute("""
+        module, name = xml_id.split(".")
+        self.env.cr.execute(
+            """
             SELECT u.active 
             FROM ir_model_data d 
             JOIN res_users u ON d.res_id = u.id 
             WHERE d.model = 'res.users' AND d.module = %s AND d.name = %s
-        """, (module, name))
+        """,
+            (module, name),
+        )
         row = self.env.cr.fetchone()
         if not row:
-            raise AccessError(_("Security Alert: Service Account %s not found.") % xml_id)
+            raise AccessError(
+                _("Security Alert: Service Account %s not found.") % xml_id
+            )
         if not row[0]:
-            raise AccessError(_("Security Alert: Service Account %s is disabled.") % xml_id)
+            raise AccessError(
+                _("Security Alert: Service Account %s is disabled.") % xml_id
+            )
 
         self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))
         uid = self.env.cr.fetchone()[0]
@@ -88,7 +98,12 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             return env_svc["binary.manifest"].ensure_executable(cmd_name)
 
         pkg = pkg_name or cmd_name
-        raise UserError(_("Missing dependency: '%s'. Please install via OS package manager (e.g., 'apt-get install %s').") % (cmd_name, pkg))
+        raise UserError(
+            _(
+                "Missing dependency: '%s'. Please install via OS package manager (e.g., 'apt-get install %s')."
+            )
+            % (cmd_name, pkg)
+        )
 
     @api.model
     def _invalidate_model_cache(self, model_name):
@@ -103,11 +118,16 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             return
 
         # Check if the current user has access to the model
-        if not self.env.user.has_group('base.group_system'):
+        if not self.env.user.has_group("base.group_system"):
             try:
-                self.env[model_name].check_access('write')
+                self.env[model_name].check_access("write")
             except AccessError:
-                raise AccessError(_("Security Alert: You do not have permission to invalidate the cache for model '%s'.") % model_name)
+                raise AccessError(
+                    _(
+                        "Security Alert: You do not have permission to invalidate the cache for model '%s'."
+                    )
+                    % model_name
+                )
 
         # We assume the identity of the dedicated cache invalidation service
         # to perform the registry-level cache clearing.
@@ -116,11 +136,13 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         # Log the invalidation event
         facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
-        facility_env['zero_sudo.security.log'].create({
-            'user_id': self.env.user.id,
-            'reason': 'cache_invalidation',
-            'login': f"Model: {model_name}",
-        })
+        facility_env["zero_sudo.security.log"].create(
+            {
+                "user_id": self.env.user.id,
+                "reason": "cache_invalidation",
+                "login": f"Model: {model_name}",
+            }
+        )
 
         # Also signal distributed caches via pg_notify
         self._notify_cache_invalidation(model_name, "CLEAR_ALL")
@@ -200,25 +222,45 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         whitelist = self._get_param_read_whitelist()
 
         banned_substrings = [
-            "secret", "key", "password", "token", "auth", "crypt", "cert",
+            "secret",
+            "key",
+            "password",
+            "token",
+            "auth",
+            "crypt",
+            "cert",
         ]
         lower_key = key.lower()
 
         if key not in whitelist:
             # Log the unauthorized access attempt
-            facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
-            facility_env['zero_sudo.security.log'].create({
-                'user_id': self.env.user.id,
-                'reason': 'param_access_denied',
-                'login': key,
-            })
+            facility_env = self._get_service_env(
+                "zero_sudo.odoo_facility_service_internal"
+            )
+            facility_env["zero_sudo.security.log"].create(
+                {
+                    "user_id": self.env.user.id,
+                    "reason": "param_access_denied",
+                    "login": key,
+                }
+            )
 
             if any(banned in lower_key for banned in banned_substrings):
-                raise AccessError(_("Security Alert: Parameter '%s' matches restricted cryptographic patterns and cannot be extracted via Zero-Sudo.") % key)
-            raise AccessError(_("Security Alert: Parameter '%s' is not in the Zero-Sudo READ whitelist. You must explicitly register it in zero_sudo/models/security_utils.py.") % key)
+                raise AccessError(
+                    _(
+                        "Security Alert: Parameter '%s' matches restricted cryptographic patterns and cannot be extracted via Zero-Sudo."
+                    )
+                    % key
+                )
+            raise AccessError(
+                _(
+                    "Security Alert: Parameter '%s' is not in the Zero-Sudo READ whitelist. You must explicitly register it in zero_sudo/models/security_utils.py."
+                )
+                % key
+            )
 
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
-        
+
         return env_svc["ir.config_parameter"].get_param(key, default)
 
     @api.model
@@ -228,22 +270,31 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         if key not in whitelist:
             # Log the unauthorized write attempt
-            facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
-            facility_env['zero_sudo.security.log'].create({
-                'user_id': self.env.user.id,
-                'reason': 'param_write_denied',
-                'login': key,
-            })
-            raise AccessError(_("Security Alert: Parameter '%s' is not in the Zero-Sudo WRITE whitelist. You must explicitly register it in zero_sudo/models/security_utils.py.") % key)
+            facility_env = self._get_service_env(
+                "zero_sudo.odoo_facility_service_internal"
+            )
+            facility_env["zero_sudo.security.log"].create(
+                {
+                    "user_id": self.env.user.id,
+                    "reason": "param_write_denied",
+                    "login": key,
+                }
+            )
+            raise AccessError(
+                _(
+                    "Security Alert: Parameter '%s' is not in the Zero-Sudo WRITE whitelist. You must explicitly register it in zero_sudo/models/security_utils.py."
+                )
+                % key
+            )
 
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
-        
+
         return env_svc["ir.config_parameter"].set_param(key, value)
 
     @api.model
     def _get_kv(self, key):
         env_svc = self._get_service_env("zero_sudo.odoo_facility_service_internal")
-        record = env_svc['zero_sudo.kv'].search([('key', '=', key)], limit=1)
+        record = env_svc["zero_sudo.kv"].search([("key", "=", key)], limit=1)
         return record.value if record else None
 
     @api.model
@@ -282,7 +333,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 # We check the file strictly if it exists to avoid repeated failed opens
                 secret_path = "/var/lib/odoo/hams_crypto.secret"
                 if os.path.exists(secret_path):
-                    with open(secret_path, "r") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
+                    with open(
+                        secret_path, "r"
+                    ) as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
                         secret = f.read().strip()
             except OSError as e:
                 _logger.warning("Failed to read crypto secret file: %s", e)
@@ -293,7 +346,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             secret = tools.config.get("admin_passwd")
 
         if not secret or secret == "admin":
-            _logger.warning("System running with insecure or default cryptographic secret!")
+            _logger.warning(
+                "System running with insecure or default cryptographic secret!"
+            )
             secret = "default_insecure_secret_fallback"
 
         return secret

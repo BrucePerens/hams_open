@@ -45,15 +45,29 @@ class TestPgConfig(HamsTransactionCase):
         # min(1024, 16GB * 0.05) = min(1024, 819) = 819MB
         # max(4, (16GB * 0.25) / 500) = max(4, 4096 / 500) = max(4, 8.19) = 8MB
 
-        calls = [call[0][0] for call in mock_execute.call_args_list if isinstance(call[0][0], (sql.SQL, sql.Composed))]
+        calls = [
+            call[0][0]
+            for call in mock_execute.call_args_list
+            if isinstance(call[0][0], (sql.SQL, sql.Composed))
+        ]
         query_strings = [c.as_string(self.env.cr._obj) for c in calls]
 
-        self.assertTrue(any("SET \"shared_buffers\" = '4096MB'" in s for s in query_strings))
-        self.assertTrue(any("SET \"effective_cache_size\" = '12288MB'" in s for s in query_strings))
-        self.assertTrue(any("SET \"maintenance_work_mem\" = '819MB'" in s for s in query_strings))
+        self.assertTrue(
+            any("SET \"shared_buffers\" = '4096MB'" in s for s in query_strings)
+        )
+        self.assertTrue(
+            any("SET \"effective_cache_size\" = '12288MB'" in s for s in query_strings)
+        )
+        self.assertTrue(
+            any("SET \"maintenance_work_mem\" = '819MB'" in s for s in query_strings)
+        )
         self.assertTrue(any("SET \"work_mem\" = '8MB'" in s for s in query_strings))
-        self.assertTrue(any("SET \"max_connections\" = '500'" in s for s in query_strings))
-        self.assertTrue(any("SET \"random_page_cost\" = '1.1'" in s for s in query_strings))
+        self.assertTrue(
+            any("SET \"max_connections\" = '500'" in s for s in query_strings)
+        )
+        self.assertTrue(
+            any("SET \"random_page_cost\" = '1.1'" in s for s in query_strings)
+        )
 
     def test_02_ha_wizard(self):
         self.safe_patch(
@@ -94,7 +108,11 @@ class TestPgConfig(HamsTransactionCase):
         self.assertIn("listen_port = 6432", wizard.pgbouncer_ini)
 
     def test_01b_optimization_wizard_errors(self):
-        wizard = self.env["pg.optimize.wizard"].with_user(self.admin).create({"ram_gb": 0, "cpu_cores": 8})
+        wizard = (
+            self.env["pg.optimize.wizard"]
+            .with_user(self.admin)
+            .create({"ram_gb": 0, "cpu_cores": 8})
+        )
         with self.assertRaises(UserError):
             wizard.action_apply_optimizations()
 
@@ -120,7 +138,9 @@ class TestPgConfig(HamsTransactionCase):
                 }
             )
         )
-        with self.assertRaisesRegex(UserError, "Password must be at least 8 characters"):
+        with self.assertRaisesRegex(
+            UserError, "Password must be at least 8 characters"
+        ):
             wizard2.action_generate()
 
     def test_02b_ha_wizard_missing_binaries(self):

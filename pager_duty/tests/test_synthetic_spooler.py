@@ -3,7 +3,8 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.pager_duty.daemon import pager_synthetic_spooler
 
-@tagged('post_install', '-at_install')
+
+@tagged("post_install", "-at_install")
 class TestSyntheticSpooler(HamsTransactionCase):
 
     def test_00_i18n_headless_audit(self):
@@ -29,4 +30,6 @@ class TestSyntheticSpooler(HamsTransactionCase):
             "sandbox_network_access": "loopback",
         }
         name, res = pager_synthetic_spooler.execute_check(check)
-        self.assertFalse(res["success"], "Ping should have failed due to unshared network.")
+        self.assertFalse(
+            res["success"], "Ping should have failed due to unshared network."
+        )

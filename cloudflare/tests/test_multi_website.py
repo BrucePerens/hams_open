@@ -31,11 +31,19 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
 
     def tearDown(self):
         # Clean up Odoo core's automatic implied_ids when multiple websites exist
-        group_user_data = self.env["ir.model.data"].search([("module", "=", "base"), ("name", "=", "group_user")])
-        group_user = self.env["res.groups"].browse(group_user_data.res_id) if group_user_data else self.env["res.groups"]
-        group_multi = self.env.ref("website.group_multi_website", raise_if_not_found=False)
+        group_user_data = self.env["ir.model.data"].search(
+            [("module", "=", "base"), ("name", "=", "group_user")]
+        )
+        group_user = (
+            self.env["res.groups"].browse(group_user_data.res_id)
+            if group_user_data
+            else self.env["res.groups"]
+        )
+        group_multi = self.env.ref(
+            "website.group_multi_website", raise_if_not_found=False
+        )
         if group_user and group_multi:
-            group_user.write({'implied_ids': [(3, group_multi.id)]})
+            group_user.write({"implied_ids": [(3, group_multi.id)]})
         super().tearDown()
 
     def test_multi_website_purge_queue(self):
@@ -51,7 +59,8 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
             "odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True
         )
         self.safe_patch(
-            "odoo.addons.cloudflare.models.purge_queue.purge_everything", return_value=True
+            "odoo.addons.cloudflare.models.purge_queue.purge_everything",
+            return_value=True,
         )
 
         # Enqueue URLs for both websites

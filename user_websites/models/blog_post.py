@@ -37,10 +37,7 @@ class BlogPost(models.Model):
         for rec in self:
             if rec.owner_user_id and rec.owner_user_id.website_slug:
                 tags.add(f"site-{rec.owner_user_id.website_slug}")
-            elif (
-                rec.user_websites_group_id
-                and rec.user_websites_group_id.website_slug
-            ):
+            elif rec.user_websites_group_id and rec.user_websites_group_id.website_slug:
                 tags.add(f"site-{rec.user_websites_group_id.website_slug}")
         if tags:
             try:
@@ -54,9 +51,13 @@ class BlogPost(models.Model):
                 if "Service Account" in str(e):
                     logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
                 else:
-                    logging.getLogger(__name__).exception("Access error during Cloudflare purge")
-            except Exception: # audit-ignore-catch-all
-                logging.getLogger(__name__).exception("Fatal error during Cloudflare purge")
+                    logging.getLogger(__name__).exception(
+                        "Access error during Cloudflare purge"
+                    )
+            except Exception:  # audit-ignore-catch-all
+                logging.getLogger(__name__).exception(
+                    "Fatal error during Cloudflare purge"
+                )
 
     def _get_blog_urls(self):
         """Helper method to construct the blog index URLs for Cloudflare cache invalidation."""
@@ -99,7 +100,7 @@ class BlogPost(models.Model):
                 "website_meta_description",
                 "website_meta_keywords",
                 "website_meta_og_img",
-                "seo_name"
+                "seo_name",
             }
             for vals in vals_list:
                 for k in list(vals.keys()):
@@ -110,15 +111,13 @@ class BlogPost(models.Model):
                 "user_websites.user_websites_service_account"
             )
             # ADR-0001: All service account mutations must include appropriate context
-            self_svc = self.with_user(svc_uid).with_context(
-                mail_notrack=True
-            )
+            self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
             posts = super(BlogPost, self_svc).create(vals_list)
         except AccessError as e:
-             if "not found" in str(e):
-                  posts = super(BlogPost, self).create(vals_list)
-             else:
-                  raise
+            if "not found" in str(e):
+                posts = super(BlogPost, self).create(vals_list)
+            else:
+                raise
 
         utils = self.env["zero_sudo.security.utils"]
         for url in posts._get_blog_urls():
@@ -195,7 +194,7 @@ class BlogPost(models.Model):
                 "website_meta_description",
                 "website_meta_keywords",
                 "website_meta_og_img",
-                "seo_name"
+                "seo_name",
             }
             for k in list(vals.keys()):
                 if k not in allowed:
@@ -208,15 +207,13 @@ class BlogPost(models.Model):
                 "user_websites.user_websites_service_account"
             )
             # ADR-0001: All service account mutations must include appropriate context
-            self_svc = self.with_user(svc_uid).with_context(
-                mail_notrack=True
-            )
+            self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
             res = super(BlogPost, self_svc).write(vals)
         except AccessError as e:
-             if "not found" in str(e):
-                  res = super(BlogPost, self).write(vals)
-             else:
-                  raise
+            if "not found" in str(e):
+                res = super(BlogPost, self).write(vals)
+            else:
+                raise
 
         if "is_published" in vals or "name" in vals or "content" in vals:
             new_urls = self._get_blog_urls()
@@ -239,15 +236,13 @@ class BlogPost(models.Model):
                 "user_websites.user_websites_service_account"
             )
             # ADR-0001: All service account mutations must include appropriate context
-            self_svc = self.with_user(svc_uid).with_context(
-                mail_notrack=True
-            )
+            self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
             res = super(BlogPost, self_svc).unlink()
         except AccessError as e:
-             if "not found" in str(e):
-                  res = super(BlogPost, self).unlink()
-             else:
-                  raise
+            if "not found" in str(e):
+                res = super(BlogPost, self).unlink()
+            else:
+                raise
 
         utils = self.env["zero_sudo.security.utils"]
         if urls_to_invalidate:

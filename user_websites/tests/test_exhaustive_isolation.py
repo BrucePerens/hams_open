@@ -8,7 +8,7 @@ from odoo.exceptions import AccessError
 _logger = logging.getLogger(__name__)
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
     """
     Aggressive Red-Team test suite designed to hunt for cross-tenant IDORs,
@@ -220,11 +220,11 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
                 content,
                 "CRITICAL SSTI VULNERABILITY: Malicious QWeb evaluated successfully and leaked database records!",
             )
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
             # If the rendering engine crashes entirely due to the illegal syntax (e.g. QWebException),
             # that is also considered a successful defense against extraction.
-            _logger.info('QWeb rendering exception caught as expected.')
+            _logger.info("QWeb rendering exception caught as expected.")
 
     def test_05_blog_post_cross_tenant_mutation(self):
         """
@@ -327,4 +327,6 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
             Exception,
             msg="RPC call MUST fail proxy ownership validation and raise an exception.",
         ):
-            self.make_jsonrpc_request("/web/dataset/call_kw/blog.post/create", payload) # burn-ignore-route
+            self.make_jsonrpc_request(
+                "/web/dataset/call_kw/blog.post/create", payload  # burn-ignore-route
+            )  # burn-ignore-route

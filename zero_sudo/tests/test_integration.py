@@ -5,7 +5,8 @@ import urllib.request
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
-@tagged('post_install', '-at_install', 'integration')
+
+@tagged("post_install", "-at_install", "integration")
 class TestIntegrationFacility(HamsTransactionCase):
     # Tests [@ANCHOR: integration_daemon_testing]
 
@@ -16,7 +17,7 @@ class TestIntegrationFacility(HamsTransactionCase):
         Verify that HamsTransactionCase correctly starts a daemon and polls its health.
         """
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        script_path = os.path.join(base_dir, 'tests', 'dummy_daemon.py')
+        script_path = os.path.join(base_dir, "tests", "dummy_daemon.py")
 
         # The dummy_daemon.py uses port 1234.
         # We use the hostname here to satisfy the linter's anti-localhost policy.

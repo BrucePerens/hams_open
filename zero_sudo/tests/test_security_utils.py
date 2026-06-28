@@ -26,7 +26,10 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # Safe parameters should pass
         base_url = utils._get_system_param("web.base.url")
-        self.assertTrue(base_url is not None or base_url is False, msg="[!] DIAGNOSTIC FOR AI: Failed to retrieve whitelisted parameter 'web.base.url'.")
+        self.assertTrue(
+            base_url is not None or base_url is False,
+            msg="[!] DIAGNOSTIC FOR AI: Failed to retrieve whitelisted parameter 'web.base.url'.",
+        )
 
         # Test setting safe parameter
         # Use a dummy context so it doesn't break the actual DB url
@@ -105,9 +108,11 @@ class TestSecurityUtils(HamsTransactionCase):
         utils._notify_cache_invalidation("test.model", "")
         utils._notify_cache_invalidation(None, "test_key")
         utils._notify_cache_invalidation("test.model", None)
-        self.assertEqual(mock_execute.call_count, 0, "Should not notify for empty model or key")
+        self.assertEqual(
+            mock_execute.call_count, 0, "Should not notify for empty model or key"
+        )
 
-    @mute_logger('odoo.sql_db')
+    @mute_logger("odoo.sql_db")
     def test_04_god_mode_block_enforcement(self):
         # [@ANCHOR: test_god_mode_block_sql]
         # Tests [@ANCHOR: god_mode_block_sql]
@@ -133,9 +138,12 @@ class TestSecurityUtils(HamsTransactionCase):
         )
 
         try:
-            utils = self.env["zero_sudo.security.utils"]
-            utils._get_service_uid("rogue_module.sneaky_admin_service")
-            self.fail("Must block Service Accounts with group_system from escalating privileges.")
+            with self.env.cr.savepoint():
+                utils = self.env["zero_sudo.security.utils"]
+                utils._get_service_uid("rogue_module.sneaky_admin_service")
+            self.fail(
+                "Must block Service Accounts with group_system from escalating privileges."
+            )
         except (AccessError, UserError, psycopg2.errors.RaiseException) as e:
             self.assertTrue(str(e))
 
@@ -152,16 +160,24 @@ class TestSecurityUtils(HamsTransactionCase):
         query = args[0]
         params = args[1]
 
-        self.assertEqual(query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload")
+        self.assertEqual(
+            query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload"
+        )
         self.assertEqual(params[0], "cache_invalidation")
         # We must sort the payloads because set conversion makes the order non-deterministic
-        self.assertListEqual(sorted(params[1]), sorted(["test.model:key1", "test.model:key2"]))
+        self.assertListEqual(
+            sorted(params[1]), sorted(["test.model:key1", "test.model:key2"])
+        )
 
         # Test chunking
         many_keys = [f"key{i}" for i in range(250)]
         mock_execute = self.safe_patch_object(self.env.cr, "execute")
         utils._notify_cache_invalidation("test.model", many_keys)
-        self.assertEqual(mock_execute.call_count, 3, "Should chunk 250 keys into 3 calls (100+100+50)")
+        self.assertEqual(
+            mock_execute.call_count,
+            3,
+            "Should chunk 250 keys into 3 calls (100+100+50)",
+        )
 
     def test_06_get_deterministic_hash(self):
         # [@ANCHOR: test_deterministic_hash]
@@ -177,9 +193,13 @@ class TestSecurityUtils(HamsTransactionCase):
 
         self.assertIsInstance(hash1, int)
         self.assertEqual(hash1, hash2, "Same input should yield same hash")
-        self.assertNotEqual(hash1, hash3, "Different inputs should yield different hashes")
+        self.assertNotEqual(
+            hash1, hash3, "Different inputs should yield different hashes"
+        )
         self.assertIsInstance(hash4, int, "Should handle non-string inputs gracefully")
-        self.assertTrue(0 <= hash1 <= 2147483647, "Hash should be within 32-bit integer range")
+        self.assertTrue(
+            0 <= hash1 <= 2147483647, "Hash should be within 32-bit integer range"
+        )
 
     def test_08_get_crypto_secret(self):
         # [@ANCHOR: test_get_crypto_secret]
@@ -212,7 +232,9 @@ class TestSecurityUtils(HamsTransactionCase):
             # 3. Test configuration fallback
             utils.env.registry.clear_cache()
             self.safe_patch("os.path.exists", return_value=False)
-            self.safe_patch_object(odoo.tools.config, "get", return_value="test_config_key")
+            self.safe_patch_object(
+                odoo.tools.config, "get", return_value="test_config_key"
+            )
             self.assertEqual(utils._get_crypto_secret(), "test_config_key")
         finally:
             os.environ.clear()
@@ -255,11 +277,18 @@ class TestSecurityUtils(HamsTransactionCase):
         mock_manifest.ensure_executable.return_value = "/var/lib/odoo/hams_bin/kopia"
         mock_env = MagicMock()
         # Mocking __getitem__ to handle 'binary.manifest'
-        mock_env.__getitem__.side_effect = lambda k: mock_manifest if k == "binary.manifest" else None
+        mock_env.__getitem__.side_effect = lambda k: (
+            mock_manifest if k == "binary.manifest" else None
+        )
 
-        self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env)
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
+            return_value=mock_env,
+        )
 
-        res = utils._ensure_executable("kopia", svc_xml_id="zero_sudo.mail_service_internal")
+        res = utils._ensure_executable(
+            "kopia", svc_xml_id="zero_sudo.mail_service_internal"
+        )
         self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
         mock_manifest.ensure_executable.assert_called_once_with("kopia")
 
@@ -288,14 +317,16 @@ class TestSecurityUtils(HamsTransactionCase):
         table_name = "test_noisy_table"
         table = self.env["zero_sudo.noisy_table"].create({"name": table_name})
         self.assertTrue(table.exists())
-        self.assertIn(table_name, self.env["zero_sudo.noisy_table"].search([]).mapped("name"))
+        self.assertIn(
+            table_name, self.env["zero_sudo.noisy_table"].search([]).mapped("name")
+        )
 
     def test_missing_key(self):
         utils = self.env["zero_sudo.security.utils"]
         # Test Missing Key
         self.assertIsNone(utils._get_kv("non_existent_key"))
 
-    @mute_logger('odoo.sql_db')
+    @mute_logger("odoo.sql_db")
     def test_13_service_uid_error_paths(self):
         """Audit all rejection branches within the service account lookup logic."""
         utils = self.env["zero_sudo.security.utils"]
@@ -325,18 +356,22 @@ class TestSecurityUtils(HamsTransactionCase):
             _logger.info("Caught expected exception for human admin pass-through")
 
         # 4. Deny Disabled Accounts
-        disabled_user = self.env["res.users"].create({
-            "name": "Disabled SA",
-            "login": "disabled_sa",
-            "is_service_account": True,
-            "active": False
-        })
-        self.env["ir.model.data"].create({
-            "module": "test_module",
-            "name": "disabled_sa_xml",
-            "model": "res.users",
-            "res_id": disabled_user.id,
-        })
+        disabled_user = self.env["res.users"].create(
+            {
+                "name": "Disabled SA",
+                "login": "disabled_sa",
+                "is_service_account": True,
+                "active": False,
+            }
+        )
+        self.env["ir.model.data"].create(
+            {
+                "module": "test_module",
+                "name": "disabled_sa_xml",
+                "model": "res.users",
+                "res_id": disabled_user.id,
+            }
+        )
         try:
             with self.env.cr.savepoint():
                 utils._get_service_uid("test_module.disabled_sa_xml")
@@ -352,33 +387,39 @@ class TestSecurityUtils(HamsTransactionCase):
         Verify that service accounts are automatically assigned a massive,
         cryptographically secure random password to prevent interactive logins.
         """
-        service_account_1 = self.env["res.users"].create({
-            "name": "Service Account 1",
-            "login": "service_test_user_1",
-            "is_service_account": True,
-        })
+        service_account_1 = self.env["res.users"].create(
+            {
+                "name": "Service Account 1",
+                "login": "service_test_user_1",
+                "is_service_account": True,
+            }
+        )
 
-        service_account_2 = self.env["res.users"].create({
-            "name": "Service Account 2",
-            "login": "service_test_user_2",
-            "is_service_account": True,
-        })
+        service_account_2 = self.env["res.users"].create(
+            {
+                "name": "Service Account 2",
+                "login": "service_test_user_2",
+                "is_service_account": True,
+            }
+        )
 
         self.env.cr.execute(
-            "SELECT password FROM res_users WHERE id = %s",
-            (service_account_1.id,)
+            "SELECT password FROM res_users WHERE id = %s", (service_account_1.id,)
         )
         hash_1 = self.env.cr.fetchone()[0]
 
         self.env.cr.execute(
-            "SELECT password FROM res_users WHERE id = %s",
-            (service_account_2.id,)
+            "SELECT password FROM res_users WHERE id = %s", (service_account_2.id,)
         )
         hash_2 = self.env.cr.fetchone()[0]
 
         self.assertTrue(hash_1, "Service account MUST have a generated password hash.")
         self.assertTrue(hash_2, "Service account MUST have a generated password hash.")
-        self.assertNotEqual(hash_1, hash_2, "Every service account MUST receive a unique random password.")
+        self.assertNotEqual(
+            hash_1,
+            hash_2,
+            "Every service account MUST receive a unique random password.",
+        )
 
     def test_15_invalidate_model_cache(self):
         # [@ANCHOR: test_invalidate_model_cache]
@@ -391,7 +432,9 @@ class TestSecurityUtils(HamsTransactionCase):
         mock_clear_cache = self.safe_patch_object(self.env.registry, "clear_cache")
         # We use patch directly because self.safe_patch_object might have issues with some objects
         # Use the class since it's an AbstractModel and 'utils' is just a reference
-        mock_notify = patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._notify_cache_invalidation")
+        mock_notify = patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._notify_cache_invalidation"
+        )
         mock_notify.start()
         self.addCleanup(mock_notify.stop)
 
@@ -402,12 +445,14 @@ class TestSecurityUtils(HamsTransactionCase):
         # 2. Non-admin with write access should be able to invalidate
         # We need a user with some write access but not system.
         # Let's create one.
-        test_user = self.env["res.users"].create({
-            "name": "Test Cache User",
-            "login": "test_cache_user",
-            "email": "test@test.com",
-            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
-        })
+        test_user = self.env["res.users"].create(
+            {
+                "name": "Test Cache User",
+                "login": "test_cache_user",
+                "email": "test@test.com",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
 
         # Portal user usually doesn't have write access to res.partner
         with self.assertRaises(AccessError):

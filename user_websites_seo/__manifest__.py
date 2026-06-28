@@ -27,7 +27,7 @@ Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.
             "name": "User Websites SEO Guide",
             "path": "data/documentation.html",
             "icon": "🔍",
-            "category": "workspace"
+            "category": "workspace",
         }
     ],
     "assets": {

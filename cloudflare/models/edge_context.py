@@ -36,7 +36,8 @@ class CloudflareUtils(models.AbstractModel):
         headers = request_obj.httprequest.headers
 
         return {
-            "ip": headers.get("CF-Connecting-IP") or request_obj.httprequest.remote_addr,
+            "ip": headers.get("CF-Connecting-IP")
+            or request_obj.httprequest.remote_addr,
             "country": headers.get("CF-IPCountry"),
             "region": headers.get("CF-Region"),
             "city": headers.get("CF-IPCity"),

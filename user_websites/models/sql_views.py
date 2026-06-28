@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, tools
 
+
 class UserWebsitesPublicDirectoryView(models.Model):
     _name = "user_websites.public_directory_view"
     _description = "Community Directory SQL View"
     _auto = False
 
-    user_id = fields.Many2one('res.users', string="User", readonly=True)
+    user_id = fields.Many2one("res.users", string="User", readonly=True)
     name = fields.Char(string="Name", readonly=True)
     website_slug = fields.Char(string="Slug", readonly=True)
     view_count = fields.Integer(string="Total Views", readonly=True)
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW user_websites_public_directory_view AS (
                 SELECT
                     u.id as id,
@@ -30,7 +32,9 @@ class UserWebsitesPublicDirectoryView(models.Model):
                 AND u.privacy_show_in_directory IS TRUE
                 AND u.is_service_account IS NOT TRUE
             )
-        """)
+        """
+        )
+
 
 class UserWebsitesContentRoutingView(models.Model):
     _name = "user_websites.content_routing_view"
@@ -43,7 +47,8 @@ class UserWebsitesContentRoutingView(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW user_websites_content_routing_view AS (
                 SELECT
                     u.id as id,
@@ -66,14 +71,16 @@ class UserWebsitesContentRoutingView(models.Model):
                 WHERE website_slug IS NOT NULL
                 AND website_slug != ''
             )
-        """)
+        """
+        )
+
 
 class UserWebsitesWeeklyDigestView(models.Model):
     _name = "user_websites.weekly_digest_view"
     _description = "Weekly Digest SQL View"
     _auto = False
 
-    partner_id = fields.Many2one('res.partner', string="Subscriber", readonly=True)
+    partner_id = fields.Many2one("res.partner", string="Subscriber", readonly=True)
     author_name = fields.Char(string="Author", readonly=True)
     owner_model = fields.Char(string="Owner Model", readonly=True)
     owner_record_id = fields.Integer(string="Owner ID", readonly=True)
@@ -82,7 +89,8 @@ class UserWebsitesWeeklyDigestView(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW user_websites_weekly_digest_view AS (
                 SELECT
                     row_number() OVER () as id,
@@ -117,14 +125,17 @@ class UserWebsitesWeeklyDigestView(models.Model):
                 AND pst.create_date >= now() - interval '7 days'
                 GROUP BY f.partner_id, g.id, g.name
             )
-        """)
+        """
+        )
+
 
 class UserWebsitesDbFunctions(models.AbstractModel):
     _name = "user_websites.db_functions"
     _description = "User Websites DB Functions"
 
     def init(self):
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE FUNCTION increment_strike_count(tbl_name text, rec_id integer)
             RETURNS void AS $$
             BEGIN
@@ -137,4 +148,5 @@ class UserWebsitesDbFunctions(models.AbstractModel):
                 END IF;
             END;
             $$ LANGUAGE plpgsql;
-        """)
+        """
+        )

@@ -16,6 +16,7 @@ from odoo.modules.registry import Registry
 
 _logger = logging.getLogger(__name__)
 
+
 def _async_unpublish_group_content(db_name, group_ids):
     """Unpublishes group content in the background to prevent transaction lock exhaustion."""
     registry = Registry(db_name)
@@ -44,7 +45,8 @@ def _async_unpublish_group_content(db_name, group_ids):
                 env.cr.commit()
                 if len(pages) < 5000:
                     break
-                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                    time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
 
             while True:
                 posts = env_svc["blog.post"].search(
@@ -60,11 +62,12 @@ def _async_unpublish_group_content(db_name, group_ids):
                 env.cr.commit()
                 if len(posts) < 5000:
                     break
-                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                    time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
 
         finally:
             env.cr.rollback()
-    except psycopg2.Error as e: # audit-ignore-catch-all
+    except psycopg2.Error as e:  # audit-ignore-catch-all
         _logger.error("Async unpublish group content failed: %s", e)
     finally:
         cr.close()

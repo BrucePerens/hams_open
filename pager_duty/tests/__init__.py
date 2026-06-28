@@ -11,3 +11,5 @@ from . import test_log_analyzer
 from . import test_generalized_config
 from . import test_ui_tours
 from . import test_journeys_stories
+from . import test_generalized_monitor
+from . import test_synthetic_spooler

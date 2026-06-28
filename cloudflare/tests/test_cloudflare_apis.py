@@ -117,7 +117,6 @@ class TestCloudflareAPIs(HamsTransactionCase):
     def test_06_purge_urls(self):
         # [@ANCHOR: test_purge_urls_api]
 
-
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"
         )
@@ -162,7 +161,6 @@ class TestCloudflareAPIs(HamsTransactionCase):
 
     def test_07_purge_tags(self):
         # [@ANCHOR: test_purge_tags_api]
-
 
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.requests.post"

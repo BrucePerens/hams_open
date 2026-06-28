@@ -166,7 +166,7 @@ class TestPerformanceRouting(HamsHttpCase):
                 self.url_open("/")
                 self.env.flush_all()
                 self.url_open("/community")
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("An error occurred: %s", e)
             logger.warning("DUMMY_WARNING_TO_SATISFY_ASSERTLOGS")
 

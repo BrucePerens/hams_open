@@ -8,6 +8,7 @@
     "author": "HAMS",
     "depends": ["base", "distributed_redis_cache", "zero_sudo"],
     "data": [
+        "data/security_data.xml",
         "security/ir.model.access.csv",
     ],
     "installable": True,

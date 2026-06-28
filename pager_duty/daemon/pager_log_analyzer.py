@@ -34,7 +34,7 @@ if not os.path.exists(config_path):
 try:
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
-except Exception as e: # audit-ignore-catch-all
+except Exception as e:  # audit-ignore-catch-all
     logger.critical(f"Failed to parse JSON config: {e}")
     sys.exit(1)
 
@@ -61,7 +61,7 @@ try:
     )
     r_client.ping()
     logger.info("Connected to Redis successfully.")
-except Exception as e: # audit-ignore-catch-all
+except Exception as e:  # audit-ignore-catch-all
     logger.critical(f"Redis connection failed: {e}")
     sys.exit(1)
 
@@ -84,7 +84,7 @@ if os.geteuid() == 0:
         for cap in range(40):
             libc.prctl(24, cap, 0, 0, 0)
         logger.info("All kernel bounding capabilities successfully dropped.")
-    except Exception as e: # audit-ignore-catch-all
+    except Exception as e:  # audit-ignore-catch-all
         logger.warning(f"Could not drop bounding capabilities: {e}")
 
     # C. Drop to nobody:adm
@@ -95,7 +95,7 @@ if os.geteuid() == 0:
         os.setresgid(gid, gid, gid)
         os.setresuid(uid, uid, uid)
         logger.info("Privileges successfully de-escalated to nobody:adm")
-    except Exception as e: # audit-ignore-catch-all
+    except Exception as e:  # audit-ignore-catch-all
         logger.warning(f"Could not setuid to nobody:adm: {e}")
 
 
@@ -137,7 +137,9 @@ def tail_file(fp, compiled_patterns):
                         else:
                             f.seek(0, 2)
                         cur_inode = new_inode
-                        logger.info(f"Tailing log file {chroot_path} (inode: {cur_inode})")
+                        logger.info(
+                            f"Tailing log file {chroot_path} (inode: {cur_inode})"
+                        )
                     except IOError as e:
                         logger.error(f"Failed to open {chroot_path}: {e}")
                         f = None
@@ -150,7 +152,7 @@ def tail_file(fp, compiled_patterns):
             if f:
                 line = f.readline()
                 if not line:
-                    time.sleep(0.5) # audit-ignore-sleep
+                    time.sleep(0.5)  # audit-ignore-sleep
                     continue
 
                 for pat in compiled_patterns:
@@ -164,10 +166,10 @@ def tail_file(fp, compiled_patterns):
                         # Send to generalized monitor via Redis queue to proxy RPC safely
                         r_client.lpush("pager_log_anomalies", json.dumps(payload))
             else:
-                time.sleep(5) # audit-ignore-sleep
-        except Exception as e: # audit-ignore-catch-all
+                time.sleep(5)  # audit-ignore-sleep
+        except Exception as e:  # audit-ignore-catch-all
             logger.error(f"Error tailing {chroot_path}: {e}")
-            time.sleep(5) # audit-ignore-sleep
+            time.sleep(5)  # audit-ignore-sleep
 
 
 # --- 5. Interactive Splunk UI Listener ---
@@ -203,7 +205,7 @@ def redis_search_listener():
                 # Publish results back to the specific request UUID channel
                 res_payload = {"matches": matches}
                 r_client.publish(f"log_search_res:{uuid_str}", json.dumps(res_payload))
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 logger.error(f"Search failure: {e}")
 
 

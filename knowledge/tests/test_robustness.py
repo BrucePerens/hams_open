@@ -121,10 +121,12 @@ class TestManualRobustness(HamsHttpCase):
 
     def test_05_canonical_redirect(self):
         """Verify that accessing an article with an old slug redirects to the current one."""
-        article = self.env["knowledge.article"].create({
-            "name": "Canonical Test",
-            "is_published": True,
-        })
+        article = self.env["knowledge.article"].create(
+            {
+                "name": "Canonical Test",
+                "is_published": True,
+            }
+        )
         old_slug = f"{article.id}-old-name"
         url = f"/manual/{old_slug}"
 
@@ -154,24 +156,32 @@ class TestManualRobustness(HamsHttpCase):
         )
 
         article.invalidate_recordset(["helpful_count"])
-        self.assertEqual(article.helpful_count, initial_helpful, "Honeypot should have blocked the increment.")
+        self.assertEqual(
+            article.helpful_count,
+            initial_helpful,
+            "Honeypot should have blocked the increment.",
+        )
 
     def test_07_portal_access(self):
         """Verify that portal users can see published articles but not internal ones."""
         published_article = self.article_active
-        self.env["res.users"].create({
-            "name": "Portal User",
-            "login": "portal_user_robust",
-            "password": "portal_user_robust",
-            "email": "portal_robust@test.com",
-            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
-        })
+        self.env["res.users"].create(
+            {
+                "name": "Portal User",
+                "login": "portal_user_robust",
+                "password": "portal_user_robust",
+                "email": "portal_robust@test.com",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
 
-        internal_article = self.env["knowledge.article"].create({
-            "name": "Internal Only Robust",
-            "internal_permission": "read",
-            "is_published": False,
-        })
+        internal_article = self.env["knowledge.article"].create(
+            {
+                "name": "Internal Only Robust",
+                "internal_permission": "read",
+                "is_published": False,
+            }
+        )
 
         self.authenticate("portal_user_robust", "portal_user_robust")
 

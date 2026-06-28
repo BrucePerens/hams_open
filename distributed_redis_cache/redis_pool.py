@@ -36,10 +36,16 @@ def get_redis_connection(env=None):
     if env:
         # Configuration is loaded via zero_sudo security utils to comply with security mandates
         security_utils = env["zero_sudo.security.utils"]
-        host = security_utils._get_system_param("distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT)
-        port_raw = security_utils._get_system_param("distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT))
+        host = security_utils._get_system_param(
+            "distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT
+        )
+        port_raw = security_utils._get_system_param(
+            "distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT)
+        )
         port = int(port_raw)
-        password = security_utils._get_system_param("distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT)
+        password = security_utils._get_system_param(
+            "distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT
+        )
 
         # Check if the environment config differs from the default pool
         if (
@@ -60,7 +66,5 @@ def get_redis_connection(env=None):
                 )
             return redis.Redis(connection_pool=_custom_pools[pool_key])
 
-    _logger.debug(
-        "Returning default Redis Connection Pool."
-    )
+    _logger.debug("Returning default Redis Connection Pool.")
     return redis.Redis(connection_pool=redis_pool)

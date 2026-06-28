@@ -6,7 +6,8 @@ from datetime import timedelta
 
 from odoo.tests import tagged
 
-@tagged('post_install', '-at_install')
+
+@tagged("post_install", "-at_install")
 class TestPagerSchedule(HamsTransactionCase):
     def setUp(self):
         super(TestPagerSchedule, self).setUp()

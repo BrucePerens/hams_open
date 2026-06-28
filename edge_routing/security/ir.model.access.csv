@@ -3,3 +3,9 @@ access_edge_routing_domain_system,edge.routing.domain.system,model_edge_routing_
 access_edge_routing_domain_user,edge.routing.domain.user,model_edge_routing_domain,base.group_user,1,0,0,0
 access_edge_routing_domain_portal,edge.routing.domain.portal,model_edge_routing_domain,base.group_portal,1,0,0,0
 access_edge_routing_domain_public,edge.routing.domain.public,model_edge_routing_domain,base.group_public,1,0,0,0
+access_edge_routing_svc_res_users,res.users svc,base.model_res_users,edge_routing.group_edge_routing_service_account,1,0,0,0
+access_edge_routing_svc_res_company,res.company svc,base.model_res_company,edge_routing.group_edge_routing_service_account,1,0,0,0
+access_edge_routing_svc_res_partner,res.partner svc,base.model_res_partner,edge_routing.group_edge_routing_service_account,1,0,0,0
+access_edge_routing_svc_res_partner_bank,res.partner.bank svc,base.model_res_partner_bank,edge_routing.group_edge_routing_service_account,1,0,0,0
+access_edge_routing_svc_discuss_channel,discuss.channel svc,mail.model_discuss_channel,edge_routing.group_edge_routing_service_account,1,0,0,0
+access_edge_routing_svc_edge_domain,edge.routing.domain svc,model_edge_routing_domain,edge_routing.group_edge_routing_service_account,1,0,0,0

@@ -300,7 +300,12 @@ class TestBinaryManifest(HamsTransactionCase):
         # The slip is prevented by os.path.basename in the core logic.
         path = self.env["binary.manifest"].ensure_executable("slippy")
         self.assertTrue(os.path.exists(path))
-        self.assertEqual(os.path.basename(path), self.env["binary.manifest"].search([("name", "=", "slippy")])._get_target_filename())
+        self.assertEqual(
+            os.path.basename(path),
+            self.env["binary.manifest"]
+            .search([("name", "=", "slippy")])
+            ._get_target_filename(),
+        )
 
     def test_13_symlink_prevention(self):
         # [!] DIAGNOSTIC FOR AI: Testing prevention of symlinks inside tar archives.
@@ -350,7 +355,9 @@ class TestBinaryManifest(HamsTransactionCase):
 
         # Create a real zip in memory
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:  # audit-ignore-path
+        with zipfile.ZipFile(
+            zip_buffer, "a", zipfile.ZIP_DEFLATED, False
+        ) as zip_file:  # audit-ignore-path
             zip_file.writestr("zippybin", b"zipdata")
 
         zip_data = zip_buffer.getvalue()
@@ -454,4 +461,9 @@ class TestBinaryManifest(HamsTransactionCase):
 
         path = self.env["binary.manifest"].ensure_executable("zip_slip")
         self.assertTrue(os.path.exists(path))
-        self.assertEqual(os.path.basename(path), self.env["binary.manifest"].search([("name", "=", "zip_slip")])._get_target_filename())
+        self.assertEqual(
+            os.path.basename(path),
+            self.env["binary.manifest"]
+            .search([("name", "=", "zip_slip")])
+            ._get_target_filename(),
+        )

@@ -62,7 +62,10 @@ class CloudflareConfigManager(models.AbstractModel):
                 "zero_sudo.odoo_facility_service_internal"
             )
         except AccessError as e:
-            _logger.info("Service accounts not yet available, deferring static mtime check: %s", e)
+            _logger.info(
+                "Service accounts not yet available, deferring static mtime check: %s",
+                e,
+            )
             return
 
         # ADR-0002: Use ORM for module list, but ensure we use limit=None for exhaustive scan

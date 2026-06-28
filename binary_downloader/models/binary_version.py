@@ -170,7 +170,9 @@ class BinaryVersion(models.Model):
                     )
 
                 if self.archive_type == "tar.gz":
-                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
+                    with tarfile.open(
+                        tmp_path, "r:gz"
+                    ) as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
                         found = False
                         extract_target = self.extract_member or self.manifest_id.name
                         for member in tar.getmembers():
@@ -202,7 +204,9 @@ class BinaryVersion(models.Model):
                                 _("Member %s not found in archive.") % extract_target
                             )
                 elif self.archive_type == "zip":
-                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
+                    with zipfile.ZipFile(
+                        tmp_path, "r"
+                    ) as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
                         extract_target = self.extract_member or self.manifest_id.name
                         found = False
                         for zinfo in zip_ref.infolist():

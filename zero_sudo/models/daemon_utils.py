@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
+import ctypes
 import logging
 import os
 import signal
 import subprocess
+import sys
 import time
 import urllib.request
 from odoo import models, api, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
 
 class ZeroSudoDaemonUtils(models.AbstractModel):
     _name = "zero_sudo.daemon.utils"
@@ -30,12 +33,23 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         if env_vars:
             env.update(env_vars)
 
+        def _preexec_daemon():
+            """Set PR_SET_PDEATHSIG so daemon dies when parent exits."""
+            try:
+                libc = ctypes.CDLL("libc.so.6")
+                libc.prctl(1, signal.SIGTERM)
+            except OSError:  # audit-ignore-catch-all
+                sys.stderr.write(
+                    "PR_SET_PDEATHSIG unavailable\n"
+                )
+
         _logger.info("Starting daemon: %s", " ".join(cmd))
         process = subprocess.Popen(
             cmd,
             env=env,
             start_new_session=True,
             shell=False,
+            preexec_fn=_preexec_daemon,
         )
         return process
 
@@ -48,7 +62,9 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                _logger.warning("Daemon PID %s did not terminate, forcing SIGKILL", process.pid)
+                _logger.warning(
+                    "Daemon PID %s did not terminate, forcing SIGKILL", process.pid
+                )
                 os.killpg(os.getpgid(process.pid), signal.SIGKILL)
 
     @api.model
@@ -65,11 +81,14 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                         return True
             except urllib.error.URLError as e:
                 _logger.info("Health check polling connection issue: %s", e)
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Unexpected error during health check: %s", e)
                 raise
-            time.sleep(interval) # audit-ignore-sleep
+            time.sleep(interval)  # audit-ignore-sleep
 
-        error_msg = _("Daemon health check failed for %s after %s seconds.") % (url, timeout)
+        error_msg = _("Daemon health check failed for %s after %s seconds.") % (
+            url,
+            timeout,
+        )
         _logger.error(error_msg)
         raise UserError(error_msg)

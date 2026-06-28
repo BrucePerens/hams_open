@@ -22,8 +22,6 @@ class ResUsersModeration(models.Model):
         help="If True, all personal pages and blogs are forcefully unpublished and locked.",
     )
 
-
-
     def action_suspend_user_websites(self):
         """Forcefully unpublishes all user content and flags them as suspended."""
         user_ids = self.ids
@@ -33,9 +31,7 @@ class ResUsersModeration(models.Model):
         if not is_test:
             db_name = self.env.cr.dbname
             # Fire and forget safely without unbounded thread growth
-            BACKGROUND_EXECUTOR.submit(
-                _async_unpublish_content, db_name, user_ids
-            )
+            BACKGROUND_EXECUTOR.submit(_async_unpublish_content, db_name, user_ids)
         else:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"

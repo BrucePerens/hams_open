@@ -1,5 +1,6 @@
 from odoo import models
 
+
 class CalendarEvent(models.Model):
     _inherit = "calendar.event"
 

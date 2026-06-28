@@ -14,20 +14,26 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 import odoo.addons.pager_duty.daemon.generalized_monitor as generalized_monitor
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_01_smtp_fallback(self):
         # Tests [@ANCHOR: daemon_report_incident]
         """Verify that if the Odoo client crashes, the report gracefully triggers the SMTP fallback."""
-        mock_smtp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP")
+        mock_smtp = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP"
+        )
 
         orig_env = dict(os.environ)
-        os.environ.update({"PAGER_FALLBACK_EMAIL": "admin@test.com", "SMTP_HOST": "smtp.test.com"})
+        os.environ.update(
+            {"PAGER_FALLBACK_EMAIL": "admin@test.com", "SMTP_HOST": "smtp.test.com"}
+        )
 
         try:
             mock_client = MagicMock()
-            mock_client.execute.side_effect = Exception("Connection Refused (Odoo Down)")
+            mock_client.execute.side_effect = Exception(
+                "Connection Refused (Odoo Down)"
+            )
 
             mock_smtp_instance = MagicMock()
             mock_smtp.return_value.__enter__.return_value = mock_smtp_instance
@@ -66,7 +72,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
     def test_03_system_checks(self):
         # Tests [@ANCHOR: daemon_execute_check]
         """Exhaustively verify Disk, Memory, CPU, IO Wait, and Steal metrics."""
-        mock_psutil = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.psutil")
+        mock_psutil = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.psutil"
+        )
         # Disk
         mock_psutil.disk_usage.return_value.percent = 95
         success, msg = generalized_monitor.execute_check(
@@ -117,10 +125,16 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_04_dns_checks(self):
         """Verify un-cached root DNS lookup via dig with socket fallback."""
-        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
+        )
         mock_which.return_value = "/bin/mock"
-        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
-        mock_gethost = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.gethostbyname")
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
+        mock_gethost = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.gethostbyname"
+        )
 
         # Test Dig Success
         mock_run.return_value.returncode = 0
@@ -148,7 +162,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_05_http_checks(self):
         """Verify payload matching and 500 error detection on HTTP endpoints."""
-        mock_urlopen = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen")
+        mock_urlopen = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen"
+        )
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = b'{"status": "ok"}'
@@ -177,7 +193,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_06_tcp_checks(self):
         """Verify raw hex socket handshakes (e.g. RabbitMQ AMQP)."""
-        mock_conn = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
+        mock_conn = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection"
+        )
         mock_socket = MagicMock()
         mock_conn.return_value.__enter__.return_value = mock_socket
         mock_socket.recv.return_value = b"+PONG"
@@ -210,7 +228,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_07_postgres_and_anomaly(self):
         """Verify raw database pinging and custom SQL mathematical anomaly detection."""
-        mock_psycopg2 = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.psycopg2")
+        mock_psycopg2 = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.psycopg2"
+        )
         mock_conn = MagicMock()
         mock_psycopg2.connect.return_value = mock_conn
         mock_cursor = MagicMock()
@@ -236,8 +256,12 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_08_ssl_checks(self):
         """Verify Let's Encrypt certificate expiration date math."""
-        self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
-        mock_ssl_ctx = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ssl.create_default_context")
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection"
+        )
+        mock_ssl_ctx = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.ssl.create_default_context"
+        )
 
         mock_ctx = MagicMock()
         mock_ssl_ctx.return_value = mock_ctx
@@ -269,9 +293,13 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_09_process_wrappers(self):
         """Verify synthetic journey scripts, logrotate, nginx syntax, and cloudflared tunnel checks."""
-        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
+        )
         mock_which.return_value = "/bin/mock"
-        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
         mock_run.return_value.returncode = 0
 
         # Synthetic
@@ -312,10 +340,16 @@ class TestMonitorExhaustive(HamsTransactionCase):
     def test_10_certbot_check(self):
         # Tests [@ANCHOR: daemon_verify_dependencies]
         """Verify the Certbot 3-stage readiness pipeline (API, DNS IP Match, Dry-Run)."""
-        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
+        )
         mock_which.return_value = "/usr/bin/certbot"
-        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
-        mock_urlopen = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen")
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
+        mock_urlopen = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen"
+        )
 
         # Pass API Check
         mock_api_resp = MagicMock()
@@ -338,7 +372,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_11_smtp_dryrun(self):
         """Verify SMTP pre-flight handshake."""
-        mock_smtp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP")
+        mock_smtp = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP"
+        )
         mock_server = MagicMock()
         mock_smtp.return_value.__enter__.return_value = mock_server
 
@@ -350,12 +386,20 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_12_new_protocols_and_rpcs(self):
         """Verify the new natively supported sub-protocols (UDP, HTTP3, XML-RPC, JSON-RPC, native Redis, native RabbitMQ)."""
-        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
+        )
         mock_which.return_value = "/bin/mock"
-        mock_socket = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.socket")
-        mock_urlopen = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen")
+        mock_socket = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.socket"
+        )
+        mock_urlopen = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen"
+        )
         mock_xmlrpc = self.safe_patch("xmlrpc.client.ServerProxy")
-        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
 
         # 1. UDP Datagram
         mock_sock_inst = MagicMock()
@@ -424,7 +468,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_redis_inst.ping.assert_called_once()
 
         # 6. Native RabbitMQ
-        mock_conn = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
+        mock_conn = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection"
+        )
         mock_tcp_sock = MagicMock()
         mock_conn.return_value.__enter__.return_value = mock_tcp_sock
         mock_tcp_sock.recv.return_value = b"\x01\x02\x03"
@@ -436,10 +482,16 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_13_additional_facilities(self):
         """Verify ICMP, Docker, Memcached, SSH, and Systemd checks."""
-        mock_which = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
+        )
         mock_which.return_value = "/bin/mock"
-        mock_run = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
-        mock_conn = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection")
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
+        mock_conn = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection"
+        )
 
         # ICMP
         mock_run.return_value.returncode = 0
@@ -457,7 +509,11 @@ class TestMonitorExhaustive(HamsTransactionCase):
         )
         self.assertTrue(success)
         # Verify docker inspect call
-        docker_call = [call for call in mock_run.call_args_list if '/bin/mock' in call[0][0] and 'inspect' in call[0][0]]
+        docker_call = [
+            call
+            for call in mock_run.call_args_list
+            if "/bin/mock" in call[0][0] and "inspect" in call[0][0]
+        ]
         self.assertTrue(docker_call, "Docker call not found")
 
         # Systemd
@@ -510,7 +566,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_14_nagios_checks(self):
         """Verify Nagios-style checks: load, ftp, imap, pop3, mysql, snmp."""
-        mock_load = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.os.getloadavg")
+        mock_load = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.os.getloadavg"
+        )
         mock_load.return_value = (1.5, 1.0, 0.5)
 
         # Load
@@ -526,7 +584,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertTrue(success, msg)
 
         # FTP
-        mock_ftp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ftplib.FTP")
+        mock_ftp = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.ftplib.FTP"
+        )
         mock_inst = MagicMock()
         mock_ftp.return_value.__enter__.return_value = mock_inst
         success, msg = generalized_monitor.execute_check(
@@ -536,7 +596,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_inst.login.assert_called()
 
         # IMAP
-        mock_imap = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.imaplib.IMAP4")
+        mock_imap = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.imaplib.IMAP4"
+        )
         mock_inst = MagicMock()
         mock_imap.return_value = mock_inst
         success, msg = generalized_monitor.execute_check(
@@ -546,7 +608,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_inst.logout.assert_called()
 
         # POP3
-        mock_pop3 = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.poplib.POP3")
+        mock_pop3 = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.poplib.POP3"
+        )
         mock_inst = MagicMock()
         mock_pop3.return_value = mock_inst
         success, msg = generalized_monitor.execute_check(
@@ -556,7 +620,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_inst.quit.assert_called()
 
         # MySQL / MariaDB
-        mock_pymysql = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.pymysql")
+        mock_pymysql = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.pymysql"
+        )
         mock_conn = MagicMock()
         mock_pymysql.connect.return_value = mock_conn
         mock_cur = MagicMock()
@@ -569,7 +635,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_cur.execute.assert_called_with("SELECT 1;")
 
         # LDAP (Fallback)
-        mock_ldap3 = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ldap3")
+        mock_ldap3 = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.ldap3"
+        )
         mock_inst = MagicMock()
         mock_ldap3.Server.return_value = MagicMock()
         mock_ldap3.Connection.return_value = mock_inst
@@ -580,7 +648,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_inst.unbind.assert_called()
 
         # NTP (Fallback)
-        mock_ntplib = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.ntplib")
+        mock_ntplib = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.ntplib"
+        )
         mock_inst = MagicMock()
         mock_ntplib.NTPClient.return_value = mock_inst
         mock_inst.request.return_value.offset = 0.1
@@ -590,11 +660,17 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertTrue(success, msg)
 
         # SNMP
-        mock_which_snmp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which")
+        mock_which_snmp = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
+        )
         mock_which_snmp.return_value = "/bin/mock"
-        mock_run_snmp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run")
+        mock_run_snmp = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
 
-        mock_run_snmp.return_value = MagicMock(returncode=0, stdout="Timeout", stderr="")
+        mock_run_snmp.return_value = MagicMock(
+            returncode=0, stdout="Timeout", stderr=""
+        )
         success, msg = generalized_monitor.execute_check(
             {
                 "type": "snmp",
@@ -619,8 +695,12 @@ class TestMonitorExhaustive(HamsTransactionCase):
     def test_15_synthetic_spool_reads(self):
         # Tests [@ANCHOR: daemon_main_loop]
         """Verify generalized_monitor correctly reads the airgapped synthetic spool JSON."""
-        mock_exists = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.os.path.exists")
-        mock_mtime = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.os.path.getmtime")
+        mock_exists = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.os.path.exists"
+        )
+        mock_mtime = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.os.path.getmtime"
+        )
         mock_open = self.safe_patch("builtins.open")
 
         mock_exists.return_value = True

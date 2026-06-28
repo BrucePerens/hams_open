@@ -83,4 +83,7 @@ class TestManualORMLogic(HamsTransactionCase):
         except (ForeignKeyViolation, RestrictViolation):
             raised = True
 
-        self.assertTrue(raised, "unlink() should have raised a RestrictViolation or ForeignKeyViolation")
+        self.assertTrue(
+            raised,
+            "unlink() should have raised a RestrictViolation or ForeignKeyViolation",
+        )

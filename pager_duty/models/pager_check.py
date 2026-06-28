@@ -15,11 +15,13 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 
 _logger = logging.getLogger(__name__)
 
+
 class PagerCheck(models.Model):
     """
     Configurable monitoring check.
     This model is multi-tenant and multi-website, partitioned by website_id.
     """
+
     _name = "pager.check"
     _description = "Graphical Pager Duty Check"
     _order = "name asc"
@@ -205,17 +207,13 @@ class PagerCheck(models.Model):
         return check.id if check else False
 
     def write(self, vals):
-        res = super(
-            PagerCheck, self.with_context(mail_notrack=True)
-        ).write(vals)
+        res = super(PagerCheck, self.with_context(mail_notrack=True)).write(vals)
         notify_model_invalidation(self.env, self._name)
         return res
 
     def unlink(self):
         notify_model_invalidation(self.env, self._name)
-        return super(
-            PagerCheck, self.with_context(mail_notrack=True)
-        ).unlink()
+        return super(PagerCheck, self.with_context(mail_notrack=True)).unlink()
 
     @api.model
     def _valid_field_parameter(self, field, name):
@@ -229,8 +227,17 @@ class PagerCheck(models.Model):
         """
         # [@ANCHOR: rpc_ensure_executable_security]
         allow_list = {
-            "dig", "snmpget", "pg_dump", "nginx", "certbot", "logrotate",
-            "curl", "ping", "docker", "systemctl", "cloudflared"
+            "dig",
+            "snmpget",
+            "pg_dump",
+            "nginx",
+            "certbot",
+            "logrotate",
+            "curl",
+            "ping",
+            "docker",
+            "systemctl",
+            "cloudflared",
         }
         if cmd_name not in allow_list:
             _logger.warning("Unauthorized binary provisioning request: %s", cmd_name)
@@ -247,15 +254,22 @@ class PagerCheck(models.Model):
             # Use self.env.get() for safer model access across optional dependencies
             ManifestModel = self.env.get("binary.manifest")
             if ManifestModel is None:
-                return {"status": "error", "message": _("binary_downloader module not installed.")}
+                return {
+                    "status": "error",
+                    "message": _("binary_downloader module not installed."),
+                }
 
             path = ManifestModel.with_user(svc_uid).ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
         except (ValueError, FileNotFoundError, PermissionError) as e:
             _logger.warning("Executable provisioning failed for %s: %s", cmd_name, e)
             return {"status": "error", "message": str(e)}
-        except Exception as e: # audit-ignore-catch-all
-            _logger.error("Unexpected error during executable provisioning for %s: %s", cmd_name, e)
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.error(
+                "Unexpected error during executable provisioning for %s: %s",
+                cmd_name,
+                e,
+            )
             return {"status": "error", "message": _("Internal server error.")}
 
     @api.model
@@ -278,8 +292,10 @@ class PagerCheck(models.Model):
             "pager_duty.user_pager_service_internal"
         )
         # We manually fetch the parameter to avoid Zero-Sudo whitelist restrictions for internal module paths
-        sys_config_dir = self.env["ir.config_parameter"].with_user(svc_uid).get_param(
-            "pager_duty.config_dir", default="/opt/hams/etc"
+        sys_config_dir = (
+            self.env["ir.config_parameter"]
+            .with_user(svc_uid)
+            .get_param("pager_duty.config_dir", default="/opt/hams/etc")
         )
         if os.path.exists(sys_config_dir) and os.access(sys_config_dir, os.W_OK):
             return os.path.join(sys_config_dir, "pager_config.json")
@@ -578,7 +594,7 @@ class PagerCheck(models.Model):
                             "comment": f"Autodiscovered disk space monitor for {p.mountpoint}",
                         }
                     )
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred getting disk partitions: %s", e)
 
         # 3. Common Services
@@ -655,7 +671,7 @@ class PagerCheck(models.Model):
                         "comment": "Autodiscovered Docker daemon monitor",
                     }
                 )
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred interacting with systemd: %s", e)
 
         # 4. Odoo Web Server
@@ -721,34 +737,42 @@ class PagerCheck(models.Model):
         Updates the target of the 'certbot' pager checks to monitor the provided domains.
         Soft-depends on ham_dns.
         """
-        certbot_checks = self.env['pager.check'].search([('check_type', '=', 'certbot')], limit=1)
+        certbot_checks = self.env["pager.check"].search(
+            [("check_type", "=", "certbot")], limit=1
+        )
         if not certbot_checks:
             # If there isn't one, we could optionally create one, or just ignore
-            certbot_checks = self.env['pager.check'].create({
-                'name': 'Let\'s Encrypt Certbot Readiness',
-                'check_type': 'certbot',
-                'interval': 86400,
-                'target': ','.join(domains),
-                'comment': 'Auto-created by Let\'s Encrypt domain updater'
-            })
+            certbot_checks = self.env["pager.check"].create(
+                {
+                    "name": "Let's Encrypt Certbot Readiness",
+                    "check_type": "certbot",
+                    "interval": 86400,
+                    "target": ",".join(domains),
+                    "comment": "Auto-created by Let's Encrypt domain updater",
+                }
+            )
         else:
-            certbot_checks.write({'target': ','.join(domains)})
+            certbot_checks.write({"target": ",".join(domains)})
 
         # Soft-depend on ham_dns
-        HamDnsRecord = self.env.get('ham.dns.record')
+        HamDnsRecord = self.env.get("ham.dns.record")
         if HamDnsRecord is not None:
             # Reconfigure DNS if ham_dns is installed
             try:
-                existing_records = HamDnsRecord.search([('name', 'in', domains)], limit=1000).mapped('name')
+                existing_records = HamDnsRecord.search(
+                    [("name", "in", domains)], limit=1000
+                ).mapped("name")
                 new_domains = [d for d in domains if d not in existing_records]
                 for domain in new_domains:
-                    HamDnsRecord.create({
-                        'name': domain,
-                        'record_type': 'A',
-                        # Typically the IP would be determined from the environment
-                    })
-            except Exception as e: # audit-ignore-catch-all
+                    HamDnsRecord.create(
+                        {
+                            "name": domain,
+                            "record_type": "A",
+                            # Typically the IP would be determined from the environment
+                        }
+                    )
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Failed to auto-configure ham_dns: %s", e)
-        
+
         # Push changes to JSON so the daemon picks it up
         self.action_push_to_json()

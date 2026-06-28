@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields
 
+
 class ZeroSudoKV(models.Model):
     # [@ANCHOR: zero_sudo_kv_global]
     # This model is logically GLOBAL and NOT multi-tenanted.
@@ -12,4 +13,6 @@ class ZeroSudoKV(models.Model):
     key = fields.Char(string="Key", required=True, index=True)
     value = fields.Text(string="Value")
 
-    _key_uniq = models.Constraint("UNIQUE(key)", "The key must be mathematically unique.")
+    _key_uniq = models.Constraint(
+        "UNIQUE(key)", "The key must be mathematically unique."
+    )

@@ -34,10 +34,10 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         {
             content: "Select New User",
             trigger: 'div[name="new_user_id"] input',
-            run: 'edit Mitchell Admin',
+            run: 'edit tour',
         },
         {
-            content: "Pick Mitchell Admin",
+            content: "Pick First User",
             trigger: '.o-autocomplete--dropdown-item:first',
             run: 'click',
         },
@@ -58,31 +58,62 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         },
         {
             content: "Confirm Handoff",
-            trigger: 'button[name="action_confirm_handoff"]',
+            trigger: 'button[name="action_confirm_handoff"]:not([disabled])',
             run: 'click',
-            expectUnloadPage: true,
         },
-        TourUtils.waitForAbsence('.modal-body', "Wait for Wizard to close"),
+        {
+            content: "Wait for modal to close",
+            trigger: 'body:not(:has(.modal))',
+            run: function() {}
+        },
+        {
+            content: "Go back to list via breadcrumb to close the form",
+            trigger: '.o_control_panel .breadcrumb-item:not(.active):first, .o_control_panel .o_back_button',
+            run: 'click',
+        },
+        {
+            content: "Wait for list view to load",
+            trigger: '.o_list_table',
+            run: function() {}
+        },
+        {
+            content: "Wait for list view to load after reload and open ticket",
+            trigger: '.o_list_table .o_data_row',
+            run: 'click',
+        },
         {
             content: "Verify Handoff in Chatter",
-            trigger: '.o_form_sheet',
-            run: function() {
-                return new Promise((resolve, reject) => {
-                    let interval = setInterval(() => {
-                        if (document.body.textContent.includes("Official Shift Handoff Executed")) {
+            trigger: '.o_form_sheet', // wait for form sheet to render first
+            run: function() {}
+        },
+        {
+            content: "Wait for Handoff message in chatter",
+            trigger: 'body',
+            run: function () {
+                return new Promise((resolve) => {
+                    function checkText(node, text) {
+                        if (node.textContent && node.textContent.includes(text)) return true;
+                        if (node.shadowRoot) {
+                            if (checkText(node.shadowRoot, text)) return true;
+                        }
+                        for (let child of node.children || []) {
+                            if (checkText(child, text)) return true;
+                        }
+                        return false;
+                    }
+                    const interval = setInterval(() => {
+                        if (checkText(document.body, "Official Shift Handoff Executed")) {
                             clearInterval(interval);
                             resolve();
                         }
                     }, 250);
-                    setTimeout(() => {
-                        clearInterval(interval);
-                        // We don't reject here to avoid crashing the tour if it's just a rendering delay,
-                        // the tour will finish successfully if we resolve or just time out naturally.
-                        // Actually, better to resolve and let the test fail if it must.
-                        resolve();
-                    }, 5000);
                 });
-            },
+            }
+        },
+        {
+            content: "Final click to finish tour",
+            trigger: '.o_form_sheet',
+            run: 'click'
         }
     ])
 });

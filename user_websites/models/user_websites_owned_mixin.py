@@ -72,7 +72,10 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
             except Exception as e:  # audit-ignore-catch-all
                 # Defer if service account is not yet provisioned during early testing
                 if "not found" in str(e).lower():
-                    _logger.debug("Service account not found, deferring proxy ownership check: %s", e)
+                    _logger.debug(
+                        "Service account not found, deferring proxy ownership check: %s",
+                        e,
+                    )
                     return
                 _logger.error("Failed to execute proxy ownership lookup: %s", e)
                 raise
@@ -82,7 +85,11 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
 
         for vals in vals_list:
             # ADR-0082: Auto-assign ownership to the current user if missing and they are not a guest
-            if not vals.get("owner_user_id") and not vals.get("user_websites_group_id") and not self.env.user._is_public():
+            if (
+                not vals.get("owner_user_id")
+                and not vals.get("user_websites_group_id")
+                and not self.env.user._is_public()
+            ):
                 vals["owner_user_id"] = user_id
             owner_id = vals.get("owner_user_id")
             group_id = vals.get("user_websites_group_id")

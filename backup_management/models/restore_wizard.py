@@ -84,9 +84,21 @@ class BackupRestoreWizard(models.TransientModel):
         def publish_task(msg=payload):
             try:
                 utils = self.env["zero_sudo.security.utils"]
-                rmq_host = utils._get_system_param("backup_management.rmq_host") or os.environ.get("RMQ_HOST") or "rabbitmq"
-                rmq_user = utils._get_system_param("backup_management.rmq_user") or os.environ.get("RMQ_USER") or "guest"
-                rmq_pass = utils._get_system_param("backup_management.rmq_pass") or os.environ.get("RMQ_PASS") or "guest"  # burn-ignore-env
+                rmq_host = (
+                    utils._get_system_param("backup_management.rmq_host")
+                    or os.environ.get("RMQ_HOST")
+                    or "rabbitmq"
+                )
+                rmq_user = (
+                    utils._get_system_param("backup_management.rmq_user")
+                    or os.environ.get("RMQ_USER")
+                    or "guest"
+                )
+                rmq_pass = (
+                    utils._get_system_param("backup_management.rmq_pass")
+                    or os.environ.get("RMQ_PASS")  # burn-ignore-env
+                    or "guest"
+                )  # burn-ignore-env
                 credentials = pika.PlainCredentials(rmq_user, rmq_pass)
                 conn_params = pika.ConnectionParameters(
                     host=rmq_host, credentials=credentials

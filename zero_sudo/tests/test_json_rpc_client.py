@@ -8,7 +8,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.daemon.json_rpc_client import SecureJSONRPCClient
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestSecureJSONRPCClient(HamsTransactionCase):
 
     def setUp(self):
@@ -28,7 +28,9 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         super().tearDown()
 
     def test_call_success(self):
-        mock_post = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.zero_sudo.daemon.json_rpc_client.requests.post"
+        )
         # Setup mock response
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -47,7 +49,9 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         self.assertEqual(payload["params"]["args"][2], "test_key")
 
     def test_call_self_healing(self):
-        mock_post = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.zero_sudo.daemon.json_rpc_client.requests.post"
+        )
         # Setup mock responses: first failure (401), then success
         mock_fail = MagicMock()
         mock_fail.status_code = 401

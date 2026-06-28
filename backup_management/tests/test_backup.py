@@ -30,10 +30,12 @@ class TestBackupManagement(RealTransactionCase):
 
         # Safely isolate the shutil mock to strictly the current test instance Context
         orig_which = shutil.which
+
         def mock_which(cmd, mode=os.F_OK, path=None):
             if cmd in ("kopia", "etcd"):
                 return None
             return orig_which(cmd, mode, path)
+
         self.safe_patch("shutil.which", side_effect=mock_which)
 
         self.env.user.write(
@@ -71,7 +73,10 @@ class TestBackupManagement(RealTransactionCase):
         job = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
         )
-        self.assertTrue(job.exists(), "[!] DIAGNOSTIC FOR AI: Kopia sync did not create a backup.job record. Ensure action_sync_snapshots() correctly calls _publish_to_worker().")
+        self.assertTrue(
+            job.exists(),
+            "[!] DIAGNOSTIC FOR AI: Kopia sync did not create a backup.job record. Ensure action_sync_snapshots() correctly calls _publish_to_worker().",
+        )
         self.assertEqual(job.state, "pending")
 
     def test_02_sync_pgbackrest_triggered(self):
@@ -80,7 +85,10 @@ class TestBackupManagement(RealTransactionCase):
         job = self.env["backup.job"].search(
             [("config_id", "=", self.config_pg.id)], order="id desc", limit=1
         )
-        self.assertTrue(job.exists(), "[!] DIAGNOSTIC FOR AI: pgBackRest sync did not create a backup.job record. Check action_sync_snapshots() logic.")
+        self.assertTrue(
+            job.exists(),
+            "[!] DIAGNOSTIC FOR AI: pgBackRest sync did not create a backup.job record. Check action_sync_snapshots() logic.",
+        )
         self.assertEqual(job.state, "pending")
 
     def test_04_cron_trigger(self):
@@ -101,7 +109,9 @@ class TestBackupManagement(RealTransactionCase):
 
         self.config_kopia.message_post(body=_("Verifying failure reporting mechanism"))
 
-        mock_msg = self.safe_patch_object(type(self.env["backup.config"]), "message_post")
+        mock_msg = self.safe_patch_object(
+            type(self.env["backup.config"]), "message_post"
+        )
         self.env["backup.config"].cron_sync_all_backups()
         mock_msg.assert_called()
 
@@ -114,21 +124,35 @@ class TestBackupManagement(RealTransactionCase):
         res_kopia = self.config_kopia.action_trigger_backup()
         res_pg = self.config_pg.action_trigger_backup()
 
-        self.assertEqual(res_kopia.get("res_model"), "backup.job", "[!] DIAGNOSTIC FOR AI: action_trigger_backup() for Kopia should return an ir.actions.act_window for backup.job.")
-        self.assertEqual(res_pg.get("res_model"), "backup.job", "[!] DIAGNOSTIC FOR AI: action_trigger_backup() for pgBackRest should return an ir.actions.act_window for backup.job.")
+        self.assertEqual(
+            res_kopia.get("res_model"),
+            "backup.job",
+            "[!] DIAGNOSTIC FOR AI: action_trigger_backup() for Kopia should return an ir.actions.act_window for backup.job.",
+        )
+        self.assertEqual(
+            res_pg.get("res_model"),
+            "backup.job",
+            "[!] DIAGNOSTIC FOR AI: action_trigger_backup() for pgBackRest should return an ir.actions.act_window for backup.job.",
+        )
 
         self.env.cr.commit()
 
         job_kopia = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], limit=1
         )
-        self.assertTrue(job_kopia.exists(), "[!] DIAGNOSTIC FOR AI: Kopia orchestration trigger failed to create a job record.")
+        self.assertTrue(
+            job_kopia.exists(),
+            "[!] DIAGNOSTIC FOR AI: Kopia orchestration trigger failed to create a job record.",
+        )
         self.assertEqual(job_kopia.state, "pending")
 
         job_pg = self.env["backup.job"].search(
             [("config_id", "=", self.config_pg.id)], limit=1
         )
-        self.assertTrue(job_pg.exists(), "[!] DIAGNOSTIC FOR AI: pgBackRest orchestration trigger failed to create a job record.")
+        self.assertTrue(
+            job_pg.exists(),
+            "[!] DIAGNOSTIC FOR AI: pgBackRest orchestration trigger failed to create a job record.",
+        )
         self.assertEqual(job_pg.state, "pending")
 
     def test_08_apply_policies_triggered(self):
@@ -157,7 +181,9 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_08d_kopia_auto_download(self):
         # Tests [@ANCHOR: test_kopia_auto_download]
-        mock_get_exe = self.safe_patch_object(type(self.config_kopia), "_get_executable", return_value="/bin/kopia")
+        mock_get_exe = self.safe_patch_object(
+            type(self.config_kopia), "_get_executable", return_value="/bin/kopia"
+        )
 
         self.config_kopia.message_post(body=_("Simulating executable resolution logs"))
 
@@ -189,7 +215,7 @@ class TestBackupManagement(RealTransactionCase):
         self.config_kopia.action_view_latest_job()
 
         # Test auto_refresh_status
-        self.env['backup.job']._auto_refresh_status()
+        self.env["backup.job"]._auto_refresh_status()
 
     def test_10_restore_command_computation(self):
         # Tests [@ANCHOR: backup_management:backup_restore_command]
@@ -229,9 +255,14 @@ class TestBackupManagement(RealTransactionCase):
             [("name", "=", "Backup Management")], limit=1
         )
         self.assertTrue(
-            article.exists(), "[!] DIAGNOSTIC FOR AI: Backup documentation article 'Backup Management' not found. Verify the 'knowledge_docs' manifest entry and the bootstrap mechanism."
+            article.exists(),
+            "[!] DIAGNOSTIC FOR AI: Backup documentation article 'Backup Management' not found. Verify the 'knowledge_docs' manifest entry and the bootstrap mechanism.",
         )
-        self.assertIn("Backup Management User Guide", article.body, "[!] DIAGNOSTIC FOR AI: Backup documentation body content is missing expected headers. Check data/documentation.html.")
+        self.assertIn(
+            "Backup Management User Guide",
+            article.body,
+            "[!] DIAGNOSTIC FOR AI: Backup documentation body content is missing expected headers. Check data/documentation.html.",
+        )
 
     def test_13_restore_action(self):
         # Tests [@ANCHOR: test_restore_action]

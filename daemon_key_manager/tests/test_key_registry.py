@@ -5,11 +5,12 @@ from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError, AccessError
-from odoo import SUPERUSER_ID # burn-ignore
+
 
 _logger = logging.getLogger(__name__)
 
-@tagged('post_install', '-at_install')
+
+@tagged("post_install", "-at_install")
 class TestKeyRegistry(RealTransactionCase):
     def setUp(self):
         super().setUp()
@@ -17,30 +18,36 @@ class TestKeyRegistry(RealTransactionCase):
 
         # Centralize test paths to ensure they match the production environment directory structure
         self.test_env_paths = [
-            '/var/lib/odoo/daemon_keys/test_daemon.env',
-            '/var/lib/odoo/daemon_keys/cron_test_daemon.env',
-            '/var/lib/odoo/daemon_keys/ownership_test_daemon.env',
-            '/var/lib/odoo/daemon_keys/api_test.env',
-            '/var/lib/odoo/daemon_keys/force_provision.env',
-            '/var/lib/odoo/daemon_keys/unauthorized.env'
+            "/var/lib/odoo/daemon_keys/test_daemon.env",
+            "/var/lib/odoo/daemon_keys/cron_test_daemon.env",
+            "/var/lib/odoo/daemon_keys/ownership_test_daemon.env",
+            "/var/lib/odoo/daemon_keys/api_test.env",
+            "/var/lib/odoo/daemon_keys/force_provision.env",
+            "/var/lib/odoo/daemon_keys/unauthorized.env",
         ]
 
         # Ensure a clean slate before each test runs to prevent state collision
         self._cleanup_test_files()
 
-        self.service_user = self.env['res.users'].create({
-            'name': 'Test Service Account',
-            'login': 'test_service_account',
-            'is_service_account': True,
-        })
+        self.service_user = self.env["res.users"].create(
+            {
+                "name": "Test Service Account",
+                "login": "test_service_account",
+                "is_service_account": True,
+            }
+        )
 
-        self.regular_user = self.env['res.users'].create({
-            'name': 'Regular User',
-            'login': 'regular_user',
-            'is_service_account': False,
-        })
+        self.regular_user = self.env["res.users"].create(
+            {
+                "name": "Regular User",
+                "login": "regular_user",
+                "is_service_account": False,
+            }
+        )
 
-        self.manager_user = self.env.ref('daemon_key_manager.user_daemon_key_manager_service')
+        self.manager_user = self.env.ref(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
 
     def tearDown(self):
         # Ensure files are removed after the test completes as well
@@ -64,20 +71,24 @@ class TestKeyRegistry(RealTransactionCase):
         # We must use a user that has permission to create registries, but not a human user as target
         # Test non-service account
         with self.assertRaises(UserError):
-            self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-                'name': 'Test Daemon',
-                'user_id': self.regular_user.id,
-                'env_file_path': self.test_env_paths[0],
-            })
+            self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+                {
+                    "name": "Test Daemon",
+                    "user_id": self.regular_user.id,
+                    "env_file_path": self.test_env_paths[0],
+                }
+            )
             self.env.flush_all()
 
         # Test invalid path
         with self.assertRaises(UserError):
-            self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-                'name': 'Test Daemon Path',
-                'user_id': self.service_user.id,
-                'env_file_path': '/home/jules/test.env',
-            })
+            self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+                {
+                    "name": "Test Daemon Path",
+                    "user_id": self.service_user.id,
+                    "env_file_path": "/home/jules/test.env",
+                }
+            )
             self.env.flush_all()
 
         # Test symlink attack prevention
@@ -96,11 +107,13 @@ class TestKeyRegistry(RealTransactionCase):
 
         # Attempting to use the symlink should fail because os.path.realpath resolves it to /etc/passwd
         with self.assertRaises(UserError) as cm:
-            self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-                'name': 'Symlink Attack',
-                'user_id': self.service_user.id,
-                'env_file_path': symlink_path,
-            })
+            self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+                {
+                    "name": "Symlink Attack",
+                    "user_id": self.service_user.id,
+                    "env_file_path": symlink_path,
+                }
+            )
             self.env.flush_all()
         self.assertIn("Security Alert", str(cm.exception))
 
@@ -114,11 +127,15 @@ class TestKeyRegistry(RealTransactionCase):
         for f_path in forbidden_paths:
             with self.subTest(path=f_path):
                 with self.assertRaises(UserError) as cm:
-                    self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-                        'name': f'Forbidden {f_path}',
-                        'user_id': self.service_user.id,
-                        'env_file_path': f_path,
-                    })
+                    self.env["daemon.key.registry"].with_user(
+                        self.manager_user.id
+                    ).create(
+                        {
+                            "name": f"Forbidden {f_path}",
+                            "user_id": self.service_user.id,
+                            "env_file_path": f_path,
+                        }
+                    )
                     self.env.flush_all()
                 self.assertIn("Security Alert", str(cm.exception))
 
@@ -152,10 +169,18 @@ class TestKeyRegistry(RealTransactionCase):
         user_xml_id = "daemon_key_manager.user_daemon_key_manager_service"
         env_file_path = "/var/lib/odoo/daemon_keys/api_test.env"
 
-        result = self.env["daemon.key.registry"].with_user(self.manager_user.id).register_daemon(daemon_name, user_xml_id, env_file_path)
+        result = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .register_daemon(daemon_name, user_xml_id, env_file_path)
+        )
         self.assertTrue(result)
 
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).search([('name', '=', daemon_name)])
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .search([("name", "=", daemon_name)])
+        )
         self.assertTrue(registry)
         self.assertEqual(registry.env_file_path, env_file_path)
         self.assertTrue(os.path.exists(env_file_path))
@@ -163,7 +188,7 @@ class TestKeyRegistry(RealTransactionCase):
         # Verify usage group assignment
         # Tests [@ANCHOR: privilege_escalation_bypass]
         usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
-        target_user = self.env["res.users"].search([('login', '=', user_xml_id)])
+        target_user = self.env["res.users"].search([("login", "=", user_xml_id)])
         if not target_user:
             target_user = self.env.ref(user_xml_id)
         self.assertIn(usage_group, target_user.group_ids)
@@ -175,18 +200,26 @@ class TestKeyRegistry(RealTransactionCase):
         # Tests [@ANCHOR: revoke_old_keys_logic]
         # Tests [@ANCHOR: generate_new_key_logic]
         # Create a mock daemon
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            'name': 'Cron Test Daemon',
-            'user_id': self.service_user.id,
-            'env_file_path': self.test_env_paths[1],
-        })
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Cron Test Daemon",
+                    "user_id": self.service_user.id,
+                    "env_file_path": self.test_env_paths[1],
+                }
+            )
+        )
 
         # Test cron execution wrapper
         self.env["daemon.key.registry"]._cron_rotate_all_keys()
 
         # Call the actual trigger to fulfill the test anchor requirement
         # # Tests [@ANCHOR: cron_rotation_trigger]
-        self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys").with_user(self.manager_user.id)._trigger()
+        self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys").with_user(
+            self.manager_user.id
+        )._trigger()
 
         registry.unlink()
 
@@ -194,27 +227,44 @@ class TestKeyRegistry(RealTransactionCase):
         """Verify that the generated key belongs to the service account, not SUPERUSER."""
         # [@ANCHOR: test_key_ownership]
         # Tests [@ANCHOR: generate_new_key_logic]
-        service_user = self.env['res.users'].create({
-            'name': 'Test Ownership Service Account',
-            'login': 'test_ownership_svc',
-            'is_service_account': True,
-        })
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            'name': 'Ownership Test Daemon',
-            'user_id': service_user.id,
-            'env_file_path': self.test_env_paths[2],
-        })
+        service_user = self.env["res.users"].create(
+            {
+                "name": "Test Ownership Service Account",
+                "login": "test_ownership_svc",
+                "is_service_account": True,
+            }
+        )
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Ownership Test Daemon",
+                    "user_id": service_user.id,
+                    "env_file_path": self.test_env_paths[2],
+                }
+            )
+        )
         registry.with_user(self.manager_user.id)._rotate_key_and_write_file()
 
         # Search for the key
-        self.env.cr.execute("SELECT user_id FROM res_users_apikeys WHERE name = 'Ownership Test Daemon_key'")
+        self.env.cr.execute(
+            "SELECT user_id FROM res_users_apikeys WHERE name = 'Ownership Test Daemon_key'"
+        )
         res = self.env.cr.fetchone()
 
         self.assertTrue(res, "API Key was not created")
-        self.assertEqual(res[0], service_user.id,
-                         f"Key owner should be {service_user.login} (ID {service_user.id}), "
-                         f"but it is ID {res[0]}")
-        self.assertNotEqual(res[0], SUPERUSER_ID, "Key should not be owned by SUPERUSER") # burn-ignore
+        self.assertEqual(
+            res[0],
+            service_user.id,
+            f"Key owner should be {service_user.login} (ID {service_user.id}), "
+            f"but it is ID {res[0]}",
+        )
+        self.assertNotEqual(
+            res[0],
+            self.env.ref("base.user_root").id,
+            "Key should not be owned by SUPERUSER",
+        )
 
     def test_force_provisioning(self):
         """Test force provisioning of all keys."""
@@ -225,33 +275,35 @@ class TestKeyRegistry(RealTransactionCase):
         daemon_name = "Force Provision Test"
         env_file_path = "/var/lib/odoo/daemon_keys/force_provision.env"
 
-        self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            'name': daemon_name,
-            'user_id': self.service_user.id,
-            'env_file_path': env_file_path,
-        })
+        self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+            {
+                "name": daemon_name,
+                "user_id": self.service_user.id,
+                "env_file_path": env_file_path,
+            }
+        )
 
         # Ensure file does not exist
         if os.path.exists(env_file_path):
             os.remove(env_file_path)
 
-        self.env["daemon.key.registry"].with_user(self.manager_user.id).action_force_provision_all()
+        self.env["daemon.key.registry"].with_user(
+            self.manager_user.id
+        ).action_force_provision_all()
         self.assertTrue(os.path.exists(env_file_path))
 
     def test_ui_rendering(self):
         """Test UI view rendering."""
         # [@ANCHOR: test_ui_rendering]
         # Test Tree View (Now 'list' in Odoo 19)
-        tree_view = self.env['ir.ui.view'].get_view(
-            res_model='daemon.key.registry',
-            view_type='list'
+        tree_view = self.env["ir.ui.view"].get_view(
+            res_model="daemon.key.registry", view_type="list"
         )
         self.assertTrue(tree_view)
 
         # Test Form View
-        form_view = self.env['ir.ui.view'].get_view(
-            res_model='daemon.key.registry',
-            view_type='form'
+        form_view = self.env["ir.ui.view"].get_view(
+            res_model="daemon.key.registry", view_type="form"
         )
         self.assertTrue(form_view)
 
@@ -259,11 +311,17 @@ class TestKeyRegistry(RealTransactionCase):
         """Test that unauthorized users cannot manage daemon keys."""
         # # Tests [@ANCHOR: test_unauthorized_access]
         # Create a registry entry
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            'name': 'Unauthorized Test',
-            'user_id': self.service_user.id,
-            'env_file_path': self.test_env_paths[5],
-        })
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Unauthorized Test",
+                    "user_id": self.service_user.id,
+                    "env_file_path": self.test_env_paths[5],
+                }
+            )
+        )
 
         # Regular user should not be able to rotate keys
         with self.assertRaises(AccessError):
@@ -271,7 +329,9 @@ class TestKeyRegistry(RealTransactionCase):
 
         # Regular user should not be able to call force provision all
         with self.assertRaises(AccessError):
-            self.env["daemon.key.registry"].with_user(self.regular_user.id).action_force_provision_all()
+            self.env["daemon.key.registry"].with_user(
+                self.regular_user.id
+            ).action_force_provision_all()
 
     def test_action_rotate_key(self):
         """Test manual rotation of a single key."""
@@ -281,11 +341,17 @@ class TestKeyRegistry(RealTransactionCase):
         env_file_path = "/var/lib/odoo/daemon_keys/single_rotation.env"
         self.test_env_paths.append(env_file_path)
 
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            'name': daemon_name,
-            'user_id': self.service_user.id,
-            'env_file_path': env_file_path,
-        })
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": daemon_name,
+                    "user_id": self.service_user.id,
+                    "env_file_path": env_file_path,
+                }
+            )
+        )
 
         # Ensure file does not exist
         if os.path.exists(env_file_path):
@@ -298,24 +364,32 @@ class TestKeyRegistry(RealTransactionCase):
         """Test that keys cannot be rotated for archived service accounts."""
         # [@ANCHOR: test_rotation_safety_archived_user]
         # Tests [@ANCHOR: rotation_safety_archived_user]
-        archived_user = self.env['res.users'].create({
-            'name': 'Archived Service Account',
-            'login': 'archived_svc',
-            'is_service_account': True,
-            'active': False,
-        })
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            'name': 'Archived Test',
-            'user_id': archived_user.id,
-            'env_file_path': self.test_env_paths[0],
-        })
+        archived_user = self.env["res.users"].create(
+            {
+                "name": "Archived Service Account",
+                "login": "archived_svc",
+                "is_service_account": True,
+                "active": False,
+            }
+        )
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Archived Test",
+                    "user_id": archived_user.id,
+                    "env_file_path": self.test_env_paths[0],
+                }
+            )
+        )
 
         with self.assertRaises(UserError) as cm:
             registry.with_user(self.manager_user.id)._rotate_key_and_write_file()
         self.assertIn("archived", str(cm.exception))
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestKeyRegistryTour(HamsHttpCase):
     def test_daemon_key_manager_tour(self):
         # [@ANCHOR: test_daemon_key_manager_tour]
@@ -324,13 +398,17 @@ class TestKeyRegistryTour(HamsHttpCase):
         # Tests [@ANCHOR: action_force_provision_all_api]
 
         # Ensure admin has Technical Features enabled for the tour
-        admin = self.env.ref('base.user_admin')
-        group_no_one = self.env.ref('base.group_no_one')
+        admin = self.env.ref("base.user_admin")
+        group_no_one = self.env.ref("base.group_no_one")
         if group_no_one not in admin.group_ids:
-            admin.write({'group_ids': [(4, group_no_one.id)]})
+            admin.write({"group_ids": [(4, group_no_one.id)]})
 
-        manager_group = self.env.ref('daemon_key_manager.group_daemon_key_manager')
+        manager_group = self.env.ref("daemon_key_manager.group_daemon_key_manager")
         if manager_group not in admin.group_ids:
-            admin.write({'group_ids': [(4, manager_group.id)]})
+            admin.write({"group_ids": [(4, manager_group.id)]})
 
-        self.start_tour("/odoo?debug=1&action=daemon_key_manager.action_daemon_key_registry", "daemon_key_manager_tour", login="admin")
+        self.start_tour(
+            "/odoo?debug=1&action=daemon_key_manager.action_daemon_key_registry",
+            "daemon_key_manager_tour",
+            login="admin",
+        )

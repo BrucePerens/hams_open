@@ -4,11 +4,13 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 class ResUsersEdgeRouting(models.Model):
     """
     Extends res.users with edge.routing.mixin to provide high-performance
     vanity URL routing and slug caching.
     """
+
     _name = "res.users"
     _inherit = ["res.users", "edge.routing.mixin"]
 
@@ -22,14 +24,16 @@ class ResUsersEdgeRouting(models.Model):
             else:
                 try:
                     target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                        "user_websites.user_websites_service_account"
+                        "edge_routing.edge_routing_service_account"
                     )
-                except Exception as e: # audit-ignore-catch-all
+                except Exception as e:  # audit-ignore-catch-all
                     _logger.warning("Failed to access website settings: %s", e)
                     target_env = self.env
 
-            user = target_env["res.users"].with_context(active_test=False).search(
-                [("login", "=ilike", str(slug).lower())], limit=1
+            user = (
+                target_env["res.users"]
+                .with_context(active_test=False)
+                .search([("login", "=ilike", str(slug).lower())], limit=1)
             )
             return user.id if user else False
         return res

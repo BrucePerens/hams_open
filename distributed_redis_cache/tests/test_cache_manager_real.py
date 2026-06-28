@@ -11,6 +11,7 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 
+
 @tagged("post_install", "-at_install")
 class TestRealCacheManager(RealTransactionCase):
     def setUp(self):
@@ -20,9 +21,7 @@ class TestRealCacheManager(RealTransactionCase):
     def tearDown(self):
         if self.daemon_proc:
             try:
-                self.env["zero_sudo.daemon.utils"].stop_daemon_process(
-                    self.daemon_proc
-                )
+                self.env["zero_sudo.daemon.utils"].stop_daemon_process(self.daemon_proc)
             except (ProcessLookupError, PermissionError) as e:
                 _logger.warning("Daemon termination failed: %s", repr(e))
         super().tearDown()
@@ -39,7 +38,9 @@ class TestRealCacheManager(RealTransactionCase):
             "REDIS_HOST": os.environ.get("REDIS_HOST", "redis"),
         }
 
-        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
+        self.daemon_proc = daemon_utils.start_daemon_process(
+            daemon_script, env_vars=env_vars
+        )
 
         # Standardize Redis host to match the daemon's default fallback
         redis_host = os.environ.get("REDIS_HOST", "redis")
@@ -65,12 +66,14 @@ class TestRealCacheManager(RealTransactionCase):
 
             # Failsafe: directly emit NOTIFY to test the daemon relay using parameterized pg_notify
             payload = json.dumps({"model": "res.users", "dbname": self.env.cr.dbname})
-            self.env.cr.execute("SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload))
+            self.env.cr.execute(
+                "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
+            )
             self.env.cr.commit()
 
             msg = pubsub.get_message(ignore_subscribe_messages=True)
-            if msg and msg['type'] == 'message':
-                data = json.loads(msg['data'])
+            if msg and msg["type"] == "message":
+                data = json.loads(msg["data"])
                 if data.get("model") == "res.users":
                     message_received = True
                     break
@@ -79,5 +82,5 @@ class TestRealCacheManager(RealTransactionCase):
         pubsub.close()
         self.assertTrue(
             message_received,
-            "[!] DIAGNOSTIC FOR AI: The standalone cache_manager.py daemon failed to relay the PG NOTIFY event to the Redis 'odoo_cache_invalidation_bus' channel. Verify that the daemon is correctly parsing DB_NAME and connected to Redis."
+            "[!] DIAGNOSTIC FOR AI: The standalone cache_manager.py daemon failed to relay the PG NOTIFY event to the Redis 'odoo_cache_invalidation_bus' channel. Verify that the daemon is correctly parsing DB_NAME and connected to Redis.",
         )

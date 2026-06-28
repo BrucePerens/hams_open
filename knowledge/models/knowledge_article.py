@@ -13,7 +13,12 @@ class KnowledgeArticle(models.Model):
 
     _name = "knowledge.article"
     _description = "Manual Article"
-    _inherit = ["mail.thread", "mail.activity.mixin", "website.published.mixin", "website.multi.mixin"]
+    _inherit = [
+        "mail.thread",
+        "mail.activity.mixin",
+        "website.published.mixin",
+        "website.multi.mixin",
+    ]
     _order = "sequence, id"
 
     # --- API Interoperability Fields (Strict Matching) ---
@@ -66,11 +71,15 @@ class KnowledgeArticle(models.Model):
     unhelpful_count = fields.Integer(string="Unhelpful Votes", default=0, readonly=True)
 
     breadcrumb_article_ids = fields.Many2many(
-        "knowledge.article", compute="_compute_breadcrumb_article_ids", string="Breadcrumbs"
+        "knowledge.article",
+        compute="_compute_breadcrumb_article_ids",
+        string="Breadcrumbs",
     )
 
     body_snippet = fields.Text(compute="_compute_body_snippet", string="Body Snippet")
-    reading_time = fields.Integer(compute="_compute_reading_time", string="Reading Time (min)")
+    reading_time = fields.Integer(
+        compute="_compute_reading_time", string="Reading Time (min)"
+    )
 
     author_id = fields.Many2one(
         "res.users", string="Author", compute="_compute_author_id", store=True

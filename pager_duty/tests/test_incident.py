@@ -10,6 +10,7 @@ from odoo import fields, _
 
 _logger = logging.getLogger(__name__)
 
+
 @tagged("standard", "post_install", "-at_install")
 class TestPagerIncidentStandard(HamsTransactionCase):
     def setUp(self):
@@ -28,7 +29,9 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         }
 
         mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
-        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", MagicMock())
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
+        )
         mock_client = MagicMock()
         mock_redis.Redis.return_value = mock_client
         mock_client.set.return_value = False
@@ -40,7 +43,9 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         )
         website = self.env["website"].get_current_website()
         website_suffix = str(website.id) if website else "global"
-        mock_client.set.assert_called_with(f"pager_rate_limit:test_daemon:{website_suffix}", "1", ex=60, nx=True)
+        mock_client.set.assert_called_with(
+            f"pager_rate_limit:test_daemon:{website_suffix}", "1", ex=60, nx=True
+        )
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
@@ -52,7 +57,9 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         }
 
         mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
-        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", MagicMock())
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
+        )
         mock_client = MagicMock()
         mock_redis.Redis.return_value = mock_client
         mock_client.get.return_value = None
@@ -145,7 +152,11 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         # Tests [@ANCHOR: pager_duty_postgres_procedures]
         # Tests [@ANCHOR: test_pager_duty_procedures]
         self.incident_model.report_incident(
-            {"source": "Dashboard Board Test", "severity": "medium", "description": "test"}
+            {
+                "source": "Dashboard Board Test",
+                "severity": "medium",
+                "description": "test",
+            }
         )
         self.env.flush_all()
         data = self.incident_model.get_board_data()
@@ -165,7 +176,11 @@ class TestPagerIncidentIntegration(HamsTransactionCase):
 
         if not self.__class__._daemons_started:
             base_dir = os.path.join(os.path.dirname(__file__), "..", "daemon")
-            daemons = ["pager_smart_spooler.py", "pager_log_analyzer.py", "pager_synthetic_spooler.py"]
+            daemons = [
+                "pager_smart_spooler.py",
+                "pager_log_analyzer.py",
+                "pager_synthetic_spooler.py",
+            ]
             for d in daemons:
                 daemon_path = os.path.abspath(os.path.join(base_dir, d))
                 if os.path.exists(daemon_path):
@@ -209,9 +224,7 @@ class TestPagerIncidentIntegration(HamsTransactionCase):
         r.delete("pager_rate_limit:test_daemon_2")
 
         incident_id = self.incident_model.report_incident(vals)
-        self.assertTrue(
-            incident_id, "Incident failed to create in integration mode."
-        )
+        self.assertTrue(incident_id, "Incident failed to create in integration mode.")
 
         incident = self.incident_model.browse(incident_id)
         self.assertEqual(

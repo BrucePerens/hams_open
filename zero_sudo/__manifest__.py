@@ -11,11 +11,11 @@
     "license": "AGPL-3",
     "depends": ["base", "web", "mail"],
     "assets": {
-      "web.assets_tests": [
-        "zero_sudo/static/src/js/tour_utils.js",
-        "zero_sudo/static/src/js/tour_failure_dump.js",
-        "zero_sudo/static/src/tours/zero_sudo_tour.js"
-      ],
+        "web.assets_tests": [
+            "zero_sudo/static/src/js/tour_utils.js",
+            "zero_sudo/static/src/js/tour_failure_dump.js",
+            "zero_sudo/static/src/tours/zero_sudo_tour.js",
+        ],
     },
     "data": [
         "data/security_data.xml",
@@ -24,39 +24,39 @@
         "views/res_users_views.xml",
         "views/security_log_views.xml",
         "data/noisy_table_data.xml",
-        "views/noisy_table_views.xml"
+        "views/noisy_table_views.xml",
     ],
     "knowledge_docs": [
         {
             "name": "Zero-Sudo Security Core",
             "path": "data/documentation.html",
             "icon": "🛡️",
-            "category": "workspace"
+            "category": "workspace",
         },
         {
             "name": "Real Transaction Testing Facility Guide",
             "path": "data/testing_documentation.html",
             "icon": "🧪",
-            "category": "workspace"
+            "category": "workspace",
         },
         {
             "name": "Developer Integration Journey",
             "path": "docs/journeys/developer_integration.md",
             "icon": "🚀",
-            "category": "workspace"
+            "category": "workspace",
         },
         {
             "name": "Multi-Website Security Story",
             "path": "docs/stories/multi_website.md",
             "icon": "🌐",
-            "category": "workspace"
+            "category": "workspace",
         },
         {
             "name": "High-Performance Atomic KV Storage",
             "path": "docs/stories/set_kv_procedure.md",
             "icon": "⚡",
-            "category": "workspace"
-        }
+            "category": "workspace",
+        },
     ],
     "installable": True,
     "auto_install": False,

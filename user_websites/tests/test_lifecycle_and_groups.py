@@ -9,7 +9,7 @@ from odoo.exceptions import ValidationError
 _logger = logging.getLogger(__name__)
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestLifecycleAndGroups(RealTransactionCase):
     def setUp(self):
         super(TestLifecycleAndGroups, self).setUp()
@@ -21,7 +21,8 @@ class TestLifecycleAndGroups(RealTransactionCase):
         self.user_a = self.env["res.users"].create(
             {
                 "name": "Alice Life",
-                "login": "alicelife", "password": "alicelife",
+                "login": "alicelife",
+                "password": "alicelife",
                 "email": "alice@example.com",
                 "website_slug": "alicelife",
                 "group_ids": [
@@ -105,7 +106,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
@@ -154,9 +155,9 @@ class TestLifecycleAndGroups(RealTransactionCase):
             self.env.cr.commit()
             self.env.invalidate_all()
             if not page.website_published:
-                time.sleep(0.5) # audit-ignore-sleep
+                time.sleep(0.5)  # audit-ignore-sleep
                 break
-            time.sleep(0.5) # audit-ignore-sleep
+            time.sleep(0.5)  # audit-ignore-sleep
 
         page.invalidate_recordset()
         post.invalidate_recordset()
@@ -240,7 +241,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(

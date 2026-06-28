@@ -122,9 +122,7 @@ async def main():
             logger.info("Daemon shutting down cleanly.")
             break
         except Exception as e:  # audit-ignore-catch-all
-            logger.error(
-                "PostgreSQL connection dropped: %s. Reconnecting in 5s...", e
-            )
+            logger.error("PostgreSQL connection dropped: %s. Reconnecting in 5s...", e)
             try:
                 await asyncio.sleep(5)  # audit-ignore-sleep
             except asyncio.CancelledError:

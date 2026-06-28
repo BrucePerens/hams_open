@@ -3,6 +3,7 @@
 from odoo import models, api, _
 from odoo.exceptions import AccessError
 
+
 class BlogBlog(models.Model):
     _name = "blog.blog"
     _inherit = ["blog.blog", "user_websites.owned.mixin"]

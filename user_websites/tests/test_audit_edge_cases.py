@@ -5,7 +5,7 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from unittest.mock import MagicMock
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestAuditEdgeCases(RealTransactionCase):
     """
     Advanced integration tests targeting edge cases discovered during
@@ -16,9 +16,14 @@ class TestAuditEdgeCases(RealTransactionCase):
         super(TestAuditEdgeCases, self).setUp()
 
         # Prevent Cloudflare cache purge hooks from leaking queue records during tests and teardown
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.CloudflarePurgeQueue.enqueue_urls", return_value=True)
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.CloudflarePurgeQueue.enqueue_tags", return_value=True)
-
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.CloudflarePurgeQueue.enqueue_urls",
+            return_value=True,
+        )
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.CloudflarePurgeQueue.enqueue_tags",
+            return_value=True,
+        )
 
         self.test_user = self.env["res.users"].create(
             {
@@ -220,9 +225,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         group.write({"website_slug": "newcachegroup"})
 
         # 4. Verify cache was cleared (next call must execute SQL)
-        group_id = self.env["user.websites.group"].get_record_by_slug(
-            "newcachegroup"
-        )
+        group_id = self.env["user.websites.group"].get_record_by_slug("newcachegroup")
         self.assertEqual(
             group_id,
             group.id,
@@ -251,7 +254,9 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         initial_views = page.view_count
 
-        mock_client = self.safe_patch("odoo.addons.user_websites.models.website_page.redis_client")
+        mock_client = self.safe_patch(
+            "odoo.addons.user_websites.models.website_page.redis_client"
+        )
         # Simulate scan returning a cursor of 5 (more data) and one key
         mock_client.scan.return_value = (5, [f"views:page:{page.id}"])
 

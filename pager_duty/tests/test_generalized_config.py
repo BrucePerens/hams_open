@@ -72,8 +72,12 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertEqual(bash_check.ignored_services, "ignored.service")
 
     def test_02_autodiscovery(self):
-        mock_push = self.safe_patch("odoo.addons.pager_duty.models.pager_check.PagerCheck.action_push_to_json")
-        mock_run = self.safe_patch("odoo.addons.pager_duty.models.pager_check.subprocess.run")
+        mock_push = self.safe_patch(
+            "odoo.addons.pager_duty.models.pager_check.PagerCheck.action_push_to_json"
+        )
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.models.pager_check.subprocess.run"
+        )
         """Verify the autodiscover action builds checks safely without crashing."""
         mock_res = MagicMock()
         mock_res.stdout = "postgresql.service\nnginx.service"

@@ -5,6 +5,7 @@ from .real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 
+
 @tagged("post_install", "-at_install")
 class TestRealTransactionFacility(RealTransactionCase):
     _integration_daemon_process = None
@@ -20,7 +21,6 @@ class TestRealTransactionFacility(RealTransactionCase):
     def test_00_cursor_hijacking_and_snapshot(self):
         # [@ANCHOR: test_cursor_hijacking]
         # [@ANCHOR: test_leak_snapshotting]
-
 
         """
         Verify that the cursor is indeed real and that snapshotting occurred.
@@ -67,14 +67,17 @@ class TestRealTransactionFacility(RealTransactionCase):
         # Temporarily mock the tearDown leak detector to ensure it would raise
         leaks = []
         noisy_tables = set()
-        noisy_tables_records = self.env['zero_sudo.noisy_table'].search([])
+        noisy_tables_records = self.env["zero_sudo.noisy_table"].search([])
         noisy_tables = {record.name for record in noisy_tables_records}
 
         self.cr.execute("SELECT count(1) FROM ir_module_category")
         final_count = self.cr.fetchone()[0]
         initial_count = self._initial_counts.get("ir_module_category", 0)
 
-        if "ir_module_category" not in noisy_tables and final_count - initial_count != 0:
+        if (
+            "ir_module_category" not in noisy_tables
+            and final_count - initial_count != 0
+        ):
             leaks.append("ir_module_category")
 
         # Clean up the raw SQL insertion so the REAL tearDown doesn't crash the test suite
@@ -115,9 +118,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         from catching it.
         """
         # 1. Add table to noisy tables
-        noisy_table = self.env['zero_sudo.noisy_table'].create({
-            'name': 'ir_module_category'
-        })
+        noisy_table = self.env["zero_sudo.noisy_table"].create(
+            {"name": "ir_module_category"}
+        )
         self.env.cr.commit()
 
         # 2. Simulate a leak
@@ -130,7 +133,7 @@ class TestRealTransactionFacility(RealTransactionCase):
         # 3. Run the leak detector logic
         leaks = []
         noisy_records = self.env["zero_sudo.noisy_table"].search(
-            [('active', '=', True)], limit=1000
+            [("active", "=", True)], limit=1000
         )
         noisy_tables = {r.name for r in noisy_records}
 
@@ -138,7 +141,10 @@ class TestRealTransactionFacility(RealTransactionCase):
         final_count = self.cr.fetchone()[0]
         initial_count = self._initial_counts.get("ir_module_category", 0)
 
-        if "ir_module_category" not in noisy_tables and final_count - initial_count != 0:
+        if (
+            "ir_module_category" not in noisy_tables
+            and final_count - initial_count != 0
+        ):
             leaks.append("ir_module_category")
 
         # 4. Clean up the leak AND the noisy table record to keep the DB clean for tearDown
@@ -158,7 +164,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         """
         try:
             # 1. Ensure we have an initial count
-            self.cr.execute("INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test')")
+            self.cr.execute(
+                "INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test')"
+            )
             self.env.cr.commit()
 
             # We need to re-run snapshotting logic or simulate it
@@ -166,7 +174,9 @@ class TestRealTransactionFacility(RealTransactionCase):
             initial_count = self.cr.fetchone()[0]
 
             # 2. Add another record via SQL (bypass ORM)
-            self.cr.execute("INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test_2')")
+            self.cr.execute(
+                "INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test_2')"
+            )
             self.env.cr.commit()
 
             # 3. Verify leak detector would catch it
@@ -176,7 +186,9 @@ class TestRealTransactionFacility(RealTransactionCase):
             self.assertEqual(final_count - initial_count, 1)
         finally:
             # Cleanup
-            self.cr.execute("DELETE FROM zero_sudo_noisy_table WHERE name IN ('temp_table_leak_test', 'temp_table_leak_test_2')")
+            self.cr.execute(
+                "DELETE FROM zero_sudo_noisy_table WHERE name IN ('temp_table_leak_test', 'temp_table_leak_test_2')"
+            )
             self.env.cr.commit()
 
     @classmethod

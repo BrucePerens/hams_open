@@ -63,12 +63,8 @@ class TestSettingsAndCache(RealTransactionCase):
         mock_req.website = website
 
         # Case 1: No files
-        self.safe_patch_object(
-            controller, "_get_fs_stats", return_value=(1000.0, [])
-        )
-        self.safe_patch(
-            "odoo.addons.caching.controllers.main.request", mock_req
-        )
+        self.safe_patch_object(controller, "_get_fs_stats", return_value=(1000.0, []))
+        self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
         website.caching_safe_quota_mb = 35
         mtime, max_size = controller._get_global_static_info()
         self.assertEqual(
@@ -130,11 +126,9 @@ class TestSettingsAndCache(RealTransactionCase):
         self.assertIn("-v1", content_1)
 
         # Simulate button click
-        settings = self.env["res.config.settings"].create(
-            {"website_id": website.id}
-        )
+        settings = self.env["res.config.settings"].create({"website_id": website.id})
         settings.action_force_cache_invalidation()
-        self.env.flush_all() # Ensure data is written to DB
+        self.env.flush_all()  # Ensure data is written to DB
 
         # To safely bypass the Odoo test cursor constraint (which blocks self.env.cr.commit),
         # we will mock the website retrieval in the controller to directly read our uncommitted
@@ -151,9 +145,15 @@ class TestSettingsAndCache(RealTransactionCase):
         mock_file.read.return_value = "const CACHE_NAME = '__CACHE_NAME__'; const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;"
         mock_open = MagicMock()
         mock_open.return_value.__enter__.return_value = mock_file
-        self.safe_patch("odoo.addons.caching.controllers.main.tools.file_open", mock_open)
+        self.safe_patch(
+            "odoo.addons.caching.controllers.main.tools.file_open", mock_open
+        )
 
-        mock_req.make_response = MagicMock(side_effect=lambda content, headers: werkzeug.wrappers.Response(content, headers=headers))
+        mock_req.make_response = MagicMock(
+            side_effect=lambda content, headers: werkzeug.wrappers.Response(
+                content, headers=headers
+            )
+        )
 
         response_2 = controller.service_worker()
 
@@ -169,9 +169,8 @@ class TestSettingsAndCache(RealTransactionCase):
         """
         # This test acts as the anchor verifying that the params are
         # intentionally safe
-        val = (
-            self.env["zero_sudo.security.utils"]
-            ._get_system_param("caching.safe_quota_mb")
+        val = self.env["zero_sudo.security.utils"]._get_system_param(
+            "caching.safe_quota_mb"
         )
         self.assertIsInstance(val, (str, type(None)))
 
@@ -184,20 +183,12 @@ class TestSettingsAndCache(RealTransactionCase):
         ServiceWorkerController._fs_cache = None
 
         mock_req = MagicMock()
-        mock_req.env = (
-            self.env["res.users"]
-            .with_context(force_fs_scan=True)
-            .env
-        )
+        mock_req.env = self.env["res.users"].with_context(force_fs_scan=True).env
 
-        self.safe_patch(
-            "odoo.addons.caching.controllers.main.request", mock_req
-        )
+        self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
         mtime, sizes = controller._get_fs_stats()
         self.assertGreater(mtime, 0)
         self.assertIsInstance(sizes, list)
-
-
 
     def test_04_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_caching_settings]
@@ -214,6 +205,5 @@ class TestSettingsAndCache(RealTransactionCase):
         self.assertIn(
             "Caching Service Worker",
             arch_str,
-            "The Caching settings block must be injected into "
-            "the compiled layout.",
+            "The Caching settings block must be injected into " "the compiled layout.",
         )

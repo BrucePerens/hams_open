@@ -31,7 +31,9 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
 
         tar_stream = io.BytesIO()
-        with tarfile.open(fileobj=tar_stream, mode="w:gz") as tar: # audit-ignore-path-traversal
+        with tarfile.open(
+            fileobj=tar_stream, mode="w:gz"
+        ) as tar:  # audit-ignore-path-traversal
             content = b"dummy kopia content"
             tarinfo = tarfile.TarInfo(name="kopia")
             tarinfo.size = len(content)
@@ -42,10 +44,9 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
 
         # Update the manifest record in the database to use our dummy checksum and url
         manifest = self.env.ref("binary_downloader.binary_manifest_kopia")
-        manifest.write({
-            "checksum": expected_checksum,
-            "url": "http://dummy.internal/kopia.tar.gz"
-        })
+        manifest.write(
+            {"checksum": expected_checksum, "url": "http://dummy.internal/kopia.tar.gz"}
+        )
 
         # Update test_bin to the variant name and clean it
         self.test_bin = os.path.join(self.bin_dir, manifest._get_target_filename())
@@ -57,10 +58,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
                 return None
 
         # Patch urllib.request.urlopen to return our mock response
-        self.safe_patch(
-            "urllib.request.urlopen",
-            return_value=MockResponse(tar_bytes)
-        )
+        self.safe_patch("urllib.request.urlopen", return_value=MockResponse(tar_bytes))
 
         path = self.env["binary.manifest"].ensure_executable("kopia")
 

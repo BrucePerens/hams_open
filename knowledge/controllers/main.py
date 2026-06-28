@@ -28,26 +28,29 @@ class ManualLibraryController(http.Controller):
 
         # Heuristic: Look for common Markdown signatures
         markdown_signatures = [
-            r'(?m)^#{1,6}\s+.+',       # Headers
-            r'(?m)^```[\s\S]*?^```',   # Code blocks
-            r'(?m)^(\*|-|\d+\.)\s+',   # Lists
-            r'\*\*.*?\*\*',            # Bold
-            r'\[.+?\]\(.+?\)',         # Links
+            r"(?m)^#{1,6}\s+.+",  # Headers
+            r"(?m)^```[\s\S]*?^```",  # Code blocks
+            r"(?m)^(\*|-|\d+\.)\s+",  # Lists
+            r"\*\*.*?\*\*",  # Bold
+            r"\[.+?\]\(.+?\)",  # Links
         ]
 
         is_md = any(re.search(sig, text_content) for sig in markdown_signatures)
 
         # Avoid compiling if it contains complex native Odoo UI snippets (tables, deep divs)
-        has_complex_html = bool(re.search(r'<(div|table|section|article|img)[^>]*>', html_body, re.IGNORECASE))
+        has_complex_html = bool(
+            re.search(
+                r"<(div|table|section|article|img)[^>]*>", html_body, re.IGNORECASE
+            )
+        )
 
         if is_md and not has_complex_html:
             try:
                 md_html = markdown.markdown(
-                    text_content,
-                    extensions=['fenced_code', 'tables', 'nl2br', 'toc']
+                    text_content, extensions=["fenced_code", "tables", "nl2br", "toc"]
                 )
                 return Markup(md_html)
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Markdown compilation failed: %s", e)
 
         return Markup(html_body)
@@ -57,18 +60,35 @@ class ManualLibraryController(http.Controller):
         # [@ANCHOR: manual_sidebar_search_optimization]
         # Performance: Reducing 3 RPC/DB round-trips to 1 by using a combined domain.
         user_id = request.env.user.id
-        base_domain = [("parent_id", "=", False), ("website_id", "in", (False, request.website.id))]
+        base_domain = [
+            ("parent_id", "=", False),
+            ("website_id", "in", (False, request.website.id)),
+        ]
 
         # Combined domain to fetch all relevant root articles in one go
-        combined_domain = base_domain + ["|", ("internal_permission", "in", ("read", "write")),
-                          "|", ("member_ids", "in", [user_id]),
-                          "&", ("internal_permission", "=", "none"), ("create_uid", "=", user_id)]
+        combined_domain = base_domain + [
+            "|",
+            ("internal_permission", "in", ("read", "write")),
+            "|",
+            ("member_ids", "in", [user_id]),
+            "&",
+            ("internal_permission", "=", "none"),
+            ("create_uid", "=", user_id),
+        ]
 
         all_roots = request.env["knowledge.article"].search(combined_domain, limit=5000)
 
-        workspace_articles = all_roots.filtered(lambda a: a.internal_permission in ("read", "write"))
-        shared_articles = all_roots.filtered(lambda a: a.internal_permission == "none" and user_id in a.member_ids.ids)
-        private_articles = all_roots.filtered(lambda a: a.internal_permission == "none" and a.create_uid.id == user_id and not a.member_ids)
+        workspace_articles = all_roots.filtered(
+            lambda a: a.internal_permission in ("read", "write")
+        )
+        shared_articles = all_roots.filtered(
+            lambda a: a.internal_permission == "none" and user_id in a.member_ids.ids
+        )
+        private_articles = all_roots.filtered(
+            lambda a: a.internal_permission == "none"
+            and a.create_uid.id == user_id
+            and not a.member_ids
+        )
 
         return workspace_articles, shared_articles, private_articles
 
@@ -99,7 +119,9 @@ class ManualLibraryController(http.Controller):
                 raise werkzeug.exceptions.NotFound()
 
         # 2. Fetch root articles for the sidebar navigation
-        workspace_articles, shared_articles, private_articles = self._get_sidebar_articles()
+        workspace_articles, shared_articles, private_articles = (
+            self._get_sidebar_articles()
+        )
 
         # 3. If no specific article is requested, default to the first available root article
         if not article:
@@ -117,7 +139,11 @@ class ManualLibraryController(http.Controller):
         # 5. Enforce Read Context (Public/Guest)
         try:
             # Re-browse with the explicit user environment to trigger record rules
-            user_article = request.env["knowledge.article"].with_user(request.env.user).browse(article.id)
+            user_article = (
+                request.env["knowledge.article"]
+                .with_user(request.env.user)
+                .browse(article.id)
+            )
             user_article.check_access("read")
             _ = user_article.name
         except AccessError:
@@ -146,7 +172,8 @@ class ManualLibraryController(http.Controller):
                 "shared_articles": shared_articles,
                 "private_articles": private_articles,
                 "search_term": "",
-                "is_internal_user": is_internal or request.env.user.has_group("base.group_portal"),
+                "is_internal_user": is_internal
+                or request.env.user.has_group("base.group_portal"),
             },
         )
 
@@ -169,7 +196,9 @@ class ManualLibraryController(http.Controller):
         articles = request.env["knowledge.article"].search(domain, limit=1000)
 
         # Fetch and group root articles for the sidebar navigation
-        workspace_articles, shared_articles, private_articles = self._get_sidebar_articles()
+        workspace_articles, shared_articles, private_articles = (
+            self._get_sidebar_articles()
+        )
 
         return request.render(
             "knowledge.search_results_template",
@@ -179,7 +208,8 @@ class ManualLibraryController(http.Controller):
                 "workspace_articles": workspace_articles,
                 "shared_articles": shared_articles,
                 "private_articles": private_articles,
-                "is_internal_user": request.env.user.has_group("base.group_user") or request.env.user.has_group("base.group_portal"),
+                "is_internal_user": request.env.user.has_group("base.group_user")
+                or request.env.user.has_group("base.group_portal"),
             },
         )
 

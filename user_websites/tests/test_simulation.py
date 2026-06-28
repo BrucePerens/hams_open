@@ -10,7 +10,7 @@ import time
 _logger = logging.getLogger(__name__)
 
 
-@tagged('post_install', '-at_install', '-standard', 'simulation')
+@tagged("post_install", "-at_install", "-standard", "simulation")
 class TestLongRunningSimulation(odoo.tests.common.HttpCase):
     """
     Executes a high-speed simulation to exercise system capabilities
@@ -141,7 +141,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
         track(
             "User: Report Violation",
             self.url_open,
-            "/website/report_violation", # burn-ignore-route
+            "/website/report_violation",  # burn-ignore-route
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": f"/{other_user.website_slug}/home",
@@ -182,7 +182,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
             track(
                 "User: Submit Appeal",
                 self.url_open,
-                "/website/submit_appeal", # burn-ignore-route
+                "/website/submit_appeal",  # burn-ignore-route
                 data={
                     "csrf_token": odoo.http.Request.csrf_token(self),
                     "reason": "I am a simulation. Please pardon my simulated behavior.",

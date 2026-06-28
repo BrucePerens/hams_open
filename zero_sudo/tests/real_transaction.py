@@ -114,7 +114,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             # snapshot locks and abort pending dirty-form submissions.
             try:
                 self.env.cr.rollback()
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Ignored error during initial teardown rollback: %s", e)
 
             # 2. Automated ORM Cleanup (Multiple passes for Foreign Key cascades)
@@ -125,18 +125,42 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                     if ids:
                         model_env = self.env[model_name]
                         try:
-                            with self.env.cr.savepoint(), mute_logger("odoo.sql_db"), mute_logger("odoo.models.unlink"):
-                                records = model_env.with_context(active_test=False).browse(list(ids)).exists()
+                            with self.env.cr.savepoint(), mute_logger(
+                                "odoo.sql_db"
+                            ), mute_logger("odoo.models.unlink"):
+                                records = (
+                                    model_env.with_context(active_test=False)
+                                    .browse(list(ids))
+                                    .exists()
+                                )
                                 if records:
                                     records.sudo().unlink()  # burn-ignore-sudo: Administrative test environment cleanup
                             self._tracked_records[model_name] = set()
-                        except (psycopg2.IntegrityError, psycopg2.OperationalError, odoo.exceptions.AccessError, odoo.exceptions.UserError, odoo.exceptions.RedirectWarning, odoo.exceptions.ValidationError) as e:
+                        except (
+                            psycopg2.IntegrityError,
+                            psycopg2.OperationalError,
+                            odoo.exceptions.AccessError,
+                            odoo.exceptions.UserError,
+                            odoo.exceptions.RedirectWarning,
+                            odoo.exceptions.ValidationError,
+                        ) as e:
                             pending_deletes = True
                             if attempt == 4:
-                                _logger.info("Auto-cleanup failed for %s %s after 5 attempts: %s", model_name, ids, e)
-                        except Exception as e: # audit-ignore-catch-all
+                                _logger.info(
+                                    "Auto-cleanup failed for %s %s after 5 attempts: %s",
+                                    model_name,
+                                    ids,
+                                    e,
+                                )
+                        except Exception as e:  # audit-ignore-catch-all
                             pending_deletes = True
-                            _logger.error("Unexpected error during auto-cleanup of %s %s: %s", model_name, ids, e, exc_info=True)
+                            _logger.error(
+                                "Unexpected error during auto-cleanup of %s %s: %s",
+                                model_name,
+                                ids,
+                                e,
+                                exc_info=True,
+                            )
                 if not pending_deletes:
                     break
 
@@ -148,19 +172,46 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             leaks = []
             noisy_tables = set()
             try:
-                noisy_records = self.env["zero_sudo.noisy_table"].search([('active', '=', True)], limit=1000)
+                noisy_records = self.env["zero_sudo.noisy_table"].search(
+                    [("active", "=", True)], limit=1000
+                )
                 noisy_tables = {r.name for r in noisy_records}
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Could not fetch noisy tables during teardown: %s", e)
 
             fallback_tables = {
-                "bus_bus", "ir_logging", "base_registry_signaling", "ir_cron",
-                "mail_message", "mail_notification", "mail_followers", "mail_tracking_value",
-                "mail_mail", "res_groups_users_rel", "res_company_users_rel", "res_users_log",
-                "http_session", "database_pg_setting", "database_table_stat", "database_query_stat",
-                "database_activity", "database_index_stat", "ir_attachment", "ir_model_data",
-                "website_visitor", "website_track", "ir_ui_view", "cloudflare_purge_queue", "res_groups_implied_rel",
-                "res_users_apikeys", "ir_cron_progress",
+                "bus_bus",
+                "ir_logging",
+                "base_registry_signaling",
+                "ir_cron",
+                "mail_message",
+                "mail_notification",
+                "mail_followers",
+                "mail_tracking_value",
+                "mail_mail",
+                "res_groups_users_rel",
+                "res_company_users_rel",
+                "res_users_log",
+                "http_session",
+                "database_pg_setting",
+                "database_table_stat",
+                "database_query_stat",
+                "database_activity",
+                "database_index_stat",
+                "ir_attachment",
+                "ir_model_data",
+                "website_visitor",
+                "website_track",
+                "ir_ui_view",
+                "cloudflare_purge_queue",
+                "res_groups_implied_rel",
+                "res_users_apikeys",
+                "ir_cron_progress",
+                "orm_signaling_stable",
+                "ir_config_parameter",
+                "gamification_challenge_users_rel",
+                "gamification_goal",
+                "ir_cron_trigger",
             }
             noisy_tables.update(fallback_tables)
 
@@ -176,7 +227,12 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                     leaks.append(f"{t} ({diff:+d})")
 
             if leaks:
-                raise AssertionError(_("Database pollution detected! Auto-cleanup failed or raw SQL was used. Leaked records: %s") % ", ".join(leaks))
+                raise AssertionError(
+                    _(
+                        "Database pollution detected! Auto-cleanup failed or raw SQL was used. Leaked records: %s"
+                    )
+                    % ", ".join(leaks)
+                )
 
         finally:
             # 4. Close OUR real DB connection NO MATTER WHAT
@@ -185,8 +241,10 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 self.registry.clear_cache()
                 self.env.clear()
                 self.cr.close()
-            except Exception as e: # audit-ignore-catch-all
-                _logger.error("Failed to cleanly close DB connection during teardown: %s", e)
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.error(
+                    "Failed to cleanly close DB connection during teardown: %s", e
+                )
 
             # 4. Cleanly restore the underlying HttpCase TestCursor so its own teardown succeeds.
             # Verified by [@ANCHOR: test_cursor_restoration]

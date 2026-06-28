@@ -9,7 +9,7 @@ class UserWebsitesGroupSEO(models.Model):
     _inherit = [
         "user.websites.group",
         "website.seo.metadata",
-        "user.websites.seo.metadata.mixin"
+        "user.websites.seo.metadata.mixin",
     ]
 
     def _check_seo_write_permission(self):
@@ -17,7 +17,6 @@ class UserWebsitesGroupSEO(models.Model):
             # [@ANCHOR: user_websites_group_seo_write_elevation]
             # Verified by [@ANCHOR: test_seo_widget_tour]
             # Verified by [@ANCHOR: test_check_access_rule_user_websites_group]
-            raise AccessError(_(
-                "You can only modify SEO metadata for groups "
-                "you are a member of."
-            ))
+            raise AccessError(
+                _("You can only modify SEO metadata for groups " "you are a member of.")
+            )

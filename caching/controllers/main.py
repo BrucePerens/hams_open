@@ -24,15 +24,9 @@ class ServiceWorkerController(http.Controller):
         """
         # Gating for Jules VM stability during Odoo initialization.
         # Prevent scanner during --init phase of tests.
-        is_test = 'test_cr' in request.env.registry.__dict__
-        is_boot = tools.config.get("init") or tools.config.get(
-            "stop_after_init"
-        )
-        if (
-            is_test
-            and is_boot
-            and not request.env.context.get("force_fs_scan")
-        ):
+        is_test = "test_cr" in request.env.registry.__dict__
+        is_boot = tools.config.get("init") or tools.config.get("stop_after_init")
+        if is_test and is_boot and not request.env.context.get("force_fs_scan"):
             return (0.0, [])
 
         registry = request.env.registry
@@ -54,9 +48,7 @@ class ServiceWorkerController(http.Controller):
             # Tested by [@ANCHOR: test_caching_zero_sudo_scan]
             # audit-ignore-line: zero-sudo utils
             utils = request.env["zero_sudo.security.utils"]
-            env_svc = utils._get_service_env(
-                "caching.user_caching_service"
-            )
+            env_svc = utils._get_service_env("caching.user_caching_service")
 
             # Use ORM to get installed modules.
             # Bound search to satisfy AST linters.
@@ -83,9 +75,7 @@ class ServiceWorkerController(http.Controller):
                                     max_mtime = stat.st_mtime
                                 file_sizes.append(stat.st_size)
                 except OSError as e:
-                    _logger.warning(
-                        "Could not access path %s: %s", path, e
-                    )
+                    _logger.warning("Could not access path %s: %s", path, e)
 
             for module_name in installed_modules:
                 mod_path = get_module_path(module_name)
@@ -126,10 +116,7 @@ class ServiceWorkerController(http.Controller):
                 # Tested by [@ANCHOR: test_caching_sudo_params]
                 utils = request.env["zero_sudo.security.utils"]
                 quota_mb = int(
-                    utils._get_system_param(
-                        "caching.safe_quota_mb", "35"
-                    )
-                    or 35
+                    utils._get_system_param("caching.safe_quota_mb", "35") or 35
                 )
 
         # Reserve 10MB for compiled bundles and overhead.
@@ -165,9 +152,7 @@ class ServiceWorkerController(http.Controller):
 
         return (str(int(max_mtime)), str(dynamic_max_size))
 
-    @http.route(
-        "/sw.js", type="http", auth="public", sitemap=False, website=True
-    )
+    @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True)
     def service_worker(self):
         # [@ANCHOR: caching_sw_serve_route]
         # Verified by [@ANCHOR: test_service_worker_01]
@@ -180,9 +165,7 @@ class ServiceWorkerController(http.Controller):
         if not content:
             try:
                 # audit-ignore-path: Internal module file access.
-                with tools.file_open(
-                    "caching/static/src/sw/sw.js", "r"
-                ) as f:
+                with tools.file_open("caching/static/src/sw/sw.js", "r") as f:
                     content = f.read()
                 registry.caching_sw_js_content = content
             except FileNotFoundError:
@@ -197,16 +180,14 @@ class ServiceWorkerController(http.Controller):
             quota_mb, in_v = 35, 1
 
         # Calculate max file size based on quota from procedure.
-        latest_mtime, max_file_size = self._get_global_static_info(quota_override=quota_mb)
+        latest_mtime, max_file_size = self._get_global_static_info(
+            quota_override=quota_mb
+        )
 
         # Build cache name with version.
-        cache_name = (
-            f"odoo-assets-cache-{latest_mtime}-v{in_v}"
-        )
+        cache_name = f"odoo-assets-cache-{latest_mtime}-v{in_v}"
         content = content.replace("__CACHE_NAME__", cache_name)
-        content = content.replace(
-            "__MAX_FILE_SIZE_BYTES__", max_file_size
-        )
+        content = content.replace("__MAX_FILE_SIZE_BYTES__", max_file_size)
 
         headers = [
             ("Content-Type", "application/javascript"),

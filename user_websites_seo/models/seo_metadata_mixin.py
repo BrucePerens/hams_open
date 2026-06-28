@@ -13,7 +13,7 @@ class SEOMetadataMixin(models.AbstractModel):
             "website_meta_description",
             "website_meta_keywords",
             "website_meta_og_img",
-            "seo_name"
+            "seo_name",
         }
 
     def _check_seo_write_permission(self):
@@ -21,9 +21,7 @@ class SEOMetadataMixin(models.AbstractModel):
         To be overridden by models using this mixin to define
         who can edit SEO metadata.
         """
-        raise NotImplementedError(
-            "Each model must implement its own permission check."
-        )
+        raise NotImplementedError("Each model must implement its own permission check.")
 
     def write(self, vals):
         if self.env.context.get("skip_seo_metadata_mixin"):

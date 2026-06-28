@@ -50,7 +50,8 @@ def _async_unpublish_content(db_name, user_ids):
                 env.cr.commit()
                 if len(pages) < 5000:
                     break
-                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                    time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
 
             while True:
                 posts = env_svc["blog.post"].search(
@@ -66,7 +67,8 @@ def _async_unpublish_content(db_name, user_ids):
                 env.cr.commit()
                 if len(posts) < 5000:
                     break
-                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                    time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
 
             while True:
                 blogs = env_svc["blog.blog"].search(
@@ -78,13 +80,18 @@ def _async_unpublish_content(db_name, user_ids):
                 env.cr.commit()
                 if len(blogs) < 5000:
                     break
-                if not os.environ.get('ODOO_DISABLE_SLEEPS'): time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
+                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                    time.sleep(0.1) # audit-ignore-sleep: Rate limiting background thread  # fmt: skip
         except (odoo.exceptions.AccessError, odoo.exceptions.ValidationError) as e:
             env.cr.rollback()
-            logging.getLogger(__name__).warning("Background unpublish business logic failure: %s", e)
-        except Exception as e: # audit-ignore-catch-all
+            logging.getLogger(__name__).warning(
+                "Background unpublish business logic failure: %s", e
+            )
+        except Exception as e:  # audit-ignore-catch-all
             env.cr.rollback()
-            logging.getLogger(__name__).error("Fatal error during background unpublish: %s", e)
+            logging.getLogger(__name__).error(
+                "Fatal error during background unpublish: %s", e
+            )
     finally:
         cr.close()
 
@@ -101,33 +108,44 @@ class ResUsers(models.Model):
         # Early initialization of sys_provisioner to satisfy cross-module dependencies
         # Runs before any XML data files are processed, bypassing Uninstalled Module parse errors
         with self.env.cr.savepoint():
-            existing = self.env['res.users'].with_context(active_test=False).search([('login', '=', 'sys_provisioner')], limit=1)
+            existing = (
+                self.env["res.users"]
+                .with_context(active_test=False)
+                .search([("login", "=", "sys_provisioner")], limit=1)
+            )
             if not existing:
-                company_id = self.env.ref('base.main_company').id
-                user = self.env['res.users'].create({
-                    'name': 'System Provisioner',
-                    'login': 'sys_provisioner',
-                    'company_id': company_id,
-                    'company_ids': [(4, company_id)],
-                    'notification_type': 'email',
-                    'is_service_account': True,
-                    'active': True,
-                })
+                company_id = self.env.ref("base.main_company").id
+                user = self.env["res.users"].create(
+                    {
+                        "name": "System Provisioner",
+                        "login": "sys_provisioner",
+                        "company_id": company_id,
+                        "company_ids": [(4, company_id)],
+                        "notification_type": "email",
+                        "is_service_account": True,
+                        "active": True,
+                    }
+                )
             else:
                 user = existing
 
-            xml_exists = self.env['ir.model.data'].search([
-                ('module', '=', 'user_websites'),
-                ('name', '=', 'user_websites_service_account')
-            ], limit=1)
+            xml_exists = self.env["ir.model.data"].search(
+                [
+                    ("module", "=", "user_websites"),
+                    ("name", "=", "user_websites_service_account"),
+                ],
+                limit=1,
+            )
             if not xml_exists:
-                self.env['ir.model.data'].create({
-                    'module': 'user_websites',
-                    'name': 'user_websites_service_account',
-                    'model': 'res.users',
-                    'res_id': user.id,
-                    'noupdate': True,
-                })
+                self.env["ir.model.data"].create(
+                    {
+                        "module": "user_websites",
+                        "name": "user_websites_service_account",
+                        "model": "res.users",
+                        "res_id": user.id,
+                        "noupdate": True,
+                    }
+                )
 
     @property
     def SELF_WRITEABLE_FIELDS(self):
@@ -200,27 +218,29 @@ class ResUsers(models.Model):
 
     def _is_admin(self):
         """Helper to check if the user has administration rights."""
-        return self.has_group("user_websites.group_user_websites_administrator") or self.has_group("base.group_system")
+        return self.has_group(
+            "user_websites.group_user_websites_administrator"
+        ) or self.has_group("base.group_system")
 
     @api.model
-    @odoo.tools.ormcache('slug')
+    @odoo.tools.ormcache("slug")
     def _get_user_id_by_slug(self, slug, override_svc_uid=None):
         if not slug:
             return False
         # ADR-0001 / Zero-Sudo: Use direct SQL to resolve the slug to an ID.
         # This prevents AccessError loops in public routes and avoids
-        # transaction isolation issues in HttpCase tests. 
+        # transaction isolation issues in HttpCase tests.
         # It is safe because it only returns the ID; the caller must still
         # use the ORM to browse and read the record, which enforces ACLs.
-        
+
         # We must flush the ORM cache first, otherwise test records created
         # in setUp() (which do not auto-commit) will be invisible to this raw SQL query.
         self.env.flush_all()
-        self.env.cr.execute("SELECT id FROM res_users WHERE website_slug = %s LIMIT 1", (slug,))
+        self.env.cr.execute(
+            "SELECT id FROM res_users WHERE website_slug = %s LIMIT 1", (slug,)
+        )
         row = self.env.cr.fetchone()
         return row[0] if row else False
-
-
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -373,107 +393,212 @@ class ResUsers(models.Model):
             env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
                 "user_websites.user_websites_service_account"
             )
-            pages_batch = env_svc["website.page"].search([("owner_user_id", "=", user_id)], limit=10000)
-            pages_data = [{"name": p.name, "url": p.url, "content": p.arch} for p in pages_batch]
+            pages_batch = env_svc["website.page"].search(
+                [("owner_user_id", "=", user_id)], limit=10000
+            )
+            pages_data = [
+                {"name": p.name, "url": p.url, "content": p.arch} for p in pages_batch
+            ]
 
-            blogs_batch = env_svc["blog.post"].search([("owner_user_id", "=", user_id)], limit=10000)
-            blogs_data = [{"name": b.name, "content": b.content, "published_date": str(b.post_date)} for b in blogs_batch]
+            blogs_batch = env_svc["blog.post"].search(
+                [("owner_user_id", "=", user_id)], limit=10000
+            )
+            blogs_data = [
+                {
+                    "name": b.name,
+                    "content": b.content,
+                    "published_date": str(b.post_date),
+                }
+                for b in blogs_batch
+            ]
 
-            reports_batch = env_svc["content.violation.report"].search([("reported_by_user_id", "=", user_id)], limit=10000)
-            reports_data = [{"target_url": r.target_url, "description": r.description, "status": r.state, "submitted_date": str(r.create_date)} for r in reports_batch]
+            reports_batch = env_svc["content.violation.report"].search(
+                [("reported_by_user_id", "=", user_id)], limit=10000
+            )
+            reports_data = [
+                {
+                    "target_url": r.target_url,
+                    "description": r.description,
+                    "status": r.state,
+                    "submitted_date": str(r.create_date),
+                }
+                for r in reports_batch
+            ]
 
-            appeals_batch = env_svc["content.violation.appeal"].search([("user_id", "=", user_id)], limit=10000)
-            appeals_data = [{"reason": a.reason, "status": a.state, "submitted_date": str(a.create_date)} for a in appeals_batch]
+            appeals_batch = env_svc["content.violation.appeal"].search(
+                [("user_id", "=", user_id)], limit=10000
+            )
+            appeals_data = [
+                {
+                    "reason": a.reason,
+                    "status": a.state,
+                    "submitted_date": str(a.create_date),
+                }
+                for a in appeals_batch
+            ]
 
             def generate_pages():
-                for item in pages_data: yield item
+                for item in pages_data:
+                    yield item
+
             def generate_blogs():
-                for item in blogs_data: yield item
+                for item in blogs_data:
+                    yield item
+
             def generate_reports():
-                for item in reports_data: yield item
+                for item in reports_data:
+                    yield item
+
             def generate_appeals():
-                for item in appeals_data: yield item
+                for item in appeals_data:
+                    yield item
+
         else:
+
             def generate_pages():
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        cr.execute(
+                            "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                        )
                         row = cr.fetchone()
                         svc_id = row[0] if row else 2
                         env = odoo.api.Environment(cr, svc_id, {})
-                        env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
-                        batch = env_svc["website.page"].search([("owner_user_id", "=", user_id)], limit=1000, offset=offset)
-                        items = [{"name": p.name, "url": p.url, "content": p.arch} for p in batch]
-                    if not items: break
-                    for item in items: yield item
-                    if len(items) < 1000: break
+                        env_svc = env["zero_sudo.security.utils"]._get_service_env(
+                            "user_websites.user_websites_service_account"
+                        )
+                        batch = env_svc["website.page"].search(
+                            [("owner_user_id", "=", user_id)], limit=1000, offset=offset
+                        )
+                        items = [
+                            {"name": p.name, "url": p.url, "content": p.arch}
+                            for p in batch
+                        ]
+                    if not items:
+                        break
+                    for item in items:
+                        yield item
+                    if len(items) < 1000:
+                        break
                     offset += 1000
 
             def generate_blogs():
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        cr.execute(
+                            "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                        )
                         row = cr.fetchone()
                         svc_id = row[0] if row else 2
                         env = odoo.api.Environment(cr, svc_id, {})
-                        env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
-                        batch = env_svc["blog.post"].search([("owner_user_id", "=", user_id)], limit=1000, offset=offset)
-                        items = [{"name": b.name, "content": b.content, "published_date": str(b.post_date)} for b in batch]
-                    if not items: break
-                    for item in items: yield item
-                    if len(items) < 1000: break
+                        env_svc = env["zero_sudo.security.utils"]._get_service_env(
+                            "user_websites.user_websites_service_account"
+                        )
+                        batch = env_svc["blog.post"].search(
+                            [("owner_user_id", "=", user_id)], limit=1000, offset=offset
+                        )
+                        items = [
+                            {
+                                "name": b.name,
+                                "content": b.content,
+                                "published_date": str(b.post_date),
+                            }
+                            for b in batch
+                        ]
+                    if not items:
+                        break
+                    for item in items:
+                        yield item
+                    if len(items) < 1000:
+                        break
                     offset += 1000
 
             def generate_reports():
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        cr.execute(
+                            "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                        )
                         row = cr.fetchone()
                         svc_id = row[0] if row else 2
                         env = odoo.api.Environment(cr, svc_id, {})
-                        env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
-                        batch = env_svc["content.violation.report"].search([("reported_by_user_id", "=", user_id)], limit=1000, offset=offset)
-                        items = [{"target_url": r.target_url, "description": r.description, "status": r.state, "submitted_date": str(r.create_date)} for r in batch]
-                    if not items: break
-                    for item in items: yield item
-                    if len(items) < 1000: break
+                        env_svc = env["zero_sudo.security.utils"]._get_service_env(
+                            "user_websites.user_websites_service_account"
+                        )
+                        batch = env_svc["content.violation.report"].search(
+                            [("reported_by_user_id", "=", user_id)],
+                            limit=1000,
+                            offset=offset,
+                        )
+                        items = [
+                            {
+                                "target_url": r.target_url,
+                                "description": r.description,
+                                "status": r.state,
+                                "submitted_date": str(r.create_date),
+                            }
+                            for r in batch
+                        ]
+                    if not items:
+                        break
+                    for item in items:
+                        yield item
+                    if len(items) < 1000:
+                        break
                     offset += 1000
 
             def generate_appeals():
                 offset = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
-                        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+                        cr.execute(
+                            "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                        )
                         row = cr.fetchone()
                         svc_id = row[0] if row else 2
                         env = odoo.api.Environment(cr, svc_id, {})
-                        env_svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
-                        batch = env_svc["content.violation.appeal"].search([("user_id", "=", user_id)], limit=1000, offset=offset)
-                        items = [{"reason": a.reason, "status": a.state, "submitted_date": str(a.create_date)} for a in batch]
-                    if not items: break
-                    for item in items: yield item
-                    if len(items) < 1000: break
+                        env_svc = env["zero_sudo.security.utils"]._get_service_env(
+                            "user_websites.user_websites_service_account"
+                        )
+                        batch = env_svc["content.violation.appeal"].search(
+                            [("user_id", "=", user_id)], limit=1000, offset=offset
+                        )
+                        items = [
+                            {
+                                "reason": a.reason,
+                                "status": a.state,
+                                "submitted_date": str(a.create_date),
+                            }
+                            for a in batch
+                        ]
+                    if not items:
+                        break
+                    for item in items:
+                        yield item
+                    if len(items) < 1000:
+                        break
                     offset += 1000
 
         mro = self.__class__.__mro__
         start_idx = mro.index(ResUsers) + 1
         has_parent_method = any(
-            "_get_gdpr_streamed_keys" in cls.__dict__
-            for cls in mro[start_idx:]
+            "_get_gdpr_streamed_keys" in cls.__dict__ for cls in mro[start_idx:]
         )
         if has_parent_method:
             res = super()._get_gdpr_streamed_keys()
         else:
             res = {}
-        res.update({
-            "pages": generate_pages,
-            "blog_posts": generate_blogs,
-            "submitted_reports": generate_reports,
-            "appeals": generate_appeals,
-        })
+        res.update(
+            {
+                "pages": generate_pages,
+                "blog_posts": generate_blogs,
+                "submitted_reports": generate_reports,
+                "appeals": generate_appeals,
+            }
+        )
         return res
 
     def _get_gdpr_export_data(self):
@@ -513,10 +638,16 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["website.page"].browse(pages.ids).unlink()
-            except Exception as e: # audit-ignore-catch-all
-                logging.getLogger(__name__).warning("GDPR erasure concurrent update pages: %s", e)
-                if 'concurrent update' in str(e).lower() or 'serialization' in str(e).lower() or 'deadlock' in str(e).lower():
-                    time.sleep(0.5) # audit-ignore-sleep: Retry backoff
+            except Exception as e:  # audit-ignore-catch-all
+                logging.getLogger(__name__).warning(
+                    "GDPR erasure concurrent update pages: %s", e
+                )
+                if (
+                    "concurrent update" in str(e).lower()
+                    or "serialization" in str(e).lower()
+                    or "deadlock" in str(e).lower()
+                ):
+                    time.sleep(0.5)  # audit-ignore-sleep: Retry backoff
                     continue
                 raise
 
@@ -537,10 +668,16 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["blog.post"].browse(posts.ids).unlink()
-            except Exception as e: # audit-ignore-catch-all
-                logging.getLogger(__name__).warning("GDPR erasure concurrent update posts: %s", e)
-                if 'concurrent update' in str(e).lower() or 'serialization' in str(e).lower() or 'deadlock' in str(e).lower():
-                    time.sleep(0.5) # audit-ignore-sleep: Retry backoff
+            except Exception as e:  # audit-ignore-catch-all
+                logging.getLogger(__name__).warning(
+                    "GDPR erasure concurrent update posts: %s", e
+                )
+                if (
+                    "concurrent update" in str(e).lower()
+                    or "serialization" in str(e).lower()
+                    or "deadlock" in str(e).lower()
+                ):
+                    time.sleep(0.5)  # audit-ignore-sleep: Retry backoff
                     continue
                 raise
 
@@ -561,10 +698,16 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["blog.blog"].browse(blogs.ids).unlink()
-            except Exception as e: # audit-ignore-catch-all
-                logging.getLogger(__name__).warning("GDPR erasure concurrent update blogs: %s", e)
-                if 'concurrent update' in str(e).lower() or 'serialization' in str(e).lower() or 'deadlock' in str(e).lower():
-                    time.sleep(0.5) # audit-ignore-sleep: Retry backoff
+            except Exception as e:  # audit-ignore-catch-all
+                logging.getLogger(__name__).warning(
+                    "GDPR erasure concurrent update blogs: %s", e
+                )
+                if (
+                    "concurrent update" in str(e).lower()
+                    or "serialization" in str(e).lower()
+                    or "deadlock" in str(e).lower()
+                ):
+                    time.sleep(0.5)  # audit-ignore-sleep: Retry backoff
                     continue
                 raise
 

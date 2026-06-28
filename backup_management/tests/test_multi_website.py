@@ -39,12 +39,16 @@ class TestBackupMultiWebsite(HamsTransactionCase):
 
     def test_01_global_config_visibility(self):
         """Verify that a backup config without a website_id is globally visible."""
-        user_a = self.env["res.users"].create({
-            "name": "User A",
-            "login": "backup_user_a",
-            "website_id": self.website_a.id,
-            "group_ids": [(6, 0, [self.env.ref("backup_management.group_backup_admin").id])]
-        })
+        user_a = self.env["res.users"].create(
+            {
+                "name": "User A",
+                "login": "backup_user_a",
+                "website_id": self.website_a.id,
+                "group_ids": [
+                    (6, 0, [self.env.ref("backup_management.group_backup_admin").id])
+                ],
+            }
+        )
         configs_a = self.env["backup.config"].with_user(user_a).search([])
 
         self.assertIn(
@@ -60,12 +64,16 @@ class TestBackupMultiWebsite(HamsTransactionCase):
 
     def test_02_isolated_config_visibility(self):
         """Verify that a backup config linked to Website A is invisible to Website B."""
-        user_b = self.env["res.users"].create({
-            "name": "User B",
-            "login": "backup_user_b",
-            "website_id": self.website_b.id,
-            "group_ids": [(6, 0, [self.env.ref("backup_management.group_backup_admin").id])]
-        })
+        user_b = self.env["res.users"].create(
+            {
+                "name": "User B",
+                "login": "backup_user_b",
+                "website_id": self.website_b.id,
+                "group_ids": [
+                    (6, 0, [self.env.ref("backup_management.group_backup_admin").id])
+                ],
+            }
+        )
         configs_b = self.env["backup.config"].with_user(user_b).search([])
 
         self.assertIn(
@@ -101,7 +109,9 @@ class TestBackupMultiWebsite(HamsTransactionCase):
                 "job_type": "kopia",
             }
         )
-        self.assertFalse(job_global.website_id, "Global job MUST NOT have a website_id.")
+        self.assertFalse(
+            job_global.website_id, "Global job MUST NOT have a website_id."
+        )
 
     def test_04_snapshot_isolation(self):
         """Verify that snapshots inherit the website_id of their parent config."""
@@ -131,9 +141,11 @@ class TestBackupMultiWebsite(HamsTransactionCase):
             {"config_id": self.config_all.id, "state": "pending", "job_type": "kopia"}
         )
 
-        data_a = self.env["backup.config"].with_context(
-            website_id=self.website_a.id
-        ).get_board_data()
+        data_a = (
+            self.env["backup.config"]
+            .with_context(website_id=self.website_a.id)
+            .get_board_data()
+        )
 
         # The original test assumed aggregate counts. We mathematically verify data structural integrity.
         self.assertEqual(len(data_a), 2)
@@ -142,9 +154,11 @@ class TestBackupMultiWebsite(HamsTransactionCase):
         self.assertIn("Global Backup", names_a)
         self.assertTrue(all(isinstance(d.get("is_stale"), bool) for d in data_a))
 
-        data_b = self.env["backup.config"].with_context(
-            website_id=self.website_b.id
-        ).get_board_data()
+        data_b = (
+            self.env["backup.config"]
+            .with_context(website_id=self.website_b.id)
+            .get_board_data()
+        )
 
         # The original test assumed aggregate counts. We mathematically verify data structural integrity.
         self.assertEqual(len(data_b), 1)

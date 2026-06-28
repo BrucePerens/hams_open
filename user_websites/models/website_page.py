@@ -47,7 +47,7 @@ class WebsitePage(models.Model):
             if not self.env.user._is_admin():
                 db_name = self.env.cr.dbname
                 redis_client.incr(f"views:{db_name}:page:{self.id}")
-        except Exception: # audit-ignore-catch-all
+        except Exception:  # audit-ignore-catch-all
             _logger.warning("Redis view counter increment failed")
         return response
 
@@ -80,10 +80,17 @@ class WebsitePage(models.Model):
                         list(tags)
                     )
                 except Exception as e:  # audit-ignore-catch-all
-                    if "not found" in str(e).lower() or "service account" in str(e).lower():
-                        logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
+                    if (
+                        "not found" in str(e).lower()
+                        or "service account" in str(e).lower()
+                    ):
+                        logging.getLogger(__name__).debug(
+                            "Cloudflare purge skipped: %s", e
+                        )
                     else:
-                        logging.getLogger(__name__).error("Fatal error during Cloudflare purge: %s", e)
+                        logging.getLogger(__name__).error(
+                            "Fatal error during Cloudflare purge: %s", e
+                        )
 
     @api.model
     def _sanitize_user_arch(self, arch_content):
@@ -108,13 +115,36 @@ class WebsitePage(models.Model):
             # ADR-0102: Explicitly allow safe QWeb directives while blocking SSTI vectors
             # Finite whitelist of allowed t-att-* attributes to minimize attack surface.
             ALLOWED_T_DIRECTIVES = {
-                "t-name", "t-call", "t-set", "t-value", "t-out", "t-esc",
-                "t-if", "t-elif", "t-else", "t-foreach", "t-as", "t-options", "t-call-options",
-                "t-att-class", "t-att-style", "t-att-src", "t-att-href",
-                "t-att-alt", "t-att-title", "t-att-name", "t-att-value",
-                "t-att-data-target", "t-att-data-bs-target",
-                "t-att-data-bs-toggle", "t-att-role", "t-att-aria-label",
-                "t-att-placeholder", "t-att-id", "t-att-checked", "t-att-selected"
+                "t-name",
+                "t-call",
+                "t-set",
+                "t-value",
+                "t-out",
+                "t-esc",
+                "t-if",
+                "t-elif",
+                "t-else",
+                "t-foreach",
+                "t-as",
+                "t-options",
+                "t-call-options",
+                "t-att-class",
+                "t-att-style",
+                "t-att-src",
+                "t-att-href",
+                "t-att-alt",
+                "t-att-title",
+                "t-att-name",
+                "t-att-value",
+                "t-att-data-target",
+                "t-att-data-bs-target",
+                "t-att-data-bs-toggle",
+                "t-att-role",
+                "t-att-aria-label",
+                "t-att-placeholder",
+                "t-att-id",
+                "t-att-checked",
+                "t-att-selected",
             }
 
             for elem in root.xpath("//*"):
@@ -147,7 +177,10 @@ class WebsitePage(models.Model):
                         else:
                             # Additional expression-level check for SSTI vectors
                             # Blocks .sudo(), .with_user(), eval(), exec(), and dunder methods
-                            if re.search(r"\.(sudo|with_user|with_context|with_env|env)\s*\(|__|\b(eval|exec|getattr|setattr)\b", val):
+                            if re.search(
+                                r"\.(sudo|with_user|with_context|with_env|env)\s*\(|__|\b(eval|exec|getattr|setattr)\b",
+                                val,
+                            ):
                                 del elem.attrib[attr]
                                 elem.attrib[f"data-blocked-ssti-{attr}"] = val
                                 was_modified = True
@@ -161,7 +194,7 @@ class WebsitePage(models.Model):
             sanitized_content = full_string[start_tag_end:end_tag_start]
 
             return sanitized_content, was_modified
-        except Exception: # audit-ignore-catch-all
+        except Exception:  # audit-ignore-catch-all
             _logger.exception("Failed to sanitize user arch")
             return "<div>Sanitization Error</div>", True
 
@@ -244,7 +277,10 @@ class WebsitePage(models.Model):
         if page:
             if page.owner_user_id and page.owner_user_id.is_suspended_from_websites:
                 return False
-            if page.user_websites_group_id and page.user_websites_group_id.is_suspended_from_websites:
+            if (
+                page.user_websites_group_id
+                and page.user_websites_group_id.is_suspended_from_websites
+            ):
                 return False
             return page.id
         return False
@@ -261,9 +297,11 @@ class WebsitePage(models.Model):
             )
         ):
             for vals in vals_list:
-                for arch_field in ['arch', 'arch_base', 'arch_db']:
+                for arch_field in ["arch", "arch_base", "arch_db"]:
                     if vals.get(arch_field):
-                        sanitized_arch, modified = self._sanitize_user_arch(vals[arch_field])
+                        sanitized_arch, modified = self._sanitize_user_arch(
+                            vals[arch_field]
+                        )
                         vals[arch_field] = sanitized_arch
                         if modified:
                             self._trigger_malicious_arch_violation(vals)
@@ -303,7 +341,7 @@ class WebsitePage(models.Model):
                 "website_meta_description",
                 "website_meta_keywords",
                 "website_meta_og_img",
-                "seo_name"
+                "seo_name",
             }
             for vals in vals_list:
                 for k in list(vals.keys()):
@@ -323,20 +361,28 @@ class WebsitePage(models.Model):
                 svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                     "user_websites.user_websites_service_account"
                 )
-                users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
+                users = (
+                    self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
+                )
                 user_limits = {user.id: user._get_page_limit() for user in users}
             except Exception as e:  # audit-ignore-catch-all
-                 if "not found" in str(e).lower():
-                     _logger.debug("Service account not found during user quota check: %s", e)
-                     # Safe fallback using raw SQL if during DB initialization
-                     self.env.cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
-                     row = self.env.cr.fetchone()
-                     svc_id = row[0] if row else 1
-                     users = self.env["res.users"].with_user(svc_id).browse(unique_owner_ids)
-                     user_limits = {user.id: user._get_page_limit() for user in users}
-                 else:
-                     _logger.error("Failed user quota check execution: %s", e)
-                     raise
+                if "not found" in str(e).lower():
+                    _logger.debug(
+                        "Service account not found during user quota check: %s", e
+                    )
+                    # Safe fallback using raw SQL if during DB initialization
+                    self.env.cr.execute(
+                        "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                    )
+                    row = self.env.cr.fetchone()
+                    svc_id = row[0] if row else 1
+                    users = (
+                        self.env["res.users"].with_user(svc_id).browse(unique_owner_ids)
+                    )
+                    user_limits = {user.id: user._get_page_limit() for user in users}
+                else:
+                    _logger.error("Failed user quota check execution: %s", e)
+                    raise
 
             existing_counts = {u_id: 0 for u_id in unique_owner_ids}
             page_counts = (
@@ -376,14 +422,18 @@ class WebsitePage(models.Model):
                     "user_websites.user_websites_service_account"
                 )
             except Exception as e:  # audit-ignore-catch-all
-                 if "not found" in str(e).lower():
-                     _logger.debug("Service account not found during group quota check: %s", e)
-                     self.env.cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
-                     row = self.env.cr.fetchone()
-                     svc_uid = row[0] if row else 1
-                 else:
-                     _logger.error("Failed group quota check execution: %s", e)
-                     raise
+                if "not found" in str(e).lower():
+                    _logger.debug(
+                        "Service account not found during group quota check: %s", e
+                    )
+                    self.env.cr.execute(
+                        "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                    )
+                    row = self.env.cr.fetchone()
+                    svc_uid = row[0] if row else 1
+                else:
+                    _logger.error("Failed group quota check execution: %s", e)
+                    raise
             global_limit = int(
                 self.env["zero_sudo.security.utils"]._get_system_param(
                     "user_websites.global_website_page_limit", 100
@@ -426,15 +476,19 @@ class WebsitePage(models.Model):
             )
             # ADR-0001: All service account mutations must include appropriate context
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
-            _logger.error(f"DEBUG CREATE: vals_list={vals_list} context={self_svc.env.context}")
+            _logger.error(
+                f"DEBUG CREATE: vals_list={vals_list} context={self_svc.env.context}"
+            )
             records = super(WebsitePage, self_svc).create(vals_list)
         except Exception as e:  # audit-ignore-catch-all
             if "not found" in str(e).lower():
-                 _logger.debug("Service account not found during page create bypass: %s", e)
-                 records = super(WebsitePage, self).create(vals_list)
+                _logger.debug(
+                    "Service account not found during page create bypass: %s", e
+                )
+                records = super(WebsitePage, self).create(vals_list)
             else:
-                 _logger.error("Failed page create bypass execution: %s", e)
-                 raise
+                _logger.error("Failed page create bypass execution: %s", e)
+                raise
         records._invalidate_cloudflare_cache()
         return records
 
@@ -521,7 +575,7 @@ class WebsitePage(models.Model):
                 "website_meta_description",
                 "website_meta_keywords",
                 "website_meta_og_img",
-                "seo_name"
+                "seo_name",
             }
             for k in list(vals.keys()):
                 if k not in allowed:
@@ -534,9 +588,11 @@ class WebsitePage(models.Model):
                 "user_websites.group_user_websites_administrator"
             )
         ):
-            for arch_field in ['arch', 'arch_base', 'arch_db']:
+            for arch_field in ["arch", "arch_base", "arch_db"]:
                 if arch_field in vals:
-                    sanitized_arch, modified = self._sanitize_user_arch(vals[arch_field])
+                    sanitized_arch, modified = self._sanitize_user_arch(
+                        vals[arch_field]
+                    )
                     vals[arch_field] = sanitized_arch
                     if modified:
                         self._trigger_malicious_arch_violation(vals, records=self)
@@ -553,12 +609,14 @@ class WebsitePage(models.Model):
             _logger.error(f"DEBUG WRITE: vals={vals} ids={self.ids}")
             res = super(WebsitePage, self_svc).write(vals)
         except Exception as e:  # audit-ignore-catch-all
-             if "not found" in str(e).lower():
-                  _logger.debug("Service account not found during page write bypass: %s", e)
-                  res = super(WebsitePage, self).write(vals)
-             else:
-                  _logger.error("Failed page write bypass execution: %s", e)
-                  raise
+            if "not found" in str(e).lower():
+                _logger.debug(
+                    "Service account not found during page write bypass: %s", e
+                )
+                res = super(WebsitePage, self).write(vals)
+            else:
+                _logger.error("Failed page write bypass execution: %s", e)
+                raise
 
         # Targeted DB NOTIFY invalidation (O(1) line eviction instead of global clear)
         if "url" in vals or "website_published" in vals or "is_published" in vals:
@@ -592,15 +650,23 @@ class WebsitePage(models.Model):
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
             res = super(WebsitePage, self_svc).unlink()
         except Exception as e:  # audit-ignore-catch-all
-             if "not found" in str(e).lower():
-                  _logger.debug("Service account not found during page unlink bypass: %s", e)
-                  res = super(WebsitePage, self).unlink()
-             elif type(e).__name__ in ('SerializationFailure', 'OperationalError') or 'could not serialize' in str(e):
-                  _logger.debug("SerializationFailure during page unlink bypass, allowing retry: %s", e)
-                  raise
-             else:
-                  _logger.error("Failed page unlink bypass execution: %s", e)
-                  raise
+            if "not found" in str(e).lower():
+                _logger.debug(
+                    "Service account not found during page unlink bypass: %s", e
+                )
+                res = super(WebsitePage, self).unlink()
+            elif type(e).__name__ in (
+                "SerializationFailure",
+                "OperationalError",
+            ) or "could not serialize" in str(e):
+                _logger.debug(
+                    "SerializationFailure during page unlink bypass, allowing retry: %s",
+                    e,
+                )
+                raise
+            else:
+                _logger.error("Failed page unlink bypass execution: %s", e)
+                raise
 
         utils = self.env["zero_sudo.security.utils"]
         if pages_to_invalidate:
@@ -646,7 +712,9 @@ class WebsitePage(models.Model):
                     increment = int(val)
                     updates.append((increment, page_id))
                 except ValueError:
-                    _logger.warning('Failed to parse Redis key or value for view count.')
+                    _logger.warning(
+                        "Failed to parse Redis key or value for view count."
+                    )
 
         if updates:
             try:
@@ -670,7 +738,7 @@ class WebsitePage(models.Model):
                 is_test = vars(self.env.registry).get("test_cr") is not None
                 if not is_test:
                     self.env.cr.commit()
-            except Exception: # audit-ignore-catch-all
+            except Exception:  # audit-ignore-catch-all
                 is_test = vars(self.env.registry).get("test_cr") is not None
                 if not is_test:
                     self.env.cr.rollback()
@@ -680,6 +748,8 @@ class WebsitePage(models.Model):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
-            cron = self.env.ref("user_websites.ir_cron_flush_view_counters", raise_if_not_found=False)
+            cron = self.env.ref(
+                "user_websites.ir_cron_flush_view_counters", raise_if_not_found=False
+            )
             if cron:
                 cron.with_user(svc_uid).with_context(mail_notrack=True)._trigger()

@@ -4,7 +4,7 @@ from odoo.tests import tagged
 from lxml import etree
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestXPathRendering(odoo.tests.common.HttpCase):
     """
     ADR-0053: Exhaustive tests to mathematically prove that all XML XPath
@@ -157,17 +157,17 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
         self.assertIn(
             b'id="user_websites_dropzone_home_header"',
             response.content,
-            "The home header dropzone must render."
+            "The home header dropzone must render.",
         )
         self.assertIn(
             b'id="user_websites_dropzone_home_footer"',
             response.content,
-            "The home footer dropzone must render."
+            "The home footer dropzone must render.",
         )
         self.assertIn(
             b'id="user_websites_dropzone_navbar_actions"',
             response.content,
-            "The navbar actions dropzone must render."
+            "The navbar actions dropzone must render.",
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn(

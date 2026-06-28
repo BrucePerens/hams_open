@@ -73,7 +73,6 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             }
         )
 
-
     def test_01_weekly_digest_and_unsubscribe_headers(self):
         """
         Verify that the cron correctly generates emails, successfully injects the
@@ -95,16 +94,21 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         mail_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "zero_sudo.mail_service_internal"
         )
-        mail = self.env["mail.mail"].with_user(mail_svc_uid).search(
-            [
-                ("recipient_ids", "in", [self.follower.partner_id.id]),
-                ("subject", "ilike", "Weekly Update from Content Creator"),
-            ],
-            limit=1,
+        mail = (
+            self.env["mail.mail"]
+            .with_user(mail_svc_uid)
+            .search(
+                [
+                    ("recipient_ids", "in", [self.follower.partner_id.id]),
+                    ("subject", "ilike", "Weekly Update from Content Creator"),
+                ],
+                limit=1,
+            )
         )
 
         self.assertTrue(
-            mail, "The system must generate a mail.mail record for the follower. [!] DIAGNOSTIC FOR AI: mail.mail search returned empty. This often happens in RealTransactionCase if the mail queue is not properly inspected or if ACLs prevent the test user from seeing the system-generated email."
+            mail,
+            "The system must generate a mail.mail record for the follower. [!] DIAGNOSTIC FOR AI: mail.mail search returned empty. This often happens in RealTransactionCase if the mail queue is not properly inspected or if ACLs prevent the test user from seeing the system-generated email.",
         )
 
         # Assert Service Account Role Execution
@@ -135,7 +139,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         unsub_url = unsub_url_raw.strip("<>")
 
         self.assertTrue(
-            "/website/unsubscribe/res.partner/" in unsub_url, # burn-ignore-route
+            "/website/unsubscribe/res.partner/" in unsub_url,  # burn-ignore-route
             "The URL must map to the correct controller route.",
         )
 
@@ -185,7 +189,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         # Attempt an unsubscribe with a forged token
         fake_token = "1234abcd5678"
         current_ts = int(time.time())
-        url = f"/website/unsubscribe/res.partner/{self.creator.partner_id.id}/{self.follower.partner_id.id}/{current_ts}/{fake_token}" # burn-ignore-route
+        url = f"/website/unsubscribe/res.partner/{self.creator.partner_id.id}/{self.follower.partner_id.id}/{current_ts}/{fake_token}"  # burn-ignore-route
 
         self.authenticate(None, None)
         response = self.url_open(url)

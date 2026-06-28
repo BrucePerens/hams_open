@@ -7,8 +7,9 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 class Module(models.Model):
-    _inherit = 'ir.module.module'
+    _inherit = "ir.module.module"
 
     @api.model
     def _register_hook(self):
@@ -19,16 +20,18 @@ class Module(models.Model):
     @api.model
     def _bootstrap_knowledge_docs(self):
         # Dependencies formally guarantee knowledge.article
-        article_model_name = 'knowledge.article'
+        article_model_name = "knowledge.article"
 
         if article_model_name not in self.env:
             return
 
-        utils = self.env['zero_sudo.security.utils']
+        utils = self.env["zero_sudo.security.utils"]
 
         svc_account = "knowledge.user_knowledge_service_account"
-        if not self.env["ir.model.data"]._xmlid_to_res_id(svc_account, raise_if_not_found=False):
-             svc_account = "zero_sudo.odoo_facility_service_internal"
+        if not self.env["ir.model.data"]._xmlid_to_res_id(
+            svc_account, raise_if_not_found=False
+        ):
+            svc_account = "zero_sudo.odoo_facility_service_internal"
 
         # Context for creating documentation
         try:
@@ -36,21 +39,31 @@ class Module(models.Model):
         except AccessError:
             return
 
-        Article = self.env[article_model_name].with_user(svc_uid).with_context(
-            mail_notrack=True,
-            prefetch_fields=False,
+        Article = (
+            self.env[article_model_name]
+            .with_user(svc_uid)
+            .with_context(
+                mail_notrack=True,
+                prefetch_fields=False,
+            )
         )
 
         # Context for reading the core ERP framework table
-        facility_uid = utils._get_service_uid("zero_sudo.odoo_facility_service_internal")
-        modules = self.env['ir.module.module'].with_user(facility_uid).search([('state', '=', 'installed')], limit=10000)
+        facility_uid = utils._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
+        )
+        modules = (
+            self.env["ir.module.module"]
+            .with_user(facility_uid)
+            .search([("state", "=", "installed")], limit=10000)
+        )
 
         for mod in modules:
             manifest = get_manifest(mod.name)
-            if not manifest or 'knowledge_docs' not in manifest:
+            if not manifest or "knowledge_docs" not in manifest:
                 continue
 
-            knowledge_docs = manifest['knowledge_docs']
+            knowledge_docs = manifest["knowledge_docs"]
             if not isinstance(knowledge_docs, list):
                 _logger.warning("knowledge_docs in module %s is not a list.", mod.name)
                 continue
@@ -60,23 +73,25 @@ class Module(models.Model):
 
     @api.model
     def _install_single_doc(self, utils, Article, module_name, doc_info):
-        path = doc_info.get('path')
+        path = doc_info.get("path")
         if not path:
             return
 
         try:
             full_path = f"{module_name}/{path}"
-            with tools.file_open(full_path, 'rb') as f:
+            with tools.file_open(full_path, "rb") as f:
                 content_bytes = f.read()
                 content_hash = hashlib.sha256(content_bytes).hexdigest()
-                doc_body = content_bytes.decode('utf-8')
+                doc_body = content_bytes.decode("utf-8")
         except OSError as e:
-            _logger.error("Failed to load doc file %s for module %s: %s", path, module_name, e)
+            _logger.error(
+                "Failed to load doc file %s for module %s: %s", path, module_name, e
+            )
             return
 
-        name = doc_info.get('name', f"{module_name} Documentation")
-        icon = doc_info.get('icon', '📄')
-        category = doc_info.get('category', 'workspace')
+        name = doc_info.get("name", f"{module_name} Documentation")
+        icon = doc_info.get("icon", "📄")
+        category = doc_info.get("category", "workspace")
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
         existing_hash = utils._get_kv(hash_key)
@@ -85,21 +100,21 @@ class Module(models.Model):
             return
 
         vals = {
-            'name': name,
-            'body': doc_body,
+            "name": name,
+            "body": doc_body,
         }
 
         model_fields = Article._fields
-        if 'is_published' in model_fields:
-            vals['is_published'] = True
-        if 'category' in model_fields:
-            vals['category'] = category
-        if 'internal_permission' in model_fields:
-            vals['internal_permission'] = 'read'
-        if 'icon' in model_fields:
-            vals['icon'] = icon
+        if "is_published" in model_fields:
+            vals["is_published"] = True
+        if "category" in model_fields:
+            vals["category"] = category
+        if "internal_permission" in model_fields:
+            vals["internal_permission"] = "read"
+        if "icon" in model_fields:
+            vals["icon"] = icon
 
-        existing = Article.search([('name', '=', name)], limit=1)
+        existing = Article.search([("name", "=", name)], limit=1)
         if existing:
             existing.write(vals)
         else:

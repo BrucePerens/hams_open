@@ -4,6 +4,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 def post_init_hook(env):
     # [@ANCHOR: documentation_bootstrap]
     """
@@ -17,7 +18,8 @@ def post_init_hook(env):
     if user_group:
         public_user = env.ref("base.public_user", raise_if_not_found=False)
         public_user_id = public_user.id if public_user else -1
-        env.cr.execute("""
+        env.cr.execute(
+            """
             INSERT INTO res_groups_users_rel (gid, uid)
             SELECT %s, u.id
             FROM res_users u
@@ -25,7 +27,9 @@ def post_init_hook(env):
               AND u.id != %s
               AND (u.is_service_account IS NOT TRUE)
             ON CONFLICT DO NOTHING
-        """, (user_group.id, public_user_id))
+        """,
+            (user_group.id, public_user_id),
+        )
 
     env.cr.execute(
         "CREATE INDEX IF NOT EXISTS idx_website_page_published ON website_page (id) WHERE is_published = TRUE;"
@@ -37,7 +41,13 @@ def post_init_hook(env):
     # Use direct SQL to update is_service_account as the service account itself cannot see/edit this field
     cf_svc = env.ref("cloudflare.user_cloudflare_purge", raise_if_not_found=False)
     if cf_svc:
-        env.cr.execute("UPDATE res_users SET is_service_account = true WHERE id = %s", (cf_svc.id,))
-    uw_svc = env.ref("user_websites.user_websites_service_account", raise_if_not_found=False)
+        env.cr.execute(
+            "UPDATE res_users SET is_service_account = true WHERE id = %s", (cf_svc.id,)
+        )
+    uw_svc = env.ref(
+        "user_websites.user_websites_service_account", raise_if_not_found=False
+    )
     if uw_svc:
-         env.cr.execute("UPDATE res_users SET is_service_account = true WHERE id = %s", (uw_svc.id,))
+        env.cr.execute(
+            "UPDATE res_users SET is_service_account = true WHERE id = %s", (uw_svc.id,)
+        )

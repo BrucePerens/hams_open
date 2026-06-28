@@ -5,6 +5,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 class HelpdeskTicket(models.Model):
     _name = "hams_helpdesk.ticket"
     _description = "Helpdesk Ticket"
@@ -14,13 +15,17 @@ class HelpdeskTicket(models.Model):
     # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
     name = fields.Char(string="Subject", required=True, tracking=True)
     description = fields.Html(string="Description")
-    callsign = fields.Char(string="Callsign", tracking=True, help="Relevant amateur radio callsign.")
+    callsign = fields.Char(
+        string="Callsign", tracking=True, help="Relevant amateur radio callsign."
+    )
     active = fields.Boolean(default=True)
 
     user_id = fields.Many2one(
         "res.users", string="Assigned To", tracking=True, index=True
     )
-    partner_id = fields.Many2one("res.partner", string="Customer", index=True, tracking=True)
+    partner_id = fields.Many2one(
+        "res.partner", string="Customer", index=True, tracking=True
+    )
 
     stage = fields.Selection(
         [
@@ -61,8 +66,10 @@ class HelpdeskTicket(models.Model):
     )  # [@ANCHOR: helpdesk_multi_website]
 
     company_id = fields.Many2one(
-        'res.company', string='Company', required=True,
-        default=lambda self: self.env.company
+        "res.company",
+        string="Company",
+        required=True,
+        default=lambda self: self.env.company,
     )
 
     @api.onchange("partner_id")
@@ -78,11 +85,11 @@ class HelpdeskTicket(models.Model):
             if "website_id" not in vals and self.env.context.get("website_id"):
                 vals["website_id"] = self.env.context.get("website_id")
             if "company_id" not in vals and vals.get("website_id"):
-                website = self.env['website'].browse(vals["website_id"])
+                website = self.env["website"].browse(vals["website_id"])
                 if website.company_id:
                     vals["company_id"] = website.company_id.id
             if not vals.get("callsign") and vals.get("partner_id"):
-                partner = self.env['res.partner'].browse(vals["partner_id"])
+                partner = self.env["res.partner"].browse(vals["partner_id"])
                 if partner.callsign:
                     vals["callsign"] = partner.callsign
 
@@ -115,7 +122,9 @@ class HelpdeskTicket(models.Model):
         except AccessError as e:
             # PagerDuty service account might not be provisioned yet or module not installed.
             # This is an optional integration, so we continue with standard env.
-            _logger.info("PagerDuty service env not loaded (optional integration): %s", e)
+            _logger.info(
+                "PagerDuty service env not loaded (optional integration): %s", e
+            )
         # Discover On-Duty Admin
         # Polymorphic decoupling: calendar_event.py in hams_helpdesk provides a stub returning False
         on_duty_admin = Calendar.get_current_on_duty_admin()
@@ -126,11 +135,14 @@ class HelpdeskTicket(models.Model):
         if "is_pager_duty" in Calendar._fields:
             now = fields.Datetime.now()
             thirty_mins = now + datetime.timedelta(minutes=30)
-            upcoming_shifts = Calendar.search([
-                ("is_pager_duty", "=", True),
-                ("start", ">", now),
-                ("start", "<=", thirty_mins),
-            ], limit=100)
+            upcoming_shifts = Calendar.search(
+                [
+                    ("is_pager_duty", "=", True),
+                    ("start", ">", now),
+                    ("start", "<=", thirty_mins),
+                ],
+                limit=100,
+            )
             upcoming_partner_ids = upcoming_shifts.mapped("user_id.partner_id.id")
 
         # 2. Apply assignments and send notifications via Helpdesk Service Account
@@ -139,8 +151,8 @@ class HelpdeskTicket(models.Model):
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
 
         # Optimization: Pre-fetch partner info for all tickets to avoid N+1 inside the loop
-        self.mapped('user_id.partner_id')
-        self.mapped('company_id')
+        self.mapped("user_id.partner_id")
+        self.mapped("company_id")
 
         for ticket in self:
             # Switch to service account and ensure company context is correct for each ticket
@@ -154,7 +166,7 @@ class HelpdeskTicket(models.Model):
                 ticket_service.message_post(
                     body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id,
                     partner_ids=[ticket_service.user_id.partner_id.id],
-                    subject=_("Ticket Assigned: %s") % ticket_service.name
+                    subject=_("Ticket Assigned: %s") % ticket_service.name,
                 )
                 # Bus Toast
                 self.env["bus.bus"]._sendone(
@@ -163,34 +175,55 @@ class HelpdeskTicket(models.Model):
                     {
                         "type": "warning",
                         "title": _("New Helpdesk Ticket"),
-                        "message": _("Ticket %s requires your attention.") % ticket_service.name
-                    }
+                        "message": _("Ticket %s requires your attention.")
+                        % ticket_service.name,
+                    },
                 )
 
             # Pre-Shift Awareness (CC upcoming admins)
             if upcoming_partner_ids:
-                current_assignee_pid = ticket_service.user_id.partner_id.id if ticket_service.user_id else False
-                cc_pids = [pid for pid in upcoming_partner_ids if pid != current_assignee_pid]
+                current_assignee_pid = (
+                    ticket_service.user_id.partner_id.id
+                    if ticket_service.user_id
+                    else False
+                )
+                cc_pids = [
+                    pid for pid in upcoming_partner_ids if pid != current_assignee_pid
+                ]
                 if cc_pids:
                     ticket_service.message_subscribe(partner_ids=cc_pids)
                     ticket_service.message_post(
-                        body=_("Upcoming shift awareness: A new ticket was created near your shift start."),
+                        body=_(
+                            "Upcoming shift awareness: A new ticket was created near your shift start."
+                        ),
                         partner_ids=cc_pids,
                         subject=_("Shift CC: %s") % ticket_service.name,
-                        subtype_xmlid="mail.mt_note"
+                        subtype_xmlid="mail.mt_note",
                     )
 
             # Ensure customer is subscribed
             if ticket_service.partner_id:
-                ticket_service.message_subscribe(partner_ids=[ticket_service.partner_id.id])
+                ticket_service.message_subscribe(
+                    partner_ids=[ticket_service.partner_id.id]
+                )
 
     def write(self, vals):
         # [@ANCHOR: helpdesk_micro_privilege]
         # Micro-Privilege Security Audit: Prevent portal users from modifying restricted fields.
         if self.env.user.has_group("base.group_portal"):
-            restricted_fields = {"stage", "user_id", "priority", "calendar_event_id", "website_id"}
+            restricted_fields = {
+                "stage",
+                "user_id",
+                "priority",
+                "calendar_event_id",
+                "website_id",
+            }
             if any(f in vals for f in restricted_fields):
-                raise AccessError(_("Portal users are not authorized to modify administrative fields."))
+                raise AccessError(
+                    _(
+                        "Portal users are not authorized to modify administrative fields."
+                    )
+                )
 
         res = super().write(vals)
         # Mail-back facility on state change
@@ -199,9 +232,10 @@ class HelpdeskTicket(models.Model):
                 if ticket.partner_id:
                     stage_str = dict(self._fields["stage"].selection).get(ticket.stage)
                     ticket.message_post(
-                        body=_("Your issue has been updated. New Status: %s") % stage_str,
+                        body=_("Your issue has been updated. New Status: %s")
+                        % stage_str,
                         partner_ids=[ticket.partner_id.id],
-                        subject=_("Ticket Update: %s") % ticket.name
+                        subject=_("Ticket Update: %s") % ticket.name,
                     )
         return res
 
@@ -219,7 +253,7 @@ class HelpdeskTicket(models.Model):
             "context": {
                 "default_ticket_id": self.id,
                 "default_old_user_id": self.user_id.id if self.user_id else False,
-            }
+            },
         }
 
     def action_portal_close(self):
@@ -227,9 +261,11 @@ class HelpdeskTicket(models.Model):
         # [@ANCHOR: helpdesk_portal_close]
         self.ensure_one()
         # Security: Ensure the user is the owner of the ticket
-        if self.partner_id != self.env.user.partner_id and not self.env.user.has_group('hams_helpdesk.group_helpdesk_user'):
-             raise AccessError(_("You are not authorized to close this ticket."))
+        if self.partner_id != self.env.user.partner_id and not self.env.user.has_group(
+            "hams_helpdesk.group_helpdesk_user"
+        ):
+            raise AccessError(_("You are not authorized to close this ticket."))
 
-        if self.stage != 'closed':
-            self.write({'stage': 'closed'})
+        if self.stage != "closed":
+            self.write({"stage": "closed"})
             self.message_post(body=_("Ticket closed by customer."))

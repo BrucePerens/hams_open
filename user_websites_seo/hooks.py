@@ -12,9 +12,7 @@ def post_init_hook(env):
     try:
         if not utils._get_system_param("user_websites_seo.docs_installed"):
             # Ensure the service account exists before signaling
-            utils._get_service_uid(
-                "user_websites.user_websites_service_account"
-            )
+            utils._get_service_uid("user_websites.user_websites_service_account")
             # Signal completion or perform SEO-specific bootstrap tasks.
             utils._set_system_param("user_websites_seo.docs_installed", "True")
     except Exception as e:  # audit-ignore-catch-all

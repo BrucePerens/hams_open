@@ -70,5 +70,16 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: 'Click away to force DOM blur and commit text input',
             run: 'click',
         }
-    ].concat(TourUtils.safeSave('.o_form_button_save', '.o_form_saved, .o_form_button_create, .o_list_button_add')),
+    ].concat(TourUtils.safeSave('.o_form_button_save', '.o_form_saved, .o_form_button_create, .o_list_button_add')).concat([
+        {
+            content: "Go back to list via breadcrumb to close the form",
+            trigger: '.o_control_panel .breadcrumb-item:not(.active):first, .o_control_panel .o_back_button',
+            run: 'click',
+        },
+        {
+            content: "Wait for list view to load",
+            trigger: '.o_list_table',
+            run: function() {}
+        }
+    ]),
 });

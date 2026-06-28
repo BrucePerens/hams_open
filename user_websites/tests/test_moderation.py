@@ -80,7 +80,11 @@ class TestModeration(RealTransactionCase):
             report.action_take_action_and_strike()
 
         # Verify final state
-        self.assertEqual(self.bad_user.violation_strike_count, 3, "[!] DIAGNOSTIC FOR AI: Strike count mismatch. Ensure action_take_action_and_strike increments the count.")
+        self.assertEqual(
+            self.bad_user.violation_strike_count,
+            3,
+            "[!] DIAGNOSTIC FOR AI: Strike count mismatch. Ensure action_take_action_and_strike increments the count.",
+        )
         self.assertTrue(
             self.bad_user.is_suspended_from_websites,
             "User should be suspended after 3 strikes. [!] DIAGNOSTIC FOR AI: is_suspended_from_websites flag not set. Check action_suspend_user_websites trigger logic.",
@@ -91,16 +95,18 @@ class TestModeration(RealTransactionCase):
             self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
-                time.sleep(0.5) # audit-ignore-sleep
+                time.sleep(0.5)  # audit-ignore-sleep
                 break
-            time.sleep(0.5) # audit-ignore-sleep
+            time.sleep(0.5)  # audit-ignore-sleep
 
         # Verify Content was unpublished
         self.assertFalse(
-            self.spam_page.is_published, "Page should be forcefully unpublished. [!] DIAGNOSTIC FOR AI: spam_page.is_published is still True. Ensure action_suspend_user_websites unpublishes pages."
+            self.spam_page.is_published,
+            "Page should be forcefully unpublished. [!] DIAGNOSTIC FOR AI: spam_page.is_published is still True. Ensure action_suspend_user_websites unpublishes pages.",
         )
         self.assertFalse(
-            self.spam_post.is_published, "Blog post should be forcefully unpublished. [!] DIAGNOSTIC FOR AI: spam_post.is_published is still True. Ensure action_suspend_user_websites unpublishes blog posts."
+            self.spam_post.is_published,
+            "Blog post should be forcefully unpublished. [!] DIAGNOSTIC FOR AI: spam_post.is_published is still True. Ensure action_suspend_user_websites unpublishes blog posts.",
         )
 
     def test_02_pardon_functionality(self):
@@ -113,17 +119,27 @@ class TestModeration(RealTransactionCase):
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
                 # Wait for the background transaction to fully commit
-                time.sleep(0.5) # audit-ignore-sleep
+                time.sleep(0.5)  # audit-ignore-sleep
                 break
-            time.sleep(0.5) # audit-ignore-sleep
+            time.sleep(0.5)  # audit-ignore-sleep
 
-        self.assertTrue(self.bad_user.is_suspended_from_websites, "[!] DIAGNOSTIC FOR AI: Failed to suspend user before pardon test.")
+        self.assertTrue(
+            self.bad_user.is_suspended_from_websites,
+            "[!] DIAGNOSTIC FOR AI: Failed to suspend user before pardon test.",
+        )
 
         # Admin pardons user
         self.bad_user.action_pardon_user_websites()
 
-        self.assertEqual(self.bad_user.violation_strike_count, 0, "[!] DIAGNOSTIC FOR AI: Pardon failed to reset strike count.")
-        self.assertFalse(self.bad_user.is_suspended_from_websites, "[!] DIAGNOSTIC FOR AI: Pardon failed to lift suspension flag.")
+        self.assertEqual(
+            self.bad_user.violation_strike_count,
+            0,
+            "[!] DIAGNOSTIC FOR AI: Pardon failed to reset strike count.",
+        )
+        self.assertFalse(
+            self.bad_user.is_suspended_from_websites,
+            "[!] DIAGNOSTIC FOR AI: Pardon failed to lift suspension flag.",
+        )
         # Note: We intentionally do NOT automatically republish content during a pardon.
         # The user must do that manually to ensure they reviewed it.
         self.assertFalse(self.spam_page.is_published)
@@ -148,9 +164,9 @@ class TestModeration(RealTransactionCase):
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
                 # Wait for the background transaction to fully commit
-                time.sleep(0.5) # audit-ignore-sleep
+                time.sleep(0.5)  # audit-ignore-sleep
                 break
-            time.sleep(0.5) # audit-ignore-sleep
+            time.sleep(0.5)  # audit-ignore-sleep
 
         # Attempt public access again
         self.env.cr.commit()
@@ -235,9 +251,9 @@ class TestModeration(RealTransactionCase):
             self.env.invalidate_all()
             if not self.spam_page.is_published:
                 # Wait for the background transaction to fully commit
-                time.sleep(0.5) # audit-ignore-sleep
+                time.sleep(0.5)  # audit-ignore-sleep
                 break
-            time.sleep(0.5) # audit-ignore-sleep
+            time.sleep(0.5)  # audit-ignore-sleep
 
     def test_05_concurrent_strike_locking(self):
         """
@@ -284,9 +300,7 @@ class TestModeration(RealTransactionCase):
         )
         group_report.action_take_action_and_strike()
 
-        lock_query_group = (
-            "SELECT increment_strike_count('user_websites_group', %s)"
-        )
+        lock_query_group = "SELECT increment_strike_count('user_websites_group', %s)"
         mock_execute.assert_any_call(
             lock_query_group, (group_report.content_group_id.id,)
         )

@@ -114,9 +114,13 @@ class TestManualFeatures(HamsHttpCase):
         # Tests [@ANCHOR: manual_doc_auto_install]
         """Verify that documentation from the manifest is correctly installed."""
         # Trigger bootstrap manually to ensure it runs during the test
-        self.env['ir.module.module']._bootstrap_knowledge_docs()
+        self.env["ir.module.module"]._bootstrap_knowledge_docs()
 
-        article = self.env["knowledge.article"].search([("name", "=", "Knowledge: User Guide")])
-        self.assertTrue(article.exists(), "User Guide article should have been installed.")
+        article = self.env["knowledge.article"].search(
+            [("name", "=", "Knowledge: User Guide")]
+        )
+        self.assertTrue(
+            article.exists(), "User Guide article should have been installed."
+        )
         self.assertIn("Welcome to Manuals", article.body)
         self.assertTrue(article.is_published)

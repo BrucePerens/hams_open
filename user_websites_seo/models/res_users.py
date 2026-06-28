@@ -6,11 +6,7 @@ from odoo.exceptions import AccessError
 
 class ResUsersSEO(models.Model):
     _name = "res.users"
-    _inherit = [
-        "res.users",
-        "website.seo.metadata",
-        "user.websites.seo.metadata.mixin"
-    ]
+    _inherit = ["res.users", "website.seo.metadata", "user.websites.seo.metadata.mixin"]
 
     @property
     def SELF_WRITEABLE_FIELDS(self):

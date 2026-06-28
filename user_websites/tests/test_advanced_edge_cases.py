@@ -6,7 +6,8 @@ import uuid
 
 _logger = logging.getLogger(__name__)
 
-@tagged('post_install', '-at_install')
+
+@tagged("post_install", "-at_install")
 class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
     def setUp(self):
         super(TestAdvancedEdgeCases, self).setUp()
@@ -108,7 +109,7 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
 
         # We manually construct a request with NO headers to simulate a stripped Referrer
         response = self.url_open(
-            "/website/report_violation", # burn-ignore-route
+            "/website/report_violation",  # burn-ignore-route
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": "/some/test/url",
@@ -187,6 +188,6 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
                 page.id,
                 "Page should be successfully created even without an active HTTP request.",
             )
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             _logger.error("website.page creation failed in RPC context: %s", e)
             self.fail(f"website.page creation failed in RPC context: {e}")

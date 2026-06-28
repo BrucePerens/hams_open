@@ -28,7 +28,9 @@ class TestCloudflareHeaders(HamsHttpCase):
         # 1. Test Private Attachment (MUST NOT CACHE)
         # Using a route that is explicitly in the nocache list
         # We test both /odoo and /web prefixes
-        response_odoo = self.url_open("/odoo/login", allow_redirects=False)  # burn-ignore-route
+        response_odoo = self.url_open(
+            "/odoo/login", allow_redirects=False
+        )  # burn-ignore-route
         self.assertEqual(
             response_odoo.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",
@@ -36,7 +38,9 @@ class TestCloudflareHeaders(HamsHttpCase):
         )
 
         company_id = self.env.company.id
-        response_web = self.url_open(f"/web/image/res.company/{company_id}/logo")  # burn-ignore-route
+        response_web = self.url_open(
+            f"/web/image/res.company/{company_id}/logo"  # burn-ignore-route
+        )  # burn-ignore-route
         self.assertEqual(
             response_web.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",

@@ -156,6 +156,9 @@ class ContentViolationReport(models.Model):
                     "zero_sudo.mail_service_internal"
                 )
                 report.with_user(mail_svc).message_post(
-                    body=_("You applied a strike to the group. Current strike count: %s") % group.violation_strike_count,
+                    body=_(
+                        "You applied a strike to the group. Current strike count: %s"
+                    )
+                    % group.violation_strike_count,
                     subtype_xmlid="mail.mt_note",
                 )

@@ -4,7 +4,7 @@ from odoo.tests import tagged
 from odoo.exceptions import AccessError
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestAccessRights(odoo.tests.common.HttpCase):
     def setUp(self):
         super(TestAccessRights, self).setUp()

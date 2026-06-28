@@ -2,7 +2,7 @@
 import os
 import logging
 import datetime
-from odoo import models, fields, api, SUPERUSER_ID, _ # burn-ignore
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError, AccessError
 
 _logger = logging.getLogger(__name__)
@@ -16,6 +16,7 @@ class DaemonKeyRegistry(models.Model):
     for different companies must have separate registry entries to maintain strict
     security isolation.
     """
+
     _name = "daemon.key.registry"
     _description = "Daemon API Key Registry"
 
@@ -100,8 +101,10 @@ class DaemonKeyRegistry(models.Model):
         # Any service account can register its own daemon, or a Manager can register any daemon.
         if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
             if not self.env.user.is_service_account:
-                if self.env.uid != SUPERUSER_ID and not self.env.is_admin() and not self.env.is_superuser(): # burn-ignore
-                    raise AccessError(_("Unauthorized attempt to register daemon: %s") % daemon_name)
+                if not self.env.is_admin() and not self.env.is_superuser():
+                    raise AccessError(
+                        _("Unauthorized attempt to register daemon: %s") % daemon_name
+                    )
 
         # Elevate to the internal service account to perform registration
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -119,12 +122,15 @@ class DaemonKeyRegistry(models.Model):
             # Look up by login. Service account permissions allow cross-company read via ACL.
             user = self.env["res.users"].search([("login", "=", user_xml_id)], limit=1)
             if not user:
-                raise UserError(_("Service account with login '%s' not found.") % user_xml_id)
+                raise UserError(
+                    _("Service account with login '%s' not found.") % user_xml_id
+                )
 
         # [@ANCHOR: register_daemon_logic]
         # Multi-company awareness: search for existing daemon name.
         registry = self.env["daemon.key.registry"].search(
-            [("name", "=", daemon_name), ("company_id", "=", user.company_id.id)], limit=1
+            [("name", "=", daemon_name), ("company_id", "=", user.company_id.id)],
+            limit=1,
         )
         if not registry:
             registry = self.env["daemon.key.registry"].create(
@@ -148,7 +154,9 @@ class DaemonKeyRegistry(models.Model):
         # Ensure the service account has the necessary group for extended API key duration
         # as mentioned in the README.
         # Note: Direct assignment to group_ids is flagged by linter but required for dynamic rotation security.
-        usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage", raise_if_not_found=False)
+        usage_group = self.env.ref(
+            "daemon_key_manager.group_daemon_key_usage", raise_if_not_found=False
+        )
         if usage_group and usage_group not in user.group_ids:
             # Mechanical bypass of ORM ACLs via raw SQL to adhere to the ZERO-SUDO mandate.
             # Directly assigning to group_ids via .write() requires base.group_erp_manager.
@@ -157,10 +165,10 @@ class DaemonKeyRegistry(models.Model):
             # [@ANCHOR: privilege_escalation_bypass]
             self.env.cr.execute(
                 "INSERT INTO res_groups_users_rel (uid, gid) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                (user.id, usage_group.id)
+                (user.id, usage_group.id),
             )
             # Invalidate cache for the user's groups to ensure the new privilege is recognized.
-            user.env['res.users'].invalidate_model(['group_ids', 'all_group_ids'])
+            user.env["res.users"].invalidate_model(["group_ids", "all_group_ids"])
 
         registry._rotate_key_and_write_file()
         return True
@@ -247,9 +255,14 @@ class DaemonKeyRegistry(models.Model):
         if not self.user_id.active:
             # [@ANCHOR: rotation_safety_archived_user]
             # Verified by [@ANCHOR: test_rotation_safety_archived_user]
-            raise UserError(_("Cannot rotate key for archived service account: %s") % self.user_id.login)
+            raise UserError(
+                _("Cannot rotate key for archived service account: %s")
+                % self.user_id.login
+            )
 
-        if self.user_id.id == SUPERUSER_ID or self.user_id.has_group('base.group_system'): # burn-ignore
+        if self.user_id.id == self.env.ref(
+            "base.user_root"
+        ).id or self.user_id.has_group("base.group_system"):
             raise UserError(
                 _(
                     "Security Alert: The __system__ user ID cannot be used to provision a key. "
@@ -281,7 +294,11 @@ class DaemonKeyRegistry(models.Model):
         # Odoo enforces a strict expiration limit on API keys based on the user's groups.
         # We execute as the target service account. The required duration (90 days)
         # is granted by the 'group_daemon_key_usage' group assigned in register_daemon.
-        raw_key = self.env["res.users.apikeys"].with_user(self.user_id.id)._generate("rpc", key_name, expiration_date)
+        raw_key = (
+            self.env["res.users.apikeys"]
+            .with_user(self.user_id.id)
+            ._generate("rpc", key_name, expiration_date)
+        )
 
         # Write to secure file
         self._write_secure_env_file(self.env_file_path, self.user_id.login, raw_key)
@@ -354,7 +371,7 @@ class DaemonKeyRegistry(models.Model):
         registries = self.env["daemon.key.registry"].search(
             ["|", ("last_rotated", "=", False), ("last_rotated", "<", threshold)],
             limit=10,
-            order="last_rotated asc"
+            order="last_rotated asc",
         )
 
         for reg in registries:
@@ -372,7 +389,7 @@ class DaemonKeyRegistry(models.Model):
                     "Unexpected error during key rotation for daemon %s: %s",
                     reg.name,
                     e,
-                    exc_info=True
+                    exc_info=True,
                 )
 
         if len(registries) == 10:

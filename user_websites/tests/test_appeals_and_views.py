@@ -8,7 +8,7 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 _logger = logging.getLogger(__name__)
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestAppealsAndViews(RealTransactionCase):
 
     def setUp(self):
@@ -57,15 +57,17 @@ class TestAppealsAndViews(RealTransactionCase):
         for attempt in range(5):
             try:
                 with self.env.cr.savepoint():
-                    if visitors and visitors.exists(): visitors.unlink()
-                    if tracks and tracks.exists(): tracks.unlink()
+                    if visitors and visitors.exists():
+                        visitors.unlink()
+                    if tracks and tracks.exists():
+                        tracks.unlink()
 
                     if self.page and self.page.exists():
                         self.page.unlink()
                     if self.user_public and self.user_public.exists():
                         self.user_public.unlink()
                 break
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Resilient cleanup encountered exception: %s", e)
 
         self.env.cr.commit()
@@ -87,7 +89,9 @@ class TestAppealsAndViews(RealTransactionCase):
         self.env["website.page"]._flush_redis_view_counters()
 
         # Raw SQL to aggressively verify the hit registered across ORM caches
-        self.env.cr.execute("SELECT view_count FROM website_page WHERE id = %s", [self.page.id])
+        self.env.cr.execute(
+            "SELECT view_count FROM website_page WHERE id = %s", [self.page.id]
+        )
         count = self.env.cr.fetchone()[0]
         self.assertEqual(count, 1, "View count should increment by 1 on access.")
 
@@ -102,7 +106,7 @@ class TestAppealsAndViews(RealTransactionCase):
 
         # User submits an appeal
         self.url_open(
-            "/website/submit_appeal", # burn-ignore-route
+            "/website/submit_appeal",  # burn-ignore-route
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "reason": "It was a misunderstanding!",

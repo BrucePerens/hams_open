@@ -69,8 +69,9 @@ def distributed_cache():
             # Force company_id from context if available, else use env.company
             website_id = self.env.context.get("website_id")
 
-
-            company_id = self.env.context.get("allowed_company_ids", [self.env.company.id])[0]
+            company_id = self.env.context.get(
+                "allowed_company_ids", [self.env.company.id]
+            )[0]
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}" if website_id else ""
             company_suffix = f":c{company_id}" if company_id else ""
@@ -95,7 +96,10 @@ def distributed_cache():
                             return json.loads(cached)
                         break  # Successful miss, break loop to query database
                     except redis.RedisError as e:
-                        _logger.warning("Network partition detected. Pausing worker until Redis is reachable: %s", e)
+                        _logger.warning(
+                            "Network partition detected. Pausing worker until Redis is reachable: %s",
+                            e,
+                        )
                         time.sleep(2)  # audit-ignore-sleep
                     except json.JSONDecodeError as e:
                         _logger.warning("Redis cache corrupted JSON payload: %s", e)
@@ -118,10 +122,16 @@ def distributed_cache():
                         r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                         return result
                     except redis.RedisError as e:
-                        _logger.warning("Network partition detected during cache write. Pausing worker: %s", e)
+                        _logger.warning(
+                            "Network partition detected during cache write. Pausing worker: %s",
+                            e,
+                        )
                         time.sleep(2)  # audit-ignore-sleep
                     except (TypeError, json.JSONDecodeError) as e:
-                        _logger.warning("Redis cache write serialization failed, falling back to local: %s", e)
+                        _logger.warning(
+                            "Redis cache write serialization failed, falling back to local: %s",
+                            e,
+                        )
                         _local_cache[cache_key] = result
                         return result
 
@@ -165,9 +175,7 @@ def invalidate_model_cache(env, model_name, local_only=False):
 
     # Always clear local fallback cache for this process to ensure consistency
     prefix_local = f"{dbname}:distributed_cache:{model_name}:"
-    keys_to_delete = [
-        k for k in _local_cache.keys() if k.startswith(prefix_local)
-    ]
+    keys_to_delete = [k for k in _local_cache.keys() if k.startswith(prefix_local)]
     for k in keys_to_delete:
         _local_cache.pop(k, None)
 
@@ -180,7 +188,9 @@ def notify_model_invalidation(env, model_name):
     # Security: Validate model name
     if model_name not in env:
         # [!] DIAGNOSTIC FOR AI: Invalid model name %s attempted for invalidation.
-        _logger.warning("Security: Attempted to invalidate unknown model %s", model_name)
+        _logger.warning(
+            "Security: Attempted to invalidate unknown model %s", model_name
+        )
         return
 
     dbname = env.cr.dbname

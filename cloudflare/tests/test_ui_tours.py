@@ -75,7 +75,9 @@ class TestCloudflareUITours(HamsHttpCase):
         )
 
         self.authenticate(self.admin.login, self.admin.login)
-        self.start_tour("/odoo?debug=1", "cf_zone_settings_tour", login=self.admin.login)
+        self.start_tour(
+            "/odoo?debug=1", "cf_zone_settings_tour", login=self.admin.login
+        )
 
     def test_05_backend_views_rendering(self):
         # [@ANCHOR: test_cf_backend_views_rendering]

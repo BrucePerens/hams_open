@@ -20,7 +20,9 @@ class BackupConfig(models.Model):
 
     name = fields.Char(string="Name", required=True)
     website_id = fields.Many2one("website", string="Website")
-    company_id = fields.Many2one("res.company", string="Company", default=lambda self: self.env.company)
+    company_id = fields.Many2one(
+        "res.company", string="Company", default=lambda self: self.env.company
+    )
     engine = fields.Selection(
         [("kopia", "Kopia"), ("pgbackrest", "pgBackRest")], required=True
     )
@@ -150,9 +152,14 @@ class BackupConfig(models.Model):
             if rec.engine == "pgbackrest":
                 # pgBackRest target_path is a stanza name, not a direct path.
                 # Strictly allow only alphanumeric and underscores for stanza names.
-                if not rec.target_path or not re.match(r"^[a-zA-Z0-9_]+$", rec.target_path):
+                if not rec.target_path or not re.match(
+                    r"^[a-zA-Z0-9_]+$", rec.target_path
+                ):
                     raise UserError(
-                        _("Invalid pgBackRest stanza name: %s. Use only alphanumeric characters and underscores.") % rec.target_path
+                        _(
+                            "Invalid pgBackRest stanza name: %s. Use only alphanumeric characters and underscores."
+                        )
+                        % rec.target_path
                     )
 
             if rec.restore_drill_script:
@@ -242,9 +249,21 @@ class BackupConfig(models.Model):
             def publish_task(msg=payload):
                 try:
                     utils = self.env["zero_sudo.security.utils"]
-                    rmq_host = utils._get_system_param("backup_management.rmq_host") or os.environ.get("RMQ_HOST") or "rabbitmq"
-                    rmq_user = utils._get_system_param("backup_management.rmq_user") or os.environ.get("RMQ_USER") or "guest"
-                    rmq_pass = utils._get_system_param("backup_management.rmq_pass") or os.environ.get("RMQ_PASS") or "guest"  # burn-ignore-env
+                    rmq_host = (
+                        utils._get_system_param("backup_management.rmq_host")
+                        or os.environ.get("RMQ_HOST")
+                        or "rabbitmq"
+                    )
+                    rmq_user = (
+                        utils._get_system_param("backup_management.rmq_user")
+                        or os.environ.get("RMQ_USER")
+                        or "guest"
+                    )
+                    rmq_pass = (
+                        utils._get_system_param("backup_management.rmq_pass")
+                        or os.environ.get("RMQ_PASS")  # burn-ignore-env
+                        or "guest"
+                    )  # burn-ignore-env
                     credentials = pika.PlainCredentials(rmq_user, rmq_pass)
                     conn_params = pika.ConnectionParameters(
                         host=rmq_host, credentials=credentials
@@ -315,28 +334,30 @@ class BackupConfig(models.Model):
         for rec in self:
             rec.action_sync_snapshots()
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Connection Test Triggered'),
-                'message': _('The connection test has been offloaded to the background worker. Please check the Active Jobs or Snapshots in a few moments.'),
-                'sticky': False,
-            }
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Connection Test Triggered"),
+                "message": _(
+                    "The connection test has been offloaded to the background worker. Please check the Active Jobs or Snapshots in a few moments."
+                ),
+                "sticky": False,
+            },
         }
 
     def action_view_latest_job(self):
         # [@ANCHOR: backup_management:action_view_latest_job]
         # Verified by [@ANCHOR: backup_management:test_backup_view]
         self.ensure_one()
-        job = self.env['backup.job'].search([('config_id', '=', self.id)], limit=1)
+        job = self.env["backup.job"].search([("config_id", "=", self.id)], limit=1)
         if not job:
             raise UserError(_("No jobs found for this configuration."))
         return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'backup.job',
-            'res_id': job.id,
-            'view_mode': 'form',
-            'target': 'current',
+            "type": "ir.actions.act_window",
+            "res_model": "backup.job",
+            "res_id": job.id,
+            "view_mode": "form",
+            "target": "current",
         }
 
     def action_sync_snapshots(self):
@@ -418,13 +439,16 @@ class BackupConfig(models.Model):
         job_map = {}
         if configs:
             # Efficiently fetch only the latest job for each config
-            self.env.cr.execute("""
+            self.env.cr.execute(
+                """
                 SELECT DISTINCT ON (config_id)
                     config_id, state, job_type, create_date
                 FROM backup_job
                 WHERE config_id IN %s
                 ORDER BY config_id, create_date DESC
-            """, (tuple([c["id"] for c in configs]),))
+            """,
+                (tuple([c["id"] for c in configs]),),
+            )
             for row in self.env.cr.dictfetchall():
                 job_map[row["config_id"]] = row
 
@@ -477,9 +501,7 @@ class BackupConfig(models.Model):
                             datetime.datetime.fromtimestamp(
                                 ts,
                                 tz=datetime.timezone.utc,
-                            ).strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            )
+                            ).strftime("%Y-%m-%d %H:%M:%S")
                             if ts
                             else False
                         )
@@ -509,7 +531,9 @@ class BackupConfig(models.Model):
 
             # Verification and anomaly reporting only for NEW snapshots to prevent alert spam
             if self.minimum_size_mb > 0 and new_snapshot_ids:
-                new_snaps = [s for s in snapshot_list if s['snapshot_id'] in new_snapshot_ids]
+                new_snaps = [
+                    s for s in snapshot_list if s["snapshot_id"] in new_snapshot_ids
+                ]
                 # Sort by start_time to check the absolute latest
                 new_snaps.sort(key=lambda x: x["start_time"], reverse=True)
                 for c in new_snaps:

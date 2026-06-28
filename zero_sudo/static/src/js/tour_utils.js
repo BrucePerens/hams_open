@@ -82,6 +82,24 @@ export const TourUtils = {
         };
     },
 
+    waitForText: function (text, description) {
+        description = description || "";
+        return {
+            content: "[MACRO] Wait for DOM text: " + (description || text),
+            trigger: 'body',
+            run: function () {
+                return new Promise((resolve) => {
+                    const interval = setInterval(() => {
+                        if (document.body.textContent.includes(text)) {
+                            clearInterval(interval);
+                            resolve();
+                        }
+                    }, 250);
+                });
+            }
+        };
+    },
+
     waitForElement: function (selector, description) {
         description = description || "";
         return {

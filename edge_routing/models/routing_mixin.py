@@ -2,13 +2,17 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 from odoo.addons.edge_routing.utils import slugify, RESERVED_SLUGS
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, notify_model_invalidation
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    distributed_cache,
+    notify_model_invalidation,
+)
 
 import json
 
 import logging
 
 _logger = logging.getLogger(__name__)
+
 
 class EdgeRoutingMixin(models.AbstractModel):
     _name = "edge.routing.mixin"
@@ -77,7 +81,7 @@ class EdgeRoutingMixin(models.AbstractModel):
             for model_name in routing_model_names:
                 if model_name not in self.env:
                     continue
-                
+
                 domain = [("website_slug", "=", slug)]
                 if record_id and model_name == self._name:
                     domain.append(("id", "!=", record_id))
@@ -85,11 +89,13 @@ class EdgeRoutingMixin(models.AbstractModel):
                 try:
                     with self.env.cr.savepoint():
                         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                            "user_websites.user_websites_service_account"
+                            "edge_routing.edge_routing_service_account"
                         )
                         env_target = env_svc[model_name]
-                except Exception as e: # audit-ignore-catch-all
-                    _logger.warning("Failed to get service env for %s: %s", model_name, e)
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.warning(
+                        "Failed to get service env for %s: %s", model_name, e
+                    )
                     env_target = self.env[model_name]
 
                 if self._check_slug_collision(env_target, domain):
@@ -127,14 +133,16 @@ class EdgeRoutingMixin(models.AbstractModel):
         else:
             try:
                 target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                    "user_websites.user_websites_service_account"
+                    "edge_routing.edge_routing_service_account"
                 )
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Failed to get service env: %s", e)
                 target_env = self.env
 
-        record = target_env[self._name].with_context(active_test=False).search(
-            [("website_slug", "=ilike", slug)], limit=1
+        record = (
+            target_env[self._name]
+            .with_context(active_test=False)
+            .search([("website_slug", "=ilike", slug)], limit=1)
         )
         return record.id if record else False
 
@@ -146,11 +154,11 @@ class EdgeRoutingMixin(models.AbstractModel):
         """
         if not domain:
             return False
-            
-        slug = self.env['edge.routing.domain'].get_target_slug_by_domain(domain)
+
+        slug = self.env["edge.routing.domain"].get_target_slug_by_domain(domain)
         if not slug:
             return False
-            
+
         return self.get_record_by_slug(slug, override_svc_uid=override_svc_uid)
 
     @api.model_create_multi
@@ -168,11 +176,13 @@ class EdgeRoutingMixin(models.AbstractModel):
         if "website_slug" in vals:
             if vals.get("website_slug"):
                 if len(self) == 1:
-                    vals["website_slug"] = self._generate_unique_slug(vals["website_slug"], record_id=self.id)
+                    vals["website_slug"] = self._generate_unique_slug(
+                        vals["website_slug"], record_id=self.id
+                    )
                 else:
                     vals["website_slug"] = slugify(vals["website_slug"])
             else:
-                pass # Clearing the slug is allowed if the field isn't required
+                pass  # Clearing the slug is allowed if the field isn't required
 
         res = super().write(vals)
 
@@ -180,7 +190,9 @@ class EdgeRoutingMixin(models.AbstractModel):
             for record in self:
                 if not record.website_slug and record.name:
                     # Auto-generate if missing (and name changed)
-                    record.website_slug = self._generate_unique_slug(record.name, record_id=record.id)
+                    record.website_slug = self._generate_unique_slug(
+                        record.name, record_id=record.id
+                    )
 
                 if record.website_slug:
                     payload = json.dumps({"model": self._name})
@@ -190,9 +202,10 @@ class EdgeRoutingMixin(models.AbstractModel):
                         )
                         notify_model_invalidation(self.env, self._name)
                         self.env.cr.execute(
-                            "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
+                            "SELECT pg_notify(%s, %s)",
+                            ("distributed_cache_invalidation", payload),
                         )
-                    except Exception as e: # audit-ignore-catch-all
+                    except Exception as e:  # audit-ignore-catch-all
                         _logger.warning("Failed to notify cache invalidation: %s", e)
         return res
 
@@ -208,9 +221,11 @@ class EdgeRoutingMixin(models.AbstractModel):
                     )
                     notify_model_invalidation(self.env, self._name)
                     self.env.cr.execute(
-                        "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
+                        "SELECT pg_notify(%s, %s)",
+                        ("distributed_cache_invalidation", payload),
                     )
-                except Exception as e: # audit-ignore-catch-all
-                    _logger.warning("Failed to notify cache invalidation on unlink: %s", e)
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.warning(
+                        "Failed to notify cache invalidation on unlink: %s", e
+                    )
         return res
-

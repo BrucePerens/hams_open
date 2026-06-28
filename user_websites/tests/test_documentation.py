@@ -6,7 +6,8 @@ from odoo.addons.user_websites.hooks import post_init_hook
 
 _logger = logging.getLogger(__name__)
 
-@tagged('post_install', '-at_install')
+
+@tagged("post_install", "-at_install")
 class TestDocumentation(RealTransactionCase):
 
     def setUp(self):
@@ -32,7 +33,7 @@ class TestDocumentation(RealTransactionCase):
                     if self.regular_user and self.regular_user.exists():
                         self.regular_user.unlink()
                 break
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Resilient cleanup encountered exception: %s", e)
 
         self.env.cr.commit()
@@ -97,9 +98,7 @@ class TestDocumentation(RealTransactionCase):
             )
         else:
             # If API is present but lacks frontend publishing, it MUST fallback to QWeb
-            self.assertEqual(
-                response.status_code, 200, "Should fallback to 200 OK."
-            )
+            self.assertEqual(response.status_code, 200, "Should fallback to 200 OK.")
             self.assertIn(
                 b"User Websites Module Documentation",
                 response.content,
@@ -120,7 +119,7 @@ class TestDocumentation(RealTransactionCase):
             "The redirect to the login page should resolve successfully.",
         )
         self.assertIn(
-            b"/web/login", # burn-ignore-route
+            b"/web/login",  # burn-ignore-route
             response.url.encode(),
             "Unauthenticated guest users should be redirected to the login screen.",
         )

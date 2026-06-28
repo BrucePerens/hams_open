@@ -50,9 +50,9 @@ def _redis_listener_thread(conn_params=None):
             # We use a custom connection pool for the background thread to avoid
             # sharing the Odoo worker's pool and potential lifecycle issues.
             r_client = redis.Redis(
-                host=conn_params.get('host'),
-                port=conn_params.get('port'),
-                password=conn_params.get('password'),
+                host=conn_params.get("host"),
+                port=conn_params.get("port"),
+                password=conn_params.get("password"),
                 db=0,
                 decode_responses=True,
                 socket_timeout=2.0,
@@ -65,9 +65,7 @@ def _redis_listener_thread(conn_params=None):
 
         while _listener_started:
             try:
-                msg = pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=0.1
-                )
+                msg = pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
                 if msg and msg.get("type") == "message":
                     data = msg.get("data")
                     if data:
@@ -113,9 +111,11 @@ class IrHttp(models.AbstractModel):
         integration_active = False
         try:
             # Use zero_sudo security utils for system parameter read to comply with security mandates
-            param = request.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
+            param = request.env["zero_sudo.security.utils"]._get_system_param(
+                "distributed_redis_cache.test_integration_active"
+            )
             integration_active = bool(param)
-        except Exception as e: # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
             # Fail silently during initialization/teardown if request context is unstable
             _logger.info("Failed to read integration status from request env: %s", e)
 
@@ -140,16 +140,27 @@ class IrHttp(models.AbstractModel):
                         conn_params = None
                         try:
                             security_utils = request.env["zero_sudo.security.utils"]
-                            host = security_utils._get_system_param("distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT)
-                            port_raw = security_utils._get_system_param("distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT))
-                            password = security_utils._get_system_param("distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT)
+                            host = security_utils._get_system_param(
+                                "distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT
+                            )
+                            port_raw = security_utils._get_system_param(
+                                "distributed_redis_cache.redis_port",
+                                str(REDIS_PORT_DEFAULT),
+                            )
+                            password = security_utils._get_system_param(
+                                "distributed_redis_cache.redis_password",
+                                REDIS_PASS_DEFAULT,
+                            )
                             conn_params = {
-                                'host': host,
-                                'port': int(port_raw),
-                                'password': password
+                                "host": host,
+                                "port": int(port_raw),
+                                "password": password,
                             }
-                        except Exception as e: # audit-ignore-catch-all
-                            _logger.warning("Failed to extract Redis connection parameters for listener: %s", e)
+                        except Exception as e:  # audit-ignore-catch-all
+                            _logger.warning(
+                                "Failed to extract Redis connection parameters for listener: %s",
+                                e,
+                            )
 
                         _executor.submit(_redis_listener_thread, conn_params)
                         _listener_started = True

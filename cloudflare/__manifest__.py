@@ -6,7 +6,14 @@
     "category": "Website",
     "version": "1.3",
     "license": "AGPL-3",
-    "depends": ["base", "zero_sudo", "website", "website_blog", "website_sale", "edge_routing"],
+    "depends": [
+        "base",
+        "zero_sudo",
+        "website",
+        "website_blog",
+        "website_sale",
+        "edge_routing",
+    ],
     "data": [
         "security/security_data.xml",
         "security/ir.model.access.csv",

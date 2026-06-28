@@ -6,7 +6,7 @@ from psycopg2 import IntegrityError
 from odoo.tools import mute_logger
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestORMSecurity(RealTransactionCase):
     """
     Tests focused on preventing malicious authenticated users from bypassing

@@ -8,7 +8,7 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 _logger = logging.getLogger(__name__)
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestUserWebsitesUITours(RealTransactionCase):
     def setUp(self):
         super().setUp()
@@ -49,15 +49,13 @@ class TestUserWebsitesUITours(RealTransactionCase):
 
     def tearDown(self):
         # Pre-fetch outside the loop to avoid N+1 DB LOCK per ADR-0022
-        dynamic_users = self.env["res.users"].search([
-            ("login", "in", ["sitetour", "blogtour"])
-        ])
-        dynamic_pages = self.env["website.page"].search([
-            ("url", "in", ["/sitetour/home", "/blogtour/blog"])
-        ])
-        dynamic_blogs = self.env["blog.blog"].search([
-            ("name", "ilike", "Tour User")
-        ])
+        dynamic_users = self.env["res.users"].search(
+            [("login", "in", ["sitetour", "blogtour"])]
+        )
+        dynamic_pages = self.env["website.page"].search(
+            [("url", "in", ["/sitetour/home", "/blogtour/blog"])]
+        )
+        dynamic_blogs = self.env["blog.blog"].search([("name", "ilike", "Tour User")])
         visitors = self.env["website.visitor"].search([])
         tracks = self.env["website.track"].search([])
 
@@ -65,9 +63,13 @@ class TestUserWebsitesUITours(RealTransactionCase):
         # Absorbs SerializationFailures if Werkzeug threads are still closing
         for attempt in range(5):
             try:
-                with self.env.cr.savepoint(), mute_logger("odoo.sql_db"), mute_logger("odoo.models.unlink"):
-                    if visitors and visitors.exists(): visitors.unlink()
-                    if tracks and tracks.exists(): tracks.unlink()
+                with self.env.cr.savepoint(), mute_logger("odoo.sql_db"), mute_logger(
+                    "odoo.models.unlink"
+                ):
+                    if visitors and visitors.exists():
+                        visitors.unlink()
+                    if tracks and tracks.exists():
+                        tracks.unlink()
 
                     # Delete child records (pages, blogs) FIRST to prevent massive ORM
                     # cascade updates (like setting write_uid = NULL) when deleting users.
@@ -84,9 +86,13 @@ class TestUserWebsitesUITours(RealTransactionCase):
                     if dynamic_users.exists():
                         dynamic_users.unlink()
                 break
-            except Exception as e: # audit-ignore-catch-all
-                _logger.info("Resilient cleanup encountered exception (Attempt %s/5): %s", attempt + 1, e)
-                time.sleep(0.5) # audit-ignore-sleep
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.info(
+                    "Resilient cleanup encountered exception (Attempt %s/5): %s",
+                    attempt + 1,
+                    e,
+                )
+                time.sleep(0.5)  # audit-ignore-sleep
 
         self.env.cr.commit()
         super().tearDown()
@@ -102,7 +108,12 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.url_open("/my/privacy")
 
         # Adding a minor delay allows Owl components to hydrate in constrained VM environments
-        self.start_tour("/my/privacy?debug=1", "gdpr_privacy_tour", login=self.user_test.login, step_delay=100)
+        self.start_tour(
+            "/my/privacy?debug=1",
+            "gdpr_privacy_tour",
+            login=self.user_test.login,
+            step_delay=100,
+        )
 
     def test_04_moderation_appeal_tour(self):
         # Tests [@ANCHOR: test_tour_moderation_appeal]
@@ -113,7 +124,9 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.authenticate(self.user_test.login, "touruser")
         self.url_open("/my/home")
 
-        self.start_tour("/my/home?debug=1", "moderation_appeal_tour", login=self.user_test.login)
+        self.start_tour(
+            "/my/home?debug=1", "moderation_appeal_tour", login=self.user_test.login
+        )
 
     def test_05_create_site_tour(self):
         # Tests [@ANCHOR: test_tour_create_site]
@@ -141,7 +154,12 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.authenticate(user_no_site.login, "sitetour")
         self.url_open("/sitetour/home")
 
-        self.start_tour("/sitetour/home?debug=1", "create_site_tour", login=user_no_site.login, step_delay=100)
+        self.start_tour(
+            "/sitetour/home?debug=1",
+            "create_site_tour",
+            login=user_no_site.login,
+            step_delay=100,
+        )
 
     def test_06_create_blog_tour(self):
         # Tests [@ANCHOR: test_tour_create_blog]
@@ -169,7 +187,9 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.authenticate(user_no_blog.login, "blogtour")
         self.url_open("/blogtour/blog")
 
-        self.start_tour("/blogtour/blog?debug=1", "create_blog_tour", login=user_no_blog.login)
+        self.start_tour(
+            "/blogtour/blog?debug=1", "create_blog_tour", login=user_no_blog.login
+        )
 
     def test_07_community_directory_tour(self):
         # Tests [@ANCHOR: test_tour_community_directory]
@@ -181,7 +201,11 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.authenticate(self.user_test.login, "touruser")
         self.url_open("/user-websites/documentation")
 
-        self.start_tour("/user-websites/documentation?debug=1", "frontend_misc_tour", login=self.user_test.login)
+        self.start_tour(
+            "/user-websites/documentation?debug=1",
+            "frontend_misc_tour",
+            login=self.user_test.login,
+        )
 
     def test_09_backend_views_tour(self):
         # Tests [@ANCHOR: test_tour_backend_views]
@@ -192,4 +216,6 @@ class TestUserWebsitesUITours(RealTransactionCase):
         # Tests [@ANCHOR: test_tour_violation_report]
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
         self.url_open(f"/{self.user_test.website_slug}/home")
-        self.start_tour(f"/{self.user_test.website_slug}/home?debug=1", "test_tour_violation_report")
+        self.start_tour(
+            f"/{self.user_test.website_slug}/home?debug=1", "test_tour_violation_report"
+        )

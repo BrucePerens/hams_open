@@ -12,6 +12,7 @@ class PagerIncident(models.Model):
     Represents an incident detected by the monitoring system.
     This model is multi-tenant and multi-website, partitioned by website_id.
     """
+
     _name = "pager.incident"
     _description = "Pager Duty Incident"
     _inherit = ["mail.thread"]
@@ -19,7 +20,9 @@ class PagerIncident(models.Model):
     name = fields.Char(
         string="Incident ID", required=True, copy=False, readonly=True, default="New"
     )
-    website_id = fields.Many2one("website", string="Website", ondelete="cascade", index=True)
+    website_id = fields.Many2one(
+        "website", string="Website", ondelete="cascade", index=True
+    )
     # Added index=True to prevent sequential scans during daemon polling
     source = fields.Char(string="Source", required=True, index=True, tracking=True)
     severity = fields.Selection(
@@ -76,9 +79,7 @@ class PagerIncident(models.Model):
         elif vals.get("status") == "resolved":
             vals["time_resolved"] = now
 
-        res = super(
-            PagerIncident, self.with_context(mail_notrack=True)
-        ).write(vals)
+        res = super(PagerIncident, self.with_context(mail_notrack=True)).write(vals)
 
         # ADR 0078: O(1) Memory Mapping / Event Bus Optimization
         for rec in self:
@@ -128,7 +129,8 @@ class PagerIncident(models.Model):
         # For now, we respect website isolation in the message posting.
         for inc in incidents:
             partners = pager_admin_group.user_ids.filtered(
-                lambda u: not inc.website_id or ('website_id' in u._fields and u.website_id == inc.website_id)
+                lambda u: not inc.website_id
+                or ("website_id" in u._fields and u.website_id == inc.website_id)
             ).mapped("partner_id")
 
             if not partners:
@@ -162,7 +164,10 @@ class PagerIncident(models.Model):
                 # SET with NX=True and EX=60 provides an atomic rate limit check-and-set
                 if not r_client.set(redis_key, "1", ex=60, nx=True):
                     return False
-            except (redis.exceptions.RedisError, Exception) as e: # audit-ignore-catch-all
+            except (
+                redis.exceptions.RedisError,
+                Exception,
+            ) as e:  # audit-ignore-catch-all
                 _logger.warning("Redis rate limit check failed: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -186,13 +191,17 @@ class PagerIncident(models.Model):
             vals["name"] = "INC-AUTO"
 
         incident = IncidentModel.create(vals)
-        on_duty_user = self.env["calendar.event"].with_context(
-            website_id=website_id
-        ).get_current_on_duty_admin()
+        on_duty_user = (
+            self.env["calendar.event"]
+            .with_context(website_id=website_id)
+            .get_current_on_duty_admin()
+        )
 
         # Suppress native pager notifications if helpdesk integration is active
         # to prevent duplicate alerting (Helpdesk will handle the page).
-        use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param("pager_duty.helpdesk_model")
+        use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param(
+            "pager_duty.helpdesk_model"
+        )
 
         if on_duty_user and not use_helpdesk:
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -228,9 +237,9 @@ class PagerIncident(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        records = super(
-            PagerIncident, self.with_context(mail_notrack=True)
-        ).create(vals_list)
+        records = super(PagerIncident, self.with_context(mail_notrack=True)).create(
+            vals_list
+        )
         if records:
             self.env["bus.bus"]._sendone("pager_duty", "update_board", {})
         return records

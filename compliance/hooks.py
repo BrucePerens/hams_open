@@ -4,6 +4,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 def post_init_hook(env):
     """
     Hook executed upon module installation.
@@ -20,7 +21,9 @@ def post_init_hook(env):
     # ADR-0002: Zero-Sudo Architecture. We must not use .sudo() or stay as SUPERUSER.
     # We switch to a dedicated micro-privilege service account.
     # [@ANCHOR: compliance_zero_sudo_impersonation]
-    env_svc = env["zero_sudo.security.utils"]._get_service_env("compliance.user_compliance_service")
+    env_svc = env["zero_sudo.security.utils"]._get_service_env(
+        "compliance.user_compliance_service"
+    )
 
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
     # Performance Optimization: Reduced dozens of ORM round-trips to a single Postgres procedure call.

@@ -17,18 +17,21 @@ class BackupLatestSnapshotView(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW backup_latest_snapshot_view AS (
                 SELECT DISTINCT ON (config_id)
                     id, config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status
                 FROM backup_snapshot
                 ORDER BY config_id, start_time DESC, id DESC
             )
-        """)
+        """
+        )
 
         # Performance: Postgres procedure to upsert snapshots in a single round-trip
         # [@ANCHOR: backup_management:upsert_snapshots_procedure]
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE FUNCTION upsert_backup_snapshots(
                 p_config_id INTEGER,
                 p_website_id INTEGER,
@@ -56,4 +59,5 @@ class BackupLatestSnapshotView(models.Model):
                 RETURNING backup_snapshot.snapshot_id;
             END;
             $$ LANGUAGE plpgsql;
-        """)
+        """
+        )

@@ -34,9 +34,7 @@ class DistributedCacheConfig(models.TransientModel):
                 "tag": "display_notification",
                 "params": {
                     "title": _("Success"),
-                    "message": _(
-                        "Cache invalidated for model %s", self.model_id.model
-                    ),
+                    "message": _("Cache invalidated for model %s", self.model_id.model),
                     "type": "success",
                     "sticky": False,
                 },
@@ -47,7 +45,9 @@ class DistributedCacheConfig(models.TransientModel):
         use_redis = bool(redis and redis_pool)
 
         # Use zero_sudo security utils for system parameter read to comply with security mandates
-        integration_active = self.env["zero_sudo.security.utils"]._get_system_param('distributed_redis_cache.test_integration_active')
+        integration_active = self.env["zero_sudo.security.utils"]._get_system_param(
+            "distributed_redis_cache.test_integration_active"
+        )
         if not integration_active and self.env.context.get("test_mode"):
             use_redis = False
 

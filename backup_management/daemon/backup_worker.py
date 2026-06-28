@@ -153,12 +153,19 @@ def execute_job(ch, method, properties, body):
             ):
                 cmd = [script_path]
             else:
-                raise ValueError(f"Invalid or missing restore drill script: {script_path}")
+                raise ValueError(
+                    f"Invalid or missing restore drill script: {script_path}"
+                )
         elif engine == "restore_cmd":
             cmd = payload.get("cmd_args", [])
             # Security hardening: ensure cmd is a list and contains only allowed binaries
             allowed_binaries = ["kopia", "pgbackrest"]
-            if not cmd or not isinstance(cmd, list) or not cmd or cmd[0] not in allowed_binaries:
+            if (
+                not cmd
+                or not isinstance(cmd, list)
+                or not cmd
+                or cmd[0] not in allowed_binaries
+            ):
                 raise PermissionError(f"Unauthorized command execution attempt: {cmd}")
 
             if cmd[0] == "kopia":
@@ -170,8 +177,14 @@ def execute_job(ch, method, properties, body):
                     raise ValueError(f"Insufficient arguments for kopia restore: {cmd}")
                 target_path_arg = cmd[-1]
                 # Re-validate the path in the worker context
-                if target_path_arg.startswith("-") or ".." in target_path_arg or any(c in target_path_arg for c in "; &|`$()<>*?[]{\n"):
-                     raise PermissionError(f"Malicious path detected in worker: {target_path_arg}")
+                if (
+                    target_path_arg.startswith("-")
+                    or ".." in target_path_arg
+                    or any(c in target_path_arg for c in "; &|`$()<>*?[]{\n")
+                ):
+                    raise PermissionError(
+                        f"Malicious path detected in worker: {target_path_arg}"
+                    )
 
             elif cmd[0] == "pgbackrest":
                 # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
@@ -180,7 +193,9 @@ def execute_job(ch, method, properties, body):
                     if arg.startswith("--") and "=" in arg:
                         key, val = arg.split("=", 1)
                         if any(c in val for c in "; &|`$()<>*?[]{\n"):
-                             raise PermissionError(f"Malicious argument detected in worker: {arg}")
+                            raise PermissionError(
+                                f"Malicious argument detected in worker: {arg}"
+                            )
 
         if not cmd:
             raise ValueError(f"No command generated for engine: {engine}")
@@ -263,7 +278,9 @@ def execute_job(ch, method, properties, body):
                         engine=config.get("engine"),
                     )
                 except (json.JSONDecodeError, KeyError, ValueError) as e:
-                    logger.error("Failed to parse sync data for engine %s: %s", engine, e)
+                    logger.error(
+                        "Failed to parse sync data for engine %s: %s", engine, e
+                    )
                     _json2_call(
                         "backup.config",
                         "report_backup_failure",
@@ -295,8 +312,19 @@ def execute_job(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         logger.info("Job %s finished: %s", job_id, final_state)
 
-    except (OdooAPIError, subprocess.SubprocessError, OSError, ValueError, PermissionError) as e:
-        logger.error("Error processing job %s: %s: %s", job_id if 'job_id' in locals() else 'unknown', type(e).__name__, e)
+    except (
+        OdooAPIError,
+        subprocess.SubprocessError,
+        OSError,
+        ValueError,
+        PermissionError,
+    ) as e:
+        logger.error(
+            "Error processing job %s: %s: %s",
+            job_id if "job_id" in locals() else "unknown",
+            type(e).__name__,
+            e,
+        )
         # If possible, report the failure back to Odoo before acking
         try:
             payload = json.loads(body)
@@ -319,7 +347,11 @@ def execute_job(ch, method, properties, body):
                     ids=[config_id],
                     message=f"Worker Error ({type(e).__name__}): {e}",
                 )
-        except (OdooAPIError, json.JSONDecodeError, urllib.error.URLError) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort.
+        except (
+            OdooAPIError,
+            json.JSONDecodeError,
+            urllib.error.URLError,
+        ) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort.
             logger.error("Failed to report failure back to Odoo: %s", inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -349,9 +381,13 @@ def main():
         except OdooAPIError as e:
             logger.error("Fatal Odoo API error in main loop: %s. Retrying in 10s...", e)
             time.sleep(10)  # audit-ignore-sleep
-        except (ValueError, TypeError, OSError) as e:  # audit-ignore-catch-all: General daemon recovery loop.
-             logger.error("Unexpected error in main loop: %s. Restarting...", e)
-             time.sleep(5)  # audit-ignore-sleep
+        except (
+            ValueError,
+            TypeError,
+            OSError,
+        ) as e:  # audit-ignore-catch-all: General daemon recovery loop.
+            logger.error("Unexpected error in main loop: %s. Restarting...", e)
+            time.sleep(5)  # audit-ignore-sleep
 
 
 if __name__ == "__main__":
