@@ -227,7 +227,7 @@ class BinaryManifest(models.Model):
             # Checksum verification for existing binary
             hasher = hashlib.sha256()
             try:
-                with open(
+                with open(  # audit-ignore-path
                     target_bin, "rb"
                 ) as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                     for chunk in iter(lambda: f.read(4096), b""):
@@ -241,7 +241,7 @@ class BinaryManifest(models.Model):
                     _logger.info(
                         "Checksum mismatch for %s, re-downloading...", cmd_name
                     )
-                    os.unlink(
+                    os.unlink(  # audit-ignore-path
                         target_bin
                     )  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
             except OSError as e:
@@ -263,7 +263,7 @@ class BinaryManifest(models.Model):
                         shutil.copyfileobj(response, tmp)
 
                 hasher = hashlib.sha256()
-                with open(
+                with open(  # audit-ignore-path
                     tmp_path, "rb"
                 ) as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                     for chunk in iter(lambda: f.read(4096), b""):
@@ -283,7 +283,7 @@ class BinaryManifest(models.Model):
                     )
 
                 if manifest_record.archive_type == "tar.gz":
-                    with tarfile.open(
+                    with tarfile.open(  # audit-ignore-path
                         tmp_path, "r:gz"
                     ) as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                         found = False
@@ -309,7 +309,7 @@ class BinaryManifest(models.Model):
                                 source = tar.extractfile(member)
                                 if source:
                                     with source:
-                                        with open(
+                                        with open(  # audit-ignore-path
                                             target_bin, "wb"
                                         ) as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                                             shutil.copyfileobj(source, target)
@@ -320,7 +320,7 @@ class BinaryManifest(models.Model):
                                 _("Member %s not found in archive.") % extract_target
                             )
                 elif manifest_record.archive_type == "zip":
-                    with zipfile.ZipFile(
+                    with zipfile.ZipFile(  # audit-ignore-path
                         tmp_path, "r"
                     ) as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                         extract_target = manifest_record.extract_member or cmd_name
@@ -345,10 +345,10 @@ class BinaryManifest(models.Model):
                                 if not member_filename:
                                     continue
 
-                                with zip_ref.open(
+                                with zip_ref.open(  # audit-ignore-path
                                     zinfo
                                 ) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                                    with open(
+                                    with open(  # audit-ignore-path
                                         target_bin, "wb"
                                     ) as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                                         shutil.copyfileobj(source, target)
@@ -367,7 +367,7 @@ class BinaryManifest(models.Model):
             finally:
                 if tmp_path and os.path.exists(tmp_path):
                     try:
-                        os.unlink(
+                        os.unlink(  # audit-ignore-path
                             tmp_path
                         )  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
                     except OSError as e:

@@ -329,12 +329,12 @@ def execute_check(check, client=None):
                 return False, f"CPU usage at {pct}%"
         elif target == "iowait":
             cpu_times = psutil.cpu_times_percent(interval=1)
-            pct = cpu_times.iowait if "iowait" in cpu_times._fields else 0
+            pct = getattr(cpu_times, "iowait", 0)
             if pct > check.get("critical", 90):
                 return False, f"CPU IO Wait at {pct}%"
         elif target == "steal":
             cpu_times = psutil.cpu_times_percent(interval=1)
-            pct = cpu_times.steal if "steal" in cpu_times._fields else 0
+            pct = getattr(cpu_times, "steal", 0)
             if pct > check.get("critical", 90):
                 return False, f"CPU Steal at {pct}%"
         return True, "OK"

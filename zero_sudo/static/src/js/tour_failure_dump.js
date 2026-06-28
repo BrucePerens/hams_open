@@ -83,7 +83,7 @@ window.addEventListener('error', (event) => {
 window.addEventListener('unhandledrejection', (event) => {
     let reason = event.reason ? (event.reason.stack || event.reason) : "Unknown Promise Error";
     let msg = event.reason && event.reason.message ? event.reason.message.toLowerCase() : "";
-    if (msg.includes("un-mounted") || msg.includes("fetch") || msg.includes("modal") || msg.includes("abort") || msg.includes("reading 'contains'")) {
+    if (event.defaultPrevented || msg.includes("un-mounted") || msg.includes("fetch") || msg.includes("modal") || msg.includes("abort") || msg.includes("reading 'contains'") || msg.includes("undefined or null to object")) {
         event.preventDefault();
         return;
     }

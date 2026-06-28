@@ -116,9 +116,9 @@ def execute_check(check):
                     [
                         "--bind",
                         tmpdir,
-                        "/workspace",
+                        "/tmp/workspace",
                         "--chdir",
-                        "/workspace",
+                        "/tmp/workspace",
                         "--die-with-parent",
                         "/bin/bash",
                         "script.sh",
@@ -141,7 +141,7 @@ def execute_check(check):
                 exe_args = check.get("executable_args", "")
 
                 if not exe_path.startswith("/"):
-                    exe_path = f"/workspace/{exe_path}"
+                    exe_path = f"/tmp/workspace/{exe_path}"
 
                 bwrap_cmd = [
                     "bwrap",
@@ -167,9 +167,9 @@ def execute_check(check):
                     [
                         "--bind",
                         tmpdir,
-                        "/workspace",
+                        "/tmp/workspace",
                         "--chdir",
-                        "/workspace",
+                        "/tmp/workspace",
                         "--die-with-parent",
                         exe_path,
                     ]

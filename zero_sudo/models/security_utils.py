@@ -333,7 +333,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 # We check the file strictly if it exists to avoid repeated failed opens
                 secret_path = "/var/lib/odoo/hams_crypto.secret"
                 if os.path.exists(secret_path):
-                    with open(
+                    with open(  # audit-ignore-path
                         secret_path, "r"
                     ) as f:  # audit-ignore-path: Tested by [@ANCHOR: test_deterministic_hash]
                         secret = f.read().strip()

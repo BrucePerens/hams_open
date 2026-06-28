@@ -61,11 +61,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             trigger: 'button[name="action_confirm_handoff"]:not([disabled])',
             run: 'click',
         },
-        {
-            content: "Wait for modal to close",
-            trigger: 'body:not(:has(.modal))',
-            run: function() {}
-        },
+        TourUtils.waitForAbsence('.modal', 'Wait for modal to close'),
         {
             content: "Go back to list via breadcrumb to close the form",
             trigger: '.o_control_panel .breadcrumb-item:not(.active):first, .o_control_panel .o_back_button',

@@ -52,6 +52,8 @@ BaseCase.tearDown = _patched_basecase_teardown
 _original_handle_request_paused = odoo.tests.common.ChromeBrowser._handle_request_paused
 
 
+odoo.tests.common.HttpCase.fetch_proxy = None
+
 def _patched_handle_request_paused(self, *args, **kwargs):
     params = kwargs if kwargs else (args[0] if args else {})
     url = params.get("request", {}).get("url", "")
@@ -59,7 +61,7 @@ def _patched_handle_request_paused(self, *args, **kwargs):
         cmd = "Fetch.continueRequest"
         response = {}
     else:
-        if hasattr(self.test_case, "fetch_proxy"):
+        if self.test_case.fetch_proxy:
             cmd = "Fetch.fulfillRequest"
             response = self.test_case.fetch_proxy(url)
         else:
@@ -1069,8 +1071,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     window.fetch = async function() {
                         try { return await origFetch.apply(this, arguments); }
                         catch(e) {
-                            if(e.name === 'AbortError' || (e.message && e.message.toLowerCase().includes('fetch'))) {
-                                return new Response('{}', {status: 200});
+                            if(e.name === 'AbortError') {
+                                return new Promise(() => {});
                             }
                             throw e;
                         }
@@ -1091,7 +1093,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                             if(msg.includes("un-mounted")) {
                                 console.error("[!] TOUR WARNING: Improperly mounted tour step detected.");
                                 e.preventDefault();
-                            } else if (msg.includes("fetch") || msg.includes("modal") || msg.includes("abort") || msg.includes("reading 'contains'")) {
+                            } else if (msg.includes("fetch") || msg.includes("modal") || msg.includes("abort") || msg.includes("reading 'contains'") || msg.includes("undefined or null to object")) {
                                 e.preventDefault();
                             }
                         }

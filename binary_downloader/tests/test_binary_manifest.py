@@ -355,7 +355,7 @@ class TestBinaryManifest(HamsTransactionCase):
 
         # Create a real zip in memory
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(
+        with zipfile.ZipFile(  # audit-ignore-path
             zip_buffer, "a", zipfile.ZIP_DEFLATED, False
         ) as zip_file:  # audit-ignore-path
             zip_file.writestr("zippybin", b"zipdata")
