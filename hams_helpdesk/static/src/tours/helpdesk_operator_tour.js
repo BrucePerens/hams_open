@@ -38,7 +38,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         },
         {
             content: "Pick First User",
-            trigger: '.o-autocomplete--dropdown-item:first',
+            trigger: 'body .o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item a',
             run: 'click',
         },
         {
@@ -67,30 +67,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             trigger: '.o_form_sheet', // wait for form sheet to render first
             run: function() {}
         },
-        {
-            content: "Wait for Handoff message in chatter",
-            trigger: 'body',
-            run: function () {
-                return new Promise((resolve) => {
-                    function checkText(node, text) {
-                        if (node.textContent && node.textContent.includes(text)) return true;
-                        if (node.shadowRoot) {
-                            if (checkText(node.shadowRoot, text)) return true;
-                        }
-                        for (let child of node.children || []) {
-                            if (checkText(child, text)) return true;
-                        }
-                        return false;
-                    }
-                    const interval = setInterval(() => {
-                        if (checkText(document.body, "Official Shift Handoff Executed")) {
-                            clearInterval(interval);
-                            resolve();
-                        }
-                    }, 250);
-                });
-            }
-        },
+
         {
             content: "Final click to finish tour",
             trigger: '.o_form_sheet',

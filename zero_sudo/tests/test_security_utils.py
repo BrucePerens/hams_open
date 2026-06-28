@@ -281,16 +281,19 @@ class TestSecurityUtils(HamsTransactionCase):
             mock_manifest if k == "binary.manifest" else None
         )
 
-        self.safe_patch(
+        patcher = patch(
             "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
             return_value=mock_env,
         )
-
-        res = utils._ensure_executable(
-            "kopia", svc_xml_id="zero_sudo.mail_service_internal"
-        )
-        self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
-        mock_manifest.ensure_executable.assert_called_once_with("kopia")
+        patcher.start()
+        try:
+            res = utils._ensure_executable(
+                "kopia", svc_xml_id="zero_sudo.mail_service_internal"
+            )
+            self.assertEqual(res, "/var/lib/odoo/hams_bin/kopia")
+            mock_manifest.ensure_executable.assert_called_once_with("kopia")
+        finally:
+            patcher.stop()
 
     def test_12_kv_store(self):
         # [@ANCHOR: test_set_kv_procedure]

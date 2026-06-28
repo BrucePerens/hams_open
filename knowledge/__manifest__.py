@@ -116,6 +116,7 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
             "knowledge/static/tests/tours/manual_feedback_tour.js",
             "knowledge/static/tests/tours/manual_search_tour.js",
             "knowledge/static/tests/tours/manual_toc_tour.js",
+            "knowledge/static/tests/tours/manual_basic_browsing_tour.js",
         ],
     },
     "installable": True,
