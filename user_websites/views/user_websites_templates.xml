@@ -97,6 +97,32 @@
                         </t>
                     </div>
                 </t>
+                
+                <t t-set="suspended_groups" t-value="user_id.suspended_group_ids"/>
+                <t t-foreach="suspended_groups" t-as="group">
+                    <div class="alert alert-danger shadow-sm mt-3" role="alert">
+                        <h4 class="alert-heading fw-bold"><i class="fa fa-ban me-2" aria-hidden="true"/> Group Suspended: <t t-out="group.name"/></h4>
+                        <p>We suspended this group's website and blog features because of community guideline violations. We also unpublished the group's content.</p>
+                        <hr/>
+
+                        <t t-set="existing_appeal" t-value="group.appeal_ids.filtered(lambda a: a.state == 'new')"/>
+
+                        <t t-if="existing_appeal">
+                            <p class="mb-0 text-dark fw-bold"><i class="fa fa-clock-o me-1" aria-hidden="true"/> We are currently reviewing the group's appeal.</p>
+                        </t>
+                        <t t-else="">
+                            <form action="/website/submit_appeal" method="post">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <input type="hidden" name="group_id" t-att-value="group.id"/>
+                                <div class="mb-3">
+                                    <label t-attf-for="reason_#{group.id}" class="form-label fw-bold">Submit an Appeal for this Group (One-time only):</label>
+                                    <textarea class="form-control" name="reason" t-attf-id="reason_#{group.id}" rows="3" required="required" placeholder="Please explain why the group's suspension should be lifted..."></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-danger">Submit Appeal</button>
+                            </form>
+                        </t>
+                    </div>
+                </t>
             </div>
         </xpath>
 

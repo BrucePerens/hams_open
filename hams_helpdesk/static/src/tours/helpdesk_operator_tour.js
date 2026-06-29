@@ -38,12 +38,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         },
         {
             content: "Pick First User",
-            trigger: 'body .o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item a',
-            run: 'click',
-        },
-        {
-            content: "Force Blur for Wizard before confirmation",
-            trigger: '.modal-body',
+            trigger: '.o-autocomplete--dropdown-item',
             run: 'click',
         },
         {
@@ -58,7 +53,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         },
         {
             content: "Confirm Handoff",
-            trigger: 'button[name="action_confirm_handoff"]:not([disabled])',
+            trigger: 'button[name="action_confirm_handoff"]',
             run: 'click',
         },
         TourUtils.waitForAbsence('.modal', 'Wait for modal to close'),
@@ -67,7 +62,6 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             trigger: '.o_form_sheet', // wait for form sheet to render first
             run: function() {}
         },
-
         {
             content: "Final click to finish tour",
             trigger: '.o_form_sheet',

@@ -93,7 +93,16 @@ class UserWebsitesGroup(models.Model):
     is_suspended_from_websites = fields.Boolean(
         string="Suspended from Websites",
         default=False,
-        help="If True, all group pages and blogs are forcefully unpublished and locked.",
+        readonly=True,
+        tracking=True,
+        help="If true, this group's websites are unpublished and they cannot manage content.",
+    )
+
+    appeal_ids = fields.One2many(
+        "content.violation.appeal",
+        "group_id",
+        string="Moderation Appeals",
+        help="Appeals submitted on behalf of this group.",
     )
 
     odoo_group_id = fields.Many2one(

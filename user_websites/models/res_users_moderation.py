@@ -22,6 +22,27 @@ class ResUsersModeration(models.Model):
         help="If True, all personal pages and blogs are forcefully unpublished and locked.",
     )
 
+    suspended_group_ids = fields.Many2many(
+        "user.websites.group",
+        compute="_compute_suspended_group_ids",
+        string="Suspended Groups",
+    )
+
+    def _compute_suspended_group_ids(self):
+        groups = self.env["user.websites.group"].search([
+            ("member_ids", "in", self.ids),
+            ("is_suspended_from_websites", "=", True)
+        ], limit=1000)
+        
+        mapping = {u.id: [] for u in self}
+        for g in groups:
+            for m in g.member_ids:
+                if m.id in mapping:
+                    mapping[m.id].append(g.id)
+        
+        for user in self:
+            user.suspended_group_ids = mapping[user.id]
+
     def action_suspend_user_websites(self):
         """Forcefully unpublishes all user content and flags them as suspended."""
         user_ids = self.ids

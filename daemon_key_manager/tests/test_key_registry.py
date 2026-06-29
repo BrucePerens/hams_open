@@ -86,7 +86,7 @@ class TestKeyRegistry(RealTransactionCase):
                 {
                     "name": "Test Daemon Path",
                     "user_id": self.service_user.id,
-                    "env_file_path": "/home/jules/test.env",
+                    "env_file_path": "/opt/jules/test.env",
                 }
             )
             self.env.flush_all()
@@ -119,7 +119,7 @@ class TestKeyRegistry(RealTransactionCase):
 
         # Test expanded forbidden prefixes
         forbidden_paths = [
-            "/home/jules/test.env",
+            "/opt/jules/test.env",
             "/usr/local/bin/test.env",
             "/bin/test.env",
             "/var/log/test.env",

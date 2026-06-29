@@ -21,7 +21,7 @@ When adding a new to-do, use `write_to_file` (with Overwrite=True) to rewrite th
 
 - [x] Refactor Moderation Dashboard into `ham_moderation` module. (Priority: Medium)
   - Details: Move `moderation_dashboard.py` out of `ham_base` and into a dedicated `ham_moderation` module that cleanly depends on `ham_base`, `user_websites`, `ham_events`, and `ham_onboarding`. This will eliminate all soft-dependency hacks in the codebase by explicitly declaring module dependencies.
-  - Linked Proposal: [docs/proposals/soft_dependency_refactoring.md](file:///home/bruce/workspace/hams_com/docs/proposals/soft_dependency_refactoring.md)
+  - Linked Proposal: [docs/proposals/soft_dependency_refactoring.md](../../../../../hams_com/docs/proposals/soft_dependency_refactoring.md)
 
 ## Instructions for the AI
 

@@ -4,7 +4,7 @@
     <template id="sidebar_article_recursive" name="Sidebar Recursive">
         <li class="nav-item">
             <a t-attf-href="#{nav_article.website_url}"
-               t-attf-class="nav-link #{'active fw-bold' if (article and article.id == nav_article.id) else 'text-dark'}"
+               t-attf-class="nav-link o_manual_article_link #{'active fw-bold' if (article and article.id == nav_article.id) else 'text-dark'}"
                aria-label="Navigate to Article">
                 <span t-if="nav_article.icon" t-out="nav_article.icon" class="me-1" aria-hidden="true"/>
                 <span t-out="nav_article.name"/>

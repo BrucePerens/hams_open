@@ -121,6 +121,9 @@ class UserWebsitesController(http.Controller):
         if profile_user and profile_user.is_suspended_from_websites:
             return request.not_found()
 
+        if profile_group and profile_group.is_suspended_from_websites:
+            return request.not_found()
+
         main_object = profile_user or profile_group
 
         domain = (
@@ -192,6 +195,9 @@ class UserWebsitesController(http.Controller):
             return request.not_found()
 
         if profile_user and profile_user.is_suspended_from_websites:
+            return request.not_found()
+
+        if profile_group and profile_group.is_suspended_from_websites:
             return request.not_found()
 
         # Check if the page actually exists; if it does, let core ir.http route handle it
@@ -422,7 +428,7 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )
-    def submit_appeal(self, reason="", **post):
+    def submit_appeal(self, reason="", group_id=None, **post):
         # [@ANCHOR: UX_SUBMIT_APPEAL]
         if not reason:
             return request.redirect("/my/home?error=missing_reason")
@@ -431,13 +437,19 @@ class UserWebsitesController(http.Controller):
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         try:
-            env_svc["content.violation.appeal"].create(
-                {
-                    "user_id": request.env.user.id,
-                    "reason": reason,
-                    "state": "new",
-                }
-            )
+            vals = {
+                "reason": reason,
+                "state": "new",
+            }
+            if group_id:
+                group = env_svc["user.websites.group"].browse(int(group_id))
+                if not group or request.env.user.id not in group.member_ids.ids:
+                    return request.redirect("/my/home?error=appeal_failed")
+                vals["group_id"] = group.id
+            else:
+                vals["user_id"] = request.env.user.id
+
+            env_svc["content.violation.appeal"].create(vals)
         except Exception as e:  # audit-ignore-catch-all
             _logger.warning("Appeal creation failed: %s", e)
             return request.redirect("/my/home?error=appeal_failed")

@@ -7,6 +7,7 @@
             <list string="Moderation Appeals" decoration-danger="state=='new'" decoration-success="state=='approved'" decoration-muted="state=='rejected'">
                 <field name="create_date"/>
                 <field name="user_id"/>
+                <field name="group_id"/>
                 <field name="state" widget="badge" 
                        decoration-danger="state=='new'" 
                        decoration-success="state=='approved'" 
@@ -27,7 +28,10 @@
                 </header>
                 <sheet>
                     <div class="oe_title">
-                        <h1><field name="user_id" readonly="1"/></h1>
+                        <h1>
+                            <field name="user_id" readonly="1" invisible="not user_id"/>
+                            <field name="group_id" readonly="1" invisible="not group_id"/>
+                        </h1>
                     </div>
                     <group>
                         <field name="create_date" readonly="1"/>
@@ -50,7 +54,7 @@
         <field name="domain">[('state', '=', 'new')]</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
-                No active appeals from suspended users.
+                No active appeals from suspended users or groups.
             </p>
         </field>
     </record>
@@ -66,7 +70,7 @@
         <field name="name">My Moderation Appeals</field>
         <field name="res_model">content.violation.appeal</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('user_id', '=', uid)]</field>
+        <field name="domain">['|', ('user_id', '=', uid), ('group_id.member_ids', 'in', [uid])]</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 You have not submitted any appeals.
