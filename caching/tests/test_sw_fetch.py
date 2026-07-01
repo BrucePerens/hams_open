@@ -39,7 +39,7 @@ class TestServiceWorkerFetch(HamsHttpCase):
             "[!] DIAGNOSTIC FOR AI: Could not find CACHE_URL_REGEX definition in sw.js.",
         )
         if match:
-            regex_str = match.group(1).strip("/")
+            regex_str = match.group(1)[1:-1]
             # Use Python's re to test the same regex
             pattern = re.compile(regex_str)
             self.assertTrue(

@@ -45,9 +45,9 @@ class DaemonKeyRegistry(models.Model):
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
 
 
-    _name_uniq = models.Constraint("UNIQUE(name)", "The daemon name must be unique!")
-    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The daemon name cannot be empty.")
-    _path_not_empty = models.Constraint("CHECK(LENGTH(TRIM(env_file_path)) > 0)", "The environment file path cannot be empty.")
+    _name_company_uniq = models.Constraint('unique(name, company_id)', 'The daemon name must be unique per company!')
+    _name_not_empty = models.Constraint('CHECK(LENGTH(TRIM(name)) > 0)', 'The daemon name cannot be empty.')
+    _path_not_empty = models.Constraint('CHECK(LENGTH(TRIM(env_file_path)) > 0)', 'The environment file path cannot be empty.')
 
     @api.constrains("user_id")
     def _check_user_is_service_account(self):
@@ -162,8 +162,8 @@ class DaemonKeyRegistry(models.Model):
                 "INSERT INTO res_groups_users_rel (uid, gid) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                 (user.id, usage_group.id),
             )
-            # Invalidate cache for the user's groups to ensure the new privilege is recognized.
-            user.env["res.users"].invalidate_model(["group_ids", "all_group_ids"])
+            user.invalidate_recordset()
+            self.env.registry.clear_cache()
 
         registry._rotate_key_and_write_file()
         return True
@@ -344,7 +344,7 @@ class DaemonKeyRegistry(models.Model):
                 try:
                     os.chmod(directory, 0o700)
                 except PermissionError:
-                    _logger.warning("Could not chmod %s (Permission denied). Using existing permissions.", directory)
+                    _logger.warning("Security Alert: Could not enforce secure permissions on %s. Proceeding anyway.", directory)
 
             # Ensure the file is created with 0600 from the start
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -383,11 +383,15 @@ class DaemonKeyRegistry(models.Model):
                 self.env.cr.commit()
             except (OSError, UserError, ValidationError, AccessError) as e:
                 self.env.cr.rollback()
+                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() WHERE id = %s", (reg.id,))
+                self.env.cr.commit()
                 _logger.error(
                     "Managed failure rotating key for daemon %s: %s", reg.name, e
                 )
             except Exception as e:  # audit-ignore-catch-all
                 self.env.cr.rollback()
+                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() WHERE id = %s", (reg.id,))
+                self.env.cr.commit()
                 _logger.error(
                     "Unexpected error during key rotation for daemon %s: %s",
                     reg.name,

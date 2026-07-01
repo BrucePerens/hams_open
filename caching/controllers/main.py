@@ -188,6 +188,7 @@ class ServiceWorkerController(http.Controller):
         cache_name = f"odoo-assets-cache-{latest_mtime}-v{in_v}"
         content = content.replace("__CACHE_NAME__", cache_name)
         content = content.replace("__MAX_FILE_SIZE_BYTES__", max_file_size)
+        content = content.replace("__MAX_STORAGE_BYTES__", str(quota_mb * 1024 * 1024))
 
         headers = [
             ("Content-Type", "application/javascript"),

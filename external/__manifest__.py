@@ -13,10 +13,12 @@
     "depends": ["zero_sudo", "base", "web"],
     "assets": {
         "external.assets_leaflet": [
+            # [@ANCHOR: external:HTTP_REACHABLE_LEAFLET]
             "external/static/src/node_modules/leaflet/leaflet.css",
             "external/static/src/node_modules/leaflet/leaflet.js",
         ],
         "external.assets_transformers": [
+            # [@ANCHOR: external:HTTP_REACHABLE_TRANSFORMERS]
             "external/static/src/node_modules/transformers/transformers.js",
         ],
     },

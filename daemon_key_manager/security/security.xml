@@ -19,6 +19,13 @@
             <field name="api_key_duration">90</field>
             <field name="comment">This group allows service accounts to have API keys with a 90-day duration.</field>
         </record>
+
+        <record id="daemon_key_registry_company_rule" model="ir.rule">
+            <field name="name">Daemon Key Registry multi-company</field>
+            <field name="model_id" ref="model_daemon_key_registry"/>
+            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
     </data>
     <data>
         <record id="user_daemon_key_manager_service" model="res.users">

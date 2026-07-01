@@ -5,7 +5,7 @@
         <field name="model">website.page</field>
         <field name="inherit_id" ref="website.website_pages_form_view"/>
         <field name="arch" type="xml">
-            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Verified by test_xpath_rendering -->
+            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_pages_posts] -->
                 <notebook>
                     <page string="SEO Metadata" name="seo_settings">
                         <group>

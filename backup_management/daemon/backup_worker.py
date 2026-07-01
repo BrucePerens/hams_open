@@ -8,6 +8,7 @@ import urllib.request
 import urllib.error
 import logging
 import shlex
+import re
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [BACKUP_WORKER] - %(message)s"
@@ -148,11 +149,12 @@ def execute_job(ch, method, properties, body):
                 script_path
                 and os.path.exists(script_path)
                 and os.access(script_path, os.X_OK)
+                and script_path.endswith(".py")
             ):
                 cmd = [script_path]
             else:
                 raise ValueError(
-                    f"Invalid or missing restore drill script: {script_path}"
+                    f"Invalid or missing restore drill script: {script_path}. Must be a .py script."
                 )
         elif engine == "restore_cmd":
             cmd = payload.get("cmd_args", [])
@@ -183,11 +185,23 @@ def execute_job(ch, method, properties, body):
                     raise PermissionError(
                         f"Malicious path detected in worker: {target_path_arg}"
                     )
+                
+                try:
+                    abs_path = os.path.realpath(os.path.normpath(target_path_arg))
+                except OSError:
+                    abs_path = os.path.abspath(target_path_arg)
+                forbidden_prefixes = ["/etc", "/var", "/bin", "/sbin", "/usr", "/boot", "/root"]
+                if any(abs_path == f or abs_path.startswith(f + "/") for f in forbidden_prefixes):
+                    raise PermissionError(f"Malicious path targets forbidden system directory: {abs_path}")
 
             elif cmd[0] == "pgbackrest":
                 # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
                 # Ensure no dangerous flags are injected
                 for arg in cmd:
+                    if arg.startswith("--stanza="):
+                        val = arg.split("=", 1)[1]
+                        if not re.match(r"^[a-zA-Z0-9_]+$", val):
+                            raise PermissionError(f"Invalid stanza name in worker: {val}")
                     if arg.startswith("--") and "=" in arg:
                         key, val = arg.split("=", 1)
                         if any(c in val for c in "; &|`$()<>*?[]{\n"):

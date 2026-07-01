@@ -95,18 +95,16 @@ class KnowledgeArticle(models.Model):
     def _compute_breadcrumb_article_ids(self):
         # [@ANCHOR: manual_compute_breadcrumbs]
         for article in self:
-            breadcrumbs = self.env["knowledge.article"]
+            breadcrumbs = []
             current = article.parent_id
             visited = set()
             while current and current.id not in visited:
-                breadcrumbs |= current
+                breadcrumbs.append(current.id)
                 visited.add(current.id)
                 current = current.parent_id
-            # Order from root to parent
-            res = self.env["knowledge.article"]
-            for a in reversed(list(breadcrumbs)):
-                res |= a
-            article.breadcrumb_article_ids = res
+            
+            breadcrumbs.reverse()
+            article.breadcrumb_article_ids = [(6, 0, breadcrumbs)]
 
     @api.depends("body")
     def _compute_body_snippet(self):

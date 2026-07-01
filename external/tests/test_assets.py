@@ -10,7 +10,6 @@ class TestExternalAssets(HamsHttpCase):
     # Tests [@ANCHOR: external:HTTP_REACHABLE_LEAFLET]
     def test_01_leaflet_assets_reachable(self):
         """Verify Leaflet JS and CSS are reachable via HTTP."""
-        # [@ANCHOR: external:HTTP_REACHABLE_LEAFLET]
         js_url = "/external/static/src/node_modules/leaflet/leaflet.js"
         css_url = "/external/static/src/node_modules/leaflet/leaflet.css"
 
@@ -35,7 +34,6 @@ class TestExternalAssets(HamsHttpCase):
     # Tests [@ANCHOR: external:HTTP_REACHABLE_TRANSFORMERS]
     def test_02_transformers_assets_reachable(self):
         """Verify Transformers JS is reachable via HTTP."""
-        # [@ANCHOR: external:HTTP_REACHABLE_TRANSFORMERS]
         js_url = "/external/static/src/node_modules/transformers/transformers.js"
 
         js_response = self.url_open(js_url)

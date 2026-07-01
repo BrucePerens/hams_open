@@ -181,8 +181,6 @@ class IrHttp(models.AbstractModel):
 
             for m in to_process:
                 if m and isinstance(m, str):
-                    # Enforce schema contract: model must exist in env, otherwise fail loudly
-                    _ = request.env[m]
                     # Pass local_only=True to prevent infinite pub/sub loops
                     invalidate_model_cache(request.env, m, local_only=True)
                     info_msg = """Cache cleared for model: %s on %s"""

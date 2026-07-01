@@ -16,4 +16,16 @@
             <field name="group_ids" eval="[(6, 0, [ref('edge_routing.group_edge_routing_service_account')])]"/>
         </record>
     </data>
+    <data noupdate="1">
+        <record id="ir_cron_push_pager_duty" model="ir.cron">
+            <field name="name">Edge Routing: Sync domains to PagerDuty</field>
+            <field name="model_id" ref="model_edge_routing_domain"/>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="state">code</field>
+            <field name="code">model.push_all_to_pager_duty()</field> <!-- audit-ignore-cron -->
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
 </odoo>

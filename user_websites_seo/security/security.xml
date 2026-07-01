@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="user_websites.group_user_websites_service_account" model="res.groups">
+            <field name="name">Service Account: User Websites Provisioning</field>
+            <field name="implied_ids" eval="[(4, ref('website.group_website_designer'))]"/>
+        </record>
+    </data>
+</odoo>

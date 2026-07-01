@@ -179,8 +179,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             test_post = self.env["blog.post"].search(
                 [("owner_user_id", "=", self.creator.id)], limit=1
             )
-            # audit-ignore-mail: Tested by [@ANCHOR: test_weekly_digest_mail_template]  # fmt: skip
-            template.send_mail(test_post.id, force_send=False)
+            template.send_mail(test_post.id, force_send=False)  # audit-ignore-mail: Tested by [@ANCHOR: test_weekly_digest_mail_template]
 
     def test_02_invalid_unsubscribe_token(self):
         """

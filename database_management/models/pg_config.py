@@ -181,10 +181,10 @@ class PgHaWizard(models.TransientModel):
         # Tests [@ANCHOR: pg_ha_wizard]
         self._validate_inputs()
 
-        if not self.env.context.get("test_mode"):
-            self._get_executable("etcd")
-            self._get_executable("patroni")
-            self._get_executable("pgbouncer")
+        # Check required binaries before generating config
+        self._get_executable("patroni")
+        self._get_executable("pgbouncer")
+        self._get_executable("etcd")
 
         etcd_config = (
             "host: " + self.etcd_hosts

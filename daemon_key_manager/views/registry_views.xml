@@ -50,6 +50,15 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <record id="action_server_force_provision_all" model="ir.actions.server">
+        <field name="name">Force Provision All Keys</field>
+        <field name="model_id" ref="model_daemon_key_registry"/>
+        <field name="binding_model_id" ref="model_daemon_key_registry"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = model.action_force_provision_all()</field>
+    </record>
+
     <menuitem id="menu_daemon_key_registry"
               name="Daemon Key Registry"
               parent="base.menu_security"

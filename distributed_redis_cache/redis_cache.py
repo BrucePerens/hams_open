@@ -4,7 +4,6 @@ import json
 import logging
 import hashlib
 import datetime
-import time
 from functools import wraps
 from odoo import models, tools
 from odoo.addons.distributed_redis_cache.redis_pool import (
@@ -12,12 +11,14 @@ from odoo.addons.distributed_redis_cache.redis_pool import (
     redis_pool,
     get_redis_connection,
 )
+import threading
 
 _logger = logging.getLogger(__name__)
 
 # Local fallback cache to maintain HA if Redis is unreachable.
 # Limit to 8192 entries to prevent memory exhaustion during Redis outages.
 _local_cache = tools.lru.LRU(8192)
+LRU_LOCK = threading.Lock()
 
 
 def _get_hash(*args, **kwargs):
@@ -66,12 +67,12 @@ def distributed_cache():
             model_name = self._name
 
             # Multi-Tenant awareness: Include website_id and company_id in cache key
-            # Force company_id from context if available, else use env.company
             website_id = self.env.context.get("website_id")
-
-            company_id = self.env.context.get(
-                "allowed_company_ids", [self.env.company.id]
-            )[0]
+            
+            # Use only context to avoid triggering N+1 queries from self.env.company
+            allowed_company_ids = self.env.context.get("allowed_company_ids", [])
+            company_id = allowed_company_ids[0] if allowed_company_ids else None
+            
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}" if website_id else ""
             company_suffix = f":c{company_id}" if company_id else ""
@@ -79,63 +80,44 @@ def distributed_cache():
             arg_hash = _get_hash(*args, **kwargs)
             cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}{company_suffix}:{arg_hash}"
 
+            # L1 Cache Check (In-Memory)
+            if cache_key in _local_cache:
+                return _local_cache[cache_key]
+
             use_redis = bool(redis and redis_pool)
 
             # Ensure Redis is running in testing environments to maintain production parity.
 
             if use_redis:
-                # Required to prevent Odoo from having invalid or out-of-phase data,
-                # the "split brain" phenomenon, during a network partition.
-                while True:
-                    try:
-                        r = get_redis_connection(self.env)
-                        cached = r.get(cache_key)
-                        if cached:
-                            # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
-                            _logger.debug("Redis cache hit: %s", cache_key)
-                            return json.loads(cached)
-                        break  # Successful miss, break loop to query database
-                    except redis.RedisError as e:
-                        _logger.warning(
-                            "Network partition detected. Pausing worker until Redis is reachable: %s",
-                            e,
-                        )
-                        time.sleep(2)  # audit-ignore-sleep
-                    except json.JSONDecodeError as e:
-                        _logger.warning("Redis cache corrupted JSON payload: %s", e)
-                        use_redis = False
-                        break
-
-            if not use_redis:
-                if cache_key in _local_cache:
-                    return _local_cache[cache_key]
+                try:
+                    r = get_redis_connection(self.env)
+                    cached = r.get(cache_key)
+                    if cached:
+                        # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
+                        _logger.debug("Redis cache hit: %s", cache_key)
+                        res = json.loads(cached)
+                        _local_cache[cache_key] = res
+                        return res
+                except redis.RedisError as e:
+                    _logger.warning("Network partition detected. Bypassing Redis: %s", e)
+                    use_redis = False
+                except json.JSONDecodeError as e:
+                    _logger.warning("Redis cache corrupted JSON payload: %s", e)
+                    use_redis = False
 
             result = func(self, *args, **kwargs)
 
             if use_redis:
-                # Required to prevent Odoo from having invalid or out-of-phase data,
-                # the "split brain" phenomenon, during a network partition.
-                while True:
-                    try:
-                        serialized_result = json.dumps(result)
-                        r = get_redis_connection(self.env)
-                        r.setex(cache_key, 86400, serialized_result)  # 24h TTL
-                        return result
-                    except redis.RedisError as e:
-                        _logger.warning(
-                            "Network partition detected during cache write. Pausing worker: %s",
-                            e,
-                        )
-                        time.sleep(2)  # audit-ignore-sleep
-                    except (TypeError, json.JSONDecodeError) as e:
-                        _logger.warning(
-                            "Redis cache write serialization failed, falling back to local: %s",
-                            e,
-                        )
-                        _local_cache[cache_key] = result
-                        return result
+                try:
+                    serialized_result = json.dumps(result)
+                    r = get_redis_connection(self.env)
+                    r.setex(cache_key, 86400, serialized_result)  # 24h TTL
+                except redis.RedisError as e:
+                    _logger.warning("Network partition detected during cache write: %s", e)
+                except (TypeError, json.JSONDecodeError) as e:
+                    _logger.warning("Redis cache write serialization failed: %s", e)
 
-            # Final fallback only if explicitly told not to use Redis
+            # Always populate L1 local fallback cache
             _local_cache[cache_key] = result
             return result
 
@@ -175,9 +157,10 @@ def invalidate_model_cache(env, model_name, local_only=False):
 
     # Always clear local fallback cache for this process to ensure consistency
     prefix_local = f"{dbname}:distributed_cache:{model_name}:"
-    keys_to_delete = [k for k in _local_cache.keys() if k.startswith(prefix_local)]
-    for k in keys_to_delete:
-        _local_cache.pop(k, None)
+    with LRU_LOCK:
+        keys_to_delete = [k for k in _local_cache.keys() if k.startswith(prefix_local)]
+        for k in keys_to_delete:
+            _local_cache.pop(k, None)
 
 
 def notify_model_invalidation(env, model_name):

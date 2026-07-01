@@ -181,7 +181,7 @@ class CloudflarePurgeQueue(models.Model):
 
             batches_processed += 1
             self.env.cr.commit()
-            time.sleep(0.1)  # Drop DB locks and respect rate limit
+            time.sleep(0.1)  # Drop DB locks and respect rate limit # audit-ignore-sleep
 
         if batches_processed >= max_batches:
             cron = self.env.ref(

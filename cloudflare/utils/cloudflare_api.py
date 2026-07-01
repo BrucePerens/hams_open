@@ -7,6 +7,13 @@ from urllib3.util.retry import Retry
 
 _logger = logging.getLogger(__name__)
 
+
+def _handle_api_error(context_msg, exception):
+    if "External requests verboten" in str(exception):
+        _logger.info("%s (Disabled in tests): %s", context_msg, exception)
+    else:
+        _logger.error("%s: %s", context_msg, exception)
+
 session = requests.Session()
 retry_strategy = Retry(
     total=3,
@@ -37,7 +44,7 @@ def purge_urls(urls, token, zone_id):
             response = session.post(endpoint, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            _logger.error(f"Cloudflare URL purge API failed for chunk: {e}")
+            _handle_api_error("Cloudflare URL purge API failed for chunk", e)
             success = False
     return success
 
@@ -60,7 +67,7 @@ def purge_tags(tags, token, zone_id):
             response = session.post(endpoint, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            _logger.error(f"Cloudflare Tag purge API failed for chunk: {e}")
+            _handle_api_error("Cloudflare Tag purge API failed for chunk", e)
             success = False
     return success
 
@@ -85,7 +92,7 @@ def ban_ip(ip_address, mode, notes, token, zone_id):
         rule_id = response.json().get("result", {}).get("id")
         return True, rule_id
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare WAF IP Ban API failed: {e}")
+        _handle_api_error("Cloudflare WAF IP Ban API failed", e)
         return False, str(e)
 
 
@@ -101,7 +108,7 @@ def unban_ip(rule_id, token, zone_id):
         response.raise_for_status()
         return True, "Success"
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare WAF IP Unban API failed: {e}")
+        _handle_api_error("Cloudflare WAF IP Unban API failed", e)
         return False, str(e)
 
 
@@ -120,7 +127,7 @@ def verify_turnstile(token, remote_ip, secret):
         response.raise_for_status()
         return response.json().get("success", False)
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Turnstile verification failed: {e}")
+        _handle_api_error("Cloudflare Turnstile verification failed", e)
         return False
 
 
@@ -138,7 +145,7 @@ def get_zone_ruleset(phase, token, zone_id):
         response.raise_for_status()
         return response.json().get("result")
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Ruleset Fetch API failed: {e}")
+        _handle_api_error("Cloudflare Ruleset Fetch API failed", e)
         return None
 
 
@@ -156,7 +163,7 @@ def update_zone_ruleset(ruleset_id, payload, token, zone_id):
         response.raise_for_status()
         return True, "Ruleset updated successfully."
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Ruleset Update API failed: {e}")
+        _handle_api_error("Cloudflare Ruleset Update API failed", e)
         return False, str(e)
 
 
@@ -172,7 +179,7 @@ def create_zone_ruleset(payload, token, zone_id):
         response.raise_for_status()
         return True, "Ruleset created successfully."
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Ruleset Create API failed: {e}")
+        _handle_api_error("Cloudflare Ruleset Create API failed", e)
         return False, str(e)
 
 
@@ -192,7 +199,7 @@ def create_cfd_tunnel(account_id, token, tunnel_name):
         response.raise_for_status()
         return True, response.json().get("result", {}).get("id")
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Tunnel Create API failed: {e}")
+        _handle_api_error("Cloudflare Tunnel Create API failed", e)
         return False, str(e)
 
 
@@ -208,7 +215,7 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
         response.raise_for_status()
         return True, response.json().get("result", "")
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Tunnel Token API failed: {e}")
+        _handle_api_error("Cloudflare Tunnel Token API failed", e)
         return False, str(e)
 
 
@@ -225,7 +232,7 @@ def purge_everything(token, zone_id):
         response.raise_for_status()
         return True
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Purge Everything API failed: {e}")
+        _handle_api_error("Cloudflare Purge Everything API failed", e)
         return False
 
 
@@ -243,7 +250,7 @@ def get_zone_settings(token, zone_id):
         response.raise_for_status()
         return response.json().get("result")
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Get Zone Settings API failed: {e}")
+        _handle_api_error("Cloudflare Get Zone Settings API failed", e)
         return None
 
 
@@ -262,7 +269,7 @@ def update_zone_setting(setting_name, value, token, zone_id):
         response.raise_for_status()
         return True, "Setting updated successfully."
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Update Zone Setting API failed: {e}")
+        _handle_api_error("Cloudflare Update Zone Setting API failed", e)
         return False, str(e)
 
 
@@ -278,7 +285,7 @@ def list_cfd_tunnels(account_id, token):
         response.raise_for_status()
         return response.json().get("result", [])
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare List Tunnels API failed: {e}")
+        _handle_api_error("Cloudflare List Tunnels API failed", e)
         return []
 
 
@@ -294,7 +301,7 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
         response.raise_for_status()
         return True, "Tunnel deleted successfully."
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Delete Tunnel API failed: {e}")
+        _handle_api_error("Cloudflare Delete Tunnel API failed", e)
         return False, str(e)
 
 
@@ -315,7 +322,7 @@ def create_custom_hostname(hostname, token, zone_id):
         response.raise_for_status()
         return True, response.json().get("result", {})
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Create Custom Hostname API failed: {e}")
+        _handle_api_error("Cloudflare Create Custom Hostname API failed", e)
         return False, str(e)
 
 
@@ -331,7 +338,7 @@ def get_custom_hostname(hostname_id, token, zone_id):
         response.raise_for_status()
         return True, response.json().get("result", {})
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Get Custom Hostname API failed: {e}")
+        _handle_api_error("Cloudflare Get Custom Hostname API failed", e)
         return False, str(e)
 
 
@@ -347,5 +354,5 @@ def delete_custom_hostname(hostname_id, token, zone_id):
         response.raise_for_status()
         return True, "Custom hostname deleted successfully."
     except requests.exceptions.RequestException as e:
-        _logger.error(f"Cloudflare Delete Custom Hostname API failed: {e}")
+        _handle_api_error("Cloudflare Delete Custom Hostname API failed", e)
         return False, str(e)

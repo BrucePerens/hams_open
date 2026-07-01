@@ -8,6 +8,7 @@ const CACHE_URL_REGEX = /^(\/web\/assets\/|\/[a-zA-Z0-9_-]+\/static\/)/;
 
 // Dynamically calculated by the Python backend to prevent quota exhaustion
 const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;
+const MAX_STORAGE_BYTES = __MAX_STORAGE_BYTES__;
 
 const DB_NAME = 'LRUCacheDB';
 const STORE_NAME = 'LRUMetadata';
@@ -47,7 +48,6 @@ async function enforceLRUQuota(cache) {
         if (!navigator.storage || !navigator.storage.estimate) return;
         
         const estimate = await navigator.storage.estimate();
-        const MAX_STORAGE_BYTES = 35 * 1024 * 1024; // 35 MB
         
         if (estimate.usage <= MAX_STORAGE_BYTES) return;
 
@@ -135,8 +135,8 @@ self.addEventListener('fetch', (event) => {
                     const contentLength = networkResponse.headers.get('Content-Length');
                     const parsedLength = contentLength ? parseInt(contentLength, 10) : NaN;
                     
-                    if (!isBundle && (isNaN(parsedLength) || parsedLength > MAX_FILE_SIZE_BYTES)) {
-                        console.warn(`[Caching SW] Skipping cache for large or chunked file: ${request.url}`);
+                    if (!isBundle && (!isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE_BYTES)) {
+                        console.warn(`[Caching SW] Skipping cache for large file: ${request.url}`);
                         return networkResponse;
                     }
 

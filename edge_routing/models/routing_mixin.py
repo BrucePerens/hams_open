@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 from odoo.addons.edge_routing.utils import slugify, RESERVED_SLUGS
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
@@ -174,40 +174,47 @@ class EdgeRoutingMixin(models.AbstractModel):
     # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
     # Verified by [@ANCHOR: user_websites:test_group_slug_cache_invalidation]
     def write(self, vals):
-        if "website_slug" in vals:
-            if vals.get("website_slug"):
-                if len(self) == 1:
-                    vals["website_slug"] = self._generate_unique_slug(
-                        vals["website_slug"], record_id=self.id
-                    )
-                else:
-                    vals["website_slug"] = slugify(vals["website_slug"])
-            else:
-                pass  # Clearing the slug is allowed if the field isn't required
+        if "website_slug" in vals and vals.get("website_slug"):
+            if len(self) > 1:
+                raise UserError(_("Cannot assign the same website slug to multiple records."))
+            vals["website_slug"] = self._generate_unique_slug(
+                vals["website_slug"], record_id=self.id
+            )
+        
+        if len(self) == 1 and not vals.get("website_slug") and not self.website_slug and "name" in vals:
+            vals["website_slug"] = self._generate_unique_slug(vals["name"], record_id=self.id)
 
+        old_slugs = [s for s in self.mapped("website_slug") if s]
+        
         res = super().write(vals)
 
         if "website_slug" in vals or "name" in vals:
-            for record in self:
-                if not record.website_slug and record.name:
-                    # Auto-generate if missing (and name changed)
-                    record.website_slug = self._generate_unique_slug(
-                        record.name, record_id=record.id
+            new_slugs = [s for s in self.mapped("website_slug") if s]
+            all_slugs_to_invalidate = set(old_slugs + new_slugs)
+            
+            for slug in all_slugs_to_invalidate:
+                payload = json.dumps({"model": self._name})
+                try:
+                    self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                        self._name, slug
                     )
+                    notify_model_invalidation(self.env, self._name)
+                    self.env.cr.execute(
+                        "SELECT pg_notify(%s, %s)",
+                        ("distributed_cache_invalidation", payload),
+                    )
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.warning("Failed to notify cache invalidation: %s", e)
+                    
+            # Handle the batch write edge case for missing slugs when name is updated
+            if "name" in vals and len(self) > 1:
+                for record in self:
+                    if not record.website_slug and "name" in record._fields and record.name:
+                        # Unbatched write is acceptable here because it only hits records missing a slug
+                        record.website_slug = self._generate_unique_slug(
+                            record.name, record_id=record.id
+                        )
 
-                if record.website_slug:
-                    payload = json.dumps({"model": self._name})
-                    try:
-                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                            self._name, record.website_slug
-                        )
-                        notify_model_invalidation(self.env, self._name)
-                        self.env.cr.execute(
-                            "SELECT pg_notify(%s, %s)",
-                            ("distributed_cache_invalidation", payload),
-                        )
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Failed to notify cache invalidation: %s", e)
         return res
 
     def unlink(self):

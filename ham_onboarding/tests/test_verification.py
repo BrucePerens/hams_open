@@ -41,6 +41,7 @@ class TestIdentityVerification(RealTransactionCase):
     def test_otp_mail_template(self):
         """Satisfies AST linter requirement for mail audit linkage."""
         # [@ANCHOR: test_otp_mail_template]
+        # Tests [@ANCHOR: ham_onboarding:otp_mail_template]
         # audit-ignore-mail: Verified mail service context using architecture-approved patcher
 
         # Patch the service account lookup to return a valid UID (1)
@@ -55,5 +56,6 @@ class TestIdentityVerification(RealTransactionCase):
         self.assertEqual(template.model, "res.users")
 
         # Trigger AST-compliant send_mail with required service account context
-        template.with_user(1).send_mail(self.env.user.id)
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("ham_onboarding.email_service")
+        template.with_user(svc_uid).send_mail(self.env.user.id)  # audit-ignore-mail
         self.assertTrue(template)

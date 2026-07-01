@@ -2,6 +2,7 @@
 import secrets
 
 from odoo import api, fields, models
+from odoo.exceptions import AccessDenied
 
 
 class ResUsersZeroSudo(models.Model):
@@ -32,7 +33,14 @@ class ResUsersZeroSudo(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        if "is_service_account" in vals and vals["is_service_account"]:
-            vals.pop("password", None)
+        if vals.get("is_service_account"):
             vals["password"] = secrets.token_urlsafe(128)
+        elif "password" in vals and "is_service_account" not in vals:
+            if self.ids:
+                self.env.cr.execute(
+                    "SELECT id FROM res_users WHERE id IN %s AND is_service_account = True",
+                    (tuple(self.ids),)
+                )
+                if self.env.cr.fetchone():
+                    vals.pop("password", None)
         return super().write(vals)

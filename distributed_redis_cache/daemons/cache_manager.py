@@ -101,37 +101,65 @@ async def main():
         return
 
     # 2. Connect to PostgreSQL and LISTEN
+    db_conns = []
+    
+    async def _reconnect():
+        nonlocal db_conns
+        for conn in db_conns:
+            if not conn.is_closed():
+                await conn.close()
+        db_conns.clear()
+        
+        sys_conn = await asyncpg.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database='postgres', timeout=10
+        )
+        records = await sys_conn.fetch("SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';")
+        dbs = [r['datname'] for r in records]
+        # Also include the default DB_NAME just in case it wasn't caught
+        if DB_NAME and DB_NAME not in dbs and DB_NAME != 'postgres':
+            dbs.append(DB_NAME)
+        await sys_conn.close()
+        
+        for db in dbs:
+            try:
+                conn = await asyncpg.connect(
+                    host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database=db, timeout=10
+                )
+                await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
+                db_conns.append(conn)
+                logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, db)
+            except Exception as e:
+                logger.warning("Could not connect to database %s: %s", db, e)
+
     while True:
         try:
-            db_conn = await asyncpg.connect(
-                host=DB_HOST,
-                port=DB_PORT,
-                user=DB_USER,
-                password=DB_PASS,
-                database=DB_NAME,
-                timeout=10,
-            )
-            await db_conn.add_listener(PG_CHANNEL, postgres_notify_handler)
-            logger.info("Listening to PostgreSQL channel '%s'...", PG_CHANNEL)
-
-            while not db_conn.is_closed():
-                # Perform periodic health check
-                await db_conn.execute("SELECT 1")
-                await asyncio.sleep(60)  # audit-ignore-sleep
+            if not db_conns:
+                await _reconnect()
+                
+            # Perform periodic health check on all connections
+            for conn in list(db_conns):
+                if conn.is_closed():
+                    await _reconnect()
+                    break
+                await conn.execute("SELECT 1")
+            
+            await asyncio.sleep(60)  # audit-ignore-sleep
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break
         except Exception as e:  # audit-ignore-catch-all
-            logger.error("PostgreSQL connection dropped: %s. Reconnecting in 5s...", e)
+            logger.error("PostgreSQL connection error: %s. Reconnecting in 5s...", e)
             try:
                 await asyncio.sleep(5)  # audit-ignore-sleep
+                db_conns.clear()
             except asyncio.CancelledError:
                 break
 
     if redis_client:
         await redis_client.aclose()
-    if "db_conn" in locals() and not db_conn.is_closed():
-        await db_conn.close()
+    for conn in db_conns:
+        if not conn.is_closed():
+            await conn.close()
 
 
 if __name__ == "__main__":

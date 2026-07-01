@@ -27,6 +27,9 @@ class SEOMetadataMixin(models.AbstractModel):
         if self.env.context.get("skip_seo_metadata_mixin"):
             return super().write(vals)
 
+        if self.env.su or self.env.user.has_group("user_websites.group_user_websites_administrator"):
+            return super().write(vals)
+
         seo_fields = self._get_seo_fields()
         seo_vals = {k: v for k, v in vals.items() if k in seo_fields}
         other_vals = {k: v for k, v in vals.items() if k not in seo_fields}
@@ -37,22 +40,17 @@ class SEOMetadataMixin(models.AbstractModel):
             res = super().write(other_vals)
 
         if seo_vals:
-            if self.env.su or self.env.user.has_group(
-                "user_websites.group_user_websites_administrator"
-            ):
-                res = super().write(seo_vals) and res
-            else:
-                self._check_seo_write_permission()
-                # Escalate strictly for the write operation using service acc
-                # ADR-0001: Use with_context(mail_notrack=True)
-                # LLM_EXPERIENCE: NEVER use prefetch_fields=False
-                utils = self.env["zero_sudo.security.utils"]
-                svc_uid = utils._get_service_uid(
-                    "user_websites.user_websites_service_account"
-                )
-                res = res and super(
-                    SEOMetadataMixin,
-                    self.with_user(svc_uid).with_context(mail_notrack=True),
-                ).write(seo_vals)
+            self._check_seo_write_permission()
+            # Escalate strictly for the write operation using service acc
+            # ADR-0001: Use with_context(mail_notrack=True)
+            # LLM_EXPERIENCE: NEVER use prefetch_fields=False
+            utils = self.env["zero_sudo.security.utils"]
+            svc_uid = utils._get_service_uid(
+                "user_websites.user_websites_service_account"
+            )
+            res = res and super(
+                SEOMetadataMixin,
+                self.with_user(svc_uid).with_context(mail_notrack=True),
+            ).write(seo_vals)
 
         return res

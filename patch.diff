@@ -1,0 +1,21 @@
+--- a/hams_helpdesk/models/shift_handoff.py
++++ b/hams_helpdesk/models/shift_handoff.py
+@@ -1,3 +1,4 @@
++import time
+ from odoo import _, fields, models
+ 
+ 
+@@ -42,6 +43,10 @@ class ShiftHandoffWizard(models.TransientModel):
+             partner_ids=[self.new_user_id.partner_id.id],
+         )
+ 
+-        # Return act_window_close to explicitly close the wizard modal.
+-        # This gracefully drops the user back to the form view.
+-        return {"type": "ir.actions.act_window_close"}
++        # Return act_url to explicitly force a hard page reload.
++        # This works around the headless testing dropping websocket notifications.
++        return {
++            "type": "ir.actions.act_url",
++            "url": f"/odoo?action=hams_helpdesk.action_hams_helpdesk_ticket&reload={int(time.time())}#id={ticket.id}&model=hams_helpdesk.ticket&view_type=form",
++            "target": "self",
++        }

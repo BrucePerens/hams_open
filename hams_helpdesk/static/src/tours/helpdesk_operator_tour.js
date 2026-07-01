@@ -37,8 +37,15 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             run: 'edit Manager',
         },
         {
+            content: "Wait for debounce",
+            trigger: 'div[name="new_user_id"] input',
+            run: function() {
+                return new Promise(resolve => setTimeout(resolve, 500));
+            }
+        },
+        {
             content: "Pick First User",
-            trigger: '.o-autocomplete--dropdown-item a',
+            trigger: '.o-autocomplete--dropdown-item',
             run: 'click',
         },
         {
@@ -50,6 +57,13 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
             content: "Force Blur for Notes",
             trigger: '.modal-body',
             run: 'click',
+        },
+        {
+            content: "Wait for OWL state sync",
+            trigger: '.modal-body',
+            run: function() {
+                return new Promise(resolve => setTimeout(resolve, 500));
+            }
         },
         {
             content: "Confirm Handoff",

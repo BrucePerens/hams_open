@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-
-_logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
@@ -36,5 +33,5 @@ class TestSEOUI(RealTransactionCase):
 
     def test_01_seo_widget_tour(self):
         # [@ANCHOR: test_seo_widget_tour]
-        """Execute the SEO Optimization UI Tour as the admin user."""
+        """Execute the SEO Optimization UI Tour as the admin user to edit the portal user."""
         self.start_tour("/odoo?debug=1", "user_websites_seo_tour", login="admin")

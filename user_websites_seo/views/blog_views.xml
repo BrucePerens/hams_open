@@ -5,7 +5,7 @@
         <field name="model">blog.post</field>
         <field name="inherit_id" ref="website_blog.view_blog_post_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Verified by test_xpath_rendering -->
+            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_pages_posts] -->
                 <notebook>
                     <page string="SEO Metadata" name="seo_settings">
                         <group>
@@ -32,7 +32,7 @@
         <field name="model">blog.blog</field>
         <field name="inherit_id" ref="website_blog.view_blog_blog_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Verified by test_xpath_rendering -->
+            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_pages_posts] -->
                 <notebook>
                     <page string="SEO Metadata" name="seo_settings">
                         <group>

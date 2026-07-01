@@ -326,60 +326,60 @@ class PagerCheck(models.Model):
                 )
 
         checks = data.get("checks", []) if isinstance(data, dict) else []
-        for c in checks:
+        for check in checks:
             self.env["pager.check"].create(
                 {
-                    "name": c.get("name", "Unnamed"),
-                    "website_id": c.get("website_id"),
-                    "check_type": c.get("type", "system"),
-                    "target": c.get("target", ""),
-                    "port": c.get("port", 0),
-                    "payload_send": c.get("send", ""),
-                    "payload_send_hex": c.get("send_hex", ""),
-                    "payload_expect": c.get("expect", ""),
-                    "dbname": c.get("dbname", ""),
-                    "dbuser": c.get("user", ""),
-                    "dbpass": c.get("password", ""),
-                    "query": c.get("query", ""),
-                    "script": c.get("script", ""),
-                    "rpc_method": c.get("rpc_method", ""),
-                    "rpc_params": c.get("rpc_params", ""),
-                    "regex": c.get("regex", ""),
-                    "critical_threshold": c.get("critical", 0),
-                    "warning_threshold": c.get("warning", 0),
-                    "snmp_community": c.get("snmp_community", ""),
-                    "snmp_oid": c.get("snmp_oid", ""),
-                    "partition": c.get("partition", "/"),
-                    "ignored_services": c.get("ignored_services", ""),
-                    "interval": c.get("interval", 60),
-                    "grace_period": c.get("grace", 0),
-                    "auto_remediate_script": c.get("remediate", ""),
-                    "comment": c.get("comment", ""),
-                    "code_payload": c.get("code_payload", ""),
-                    "executable_path": c.get("executable_path", ""),
-                    "executable_args": c.get("executable_args", ""),
-                    "sandbox_downloads": c.get("sandbox_downloads", ""),
-                    "sandbox_network_access": c.get(
+                    "name": check.get("name", "Unnamed"),
+                    "website_id": check.get("website_id"),
+                    "check_type": check.get("type", "system"),
+                    "target": check.get("target", ""),
+                    "port": check.get("port", 0),
+                    "payload_send": check.get("send", ""),
+                    "payload_send_hex": check.get("send_hex", ""),
+                    "payload_expect": check.get("expect", ""),
+                    "dbname": check.get("dbname", ""),
+                    "dbuser": check.get("user", ""),
+                    "dbpass": check.get("password", ""),
+                    "query": check.get("query", ""),
+                    "script": check.get("script", ""),
+                    "rpc_method": check.get("rpc_method", ""),
+                    "rpc_params": check.get("rpc_params", ""),
+                    "regex": check.get("regex", ""),
+                    "critical_threshold": check.get("critical", 0),
+                    "warning_threshold": check.get("warning", 0),
+                    "snmp_community": check.get("snmp_community", ""),
+                    "snmp_oid": check.get("snmp_oid", ""),
+                    "partition": check.get("partition", "/"),
+                    "ignored_services": check.get("ignored_services", ""),
+                    "interval": check.get("interval", 60),
+                    "grace_period": check.get("grace", 0),
+                    "auto_remediate_script": check.get("remediate", ""),
+                    "comment": check.get("comment", ""),
+                    "code_payload": check.get("code_payload", ""),
+                    "executable_path": check.get("executable_path", ""),
+                    "executable_args": check.get("executable_args", ""),
+                    "sandbox_downloads": check.get("sandbox_downloads", ""),
+                    "sandbox_network_access": check.get(
                         "sandbox_network_access", "loopback"
                     ),
-                    "maintenance_start": c.get("maint_start"),
-                    "maintenance_end": c.get("maint_end"),
+                    "maintenance_start": check.get("maint_start"),
+                    "maintenance_end": check.get("maint_end"),
                 }
             )
 
         all_checks = self.env["pager.check"].search([], limit=1000)
         name_to_id = {rec.name: rec.id for rec in all_checks}
-        for c in checks:
+        for check in checks:
             if (
-                c.get("parent")
-                and c.get("parent") in name_to_id
-                and c.get("name") in name_to_id
+                check.get("parent")
+                and check.get("parent") in name_to_id
+                and check.get("name") in name_to_id
             ):
                 check_rec = next(
-                    (r for r in all_checks if r.id == name_to_id[c.get("name")]), None
+                    (r for r in all_checks if r.id == name_to_id[check.get("name")]), None
                 )
                 if check_rec:
-                    check_rec.write({"parent_check_id": name_to_id[c.get("parent")]})
+                    check_rec.write({"parent_check_id": name_to_id[check.get("parent")]})
 
         return {
             "type": "ir.actions.client",
@@ -396,77 +396,77 @@ class PagerCheck(models.Model):
         # [@ANCHOR: generalized_pager_config]
         checks = self.env["pager.check"].search([("active", "=", True)], limit=1000)
         check_list = []
-        for c in checks:
-            d = {
-                "id": c.id,
-                "name": c.name,
-                "type": c.check_type,
-                "target": c.target,
-                "interval": c.interval,
+        for check in checks:
+            check_dict = {
+                "id": check.id,
+                "name": check.name,
+                "type": check.check_type,
+                "target": check.target,
+                "interval": check.interval,
             }
-            if c.port:
-                d["port"] = c.port
-            if c.payload_send:
-                d["send"] = c.payload_send
-            if c.payload_send_hex:
-                d["send_hex"] = c.payload_send_hex
-            if c.payload_expect:
-                d["expect"] = c.payload_expect
-            if c.dbname:
-                d["dbname"] = c.dbname
-            if c.dbuser:
-                d["user"] = c.dbuser
-            if c.dbpass:
-                d["password"] = c.dbpass
-            if c.query:
-                d["query"] = c.query
-            if c.script:
-                d["script"] = c.script
-            if c.rpc_method:
-                d["rpc_method"] = c.rpc_method
-            if c.rpc_params:
-                d["rpc_params"] = c.rpc_params
-            if c.regex:
-                d["regex"] = c.regex
-            if c.critical_threshold:
-                d["critical"] = c.critical_threshold
-            if c.warning_threshold:
-                d["warning"] = c.warning_threshold
-            if c.snmp_community:
-                d["snmp_community"] = c.snmp_community
-            if c.snmp_oid:
-                d["snmp_oid"] = c.snmp_oid
-            if c.partition and c.partition != "/":
-                d["partition"] = c.partition
-            if c.ignored_services:
-                d["ignored_services"] = c.ignored_services
-            if c.grace_period:
-                d["grace"] = c.grace_period
-            if c.parent_check_id:
-                d["parent"] = c.parent_check_id.name
-            if c.maintenance_start:
-                d["maint_start"] = c.maintenance_start.strftime("%Y-%m-%d %H:%M:%S")
-            if c.maintenance_end:
-                d["maint_end"] = c.maintenance_end.strftime("%Y-%m-%d %H:%M:%S")
-            if c.auto_remediate_script:
-                d["remediate"] = c.auto_remediate_script
-            if c.comment:
-                d["comment"] = c.comment
-            if c.check_type == "heartbeat":
-                d["uuid"] = c.heartbeat_uuid
-            if c.website_id:
-                d["website_id"] = c.website_id.id
-            if c.code_payload:
-                d["code_payload"] = c.code_payload
-            if c.executable_path:
-                d["executable_path"] = c.executable_path
-            if c.executable_args:
-                d["executable_args"] = c.executable_args
-            if c.sandbox_downloads:
-                d["sandbox_downloads"] = c.sandbox_downloads
-            if c.sandbox_network_access:
-                d["sandbox_network_access"] = c.sandbox_network_access
-            check_list.append(d)
+            if check.port:
+                check_dict["port"] = check.port
+            if check.payload_send:
+                check_dict["send"] = check.payload_send
+            if check.payload_send_hex:
+                check_dict["send_hex"] = check.payload_send_hex
+            if check.payload_expect:
+                check_dict["expect"] = check.payload_expect
+            if check.dbname:
+                check_dict["dbname"] = check.dbname
+            if check.dbuser:
+                check_dict["user"] = check.dbuser
+            if check.dbpass:
+                check_dict["password"] = check.dbpass
+            if check.query:
+                check_dict["query"] = check.query
+            if check.script:
+                check_dict["script"] = check.script
+            if check.rpc_method:
+                check_dict["rpc_method"] = check.rpc_method
+            if check.rpc_params:
+                check_dict["rpc_params"] = check.rpc_params
+            if check.regex:
+                check_dict["regex"] = check.regex
+            if check.critical_threshold:
+                check_dict["critical"] = check.critical_threshold
+            if check.warning_threshold:
+                check_dict["warning"] = check.warning_threshold
+            if check.snmp_community:
+                check_dict["snmp_community"] = check.snmp_community
+            if check.snmp_oid:
+                check_dict["snmp_oid"] = check.snmp_oid
+            if check.partition and check.partition != "/":
+                check_dict["partition"] = check.partition
+            if check.ignored_services:
+                check_dict["ignored_services"] = check.ignored_services
+            if check.grace_period:
+                check_dict["grace"] = check.grace_period
+            if check.parent_check_id:
+                check_dict["parent"] = check.parent_check_id.name
+            if check.maintenance_start:
+                check_dict["maint_start"] = check.maintenance_start.strftime("%Y-%m-%d %H:%M:%S")
+            if check.maintenance_end:
+                check_dict["maint_end"] = check.maintenance_end.strftime("%Y-%m-%d %H:%M:%S")
+            if check.auto_remediate_script:
+                check_dict["remediate"] = check.auto_remediate_script
+            if check.comment:
+                check_dict["comment"] = check.comment
+            if check.check_type == "heartbeat":
+                check_dict["uuid"] = check.heartbeat_uuid
+            if check.website_id:
+                check_dict["website_id"] = check.website_id.id
+            if check.code_payload:
+                check_dict["code_payload"] = check.code_payload
+            if check.executable_path:
+                check_dict["executable_path"] = check.executable_path
+            if check.executable_args:
+                check_dict["executable_args"] = check.executable_args
+            if check.sandbox_downloads:
+                check_dict["sandbox_downloads"] = check.sandbox_downloads
+            if check.sandbox_network_access:
+                check_dict["sandbox_network_access"] = check.sandbox_network_access
+            check_list.append(check_dict)
 
         json_dict = {"checks": check_list}
 
@@ -568,17 +568,17 @@ class PagerCheck(models.Model):
 
         # 2. Physical Disks
         try:
-            for p in psutil.disk_partitions(all=False):
-                if p.fstype in ("ext4", "xfs", "btrfs", "zfs", "vfat"):
+            for partition in psutil.disk_partitions(all=False):
+                if partition.fstype in ("ext4", "xfs", "btrfs", "zfs", "vfat"):
                     checks.append(
                         {
-                            "name": f"Disk Space ({p.mountpoint})",
+                            "name": f"Disk Space ({partition.mountpoint})",
                             "check_type": "system",
                             "target": "disk",
-                            "partition": p.mountpoint,
+                            "partition": partition.mountpoint,
                             "critical_threshold": 90,
                             "interval": 300,
-                            "comment": f"Autodiscovered disk space monitor for {p.mountpoint}",
+                            "comment": f"Autodiscovered disk space monitor for {partition.mountpoint}",
                         }
                     )
         except Exception as e:  # audit-ignore-catch-all
@@ -678,10 +678,10 @@ class PagerCheck(models.Model):
             self.env["pager.check"].search([], limit=5000).mapped("name")
         )
         new_checks = []
-        for c in checks:
-            if c["name"] not in existing_names:
-                new_checks.append(c)
-                existing_names.add(c["name"])
+        for check in checks:
+            if check["name"] not in existing_names:
+                new_checks.append(check)
+                existing_names.add(check["name"])
 
         if new_checks:
             self.env["pager.check"].create(new_checks)

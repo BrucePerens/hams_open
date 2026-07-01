@@ -26,7 +26,7 @@
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
                             <h1 class="mb-4 fw-bold">Privacy Policy</h1>
-                            <p class="text-muted">Last Updated: <t t-out="time.strftime('%B %d, %Y')"/></p>
+                            <p class="text-muted">Last Updated: January 01, 2026</p>
                             <p class="text-muted">Warning: This is the default
                             version of this document that comes with the
                             software. It was not produced by a lawyer.</p>
@@ -83,7 +83,7 @@
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
                             <h1 class="mb-4 fw-bold">Cookie Policy</h1>
-                            <p class="text-muted">Last Updated: <t t-out="time.strftime('%B %d, %Y')"/></p>
+                            <p class="text-muted">Last Updated: January 01, 2026</p>
                             <p class="text-muted">Warning: This is the default
                             version of this document that comes with the
                             software. It was not produced by a lawyer.</p>
@@ -134,7 +134,7 @@
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
                             <h1 class="mb-4 fw-bold">Terms of Service</h1>
-                            <p class="text-muted">Last Updated: <t t-out="time.strftime('%B %d, %Y')"/></p>
+                            <p class="text-muted">Last Updated: January 01, 2026</p>
                             <p class="text-muted">Warning: This is the default
                             version of this document that comes with the
                             software. It was not produced by a lawyer.</p>
@@ -182,7 +182,7 @@
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
                             <h1 class="mb-4 fw-bold">Accessibility Statement</h1>
-                            <p class="text-muted">Last Updated: <t t-out="time.strftime('%B %d, %Y')"/></p>
+                            <p class="text-muted">Last Updated: January 01, 2026</p>
 
                             <h3 class="mt-4">1. Our Commitment</h3>
                             <p>We are committed to ensuring digital accessibility for people with disabilities. We are continually improving the user experience for everyone and applying the relevant accessibility standards.</p>

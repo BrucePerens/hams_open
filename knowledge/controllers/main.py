@@ -9,13 +9,16 @@ import re
 import markdown
 from werkzeug.urls import url_parse
 from markupsafe import Markup
+from odoo.tools import lru
+import hashlib
 
 _logger = logging.getLogger(__name__)
 
+_md_cache = lru.LRU(1024)
 
 class ManualLibraryController(http.Controller):
 
-    def _compile_markdown(self, html_body):
+    def _compile_markdown(self, html_body, article_id=None, write_date=None):
         """
         Heuristic detection and compilation of Markdown from Odoo's HTML fields.
         Odoo's WYSIWYG editor wraps pasted text in <p> tags and <br/>.
@@ -23,6 +26,12 @@ class ManualLibraryController(http.Controller):
         """
         if not html_body:
             return Markup("")
+
+        cache_key = None
+        if article_id and write_date:
+            cache_key = f"{article_id}_{write_date}"
+            if cache_key in _md_cache:
+                return _md_cache[cache_key]
 
         text_content = html2plaintext(html_body)
 
@@ -49,11 +58,17 @@ class ManualLibraryController(http.Controller):
                 md_html = markdown.markdown(
                     text_content, extensions=["fenced_code", "tables", "nl2br", "toc"]
                 )
-                return Markup(md_html)
+                res = Markup(md_html)
+                if cache_key:
+                    _md_cache[cache_key] = res
+                return res
             except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Markdown compilation failed: %s", e)
 
-        return Markup(html_body)
+        res = Markup(html_body)
+        if cache_key:
+            _md_cache[cache_key] = res
+        return res
 
     def _get_sidebar_articles(self):
         """Helper to fetch and group root articles for the sidebar."""
@@ -159,7 +174,7 @@ class ManualLibraryController(http.Controller):
             return request.redirect(article.website_url, code=301)
 
         # 7. Compile Markdown if detected
-        compiled_body = self._compile_markdown(article.body)
+        compiled_body = self._compile_markdown(article.body, article.id, article.write_date)
 
         # 8. Render standard QWeb response
         return request.render(
@@ -191,6 +206,10 @@ class ManualLibraryController(http.Controller):
 
         # Explicitly filter by website_id in case record rules are not enough for frontend context
         domain += [("website_id", "in", (False, request.website.id))]
+        
+        is_internal = request.env.user.has_group("base.group_user")
+        if not is_internal:
+            domain += [("is_published", "=", True)]
 
         # Removed .sudo() to allow native Record Rules to filter visibility by user persona
         articles = request.env["knowledge.article"].search(domain, limit=1000)
@@ -226,8 +245,13 @@ class ManualLibraryController(http.Controller):
         Handles article helpfulness ratings via Service Account isolation.
         """
         # --- ANTI-SPAM: Honeypot Check ---
+        referer = request.httprequest.referrer or "/manual"
         if website_feedback_honeypot:
-            referer = request.httprequest.referrer or "/manual"
+            return request.redirect(referer)
+            
+        session_key = f"feedback_submitted_{article_id}"
+        if request.session.get(session_key):
+            # Block duplicate voting in same session
             return request.redirect(referer)
 
         try:
@@ -255,6 +279,8 @@ class ManualLibraryController(http.Controller):
                         'UPDATE "knowledge_article" SET "unhelpful_count" = COALESCE("unhelpful_count", 0) + 1 WHERE "id" = %s',
                         (article.id,),
                     )
+                article.invalidate_recordset(["helpful_count", "unhelpful_count"])
+                request.session[session_key] = True
         except (ValueError, AccessError) as e:
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery
             _logger.warning("Feedback submission failed gracefully: %s", e)

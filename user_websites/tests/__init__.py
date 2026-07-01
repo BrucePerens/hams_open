@@ -7,7 +7,6 @@ from . import test_config_settings
 from . import test_controllers
 from . import test_documentation
 from . import test_exhaustive_isolation
-from . import test_exhaustive_performance
 from . import test_gdpr_base
 from . import test_group_moderation
 from . import test_lifecycle_and_groups

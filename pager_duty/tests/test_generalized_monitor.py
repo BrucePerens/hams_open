@@ -20,7 +20,7 @@ from odoo.tools import mute_logger
 @tagged("post_install", "-at_install")
 class TestMonitorExhaustive(HamsTransactionCase):
 
-    @mute_logger("odoo.addons.pager_duty.daemon.generalized_monitor")
+    @mute_logger("generalized_monitor")
     def test_01_smtp_fallback(self):
         # Tests [@ANCHOR: daemon_report_incident]
         """Verify that if the Odoo client crashes, the report gracefully triggers the SMTP fallback."""

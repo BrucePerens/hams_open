@@ -20,7 +20,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
     @api.model
     def start_daemon_process(self, script_path, args=None, env_vars=None):
         """Starts a python daemon script as a subprocess."""
-        python_exec = "/usr/bin/python3"
+        python_exec = sys.executable or "/usr/bin/python3"
         cmd = [python_exec, script_path] + (args or [])
         env = os.environ.copy()
 
@@ -33,21 +33,12 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         if env_vars:
             env.update(env_vars)
 
-        def _preexec_daemon():
-            """Set PR_SET_PDEATHSIG so daemon dies when parent exits."""
-            try:
-                libc = ctypes.CDLL("libc.so.6")
-                libc.prctl(1, signal.SIGTERM)
-            except OSError:  # audit-ignore-catch-all
-                sys.stderr.write("PR_SET_PDEATHSIG unavailable\n")
-
         _logger.info("Starting daemon: %s", " ".join(cmd))
         process = subprocess.Popen(
             cmd,
             env=env,
             start_new_session=True,
             shell=False,
-            preexec_fn=_preexec_daemon,
         )
         return process
 
@@ -57,13 +48,13 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         if process and process.poll() is None:
             _logger.info("Stopping daemon PID %s", process.pid)
             try:
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                process.terminate()
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 _logger.warning(
                     "Daemon PID %s did not terminate, forcing SIGKILL", process.pid
                 )
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                process.kill()
 
     @api.model
     def poll_health_check(self, url, timeout=30, interval=1):

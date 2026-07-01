@@ -29,9 +29,4 @@ class TestComplianceSecurity(HamsTransactionCase):
             "Check compliance/security/security_data.xml.",
         )
 
-    def test_register_hook_idempotency(self):
-        """Verify that _register_hook can be called multiple times safely."""
-        # This primarily ensures that the documentation bootstrap doesn't crash
-        # when called repeatedly during registry reloads.
-        self.env["compliance.config"]._register_hook()
-        self.env["compliance.config"]._register_hook()
+

@@ -12,11 +12,14 @@ Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.
     "depends": [
         "base",
         "website",
+        "website_blog",
         "user_websites",
         "zero_sudo",
         "web_tour",
     ],
     "data": [
+        "security/ir.model.access.csv",
+        "security/security.xml",
         "views/res_users_views.xml",
         "views/user_websites_group_views.xml",
         "views/blog_views.xml",

@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-
-_logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
@@ -78,3 +75,19 @@ class TestSEOPagesPosts(RealTransactionCase):
             self.post.website_meta_title,
             "Post SEO Title",
         )
+
+    def test_blog_seo_write(self):
+        """Test that a user can write to their own blog's SEO fields."""
+        blog_by_user = self.blog.with_user(self.regular_user)
+        blog_by_user.write({"website_meta_title": "Blog SEO Title"})
+        self.blog.invalidate_recordset()
+        self.assertEqual(
+            self.blog.website_meta_title,
+            "Blog SEO Title",
+        )
+
+    def test_soft_dependency_docs_installation(self):
+        # [@ANCHOR: test_soft_dependency_docs_installation]
+        utils = self.env["zero_sudo.security.utils"]
+        val = utils._get_system_param("user_websites_seo.docs_installed")
+        self.assertEqual(val, "True")

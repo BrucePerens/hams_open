@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-from odoo import models, api, fields
+from odoo import models, fields
 
 
 class Website(models.Model):
@@ -11,10 +11,4 @@ class Website(models.Model):
     cookies_bar = fields.Boolean(default=True)
 
 
-class ComplianceConfig(models.AbstractModel):
-    _name = "compliance.config"
-    _description = "Compliance Configuration Hook"
 
-    @api.model
-    def _register_hook(self):
-        super()._register_hook()

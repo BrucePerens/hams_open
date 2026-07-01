@@ -13,7 +13,6 @@ The `caching` module implements a dynamic safety valve.
 2. **Calculation**: It then calculates a dynamic maximum file size limit ([@ANCHOR: caching_quota_calculation]).
 3. **Filtering**: If the total size of all assets exceeds the `caching.safe_quota_mb` (default 35MB), the system identifies the largest files and excludes them from the cache until the total remaining size fits within the quota.
 4. **Enforcement**: This calculated `MAX_FILE_SIZE_BYTES` is injected into the Service Worker script ([@ANCHOR: caching_sw_serve_route]).
-5. **Optimization**: Parameters are retrieved efficiently using a dedicated Postgres procedure ([@ANCHOR: caching_postgres_procedures]).
 
 ## Impact
 This ensures that the most critical, lightweight UI assets (JS/CSS) are always cached, while heavy media files that would risk the entire cache's stability are safely ignored by the Service Worker, allowing standard browser caching or CDNs to handle them.

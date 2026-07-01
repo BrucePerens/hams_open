@@ -26,6 +26,11 @@ class BlogBlog(models.Model):
                 "owner_user_id",
                 "user_websites_group_id",
                 "website_id",
+                "website_meta_title",
+                "website_meta_description",
+                "website_meta_keywords",
+                "website_meta_og_img",
+                "seo_name",
             }
             for vals in vals_list:
                 for k in list(vals.keys()):
@@ -92,6 +97,11 @@ class BlogBlog(models.Model):
                 "owner_user_id",
                 "user_websites_group_id",
                 "website_id",
+                "website_meta_title",
+                "website_meta_description",
+                "website_meta_keywords",
+                "website_meta_og_img",
+                "seo_name",
             }
             for k in list(vals.keys()):
                 if k not in allowed:

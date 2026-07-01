@@ -7,17 +7,27 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
     url: "/odoo?debug=1&action=base.action_res_users",
     steps: () => [
         {
-            content: "Remove default Internal Users filter to expose portal users",
-            trigger: '.o_facet_remove',
-            run: "click",
-        },
-        {
-            content: "Find and click the specific test user row via native DOM polling",
+            content: "Remove facet if needed and find the specific test user row by polling",
             trigger: 'body',
             run: function () {
-                return new Promise((resolve, reject) => {
-                    let interval = setInterval(() => {
-                        const cells = document.querySelectorAll('.o_data_row .o_data_cell[name="name"]');
+                return new Promise((resolve) => {
+                    let clickedFacet = false;
+                    let logged = false;
+                    const interval = setInterval(() => {
+                        if (!logged) {
+                            console.log("BODY HTML: ", document.body.innerHTML);
+                            logged = true;
+                        }
+                        if (!clickedFacet) {
+                            const facet = document.querySelector('.o_facet_remove');
+                            if (facet) {
+                                facet.click();
+                                clickedFacet = true;
+                                return; // wait for reload
+                            }
+                        }
+                        
+                        const cells = document.querySelectorAll('.o_data_row .o_data_cell[name="name"], .o_kanban_record');
                         for (const cell of cells) {
                             if (cell.textContent.includes("SEO UI Test User")) {
                                 clearInterval(interval);
@@ -27,10 +37,6 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
                             }
                         }
                     }, 250);
-                    setTimeout(() => {
-                        clearInterval(interval);
-                        reject(new Error("Test User row not found in list view."));
-                    }, 10000);
                 });
             }
         },

@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_blog_blog_svc,blog.blog svc,website_blog.model_blog_blog,user_websites.group_user_websites_service_account,1,1,1,1
+access_blog_post_svc,blog.post svc,website_blog.model_blog_post,user_websites.group_user_websites_service_account,1,1,1,1

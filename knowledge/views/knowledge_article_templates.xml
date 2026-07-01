@@ -141,6 +141,7 @@
                                     <form action="/manual/feedback" method="POST" class="d-inline-block">
                                         <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                         <input type="hidden" name="article_id" t-att-value="article.id"/>
+                                        <input type="text" name="website_feedback_honeypot" style="display: none;" tabindex="-1" autocomplete="off"/>
                                         <button type="submit" name="is_helpful" value="1" class="btn btn-outline-success me-2 rounded-pill px-4" aria-label="Yes">
                                             <i class="fa fa-thumbs-up me-1" aria-hidden="true"/> Yes
                                         </button>

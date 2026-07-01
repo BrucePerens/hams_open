@@ -133,7 +133,7 @@ class BackupConfig(models.Model):
     @api.constrains("target_path", "restore_drill_script", "engine", "storage_type")
     def _check_security_paths(self):
         for rec in self:
-            if rec.engine == "kopia" and rec.storage_type == "local":
+            if rec.engine == "kopia":
                 validate_backup_path(rec.target_path)
 
             if rec.engine == "pgbackrest":
@@ -415,9 +415,14 @@ class BackupConfig(models.Model):
             ]
         configs = self.search_read(domain, ["name", "engine", "target_path"])
         now = fields.Datetime.now()
+        
+        if not configs:
+            return []
+            
+        config_ids = [c["id"] for c in configs]
 
         latest_snaps = self.env["backup.latest.snapshot.view"].search_read(
-            [], ["config_id", "snapshot_id", "start_time", "size_bytes", "status"]
+            [("config_id", "in", config_ids)], ["config_id", "snapshot_id", "start_time", "size_bytes", "status"]
         )
         snap_map = {s["config_id"][0]: s for s in latest_snaps if s.get("config_id")}
 

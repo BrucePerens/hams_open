@@ -86,7 +86,7 @@ class CloudflareConfigManager(models.AbstractModel):
                             if mtime > max_mtime:
                                 max_mtime = mtime
                         except OSError as e:
-                            _logger.warning(f"Could not read mtime for {filepath}: {e}")
+                            _logger.warning("Could not read mtime for %s: %s", filepath, e)
 
         latest_mtime = int(max_mtime)
 
@@ -121,7 +121,7 @@ class CloudflareConfigManager(models.AbstractModel):
                     last_mtime,
                 )
         except (ValueError, OSError, RuntimeError, AccessError) as e:
-            _logger.exception(f"Failed to process static mtime purge: {e}")
+            _logger.exception("Failed to process static mtime purge: %s", e)
 
     @api.model
     def initialize_cloudflare_state(self):

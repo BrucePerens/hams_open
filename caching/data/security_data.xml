@@ -10,6 +10,17 @@
             <field name="name">Caching Service Account Group</field>
             <field name="privilege_id" ref="privilege_caching_service"/>
         </record>
+
+        <record id="rule_caching_service_config_param" model="ir.rule">
+            <field name="name">Caching Service Config Param Rule</field>
+            <field name="model_id" ref="base.model_ir_config_parameter"/>
+            <field name="domain_force">[('key', '=like', 'caching.%')]</field>
+            <field name="groups" eval="[(4, ref('caching.group_caching_service'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
     </data>
     <data>
         <record id="user_caching_service" model="res.users">

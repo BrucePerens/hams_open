@@ -5,7 +5,6 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
     notify_model_invalidation,
 )
-import odoo
 import logging
 import json
 import requests
@@ -36,6 +35,43 @@ class EdgeRoutingDomain(models.Model):
                     _("This domain name is reserved and cannot be used.")
                 )
 
+    @api.model
+    def push_all_to_pager_duty(self):
+        """
+        Pushes the full domain routing table to PagerDuty.
+        Designed to be executed asynchronously via ir.cron.
+        """
+        try:
+            # Resolve service user securely
+            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "edge_routing.edge_routing_service_account"
+            )
+            env_svc = self.with_user(svc_uid).env
+
+            all_domains = env_svc["edge.routing.domain"].search([], limit=1000).mapped("name")
+
+            if "ham.dns.zone" in env_svc:
+                try:
+                    dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
+                    dns_domains = dns_env_svc["ham.dns.zone"].search([], limit=5000).mapped("name")
+                    all_domains.extend(dns_domains)
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
+
+            unique_domains = list(set(all_domains))
+            # Send to the API
+            requests.post(
+                "http://odoo:8069/api/v1/pager_duty/update_domains",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "call",
+                    "params": {"domains": unique_domains},
+                },
+                timeout=5,
+            )
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.warning("Failed to sync domains to Pager Duty: %s", e)
+
     def _invalidate_cache(self, names):
         for name in names:
             if name:
@@ -52,57 +88,13 @@ class EdgeRoutingDomain(models.Model):
                 except Exception:  # audit-ignore-catch-all
                     _logger.warning("Failed to invalidate cache for domain %s", name)
 
-        # Async push to Pager Duty
-        def push_to_pager_duty():
-            try:
-                # Use a new cursor or environment to get all domains
-                with odoo.registry(self.env.cr.dbname).cursor() as cr:
-                    # Resolve service user instead of SUPERUSER_ID
-                    cr.execute(
-                        "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
-                    )
-                    row = cr.fetchone()
-                    svc_id = row[0] if row else 2
-                    env = odoo.api.Environment(cr, svc_id, {})
-                    all_domains = (
-                        env["edge.routing.domain"].search([], limit=1000).mapped("name")
-                    )
-
-                    if "ham.dns.zone" in env:
-                        try:
-                            # Soft-dependency on ham_dns to include subdomains
-                            dns_env_svc = env[
-                                "zero_sudo.security.utils"
-                            ]._get_service_env("ham_dns.user_dns_api_service")
-                            dns_domains = (
-                                dns_env_svc["ham.dns.zone"]
-                                .search([], limit=5000)
-                                .mapped("name")
-                            )
-                            all_domains.extend(dns_domains)
-                        except Exception as e:  # audit-ignore-catch-all
-                            _logger.warning(
-                                "Soft dependency ham.dns.zone failed: %s", e
-                            )
-
-                    unique_domains = list(set(all_domains))
-                    # Send to the API
-                    requests.post(
-                        "http://odoo:8069/api/v1/pager_duty/update_domains",
-                        json={
-                            "jsonrpc": "2.0",
-                            "method": "call",
-                            "params": {"domains": unique_domains},
-                        },
-                        timeout=5,
-                    )
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Failed to sync domains to Pager Duty: %s", e)
-
         try:
-            self.env.cr.postcommit.add(push_to_pager_duty)
+            # Trigger cron to run asynchronously, avoiding thread exhaustion and batching O(N) fetches
+            cron = self.env.ref('edge_routing.ir_cron_push_pager_duty', raise_if_not_found=False)
+            if cron:
+                cron._trigger()
         except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Failed to add postcommit hook: %s", e)
+            _logger.warning("Failed to trigger PagerDuty sync cron: %s", e)
 
     @api.model_create_multi
     def create(self, vals_list):

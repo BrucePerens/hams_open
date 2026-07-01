@@ -30,7 +30,6 @@ This module eliminates the need for manual version bumping or complex cache-bust
 **Filesystem-Linked Invalidation:**
 - **Boot Scan:** During server startup, the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: caching_fs_scan_logic]). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files.
 - **MTime Tracking:** It identifies the latest modification timestamp (`mtime`) among all discovered assets.
-- **Postgres Performance Procedures:** High-frequency configuration lookups are optimized using a dedicated Postgres procedure (`caching_get_sw_params`), reducing database round-trips to a single call ([@ANCHOR: caching_postgres_procedures]).
 - **Dynamic SW Generation:** This timestamp is injected into the `/sw.js` payload, effectively versioning the Service Worker script itself.
 - **Automatic Refresh:** When any static file is modified and the server restarts, the Service Worker's signature changes. Browsers detect this update on the next visit, triggering a background installation of the new worker and an immediate purge of the stale cache.
 
@@ -65,7 +64,6 @@ Implements a global, root-scoped Service Worker (`/sw.js`) that proxies and cach
 * **No Competing Workers:** DO NOT attempt to register another Service Worker.
 * **WebSockets:** `ws://` protocols are hardcoded to bypass the proxy.
 * **Dynamic Large File Prohibition**: The worker mathematically calculates an active quota limit (approx 35MB) [@ANCHOR: caching_quota_calculation]. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
-* **Layout Injection**: The service worker registration script is injected globally into the frontend `website.layout` via XPath [@ANCHOR: xpath_rendering_caching_layout].
 * **Settings Layout Injection**: The settings UI is injected into `website.res_config_settings_view_form` via XPath [@ANCHOR: xpath_rendering_caching_settings].
 
 ## 3. Zero-Sudo Architecture
@@ -81,7 +79,6 @@ Detailed architectural narratives and process flows are documented in the `docs/
 ### Stories
 * [Cache Quota Management](docs/stories/cache_quota_management.md) ([@ANCHOR: caching_quota_calculation])
 * [Cache Invalidation Strategy](docs/stories/cache_invalidation_strategy.md) ([@ANCHOR: caching_fs_scan_logic])
-* [Documentation Bootstrap](docs/stories/documentation_bootstrap.md) ([@ANCHOR: caching_docs_bootstrap])
 
 ### Journeys
 * [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: caching_sw_fetch_interceptor])

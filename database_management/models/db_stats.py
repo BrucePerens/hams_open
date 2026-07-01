@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import re
 import subprocess
 
 from psycopg2 import sql as psql
@@ -447,25 +446,21 @@ class DatabaseQueryStatInherit(models.Model):
         cr_svc = env_svc.cr
 
         try:
-            # We use EXPLAIN (ANALYZE, BUFFERS) to get real performance data.
-            # WARNING: This executes the query. Since it's a SELECT, it's generally safe
-            # but in production, we should be careful with side-effecting functions.
-            # We strictly enforce that it MUST be a SELECT query for this tool.
             query_text = self.query.strip()
             query_upper = query_text.upper()
-            if not query_upper.startswith("SELECT"):
-                msg = _("Only SELECT queries can" " be analyzed via Explain.")
+            if not (query_upper.startswith("SELECT") or query_upper.startswith("WITH")):
+                msg = _("Only SELECT or WITH queries can be analyzed via Explain.")
                 raise UserError(msg)
 
-            # Reject multi-statement payloads
-            if re.search(r";\s*\S", query_text):
-                msg = _("Multi-statement queries" " are not permitted.")
-                raise UserError(msg)
-
-            explain_prefix = psql.SQL("EXPLAIN (ANALYZE, BUFFERS) ")
-            explain_query = explain_prefix + psql.SQL(query_text)
-            cr_svc.execute(explain_query)
-            plan = "\n".join([row[0] for row in cr_svc.fetchall()])
+            cr_svc.execute("SAVEPOINT explain_sp")
+            try:
+                cr_svc.execute("SET LOCAL default_transaction_read_only = 'on'")
+                explain_prefix = psql.SQL("EXPLAIN (ANALYZE, BUFFERS) ")
+                explain_query = explain_prefix + psql.SQL(query_text)
+                cr_svc.execute(explain_query)
+                plan = "\n".join([row[0] for row in cr_svc.fetchall()])
+            finally:
+                cr_svc.execute("ROLLBACK TO SAVEPOINT explain_sp")
 
             wizard = self.env["pg.explain.wizard"].create(
                 {

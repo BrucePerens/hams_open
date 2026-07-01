@@ -169,10 +169,10 @@ class TestSettingsAndCache(RealTransactionCase):
         """
         # This test acts as the anchor verifying that the params are
         # intentionally safe
-        val = self.env["zero_sudo.security.utils"]._get_system_param(
-            "caching.safe_quota_mb"
-        )
-        self.assertIsInstance(val, (str, type(None)))
+        utils = self.env["zero_sudo.security.utils"]
+        utils._set_system_param("caching.safe_quota_mb", "42")
+        val = utils._get_system_param("caching.safe_quota_mb")
+        self.assertEqual(val, "42", "System parameter should be retrievable securely.")
 
     def test_05_zero_sudo_scan(self):
         # [@ANCHOR: test_caching_zero_sudo_scan]
