@@ -187,11 +187,6 @@ def notify_model_invalidation(env, model_name):
     # Fail fast if postcommit API is not present, enforcing architectural contract
     env.cr.postcommit.add(_do_invalidate)
 
-    # In testing mode, transaction commits are rolled back, so postcommit callbacks never run.
-    # We must invalidate the cache immediately during tests to prevent stale cache bugs.
-    import odoo
-    if odoo.tools.config.get("test_enable") or odoo.tools.config.get("test_file"):
-        invalidate_model_cache(env, model_name, local_only=False)
 
     # 2. Notify all other workers via Postgres -> Daemon -> Redis Pub/Sub.
     # pg_notify is natively transactional and inherently waits until commit to broadcast.
