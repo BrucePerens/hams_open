@@ -12,9 +12,13 @@ registry.category("web_tour.tours").add("compliance_tour", {
             trigger: 'body',
             content: 'Check for Cookie Bar',
             run: function() {
-                const cookieBar = document.querySelector('.js_close_cookie_bar, #website_cookies_bar .btn-primary');
+                const cookieBarBtn = document.querySelector('.js_close_cookie_bar, #website_cookies_bar .btn-primary');
+                if (cookieBarBtn) {
+                    cookieBarBtn.click();
+                }
+                const cookieBar = document.querySelector('#website_cookies_bar');
                 if (cookieBar) {
-                    cookieBar.click();
+                    cookieBar.remove(); // Force remove to bypass animation
                 }
             }
         },

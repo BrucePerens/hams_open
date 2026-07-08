@@ -78,6 +78,10 @@ class ManualLibraryController(http.Controller):
             ("parent_id", "=", False),
             ("website_id", "in", (False, request.website.id)),
         ]
+        
+        is_internal = request.env.user.has_group("base.group_user")
+        if not is_internal:
+            base_domain.append(("is_published", "=", True))
 
         # Combined domain to fetch all relevant root articles in one go
         combined_domain = base_domain + [
@@ -234,7 +238,12 @@ class ManualLibraryController(http.Controller):
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
-        article = request.env["knowledge.article"].search([("name", "=ilike", normalized_name)], limit=1)
+        domain = [("name", "=ilike", normalized_name)]
+        is_internal = request.env.user.has_group("base.group_user")
+        if not is_internal:
+            domain.append(("is_published", "=", True))
+        
+        article = request.env["knowledge.article"].search(domain, limit=1)
         if article:
             return request.redirect(article.website_url)
         raise werkzeug.exceptions.NotFound()
@@ -251,15 +260,21 @@ class ManualLibraryController(http.Controller):
         """
         Handles article helpfulness ratings via Service Account isolation.
         """
-        # --- ANTI-SPAM: Honeypot Check ---
+        # Protect against open redirects by enforcing local paths
         referer = request.httprequest.referrer or "/manual"
+        parsed_referrer = url_parse(referer)
+        safe_redirect = (
+            parsed_referrer.path if parsed_referrer.path.startswith("/") else "/manual"
+        )
+        
+        # --- ANTI-SPAM: Honeypot Check ---
         if website_feedback_honeypot:
-            return request.redirect(referer)
+            return request.redirect(safe_redirect)
             
         session_key = f"feedback_submitted_{article_id}"
         if request.session.get(session_key):
             # Block duplicate voting in same session
-            return request.redirect(referer)
+            return request.redirect(safe_redirect)
 
         try:
             # Fetch without sudo() first to ensure the user actually has Read access to the article
@@ -291,13 +306,6 @@ class ManualLibraryController(http.Controller):
         except (ValueError, AccessError) as e:
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery
             _logger.warning("Feedback submission failed gracefully: %s", e)
-
-        # Protect against open redirects by enforcing local paths
-        referer = request.httprequest.referrer or "/manual"
-        parsed_referrer = url_parse(referer)
-        safe_redirect = (
-            parsed_referrer.path if parsed_referrer.path.startswith("/") else "/manual"
-        )
 
         separator = "&" if "?" in safe_redirect else "?"
         return request.redirect(f"{safe_redirect}{separator}feedback_submitted=1")

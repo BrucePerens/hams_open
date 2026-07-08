@@ -13,5 +13,5 @@
     ],
     "installable": True,
     "application": False,
-    "license": "OEEL-1",
+    "license": "AGPL-3",
 }

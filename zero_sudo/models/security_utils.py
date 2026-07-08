@@ -96,6 +96,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         if not model_name:
             return
 
+        if model_name not in self.env:
+            raise UserError(_("Invalid model name: %s") % model_name)
+
         # Check if the current user has access to the model
         if not self.env.user.has_group("base.group_system"):
             try:

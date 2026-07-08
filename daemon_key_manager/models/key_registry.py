@@ -178,7 +178,7 @@ class DaemonKeyRegistry(models.Model):
         to prevent race conditions before daemon startup.
         """
         # Ensure only authorized users can call this
-        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
+        if not self.env.is_superuser() and not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
             raise AccessError(_("Only Daemon Key Managers can provision keys."))
 
         # Elevate to the internal service account
@@ -344,7 +344,7 @@ class DaemonKeyRegistry(models.Model):
                 try:
                     os.chmod(directory, 0o700)
                 except PermissionError:
-                    _logger.warning("Security Alert: Could not enforce secure permissions on %s. Proceeding anyway.", directory)
+                    raise UserError(_("Security Alert: Could not enforce secure permissions on %s.") % directory)
 
             # Ensure the file is created with 0600 from the start
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

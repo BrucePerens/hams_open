@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
+from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 import psycopg2
 from odoo.modules.registry import Registry
 
@@ -162,6 +163,14 @@ class ResUsers(models.Model):
         index="trigram",
         help="The URL-friendly identifier for the user's site. Alphanumeric and hyphens only.",
     )
+
+    @api.constrains("website_slug")
+    def _check_reserved_slugs(self):
+        for record in self:
+            if record.website_slug and record.website_slug.lower() in RESERVED_SLUGS:
+                raise ValidationError(
+                    _("The slug '%s' is reserved and cannot be used.") % record.website_slug
+                )
 
     website_page_limit = fields.Integer(
         string="Website Page Limit",

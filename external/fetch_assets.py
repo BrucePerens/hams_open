@@ -9,6 +9,10 @@ import urllib.request
 import logging
 import hashlib
 
+import tempfile
+import shutil
+import urllib.error
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 _logger = logging.getLogger(__name__)
 
@@ -16,8 +20,8 @@ _logger = logging.getLogger(__name__)
 def hash_file(path):
     sha256 = hashlib.sha256()
     try:
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
+        with open(path, "rb") as file_stream:
+            for chunk in iter(lambda: file_stream.read(4096), b""):
                 sha256.update(chunk)
         return sha256.hexdigest()
     except FileNotFoundError:
@@ -31,16 +35,38 @@ def download_file(url, dest_path, expected_hash):
 
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     _logger.info("Downloading %s\n -> %s", url, dest_path)
+    
+    head_req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Hams-DevSecOps/1.0"})
+    try:
+        with urllib.request.urlopen(head_req, timeout=10) as head_response:
+            pass
+    except urllib.error.URLError as e:
+        _logger.warning("HEAD request failed for %s: %s", url, e)
+
     req = urllib.request.Request(url, headers={"User-Agent": "Hams-DevSecOps/1.0"})
     
     with urllib.request.urlopen(req, timeout=10) as response:
-        content = response.read()
-        content_hash = hashlib.sha256(content).hexdigest()
-        if content_hash != expected_hash:
-            raise ValueError(f"Hash mismatch for {url}: expected {expected_hash}, got {content_hash}")
-        
-        with open(dest_path, "wb") as out_file:
-            out_file.write(content)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(dest_path))
+        try:
+            with os.fdopen(tmp_fd, "wb") as out_file:
+                sha256 = hashlib.sha256()
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    out_file.write(chunk)
+                    sha256.update(chunk)
+            
+            content_hash = sha256.hexdigest()
+            if content_hash != expected_hash:
+                raise ValueError(f"Hash mismatch for {url}: expected {expected_hash}, got {content_hash}")
+            
+            os.chmod(tmp_path, 0o644)
+            shutil.move(tmp_path, dest_path)
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.error("Failed to download %s: %s", url, e)
+            os.remove(tmp_path)
+            raise
 
 
 def main():

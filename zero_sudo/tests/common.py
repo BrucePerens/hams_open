@@ -37,12 +37,12 @@ def _patched_basecase_teardown(self, *args, **kwargs):
         r = get_redis_connection(self.env)
         r.flushdb()
     except Exception as e:  # audit-ignore-catch-all
-        _logger.warning("Ignored exception: %s", e)
+        _logger.info("Ignored exception: %s", e)
     try:
 
         _local_cache.clear()
     except Exception as e:  # audit-ignore-catch-all
-        _logger.warning("Ignored exception: %s", e)
+        _logger.info("Ignored exception: %s", e)
     original_basecase_teardown(self)
 
 
@@ -88,7 +88,7 @@ def _patched_preexec(*args, **kwargs):
     try:
         os.setsid()
     except Exception as e:  # audit-ignore-catch-all
-        _logger.warning("Ignored exception: %s", e)
+        _logger.info("Ignored exception: %s", e)
 
 
 if _original_preexec:
@@ -391,7 +391,7 @@ def _patched_wait_ready(self, ready_code=None, timeout=60, *args, **kwargs):
         if msg == 'Evaluate ready code "%s"' and args:
             code = args[0]
             if code and len(code) > 150:
-                args = (code[:150] + " ... [TRUNCATED FOR LOGS]",)
+                args = (code[:150] + " ...",)
         original_info(msg, *args, **kwargs)
 
     self._logger.info = _patched_info
@@ -423,7 +423,7 @@ def _patched_chrome_start(self, *args, **kwargs):
                         parent = psutil.Process(proc_obj.pid)
                         children_to_kill = parent.children(recursive=True)
                     except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Ignored exception fetching children: %s", e)
+                        _logger.info("Ignored exception fetching children: %s", e)
             yield res
     except psutil.NoSuchProcess:
         _logger.debug("NoSuchProcess ignored during chrome lifecycle")
@@ -434,22 +434,22 @@ def _patched_chrome_start(self, *args, **kwargs):
                 parent = psutil.Process(proc_obj.pid)
                 children_to_kill.extend(parent.children(recursive=True))
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Ignored exception updating children: %s", e)
+                _logger.info("Ignored exception updating children: %s", e)
 
             try:
                 os.killpg(proc_obj.pid, signal.SIGKILL)
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Ignored exception: %s", e)
+                _logger.info("Ignored exception: %s", e)
             try:
                 proc_obj.terminate()
                 proc_obj.wait(timeout=2.0)
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Ignored exception: %s", e)
+                _logger.info("Ignored exception: %s", e)
             try:
                 proc_obj.kill()
                 proc_obj.wait(timeout=1.0)
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Ignored exception: %s", e)
+                _logger.info("Ignored exception: %s", e)
 
         for child in set(children_to_kill):
             try:
@@ -457,7 +457,7 @@ def _patched_chrome_start(self, *args, **kwargs):
                     child.kill()
                     child.wait(timeout=0.1)
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Ignored exception killing child: %s", e)
+                _logger.info("Ignored exception killing child: %s", e)
 
         # Aggressive cleanup of escaped orphans and zombies
         try:
@@ -472,9 +472,9 @@ def _patched_chrome_start(self, *args, **kwargs):
                             p.kill()
                         p.wait(timeout=0.1)
                 except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Ignored exception: %s", e)
+                    _logger.info("Ignored exception: %s", e)
         except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Ignored exception: %s", e)
+            _logger.info("Ignored exception: %s", e)
 
 
 ChromeBrowser._chrome_start = _patched_chrome_start
@@ -926,7 +926,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
                         os.killpg(proc.pid, signal.SIGKILL)
                     except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Ignored exception: %s", e)
+                        _logger.info("Ignored exception: %s", e)
                     try:
                         proc.terminate()
                         proc.wait(timeout=2.0)
@@ -980,7 +980,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         "/odoo/health", headers={"Connection": "close"}, timeout=1
                     )
                 except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Ignored exception: %s", e)
+                    _logger.info("Ignored exception: %s", e)
                 try:
                     self.opener.close()
                 except Exception as e:  # audit-ignore-catch-all
@@ -1009,7 +1009,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
                         os.killpg(proc.pid, signal.SIGKILL)
                     except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Ignored exception: %s", e)
+                        _logger.info("Ignored exception: %s", e)
                     try:
                         proc.terminate()
                         proc.wait(timeout=2.0)

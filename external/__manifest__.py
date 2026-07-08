@@ -9,7 +9,7 @@
     "description": """
         Local hosting of external libraries for isolated networks.
     """,
-    "license": "Other proprietary",
+    "license": "AGPL-3",
     "depends": ["zero_sudo", "base", "web"],
     "assets": {
         "external.assets_leaflet": [

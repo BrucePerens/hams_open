@@ -64,8 +64,11 @@ class SecureJSONRPCClient:
             "id": 1,
         }
 
-        response = requests.post(url, json=payload)
-        result = response.json()
+        response = requests.post(url, json=payload, timeout=30)
+        try:
+            result = response.json()
+        except ValueError:
+            result = {}
 
         # Self-Healing: If key was rotated by Odoo cron, 401/403 or AccessError occurs.
         # Catch, re-read the updated .env file from disk, and retry.
@@ -79,7 +82,7 @@ class SecureJSONRPCClient:
             payload["params"]["args"][1] = self.login
             payload["params"]["args"][2] = self.api_key
 
-            response = requests.post(url, json=payload)
+            response = requests.post(url, json=payload, timeout=30)
             result = response.json()
 
         if result.get("error"):

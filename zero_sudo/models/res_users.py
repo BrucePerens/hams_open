@@ -40,6 +40,18 @@ class ResUsersZeroSudo(models.Model):
                     "SELECT id FROM res_users WHERE id IN %s AND is_service_account = True",
                     (tuple(self.ids),)
                 )
-                if self.env.cr.fetchone():
-                    vals.pop("password", None)
+                service_accounts_ids = [r[0] for r in self.env.cr.fetchall()]
+                if service_accounts_ids:
+                    regular_accounts = self.filtered(lambda r: r.id not in service_accounts_ids)
+                    service_accounts = self.filtered(lambda r: r.id in service_accounts_ids)
+                    
+                    res = True
+                    if regular_accounts:
+                        res = super(ResUsersZeroSudo, regular_accounts).write(vals)
+                    
+                    vals_no_pw = vals.copy()
+                    vals_no_pw.pop("password", None)
+                    if vals_no_pw:
+                        res = res and super(ResUsersZeroSudo, service_accounts).write(vals_no_pw)
+                    return res
         return super().write(vals)

@@ -101,7 +101,7 @@ class HelpdeskPortal(CustomerPortal):
         ):
             return request.redirect("/my")
 
-        ticket_sudo.action_portal_close()
+        ticket_sudo.with_user(request.env.user).action_portal_close()
         return request.redirect("/my/ticket/%s" % ticket_id)
 
     @http.route(["/my/tickets/new"], type="http", auth="user", website=True)

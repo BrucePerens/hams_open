@@ -105,7 +105,6 @@ class TestComplianceHooks(HamsTransactionCase):
         boilerplate_page = self.env.ref("compliance.compliance_page_privacy_policy")
         boilerplate_page.write({"is_published": True, "website_id": False})
 
-        self.env.flush_all()
         # Run the hook
         post_init_hook(self.env)
         self.env["website.page"].invalidate_model(["is_published"])
@@ -158,7 +157,6 @@ class TestComplianceHooks(HamsTransactionCase):
         )
         existing_bp_2.write({"is_published": False})
 
-        self.env.flush_all()
         post_init_hook(self.env)
         boilerplate_cookie.invalidate_recordset(["is_published"])
 

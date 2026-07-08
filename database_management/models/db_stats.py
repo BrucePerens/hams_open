@@ -96,7 +96,7 @@ class DatabaseTableStat(models.Model):
                 raise UserError(_("Vacuum failed: %s") % res.stderr)
         except subprocess.TimeoutExpired:
             raise UserError(_("Vacuum timed out for tables: %s") % table_names)
-        except (subprocess.CalledProcessError, OSError) as e:
+        except OSError as e:
             _logger.exception("Error executing vacuumdb")
             raise UserError(_("Error executing vacuumdb: %s") % str(e))
         return True
@@ -247,17 +247,7 @@ class DatabaseActivity(models.Model):
             # Performance: Optimize latency by reducing database operation round-trips to only one.
             # We use a DO block to ensure the termination logic runs entirely on the DB server.
             env_svc.cr.execute(
-                """
-                DO $$
-                DECLARE
-                    p integer;
-                BEGIN
-                    FOREACH p IN ARRAY %s
-                    LOOP
-                        PERFORM pg_terminate_backend(p);
-                    END LOOP;
-                END $$;
-            """,
+                "SELECT pg_terminate_backend(pid) FROM unnest(%s) AS pid;",
                 (pids,),
             )
         return True
@@ -447,6 +437,9 @@ class DatabaseQueryStatInherit(models.Model):
 
         try:
             query_text = self.query.strip()
+            if ";" in query_text:
+                raise UserError(_("Multiple statements are not allowed."))
+            
             query_upper = query_text.upper()
             if not (query_upper.startswith("SELECT") or query_upper.startswith("WITH")):
                 msg = _("Only SELECT or WITH queries can be analyzed via Explain.")
@@ -454,7 +447,7 @@ class DatabaseQueryStatInherit(models.Model):
 
             cr_svc.execute("SAVEPOINT explain_sp")
             try:
-                cr_svc.execute("SET LOCAL default_transaction_read_only = 'on'")
+                cr_svc.execute("SET TRANSACTION READ ONLY")
                 explain_prefix = psql.SQL("EXPLAIN (ANALYZE, BUFFERS) ")
                 explain_query = explain_prefix + psql.SQL(query_text)
                 cr_svc.execute(explain_query)

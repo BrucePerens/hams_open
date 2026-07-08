@@ -81,17 +81,43 @@ class HelpdeskTicket(models.Model):
     def create(self, vals_list):
         # [@ANCHOR: helpdesk_ticket_creation]
         # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+        
+        # Calculate on_duty_user_id before bulk creation
+        on_duty_user_id = False
+        utils = self.env["zero_sudo.security.utils"]
+        Calendar = self.env["calendar.event"]
+        if "is_pager_duty" in Calendar._fields:
+            try:
+                pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
+                Calendar = pager_env["calendar.event"]
+            except Exception as e: # audit-ignore-catch-all
+                _logger.info("PagerDuty service env not loaded: %s", e)
+        on_duty_admin = Calendar.get_current_on_duty_admin()
+        if on_duty_admin:
+            on_duty_user_id = on_duty_admin.id
+
+        # Pre-fetch records
+        website_ids = {vals["website_id"] for vals in vals_list if vals.get("website_id")}
+        if self.env.context.get("website_id"):
+            website_ids.add(self.env.context.get("website_id"))
+        partner_ids = {vals["partner_id"] for vals in vals_list if vals.get("partner_id")}
+        
+        websites = {w.id: w for w in self.env["website"].browse(list(website_ids)).exists()}
+        partners = {p.id: p for p in self.env["res.partner"].browse(list(partner_ids)).exists()}
+
         for vals in vals_list:
             if "website_id" not in vals and self.env.context.get("website_id"):
                 vals["website_id"] = self.env.context.get("website_id")
             if "company_id" not in vals and vals.get("website_id"):
-                website = self.env["website"].browse(vals["website_id"])
-                if website.company_id:
+                website = websites.get(vals["website_id"])
+                if website and website.company_id:
                     vals["company_id"] = website.company_id.id
             if not vals.get("callsign") and vals.get("partner_id"):
-                partner = self.env["res.partner"].browse(vals["partner_id"])
-                if partner.callsign:
+                partner = partners.get(vals["partner_id"])
+                if partner and partner.callsign:
                     vals["callsign"] = partner.callsign
+            if on_duty_user_id and not vals.get("user_id"):
+                vals["user_id"] = on_duty_user_id
 
         tickets = super().create(vals_list)
 
@@ -110,8 +136,7 @@ class HelpdeskTicket(models.Model):
 
         utils = self.env["zero_sudo.security.utils"]
 
-        # 1. Resolve On-Duty Admin via PagerDuty (if available)
-        on_duty_user_id = False
+        # 1. Resolve upcoming shifts for pre-shift awareness via PagerDuty (if available)
         upcoming_partner_ids = []
 
         # Use service account if available, otherwise fallback to current env (e.g. during tests or if pager_duty not installed)
@@ -121,19 +146,7 @@ class HelpdeskTicket(models.Model):
                 pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
                 Calendar = pager_env["calendar.event"]
             except Exception as e: # audit-ignore-catch-all
-                # PagerDuty service account might not be provisioned yet or module not installed.
-                # This is an optional integration, so we continue with standard env.
-                _logger.info(
-                    "PagerDuty service env not loaded (optional integration): %s", e
-                )
-        # Discover On-Duty Admin
-        # Polymorphic decoupling: calendar_event.py in hams_helpdesk provides a stub returning False
-        on_duty_admin = Calendar.get_current_on_duty_admin()
-        if on_duty_admin:
-            on_duty_user_id = on_duty_admin.id
-
-        # Discover upcoming shifts (within 30 minutes) if PagerDuty is installed
-        if "is_pager_duty" in Calendar._fields:
+                _logger.info("PagerDuty service env not loaded (optional integration): %s", e)
             now = fields.Datetime.now()
             thirty_mins = now + datetime.timedelta(minutes=30)
             upcoming_shifts = Calendar.search(
@@ -151,17 +164,11 @@ class HelpdeskTicket(models.Model):
         # account is misconfigured, we fail fast.
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
 
-        # Optimization: Pre-fetch partner info for all tickets to avoid N+1 inside the loop
-        self.mapped("user_id.partner_id")
-        self.mapped("company_id")
-
         for ticket in self:
             # Switch to service account and ensure company context is correct for each ticket
             ticket_service = ticket.with_env(hd_env).with_company(ticket.company_id)
-            # Assignment
-            if on_duty_user_id and not ticket_service.user_id:
-                ticket_service.user_id = on_duty_user_id
-
+            
+            # Since assignment is now handled in create(), we only check if it was assigned
             if ticket_service.user_id:
                 # Email Notification
                 ticket_service.message_post(
@@ -268,5 +275,7 @@ class HelpdeskTicket(models.Model):
             raise AccessError(_("You are not authorized to close this ticket."))
 
         if self.stage != "closed":
-            self.write({"stage": "closed"})
+            utils = self.env["zero_sudo.security.utils"]
+            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+            self.with_env(hd_env).write({"stage": "closed"})
             self.message_post(body=_("Ticket closed by customer."))

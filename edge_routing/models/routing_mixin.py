@@ -147,6 +147,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         )
         return record.id if record else False
 
+    @api.model
     def get_record_by_domain(self, domain, override_svc_uid=None):
         """
         Helper to map a custom domain directly to a record ID.
@@ -166,7 +167,10 @@ class EdgeRoutingMixin(models.AbstractModel):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("website_slug"):
-                vals["website_slug"] = slugify(vals["website_slug"])
+                slug_to_check = slugify(vals["website_slug"])
+                if slug_to_check in RESERVED_SLUGS:
+                    raise ValidationError(_("The slug '%s' is reserved and cannot be used.") % vals["website_slug"])
+                vals["website_slug"] = self._generate_unique_slug(vals["website_slug"])
             elif vals.get("name"):
                 vals["website_slug"] = self._generate_unique_slug(vals["name"])
         return super().create(vals_list)
@@ -174,7 +178,11 @@ class EdgeRoutingMixin(models.AbstractModel):
     # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
     # Verified by [@ANCHOR: user_websites:test_group_slug_cache_invalidation]
     def write(self, vals):
-        if "website_slug" in vals and vals.get("website_slug"):
+        if vals.get("website_slug"):
+            slug_to_check = slugify(vals["website_slug"])
+            if slug_to_check in RESERVED_SLUGS:
+                raise ValidationError(_("The slug '%s' is reserved and cannot be used.") % vals["website_slug"])
+            
             if len(self) > 1:
                 raise UserError(_("Cannot assign the same website slug to multiple records."))
             vals["website_slug"] = self._generate_unique_slug(
@@ -192,19 +200,23 @@ class EdgeRoutingMixin(models.AbstractModel):
             new_slugs = [s for s in self.mapped("website_slug") if s]
             all_slugs_to_invalidate = set(old_slugs + new_slugs)
             
-            for slug in all_slugs_to_invalidate:
+            if all_slugs_to_invalidate:
                 payload = json.dumps({"model": self._name})
+                for slug in all_slugs_to_invalidate:
+                    try:
+                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                            self._name, slug
+                        )
+                    except Exception as e:  # audit-ignore-catch-all
+                        _logger.warning("Failed to notify cache invalidation for %s: %s", slug, e)
                 try:
-                    self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                        self._name, slug
-                    )
                     notify_model_invalidation(self.env, self._name)
                     self.env.cr.execute(
                         "SELECT pg_notify(%s, %s)",
                         ("distributed_cache_invalidation", payload),
                     )
                 except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Failed to notify cache invalidation: %s", e)
+                    _logger.warning("Failed to notify global cache invalidation: %s", e)
                     
             # Handle the batch write edge case for missing slugs when name is updated
             if "name" in vals and len(self) > 1:
@@ -220,20 +232,24 @@ class EdgeRoutingMixin(models.AbstractModel):
     def unlink(self):
         slugs = self.mapped("website_slug")
         res = super().unlink()
-        for slug in slugs:
-            if slug:
-                payload = json.dumps({"model": self._name})
-                try:
-                    self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                        self._name, slug
-                    )
-                    notify_model_invalidation(self.env, self._name)
-                    self.env.cr.execute(
-                        "SELECT pg_notify(%s, %s)",
-                        ("distributed_cache_invalidation", payload),
-                    )
-                except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning(
-                        "Failed to notify cache invalidation on unlink: %s", e
-                    )
+        if slugs:
+            payload = json.dumps({"model": self._name})
+            for slug in slugs:
+                if slug:
+                    try:
+                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                            self._name, slug
+                        )
+                    except Exception as e:  # audit-ignore-catch-all
+                        _logger.warning("Failed to notify local cache invalidation on unlink for %s: %s", slug, e)
+            try:
+                notify_model_invalidation(self.env, self._name)
+                self.env.cr.execute(
+                    "SELECT pg_notify(%s, %s)",
+                    ("distributed_cache_invalidation", payload),
+                )
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning(
+                    "Failed to notify global cache invalidation on unlink: %s", e
+                )
         return res

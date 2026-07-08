@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields
 import logging
+import secrets
 
+_logger = logging.getLogger(__name__)
 class ResUsers(models.Model):
     _inherit = 'res.users'
 
@@ -18,16 +20,15 @@ class ResUsers(models.Model):
     def action_generate_qrz_token(self):
         # [@ANCHOR: ham_onboarding:action_generate_qrz_token]
         self.ensure_one()
-        # Mock token generation for test pass
-        token = "qrz_token_123"
+        # Mock token generation for test pass - FIXED: generate real token
+        token = secrets.token_urlsafe(32)
         self.qrz_task_state = "pending"
         return token
 
     def action_send_official_otp(self):
         self.ensure_one()
-        _logger = logging.getLogger(__name__)
-        # Set dummy OTP
-        self.official_otp = "123456"
+        # Set dummy OTP - FIXED: generate real random 6 digit OTP
+        self.official_otp = "".join(secrets.choice("0123456789") for _ in range(6))
         template = self.env.ref('ham_onboarding.email_template_official_otp', raise_if_not_found=False)
         if template:
             # Need to get service user context

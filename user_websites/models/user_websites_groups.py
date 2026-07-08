@@ -5,6 +5,7 @@ This file defines the Odoo model for User Websites Groups.
 
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 from psycopg2 import IntegrityError
 import psycopg2
 import logging
@@ -112,6 +113,14 @@ class UserWebsitesGroup(models.Model):
         ondelete="cascade",
         help="The Odoo security group associated with this website.",
     )
+
+    @api.constrains("website_slug")
+    def _check_reserved_slugs(self):
+        for record in self:
+            if record.website_slug and record.website_slug.lower() in RESERVED_SLUGS:
+                raise ValidationError(
+                    _("The slug '%s' is reserved and cannot be used.") % record.website_slug
+                )
 
     member_ids = fields.Many2many(
         "res.users",

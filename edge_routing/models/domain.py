@@ -30,9 +30,9 @@ class EdgeRoutingDomain(models.Model):
                 raise exceptions.ValidationError(
                     _("Domain must be a valid FQDN (e.g. www.myclub.org)")
                 )
-            if record.name.lower() in RESERVED_SLUGS:
+            if record.target_slug and record.target_slug.lower() in RESERVED_SLUGS:
                 raise exceptions.ValidationError(
-                    _("This domain name is reserved and cannot be used.")
+                    _("This target slug is reserved and cannot be used.")
                 )
 
     @api.model
@@ -73,20 +73,24 @@ class EdgeRoutingDomain(models.Model):
             _logger.warning("Failed to sync domains to Pager Duty: %s", e)
 
     def _invalidate_cache(self, names):
-        for name in names:
-            if name:
-                payload = json.dumps({"model": self._name})
-                try:
-                    self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                        self._name, name
-                    )
-                    notify_model_invalidation(self.env, self._name)
-                    self.env.cr.execute(
-                        "SELECT pg_notify(%s, %s)",
-                        ("distributed_cache_invalidation", payload),
-                    )
-                except Exception:  # audit-ignore-catch-all
-                    _logger.warning("Failed to invalidate cache for domain %s", name)
+        if names:
+            payload = json.dumps({"model": self._name})
+            for name in names:
+                if name:
+                    try:
+                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                            self._name, name
+                        )
+                    except Exception:  # audit-ignore-catch-all
+                        _logger.warning("Failed to invalidate cache for domain %s", name)
+            try:
+                notify_model_invalidation(self.env, self._name)
+                self.env.cr.execute(
+                    "SELECT pg_notify(%s, %s)",
+                    ("distributed_cache_invalidation", payload),
+                )
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("Failed to notify global cache invalidation: %s", e)
 
         try:
             # Trigger cron to run asynchronously, avoiding thread exhaustion and batching O(N) fetches

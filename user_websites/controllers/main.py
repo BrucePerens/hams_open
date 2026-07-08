@@ -9,6 +9,8 @@ import hashlib
 import hmac
 from urllib.parse import urlparse
 
+from werkzeug.wrappers import Response
+
 _logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
@@ -267,7 +269,7 @@ class UserWebsitesController(http.Controller):
             raise request.not_found()
         if profile_group:
             is_member = env_svc["user.websites.group"].search_count(
-                [("id", "=", profile_group.id), ("member_ids", "in", user.id)]
+                [("id", "=", profile_group.id), ("member_ids", "=", user.id)]
             )
             if not is_member:
                 return request.not_found()
@@ -358,7 +360,7 @@ class UserWebsitesController(http.Controller):
             [
                 (
                     "name",
-                    "ilike",
+                    "=ilike",
                     "User Websites Documentation%",
                 )
             ],
@@ -398,14 +400,35 @@ class UserWebsitesController(http.Controller):
         user = request.env.user
         data = user._get_gdpr_export_data()
         streamed = user._get_gdpr_streamed_keys()
-        for k, generator_func in streamed.items():
-            data[k] = list(generator_func())
-        body = json.dumps(data)
+        
+        def generate():
+            yield "{"
+            first_key = True
+            for k, v in data.items():
+                if not first_key:
+                    yield ","
+                yield f'"{k}": {json.dumps(v)}'
+                first_key = False
+            
+            for k, generator_func in streamed.items():
+                if not first_key:
+                    yield ","
+                yield f'"{k}": ['
+                first_item = True
+                for item in generator_func():
+                    if not first_item:
+                        yield ","
+                    yield json.dumps(item)
+                    first_item = False
+                yield "]"
+                first_key = False
+            yield "}"
+
         headers = [
             ("Content-Type", "application/json"),
             ("Content-Disposition", 'attachment; filename="gdpr_export.json"'),
         ]
-        return request.make_response(body, headers=headers)
+        return Response(generate(), headers=headers)
 
     @http.route(
         "/my/privacy/delete_content",

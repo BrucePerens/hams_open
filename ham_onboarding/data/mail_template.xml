@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
-        <!-- [@ANCHOR: otp_mail_template] -->
+        <!-- [@ANCHOR: ham_onboarding:otp_mail_template] -->
         <record id="email_template_official_otp" model="mail.template">
             <field name="name">Official OTP</field>
             <field name="model_id" ref="base.model_res_users"/>

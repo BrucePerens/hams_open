@@ -137,7 +137,7 @@ class KnowledgeArticle(models.Model):
         # Verified by [@ANCHOR: test_manual_check_hierarchy]
         """Prevent circular references in the article tree."""
         if self._has_cycle():
-            raise ValidationError(_("Error! You cannot create recursive articles."))
+            raise ValidationError(_("You cannot create recursive articles."))
 
     def copy(self, default=None):
         """Override copy to ensure hierarchy is maintained but names are distinct."""

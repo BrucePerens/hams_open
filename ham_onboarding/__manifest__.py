@@ -10,4 +10,5 @@
     'installable': True,
     'auto_install': False,
     'license': 'AGPL-3',
+    'author': 'Bruce Perens K6BP',
 }

@@ -44,7 +44,7 @@ def post_init_hook(env):
               SELECT 1 FROM website_page cp
               JOIN ir_ui_view cv ON cp.view_id = cv.id
               WHERE cp.url = bp.url
-                AND (cp.website_id = bp.website_id OR (cp.website_id IS NULL AND bp.website_id IS NULL))
+                AND cp.website_id IS NOT DISTINCT FROM bp.website_id
                 AND cp.id != bp.id
                 AND cv.key NOT LIKE 'compliance.compliance_%'
           );
@@ -60,18 +60,20 @@ def post_init_hook(env):
               SELECT 1 FROM website_page cp
               JOIN ir_ui_view cv ON cp.view_id = cv.id
               WHERE cp.url = bp.url
-                AND (cp.website_id = bp.website_id OR (cp.website_id IS NULL AND bp.website_id IS NULL))
+                AND cp.website_id IS NOT DISTINCT FROM bp.website_id
                 AND cp.id != bp.id
                 AND cv.key NOT LIKE 'compliance.compliance_%'
           );
     END;
     $$ LANGUAGE plpgsql;
     """
+    env_svc.flush_all()
     env_svc.cr.execute(sql)
 
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
     # Performance Optimization: Reduced dozens of ORM round-trips to a single Postgres procedure call.
     # Verified by [@ANCHOR: test_compliance_postgres_procedures]
+    env_svc.flush_all()
     env_svc.cr.execute("SELECT compliance_enforce_protection()")
 
     env_svc["ir.module.module"]._bootstrap_knowledge_docs()
