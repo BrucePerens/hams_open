@@ -388,6 +388,48 @@ class TestKeyRegistry(RealTransactionCase):
             registry.with_user(self.manager_user.id)._rotate_key_and_write_file()
         self.assertIn("archived", str(cm.exception))
 
+    def test_write_secure_env_file_exceptions(self):
+        """Test that PermissionError and OSError are not swallowed."""
+        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
+            "name": "Exception Test Daemon",
+            "user_id": self.service_user.id,
+            "env_file_path": "/opt/hams/etc/keys/exception_test.env",
+        })
+        self.safe_patch("os.path.exists", return_value=False)
+        self.safe_patch("os.makedirs", side_effect=PermissionError("Mocked Permission Error"))
+        with self.assertRaises(PermissionError):
+            registry._write_secure_env_file(registry.env_file_path, "login", "key")
+
+        self.safe_patch("os.makedirs", side_effect=OSError("Mocked OS Error"))
+        with self.assertRaises(OSError):
+            registry._write_secure_env_file(registry.env_file_path, "login", "key")
+
+    def test_cron_rotation_timezone_sql(self):
+        """Test that the cron fallback raw SQL uses UTC for NOW()."""
+        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
+            "name": "Cron TZ Test Daemon",
+            "user_id": self.service_user.id,
+            "env_file_path": "/opt/hams/etc/keys/cron_tz_test.env",
+        })
+        
+        # In order to trigger the fallback, we need to mock _rotate_key_and_write_file to fail.
+        # But since _cron_rotate_all_keys queries registries, we need to mock execute directly.
+        original_execute = self.env.cr.execute
+        executed_queries = []
+        def mock_execute(query, params=None):
+            executed_queries.append(query)
+            return original_execute(query, params)
+            
+        self.safe_patch_object(type(registry), "_rotate_key_and_write_file", side_effect=OSError("Mocked Error"))
+        self.safe_patch_object(self.env.cr, "execute", side_effect=mock_execute)
+        
+        self.env["daemon.key.registry"]._cron_rotate_all_keys()
+                
+        found_update = any(
+            "UPDATE daemon_key_registry SET last_rotated = NOW() AT TIME ZONE 'UTC'" in query
+            for query in executed_queries
+        )
+        self.assertTrue(found_update, "Cron fallback should use NOW() AT TIME ZONE 'UTC'")
 
 @tagged("post_install", "-at_install")
 class TestKeyRegistryTour(HamsHttpCase):

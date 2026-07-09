@@ -208,7 +208,7 @@ class BinaryVersion(models.Model):
                                 name.endswith(f"/{extract_target}")
                                 or name == extract_target
                             ):
-                                if (zinfo.external_attr >> 16) & stat.S_IFLNK:
+                                if stat.S_ISLNK(zinfo.external_attr >> 16):
                                     raise UserError(
                                         _(
                                             "Security Alert: Links are not allowed in the archive."

@@ -8,6 +8,7 @@ from . import test_controllers
 from . import test_json_rpc_client
 from . import test_integration
 from . import dummy_daemon
+from . import test_tdd_fixes
 
 import logging
 import psycopg2

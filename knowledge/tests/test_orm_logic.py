@@ -87,3 +87,5 @@ class TestManualORMLogic(HamsTransactionCase):
             raised,
             "unlink() should have raised a RestrictViolation or ForeignKeyViolation",
         )
+
+

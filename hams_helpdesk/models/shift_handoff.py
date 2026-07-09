@@ -1,4 +1,5 @@
 from odoo import _, fields, models
+import markupsafe
 
 
 class ShiftHandoffWizard(models.TransientModel):
@@ -31,10 +32,10 @@ class ShiftHandoffWizard(models.TransientModel):
 
         old_name = self.old_user_id.name if self.old_user_id else "Unassigned"
 
-        body = "<b>🚨 Official Shift Handoff Executed</b><br/><br/>"
-        body += f"<b>Relinquished By:</b> {old_name}<br/>"
-        body += f"<b>Accepted By:</b> {self.new_user_id.name}<br/>"
-        body += f"<b>Operator Briefing:</b><br/><i>{self.handoff_notes}</i>"
+        body = markupsafe.Markup("<b>🚨 Official Shift Handoff Executed</b><br/><br/>")
+        body += markupsafe.Markup("<b>Relinquished By:</b> {}<br/>").format(old_name)
+        body += markupsafe.Markup("<b>Accepted By:</b> {}<br/>").format(self.new_user_id.name)
+        body += markupsafe.Markup("<b>Operator Briefing:</b><br/><i>{}</i>").format(self.handoff_notes or "")
 
         ticket.message_post(
             body=body,

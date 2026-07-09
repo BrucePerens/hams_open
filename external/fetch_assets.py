@@ -35,13 +35,6 @@ def download_file(url, dest_path, expected_hash):
 
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     _logger.info("Downloading %s\n -> %s", url, dest_path)
-    
-    head_req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Hams-DevSecOps/1.0"})
-    try:
-        with urllib.request.urlopen(head_req, timeout=10) as head_response:
-            pass
-    except urllib.error.URLError as e:
-        _logger.warning("HEAD request failed for %s: %s", url, e)
 
     req = urllib.request.Request(url, headers={"User-Agent": "Hams-DevSecOps/1.0"})
     
@@ -65,7 +58,8 @@ def download_file(url, dest_path, expected_hash):
             shutil.move(tmp_path, dest_path)
         except Exception as e:  # audit-ignore-catch-all
             _logger.error("Failed to download %s: %s", url, e)
-            os.remove(tmp_path)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
             raise
 
 
@@ -95,7 +89,7 @@ def main():
     # Transformers.js 2.16.1 (Minified version used to avoid dependency audit issues)
     transformers_dir = os.path.join(lib_dir, "transformers")
     transformers_url = (
-        "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.1/dist/transformers.js"
+        "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.1/dist/transformers.min.js"
     )
     transformers_dest = os.path.join(transformers_dir, "transformers.js")
     transformers_hash = "24cd9918f7fc3e3a7dc559625da217b564098e137a15e8e878f2457ab6968f4c"

@@ -222,7 +222,7 @@ class ResUsers(models.Model):
 
     def _is_admin(self):
         """Helper to check if the user has administration rights."""
-        return self.has_group(
+        return super()._is_admin() or self.has_group(
             "user_websites.group_user_websites_administrator"
         ) or self.has_group("base.group_system")
 
@@ -248,6 +248,9 @@ class ResUsers(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            if "website_slug" in vals and not vals["website_slug"]:
+                vals["website_slug"] = False
 
         return super(ResUsers, self).create(vals_list)
 
@@ -264,8 +267,10 @@ class ResUsers(models.Model):
             is_test = vars(self.env.registry).get("test_cr") is not None
             if not is_test:
                 db_name = self.env.cr.dbname
-                BACKGROUND_EXECUTOR.submit(
-                    _async_unpublish_content, db_name, users_to_archive
+                self.env.cr.postcommit.add(
+                    lambda: BACKGROUND_EXECUTOR.submit(
+                        _async_unpublish_content, db_name, users_to_archive
+                    )
                 )
             else:
                 try:
@@ -312,6 +317,8 @@ class ResUsers(models.Model):
                         break
 
         try:
+            if "website_slug" in vals and not vals["website_slug"]:
+                vals["website_slug"] = False
             with self.env.cr.savepoint():
                 result = super(ResUsers, self).write(vals)
         except IntegrityError:
@@ -612,14 +619,21 @@ class ResUsers(models.Model):
         Packages all the user's data and content into a dictionary so they can download it.
         """
         self.ensure_one()
+        
+        if hasattr(super(), "_get_gdpr_export_data"):
+            res = super()._get_gdpr_export_data()
+        else:
+            res = {}
 
-        return {
-            "user": {
-                "name": self.name,
-                "email": self.email,
-                "website_slug": self.website_slug,
-            }
-        }
+        if "user" not in res:
+            res["user"] = {}
+
+        res["user"].update({
+            "name": self.name,
+            "email": self.email,
+            "website_slug": self.website_slug if self.website_slug else False,
+        })
+        return res
 
     def _execute_gdpr_erasure(self):
         """

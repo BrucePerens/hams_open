@@ -48,13 +48,25 @@ class EdgeRoutingDomain(models.Model):
             )
             env_svc = self.with_user(svc_uid).env
 
-            all_domains = env_svc["edge.routing.domain"].search([], limit=1000).mapped("name")
+            all_domains = []
+            offset = 0
+            while True:
+                batch = env_svc["edge.routing.domain"].search([], offset=offset, limit=1000).mapped("name")
+                if not batch:
+                    break
+                all_domains.extend(batch)
+                offset += 1000
 
             if "ham.dns.zone" in env_svc:
                 try:
                     dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
-                    dns_domains = dns_env_svc["ham.dns.zone"].search([], limit=5000).mapped("name")
-                    all_domains.extend(dns_domains)
+                    offset = 0
+                    while True:
+                        dns_domains = dns_env_svc["ham.dns.zone"].search([], offset=offset, limit=1000).mapped("name")
+                        if not dns_domains:
+                            break
+                        all_domains.extend(dns_domains)
+                        offset += 1000
                 except Exception as e:  # audit-ignore-catch-all
                     _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
 

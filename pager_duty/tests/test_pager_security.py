@@ -2,6 +2,7 @@
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError
+from odoo.tools import mute_logger
 
 
 @tagged("post_install", "-at_install")
@@ -122,7 +123,8 @@ class TestPagerSecurity(HamsTransactionCase):
         self.assertIn("Command not in allow-list", res["message"])
 
         # Should pass (or at least get past allow-list) for allowed command
-        res = CheckModel.rpc_ensure_executable("ping")
+        with mute_logger('odoo.addons.pager_duty.models.pager_check'):
+            res = CheckModel.rpc_ensure_executable("ping")
         self.assertNotEqual(res.get("message"), "Command not in allow-list.")
 
     def test_03_documentation_injection(self):

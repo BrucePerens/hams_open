@@ -24,7 +24,7 @@ class BackupRestoreWizard(models.TransientModel):
     def action_restore(self):
         # [@ANCHOR: backup_trigger_restore]
         # Verified by [@ANCHOR: test_restore_action]
-        if not self.env.user.has_group("backup_management.group_backup_admin"):
+        if not self.env.su and not self.env.user.has_group("backup_management.group_backup_admin"):
             raise AccessError(
                 _("Only Backup Administrators can trigger restore operations.")
             )
@@ -104,15 +104,17 @@ class BackupRestoreWizard(models.TransientModel):
                     host=rmq_host, credentials=credentials
                 )
                 connection = pika.BlockingConnection(conn_params)
-                channel = connection.channel()
-                channel.queue_declare(queue="backup_tasks", durable=True)
-                channel.basic_publish(
-                    exchange="",
-                    routing_key="backup_tasks",
-                    body=msg,
-                    properties=pika.BasicProperties(delivery_mode=2),
-                )
-                connection.close()
+                try:
+                    channel = connection.channel()
+                    channel.queue_declare(queue="backup_tasks", durable=True)
+                    channel.basic_publish(
+                        exchange="",
+                        routing_key="backup_tasks",
+                        body=msg,
+                        properties=pika.BasicProperties(delivery_mode=2),
+                    )
+                finally:
+                    connection.close()
             except pika.exceptions.AMQPError as e:
                 logging.getLogger(__name__).warning("An error occurred: %s", e)
 

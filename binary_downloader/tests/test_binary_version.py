@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import hashlib
 import os
+import io
 import logging
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
@@ -126,3 +127,38 @@ class TestBinaryVersion(HamsTransactionCase):
         # Cleanup
         if os.path.exists(path):
             os.remove(path)
+
+    def test_zip_regular_file_allowed_version(self):
+        # [!] DIAGNOSTIC FOR AI: Testing that regular files in ZIPs are NOT blocked as symlinks.
+        version = self.env["binary.version"].create(
+            {
+                "manifest_id": self.manifest.id,
+                "version_number": "1.5",
+                "url": "http://example.com/reg.zip",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "zip",
+                "extract_member": "regbin",
+            }
+        )
+
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [b"data", b""]
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        mock_zip_open = self.safe_patch("zipfile.ZipFile")  # audit-ignore-path
+        mock_zip = MagicMock()
+        mock_zip_open.return_value.__enter__.return_value = mock_zip
+
+        mock_zinfo = MagicMock()
+        mock_zinfo.filename = "regbin"
+        # Set external_attr to represent a regular file (0x8000 << 16)
+        mock_zinfo.external_attr = 0x8000 << 16
+        mock_zip.infolist.return_value = [mock_zinfo]
+
+        mock_zip.open.return_value = io.BytesIO(b"extracted-data")
+
+        # This should NOT raise an error
+        success = version.action_download_to_pool()
+        self.assertTrue(success)

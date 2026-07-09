@@ -153,12 +153,12 @@ class CloudflarePurgeQueue(models.Model):
                         )
 
                 # Refresh batch_records by filtering out non-existent ones before further processing
-                batch_records = batch_records.filtered(lambda r: r.exists())
+                batch_records = batch_records.exists()
 
                 url_records = batch_records.filtered(lambda r: r.purge_type == "url")
                 tag_records = batch_records.filtered(lambda r: r.purge_type == "tag")
 
-                if success and url_records:
+                if url_records:
                     if not purge_urls(
                         url_records.mapped("target_item"), token, zone_id
                     ):
@@ -167,7 +167,7 @@ class CloudflarePurgeQueue(models.Model):
                     else:
                         url_records.unlink()
 
-                if success and tag_records:
+                if tag_records:
                     if not purge_tags(
                         tag_records.mapped("target_item"), token, zone_id
                     ):

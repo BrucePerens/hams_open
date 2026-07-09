@@ -1,15 +1,36 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import RealTransactionCase
-
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install")
-class TestIdentityVerification(RealTransactionCase):
+class TestIdentityVerification(HamsTransactionCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        service_user = cls.env.ref("ham_onboarding.email_service", raise_if_not_found=False)
+        if not service_user:
+            service_user = cls.env["res.users"].with_context(no_reset_password=True).create(
+                {
+                    "name": "Email Service User",
+                    "login": "email_service_user_test_unique",
+                    "email": "email_svc@example.com",
+                    "is_service_account": True,
+                }
+            )
+            cls.env["ir.model.data"].create(
+                {
+                    "name": "email_service",
+                    "module": "ham_onboarding",
+                    "model": "res.users",
+                    "res_id": service_user.id,
+                }
+            )
 
     def test_01_qrz_verification_success(self):
         """Simulates successful QRZ verification."""
         # Tests [@ANCHOR: ham_onboarding:action_generate_qrz_token]
-        user = self.env["res.users"].create(
+        user = self.env["res.users"].with_context(no_reset_password=True).create(
             {
                 "name": "QRZ Poller",
                 "login": "qrz_poller",
@@ -24,7 +45,7 @@ class TestIdentityVerification(RealTransactionCase):
     def test_otp_verification_flow(self):
         """Tests the official OTP verification flow."""
         # Tests [@ANCHOR: ham_onboarding:action_verify_official_otp]
-        user = self.env["res.users"].create(
+        user = self.env["res.users"].with_context(no_reset_password=True).create(
             {
                 "name": "OTP User",
                 "login": "otp_user",
@@ -43,12 +64,6 @@ class TestIdentityVerification(RealTransactionCase):
         # [@ANCHOR: test_otp_mail_template]
         # Tests [@ANCHOR: ham_onboarding:otp_mail_template]
         # audit-ignore-mail: Verified mail service context using architecture-approved patcher
-
-        # Patch the service account lookup to return a valid UID (1)
-        # instead of failing in the test environment.
-        self.safe_patch_object(
-            self.env["zero_sudo.security.utils"], "_get_service_uid", return_value=1
-        )
 
         template = self.env.ref("ham_onboarding.email_template_official_otp")
 

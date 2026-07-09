@@ -137,7 +137,7 @@ class CloudflareConfigManager(models.AbstractModel):
             )
             if existing_ruleset and existing_ruleset.get("rules"):
                 _logger.info(
-                    f"[+] Existing rules detected for {website.name}. Backing up and syncing."
+                    "[+] Existing rules detected for %s. Backing up and syncing.", website.name
                 )
                 # ADR-0001: Headless Mutation Context
                 self.env["cloudflare.config.backup"].with_context(

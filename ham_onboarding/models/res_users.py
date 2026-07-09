@@ -29,14 +29,10 @@ class ResUsers(models.Model):
         self.ensure_one()
         # Set dummy OTP - FIXED: generate real random 6 digit OTP
         self.official_otp = "".join(secrets.choice("0123456789") for _ in range(6))
-        template = self.env.ref('ham_onboarding.email_template_official_otp', raise_if_not_found=False)
-        if template:
-            # Need to get service user context
-            try:
-                service_uid = self.env['zero_sudo.security.utils']._get_service_uid('ham_onboarding.email_service')
-                template.with_user(service_uid).send_mail(self.id, force_send=True)  # audit-ignore-mail
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Failed to send OTP email: %s", e)
+        template = self.env.ref('ham_onboarding.email_template_official_otp')
+        # Need to get service user context
+        service_uid = self.env['zero_sudo.security.utils']._get_service_uid('ham_onboarding.email_service')
+        template.with_user(service_uid).send_mail(self.id, force_send=True)  # audit-ignore-mail
 
     def action_verify_official_otp(self, otp):
         # [@ANCHOR: ham_onboarding:action_verify_official_otp]

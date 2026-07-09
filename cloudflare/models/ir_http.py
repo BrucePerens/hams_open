@@ -25,9 +25,8 @@ class IrHttp(models.AbstractModel):
         if not request:
             return res
 
-        # Fail loudly if request lacks _get_current_object or httprequest
-        request_obj = request._get_current_object()
-        path = request_obj.httprequest.path
+        # Fail loudly if request lacks httprequest
+        path = request.httprequest.path
 
         # 1. Media & Assets (Max aggressive caching: 1 year)
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
@@ -76,7 +75,11 @@ class IrHttp(models.AbstractModel):
 
         # Inject Website-specific Cache-Tag for granular site-wide purging if needed.
         # Direct attribute access enforces schema contract
-        website = request.__dict__.get("website")
+        try:
+            website = request.website
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("Request website missing: %s", e)
+            website = False
         website_id = website.id if website else False
 
         if website_id:

@@ -3,8 +3,11 @@
 import os
 import logging
 import redis
+import threading
 
 _logger = logging.getLogger(__name__)
+
+POOL_LOCK = threading.Lock()
 
 # [@ANCHOR: redis_connection_pool]
 # Default values used as fallback when the Odoo registry is not yet available
@@ -54,8 +57,9 @@ def get_redis_connection(env=None):
             or password != REDIS_PASS_DEFAULT
         ):
             pool_key = (host, port, password)
-            if pool_key not in _custom_pools:
-                _custom_pools[pool_key] = redis.ConnectionPool(
+            with POOL_LOCK:
+                if pool_key not in _custom_pools:
+                    _custom_pools[pool_key] = redis.ConnectionPool(
                     host=host,
                     port=port,
                     password=password,

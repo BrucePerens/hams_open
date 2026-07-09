@@ -11,7 +11,6 @@ _logger = logging.getLogger(__name__)
 
 class ServiceWorkerController(http.Controller):
 
-    _fs_cache = None
     _fs_lock = threading.Lock()
 
     def _get_fs_stats(self):
@@ -24,20 +23,20 @@ class ServiceWorkerController(http.Controller):
         """
         # Gating for Jules VM stability during Odoo initialization.
         # Prevent scanner during --init phase of tests.
-        is_test = "test_cr" in request.env.registry.__dict__
+        is_test = "test_cr" in vars(request.env.registry)
         is_boot = tools.config.get("init") or tools.config.get("stop_after_init")
         if is_test and is_boot and not request.env.context.get("force_fs_scan"):
             return (0.0, [])
 
         registry = request.env.registry
         if not request.env.context.get("force_fs_scan"):
-            cache = registry.__dict__.get("caching_fs_cache")
+            cache = vars(registry).get("caching_fs_cache")
             if cache is not None:
                 return cache
 
         with type(self)._fs_lock:
             if not request.env.context.get("force_fs_scan"):
-                cache = registry.__dict__.get("caching_fs_cache")
+                cache = vars(registry).get("caching_fs_cache")
                 if cache is not None:
                     return cache
 
@@ -100,7 +99,7 @@ class ServiceWorkerController(http.Controller):
         """
         # Clear FS cache if requested (e.g., during tests or manual refresh)
         if request.env.context.get("force_fs_scan"):
-            request.env.registry.__dict__.pop("caching_fs_cache", None)
+            vars(request.env.registry).pop("caching_fs_cache", None)
 
         max_mtime, file_sizes = self._get_fs_stats()
 
@@ -161,7 +160,7 @@ class ServiceWorkerController(http.Controller):
         Injects mtime (invalidation) and max file size (quota).
         """
         registry = request.env.registry
-        content = registry.__dict__.get("caching_sw_js_content")
+        content = vars(registry).get("caching_sw_js_content")
         if not content:
             try:
                 # audit-ignore-path: Internal module file access.

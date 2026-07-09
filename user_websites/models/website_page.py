@@ -474,9 +474,7 @@ class WebsitePage(models.Model):
             )
             # ADR-0001: All service account mutations must include appropriate context
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
-            _logger.error(
-                f"DEBUG CREATE: vals_list={vals_list} context={self_svc.env.context}"
-            )
+
             records = super(WebsitePage, self_svc).create(vals_list)
         except Exception as e:  # audit-ignore-catch-all
             if "not found" in str(e).lower():
@@ -604,7 +602,7 @@ class WebsitePage(models.Model):
             )
             # ADR-0001: All service account mutations must include appropriate context
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
-            _logger.error(f"DEBUG WRITE: vals={vals} ids={self.ids}")
+
             res = super(WebsitePage, self_svc).write(vals)
         except Exception as e:  # audit-ignore-catch-all
             if "not found" in str(e).lower():
@@ -716,14 +714,6 @@ class WebsitePage(models.Model):
 
         if updates:
             try:
-                # Optimized multi-record update using Postgres Procedure
-                # Reduces round-trips to exactly one.
-                # Tests [@ANCHOR: procedure_flush_view_counters]
-                self.env.cr.execute(
-                    "SELECT user_websites_flush_view_counters(%s)",
-                    (json.dumps([{"inc": inc, "pid": pid} for inc, pid in updates]),),
-                )
-
                 # RACE CONDITION FIX: Delete from Redis first. If PostgreSQL commits, state is perfect.
                 # If PostgreSQL fails and rolls back, we lose views (acceptable), avoiding double-counting (unacceptable).
                 del_pipe = redis_client.pipeline()
@@ -732,6 +722,15 @@ class WebsitePage(models.Model):
                     if val:
                         del_pipe.decrby(key, int(val))
                 del_pipe.execute()
+
+                # Optimized multi-record update using Postgres Procedure
+                # Reduces round-trips to exactly one.
+                # Tests [@ANCHOR: procedure_flush_view_counters]
+                self.env.cr.execute(
+                    "SELECT user_websites_flush_view_counters(%s)",
+                    (json.dumps([{"inc": inc, "pid": pid} for inc, pid in updates]),),
+                )
+
 
                 is_test = vars(self.env.registry).get("test_cr") is not None
                 if not is_test:

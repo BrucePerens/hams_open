@@ -49,9 +49,12 @@ class Module(models.Model):
         )
 
         # Context for reading the core ERP framework table
-        facility_uid = utils._get_service_uid(
-            "zero_sudo.odoo_facility_service_internal"
-        )
+        try:
+            facility_uid = utils._get_service_uid(
+                "zero_sudo.odoo_facility_service_internal"
+            )
+        except AccessError:
+            return
         modules = (
             self.env["ir.module.module"]
             .with_user(facility_uid)

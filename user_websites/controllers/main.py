@@ -263,10 +263,10 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            raise request.not_found()
+            return request.not_found()
 
         if profile_user and profile_user.id != user.id:
-            raise request.not_found()
+            return request.not_found()
         if profile_group:
             is_member = env_svc["user.websites.group"].search_count(
                 [("id", "=", profile_group.id), ("member_ids", "=", user.id)]

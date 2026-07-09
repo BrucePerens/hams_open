@@ -8,6 +8,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 )
 
 import json
+from psycopg2 import sql as psql
 
 import logging
 
@@ -24,7 +25,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         help="The URL-friendly identifier for the site. Alphanumeric and hyphens only.",
     )
 
-    _website_slug_unique = models.Constraint("UNIQUE(website_slug)", "The Website Slug must be unique!")
+    _website_slug_unique = models.Constraint("EXCLUDE (website_slug WITH =) WHERE (website_slug != '')", "The Website Slug must be unique!")
 
     _website_slug_format = models.Constraint("CHECK(website_slug IS NULL OR website_slug = '' OR website_slug ~ '^[a-z0-9\\-]+$')", 'The Website Slug can only contain lowercase letters, numbers, and hyphens.')
 
@@ -39,7 +40,11 @@ class EdgeRoutingMixin(models.AbstractModel):
     @api.model
     def _get_routing_models(self):
         """Returns the list of models that share the global vanity URL namespace."""
-        return ["res.users"]
+        models = []
+        for model_name, model_class in self.env.registry.items():
+            if issubclass(model_class, type(self.env['edge.routing.mixin'])) and model_name != 'edge.routing.mixin':
+                models.append(model_name)
+        return models
 
     @api.model
     def _check_slug_collision(self, env_target, domain):
@@ -222,10 +227,17 @@ class EdgeRoutingMixin(models.AbstractModel):
             if "name" in vals and len(self) > 1:
                 for record in self:
                     if not record.website_slug and "name" in record._fields and record.name:
-                        # Unbatched write is acceptable here because it only hits records missing a slug
-                        record.website_slug = self._generate_unique_slug(
+                        new_slug = self._generate_unique_slug(
                             record.name, record_id=record.id
                         )
+                        query = psql.SQL("UPDATE {} SET website_slug = %s WHERE id = %s").format(
+                            psql.Identifier(self._table)
+                        )
+                        self.env.cr.execute(
+                            query,
+                            (new_slug, record.id)
+                        )
+                        record.invalidate_recordset(['website_slug'])
 
         return res
 

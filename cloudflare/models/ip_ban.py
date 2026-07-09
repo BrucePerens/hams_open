@@ -54,7 +54,10 @@ class CloudflareIPBan(models.Model):
             website_id = self.env["cloudflare.utils"].get_current_website_id()
 
         website = self.env["website"].browse(website_id)
-        token, zone_id = website._get_cloudflare_credentials()
+        if website:
+            token, zone_id = website._get_cloudflare_credentials()
+        else:
+            token, zone_id = None, None
 
         if not token or not zone_id:
             # ADR-0001: Headless Mutation Context

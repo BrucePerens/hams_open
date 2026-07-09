@@ -256,15 +256,17 @@ class BackupConfig(models.Model):
                         host=rmq_host, credentials=credentials
                     )
                     connection = pika.BlockingConnection(conn_params)
-                    channel = connection.channel()
-                    channel.queue_declare(queue="backup_tasks", durable=True)
-                    channel.basic_publish(
-                        exchange="",
-                        routing_key="backup_tasks",
-                        body=msg,
-                        properties=pika.BasicProperties(delivery_mode=2),
-                    )
-                    connection.close()
+                    try:
+                        channel = connection.channel()
+                        channel.queue_declare(queue="backup_tasks", durable=True)
+                        channel.basic_publish(
+                            exchange="",
+                            routing_key="backup_tasks",
+                            body=msg,
+                            properties=pika.BasicProperties(delivery_mode=2),
+                        )
+                    finally:
+                        connection.close()
                 except pika.exceptions.AMQPError as e:
                     logging.getLogger(__name__).warning("An error occurred: %s", e)
                     logging.getLogger(__name__).error(
@@ -295,7 +297,9 @@ class BackupConfig(models.Model):
         for rec in self:
             if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)
-            res = rec.with_user(svc_uid)._publish_to_worker(rec.engine)
+            action = rec.with_user(svc_uid)._publish_to_worker(rec.engine)
+            if isinstance(action, dict) and len(self) == 1:
+                res = action
         return res
 
     def action_apply_policies(self):
@@ -305,11 +309,14 @@ class BackupConfig(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "backup_management.user_backup_service_internal"
         )
+        res = True
         for rec in self:
             if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)
-            rec.with_user(svc_uid)._publish_to_worker("kopia_policy")
-        return True
+            action = rec.with_user(svc_uid)._publish_to_worker("kopia_policy")
+            if isinstance(action, dict) and len(self) == 1:
+                res = action
+        return res
 
     def action_test_connection(self):
         """

@@ -26,3 +26,24 @@ class TestDomainPush(HamsTransactionCase):
         # We can't easily mock the inner function `push_to_pager_duty`
         # But we can call the outer function to ensure it doesn't crash.
         domain_model._invalidate_cache(["manualpush.com"])
+
+    def test_push_all_to_pager_duty_batching(self):
+
+        domain_model = self.env["edge.routing.domain"].with_user(
+            self.env.ref("base.user_admin")
+        )
+        
+        # Create 1005 domains
+        vals_list = [{'name': f'domain{i}.com', 'target_slug': f'target{i}'} for i in range(1005)]
+        domain_model.create(vals_list)
+        
+        mock_post = self.safe_patch('odoo.addons.edge_routing.models.domain.requests.post')
+        domain_model.push_all_to_pager_duty()
+            
+        total_domains = domain_model.search_count([])
+        self.assertGreaterEqual(total_domains, 1005)
+        
+        mock_post.assert_called_once()
+        _, kwargs = mock_post.call_args
+        posted_domains = kwargs.get('json', {}).get('params', {}).get('domains', [])
+        self.assertEqual(len(posted_domains), total_domains)

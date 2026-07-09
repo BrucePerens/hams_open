@@ -12,12 +12,13 @@ from odoo.addons.distributed_redis_cache.redis_pool import (
     get_redis_connection,
 )
 import threading
+from odoo.tools.lru import LRU
 
 _logger = logging.getLogger(__name__)
 
 # Local fallback cache to maintain HA if Redis is unreachable.
 # Limit to 8192 entries to prevent memory exhaustion during Redis outages.
-_local_cache = tools.lru.LRU(8192)
+_local_cache = LRU(8192)
 LRU_LOCK = threading.Lock()
 
 
@@ -77,12 +78,13 @@ def distributed_cache():
             website_suffix = f":w{website_id}" if website_id else ""
             company_suffix = f":c{company_id}" if company_id else ""
 
-            arg_hash = _get_hash(*args, **kwargs)
+            arg_hash = _get_hash(self, *args, **kwargs)
             cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}{company_suffix}:{arg_hash}"
 
             # L1 Cache Check (In-Memory)
-            if cache_key in _local_cache:
-                return _local_cache[cache_key]
+            with LRU_LOCK:
+                if cache_key in _local_cache:
+                    return _local_cache[cache_key]
 
             use_redis = bool(redis and redis_pool)
 
@@ -96,7 +98,8 @@ def distributed_cache():
                         # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
                         _logger.debug("Redis cache hit: %s", cache_key)
                         res = json.loads(cached)
-                        _local_cache[cache_key] = res
+                        with LRU_LOCK:
+                            _local_cache[cache_key] = res
                         return res
                 except redis.RedisError as e:
                     _logger.warning("Network partition detected. Bypassing Redis: %s", e)
@@ -109,7 +112,7 @@ def distributed_cache():
 
             if use_redis:
                 try:
-                    serialized_result = json.dumps(result)
+                    serialized_result = json.dumps(result, default=tools.json_default)
                     r = get_redis_connection(self.env)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                 except redis.RedisError as e:
@@ -118,7 +121,8 @@ def distributed_cache():
                     _logger.warning("Redis cache write serialization failed: %s", e)
 
             # Always populate L1 local fallback cache
-            _local_cache[cache_key] = result
+            with LRU_LOCK:
+                _local_cache[cache_key] = result
             return result
 
         return wrapper

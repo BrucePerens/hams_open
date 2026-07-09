@@ -63,10 +63,6 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_request.httprequest = type("MockHttpRequest", (object,), {})()
         mock_request.httprequest.path = "/web/assets/1/dummy.js"  # burn-ignore-route
 
-        # FIX: The middleware relies on _get_current_object() to resolve the LocalProxy.
-        # Without this, it throws an AttributeError and skips header injection.
-        mock_request._get_current_object = lambda: mock_request
-
         self.safe_patch(
             "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
         )
@@ -113,3 +109,38 @@ class TestCloudflareHeaders(HamsHttpCase):
             res["arch"],
             "The injected settings block must exist in the compiled arch.",
         )
+
+    def test_04_website_cache_tag_localproxy(self):
+        """Verify that cache tags are added correctly via getattr on request."""
+        class DummyBase:
+            @classmethod
+            def _post_dispatch(cls, response):
+                return response
+
+        class DummyIrHttp(CloudflareIrHttp, DummyBase):
+            pass
+
+        mock_response = Response()
+        
+        class MockWebsite:
+            id = 99
+
+        class MockRequest:
+            env = type("MockEnv", (object,), {"user": type("MockUser", (object,), {"_is_public": lambda self: True})()})()
+            website = MockWebsite()
+            httprequest = type("MockHttpRequest", (object,), {"path": "/some-public-route"})()
+            
+            # Simulate Werkzeug's LocalProxy hiding __dict__ properties when accessed directly via __dict__
+            @property
+            def __dict__(self):
+                return {}
+                
+        mock_request = MockRequest()
+
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+        )
+
+        res = DummyIrHttp._post_dispatch(mock_response)
+        self.assertIn("odoo-website-99", res.headers.get("Cache-Tag", ""))
+

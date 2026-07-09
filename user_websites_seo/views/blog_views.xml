@@ -5,24 +5,22 @@
         <field name="model">blog.post</field>
         <field name="inherit_id" ref="website_blog.view_blog_post_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//sheet" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_pages_posts] -->
-                <notebook>
-                    <page string="SEO Metadata" name="seo_settings">
+            <xpath expr="//notebook" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_pages_posts] -->
+                <page string="SEO Metadata" name="seo_settings">
+                    <group>
                         <group>
-                            <group>
-                                <separator string="SEO Data"/>
-                                <field name="seo_name"/>
-                                <field name="website_meta_title"/>
-                                <field name="website_meta_description"/>
-                                <field name="website_meta_keywords"/>
-                            </group>
-                            <group>
-                                <separator string="Social Media"/>
-                                <field name="website_meta_og_img"/>
-                            </group>
+                            <separator string="SEO Data"/>
+                            <field name="seo_name"/>
+                            <field name="website_meta_title"/>
+                            <field name="website_meta_description"/>
+                            <field name="website_meta_keywords"/>
                         </group>
-                    </page>
-                </notebook>
+                        <group>
+                            <separator string="Social Media"/>
+                            <field name="website_meta_og_img"/>
+                        </group>
+                    </group>
+                </page>
             </xpath>
         </field>
     </record>

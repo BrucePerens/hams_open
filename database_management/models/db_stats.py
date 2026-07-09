@@ -4,8 +4,9 @@ import os
 import subprocess
 
 from psycopg2 import sql as psql
-from odoo import models, fields, api, tools, _
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError
+import odoo.tools.sql
 
 _logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class DatabaseTableStat(models.Model):
     )
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_table_stat AS (
@@ -155,7 +156,7 @@ class DatabaseQueryStat(models.Model):
     mean_time = fields.Float(string="Mean Time (ms)", readonly=True)
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
 
         can_query = False
         try:
@@ -186,6 +187,7 @@ class DatabaseQueryStat(models.Model):
                         total_exec_time as total_time,
                         mean_exec_time as mean_time
                     FROM pg_stat_statements
+                    WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
                 )
             """
             )
@@ -216,7 +218,7 @@ class DatabaseActivity(models.Model):
     duration = fields.Float(string="Duration (s)", readonly=True)
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_activity AS (
@@ -245,7 +247,7 @@ class DatabaseActivity(models.Model):
         pids = [rec.pid for rec in self if rec.pid]
         if pids:
             # Performance: Optimize latency by reducing database operation round-trips to only one.
-            # We use a DO block to ensure the termination logic runs entirely on the DB server.
+            # We use SELECT unnest() to ensure the termination logic runs entirely on the DB server.
             env_svc.cr.execute(
                 "SELECT pg_terminate_backend(pid) FROM unnest(%s) AS pid;",
                 (pids,),
@@ -269,7 +271,7 @@ class DatabaseIndexStat(models.Model):
     index_size_kb = fields.Float(string="Size (KB)", readonly=True)
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_index_stat AS (
@@ -309,7 +311,7 @@ class DatabaseReplicationStat(models.Model):
     sync_state = fields.Char(string="Sync State", readonly=True)
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_replication_stat AS (
@@ -351,7 +353,7 @@ class DatabaseIndexAdvisor(models.Model):
     table_size_mb = fields.Float(string="Table Size (MB)", readonly=True)
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_index_advisor AS (
@@ -437,8 +439,6 @@ class DatabaseQueryStatInherit(models.Model):
 
         try:
             query_text = self.query.strip()
-            if ";" in query_text:
-                raise UserError(_("Multiple statements are not allowed."))
             
             query_upper = query_text.upper()
             if not (query_upper.startswith("SELECT") or query_upper.startswith("WITH")):
@@ -447,7 +447,8 @@ class DatabaseQueryStatInherit(models.Model):
 
             cr_svc.execute("SAVEPOINT explain_sp")
             try:
-                cr_svc.execute("SET TRANSACTION READ ONLY")
+                set_query = psql.SQL("SET LOCAL {} = %s").format(psql.Identifier("default_transaction_read_only"))
+                cr_svc.execute(set_query, ("on",))
                 explain_prefix = psql.SQL("EXPLAIN (ANALYZE, BUFFERS) ")
                 explain_query = explain_prefix + psql.SQL(query_text)
                 cr_svc.execute(explain_query)

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from unittest.mock import MagicMock
+import os
 from odoo.tests.common import tagged
+from odoo.modules.module import get_module_path
 from lxml import etree
 import werkzeug
 from odoo.addons.caching.controllers.main import ServiceWorkerController
@@ -52,10 +54,17 @@ class TestSettingsAndCache(RealTransactionCase):
         # Even with 0MB quota, we expect some value for MAX_FILE_SIZE_BYTES
         self.assertIn("MAX_FILE_SIZE_BYTES", response_0.text)
 
+    def test_07_no_dict_manipulation(self):
+        """Verify that __dict__ is not manipulated in controllers/main.py and _fs_cache is removed."""
+        main_py = os.path.join(get_module_path("caching"), "controllers", "main.py")
+        with open(main_py, "r") as f:
+            content = f.read()
+        self.assertNotIn("__dict__", content, "[!] DIAGNOSTIC FOR AI: Direct __dict__ manipulation is discouraged.")
+        self.assertNotIn("_fs_cache = None", content, "[!] DIAGNOSTIC FOR AI: _fs_cache is unused and dead code.")
+
     def test_06_quota_edge_cases(self):
         """Test quota calculation edge cases with mocked filesystem data."""
         controller = ServiceWorkerController()
-        ServiceWorkerController._fs_cache = None
 
         mock_req = MagicMock()
         mock_req.env = self.env["res.users"].env
@@ -180,7 +189,6 @@ class TestSettingsAndCache(RealTransactionCase):
         """Verify that the FS scan correctly uses the service account."""
         controller = ServiceWorkerController()
         # Reset cache to force re-scan
-        ServiceWorkerController._fs_cache = None
 
         mock_req = MagicMock()
         mock_req.env = self.env["res.users"].with_context(force_fs_scan=True).env

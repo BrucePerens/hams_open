@@ -56,14 +56,14 @@ class UserWebsitesSEOController(UserWebsitesController):
                 user.read(list(user._get_seo_fields()))
                 # We de-elevate the recordset to the current request's environment to prevent SSTI
                 if request and request.env:
-                    user = user.with_env(request.env)
+                    user = user.with_user(request.env.user)
                 qcontext["main_object"] = user
                 qcontext["profile_user"] = user
             elif group:
                 group.read(list(group._get_seo_fields()))
                 # We de-elevate the recordset to the current request's environment to prevent SSTI
                 if request and request.env:
-                    group = group.with_env(request.env)
+                    group = group.with_user(request.env.user)
                 qcontext["main_object"] = group
                 qcontext["profile_group"] = group
 

@@ -354,8 +354,10 @@ class DaemonKeyRegistry(models.Model):
                 f.write("ODOO_RPC_KEY=%s\n" % key)
         except PermissionError as e:
             _logger.error("Failed to write secure env file %s due to permissions: %s", path, e)
+            raise
         except OSError as e:
             _logger.error("OS error writing secure env file %s: %s", path, e)
+            raise
 
     @api.model
     def _cron_rotate_all_keys(self):
@@ -378,19 +380,21 @@ class DaemonKeyRegistry(models.Model):
         )
 
         for reg in registries:
+            reg_id = reg.id
+            reg_name = reg.name
             try:
                 reg._rotate_key_and_write_file()
                 self.env.cr.commit()
             except (OSError, UserError, ValidationError, AccessError) as e:
                 self.env.cr.rollback()
-                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() WHERE id = %s", (reg.id,))
+                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() AT TIME ZONE 'UTC' WHERE id = %s", (reg_id,))
                 self.env.cr.commit()
                 _logger.error(
-                    "Managed failure rotating key for daemon %s: %s", reg.name, e
+                    "Managed failure rotating key for daemon %s: %s", reg_name, e
                 )
             except Exception as e:  # audit-ignore-catch-all
                 self.env.cr.rollback()
-                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() WHERE id = %s", (reg.id,))
+                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() AT TIME ZONE 'UTC' WHERE id = %s", (reg_id,))
                 self.env.cr.commit()
                 _logger.error(
                     "Unexpected error during key rotation for daemon %s: %s",

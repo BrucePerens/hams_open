@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 @tagged('post_install', '-at_install')
 class TestEdgeRoutingMixin(HamsTransactionCase):
@@ -62,3 +65,29 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.assertTrue(user.website_slug)
         user.write({'website_slug': False})
         self.assertFalse(user.website_slug)
+
+    def test_empty_slug_unique_violation(self):
+        user1 = self.User.create({'name': 'U1', 'login': 'u1_empty@ex.com'})
+        user2 = self.User.create({'name': 'U2', 'login': 'u2_empty@ex.com'})
+        # Should not raise UniqueViolation when both are empty string
+        user1.write({'website_slug': ''})
+        user2.write({'website_slug': ''})
+        self.env.flush_all()
+        self.assertEqual(user1.website_slug, '')
+        self.assertEqual(user2.website_slug, '')
+
+    def test_get_routing_models_dynamic(self):
+        models = self.env['edge.routing.mixin']._get_routing_models()
+        self.assertIn('res.users', models)
+
+    def test_get_record_by_slug_cache_removal(self):
+        # res.users get_record_by_slug should not be decorated with @distributed_cache
+        # If it is, the class method will have the 'clear_cache' attribute from the decorator
+        method = self.User.__class__.get_record_by_slug
+        has_clear_cache = False
+        try:
+            _ = method.clear_cache
+            has_clear_cache = True
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("clear_cache exception: %s", e)
+        self.assertFalse(has_clear_cache, "get_record_by_slug on res.users should not have @distributed_cache")

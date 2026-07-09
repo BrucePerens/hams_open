@@ -22,9 +22,9 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         cmd = [python_exec, script_path] + (args or [])
         env = os.environ.copy()
 
-        sys_paths = "/usr/lib/python3/dist-packages"
+        sys_paths = os.pathsep.join(sys.path)
         if "PYTHONPATH" in env:
-            env["PYTHONPATH"] = f"{sys_paths}:{env['PYTHONPATH']}"
+            env["PYTHONPATH"] = f"{sys_paths}{os.pathsep}{env['PYTHONPATH']}"
         else:
             env["PYTHONPATH"] = sys_paths
 

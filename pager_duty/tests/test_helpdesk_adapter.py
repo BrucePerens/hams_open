@@ -68,9 +68,11 @@ class TestHelpdeskAdapter(HamsTransactionCase):
 
     def test_02_smtp_fallback_on_missing_model(self):
         """Verify that a missing target model triggers the emergency SMTP fallback page."""
-        # Set to an invalid/uninstalled model
-        self.env["ir.config_parameter"].set_param(
-            "pager_duty.helpdesk_model", "invalid.model.does.not.exist"
+        # Set to an invalid/uninstalled model using safe_patch to avoid ormcache test leakage
+        self.safe_patch_object(
+            type(self.env["zero_sudo.security.utils"]),
+            "_get_system_param",
+            return_value="invalid.model.does.not.exist"
         )
 
         manager = self.on_duty_user
@@ -108,3 +110,39 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             fallback_found,
             "The adapter MUST execute an emergency SMTP message post if the helpdesk system is unreachable.",
         )
+
+    def test_03_batch_helpdesk_creation(self):
+        """Verify that multiple incidents generate helpdesk tickets in a single batched create query."""
+        self.env["ir.config_parameter"].set_param(
+            "pager_duty.helpdesk_model", "hams_helpdesk.ticket"
+        )
+        
+        manager = self.on_duty_user
+        self.safe_patch_object(
+            type(self.env["calendar.event"]),
+            "get_current_on_duty_admin",
+            lambda self: manager,
+            create=True,
+        )
+        
+        incidents = self.env["pager.incident"].create([
+            {"name": "Inc1", "source": "src", "severity": "low", "description": "desc1"},
+            {"name": "Inc2", "source": "src", "severity": "low", "description": "desc2"},
+            {"name": "Inc3", "source": "src", "severity": "low", "description": "desc3"},
+        ])
+        
+        for inc in incidents:
+            inc.helpdesk_ticket_id = False
+            
+        with self.assertQueryCount(10): # Adjust limit if needed, but we check that the creates are batched
+            original_create = self.env["hams_helpdesk.ticket"].__class__.create
+            mock_create = self.safe_patch_object(self.env["hams_helpdesk.ticket"].__class__, 'create')
+            
+            def fake_create(self_obj, *args, **kwargs):
+                return original_create(self_obj, *args, **kwargs)
+            mock_create.side_effect = fake_create
+            
+            incidents.action_generate_helpdesk_ticket()
+            
+            self.assertEqual(mock_create.call_count, 1, "Helpdesk tickets MUST be created in a single batch query.")
+

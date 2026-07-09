@@ -467,3 +467,71 @@ class TestBinaryManifest(HamsTransactionCase):
             .search([("name", "=", "zip_slip")])
             ._get_target_filename(),
         )
+
+    def test_17_zip_regular_file_allowed(self):
+        # [!] DIAGNOSTIC FOR AI: Testing that regular files in ZIPs are NOT blocked as symlinks.
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
+        self.env["binary.manifest"].create(
+            {
+                "name": "regzip",
+                "url": "http://example.com/reg.zip",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "zip",
+                "extract_member": "regbin",
+            }
+        )
+
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"data", b""]
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+
+        mock_zip_open = self.safe_patch("zipfile.ZipFile")  # audit-ignore-path
+        mock_zip = MagicMock()
+        mock_zip_open.return_value.__enter__.return_value = mock_zip
+
+        mock_zinfo = MagicMock()
+        mock_zinfo.filename = "regbin"
+        # Set external_attr to represent a regular file (0x8000 << 16)
+        mock_zinfo.external_attr = 0x8000 << 16
+
+        mock_zip.infolist.return_value = [mock_zinfo]
+
+        # Mock zip_ref.open to return a stream of bytes
+        mock_zip.open.return_value = io.BytesIO(b"extracted-data")
+
+        # This should NOT raise an error if the stat.S_ISLNK fix is applied
+        path = self.env["binary.manifest"].ensure_executable("regzip")
+        self.assertTrue(os.path.exists(path))
+
+    def test_18_path_shadow_prevention(self):
+        # [!] DIAGNOSTIC FOR AI: Testing prevention of system PATH binaries from shadowing.
+        self.safe_patch("shutil.which", return_value="/usr/bin/testbin")
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
+        # Create a manifest
+        self.env["binary.manifest"].create(
+            {
+                "name": "shadowbin",
+                "url": "http://example.com/shadowbin",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "binary",
+            }
+        )
+
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"data", b""]
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+        
+        path = self.env["binary.manifest"].ensure_executable("shadowbin")
+        # Ensure that ensure_executable doesn't return the path returned by shutil.which
+        self.assertNotEqual(path, "/usr/bin/testbin")

@@ -254,3 +254,70 @@ class TestHelpdeskCore(HamsTransactionCase):
         self.env["hams_helpdesk.ticket"].get_view(
             view_id=self.env.ref("hams_helpdesk.view_hams_helpdesk_ticket_pivot").id
         )
+
+    def test_bug_dynamic_selection(self):
+        """Verify dynamic stage selection conversion does not crash."""
+        ticket = self.env["hams_helpdesk.ticket"].create({
+            "name": "Dynamic Stage Test",
+            "partner_id": self.portal_user.partner_id.id,
+            "stage": "new",
+        })
+        
+        # Patch selection to be a callable to simulate dynamic selection
+        self.safe_patch_object(
+            self.env["hams_helpdesk.ticket"]._fields["stage"],
+            "selection",
+            lambda *args: [("new", "New"), ("in_progress", "In Progress"), ("resolved", "Resolved"), ("closed", "Closed")]
+        )
+        
+        # Transition stage to trigger the mailback code
+        ticket.write({"stage": "in_progress"})
+        
+        messages = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")]
+        )
+        mailback_found = any("Your issue has been updated" in (m.body or "") for m in messages)
+        self.assertTrue(mailback_found)
+
+    def test_bug_xss_shift_handoff(self):
+        """Verify shift handoff notes are HTML escaped to prevent XSS."""
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "XSS Test Ticket", "user_id": self.manager_user.id}
+        )
+
+        new_user = self.env["res.users"].create(
+            {
+                "name": "XSS Shift Operator",
+                "login": "xss_shift_test",
+                "group_ids": [(6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_user").id])],
+            }
+        )
+
+        wizard = self.env["hams_helpdesk.shift_handoff"].create(
+            {
+                "ticket_id": ticket.id,
+                "old_user_id": self.manager_user.id,
+                "new_user_id": new_user.id,
+                "handoff_notes": "<script>alert('xss')</script>",
+            }
+        )
+
+        wizard.with_company(self.env.company).action_confirm_handoff()
+
+        messages = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")]
+        )
+        audit_trail = " ".join([m.body for m in messages if m.body])
+        self.assertNotIn("<script>alert", audit_trail, "Handoff notes MUST be escaped.")
+        self.assertIn("&lt;script&gt;alert", audit_trail, "Handoff notes MUST be escaped.")
+
+    def test_bug_dependency_crash(self):
+        """Verify ticket creation doesn't crash when pager_duty isn't installed."""
+        # Un-patch if there's any global mock, or just run directly
+        # Since we don't mock get_current_on_duty_admin in this test, it will use the real one.
+        # If pager_duty is not installed, it will raise AttributeError and fail the test.
+        ticket = self.env["hams_helpdesk.ticket"].create({
+            "name": "Crash Test Ticket",
+            "partner_id": self.portal_user.partner_id.id,
+        })
+        self.assertTrue(ticket.id)

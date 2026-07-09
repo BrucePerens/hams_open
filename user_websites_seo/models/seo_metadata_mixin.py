@@ -48,9 +48,8 @@ class SEOMetadataMixin(models.AbstractModel):
             svc_uid = utils._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
-            res = res and super(
-                SEOMetadataMixin,
-                self.with_user(svc_uid).with_context(mail_notrack=True),
+            res = res and self.with_user(svc_uid).with_context(
+                tracking_disable=True, skip_seo_metadata_mixin=True
             ).write(seo_vals)
 
         return res

@@ -42,10 +42,9 @@ class PagerLogAPI(http.Controller):
             # Dispatch to the root daemon
             r.publish("log_search_req", json.dumps(payload))
 
-            # Wait for response (Timeout after 5 seconds to protect WSGI worker)
-            # BLOCKING CALL: get_message with timeout is the optimized pattern for Odoo WSGI workers
-            # as it yields the thread until Redis activity or timeout occurs.
-            message = pubsub.get_message(ignore_subscribe_messages=True, timeout=5.0)
+            # Wait for response
+            # BLOCKING CALL: get_message without timeout
+            message = pubsub.get_message(ignore_subscribe_messages=True)
             if message and message["type"] == "message":
                 data = json.loads(message["data"])
                 pubsub.unsubscribe()

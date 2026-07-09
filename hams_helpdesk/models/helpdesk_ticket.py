@@ -92,9 +92,12 @@ class HelpdeskTicket(models.Model):
                 Calendar = pager_env["calendar.event"]
             except Exception as e: # audit-ignore-catch-all
                 _logger.info("PagerDuty service env not loaded: %s", e)
-        on_duty_admin = Calendar.get_current_on_duty_admin()
-        if on_duty_admin:
-            on_duty_user_id = on_duty_admin.id
+            try:
+                on_duty_admin = Calendar.get_current_on_duty_admin()
+                if on_duty_admin:
+                    on_duty_user_id = on_duty_admin.id
+            except Exception as e: # audit-ignore-catch-all
+                _logger.warning("Failed to get on_duty_admin: %s", e)
 
         # Pre-fetch records
         website_ids = {vals["website_id"] for vals in vals_list if vals.get("website_id")}
@@ -238,7 +241,7 @@ class HelpdeskTicket(models.Model):
         if "stage" in vals:
             for ticket in self:
                 if ticket.partner_id:
-                    stage_str = dict(self._fields["stage"].selection).get(ticket.stage)
+                    stage_str = dict(self._fields["stage"]._description_selection(self.env)).get(ticket.stage)
                     ticket.message_post(
                         body=_("Your issue has been updated. New Status: %s")
                         % stage_str,

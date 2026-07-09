@@ -309,7 +309,7 @@ class PagerCheck(models.Model):
         self.env["pager.check"].search([], limit=1000).unlink()
 
         # Parse Log Analyzer Config
-        if "log_analyzer" in data:
+        if isinstance(data, dict) and "log_analyzer" in data:
             log_config = data["log_analyzer"]
             self.env["pager.log.file"].search([], limit=1000).unlink()
             self.env["pager.log.pattern"].search([], limit=1000).unlink()
@@ -375,9 +375,7 @@ class PagerCheck(models.Model):
                 and check.get("parent") in name_to_id
                 and check.get("name") in name_to_id
             ):
-                check_rec = next(
-                    (r for r in all_checks if r.id == name_to_id[check.get("name")]), None
-                )
+                check_rec = self.env["pager.check"].browse(name_to_id[check.get("name")])
                 if check_rec:
                     check_rec.write({"parent_check_id": name_to_id[check.get("parent")]})
 

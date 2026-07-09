@@ -123,3 +123,63 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             "/fake/central/path",
             link.symlink_path,
         )
+
+    def test_pager_integration_batching(self):
+        # [!] DIAGNOSTIC FOR AI: Testing that PagerDuty notification batches iteratively.
+        website = self.env["website"].search([], limit=1)
+        if not website:
+            website = self.env["website"].create({"name": "Test Tenant"})
+            
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_response = __import__("unittest.mock").mock.MagicMock()
+        mock_response.read.side_effect = [b"data", b""]
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+        
+        
+        manifest = self.env["binary.manifest"].create({
+            "name": "pager_test",
+            "url": "http://example.com/pager",
+            "checksum": "fake",
+        })
+        version1 = self.env["binary.version"].create({
+            "manifest_id": manifest.id,
+            "version_number": "1.0",
+            "url": "http://example.com/1.0",
+            "checksum": "fake1",
+        })
+        version2 = self.env["binary.version"].create({
+            "manifest_id": manifest.id,
+            "version_number": "2.0",
+            "url": "http://example.com/2.0",
+            "checksum": "fake2",
+        })
+        
+        # Create many links for different websites
+        links = []
+        for i in range(15):
+            new_site = self.env["website"].create({"name": f"Test Tenant {i}"})
+            links.append({
+                "website_id": new_site.id,
+                "manifest_id": manifest.id,
+                "active_version_id": version1.id,
+            })
+        self.env["binary.tenant.link"].create(links)
+        
+        original_search = self.env["binary.tenant.link"].search
+        call_limits = []
+        
+        def mock_search(*args, **kwargs):
+            call_limits.append((kwargs.get('offset', 0), kwargs.get('limit', None)))
+            return original_search(*args, **kwargs)
+            
+        self.safe_patch_object(type(self.env["binary.tenant.link"]), "search", mock_search)
+        
+        mock_incident_create = self.safe_patch_object(type(self.env["pager.incident"]), "create")
+        
+        version2.action_notify_tenants()
+        
+        self.assertTrue(len(call_limits) >= 2, "[!] DIAGNOSTIC FOR AI: Search was not called in a batched loop")
+        self.assertTrue(any(offset > 0 for offset, limit in call_limits), "[!] DIAGNOSTIC FOR AI: Offset was not incremented")
+        self.assertTrue(mock_incident_create.called, "[!] DIAGNOSTIC FOR AI: Pager incidents should be created")
+

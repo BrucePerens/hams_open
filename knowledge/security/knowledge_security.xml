@@ -26,7 +26,7 @@
             <field name="name">Knowledge Article Admin</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('knowledge.group_manual_manager'))]"/>
-            <field name="domain_force">['&amp;', ('website_id', 'in', (False, website.id)), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
             <field name="perm_create" eval="True"/>
@@ -37,7 +37,7 @@
             <field name="name">Knowledge Article Internal Read</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_portal')), (4, ref('base.group_user'))]"/>
-            <field name="domain_force">['&amp;', '&amp;', ('website_id', 'in', (False, website.id)), '|', ('company_id', '=', False), ('company_id', 'in', company_ids), '|', '|', ('internal_permission', '!=', 'none'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
+            <field name="domain_force">['&amp;', '|', ('company_id', '=', False), ('company_id', 'in', company_ids), '|', '|', ('internal_permission', '!=', 'none'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>
@@ -48,7 +48,7 @@
             <field name="name">Knowledge Article Internal Read Published</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_portal')), (4, ref('base.group_user'))]"/>
-            <field name="domain_force">['&amp;', '&amp;', ('website_id', 'in', (False, website.id)), '|', ('company_id', '=', False), ('company_id', 'in', company_ids), ('is_published', '=', True)]</field>
+            <field name="domain_force">['&amp;', '|', ('company_id', '=', False), ('company_id', 'in', company_ids), ('is_published', '=', True)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>
@@ -59,7 +59,7 @@
             <field name="name">Knowledge Article Internal Write</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_user'))]"/>
-            <field name="domain_force">['&amp;', '&amp;', ('website_id', 'in', (False, website.id)), '|', ('company_id', '=', False), ('company_id', 'in', company_ids), '|', '|', ('internal_permission', '=', 'write'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
+            <field name="domain_force">['&amp;', '|', ('company_id', '=', False), ('company_id', 'in', company_ids), '|', '|', ('internal_permission', '=', 'write'), ('create_uid', '=', user.id), ('member_ids', 'in', user.ids)]</field>
             <field name="perm_read" eval="False"/>
             <field name="perm_write" eval="True"/>
             <field name="perm_create" eval="True"/>
@@ -70,7 +70,7 @@
             <field name="name">Knowledge Article Public Read</field>
             <field name="model_id" ref="model_knowledge_article"/>
             <field name="groups" eval="[(4, ref('base.group_public'))]"/>
-            <field name="domain_force">['&amp;', '&amp;', ('website_id', 'in', (False, website.id)), '|', ('company_id', '=', False), ('company_id', 'in', company_ids), ('is_published', '=', True)]</field>
+            <field name="domain_force">['&amp;', '|', ('company_id', '=', False), ('company_id', 'in', company_ids), ('is_published', '=', True)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>

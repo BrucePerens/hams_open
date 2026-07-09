@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import re
-from odoo import models, fields, tools, _
+from odoo import models, fields, _
 from odoo.exceptions import UserError
 from psycopg2 import sql
+import odoo.tools.sql
 
 
 class DatabasePgSetting(models.Model):
@@ -24,7 +25,7 @@ class DatabasePgSetting(models.Model):
     pending_restart = fields.Boolean(string="Pending Restart", readonly=True)
 
     def init(self):
-        tools.drop_view_if_exists(self.env.cr, self._table)
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_pg_setting AS (
@@ -175,6 +176,14 @@ class PgHaWizard(models.TransientModel):
             raise UserError(
                 _("Replication Password must be at least 8 characters long.")
             )
+
+        alnum_pattern = re.compile(r"^[a-zA-Z0-9_]+$")
+        if not self.cluster_name or not alnum_pattern.match(self.cluster_name):
+            raise UserError(_("Invalid cluster name. Must be alphanumeric."))
+        if not self.superuser_user or not alnum_pattern.match(self.superuser_user):
+            raise UserError(_("Invalid superuser name. Must be alphanumeric."))
+        if not self.replication_user or not alnum_pattern.match(self.replication_user):
+            raise UserError(_("Invalid replication user name. Must be alphanumeric."))
 
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]

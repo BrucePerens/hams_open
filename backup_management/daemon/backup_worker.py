@@ -226,8 +226,11 @@ def execute_job(ch, method, properties, body):
         log_buffer = ""
         last_update = time.time()
 
-        for line in iter(proc.stdout.readline, ""):
-            log_buffer += line
+        while True:
+            char = proc.stdout.read(1)
+            if not char:
+                break
+            log_buffer += char
             # Throttle updates to Odoo to avoid overwhelming it
             if time.time() - last_update > 2.0:
                 try:

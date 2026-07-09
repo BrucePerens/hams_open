@@ -107,3 +107,19 @@ class TestGeneralizedConfig(HamsTransactionCase):
         check_model = self.env["pager.check"].with_user(self.admin)
         path = check_model._get_config_path()
         self.assertTrue(path.endswith("pager_config.json"))
+
+    def test_05_json_type_hazard(self):
+        """
+        Verify that passing a JSON array instead of a dictionary does not crash the JSON pull.
+        """
+        check_model = self.env["pager.check"].with_user(self.admin)
+        
+        # Mock the file read to supply a JSON array
+        m_open = mock_open(read_data="[]")
+        self.safe_patch("builtins.open", m_open)
+        self.safe_patch("os.path.exists", return_value=True)
+        
+        # This should not raise TypeError
+        check_model.action_pull_from_json()
+        m_open.assert_called_once()
+

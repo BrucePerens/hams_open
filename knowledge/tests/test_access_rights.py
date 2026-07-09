@@ -241,3 +241,12 @@ class TestManualAccessRights(HamsTransactionCase):
         # Non-member should be blocked
         with self.assertRaises(AccessError):
             _ = shared_article.with_user(self.other_internal_user).name
+
+    def test_09_backend_record_rule_evaluation_nameerror(self):
+        """Verify that record rules do not crash with a NameError on 'website' in a backend context."""
+        try:
+            # We fetch as an internal user to trigger the rule evaluation
+            _ = self.published_article.with_user(self.internal_user).name
+        except NameError as e:
+            self.fail(f"Record rules crashed with a NameError: {e}")
+

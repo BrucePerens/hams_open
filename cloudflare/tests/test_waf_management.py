@@ -154,3 +154,27 @@ class TestWafManagement(HamsTransactionCase):
 
         payload = mock_update.call_args[0][1]
         self.assertEqual(payload["rules"][0]["action"], "managed_challenge")
+
+    def test_05_execute_ban_missing_website(self):
+        """Verify _execute_ban gracefully handles missing website context."""
+        # Force get_current_website_id to return None
+        mock_get_website_id = self.safe_patch_object(
+            type(self.env["cloudflare.utils"]), "get_current_website_id"
+        )
+        mock_get_website_id.return_value = None
+
+        # Should return False and fail gracefully without crashing
+        res = (
+            self.env["cloudflare.ip.ban"]
+            .with_user(self.svc_uid)
+            ._execute_ban("10.0.0.2", notes="Test Spam")
+        )
+        self.assertFalse(res)
+
+        ban_record = self.env["cloudflare.ip.ban"].search(
+            [("ip_address", "=", "10.0.0.2")], limit=1
+        )
+        self.assertTrue(ban_record)
+        self.assertEqual(ban_record.state, "failed")
+        self.assertIn("Missing Cloudflare credentials", ban_record.notes)
+

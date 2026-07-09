@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -15,7 +15,6 @@ class ResUsersEdgeRouting(models.Model):
     _inherit = ["res.users", "edge.routing.mixin"]
 
     @api.model
-    @distributed_cache()
     def get_record_by_slug(self, slug, override_svc_uid=None):
         res = super().get_record_by_slug(slug, override_svc_uid=override_svc_uid)
         if not res and slug:

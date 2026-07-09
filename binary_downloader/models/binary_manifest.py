@@ -95,11 +95,6 @@ class BinaryManifest(models.Model):
                 record.is_installed = False
                 continue
 
-            # Check system path
-            if shutil.which(record.name):
-                record.is_installed = True
-                continue
-
             # Check hams_bin
             filename = record._get_target_filename()
             target_bin = os.path.join(bin_dir, filename)
@@ -157,10 +152,6 @@ class BinaryManifest(models.Model):
             or cmd_name in (".", "..")
         ):
             raise ValidationError(_("Invalid binary name: %s") % cmd_name)
-
-        path = shutil.which(cmd_name)
-        if path:
-            return path
 
         # CONDUCT SECURITY AUDIT: Binary manifests are technical system-wide resources.
         # We use the micro-privilege service account for resolution.
@@ -336,7 +327,7 @@ class BinaryManifest(models.Model):
                             ):
                                 # Security: Check for symlinks (external attributes)
                                 # ZIP external attributes: bits 16-31 for Unix permissions
-                                if (zinfo.external_attr >> 16) & stat.S_IFLNK:
+                                if stat.S_ISLNK(zinfo.external_attr >> 16):
                                     raise UserError(
                                         _(
                                             "Security Alert: Links are not allowed in the archive."

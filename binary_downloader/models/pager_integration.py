@@ -13,15 +13,6 @@ class BinaryVersionPager(models.Model):
         )
         Incident = self.env["pager.incident"].with_user(svc_uid)
 
-        # Bounded search to satisfy linter
-        links = self.env["binary.tenant.link"].search(
-            [
-                ("manifest_id", "=", self.manifest_id.id),
-                ("active_version_id", "!=", self.id),
-            ],
-            limit=1000,
-        )
-
         # Read system configuration safely without sudo
         base_url = (
             self.env["ir.config_parameter"]
@@ -36,17 +27,35 @@ class BinaryVersionPager(models.Model):
         action_id = action_ref.id if action_ref else ""
 
         incidents_created = 0
-        for link in links:
-            url = f"{base_url}/web#id={link.id}&view_type=form&model=binary.tenant.link&action={action_id}"
-            Incident.create(
-                {
+        limit = 1000
+        offset = 0
+        domain = [
+            ("manifest_id", "=", self.manifest_id.id),
+            ("active_version_id", "!=", self.id),
+        ]
+
+        while True:
+            links = self.env["binary.tenant.link"].search(
+                domain, limit=limit, offset=offset
+            )
+            if not links:
+                break
+                
+            vals_list = []
+            for link in links:
+                url = f"{base_url}/web#id={link.id}&view_type=form&model=binary.tenant.link&action={action_id}"
+                vals_list.append({
                     "name": f"Binary Update Available: {self.manifest_id.name} v{self.version_number}",
                     "description": f"A new upstream version of '{self.manifest_id.name}' has been published to the central repository pool.\n\nTenant Action Required:\nPlease review the release notes and click the link below to perform a 1-click OS-level symlink upgrade for your tenant's execution path.\n\nManagement URL: {url}",
                     "website_id": link.website_id.id,
                     "severity": "low",
-                }
-            )
-            incidents_created += 1
+                })
+                
+            if vals_list:
+                Incident.create(vals_list)
+                incidents_created += len(vals_list)
+                
+            offset += limit
 
         return {
             "type": "ir.actions.client",

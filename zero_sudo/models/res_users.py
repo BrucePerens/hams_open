@@ -26,14 +26,12 @@ class ResUsersZeroSudo(models.Model):
             if vals.get("is_service_account"):
                 # Ensure no password for service accounts
                 vals.pop("password", None)
-                # Inject a cryptographically secure, extremely large password
-                # to guarantee the account cannot be logged into interactively.
-                vals["password"] = secrets.token_urlsafe(128)
+                vals["password"] = secrets.token_hex(32)
         return super().create(vals_list)
 
     def write(self, vals):
         if vals.get("is_service_account"):
-            vals["password"] = secrets.token_urlsafe(128)
+            vals["password"] = secrets.token_hex(32)
         elif "password" in vals and "is_service_account" not in vals:
             if self.ids:
                 self.env.cr.execute(
@@ -52,6 +50,7 @@ class ResUsersZeroSudo(models.Model):
                     vals_no_pw = vals.copy()
                     vals_no_pw.pop("password", None)
                     if vals_no_pw:
-                        res = res and super(ResUsersZeroSudo, service_accounts).write(vals_no_pw)
+                        res2 = super(ResUsersZeroSudo, service_accounts).write(vals_no_pw)
+                        res = res and res2
                     return res
         return super().write(vals)
