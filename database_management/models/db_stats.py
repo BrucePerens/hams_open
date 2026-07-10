@@ -208,9 +208,9 @@ class DatabaseActivity(models.Model):
     # Tests [@ANCHOR: db_active_sessions]
     # This model is logically global as it tracks all active PostgreSQL backends
     # for the current database, representing the aggregate state of the database server.
-    name = fields.Char(string="Name", default=lambda self: self._description)
     _name = "database.activity"
     _description = "Active Database Sessions"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "duration desc"
 
@@ -261,10 +261,10 @@ class DatabaseActivity(models.Model):
 class DatabaseIndexStat(models.Model):
     # [@ANCHOR: db_index_stats]
     # Tests [@ANCHOR: db_index_stats]
-    # This model is logically global as it tracks index performance at the
-    name = fields.Char(string="Name", default=lambda self: self._description)
-    # PostgreSQL storage layer, which is shared by all Odoo tenants in this database.
     _name = "database.index.stat"
+    name = fields.Char(string="Name", default=lambda self: self._description)
+    # This model is logically global as it tracks index performance at the PostgreSQL storage layer,
+    # which is shared by all Odoo tenants in this database.
     _description = "Database Index Health"
     _auto = False
     _order = "idx_scan asc"
@@ -297,8 +297,8 @@ class DatabaseReplicationStat(models.Model):
     # [@ANCHOR: db_replication_stats]
     # This model tracks PostgreSQL replication lag and status for the entire cluster.
     _name = "database.replication.stat"
-    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "Database Replication Statistics"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
 
     usename = fields.Char(string="User", readonly=True)

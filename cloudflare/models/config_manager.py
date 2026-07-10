@@ -44,7 +44,7 @@ class CloudflareConfigManager(models.AbstractModel):
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
-    def _check_static_mtime_and_purge(self):
+
         """
         Scans static directories during Odoo boot. If a modification is detected,
         it automatically triggers an edge purge for the 'odoo-static-assets' Cache-Tag.

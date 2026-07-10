@@ -6,7 +6,6 @@ from odoo import models
 class SEOMetadataMixin(models.AbstractModel):
     _name = "user.websites.seo.metadata.mixin"
     _description = "User Websites SEO Metadata Mixin"
-    name = fields.Char(string="Name", default=lambda self: self._description)
 
     def _get_seo_fields(self):
         return {

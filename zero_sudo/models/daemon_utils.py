@@ -5,7 +5,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from odoo import models, api, _
+from odoo import models, api, fields, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)

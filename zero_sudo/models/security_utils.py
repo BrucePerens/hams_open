@@ -3,7 +3,7 @@ import hashlib
 import os
 import shutil
 import logging
-from odoo import models, api, tools, _
+from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
 
 _logger = logging.getLogger(__name__)

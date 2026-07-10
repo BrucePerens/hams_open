@@ -16,14 +16,14 @@ class EdgeRoutingDomain(models.Model):
     _name = "edge.routing.domain"
     _description = "Custom Domain Mapping"
 
-    name = fields.Char("Custom Domain", required=True, help="e.g. www.myclub.org")
+    name = fields.Char("Custom Domain", required=True, copy=False, help="e.g. www.myclub.org")
     target_slug = fields.Char(
         "Target Slug", required=True, help="The website_slug this domain maps to"
     )
 
     _name_uniq = models.Constraint("UNIQUE(name)", "This domain is already mapped!")
 
-    @api.constrains("name")
+    @api.constrains("name", "target_slug")
     def _check_name(self):
         for record in self:
             if not record.name or "." not in record.name:

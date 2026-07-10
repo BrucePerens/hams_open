@@ -5,7 +5,6 @@ from odoo import models
 
 class WebsitePageSEO(models.Model):
     _name = "website.page"
-    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["website.page", "user.websites.seo.metadata.mixin"]
 
     def _check_seo_write_permission(self):
