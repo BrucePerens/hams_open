@@ -164,9 +164,11 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
                 "manifest_id": manifest.id,
                 "active_version_id": version1.id,
             })
+            
+        self.safe_patch_object(type(self.env["binary.version"]), "action_download_to_pool")
         self.env["binary.tenant.link"].create(links)
         
-        original_search = self.env["binary.tenant.link"].search
+        original_search = self.env["binary.tenant.link"].__class__.search
         call_limits = []
         
         def mock_search(*args, **kwargs):
@@ -176,6 +178,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         self.safe_patch_object(type(self.env["binary.tenant.link"]), "search", mock_search)
         
         mock_incident_create = self.safe_patch_object(type(self.env["pager.incident"]), "create")
+        self.safe_patch_object(type(self.env['ir.config_parameter']), 'get_param', return_value='http://test')
         
         version2.action_notify_tenants()
         

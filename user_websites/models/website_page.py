@@ -30,6 +30,7 @@ redis_client = redis.Redis(connection_pool=redis_pool)
 
 class WebsitePage(models.Model):
     _name = "website.page"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["website.page", "user_websites.owned.mixin"]
 
     view_count = fields.Integer(

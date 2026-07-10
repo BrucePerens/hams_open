@@ -9,6 +9,7 @@ _logger = logging.getLogger(__name__)
 class CloudflareUtils(models.AbstractModel):
     _name = "cloudflare.utils"
     _description = "Cloudflare Edge Context Utilities"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
     def get_current_website_id(self):

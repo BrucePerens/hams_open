@@ -6,6 +6,7 @@ from odoo import models, fields
 class BackupJob(models.Model):
     _name = "backup.job"
     _description = "Asynchronous Backup Job"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _order = "create_date desc"
 
     config_id = fields.Many2one(

@@ -6,6 +6,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalid
 class ContentViolationReport(models.Model):
     _name = "content.violation.report"
     _description = "User Website Content Violation Report"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["mail.thread", "mail.activity.mixin"]
     _order = "create_date desc"
 

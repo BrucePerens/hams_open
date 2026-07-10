@@ -7,6 +7,7 @@ from ..utils.cloudflare_api import ban_ip, unban_ip
 class CloudflareIPBan(models.Model):
     _name = "cloudflare.ip.ban"
     _description = "Cloudflare IP Ban / Honeypot Registry"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _order = "create_date desc"
 
     ip_address = fields.Char(string="Target IP Address", required=True)

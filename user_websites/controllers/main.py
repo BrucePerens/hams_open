@@ -118,13 +118,13 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            return request.not_found()
+            raise request.not_found()
 
         if profile_user and profile_user.is_suspended_from_websites:
-            return request.not_found()
+            raise request.not_found()
 
         if profile_group and profile_group.is_suspended_from_websites:
-            return request.not_found()
+            raise request.not_found()
 
         main_object = profile_user or profile_group
 
@@ -194,13 +194,13 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            return request.not_found()
+            raise request.not_found()
 
         if profile_user and profile_user.is_suspended_from_websites:
-            return request.not_found()
+            raise request.not_found()
 
         if profile_group and profile_group.is_suspended_from_websites:
-            return request.not_found()
+            raise request.not_found()
 
         # Check if the page actually exists; if it does, let core ir.http route handle it
         domain = [
@@ -263,16 +263,16 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            return request.not_found()
+            raise request.not_found()
 
         if profile_user and profile_user.id != user.id:
-            return request.not_found()
+            raise request.not_found()
         if profile_group:
             is_member = env_svc["user.websites.group"].search_count(
                 [("id", "=", profile_group.id), ("member_ids", "=", user.id)]
             )
             if not is_member:
-                return request.not_found()
+                raise request.not_found()
 
         entity_name = profile_user.name if profile_user else profile_group.name
 
@@ -325,12 +325,12 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            return request.not_found()
+            raise request.not_found()
 
         if profile_user and profile_user.id != user.id:
-            return request.not_found()
+            raise request.not_found()
         if profile_group and user.id not in profile_group.member_ids.ids:
-            return request.not_found()
+            raise request.not_found()
 
         entity_name = profile_user.name if profile_user else profile_group.name
 
@@ -535,7 +535,7 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            return request.not_found()
+            raise request.not_found()
 
         record_id = profile_user.partner_id.id if profile_user else profile_group.id
         model = "res.partner" if profile_user else "user.websites.group"

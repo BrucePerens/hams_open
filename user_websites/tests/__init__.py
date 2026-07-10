@@ -26,3 +26,4 @@ from . import test_ui_tours
 from . import test_user_websites_blog_post
 from . import test_xpath_rendering
 from . import test_domains_api
+from . import test_tdd_fixes

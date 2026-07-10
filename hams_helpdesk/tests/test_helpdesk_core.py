@@ -67,11 +67,17 @@ class TestHelpdeskCore(HamsTransactionCase):
             }
         )
 
-        self.assertEqual(
-            ticket.user_id,
-            self.manager_user,
-            "Ticket MUST auto-assign to the currently active on-duty manager.",
-        )
+        if "is_pager_duty" in self.env["calendar.event"]._fields:
+            self.assertEqual(
+                ticket.user_id,
+                self.manager_user,
+                "Ticket MUST auto-assign to the currently active on-duty manager.",
+            )
+        else:
+            self.assertFalse(
+                ticket.user_id,
+                "Ticket MUST NOT auto-assign when pager_duty is not installed.",
+            )
         self.assertIn(
             self.portal_user.partner_id,
             ticket.message_partner_ids,

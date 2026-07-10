@@ -5,6 +5,7 @@ import markupsafe
 class ShiftHandoffWizard(models.TransientModel):
     _name = "hams_helpdesk.shift_handoff"
     _description = "Shift Handoff Wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     ticket_id = fields.Many2one("hams_helpdesk.ticket", string="Ticket", required=True)
     old_user_id = fields.Many2one("res.users", string="Current Assignee", readonly=True)

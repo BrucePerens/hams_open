@@ -12,6 +12,7 @@ _logger = logging.getLogger(__name__)
 class ZeroSudoSecurityUtils(models.AbstractModel):
     _name = "zero_sudo.security.utils"
     _description = "Centralized Security and Privilege Utilities"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
     def _get_deterministic_hash(self, input_string):

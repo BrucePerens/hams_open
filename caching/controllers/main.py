@@ -168,7 +168,7 @@ class ServiceWorkerController(http.Controller):
                     content = f.read()
                 registry.caching_sw_js_content = content
             except FileNotFoundError:
-                return request.not_found()
+                raise request.not_found()
 
         # Multi-Website Awareness: Get params using high-performance procedure.
         website = request.website

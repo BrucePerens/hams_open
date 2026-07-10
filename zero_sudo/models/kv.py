@@ -9,6 +9,7 @@ class ZeroSudoKV(models.Model):
     # that operate across all companies and websites.
     _name = "zero_sudo.kv"
     _description = "Zero-Sudo Key-Value Store"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     key = fields.Char(string="Key", required=True, index=True)
     value = fields.Text(string="Value")

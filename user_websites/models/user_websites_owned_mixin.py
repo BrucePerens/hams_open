@@ -15,6 +15,7 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
 
     _name = "user_websites.owned.mixin"
     _description = "User Websites Proxy Ownership Mixin"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     owner_user_id = fields.Many2one(
         "res.users",

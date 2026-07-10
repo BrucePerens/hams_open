@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError
 
 class ResUsersSEO(models.Model):
     _name = "res.users"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["res.users", "user.websites.seo.metadata.mixin"]
 
     @property

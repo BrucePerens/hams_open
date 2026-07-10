@@ -7,6 +7,7 @@ from odoo.exceptions import ValidationError
 class ContentViolationAppeal(models.Model):
     _name = "content.violation.appeal"
     _description = "User Website Moderation Appeal"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["mail.thread", "mail.activity.mixin"]
     _order = "create_date desc"
 

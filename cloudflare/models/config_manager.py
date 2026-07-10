@@ -41,6 +41,7 @@ DEFAULT_WAF_RULES = [
 class CloudflareConfigManager(models.AbstractModel):
     _name = "cloudflare.config.manager"
     _description = "Cloudflare Configuration Manager"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
     def _check_static_mtime_and_purge(self):

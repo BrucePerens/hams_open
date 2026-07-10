@@ -8,6 +8,7 @@ class SecurityLog(models.Model):
     # It records blocked service account login attempts for auditing.
     _name = "zero_sudo.security.log"
     _description = "Zero-Sudo Security Audit Log"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _order = "create_date desc"
 
     user_id = fields.Many2one(

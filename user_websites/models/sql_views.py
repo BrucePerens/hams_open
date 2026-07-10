@@ -39,6 +39,7 @@ class UserWebsitesPublicDirectoryView(models.Model):
 class UserWebsitesContentRoutingView(models.Model):
     _name = "user_websites.content_routing_view"
     _description = "Content Routing SQL View"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
 
     res_model = fields.Char(string="Model", readonly=True)
@@ -77,6 +78,7 @@ class UserWebsitesContentRoutingView(models.Model):
 
 class UserWebsitesWeeklyDigestView(models.Model):
     _name = "user_websites.weekly_digest_view"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "Weekly Digest SQL View"
     _auto = False
 
@@ -131,6 +133,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
 
 class UserWebsitesDbFunctions(models.AbstractModel):
     _name = "user_websites.db_functions"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "User Websites DB Functions"
 
     def init(self):

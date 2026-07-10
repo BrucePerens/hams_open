@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError
 
 class BlogBlog(models.Model):
     _name = "blog.blog"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["blog.blog", "user_websites.owned.mixin"]
 
     _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog with this exact title!")

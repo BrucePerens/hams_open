@@ -5,6 +5,7 @@ from odoo import models, api
 class CloudflareWAF(models.AbstractModel):
     _name = "cloudflare.waf"
     _description = "Cloudflare WAF Interface"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
     def ban_ip(

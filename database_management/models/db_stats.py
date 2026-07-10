@@ -17,6 +17,7 @@ class DatabaseTableStat(models.Model):
     # for the entire database instance, which may be shared by multiple Odoo companies.
     _name = "database.table.stat"
     _description = "Database Table Statistics (Bloat & Vacuum)"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "dead_percent desc"
 
@@ -146,6 +147,7 @@ class DatabaseQueryStat(models.Model):
     # This model is logically global as pg_stat_statements tracks all queries
     # hitting the database, regardless of which Odoo company or website initiated them.
     _name = "database.query.stat"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "Slow Query Tracking"
     _auto = False
     _order = "total_time desc"
@@ -206,6 +208,7 @@ class DatabaseActivity(models.Model):
     # Tests [@ANCHOR: db_active_sessions]
     # This model is logically global as it tracks all active PostgreSQL backends
     # for the current database, representing the aggregate state of the database server.
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _name = "database.activity"
     _description = "Active Database Sessions"
     _auto = False
@@ -259,6 +262,7 @@ class DatabaseIndexStat(models.Model):
     # [@ANCHOR: db_index_stats]
     # Tests [@ANCHOR: db_index_stats]
     # This model is logically global as it tracks index performance at the
+    name = fields.Char(string="Name", default=lambda self: self._description)
     # PostgreSQL storage layer, which is shared by all Odoo tenants in this database.
     _name = "database.index.stat"
     _description = "Database Index Health"
@@ -293,6 +297,7 @@ class DatabaseReplicationStat(models.Model):
     # [@ANCHOR: db_replication_stats]
     # This model tracks PostgreSQL replication lag and status for the entire cluster.
     _name = "database.replication.stat"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "Database Replication Statistics"
     _auto = False
 
@@ -338,6 +343,7 @@ class DatabaseReplicationStat(models.Model):
 
 class DatabaseIndexAdvisor(models.Model):
     # [@ANCHOR: db_index_advisor]
+    name = fields.Char(string="Name", default=lambda self: self._description)
     # Tests [@ANCHOR: db_index_advisor]
     # This model identifies tables with high sequential scan counts and large
     # sizes that might benefit from additional indexing.
@@ -478,6 +484,7 @@ class DatabaseQueryStatInherit(models.Model):
 
 class PgExplainWizard(models.TransientModel):
     _name = "pg.explain.wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "PostgreSQL Explain Wizard"
 
     query = fields.Text(string="SQL Query", readonly=True)

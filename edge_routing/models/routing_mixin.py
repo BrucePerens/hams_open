@@ -18,6 +18,7 @@ _logger = logging.getLogger(__name__)
 class EdgeRoutingMixin(models.AbstractModel):
     _name = "edge.routing.mixin"
     _description = "Edge Routing Mixin"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     website_slug = fields.Char(
         string="Website Slug",

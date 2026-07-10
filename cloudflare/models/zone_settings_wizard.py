@@ -7,6 +7,7 @@ from ..utils.cloudflare_api import get_zone_settings, update_zone_setting
 class CloudflareZoneSettingsWizard(models.TransientModel):
     _name = "cloudflare.zone.settings.wizard"
     _description = "Cloudflare Zone Settings Wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     website_id = fields.Many2one(
         "website",

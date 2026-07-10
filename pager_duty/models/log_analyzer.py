@@ -43,6 +43,7 @@ class PagerLogFile(models.Model):
 
     _name = "pager.log.file"
     _description = "Log Analyzer Target File"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     filepath = fields.Char(
         string="Absolute Path", required=True, help="e.g. /var/log/syslog"

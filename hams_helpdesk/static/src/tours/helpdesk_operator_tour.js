@@ -34,7 +34,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         {
             content: "Select New User",
             trigger: 'div[name="new_user_id"] input',
-            run: 'edit Manager',
+            run: 'edit Helpdesk Manager',
         },
         {
             content: "Wait for debounce",

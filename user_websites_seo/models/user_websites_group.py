@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError
 
 class UserWebsitesGroupSEO(models.Model):
     _name = "user.websites.group"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = [
         "user.websites.group",
         "website.seo.metadata",

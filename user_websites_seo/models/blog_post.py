@@ -5,6 +5,7 @@ from odoo import models
 
 class BlogPostSEO(models.Model):
     _name = "blog.post"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["blog.post", "user.websites.seo.metadata.mixin"]
 
     def _check_seo_write_permission(self):

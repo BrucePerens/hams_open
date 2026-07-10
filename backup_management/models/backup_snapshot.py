@@ -5,6 +5,7 @@ from odoo import models, fields, api
 class BackupSnapshot(models.Model):
     _name = "backup.snapshot"
     _description = "Backup Snapshot"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _order = "start_time desc"
 
     config_id = fields.Many2one(

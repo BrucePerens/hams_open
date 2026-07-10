@@ -9,6 +9,7 @@ _logger = logging.getLogger(__name__)
 class BinaryTenantLink(models.Model):
     _name = "binary.tenant.link"
     _description = "Tenant to Binary Version Assignment"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     website_id = fields.Many2one(
         "website",

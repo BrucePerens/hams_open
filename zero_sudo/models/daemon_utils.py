@@ -14,6 +14,7 @@ _logger = logging.getLogger(__name__)
 class ZeroSudoDaemonUtils(models.AbstractModel):
     _name = "zero_sudo.daemon.utils"
     _description = "Daemon Management Utilities"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
     def start_daemon_process(self, script_path, args=None, env_vars=None):

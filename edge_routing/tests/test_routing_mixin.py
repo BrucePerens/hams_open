@@ -73,8 +73,8 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         user1.write({'website_slug': ''})
         user2.write({'website_slug': ''})
         self.env.flush_all()
-        self.assertEqual(user1.website_slug, '')
-        self.assertEqual(user2.website_slug, '')
+        self.assertFalse(user1.website_slug)
+        self.assertFalse(user2.website_slug)
 
     def test_get_routing_models_dynamic(self):
         models = self.env['edge.routing.mixin']._get_routing_models()

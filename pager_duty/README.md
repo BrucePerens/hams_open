@@ -33,6 +33,7 @@ The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) 
 
 ### Monitoring Checks
 Create diverse checks for your infrastructure:
+
 - **HTTP/HTTPS/HTTP3:** Verify website availability and content.
 - **PostgreSQL/MySQL:** Ensure database connectivity and performance.
 - **System Resources:** Monitor CPU, RAM, and Disk space.

@@ -26,7 +26,7 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
             stat.action_explain_query()
             
         called = any(
-            isinstance(call[0][0], psql.Composed) and "default_transaction_read_only" in call[0][0].as_string(self.env.cr)
+            isinstance(call[0][0], psql.Composed) and "default_transaction_read_only" in call[0][0].as_string(self.env.cr._obj)
             for call in mock_cr.execute.call_args_list
         )
         self.assertTrue(called, "Transaction must be set to local read only using psycopg2")

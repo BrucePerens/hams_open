@@ -16,6 +16,7 @@ _logger = logging.getLogger(__name__)
 class DistributedCacheConfig(models.TransientModel):
     _name = "distributed.cache.config"
     _description = "Distributed Cache Configuration"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     model_id = fields.Many2one(
         "ir.model",

@@ -13,6 +13,7 @@ _logger = logging.getLogger(__name__)
 
 class BlogPost(models.Model):
     _name = "blog.post"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["blog.post", "user_websites.owned.mixin"]
 
     view_count = fields.Integer(

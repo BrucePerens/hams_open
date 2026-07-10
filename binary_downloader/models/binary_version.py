@@ -18,6 +18,7 @@ _logger = logging.getLogger(__name__)
 class BinaryVersion(models.Model):
     _name = "binary.version"
     _description = "Specific Binary Version Release"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _order = "release_date desc, id desc"
 
     manifest_id = fields.Many2one(

@@ -47,6 +47,7 @@ class DatabasePgSetting(models.Model):
 class PgOptimizeWizard(models.TransientModel):
     _name = "pg.optimize.wizard"
     _description = "PostgreSQL Optimization Wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     ram_gb = fields.Integer(string="Total Server RAM (GB)", required=True, default=8)
     cpu_cores = fields.Integer(string="Total CPU Cores", required=True, default=4)
@@ -118,6 +119,7 @@ class PgOptimizeWizard(models.TransientModel):
 
 class PgHaWizard(models.TransientModel):
     _name = "pg.ha.wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "High Availability Failover Wizard"
 
     cluster_name = fields.Char(

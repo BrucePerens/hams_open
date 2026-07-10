@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 class CloudflarePurgeQueue(models.Model):
     _name = "cloudflare.purge.queue"
     _description = "Cloudflare Cache Purge Queue"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     target_item = fields.Char(string="Target Payload", required=False)
     purge_type = fields.Selection(

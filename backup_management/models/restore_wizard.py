@@ -11,6 +11,7 @@ from .utils import validate_backup_path
 class BackupRestoreWizard(models.TransientModel):
     _name = "backup.restore.wizard"
     _description = "Backup Restore Wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     snapshot_id = fields.Many2one(
         "backup.snapshot", string="Snapshot", required=True, readonly=True

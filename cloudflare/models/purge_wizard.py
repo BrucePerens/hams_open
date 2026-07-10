@@ -7,6 +7,7 @@ from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 class CloudflarePurgeWizard(models.TransientModel):
     _name = "cloudflare.purge.wizard"
     _description = "Cloudflare Manual Cache Purge Wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     website_id = fields.Many2one(
         "website",

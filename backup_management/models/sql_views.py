@@ -5,6 +5,7 @@ from odoo import models, fields, tools
 class BackupLatestSnapshotView(models.Model):
     _name = "backup.latest.snapshot.view"
     _description = "Latest Backup Snapshot View"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
 
     config_id = fields.Many2one("backup.config", readonly=True)
