@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of hams_open, an open source module.
+    License: AGPL-3.0
+-->
 <odoo>
     <record id="view_backup_job_form" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
@@ -25,7 +30,7 @@
                     </group>
                     <notebook>
                         <page string="Live Output Log">
-                            <field name="output_log" widget="text" style="font-family: monospace; background-color: #000; color: #0f0; padding: 10px;" readonly="1"/>
+                            <field name="output_log" widget="text" class="font-monospace text-muted p-2 bg-light border rounded" readonly="1"/>
                         </page>
                     </notebook>
                 </sheet>

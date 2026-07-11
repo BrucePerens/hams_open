@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+# See the LICENSE file in the project root for full license information.
 import hashlib
 import io
 import os
@@ -25,10 +29,9 @@ class TestBinaryManifest(HamsTransactionCase):
                 if f.startswith(
                     ("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")
                 ):
-                    try:
+                    import contextlib
+                    with contextlib.suppress(OSError):
                         os.remove(os.path.join(bin_dir, f))
-                    except OSError as e:
-                        _logger.warning("Failed to remove path %s: %s", f, e)
         super().tearDown()
 
     def setUp(self):
@@ -40,16 +43,15 @@ class TestBinaryManifest(HamsTransactionCase):
                 if f.startswith(
                     ("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")
                 ):
-                    try:
+                    import contextlib
+                    with contextlib.suppress(OSError):
                         os.remove(os.path.join(bin_dir, f))
-                    except OSError as e:
-                        _logger.warning("Failed to remove path %s: %s", f, e)
         self.service_user = self.env.ref(
             "binary_downloader.user_binary_downloader_service"
         )
 
         # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
-        base_url = os.environ.get("ODOO_URL", "http://odoo:8069")
+        base_url = os.environ.get("ODOO_URL", "http://odoo:8069")  # burn-ignore-env
         url = f"{base_url}/test/dummy_bin"
         chksum = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 

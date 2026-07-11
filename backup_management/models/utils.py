@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import os
 import logging
+import threading
+import pika
 from odoo.exceptions import UserError
 from odoo import _
 
@@ -100,3 +104,31 @@ def validate_backup_path(path):
     # Block recursive directory traversal and other suspicious patterns
     if ".." in path.split(os.path.sep):
         raise UserError(_("Invalid path: directory traversal is not allowed."))
+
+def publish_to_rabbitmq(env, msg):
+    """
+    Publishes a message to RabbitMQ backup_tasks queue using the global connection pool.
+    """
+    utils = env["zero_sudo.security.utils"]
+    rmq_host = (
+        utils._get_system_param("backup_management.rmq_host")
+        or os.environ.get("RMQ_HOST")
+        or "rabbitmq"
+    )
+    rmq_user = (
+        utils._get_system_param("backup_management.rmq_user")
+        or os.environ.get("RMQ_USER")
+        or "guest"
+    )
+    rmq_pass = (
+        utils._get_system_param("backup_management.rmq_pass")
+        or os.environ.get("RMQ_PASS")  # burn-ignore-env
+        or "guest"
+    )  # burn-ignore-env
+
+    try:
+        env["hams_rabbitmq.pool"].publish(
+            "backup_tasks", msg, rmq_host=rmq_host, rmq_user=rmq_user, rmq_pass=rmq_pass
+        )
+    except Exception as e:
+        _logger.error("Failed to publish backup task to RMQ pool: %s", e)

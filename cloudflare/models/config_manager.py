@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 import os
 import json
 import logging
@@ -65,31 +66,13 @@ class CloudflareConfigManager(models.AbstractModel):
             )
             return
 
-        # ADR-0002: Use ORM for module list, but ensure we use limit=None for exhaustive scan
-        installed_modules = (
-            self.env["ir.module.module"]
-            .with_user(facility_uid)
-            .search([("state", "=", "installed")], limit=None)
-            .mapped("name")
-        )
-
-        for module_name in installed_modules:
-            mod_path = get_module_path(module_name)
-            if not mod_path:
-                continue
-            static_path = os.path.join(mod_path, "static")
-            if os.path.exists(static_path):
-                for root, dirs, files in os.walk(static_path):
-                    for file in files:
-                        filepath = os.path.join(root, file)
-                        try:
-                            mtime = os.path.getmtime(filepath)
-                            if mtime > max_mtime:
-                                max_mtime = mtime
-                        except OSError as e:
-                            _logger.warning("Could not read mtime for %s: %s", filepath, e)
-
-        latest_mtime = int(max_mtime)
+        # ADR-0002: Use mixin to perform memory-based scan
+        try:
+            max_mtime, _ = self.env["caching.mixin"].sudo().get_fs_stats()
+            latest_mtime = int(max_mtime)
+        except KeyError:
+            _logger.warning("caching.mixin not available, falling back to 0")
+            latest_mtime = 0
 
         try:
             # Use centralized config utilities instead of manual service environments
@@ -108,13 +91,18 @@ class CloudflareConfigManager(models.AbstractModel):
 
                 # Multi-Website Purge: Static assets should be purged across all configured websites
                 # We use the purger environment to access website credentials securely
-                websites = env_purger["website"].search([], limit=1000)
-                for website in websites:
-                    token, zone_id = website._get_cloudflare_credentials()
-                    if token and zone_id:
-                        env_purger["cloudflare.purge.queue"].enqueue_tags(
-                            ["odoo-static-assets"], website_id=website.id
-                        )
+                last_id = 0
+                while True:
+                    websites = env_purger["website"].search([("id", ">", last_id)], order="id asc", limit=1000)
+                    if not websites:
+                        break
+                    last_id = websites[-1].id
+                    for website in websites:
+                        token, zone_id = website._get_cloudflare_credentials()
+                        if token and zone_id:
+                            env_purger["cloudflare.purge.queue"].enqueue_tags(
+                                ["odoo-static-assets"], website_id=website.id
+                            )
 
                 _logger.info(
                     "[*] Static assets modified (%s > %s). Triggered Cloudflare purge for 'odoo-static-assets' across all websites.",
@@ -127,41 +115,48 @@ class CloudflareConfigManager(models.AbstractModel):
     @api.model
     def initialize_cloudflare_state(self):
         _logger.info("[*] Initializing Cloudflare Edge State across Websites...")
-        websites = self.env["website"].search([], limit=1000)
-        for website in websites:
-            token, zone_id = website._get_cloudflare_credentials()
-            if not token or not zone_id:
-                continue
+        last_id = 0
+        while True:
+            websites = self.env["website"].search([("id", ">", last_id)], order="id asc", limit=1000)
+            if not websites:
+                break
+            last_id = websites[-1].id
+            for website in websites:
+                token, zone_id = website._get_cloudflare_credentials()
+                if not token or not zone_id:
+                    continue
 
-            existing_ruleset = get_zone_ruleset(
-                "http_request_firewall_custom", token, zone_id
-            )
-            if existing_ruleset and existing_ruleset.get("rules"):
-                _logger.info(
-                    "[+] Existing rules detected for %s. Backing up and syncing.", website.name
+                existing_ruleset = get_zone_ruleset(
+                    "http_request_firewall_custom", token, zone_id
                 )
-                # ADR-0001: Headless Mutation Context
-                self.env["cloudflare.config.backup"].with_context(
-                    mail_notrack=True
-                ).create(
-                    {
-                        "name": f"Pre-Odoo Backup ({website.name})",
-                        "raw_json": json.dumps(existing_ruleset, indent=4),
-                        "website_id": website.id,
-                    }
-                )
-                self.action_pull_waf_rules(website_id=website.id)
-                continue
+                if existing_ruleset and existing_ruleset.get("rules"):
+                    _logger.info(
+                        "[+] Existing rules detected for %s. Backing up and syncing.", website.name
+                    )
+                    # ADR-0001: Headless Mutation Context
+                    self.env["cloudflare.config.backup"].with_context(
+                        mail_notrack=True
+                    ).create(
+                        {
+                            "name": f"Pre-Odoo Backup ({website.name})",
+                            "raw_json": json.dumps(existing_ruleset, indent=4),
+                            "website_id": website.id,
+                        }
+                    )
+                    self.action_pull_waf_rules(website_id=website.id)
+                    continue
 
-            for rule_vals in DEFAULT_WAF_RULES:
-                vals = dict(rule_vals)
-                vals["website_id"] = website.id
-                # ADR-0001: Headless Mutation Context
-                self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(
-                    vals
-                )
+                vals_list = []
+                for rule_vals in DEFAULT_WAF_RULES:
+                    vals = dict(rule_vals)
+                    vals["website_id"] = website.id
+                    vals_list.append(vals)
 
-            self.action_push_waf_rules(website_id=website.id)
+                if vals_list:
+                    # ADR-0001: Headless Mutation Context
+                    self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(vals_list)
+
+                self.action_push_waf_rules(website_id=website.id)
 
     @api.model
     def action_pull_waf_rules(self, website_id=None):
@@ -188,9 +183,9 @@ class CloudflareConfigManager(models.AbstractModel):
         ).unlink()
 
         rules = existing_ruleset.get("rules", [])
+        vals_list = []
         for i, r in enumerate(rules):
-            # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(
+            vals_list.append(
                 {
                     "sequence": (i + 1) * 10,
                     "name": r.get(
@@ -203,6 +198,9 @@ class CloudflareConfigManager(models.AbstractModel):
                     "website_id": website.id,
                 }
             )
+        if vals_list:
+            # ADR-0001: Headless Mutation Context
+            self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(vals_list)
         return True, f"Successfully pulled rules from Cloudflare for {website.name}."
 
     @api.model

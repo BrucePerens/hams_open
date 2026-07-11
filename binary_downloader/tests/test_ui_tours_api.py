@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+# See the LICENSE file in the project root for full license information.
 import os
 import logging
 from odoo import http
@@ -35,10 +39,9 @@ class TestBinaryDownloaderTour(HamsHttpCase):
         # Clean up the physical dummy binary created by the tour
         test_bin_path = "/var/lib/odoo/hams_bin/tourbin"
         if os.path.exists(test_bin_path):
-            try:
+            import contextlib
+            with contextlib.suppress(OSError):
                 os.remove(test_bin_path)
-            except OSError as e:
-                _logger.warning("Failed to remove tourbin: %s", e)
 
     def test_binary_install_tour(self):
         # [!] DIAGNOSTIC FOR AI: Running UI tour for binary installation.

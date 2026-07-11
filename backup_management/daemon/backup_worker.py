@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 #!/usr/bin/env python3
 import os
 import json
@@ -50,8 +53,11 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
                 raise OdooAPIError(f"Odoo Error: {res_data['error']}")
             return res_data
     except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8")
-        raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}")
+        try:
+            err_body = e.read().decode("utf-8")
+        except Exception:  # audit-ignore-catch-all
+            err_body = "Could not decode response body."
+        raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
     except (urllib.error.URLError, json.JSONDecodeError) as e:
         raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}")
 
@@ -224,23 +230,26 @@ def execute_job(ch, method, properties, body):
         )
 
         log_buffer = ""
+        unsent_buffer = ""
         last_update = time.time()
 
         while True:
-            char = proc.stdout.read(1)
-            if not char:
+            chunk = proc.stdout.read(4096)
+            if not chunk:
                 break
-            log_buffer += char
+            log_buffer += chunk
+            unsent_buffer += chunk
             # Throttle updates to Odoo to avoid overwhelming it
-            if time.time() - last_update > 2.0:
+            if time.time() - last_update > 2.0 and unsent_buffer:
                 try:
                     _json2_call(
                         "backup.job",
-                        "write",
+                        "append_log",
                         svc_uid=svc_uid,
                         ids=[job_id],
-                        vals={"output_log": log_buffer},
+                        text_chunk=unsent_buffer,
                     )
+                    unsent_buffer = ""
                 except urllib.error.URLError as e:
                     logger.warning("Throttled log update failed: %s", e)
                 last_update = time.time()
@@ -250,14 +259,24 @@ def execute_job(ch, method, properties, body):
 
         final_state = "done" if return_code == 0 else "failed"
         log_buffer += f"\nProcess exited with code {return_code}"
+        unsent_buffer += f"\nProcess exited with code {return_code}"
 
+        # Write final state and send any remaining buffer
         _json2_call(
             "backup.job",
             "write",
             svc_uid=svc_uid,
             ids=[job_id],
-            vals={"state": final_state, "output_log": log_buffer},
+            vals={"state": final_state},
         )
+        if unsent_buffer:
+            _json2_call(
+                "backup.job",
+                "append_log",
+                svc_uid=svc_uid,
+                ids=[job_id],
+                text_chunk=unsent_buffer,
+            )
 
         if final_state == "done":
             if engine in ("kopia", "pgbackrest", "restore_cmd"):
@@ -273,15 +292,9 @@ def execute_job(ch, method, properties, body):
                     parts = log_buffer.split("\nProcess exited")
                     json_str = parts[0].strip()
 
-                    start_idx_arr = json_str.find("[")
-                    start_idx_obj = json_str.find("{")
-                    if start_idx_arr != -1 and start_idx_obj != -1:
-                        start_idx = min(start_idx_arr, start_idx_obj)
-                    else:
-                        start_idx = max(start_idx_arr, start_idx_obj)
-
-                    if start_idx != -1:
-                        json_str = json_str[start_idx:]
+                    match = re.search(r'(\[.*\]|\{.*\})', json_str, re.DOTALL)
+                    if match:
+                        json_str = match.group(1)
 
                     data = json.loads(json_str)
                     _json2_call(
@@ -352,7 +365,14 @@ def execute_job(ch, method, properties, body):
                     "write",
                     svc_uid=svc_uid,
                     ids=[job_id],
-                    vals={"state": "failed", "output_log": f"Worker Error: {e}"},
+                    vals={"state": "failed"},
+                )
+                _json2_call(
+                    "backup.job",
+                    "append_log",
+                    svc_uid=svc_uid,
+                    ids=[job_id],
+                    text_chunk=f"\nWorker Error: {e}",
                 )
             if config_id:
                 _json2_call(

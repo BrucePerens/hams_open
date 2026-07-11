@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
 from odoo.addons.edge_routing.utils import slugify, RESERVED_SLUGS
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
-    notify_model_invalidation,
 )
 
-import json
 from psycopg2 import sql as psql
 
 import logging
@@ -47,11 +50,7 @@ class EdgeRoutingMixin(models.AbstractModel):
                 models.append(model_name)
         return models
 
-    @api.model
-    def _check_slug_collision(self, env_target, domain):
-        return bool(env_target.with_context(active_test=False).search(domain, limit=1))
-
-    def _generate_unique_slug(self, base_string, record_id=False):
+    def _generate_unique_slug(self, base_string, record_id=False, forbidden_slugs=None):
         """
         Generates a URL-safe, globally unique slug. Cross-references reserved routes
         and all models that implement edge.routing.mixin.
@@ -60,11 +59,38 @@ class EdgeRoutingMixin(models.AbstractModel):
             return ""
 
         base_slug = slugify(base_string)
+        
+        routing_model_names = self._get_routing_models()
+        existing_slugs = set(RESERVED_SLUGS)
+        if forbidden_slugs:
+            existing_slugs.update(forbidden_slugs)
+
+        try:
+            env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                "edge_routing.edge_routing_service_account"
+            )
+        except Exception:  # audit-ignore-catch-all
+            env_svc = self.env
+
+        for model_name in routing_model_names:
+            if model_name not in self.env:
+                continue
+
+            domain = [("website_slug", "=like", f"{base_slug}%")]
+            if record_id and model_name == self._name:
+                domain.append(("id", "!=", record_id))
+
+            try:
+                env_target = env_svc[model_name]
+            except Exception:  # audit-ignore-catch-all
+                env_target = self.env[model_name]
+
+            slugs = env_target.with_context(active_test=False).search_read(domain, ["website_slug"])
+            existing_slugs.update(s["website_slug"] for s in slugs if s.get("website_slug"))
+
         slug = base_slug
         counter = 1
         max_retries = 1000
-
-        routing_model_names = self._get_routing_models()
 
         while True:
             if counter > max_retries:
@@ -73,40 +99,7 @@ class EdgeRoutingMixin(models.AbstractModel):
                     % max_retries
                 )
 
-            if slug in RESERVED_SLUGS:
-                slug = f"{base_slug}-{counter}"
-                counter += 1
-                continue
-
-            collision = False
-            for model_name in routing_model_names:
-                if model_name not in self.env:
-                    continue
-
-                domain = [("website_slug", "=", slug)]
-                if record_id and model_name == self._name:
-                    domain.append(("id", "!=", record_id))
-
-                if self.env.registry.loaded:
-                    try:
-                        with self.env.cr.savepoint():
-                            env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                                "edge_routing.edge_routing_service_account"
-                            )
-                            env_target = env_svc[model_name]
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning(
-                            "Failed to get service env for %s: %s", model_name, e
-                        )
-                        env_target = self.env[model_name]
-                else:
-                    env_target = self.env[model_name]
-
-                if self._check_slug_collision(env_target, domain):
-                    collision = True
-                    break
-
-            if not collision:
+            if slug not in existing_slugs:
                 lock_hash = self.env[
                     "zero_sudo.security.utils"
                 ]._get_deterministic_hash(slug)
@@ -135,15 +128,12 @@ class EdgeRoutingMixin(models.AbstractModel):
         if override_svc_uid:
             target_env = self.with_user(override_svc_uid).env
         else:
-            if self.env.registry.loaded:
-                try:
-                    target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                        "edge_routing.edge_routing_service_account"
-                    )
-                except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Failed to get service env: %s", e)
-                    target_env = self.env
-            else:
+            try:
+                target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                    "edge_routing.edge_routing_service_account"
+                )
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("Failed to get service env: %s", e)
                 target_env = self.env
 
         record = (
@@ -171,14 +161,17 @@ class EdgeRoutingMixin(models.AbstractModel):
 
     @api.model_create_multi
     def create(self, vals_list):
+        assigned_slugs = set()
         for vals in vals_list:
             if vals.get("website_slug"):
                 slug_to_check = slugify(vals["website_slug"])
                 if slug_to_check in RESERVED_SLUGS:
                     raise ValidationError(_("The slug '%s' is reserved and cannot be used.") % vals["website_slug"])
-                vals["website_slug"] = self._generate_unique_slug(vals["website_slug"])
+                vals["website_slug"] = self._generate_unique_slug(vals["website_slug"], forbidden_slugs=assigned_slugs)
+                assigned_slugs.add(vals["website_slug"])
             elif vals.get("name"):
-                vals["website_slug"] = self._generate_unique_slug(vals["name"])
+                vals["website_slug"] = self._generate_unique_slug(vals["name"], forbidden_slugs=assigned_slugs)
+                assigned_slugs.add(vals["website_slug"])
         return super().create(vals_list)
 
     # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
@@ -204,65 +197,51 @@ class EdgeRoutingMixin(models.AbstractModel):
 
         if "website_slug" in vals or "name" in vals:
             new_slugs = [s for s in self.mapped("website_slug") if s]
-            all_slugs_to_invalidate = set(old_slugs + new_slugs)
+            all_slugs_to_invalidate = list(set(old_slugs + new_slugs))
             
             if all_slugs_to_invalidate:
-                payload = json.dumps({"model": self._name})
-                for slug in all_slugs_to_invalidate:
-                    try:
-                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                            self._name, slug
-                        )
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Failed to notify cache invalidation for %s: %s", slug, e)
                 try:
-                    notify_model_invalidation(self.env, self._name)
-                    self.env.cr.execute(
-                        "SELECT pg_notify(%s, %s)",
-                        ("distributed_cache_invalidation", payload),
+                    self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                        self._name, all_slugs_to_invalidate
                     )
                 except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Failed to notify global cache invalidation: %s", e)
+                    _logger.warning("Failed to notify cache invalidation for %s: %s", all_slugs_to_invalidate, e)
                     
             # Handle the batch write edge case for missing slugs when name is updated
             if "name" in vals and len(self) > 1:
-                for record in self:
-                    if not record.website_slug and "name" in record._fields and record.name:
+                records_to_update = self.filtered(lambda r: not r.website_slug and "name" in r._fields and r.name)
+                if records_to_update:
+                    updates = []
+                    assigned_slugs = set(all_slugs_to_invalidate)
+                    for record in records_to_update:
                         new_slug = self._generate_unique_slug(
-                            record.name, record_id=record.id
+                            record.name, record_id=record.id, forbidden_slugs=assigned_slugs
                         )
-                        query = psql.SQL("UPDATE {} SET website_slug = %s WHERE id = %s").format(
-                            psql.Identifier(self._table)
+                        assigned_slugs.add(new_slug)
+                        updates.append((record.id, new_slug))
+                        
+                    if updates:
+                        values_sql = psql.SQL(', ').join(psql.SQL('(%s, %s)') for _ in updates)
+                        query = psql.SQL("UPDATE {} AS t SET website_slug = c.website_slug FROM (VALUES {}) AS c(id, website_slug) WHERE t.id = c.id").format(
+                            psql.Identifier(self._table),
+                            values_sql
                         )
-                        self.env.cr.execute(
-                            query,
-                            (new_slug, record.id)
-                        )
-                        record.invalidate_recordset(['website_slug'])
+                        params = []
+                        for rid, slug in updates:
+                            params.extend([rid, slug])
+                        self.env.cr.execute(query, params)
+                        records_to_update.invalidate_recordset(['website_slug'])
 
         return res
 
     def unlink(self):
-        slugs = self.mapped("website_slug")
+        slugs = [s for s in self.mapped("website_slug") if s]
         res = super().unlink()
         if slugs:
-            payload = json.dumps({"model": self._name})
-            for slug in slugs:
-                if slug:
-                    try:
-                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                            self._name, slug
-                        )
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Failed to notify local cache invalidation on unlink for %s: %s", slug, e)
             try:
-                notify_model_invalidation(self.env, self._name)
-                self.env.cr.execute(
-                    "SELECT pg_notify(%s, %s)",
-                    ("distributed_cache_invalidation", payload),
+                self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                    self._name, slugs
                 )
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning(
-                    "Failed to notify global cache invalidation on unlink: %s", e
-                )
+                _logger.warning("Failed to notify local cache invalidation on unlink for %s: %s", slugs, e)
         return res

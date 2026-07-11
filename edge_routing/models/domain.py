@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo import models, fields, api, exceptions, _
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
-    notify_model_invalidation,
 )
 import logging
-import json
 import requests
 
 _logger = logging.getLogger(__name__)
@@ -49,30 +52,29 @@ class EdgeRoutingDomain(models.Model):
             env_svc = self.with_user(svc_uid).env
 
             all_domains = []
-            offset = 0
+            last_id = 0
             while True:
-                batch = env_svc["edge.routing.domain"].search([], offset=offset, limit=1000).mapped("name")
+                batch = env_svc["edge.routing.domain"].search([("id", ">", last_id)], limit=1000, order="id ASC")
                 if not batch:
                     break
-                all_domains.extend(batch)
-                offset += 1000
+                all_domains.extend(batch.mapped("name"))
+                last_id = batch[-1].id
 
-            if "ham.dns.zone" in env_svc:
-                try:
-                    dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
-                    offset = 0
-                    while True:
-                        dns_domains = dns_env_svc["ham.dns.zone"].search([], offset=offset, limit=1000).mapped("name")
-                        if not dns_domains:
-                            break
-                        all_domains.extend(dns_domains)
-                        offset += 1000
-                except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
+            try:
+                dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
+                last_id = 0
+                while True:
+                    dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
+                    if not dns_batch:
+                        break
+                    all_domains.extend(dns_batch.mapped("name"))
+                    last_id = dns_batch[-1].id
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("Hard dependency ham.dns.zone failed: %s", e)
 
             unique_domains = list(set(all_domains))
             # Send to the API
-            requests.post(
+            response = requests.post(
                 "http://odoo:8069/api/v1/pager_duty/update_domains",
                 json={
                     "jsonrpc": "2.0",
@@ -81,28 +83,19 @@ class EdgeRoutingDomain(models.Model):
                 },
                 timeout=5,
             )
+            response.raise_for_status()
         except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Failed to sync domains to Pager Duty: %s", e)
+            _logger.warning("Failed to sync domains to PagerDuty: %s", e)
 
     def _invalidate_cache(self, names):
-        if names:
-            payload = json.dumps({"model": self._name})
-            for name in names:
-                if name:
-                    try:
-                        self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                            self._name, name
-                        )
-                    except Exception:  # audit-ignore-catch-all
-                        _logger.warning("Failed to invalidate cache for domain %s", name)
+        valid_names = [n for n in names if n]
+        if valid_names:
             try:
-                notify_model_invalidation(self.env, self._name)
-                self.env.cr.execute(
-                    "SELECT pg_notify(%s, %s)",
-                    ("distributed_cache_invalidation", payload),
+                self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
+                    self._name, valid_names
                 )
             except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Failed to notify global cache invalidation: %s", e)
+                _logger.warning("Failed to notify cache invalidation: %s", e)
 
         try:
             # Trigger cron to run asynchronously, avoiding thread exhaustion and batching O(N) fetches
@@ -148,15 +141,12 @@ class EdgeRoutingDomain(models.Model):
             return False
         domain = str(domain).lower().strip()
 
-        if self.env.registry.loaded:
-            try:
-                target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                    "edge_routing.edge_routing_service_account"
-                )
-            except Exception:  # audit-ignore-catch-all
-                _logger.warning("Failed to get service env")
-                target_env = self.env
-        else:
+        try:
+            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                "edge_routing.edge_routing_service_account"
+            )
+        except Exception:  # audit-ignore-catch-all
+            _logger.warning("Failed to get service env")
             target_env = self.env
 
         record = (

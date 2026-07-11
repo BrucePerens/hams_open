@@ -1,3 +1,4 @@
+/** Copyright © HAMS project. AGPL-3.0. **/
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";

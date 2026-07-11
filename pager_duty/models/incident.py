@@ -53,11 +53,27 @@ class PagerIncident(models.Model):
         "res.users", string="Acknowledged By", readonly=True, tracking=True
     )
     mtta = fields.Float(
-        string="MTTA (Minutes)", readonly=True, help="Mean Time To Acknowledge"
+        string="MTTA (Minutes)", compute="_compute_mtta", store=True, help="Mean Time To Acknowledge"
     )
     mttr = fields.Float(
-        string="MTTR (Minutes)", readonly=True, help="Mean Time To Resolve"
+        string="MTTR (Minutes)", compute="_compute_mttr", store=True, help="Mean Time To Resolve"
     )
+
+    @api.depends("time_acknowledged", "create_date")
+    def _compute_mtta(self):
+        for rec in self:
+            if rec.time_acknowledged and rec.create_date:
+                rec.mtta = (rec.time_acknowledged - rec.create_date).total_seconds() / 60.0
+            else:
+                rec.mtta = 0.0
+
+    @api.depends("time_resolved", "create_date")
+    def _compute_mttr(self):
+        for rec in self:
+            if rec.time_resolved and rec.create_date:
+                rec.mttr = (rec.time_resolved - rec.create_date).total_seconds() / 60.0
+            else:
+                rec.mttr = 0.0
     helpdesk_ticket_id = fields.Integer(
         string="Helpdesk Ticket ID",
         help="Stores the integer ID of the generated helpdesk ticket to remain schema-agnostic.",
@@ -81,14 +97,7 @@ class PagerIncident(models.Model):
 
         res = super(PagerIncident, self.with_context(mail_notrack=True)).write(vals)
 
-        # ADR 0078: O(1) Memory Mapping / Event Bus Optimization
-        for rec in self:
-            if rec.time_acknowledged and rec.create_date and not rec.mtta:
-                rec.mtta = (
-                    rec.time_acknowledged - rec.create_date
-                ).total_seconds() / 60.0
-            if rec.time_resolved and rec.create_date and not rec.mttr:
-                rec.mttr = (rec.time_resolved - rec.create_date).total_seconds() / 60.0
+        # MTTA and MTTR are now handled via computed fields.
 
         if self:
             self.env["bus.bus"]._sendone("pager_duty", "update_board", {})

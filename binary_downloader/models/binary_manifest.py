@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+# See the LICENSE file in the project root for full license information.
 import hashlib
 import logging
 import os
@@ -17,6 +21,7 @@ _logger = logging.getLogger(__name__)
 
 
 class BinaryManifest(models.Model):
+    _inherit = ["binary_downloader.mixin"]
     _name = "binary.manifest"
     _description = "Binary Download Manifest"
 
@@ -96,24 +101,14 @@ class BinaryManifest(models.Model):
                 continue
 
             # Check hams_bin
-            filename = record._get_target_filename()
+            filename = self.env["binary_downloader.mixin"]._get_target_filename(record.name, record.checksum)
             target_bin = os.path.join(bin_dir, filename)
             if os.path.exists(target_bin) and os.access(target_bin, os.X_OK):
                 record.is_installed = True
             else:
                 record.is_installed = False
 
-    def _get_target_filename(self):
-        """Generates a stable, unique filename based on the binary name and its checksum.
-        This allows multiple versions or company-specific variants of the same command
-        to coexist in the shared hams_bin directory.
-        """
-        self.ensure_one()
-        # Hash name and checksum to create a unique identifier for this specific binary variant
-        identifier = hashlib.sha256(
-            f"{self.name}_{self.checksum}".encode()
-        ).hexdigest()[:16]
-        return f"{self.name}_{identifier}"
+
 
     def action_install(self):
         # [@ANCHOR: binary_action_install]
@@ -128,15 +123,30 @@ class BinaryManifest(models.Model):
                 _("You do not have sufficient permissions to install binaries.")
             )
 
-        # Dispatch the installation to a background worker to avoid blocking the UI thread
-        self.env.ref("binary_downloader.ir_cron_auto_install_binaries", raise_if_not_found=False)
-        self.ensure_executable(self.name)
+        def _bg_install(db_name, cmd_name):
+            import odoo
+            import threading
+            registry = odoo.registry(db_name)
+            with registry.cursor() as cr:
+                env = api.Environment(cr, odoo.SUPERUSER_ID, {})
+                try:
+                    env["binary.manifest"].ensure_executable(cmd_name)
+                except Exception as e:
+                    _logger.exception("Background installation failed for %s", cmd_name)
+
+        import threading
+        thread = threading.Thread(
+            target=_bg_install,
+            args=(self.env.cr.dbname, self.name)
+        )
+        thread.start()
+
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Success"),
-                "message": _("Successfully installed %s.") % self.name,
+                "message": _("Installation of %s has been dispatched to the background.") % self.name,
                 "sticky": False,
                 "type": "success",
             },
@@ -185,208 +195,18 @@ class BinaryManifest(models.Model):
                 % cmd_name
             )
 
-        if platform.system() != "Linux" or platform.machine() != "x86_64":
-            raise UserError(
-                _(
-                    "Auto-install of %s is only supported on Linux x86_64. Please install manually."
-                )
-                % cmd_name
-            )
 
-        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
-        bin_dir = os.path.join(data_dir, "hams_bin")
-
-        if not os.path.exists(bin_dir):
-            os.makedirs(bin_dir, exist_ok=True)
-            os.chmod(bin_dir, 0o750)
-
-        target_bin = os.path.join(bin_dir, manifest_record._get_target_filename())
-
-        # Deterministic advisory lock to prevent concurrent downloads of the SAME binary
-        lock_id = self.env["zero_sudo.security.utils"]._get_deterministic_hash(
-            f"binary_install_{cmd_name}_{manifest_record.checksum}"
+        return self.env["binary_downloader.mixin"]._download_and_extract(
+            cmd_name=manifest_record.name,
+            url=manifest_record.url,
+            checksum=manifest_record.checksum,
+            archive_type=manifest_record.archive_type,
+            extract_member=manifest_record.extract_member,
         )
-        self.env.cr.execute("SELECT pg_advisory_xact_lock(%s)", (lock_id,))
 
-        if os.path.exists(target_bin):
-            if manifest_record.archive_type != "binary":
-                if not os.access(target_bin, os.X_OK):
-                    os.chmod(target_bin, 0o750)
-                return target_bin
 
-            # Checksum verification for existing binary
-            hasher = hashlib.sha256()
-            try:
-                with open(  # audit-ignore-path
-                    target_bin,
-                    "rb",
-                    # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                ) as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
-                        hasher.update(chunk)
-                if hasher.hexdigest() == manifest_record.checksum:
-                    # [!] DIAGNOSTIC FOR AI: Checksum verified for existing binary.
-                    if not os.access(target_bin, os.X_OK):
-                        os.chmod(target_bin, 0o750)
-                    return target_bin
-                else:
-                    _logger.info(
-                        "Checksum mismatch for %s, re-downloading...", cmd_name
-                    )
-                    os.unlink(  # audit-ignore-path
-                        target_bin
-                        # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                    )
-            except OSError as e:
-                _logger.warning("Failed to check existing binary %s: %s", target_bin, e)
-
-        try:
-            get_req = urllib.request.Request(
-                manifest_record.url, headers={"User-Agent": "OdooBinaryDownloader/1.0"}
-            )
-            tmp_path = None
-            try:
-                with urllib.request.urlopen(get_req, timeout=15) as response:
-                    etag = response.getheader("ETag")
-                    if etag:
-                        _logger.info("Download successful, ETag: %s", etag)
-
-                    with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
-                        tmp_path = tmp.name
-                        for chunk in iter(lambda: response.read(8192), b""):
-                            tmp.write(chunk)
-
-                hasher = hashlib.sha256()
-                with open(  # audit-ignore-path
-                    tmp_path,
-                    "rb",
-                    # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                ) as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
-                        hasher.update(chunk)
-
-                if hasher.hexdigest() != manifest_record.checksum:
-                    # [!] DIAGNOSTIC FOR AI: Downloaded checksum mismatch. Expected %s, got %s
-                    _logger.error(
-                        "Checksum mismatch for %s. Expected %s, got %s",
-                        cmd_name,
-                        manifest_record.checksum,
-                        hasher.hexdigest(),
-                    )
-                    raise UserError(
-                        _("Security Alert: Checksum mismatch for downloaded %s binary.")
-                        % cmd_name
-                    )
-
-                if manifest_record.archive_type == "tar.gz":
-                    with tarfile.open(  # audit-ignore-path
-                        tmp_path,
-                        "r:gz",
-                        # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                    ) as tar:
-                        found = False
-                        extract_target = manifest_record.extract_member or cmd_name
-                        for member in tar.getmembers():
-                            if (
-                                member.name.endswith(f"/{extract_target}")
-                                or member.name == extract_target
-                            ):
-                                # Deep link/symlink protection
-                                if member.islnk() or member.issym():
-                                    raise UserError(
-                                        _(
-                                            "Security Alert: Links are not allowed in the archive."
-                                        )
-                                    )
-
-                                # Path traversal protection
-                                member_filename = os.path.basename(member.name)
-                                if not member_filename:
-                                    continue
-
-                                source = tar.extractfile(member)
-                                if source:
-                                    with source:
-                                        with open(  # audit-ignore-path
-                                            target_bin,
-                                            "wb",
-                                            # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                                        ) as target:
-                                            shutil.copyfileobj(source, target)
-                                    found = True
-                                    break
-                        if not found:
-                            raise UserError(
-                                _("Member %s not found in archive.") % extract_target
-                            )
-                elif manifest_record.archive_type == "zip":
-                    with zipfile.ZipFile(  # audit-ignore-path
-                        tmp_path,
-                        "r",
-                        # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                    ) as zip_ref:
-                        extract_target = manifest_record.extract_member or cmd_name
-                        found = False
-                        for zinfo in zip_ref.infolist():
-                            name = zinfo.filename
-                            if (
-                                name.endswith(f"/{extract_target}")
-                                or name == extract_target
-                            ):
-                                # Security: Check for symlinks (external attributes)
-                                # ZIP external attributes: bits 16-31 for Unix permissions
-                                if stat.S_ISLNK(zinfo.external_attr >> 16):
-                                    raise UserError(
-                                        _(
-                                            "Security Alert: Links are not allowed in the archive."
-                                        )
-                                    )
-
-                                # Path traversal protection for ZIP
-                                member_filename = os.path.basename(zinfo.filename)
-                                if not member_filename:
-                                    continue
-
-                                with zip_ref.open(  # audit-ignore-path
-                                    zinfo
-                                    # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                                ) as source:
-                                    with open(  # audit-ignore-path
-                                        target_bin,
-                                        "wb",
-                                        # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                                    ) as target:
-                                        shutil.copyfileobj(source, target)
-                                found = True
-                                break
-                        if not found:
-                            raise UserError(
-                                _("Member %s not found in zip archive.")
-                                % extract_target
-                            )
-                else:
-                    shutil.copy2(tmp_path, target_bin)
-
-                os.chmod(target_bin, 0o750)
-                return target_bin
-            finally:
-                if tmp_path and os.path.exists(tmp_path):
-                    try:
-                        os.unlink(  # audit-ignore-path
-                            tmp_path
-                            # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_standard]
-                        )
-                    except OSError as e:
-                        _logger.warning(
-                            "Failed to remove temporary file %s: %s", tmp_path, e
-                        )
-        except (UserError, ValidationError):
-            raise
-        except (
-            urllib.error.URLError,
-            OSError,
-            tarfile.TarError,
-            zipfile.BadZipFile,
-        ) as e:
-            _logger.exception("Failed to auto-install %s", cmd_name)
-            raise UserError(_("Failed to auto-install %s: %s") % (cmd_name, str(e)))
+    def unlink(self):
+        for record in self:
+            if record.name and record.checksum:
+                self.env["binary_downloader.mixin"]._unlink_binary_file(record.name, record.checksum)
+        return super().unlink()

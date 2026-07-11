@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo import models, api, fields, tools
 from odoo.modules.module import get_manifest
 from odoo.exceptions import AccessError
@@ -55,27 +60,56 @@ class Module(models.Model):
             )
         except AccessError:
             return
-        modules = (
-            self.env["ir.module.module"]
-            .with_user(facility_uid)
-            .search([("state", "=", "installed")], limit=10000)
-        )
 
-        for mod in modules:
-            manifest = get_manifest(mod.name)
-            if not manifest or "knowledge_docs" not in manifest:
-                continue
+        all_doc_infos = []
+        last_id = 0
+        while True:
+            batch = self.env["ir.module.module"].with_user(facility_uid).search(
+                [("state", "=", "installed"), ("id", ">", last_id)],
+                limit=1000,
+                order="id asc"
+            )
+            if not batch:
+                break
+            for mod in batch:
+                manifest = get_manifest(mod.name)
+                if not manifest or "knowledge_docs" not in manifest:
+                    continue
 
-            knowledge_docs = manifest["knowledge_docs"]
-            if not isinstance(knowledge_docs, list):
-                _logger.warning("knowledge_docs in module %s is not a list.", mod.name)
-                continue
+                knowledge_docs = manifest["knowledge_docs"]
+                if not isinstance(knowledge_docs, list):
+                    _logger.warning("knowledge_docs in module %s is not a list.", mod.name)
+                    continue
 
-            for doc_info in knowledge_docs:
-                self._install_single_doc(utils, Article, mod.name, doc_info)
+                for doc_info in knowledge_docs:
+                    all_doc_infos.append((mod.name, doc_info))
+            last_id = batch[-1].id
+
+        if not all_doc_infos:
+            return
+
+        hash_keys = []
+        names = []
+        for mod_name, doc_info in all_doc_infos:
+            name = doc_info.get("name", f"{mod_name} Documentation")
+            hash_key = f"zero_sudo.doc_hash_{mod_name}_{name.replace(' ', '_')}"
+            hash_keys.append(hash_key)
+            names.append(name)
+
+        # Bulk load hashes
+        env_svc = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
+        records = env_svc["zero_sudo.kv"].search([("key", "in", hash_keys)])
+        existing_hashes = {r.key: r.value for r in records}
+
+        # Bulk load existing articles
+        existing_articles = Article.search([("name", "in", names)])
+        article_by_name = {a.name: a for a in existing_articles}
+
+        for mod_name, doc_info in all_doc_infos:
+            self._install_single_doc(utils, Article, mod_name, doc_info, existing_hashes, article_by_name)
 
     @api.model
-    def _install_single_doc(self, utils, Article, module_name, doc_info):
+    def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, article_by_name=None):
         path = doc_info.get("path")
         if not path:
             return
@@ -97,7 +131,7 @@ class Module(models.Model):
         category = doc_info.get("category", "workspace")
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
-        existing_hash = utils._get_kv(hash_key)
+        existing_hash = existing_hashes.get(hash_key) if existing_hashes else utils._get_kv(hash_key)
 
         if existing_hash == content_hash:
             return
@@ -117,7 +151,7 @@ class Module(models.Model):
         if "icon" in model_fields:
             vals["icon"] = icon
 
-        existing = Article.search([("name", "=", name)], limit=1)
+        existing = article_by_name.get(name) if article_by_name else Article.search([("name", "=", name)], limit=1)
         if existing:
             existing.write(vals)
         else:

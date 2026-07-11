@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import logging
 import json
 import os
@@ -7,8 +9,8 @@ import shutil
 import pika
 import re
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError, AccessError
-from .utils import validate_backup_path
+from odoo.exceptions import UserError, AccessError, ValidationError
+from .utils import validate_backup_path, publish_to_rabbitmq
 
 from cryptography.fernet import Fernet
 
@@ -110,25 +112,27 @@ class BackupConfig(models.Model):
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
             return "***ERROR***" if decrypt else False
 
+    def _compute_encrypted_field(self, plain_field, crypt_field):
+        for rec in self:
+            setattr(rec, plain_field, rec._crypt_field(getattr(rec, crypt_field), decrypt=True))
+
+    def _inverse_encrypted_field(self, plain_field, crypt_field):
+        for rec in self:
+            setattr(rec, crypt_field, rec._crypt_field(getattr(rec, plain_field)))
+
     @api.depends("kopia_password_crypt")
     def _compute_kopia_password(self):
-        for rec in self:
-            rec.kopia_password = rec._crypt_field(
-                rec.kopia_password_crypt, decrypt=True
-            )
+        self._compute_encrypted_field("kopia_password", "kopia_password_crypt")
 
     def _inverse_kopia_password(self):
-        for rec in self:
-            rec.kopia_password_crypt = rec._crypt_field(rec.kopia_password)
+        self._inverse_encrypted_field("kopia_password", "kopia_password_crypt")
 
     @api.depends("secret_key_crypt")
     def _compute_secret_key(self):
-        for rec in self:
-            rec.secret_key = rec._crypt_field(rec.secret_key_crypt, decrypt=True)
+        self._compute_encrypted_field("secret_key", "secret_key_crypt")
 
     def _inverse_secret_key(self):
-        for rec in self:
-            rec.secret_key_crypt = rec._crypt_field(rec.secret_key)
+        self._inverse_encrypted_field("secret_key", "secret_key_crypt")
 
     @api.constrains("target_path", "restore_drill_script", "engine", "storage_type")
     def _check_security_paths(self):
@@ -142,7 +146,7 @@ class BackupConfig(models.Model):
                 if not rec.target_path or not re.match(
                     r"^[a-zA-Z0-9_]+$", rec.target_path
                 ):
-                    raise UserError(
+                    raise ValidationError(
                         _(
                             "Invalid pgBackRest stanza name: %s. Use only alphanumeric characters and underscores."
                         )
@@ -207,6 +211,8 @@ class BackupConfig(models.Model):
         created_jobs = []
 
         for rec in self:
+            if rec.engine == "kopia" and rec.storage_type == "local":
+                validate_backup_path(rec.target_path)
             job = jobs.create(
                 {
                     "config_id": rec.id,
@@ -234,44 +240,7 @@ class BackupConfig(models.Model):
             payload = json.dumps(payload_dict)
 
             def publish_task(msg=payload):
-                try:
-                    utils = self.env["zero_sudo.security.utils"]
-                    rmq_host = (
-                        utils._get_system_param("backup_management.rmq_host")
-                        or os.environ.get("RMQ_HOST")
-                        or "rabbitmq"
-                    )
-                    rmq_user = (
-                        utils._get_system_param("backup_management.rmq_user")
-                        or os.environ.get("RMQ_USER")
-                        or "guest"
-                    )
-                    rmq_pass = (
-                        utils._get_system_param("backup_management.rmq_pass")
-                        or os.environ.get("RMQ_PASS")  # burn-ignore-env
-                        or "guest"
-                    )  # burn-ignore-env
-                    credentials = pika.PlainCredentials(rmq_user, rmq_pass)
-                    conn_params = pika.ConnectionParameters(
-                        host=rmq_host, credentials=credentials
-                    )
-                    connection = pika.BlockingConnection(conn_params)
-                    try:
-                        channel = connection.channel()
-                        channel.queue_declare(queue="backup_tasks", durable=True)
-                        channel.basic_publish(
-                            exchange="",
-                            routing_key="backup_tasks",
-                            body=msg,
-                            properties=pika.BasicProperties(delivery_mode=2),
-                        )
-                    finally:
-                        connection.close()
-                except pika.exceptions.AMQPError as e:
-                    logging.getLogger(__name__).warning("An error occurred: %s", e)
-                    logging.getLogger(__name__).error(
-                        "Failed to publish backup task to RMQ: %s", e
-                    )
+                publish_to_rabbitmq(self.env, msg)
 
             self.env.cr.postcommit.add(publish_task)
 
@@ -295,8 +264,6 @@ class BackupConfig(models.Model):
         )
         res = True
         for rec in self:
-            if rec.engine == "kopia" and rec.storage_type == "local":
-                validate_backup_path(rec.target_path)
             action = rec.with_user(svc_uid)._publish_to_worker(rec.engine)
             if isinstance(action, dict) and len(self) == 1:
                 res = action
@@ -311,8 +278,6 @@ class BackupConfig(models.Model):
         )
         res = True
         for rec in self:
-            if rec.engine == "kopia" and rec.storage_type == "local":
-                validate_backup_path(rec.target_path)
             action = rec.with_user(svc_uid)._publish_to_worker("kopia_policy")
             if isinstance(action, dict) and len(self) == 1:
                 res = action
@@ -364,8 +329,6 @@ class BackupConfig(models.Model):
             "backup_management.user_backup_service_internal"
         )
         for rec in self:
-            if rec.engine == "kopia" and rec.storage_type == "local":
-                validate_backup_path(rec.target_path)
             rec.with_user(svc_uid)._publish_to_worker("sync_snapshots")
         return True
 
@@ -433,23 +396,17 @@ class BackupConfig(models.Model):
         )
         snap_map = {s["config_id"][0]: s for s in latest_snaps if s.get("config_id")}
 
-        # Get latest job status for each config efficiently
-        # Using a subquery/grouping approach if possible, or just a limited search
         job_map = {}
         if configs:
-            # Efficiently fetch only the latest job for each config
-            self.env.cr.execute(
-                """
-                SELECT DISTINCT ON (config_id)
-                    config_id, state, job_type, create_date
-                FROM backup_job
-                WHERE config_id IN %s
-                ORDER BY config_id, create_date DESC
-            """,
-                (tuple([c["id"] for c in configs]),),
-            )
-            for row in self.env.cr.dictfetchall():
-                job_map[row["config_id"]] = row
+            for c in configs:
+                jobs = self.env["backup.job"].search_read(
+                    [("config_id", "=", c["id"])],
+                    ["state", "job_type", "create_date"],
+                    order="create_date desc",
+                    limit=1,
+                )
+                if jobs:
+                    job_map[c["id"]] = jobs[0]
 
         for c in configs:
             snap = snap_map.get(c["id"])
@@ -514,19 +471,23 @@ class BackupConfig(models.Model):
                         )
 
         if snapshot_list:
-            # Use the Postgres procedure for efficient bulk upsert
-            # Returns the snapshot_id of newly inserted records to avoid duplicate alerting
-            self.env.cr.execute(
-                "SELECT snapshot_id FROM upsert_backup_snapshots(%s, %s, %s, %s, %s)",
-                (
-                    self.id,
-                    self.website_id.id or None,
-                    self.company_id.id,
-                    json.dumps(snapshot_list),
-                    self.env.uid,
-                ),
-            )
-            new_snapshot_ids = [row[0] for row in self.env.cr.fetchall()]
+            Snap = self.env["backup.snapshot"].with_user(self.env.uid)
+            new_snapshot_ids = []
+            for snap_vals in snapshot_list:
+                snap_vals.update({
+                    "config_id": self.id,
+                    "website_id": self.website_id.id or False,
+                    "company_id": self.company_id.id,
+                })
+                existing = Snap.search([
+                    ("config_id", "=", self.id),
+                    ("snapshot_id", "=", snap_vals["snapshot_id"])
+                ], limit=1)
+                if not existing:
+                    Snap.create(snap_vals)
+                    new_snapshot_ids.append(snap_vals["snapshot_id"])
+                else:
+                    existing.write(snap_vals)
 
             # Verification and anomaly reporting only for NEW snapshots to prevent alert spam
             if self.minimum_size_mb > 0 and new_snapshot_ids:
@@ -555,8 +516,9 @@ class BackupConfig(models.Model):
         for conf in configs:
             conf.action_sync_snapshots()
 
-            snaps = conf.snapshot_ids.sorted(lambda s: s.start_time, reverse=True)
-            latest_snap = snaps[0] if snaps else None
+            latest_snap = self.env["backup.snapshot"].search(
+                [("config_id", "=", conf.id)], order="start_time desc", limit=1
+            )
             if latest_snap and latest_snap.start_time:
                 delta = (now - latest_snap.start_time).total_seconds()
                 if delta > (

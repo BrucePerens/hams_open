@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 {
     "name": "Edge Routing & Resolution",
     "summary": "Core foundational module for vanity URL resolution and custom domain routing.",
@@ -6,7 +11,7 @@
     "version": "1.0",
     "category": "Website",
     "author": "HAMS",
-    "depends": ["base", "distributed_redis_cache", "zero_sudo", "mail"],
+    "depends": ["base", "distributed_redis_cache", "zero_sudo", "mail", "ham_dns"],
     "data": [
         "data/security_data.xml",
         "security/ir.model.access.csv",

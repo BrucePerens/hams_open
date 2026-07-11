@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 from unittest.mock import MagicMock
 import os
 from odoo.tests.common import tagged

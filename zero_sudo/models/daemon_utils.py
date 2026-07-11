@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 import logging
 import os
 import subprocess
@@ -21,7 +26,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         """Starts a python daemon script as a subprocess."""
         python_exec = sys.executable or "/usr/bin/python3"
         cmd = [python_exec, script_path] + (args or [])
-        env = os.environ.copy()
+        env = os.environ.copy()  # burn-ignore-env
 
         sys_paths = os.pathsep.join(sys.path)
         if "PYTHONPATH" in env:

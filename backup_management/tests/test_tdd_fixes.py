@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from unittest.mock import MagicMock
@@ -40,6 +42,7 @@ class TestTddFixes(HamsTransactionCase):
             self.assertEqual(type(res3), dict)
             self.assertEqual(type(res4), dict)
 
+    # TODO: Refactor test when removing threading in utils.py
     def test_rabbitmq_connection_close_on_exception_backup(self):
         mock_conn = MagicMock()
         mock_channel = MagicMock()

@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- 
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+    See the LICENSE file in the project root for full license information.
+-->
     <!-- Tenant Link Action -->
     <record id="action_binary_tenant_link" model="ir.actions.act_window">
-        <field name="name">Tenant Execution Paths</field>
+        <field name="name">Tenant Links</field>
         <field name="res_model">binary.tenant.link</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Assign binary versions to your tenants.
+            </p>
+        </field>
     </record>
 
     <!-- Binary Version Pool Action -->
@@ -20,18 +30,28 @@
         <field name="name">binary.tenant.link.form</field>
         <field name="model">binary.tenant.link</field>
         <field name="arch" type="xml">
-            <form>
+            <form string="Tenant Binary Version">
                 <header>
-                    <button name="action_upgrade_to_latest" type="object" string="1-Click Upgrade to Latest" class="btn-primary"/>
+                    <button name="action_upgrade_to_latest" type="object" string="1-Click Upgrade to Latest" class="btn-primary" icon="fa-level-up"/>
                 </header>
                 <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
                     <group>
-                        <field name="website_id"/>
-                        <field name="manifest_id"/>
-                        <field name="active_version_id"/>
-                        <field name="symlink_path" readonly="1" force_save="1"/>
+                        <group>
+                            <field name="website_id"/>
+                            <field name="manifest_id"/>
+                            <field name="active_version_id"/>
+                            <field name="symlink_path" readonly="1" force_save="1"/>
+                        </group>
                     </group>
                 </sheet>
+                  <div class="oe_chatter">
+                      <field name="message_follower_ids"/>
+                      <field name="activity_ids"/>
+                      <field name="message_ids"/>
+                  </div>
             </form>
         </field>
     </record>
@@ -45,7 +65,7 @@
             <form>
                 <header>
                     <button name="action_download_to_pool" type="object" string="Download to Pool" invisible="is_downloaded"/>
-                    <button name="action_notify_tenants" type="object" string="Alert Tenants via PagerDuty" class="btn-warning"/>
+                    <button name="action_notify_tenants" type="object" string="Alert Stations via PagerDuty" class="btn-warning"/>
                 </header>
                 <sheet>
                     <group>
@@ -56,14 +76,19 @@
                         <field name="checksum"/>
                         <field name="archive_type"/>
                         <field name="extract_member"/>
-                        <field name="is_downloaded" readonly="1"/>
+                        <field name="is_downloaded" readonly="1" widget="boolean_toggle"/>
                     </group>
                 </sheet>
+                  <div class="oe_chatter">
+                      <field name="message_follower_ids"/>
+                      <field name="activity_ids"/>
+                      <field name="message_ids"/>
+                  </div>
             </form>
         </field>
     </record>
 
     <!-- UI Menus under Technical Settings -->
-    <menuitem id="menu_binary_tenant_link" name="Tenant Executables" parent="base.menu_custom" action="action_binary_tenant_link" sequence="120"/>
+    <menuitem id="menu_binary_tenant_link" name="Station Executables" parent="base.menu_custom" action="action_binary_tenant_link" sequence="120"/>
     <menuitem id="menu_binary_version" name="Version Pool" parent="base.menu_custom" action="action_binary_version" sequence="121"/>
 </odoo>

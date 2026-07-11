@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import datetime
 import shutil
 import os
@@ -17,12 +19,9 @@ class TestBackupManagement(RealTransactionCase):
     def tearDown(self):
         if os.path.exists("/var/lib/odoo/backup_repo"):
             if os.path.isdir("/var/lib/odoo/backup_repo"):
-                shutil.rmtree("/var/lib/odoo/backup_repo", ignore_errors=True)
+                shutil.rmtree("/var/lib/odoo/backup_repo")
             else:
-                try:
-                    os.remove("/var/lib/odoo/backup_repo")
-                except OSError as e:
-                    _logger.warning("Failed to remove backup repo: %s", e)
+                os.remove("/var/lib/odoo/backup_repo")
         super().tearDown()
 
     def setUp(self):
@@ -47,12 +46,9 @@ class TestBackupManagement(RealTransactionCase):
         )
         if os.path.exists("/var/lib/odoo/backup_repo"):
             if os.path.isdir("/var/lib/odoo/backup_repo"):
-                shutil.rmtree("/var/lib/odoo/backup_repo", ignore_errors=True)
+                shutil.rmtree("/var/lib/odoo/backup_repo")
             else:
-                try:
-                    os.remove("/var/lib/odoo/backup_repo")
-                except OSError as e:
-                    _logger.warning("Failed to remove backup repo: %s", e)
+                os.remove("/var/lib/odoo/backup_repo")
         self.admin = self.env.ref("base.user_admin")
         self.config_kopia = self.env["backup.config"].create(
             {

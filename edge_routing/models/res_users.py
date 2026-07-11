@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo import models, api, fields
 
 import logging
 
 _logger = logging.getLogger(__name__)
 
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 class ResUsersEdgeRouting(models.Model):  # burn-ignore-env
     """
     Extends res.users with edge.routing.mixin to provide high-performance
@@ -13,7 +19,6 @@ class ResUsersEdgeRouting(models.Model):  # burn-ignore-env
 
     _name = "res.users"
     _inherit = ["res.users", "edge.routing.mixin"]
-    from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
     @api.model
     @distributed_cache()

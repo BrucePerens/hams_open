@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
+from odoo import models, fields, api
+import datetime
 
 
 class SecurityLog(models.Model):
@@ -20,11 +26,19 @@ class SecurityLog(models.Model):
     reason = fields.Selection(
         [
             ("service_account_blocked", "Service Account Web Login Attempt"),
-            ("god_mode_trip", "God-Mode Security Block Tripped"),
+            ("privilege_escalation_trip", "God-Mode Security Block Tripped"),
             ("param_access_denied", "Unauthorized System Parameter Access"),
             ("param_write_denied", "Unauthorized System Parameter Write"),
             ("cache_invalidation", "Model Cache Invalidation"),
         ],
         string="Reason",
         required=True,
+        index=True,
     )
+
+    create_date = fields.Datetime(index=True)
+
+    @api.model
+    def autovacuum(self):
+        ninety_days_ago = fields.Datetime.now() - datetime.timedelta(days=90)
+        self.search([('create_date', '<', ninety_days_ago)]).unlink()

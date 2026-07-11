@@ -263,11 +263,11 @@ class DatabaseActivity(models.Model):
 class DatabaseIndexStat(models.Model):
     # [@ANCHOR: db_index_stats]
     # Tests [@ANCHOR: db_index_stats]
-    _name = "database.index.stat"
-    name = fields.Char(string="Name", default=lambda self: self._description)
     # This model is logically global as it tracks index performance at the PostgreSQL storage layer,
     # which is shared by all Odoo tenants in this database.
+    _name = "database.index.stat"
     _description = "Database Index Health"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "idx_scan asc"
 
@@ -347,12 +347,12 @@ class DatabaseReplicationStat(models.Model):
 
 class DatabaseIndexAdvisor(models.Model):
     # [@ANCHOR: db_index_advisor]
-    name = fields.Char(string="Name", default=lambda self: self._description)
     # Tests [@ANCHOR: db_index_advisor]
     # This model identifies tables with high sequential scan counts and large
     # sizes that might benefit from additional indexing.
     _name = "database.index.advisor"
     _description = "Index Recommendation Advisor"
+    name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "seq_scan desc"
 

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <record id="res_config_settings_view_form" model="ir.ui.view">
         <field name="name">res.config.settings.view.form.inherit.caching</field>
@@ -9,12 +10,12 @@
             <!-- Verified by [@ANCHOR: test_xpath_rendering_caching_settings] -->
             <xpath expr="//block[@id='website_settings']" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_caching_settings] -->
                 <block title="Caching Service Worker" id="caching_settings">
-                    <setting help="Configure the browser storage limit (in MB) for the service worker.">
+                    <setting string="Safe Quota" help="Configure the browser storage limit (in MB) for the service worker.">
                         <field name="caching_safe_quota_mb" class="o_light_label" widget="integer"/>
                         <span>MB</span>
                     </setting>
-                    <setting string="Force Cache Invalidation" help="Current Version:">
-                        <field name="caching_invalidation_version" readonly="1"/>
+                    <setting string="Force Cache Invalidation" help="Manually invalidate the service worker cache for all clients.">
+                        <div class="text-muted mt8"><span>Current Version: </span><field name="caching_invalidation_version" class="fw-bold"/></div>
                         <div class="mt8">
                             <button name="action_force_cache_invalidation" type="object" string="Invalidate Cache Now" class="btn btn-primary" icon="fa-refresh" title="Invalidate Cache Now"/>
                         </div>

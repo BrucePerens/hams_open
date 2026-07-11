@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 import psutil
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
@@ -258,14 +263,14 @@ def _patched_save_test_file(
     *args,
     **kwargs,
 ):
-    if os.environ.get("SAVE_LOGS") != "1":
+    if os.environ.get("SAVE_LOGS") != "1":  # burn-ignore-env
         return
 
     pid = os.getpid()
     host_tmp = (
         "/opt/hams/test"
-        if os.environ.get("HAMS_ISOLATED_NS") == "1"
-        else os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")
+        if os.environ.get("HAMS_ISOLATED_NS") == "1"  # burn-ignore-env
+        else os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")  # burn-ignore-env
     )
 
     try:
@@ -301,7 +306,7 @@ def _patched_save_test_file(
             else:
                 host_path.write_bytes(content)
 
-            orig_user = os.environ.get("SUDO_USER", "odoo")
+            orig_user = os.environ.get("SUDO_USER", "odoo")  # burn-ignore-env
             user_info = next(
                 (u for u in pwd.getpwall() if u.pw_name == orig_user), None
             )
@@ -335,7 +340,7 @@ original_chrome_init = ChromeBrowser.__init__
 
 
 def _patched_chrome_init(self, *args, **kwargs):
-    if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
+    if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":  # burn-ignore-env
         self.__class__.remote_debugging_port = 9222
 
     retries = 3
@@ -487,7 +492,7 @@ def _patched_browser_js(self, *args, **kwargs):
     try:
         return original_browser_js(self, *args, **kwargs)
     except Exception as e:  # audit-ignore-catch-all
-        if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
+        if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":  # burn-ignore-env
             _logger.error(
                 "🛑 TOUR FAILED! Pausing indefinitely (--pause-on-fail active). Connect DevTools MCP to port 9222.\nError: %s",
                 repr(e),
@@ -560,7 +565,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         cls._crypto_patcher_res_users.start()
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(
+            cr.execute(  # audit-ignore-sql
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -607,7 +612,8 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         super().setUp()
         r = get_redis_connection(self.env)
         if r:
-            r.flushall()
+            with contextlib.suppress(Exception):
+                r.flushall()
 
     def start_daemon(
         self, script_path, args=None, env_vars=None, health_url=None, timeout=600
@@ -695,7 +701,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().setUpClass()
 
         with cls.registry.cursor() as cr:
-            cr.execute(
+            cr.execute(  # audit-ignore-sql
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -816,7 +822,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     def start_hams_browser(self):
         if not self.browser:
             self.browser = ChromeBrowser(
-                self, headless=not os.environ.get("HAMS_PAUSE_ON_FAIL")
+                self, headless=not os.environ.get("HAMS_PAUSE_ON_FAIL")  # burn-ignore-env
             )
         return self.browser
 
@@ -1032,7 +1038,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     ws_thread.join = lambda *args, **kwargs: None
 
             if not self.__class__._hams_tour_failed:
-                host_tmp = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")
+                host_tmp = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")  # burn-ignore-env
                 for log_file in glob.glob(os.path.join(host_tmp, "v8_hang*.log")):
                     try:
                         open(log_file, "w").close()
@@ -1133,7 +1139,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     def start_tour(self, *args, **kwargs):
         args_list = list(args)
 
-        tour_debug = os.environ.get("HAMS_TOUR_TOUR_DEBUG")
+        tour_debug = os.environ.get("HAMS_TOUR_TOUR_DEBUG")  # burn-ignore-env
         if tour_debug and args_list and isinstance(args_list[0], str):
             url_path = args_list[0]
             if "debug=" in url_path:

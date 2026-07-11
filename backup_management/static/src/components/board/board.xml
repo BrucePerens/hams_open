@@ -1,25 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="backup_management.BackupBoardTemplate" owl="1">
-        <div class="backup-board p-4" style="background: #121212; min-height: 100vh; color: #e0e0e0; overflow: hidden;">
-            <div t-att-style="state.transformStyle" style="will-change: transform;">
-                <div class="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style="background: #1e1e1e;">
-                    <h1 class="m-0 text-light"><i class="fa fa-database me-2" aria-hidden="true"/>Backup &amp; Disaster Recovery</h1>
-                    <button class="btn btn-outline-light" t-on-click="fetchData"><i class="fa fa-refresh me-1" aria-hidden="true"/> Refresh</button>
+        <div class="backup-board o_content p-4 overflow-auto">
+            <div>
+                <div class="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm bg-view">
+                    <h1 class="m-0 text-primary"><i class="fa fa-database me-2" aria-hidden="true"/>Backup &amp; Disaster Recovery</h1>
+                    <button class="btn btn-outline-primary" t-on-click="fetchData" t-att-disabled="state.isLoading"><i t-attf-class="fa fa-refresh me-1 {{ state.isLoading ? 'fa-spin' : '' }}" aria-hidden="true"/> Refresh</button>
                 </div>
 
-                <div class="row">
-                    <t t-foreach="state.configs || []" t-as="conf" t-key="conf.id">
-                        <div class="col-md-6 mb-4">
-                            <div t-attf-class="card shadow-sm h-100 {{ conf.is_stale ? 'border-danger' : 'border-success' }}" style="background: #1e1e1e; border-width: 2px;">
+                <t t-if="state.isLoading">
+                    <div class="row">
+                        <div class="col-md-6 mb-4" t-foreach="[1, 2]" t-as="i" t-key="i">
+                            <div class="card shadow-sm h-100 border-2">
                                 <div class="card-body">
-                                    <h3 class="card-title text-light d-flex justify-content-between align-items-center">
-                                        <span><t t-out="conf.name"/></span>
-                                        <span t-attf-class="badge rounded-pill {{ conf.is_stale ? 'bg-danger' : 'bg-success' }}">
-                                            <t t-out="conf.is_stale ? 'STALE / FAILED' : 'HEALTHY'"/>
-                                        </span>
+                                    <h3 class="card-title text-muted d-flex justify-content-between">
+                                        <span class="placeholder col-6 bg-secondary"></span>
+                                        <span class="placeholder col-3 bg-secondary"></span>
                                     </h3>
-                                    <h6 class="card-subtitle mb-3 text-secondary"><t t-out="conf.engine.toUpperCase()"/> - <t t-out="conf.target_path"/></h6>
+                                    <h6 class="card-subtitle mb-3 text-muted"><span class="placeholder col-4 bg-secondary"></span></h6>
+                                    <div class="mb-3">
+                                        <span class="placeholder col-3 bg-secondary btn btn-sm me-2"></span>
+                                        <span class="placeholder col-3 bg-secondary btn btn-sm"></span>
+                                    </div>
+                                    <p class="placeholder col-8 bg-secondary"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="row">
+                        <t t-foreach="state.configs || []" t-as="conf" t-key="conf.id">
+                            <div class="col-md-6 mb-4">
+                                <div t-attf-class="card shadow-sm h-100 {{ conf.is_stale ? 'border-danger' : 'border-success' }} border-2">
+                                    <div class="card-body">
+                                        <h3 class="card-title text-dark d-flex justify-content-between align-items-center">
+                                            <span><t t-out="conf.name"/></span>
+                                            <span t-attf-class="badge rounded-pill border {{ conf.is_stale ? 'bg-danger border-danger' : 'bg-success border-success' }}">
+                                                <t t-out="conf.is_stale ? 'STALE / FAILED' : 'HEALTHY'"/>
+                                            </span>
+                                        </h3>
+                                        <h6 class="card-subtitle mb-3 text-muted"><t t-out="conf.engine.toUpperCase()"/> - <t t-out="conf.target_path"/></h6>
                                     <div class="mb-3">
                                         <button class="btn btn-sm btn-danger me-2" t-on-click="() => this.triggerBackup(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
                                             <i t-attf-class="fa {{ (conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)) ? 'fa-spinner fa-spin' : 'fa-play' }} me-1" aria-hidden="true"/> Backup
@@ -29,9 +50,9 @@
                                         </button>
                                     </div>
                                     <t t-if="conf.latest_job">
-                                        <div class="mb-3 p-2 rounded" style="background: rgba(255,255,255,0.05);">
-                                            <small class="text-secondary d-block">Latest Job Status:</small>
-                                            <span t-attf-class="badge {{ conf.latest_job.state === 'done' ? 'bg-success' : (conf.latest_job.state === 'failed' ? 'bg-danger' : 'bg-info') }}">
+                                        <div class="mb-3 p-2 rounded bg-light border">
+                                            <small class="text-muted d-block">Latest Job Status:</small>
+                                            <span t-attf-class="badge border {{ conf.latest_job.state === 'done' ? 'bg-success border-success' : (conf.latest_job.state === 'failed' ? 'bg-danger border-danger' : 'bg-info text-dark border-info') }}">
                                                 <t t-out="conf.latest_job.job_type.toUpperCase()"/>: <t t-out="conf.latest_job.state.toUpperCase()"/>
                                             </span>
                                             <small class="ms-2 text-muted"><t t-out="conf.latest_job.create_date"/></small>
@@ -43,7 +64,9 @@
                                         <p class="mb-0"><strong>Size:</strong> <t t-out="(conf.latest_snapshot.size_bytes / 1048576).toFixed(2)"/> MB</p>
                                     </t>
                                     <t t-else="">
-                                        <p class="text-danger mb-0"><i class="fa fa-exclamation-triangle me-1" aria-hidden="true"/> No snapshots recorded.</p>
+                                        <div class="alert alert-secondary mt-3 mb-0">
+                                            <i class="fa fa-info-circle me-1" aria-hidden="true"/> No snapshots recorded yet.
+                                        </div>
                                     </t>
                                 </div>
                             </div>
@@ -51,12 +74,17 @@
                     </t>
                     <t t-if="state.configs.length === 0">
                         <div class="col-12">
-                            <div class="alert alert-warning shadow-sm" style="background: rgba(255, 193, 7, 0.2); border: 1px solid #ffc107; color: #ffc107;">
-                                <i class="fa fa-info-circle me-2" aria-hidden="true"/> No backup configurations found.
+                            <div class="alert alert-info shadow-sm border border-info d-flex align-items-center">
+                                <i class="fa fa-info-circle fa-2x me-3" aria-hidden="true"/>
+                                <div>
+                                    <h4 class="alert-heading mb-1">No configurations found</h4>
+                                    <p class="mb-0">Create a backup configuration to see it here.</p>
+                                </div>
                             </div>
                         </div>
                     </t>
                 </div>
+                </t>
             </div>
         </div>
     </t>

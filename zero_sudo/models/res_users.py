@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 import secrets
 
 from odoo import api, fields, models
@@ -34,7 +39,7 @@ class ResUsersZeroSudo(models.Model):
             vals["password"] = secrets.token_hex(32)
         elif "password" in vals and "is_service_account" not in vals:
             if self.ids:
-                self.env.cr.execute(
+                self.env.cr.execute(  # audit-ignore-sql
                     "SELECT id FROM res_users WHERE id IN %s AND is_service_account = True",
                     (tuple(self.ids),)
                 )

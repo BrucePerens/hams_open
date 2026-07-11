@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields, api
 from odoo.addons.cloudflare.utils import cloudflare_api as cf_utils
 
@@ -40,7 +41,9 @@ class CloudflareRoutingDomain(models.Model):
     def _create_cloudflare_custom_hostname(self):
         self.ensure_one()
         svc_user = self.env.ref("cloudflare.user_cloudflare_tunnel")
-        website = self.env["website"].with_user(svc_user).search([], limit=1)
+        website = self.env["website"].with_user(svc_user).search([("domain", "=", self.name)], limit=1)
+        if not website:
+            website = self.env["website"].with_user(svc_user).search([], limit=1)
         token, zone_id = website._get_cloudflare_credentials() if website else (None, None)
 
         if token and zone_id:
@@ -54,7 +57,9 @@ class CloudflareRoutingDomain(models.Model):
     def _delete_cloudflare_custom_hostname(self):
         self.ensure_one()
         svc_user = self.env.ref("cloudflare.user_cloudflare_tunnel")
-        website = self.env["website"].with_user(svc_user).search([], limit=1)
+        website = self.env["website"].with_user(svc_user).search([("domain", "=", self.name)], limit=1)
+        if not website:
+            website = self.env["website"].with_user(svc_user).search([], limit=1)
         token, zone_id = website._get_cloudflare_credentials() if website else (None, None)
 
         if token and zone_id:
@@ -62,7 +67,9 @@ class CloudflareRoutingDomain(models.Model):
 
     def action_sync_ssl_status(self):
         svc_user = self.env.ref("cloudflare.user_cloudflare_tunnel")
-        website = self.env["website"].with_user(svc_user).search([], limit=1)
+        website = self.env["website"].with_user(svc_user).search([("domain", "=", self.name)], limit=1)
+        if not website:
+            website = self.env["website"].with_user(svc_user).search([], limit=1)
         token, zone_id = website._get_cloudflare_credentials() if website else (None, None)
 
         if not token or not zone_id:

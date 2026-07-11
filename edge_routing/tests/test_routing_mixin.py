@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -84,10 +89,5 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         # res.users get_record_by_slug should not be decorated with @distributed_cache
         # If it is, the class method will have the 'clear_cache' attribute from the decorator
         method = self.User.__class__.get_record_by_slug
-        has_clear_cache = False
-        try:
-            _ = method.clear_cache
-            has_clear_cache = True
-        except AttributeError as e:
-            _logger.warning("clear_cache exception: %s", e)
+        has_clear_cache = getattr(method, 'clear_cache', None) is not None
         self.assertFalse(has_clear_cache, "get_record_by_slug on res.users should not have @distributed_cache")

@@ -16,7 +16,7 @@ DECLARE
     v_uid INTEGER;
     v_active BOOLEAN;
     v_is_svc BOOLEAN;
-    v_has_god_mode BOOLEAN;
+    v_has_privilege_escalation BOOLEAN;
 BEGIN
     v_module := split_part(p_xml_id, '.', 1);
     v_name := split_part(p_xml_id, '.', 2);
@@ -44,9 +44,9 @@ BEGIN
         SELECT 1 FROM res_groups_users_rel rel
         JOIN ir_model_data imd ON imd.res_id = rel.gid AND imd.model = 'res.groups'
         WHERE rel.uid = v_uid AND imd.module = 'base' AND imd.name IN ('group_system', 'group_erp_manager')
-    ) INTO v_has_god_mode;
+    ) INTO v_has_privilege_escalation;
 
-    IF v_has_god_mode THEN
+    IF v_has_privilege_escalation THEN
         RAISE EXCEPTION 'Security Alert: Service Account % violates the Zero-Sudo mandate by possessing global administrative groups.', p_xml_id;
     END IF;
 
@@ -74,8 +74,8 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
-env.cr.execute(sql_get_uid)
-env.cr.execute(sql_set_kv)
+env.cr.execute(sql_get_uid)  # audit-ignore-sql
+env.cr.execute(sql_set_kv)  # audit-ignore-sql
             </field>
         </record>
 

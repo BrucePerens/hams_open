@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields
+import logging
+try:
+    from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+except ImportError:
+    def distributed_cache():
+        def decorator(func):
+            return func
+        return decorator
 
 
 class WebsiteCloudflare(models.Model):
@@ -22,6 +31,7 @@ class WebsiteCloudflare(models.Model):
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
     )
 
+    @distributed_cache()
     def _get_cloudflare_credentials(self):
         """
         Returns the API Token and Zone ID for this specific website.

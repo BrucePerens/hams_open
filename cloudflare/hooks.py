@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 import logging
 
 _logger = logging.getLogger(__name__)

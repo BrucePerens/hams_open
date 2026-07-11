@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 import hashlib
 import os
 import shutil
@@ -48,21 +53,24 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # [@ANCHOR: get_service_uid_sql_resolve]
         # Verified by [@ANCHOR: test_get_service_uid_sql_resolve]
         # Verified by [@ANCHOR: test_get_service_uid_sql_verify]
-        # Verified by [@ANCHOR: test_god_mode_block_sql]
+        # Verified by [@ANCHOR: test_privilege_escalation_block_sql]
 
-        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))
+        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql
         uid = self.env.cr.fetchone()[0]
         return uid
 
     @api.model
-    def _get_service_env(self, xml_id):
+    def _get_service_env(self, xml_id, context=None):
         """
         Returns a new Environment running strictly under the context of the specified
         service account. Automatically disables tracking per ADR-0001
         to prevent ORM cascade Access Errors.
         """
         uid = self._get_service_uid(xml_id)
-        return self.with_user(uid).with_context(mail_notrack=True).env
+        env = self.with_user(uid).with_context(mail_notrack=True).env
+        if context:
+            env = env(context=dict(env.context, **context))
+        return env
 
     @api.model
     def _ensure_executable(self, cmd_name, svc_xml_id=None, pkg_name=None):
@@ -149,14 +157,14 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     chunk = payloads[i : i + 100]
                     # [@ANCHOR: coherent_cache_signal_batch]
                     # Verified by [@ANCHOR: test_coherent_cache_signal_batch]
-                    self.env.cr.execute(
+                    self.env.cr.execute(  # audit-ignore-sql
                         "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
                         ("cache_invalidation", chunk),
                     )
         elif key_value:
             # [@ANCHOR: coherent_cache_signal_single]
             # Verified by [@ANCHOR: test_coherent_cache_signal_single]
-            self.env.cr.execute(
+            self.env.cr.execute(  # audit-ignore-sql
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
             )
@@ -165,39 +173,22 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_param_read_whitelist(self):
         """Returns the list of system parameters allowed to be read via Zero-Sudo."""
         return [
-            "caching.invalidation_version",
-            "caching.safe_quota_mb",
-            "cloudflare.last_static_mtime",
             "distributed_redis_cache.redis_host",
             "distributed_redis_cache.redis_password",
             "distributed_redis_cache.redis_port",
             "distributed_redis_cache.test_integration_active",
-            "pager_duty.helpdesk_model",
-            "backup_management.rmq_host",
-            "backup_management.rmq_user",
-            "backup_management.rmq_pass",
-            "user_websites.company_abuse_email",
-            "user_websites.enable_blog_comments",
-            "user_websites.global_website_page_limit",
-            "user_websites.last_digest_id",
-            "user_websites.max_sites_per_user",
-            "user_websites_seo.docs_installed",
             "web.base.url",
-            "content_security_policy.report_url",
         ]
 
     @api.model
     def _get_param_write_whitelist(self):
         """Returns the list of system parameters allowed to be written via Zero-Sudo."""
         return [
-            "caching.invalidation_version",
-            "caching.safe_quota_mb",
-            "cloudflare.last_static_mtime",
-            "user_websites_seo.docs_installed",
             "web.base.url",
         ]
 
     @api.model
+    @distributed_cache()
     def _get_system_param(self, key, default=None):
         # [@ANCHOR: get_system_param]
         # Verified by [@ANCHOR: test_01_mechanical_secret_block_enforcement]
@@ -276,6 +267,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return env_svc["ir.config_parameter"].set_param(key, value)
 
     @api.model
+    @distributed_cache()
     def _get_kv(self, key):
         env_svc = self._get_service_env("zero_sudo.odoo_facility_service_internal")
         record = env_svc["zero_sudo.kv"].search([("key", "=", key)], limit=1)
@@ -291,7 +283,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         High-performance atomic KV update using a single Postgres procedure call.
         Eliminates Python-side existence checks and round-trips.
         """
-        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))
+        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql
 
         # Ensure changes are visible to other transactions/round-trips.
         # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,

@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo import models, fields
 
 
@@ -18,7 +23,7 @@ class NoisyTable(models.Model):
         help="Name of the PostgreSQL table to ignore in leak detection.",
     )
     active = fields.Boolean(
-        default=True, help="If unchecked, it will allow leak detection for this table."
+        default=True, index=True, help="If unchecked, it will allow leak detection for this table."
     )
 
     _name_uniq = models.Constraint("UNIQUE(name)", "The table name must be unique!")

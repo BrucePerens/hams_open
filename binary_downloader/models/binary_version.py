@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+# See the LICENSE file in the project root for full license information.
 import hashlib
 import logging
 import os
@@ -16,6 +20,7 @@ _logger = logging.getLogger(__name__)
 
 
 class BinaryVersion(models.Model):
+    _inherit = ["binary_downloader.mixin"]
     _name = "binary.version"
     _description = "Specific Binary Version Release"
     name = fields.Char(string="Name", default=lambda self: self._description)
@@ -89,8 +94,7 @@ class BinaryVersion(models.Model):
         self.ensure_one()
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
-        safe_hash = self.checksum[:12] if self.checksum else "nohash"
-        filename = f"{self.manifest_id.name}_{self.version_number}_{safe_hash}"
+        filename = self.env["binary_downloader.mixin"]._get_target_filename(self.manifest_id.name, self.checksum)
         return os.path.join(bin_dir, filename)
 
     @api.depends("version_number", "checksum")
@@ -120,137 +124,10 @@ class BinaryVersion(models.Model):
             os.makedirs(bin_dir, exist_ok=True)
             os.chmod(bin_dir, 0o750)
 
-        # Skip if perfectly matching binary already exists
-        if os.path.exists(target_bin):
-            hasher = hashlib.sha256()
-            try:
-                with open(target_bin, "rb") as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
-                        hasher.update(chunk)
-                if hasher.hexdigest() == self.checksum:
-                    if not os.access(target_bin, os.X_OK):
-                        os.chmod(target_bin, 0o750)
-                    return True
-                else:
-                    os.unlink(target_bin)
-            except OSError as e:
-                _logger.warning(
-                    "Failed to verify existing central binary %s: %s", target_bin, e
-                )
 
-        # Standard secure download and extraction protocol
-        try:
-            get_req = urllib.request.Request(
-                self.url, headers={"User-Agent": "OdooBinaryDownloader/2.0 (Versioned)"}
-            )
-            tmp_path = None
-            try:
-                with urllib.request.urlopen(get_req, timeout=600) as response:
-                    with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
-                        tmp_path = tmp.name
-                        shutil.copyfileobj(response, tmp)
 
-                hasher = hashlib.sha256()
-                with open(tmp_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
-                        hasher.update(chunk)
-
-                if hasher.hexdigest() != self.checksum:
-                    raise UserError(
-                        _(
-                            "Security Alert: Checksum mismatch for downloaded version %s."
-                        )
-                        % self.version_number
-                    )
-
-                if self.archive_type == "tar.gz":
-                    with tarfile.open(  # audit-ignore-path
-                        tmp_path, "r:gz"
-                    ) as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
-                        found = False
-                        extract_target = self.extract_member or self.manifest_id.name
-                        for member in tar.getmembers():
-                            if (
-                                member.name.endswith(f"/{extract_target}")
-                                or member.name == extract_target
-                            ):
-                                if member.islnk() or member.issym():
-                                    raise UserError(
-                                        _(
-                                            "Security Alert: Links are not allowed in the archive."
-                                        )
-                                    )
-
-                                # Path traversal protection
-                                member_filename = os.path.basename(member.name)
-                                if not member_filename:
-                                    continue
-
-                                source = tar.extractfile(member)
-                                if source:
-                                    with source:
-                                        with open(target_bin, "wb") as target:
-                                            shutil.copyfileobj(source, target)
-                                    found = True
-                                    break
-                        if not found:
-                            raise UserError(
-                                _("Member %s not found in archive.") % extract_target
-                            )
-                elif self.archive_type == "zip":
-                    with zipfile.ZipFile(  # audit-ignore-path
-                        tmp_path, "r"
-                    ) as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_version_standard]
-                        extract_target = self.extract_member or self.manifest_id.name
-                        found = False
-                        for zinfo in zip_ref.infolist():
-                            name = zinfo.filename
-                            if (
-                                name.endswith(f"/{extract_target}")
-                                or name == extract_target
-                            ):
-                                if stat.S_ISLNK(zinfo.external_attr >> 16):
-                                    raise UserError(
-                                        _(
-                                            "Security Alert: Links are not allowed in the archive."
-                                        )
-                                    )
-
-                                # Path traversal protection
-                                member_filename = os.path.basename(zinfo.filename)
-                                if not member_filename:
-                                    continue
-
-                                with zip_ref.open(zinfo) as source:
-                                    with open(target_bin, "wb") as target:
-                                        shutil.copyfileobj(source, target)
-                                found = True
-                                break
-                        if not found:
-                            raise UserError(
-                                _("Member %s not found in zip archive.")
-                                % extract_target
-                            )
-                else:
-                    shutil.copy2(tmp_path, target_bin)
-
-                os.chmod(target_bin, 0o750)
-                return True
-            finally:
-                if tmp_path and os.path.exists(tmp_path):
-                    try:
-                        os.unlink(tmp_path)
-                    except OSError as e:
-                        _logger.warning(
-                            "Failed to clean up temporary file %s: %s", tmp_path, e
-                        )
-        except (
-            urllib.error.URLError,
-            OSError,
-            tarfile.TarError,
-            zipfile.BadZipFile,
-            UserError,
-        ) as e:
-            raise UserError(
-                _("Failed to download version %s: %s") % (self.version_number, str(e))
-            )
+    def unlink(self):
+        for record in self:
+            if record.manifest_id.name and record.checksum:
+                self.env["binary_downloader.mixin"]._unlink_binary_file(record.manifest_id.name, record.checksum)
+        return super().unlink()

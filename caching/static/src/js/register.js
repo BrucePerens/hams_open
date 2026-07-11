@@ -1,3 +1,4 @@
+/** Copyright © HAMS project. AGPL-3.0. **/
 /** @odoo-module **/
 
 if ('serviceWorker' in navigator) {

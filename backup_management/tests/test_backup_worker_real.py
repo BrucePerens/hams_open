@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import time
 import pika
 import json
@@ -18,11 +20,8 @@ class TestRealBackupWorker(RealTransactionCase):
 
     def tearDown(self):
         if self.daemon_proc:
-            try:
-                self.daemon_proc.terminate()
-                self.daemon_proc.wait(timeout=2.0)
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Daemon termination ignored: %s", repr(e))
+            self.daemon_proc.terminate()
+            self.daemon_proc.wait(timeout=2.0)
         super().tearDown()
 
     def test_real_backup_worker_rabbitmq(self):

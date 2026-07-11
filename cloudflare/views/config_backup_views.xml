@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <!-- Verified by [@ANCHOR: test_cf_backend_views_rendering] -->
     <record id="view_cloudflare_config_backup_list" model="ir.ui.view">
@@ -29,7 +30,7 @@
                     </group>
                     <notebook>
                         <page string="Raw Cloudflare Payload">
-                            <field name="raw_json" widget="text" readonly="1"/>
+                            <field name="raw_json" widget="code" options="{'mode': 'application/json'}" readonly="1"/>
                         </page>
                     </notebook>
                 </sheet>

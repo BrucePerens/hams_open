@@ -1,4 +1,7 @@
 /** @odoo-module **/
+/* Copyright © Bruce Perens K6BP. All Rights Reserved.
+ * This software is released under the AGPL-3.0 License.
+ */
 
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
@@ -36,6 +39,11 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             trigger: 'div[name="name"] input, input[id="name"]',
             run: "edit Test Kopia Tour",
             content: "Enter name",
+        },
+        {
+            trigger: '.o_form_sheet',
+            content: 'Click away to force DOM blur and commit text input',
+            run: 'click',
         },
         {
             trigger: 'div[name="engine"] .o_select_menu_toggler',
@@ -80,6 +88,17 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: "Wait for list view to load",
             trigger: '.o_list_table',
             run: function() {}
+        },
+        {
+            content: "Go back to form view to test action button",
+            trigger: 'tr.o_data_row td[name="name"]:contains("Test Kopia Tour")',
+            run: 'click',
+        },
+        {
+            content: "Trigger Backup Now (Tests action_trigger_backup)",
+            trigger: 'button[name="action_trigger_backup"]',
+            run: 'click',
+            expectUnloadPage: true, // Crucial for button clicks that trigger python actions and refresh/navigate
         }
     ]),
 });

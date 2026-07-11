@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+# See the LICENSE file in the project root for full license information.
 import logging
 import os
-from odoo import models, fields, api, tools
+from odoo import models, fields, api, tools, _
 
 _logger = logging.getLogger(__name__)
 
 
 class BinaryTenantLink(models.Model):
+    _inherit = ["mail.thread", "mail.activity.mixin"]
     _name = "binary.tenant.link"
     _description = "Tenant to Binary Version Assignment"
     name = fields.Char(string="Name", default=lambda self: self._description)
@@ -104,3 +109,38 @@ class BinaryTenantLink(models.Model):
                         e,
                     )
         return super().unlink()
+
+    def action_upgrade_to_latest(self):
+        """Finds the most recent upstream release and automatically repoints the tenant symlink."""
+        self.ensure_one()
+        latest = self.env["binary.version"].search(
+            [("manifest_id", "=", self.manifest_id.id)],
+            order="release_date desc, id desc",
+            limit=1,
+        )
+
+        if not latest:
+            return False
+
+        if latest.id == self.active_version_id.id:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Up to Date"),
+                    "message": _("The tenant is already running the latest binary version."),
+                    "type": "info",
+                },
+            }
+
+        self.active_version_id = latest.id
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Upgrade Successful"),
+                "message": _("Tenant execution path successfully symlinked to version %s.") % latest.version_number,
+                "type": "success",
+            },
+        }

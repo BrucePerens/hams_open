@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of hams_open, an open source module.
+    License: AGPL-3.0
+-->
 <odoo>
     <record id="action_backup_board_client" model="ir.actions.client">
         <field name="name">Backup Dashboard</field>

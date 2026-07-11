@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 import re
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -35,7 +40,7 @@ class TestZeroSudoControllers(RealTransactionCase):
                 "active": True,
             }
         )
-        self.env.cr.execute(
+        self.env.cr.execute(  # audit-ignore-sql
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         # MANDATORY: Commit so the HTTP worker thread can see the new user.

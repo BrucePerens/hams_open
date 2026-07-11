@@ -1,4 +1,7 @@
 /** @odoo-module **/
+/* Copyright © Bruce Perens K6BP. All Rights Reserved.
+ * This software is released under the AGPL-3.0 License.
+ */
 import { Component, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
@@ -9,16 +12,15 @@ export class BackupBoard extends Component {
         this.website = useService("website");
         this.state = useState({
             configs: [],
-            transformStyle: ""
+            isLoading: true,
         });
 
         onMounted(async () => {
             await this.fetchData();
-            this.burnInTimer = setInterval(() => this.applyBurnInShift(), 60000);
         });
 
         onWillUnmount(() => {
-            if (this.burnInTimer) clearInterval(this.burnInTimer);
+            if (this.pollTimer) clearTimeout(this.pollTimer);
         });
     }
 
@@ -39,13 +41,13 @@ export class BackupBoard extends Component {
             context.website_id = this.website.currentWebsite.id;
         }
         this.state.configs = await this.orm.call("backup.config", "get_board_data", [], { context: context });
-        this.applyBurnInShift();
-    }
+        this.state.isLoading = false;
 
-    applyBurnInShift() {
-        const x = Math.floor(Math.random() * 30) - 15;
-        const y = Math.floor(Math.random() * 30) - 15;
-        this.state.transformStyle = `transform: translate(${x}px, ${y}px); transition: transform 20s linear;`;
+        const hasActiveJobs = this.state.configs.some(conf => conf.latest_job && ['pending', 'processing'].includes(conf.latest_job.state));
+        if (this.pollTimer) clearTimeout(this.pollTimer);
+        if (hasActiveJobs) {
+            this.pollTimer = setTimeout(() => this.fetchData(), 5000);
+        }
     }
 }
 BackupBoard.template = "backup_management.BackupBoardTemplate";

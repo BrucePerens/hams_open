@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of hams_open, an open source module.
+    License: AGPL-3.0
+-->
 <odoo>
     <record id="view_backup_config_list" model="ir.ui.view">
         <!-- Verified by [@ANCHOR: backup_dashboard_tour] -->
@@ -23,10 +28,10 @@
         <field name="arch" type="xml">
             <form string="Backup Configuration">
                 <header>
-                    <button name="action_trigger_backup" type="object" string="Run Backup Now" class="btn-danger"/>
+                    <button name="action_trigger_backup" type="object" string="Run Backup Now" class="oe_highlight"/>
                     <button name="action_test_connection" type="object" string="Test Connection" class="btn-secondary"/>
                     <button name="action_apply_policies" type="object" string="Apply Policies" class="btn-warning" invisible="engine != 'kopia'"/>
-                    <button name="action_sync_snapshots" type="object" string="Sync Snapshots" class="btn-primary"/>
+                    <button name="action_sync_snapshots" type="object" string="Sync Snapshots" class="btn-secondary"/>
                     <button name="action_view_latest_job" type="object" string="View Latest Job" class="btn-link"/>
                 </header>
                 <sheet>

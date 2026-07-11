@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo.tests.common import tagged
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -84,7 +89,7 @@ class TestSecurityUtils(HamsTransactionCase):
         utils._get_service_uid(svc_xml_id)
 
         mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute
+            self.env.cr, "execute", wraps=self.env.cr.execute  # audit-ignore-sql
         )
         utils._get_service_uid(svc_xml_id)
         for call in mock_execute.call_args_list:
@@ -114,9 +119,9 @@ class TestSecurityUtils(HamsTransactionCase):
         )
 
     @mute_logger("odoo.sql_db")
-    def test_04_god_mode_block_enforcement(self):
-        # [@ANCHOR: test_god_mode_block_sql]
-        # Tests [@ANCHOR: god_mode_block_sql]
+    def test_04_privilege_escalation_block_enforcement(self):
+        # [@ANCHOR: test_privilege_escalation_block_sql]
+        # Tests [@ANCHOR: privilege_escalation_block_sql]
         """Verify that any Service Account granted base.group_system is violently rejected."""
         # 1. Create a rogue service account
         rogue_user = self.env["res.users"].create(
@@ -213,20 +218,20 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # 1. Test environment variable resolution
         env_dict = {"HAMS_CRYPTO_KEY": "test_env_key"}
-        original_env = os.environ.copy()
-        os.environ.update(env_dict)
+        original_env = os.environ.copy()  # burn-ignore-env
+        os.environ.update(env_dict)  # burn-ignore-env
         try:
             self.assertEqual(utils._get_crypto_secret(), "test_env_key")
         finally:
-            os.environ.clear()
-            os.environ.update(original_env)
+            os.environ.clear()  # burn-ignore-env
+            os.environ.update(original_env)  # burn-ignore-env
 
         invalidate_model_cache(utils.env, "zero_sudo.security.utils")
         utils.env.registry.clear_cache()
 
         # 2. Test file fallback
-        original_env = os.environ.copy()
-        os.environ.clear()
+        original_env = os.environ.copy()  # burn-ignore-env
+        os.environ.clear()  # burn-ignore-env
         try:
             self.safe_patch("os.path.exists", return_value=True)
             self.safe_patch("builtins.open", mock_open(read_data="test_file_key\n"))
@@ -241,8 +246,8 @@ class TestSecurityUtils(HamsTransactionCase):
             )
             self.assertEqual(utils._get_crypto_secret(), "test_config_key")
         finally:
-            os.environ.clear()
-            os.environ.update(original_env)
+            os.environ.clear()  # burn-ignore-env
+            os.environ.update(original_env)  # burn-ignore-env
 
     def test_10_get_service_env(self):
         """Verify _get_service_env correctly disables tracking and prefetching."""
@@ -410,12 +415,12 @@ class TestSecurityUtils(HamsTransactionCase):
             }
         )
 
-        self.env.cr.execute(
+        self.env.cr.execute(  # audit-ignore-sql
             "SELECT password FROM res_users WHERE id = %s", (service_account_1.id,)
         )
         hash_1 = self.env.cr.fetchone()[0]
 
-        self.env.cr.execute(
+        self.env.cr.execute(  # audit-ignore-sql
             "SELECT password FROM res_users WHERE id = %s", (service_account_2.id,)
         )
         hash_2 = self.env.cr.fetchone()[0]

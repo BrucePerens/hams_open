@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from ..utils.cloudflare_api import delete_cfd_tunnel, list_cfd_tunnels
@@ -45,7 +46,10 @@ class CloudflareTunnel(models.Model):
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
             # We defer the actual sync for each website to a background job to avoid synchronous loops
-            self._sync_tunnels_for_website(website.id)
+            if hasattr(self, 'with_delay'):
+                self.with_delay()._sync_tunnels_for_website(website.id)
+            else:
+                self._sync_tunnels_for_website(website.id)
 
         return {
             "type": "ir.actions.client",

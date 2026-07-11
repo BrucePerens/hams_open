@@ -27,7 +27,7 @@ A "Service Account" is a special user profile used only by background programs, 
 ### Security Audit Logs:
 Administrators can monitor security events in **Settings > Security Logs**. The following events are tracked:
 *   **Service Account Web Login Attempt:** Logs when a background account tries to access the UI.
-*   **God-Mode Security Block Tripped:** Logs when an automated account attempts to escalate to global administrative privileges.
+*   **Privilege Escalation Security Block Tripped:** Logs when an automated account attempts to escalate to global administrative privileges.
 *   **Unauthorized System Parameter Access:** Logs when a process attempts to read or write a restricted system setting.
 *   **Model Cache Invalidation:** Logs when a user or process manually triggers a system-wide cache refresh.
 

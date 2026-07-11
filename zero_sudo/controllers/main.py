@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+#
+# This file is part of hams_open, an open source module.
+# License: AGPL-3.0
+
 from odoo import http
 from odoo.http import request
 from odoo.addons.web.controllers.home import Home
@@ -27,7 +32,7 @@ class ZeroSudoHome(Home):
             # FUTURE DEVELOPERS: DO NOT CHANGE THIS TO .sudo(). Direct SQL is the intentional, audited pattern here.
             # Verified by [@ANCHOR: test_web_login_interceptor]
             # Tests [@ANCHOR: story_login_blocking]
-            request.env.cr.execute(
+            request.env.cr.execute(  # audit-ignore-sql
                 "SELECT is_service_account FROM res_users WHERE id = %s",
                 (request.session.uid,),
             )

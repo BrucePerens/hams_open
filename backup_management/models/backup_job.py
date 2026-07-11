@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import datetime
 from odoo import models, fields
 
@@ -36,6 +38,15 @@ class BackupJob(models.Model):
     )
     output_log = fields.Text(string="Live Output Log")
 
+    def append_log(self, text_chunk):
+        """Append text delta to the output_log to prevent resending large buffers."""
+        for record in self:
+            if record.output_log:
+                record.output_log += text_chunk
+            else:
+                record.output_log = text_chunk
+
+
     def _auto_refresh_status(self):
         """
         Cleanup abandoned jobs that have been stuck in 'processing' for too long.
@@ -47,21 +58,16 @@ class BackupJob(models.Model):
             [
                 ("state", "=", "processing"),
                 ("write_date", "<", timeout_limit),
-            ],
-            limit=1,
+            ]
         )
-        if abandoned_jobs:
-            abandoned_jobs.write(
+        for job in abandoned_jobs:
+            job.write(
                 {
                     "state": "failed",
-                    "output_log": (abandoned_jobs[0].output_log or "")
+                    "output_log": (job.output_log or "")
                     + "\n[SYSTEM] Job timed out after 2 hours of inactivity.",
                 }
             )
-            # Re-trigger to process the next one in the next cron run or via _trigger if available
-            self.env.ref(
-                "backup_management.ir_cron_auto_refresh_backup_jobs"
-            )._trigger()
 
     def action_refresh_status(self):
         """

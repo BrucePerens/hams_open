@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <!-- Verified by [@ANCHOR: test_tour_cf_ip_ban] -->
     <record id="view_cloudflare_ip_ban_list" model="ir.ui.view">

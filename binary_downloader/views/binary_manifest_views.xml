@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- 
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
+    See the LICENSE file in the project root for full license information.
+-->
     <!-- Verified by [@ANCHOR: test_binary_manifest_views] -->
     <record id="view_binary_downloader_manifest_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_manifest_views] -->
         <field name="name">binary.manifest.list</field>
@@ -9,8 +14,8 @@
                 <field name="name"/>
                 <field name="company_id" groups="base.group_multi_company" optional="show"/>
                 <field name="archive_type"/>
-                <field name="url"/>
-                <field name="checksum"/>
+                <field name="url" widget="url"/>
+                <field name="checksum" widget="CopyClipboardChar"/>
                 <field name="is_installed"/>
                 <button name="action_install" type="object" string="Install" icon="fa-download" class="btn-primary" invisible="is_installed" groups="binary_downloader.group_binary_downloader_manager,base.group_system"/>
             </list>
@@ -33,14 +38,14 @@
                     </div>
                     <group>
                         <group>
-                            <field name="is_installed" readonly="1"/>
+                            <field name="is_installed" readonly="1" widget="boolean_toggle"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                             <field name="archive_type"/>
                             <field name="extract_member" invisible="archive_type not in ('tar.gz', 'zip')"/>
                         </group>
                         <group>
-                            <field name="url"/>
-                            <field name="checksum"/>
+                            <field name="url" widget="url"/>
+                            <field name="checksum" widget="CopyClipboardChar"/>
                         </group>
                     </group>
                 </sheet>

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from ..utils.cloudflare_api import get_zone_settings, update_zone_setting

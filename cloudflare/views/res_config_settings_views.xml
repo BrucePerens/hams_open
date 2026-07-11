@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <record id="res_config_settings_view_form_inherit_cloudflare" model="ir.ui.view">
         <field name="name">res.config.settings.view.form.inherit.cloudflare</field>
@@ -19,7 +20,7 @@
                                     Set the API Token, Zone ID, and Account ID specifically for this website. (Overrides fallback .env vars)
                                 </div>
                                 <div class="mt8">
-                                    <field name="cloudflare_api_token" password="True" placeholder="Bearer Token..."/>
+                                    <field name="cloudflare_api_token"  placeholder="Bearer Token..."/>
                                 </div>
                                 <div class="mt8">
                                     <field name="cloudflare_zone_id" placeholder="32-character Zone ID..."/>
@@ -62,7 +63,7 @@
                                     Provide the Secret Key to enable backend validation of invisible CAPTCHA tokens for public forms.
                                 </div>
                                 <div class="mt8">
-                                    <field name="cloudflare_turnstile_secret" class="w-100" password="True" placeholder="0x4A..."/>
+                                    <field name="cloudflare_turnstile_secret" class="w-100"  placeholder="0x4A..."/>
                                 </div>
                             </div>
                         </div>

@@ -7,7 +7,7 @@ import subprocess
 import logging
 
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
     notify_model_invalidation,
@@ -239,7 +239,7 @@ class PagerCheck(models.Model):
                 "binary_downloader.user_binary_downloader_service"
             )
             # Use self.env.get() for safer model access across optional dependencies
-            ManifestModel = self.env.get("binary.manifest")  # burn-ignore-env
+            ManifestModel = self.env["binary.manifest"] if "binary.manifest" in self.env else None  # burn-ignore-env
             if ManifestModel is None:
                 return {
                     "status": "error",
@@ -740,7 +740,7 @@ class PagerCheck(models.Model):
             certbot_checks.write({"target": ",".join(domains)})
 
         # Soft-depend on ham_dns
-        HamDnsRecord = self.env.get("ham.dns.record")  # burn-ignore-env
+        HamDnsRecord = self.env["ham.dns.record"] if "ham.dns.record" in self.env else None  # burn-ignore-env
         if HamDnsRecord is not None:
             # Reconfigure DNS if ham_dns is installed
             try:

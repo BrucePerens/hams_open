@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import json
 import os
 import pika
 import logging
 from odoo import models, fields, _
 from odoo.exceptions import UserError, AccessError
-from .utils import validate_backup_path
+from .utils import validate_backup_path, publish_to_rabbitmq
 
 
 class BackupRestoreWizard(models.TransientModel):
@@ -83,41 +85,7 @@ class BackupRestoreWizard(models.TransientModel):
         )
 
         def publish_task(msg=payload):
-            try:
-                utils = self.env["zero_sudo.security.utils"]
-                rmq_host = (
-                    utils._get_system_param("backup_management.rmq_host")
-                    or os.environ.get("RMQ_HOST")
-                    or "rabbitmq"
-                )
-                rmq_user = (
-                    utils._get_system_param("backup_management.rmq_user")
-                    or os.environ.get("RMQ_USER")
-                    or "guest"
-                )
-                rmq_pass = (
-                    utils._get_system_param("backup_management.rmq_pass")
-                    or os.environ.get("RMQ_PASS")  # burn-ignore-env
-                    or "guest"
-                )  # burn-ignore-env
-                credentials = pika.PlainCredentials(rmq_user, rmq_pass)
-                conn_params = pika.ConnectionParameters(
-                    host=rmq_host, credentials=credentials
-                )
-                connection = pika.BlockingConnection(conn_params)
-                try:
-                    channel = connection.channel()
-                    channel.queue_declare(queue="backup_tasks", durable=True)
-                    channel.basic_publish(
-                        exchange="",
-                        routing_key="backup_tasks",
-                        body=msg,
-                        properties=pika.BasicProperties(delivery_mode=2),
-                    )
-                finally:
-                    connection.close()
-            except pika.exceptions.AMQPError as e:
-                logging.getLogger(__name__).warning("An error occurred: %s", e)
+            publish_to_rabbitmq(self.env, msg)
 
         self.env.cr.postcommit.add(publish_task)
 

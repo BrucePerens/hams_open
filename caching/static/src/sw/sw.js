@@ -1,3 +1,4 @@
+/** Copyright © HAMS project. AGPL-3.0. **/
 /** @odoo-module **/
 
 const CACHE_NAME = '__CACHE_NAME__';
@@ -79,6 +80,13 @@ async function enforceLRUQuota(cache) {
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            return cache.addAll([
+                '/offline'
+            ]);
+        })
+    );
 });
 
 self.addEventListener('activate', (event) => {
@@ -91,7 +99,11 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
-        }).then(() => self.clients.claim())
+        }).then(() => self.clients.claim()).then(() => {
+            self.clients.matchAll().then(clients => {
+                clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
+            });
+        })
     );
 });
 
@@ -113,6 +125,14 @@ self.addEventListener('fetch', (event) => {
 
     // Explicitly bypass documentation images
     if (url.pathname.includes('/static/description/images/')) return;
+
+    // Network-first for navigations with offline fallback
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request).catch(() => caches.match('/offline'))
+        );
+        return;
+    }
 
     // We only intercept requests that match our static asset patterns.
     if (CACHE_URL_REGEX.test(url.pathname)) {

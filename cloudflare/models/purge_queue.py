@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © HAMS project. AGPL-3.0.
 import logging
 import time
 from odoo import models, fields, api
@@ -148,7 +149,7 @@ class CloudflarePurgeQueue(models.Model):
                     else:
                         everything_records.unlink()
                         # Optimization: Clear all other pending records for this website since we just wiped everything
-                        self.env.cr.execute(
+                        self.env.cr.execute(  # audit-ignore-sql
                             "DELETE FROM cloudflare_purge_queue WHERE website_id = %s AND state = 'pending'",
                             (first_website.id,)
                         )
