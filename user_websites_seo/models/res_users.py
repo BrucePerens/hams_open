@@ -4,7 +4,7 @@ from odoo import models, _
 from odoo.exceptions import AccessError
 
 
-class ResUsersSEO(models.Model):
+class ResUsersSEO(models.Model):  # burn-ignore-env
     _name = "res.users"
     _inherit = ["res.users", "user.websites.seo.metadata.mixin"]
 

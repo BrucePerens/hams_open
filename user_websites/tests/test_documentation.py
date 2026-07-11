@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import urllib.error
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.user_websites.hooks import post_init_hook
@@ -33,7 +34,7 @@ class TestDocumentation(RealTransactionCase):
                     if self.regular_user and self.regular_user.exists():
                         self.regular_user.unlink()
                 break
-            except Exception as e:  # audit-ignore-catch-all
+            except urllib.error.HTTPError as e:
                 _logger.warning("Resilient cleanup encountered exception: %s", e)
 
         self.env.cr.commit()

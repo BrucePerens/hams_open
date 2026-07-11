@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-from odoo import models, api, _
+from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
 
 

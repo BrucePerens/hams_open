@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 import logging
+import urllib.error
 import odoo.tests
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -67,7 +68,7 @@ class TestAppealsAndViews(RealTransactionCase):
                     if self.user_public and self.user_public.exists():
                         self.user_public.unlink()
                 break
-            except Exception as e:  # audit-ignore-catch-all
+            except urllib.error.HTTPError as e:
                 _logger.warning("Resilient cleanup encountered exception: %s", e)
 
         self.env.cr.commit()

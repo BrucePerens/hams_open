@@ -39,6 +39,7 @@ class DatabaseTableStat(models.Model):
             CREATE OR REPLACE VIEW database_table_stat AS (
                 SELECT
                     row_number() OVER () as id,
+                    'SQL View'::varchar as name,
                     t.relname as table_name,
                     t.n_live_tup as live_tuples,
                     t.n_dead_tup as dead_tuples,
@@ -184,6 +185,7 @@ class DatabaseQueryStat(models.Model):
                 CREATE OR REPLACE VIEW database_query_stat AS (
                     SELECT
                         row_number() OVER () as id,
+                    'SQL View'::varchar as name,
                         query,
                         calls,
                         total_exec_time as total_time,
@@ -225,7 +227,7 @@ class DatabaseActivity(models.Model):
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW database_activity AS (
-                SELECT
+                SELECT 'SQL View'::varchar as name,
                     pid as id,
                     pid,
                     usename,
@@ -281,6 +283,7 @@ class DatabaseIndexStat(models.Model):
             CREATE OR REPLACE VIEW database_index_stat AS (
                 SELECT
                     row_number() OVER () as id,
+                    'SQL View'::varchar as name,
                     relname as table_name,
                     indexrelname as index_name,
                     idx_scan,
@@ -322,6 +325,7 @@ class DatabaseReplicationStat(models.Model):
             CREATE OR REPLACE VIEW database_replication_stat AS (
                 SELECT
                     row_number() OVER () as id,
+                    'SQL View'::varchar as name,
                     usename,
                     application_name,
                     client_addr,

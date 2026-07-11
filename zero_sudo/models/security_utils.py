@@ -33,7 +33,6 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         )
 
     @api.model
-    @distributed_cache()
     def _get_service_uid(self, xml_id):
         # [@ANCHOR: get_service_uid]
         # Verified by [@ANCHOR: test_get_service_uid]

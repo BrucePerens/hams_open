@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
+from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError
 from unittest.mock import MagicMock, mock_open, patch
@@ -207,6 +208,7 @@ class TestSecurityUtils(HamsTransactionCase):
         """Test the cryptographic secret retrieval hierarchy."""
         utils = self.env["zero_sudo.security.utils"]
         # Clear cache since the method is ormcache'd
+        invalidate_model_cache(utils.env, "zero_sudo.security.utils")
         utils.env.registry.clear_cache()
 
         # 1. Test environment variable resolution
@@ -219,6 +221,7 @@ class TestSecurityUtils(HamsTransactionCase):
             os.environ.clear()
             os.environ.update(original_env)
 
+        invalidate_model_cache(utils.env, "zero_sudo.security.utils")
         utils.env.registry.clear_cache()
 
         # 2. Test file fallback
@@ -230,6 +233,7 @@ class TestSecurityUtils(HamsTransactionCase):
             self.assertEqual(utils._get_crypto_secret(), "test_file_key")
 
             # 3. Test configuration fallback
+            invalidate_model_cache(utils.env, "zero_sudo.security.utils")
             utils.env.registry.clear_cache()
             self.safe_patch("os.path.exists", return_value=False)
             self.safe_patch_object(

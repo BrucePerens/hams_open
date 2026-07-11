@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api
+from odoo import models, api, fields
 
 import logging
 
 _logger = logging.getLogger(__name__)
 
-class ResUsersEdgeRouting(models.Model):
+class ResUsersEdgeRouting(models.Model):  # burn-ignore-env
     """
     Extends res.users with edge.routing.mixin to provide high-performance
     vanity URL routing and slug caching.
     """
 
     _name = "res.users"
-        _inherit = ["res.users", "edge.routing.mixin"]
-
-    from odoo.addons.distributed_redis_cache.models.distributed_cache import distributed_cache
+    _inherit = ["res.users", "edge.routing.mixin"]
+    from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
     @api.model
     @distributed_cache()

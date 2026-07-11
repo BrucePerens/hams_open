@@ -21,7 +21,7 @@ class BackupLatestSnapshotView(models.Model):
         self.env.cr.execute(
             """
             CREATE OR REPLACE VIEW backup_latest_snapshot_view AS (
-                SELECT DISTINCT ON (config_id)
+                SELECT DISTINCT ON (config_id) 'SQL View'::varchar as name,
                     id, config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status
                 FROM backup_snapshot
                 ORDER BY config_id, start_time DESC, id DESC

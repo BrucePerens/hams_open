@@ -7,7 +7,7 @@ def post_init_hook(env):
     """
     # Register Backup Worker for Automated Key Vault Provisioning
     env_svc = env["zero_sudo.security.utils"]._get_service_env(
-        "zero_sudo.odoo_facility_service_internal"
+        "backup_management.user_backup_service_internal"
     )
 
     env_svc["daemon.key.registry"].register_daemon(

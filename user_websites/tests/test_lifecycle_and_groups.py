@@ -4,6 +4,7 @@ import time
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 import logging
+import urllib.error
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e:  # audit-ignore-catch-all
+        except urllib.error.HTTPError as e:
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
@@ -241,7 +242,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
                 data={"csrf_token": odoo.http.Request.csrf_token(self)},
                 method="POST",
             )
-        except Exception as e:  # audit-ignore-catch-all
+        except urllib.error.HTTPError as e:
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(

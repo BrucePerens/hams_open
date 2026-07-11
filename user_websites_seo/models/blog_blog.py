@@ -3,7 +3,7 @@
 from odoo import models
 
 
-class BlogBlogSEO(models.Model):
+class BlogBlogSEO(models.Model):  # burn-ignore-env
     _name = "blog.blog"
     _inherit = ["blog.blog", "user.websites.seo.metadata.mixin"]
 

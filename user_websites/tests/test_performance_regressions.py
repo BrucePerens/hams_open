@@ -3,6 +3,7 @@
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import logging
+import urllib.error
 
 _logger = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ class TestPerformanceRouting(HamsHttpCase):
                 self.url_open("/")
                 self.env.flush_all()
                 self.url_open("/community")
-            except Exception as e:  # audit-ignore-catch-all
+            except urllib.error.HTTPError as e:
                 _logger.warning("An error occurred: %s", e)
             logger.warning("DUMMY_WARNING_TO_SATISFY_ASSERTLOGS")
 

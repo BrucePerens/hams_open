@@ -3,6 +3,7 @@
 import odoo.tests
 from odoo.tests import tagged
 import logging
+import urllib.error
 from odoo.exceptions import AccessError
 
 _logger = logging.getLogger(__name__)
@@ -220,7 +221,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
                 content,
                 "CRITICAL SSTI VULNERABILITY: Malicious QWeb evaluated successfully and leaked database records!",
             )
-        except Exception as e:  # audit-ignore-catch-all
+        except urllib.error.HTTPError as e:
             _logger.warning("An error occurred: %s", e)
             # If the rendering engine crashes entirely due to the illegal syntax (e.g. QWebException),
             # that is also considered a successful defense against extraction.

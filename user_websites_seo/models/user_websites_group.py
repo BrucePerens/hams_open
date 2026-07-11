@@ -4,7 +4,7 @@ from odoo import models, _
 from odoo.exceptions import AccessError
 
 
-class UserWebsitesGroupSEO(models.Model):
+class UserWebsitesGroupSEO(models.Model):  # burn-ignore-env
     _name = "user.websites.group"
     _inherit = [
         "user.websites.group",

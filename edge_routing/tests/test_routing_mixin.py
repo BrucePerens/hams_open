@@ -88,6 +88,6 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         try:
             _ = method.clear_cache
             has_clear_cache = True
-        except Exception as e: # audit-ignore-catch-all
+        except AttributeError as e:
             _logger.warning("clear_cache exception: %s", e)
         self.assertFalse(has_clear_cache, "get_record_by_slug on res.users should not have @distributed_cache")

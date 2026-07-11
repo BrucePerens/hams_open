@@ -2,6 +2,7 @@
 import odoo.tests
 from odoo.tests import tagged
 import logging
+import urllib.error
 import uuid
 
 _logger = logging.getLogger(__name__)
@@ -188,6 +189,6 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
                 page.id,
                 "Page should be successfully created even without an active HTTP request.",
             )
-        except Exception as e:  # audit-ignore-catch-all
+        except urllib.error.HTTPError as e:
             _logger.error("website.page creation failed in RPC context: %s", e)
             self.fail(f"website.page creation failed in RPC context: {e}")

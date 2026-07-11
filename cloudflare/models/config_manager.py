@@ -2,7 +2,7 @@
 import os
 import json
 import logging
-from odoo import models, api
+from odoo import models, api, fields
 from odoo.exceptions import AccessError
 from odoo.modules.module import get_module_path
 from ..utils.cloudflare_api import (
@@ -44,7 +44,7 @@ class CloudflareConfigManager(models.AbstractModel):
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
-
+    def _trigger_edge_purge_static_assets(self):
         """
         Scans static directories during Odoo boot. If a modification is detected,
         it automatically triggers an edge purge for the 'odoo-static-assets' Cache-Tag.

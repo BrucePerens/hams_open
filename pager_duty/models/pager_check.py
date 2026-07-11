@@ -239,7 +239,7 @@ class PagerCheck(models.Model):
                 "binary_downloader.user_binary_downloader_service"
             )
             # Use self.env.get() for safer model access across optional dependencies
-            ManifestModel = self.env["binary.manifest"] if "binary.manifest" in self.env else None
+            ManifestModel = self.env.get("binary.manifest")  # burn-ignore-env
             if ManifestModel is None:
                 return {
                     "status": "error",
@@ -740,7 +740,7 @@ class PagerCheck(models.Model):
             certbot_checks.write({"target": ",".join(domains)})
 
         # Soft-depend on ham_dns
-        HamDnsRecord = self.env["ham.dns.record"] if "ham.dns.record" in self.env else None
+        HamDnsRecord = self.env.get("ham.dns.record")  # burn-ignore-env
         if HamDnsRecord is not None:
             # Reconfigure DNS if ham_dns is installed
             try:
@@ -764,7 +764,5 @@ class PagerCheck(models.Model):
 
     @api.constrains("parent_check_id")
     def _check_parent_check_id(self):
-        if not self._has_cycle("parent_check_id"):
-            pass
-        elif not self._check_recursion():
-            raise ValidationError("You cannot create recursive parent checks.")
+        if self._has_cycle("parent_check_id"):
+            raise ValidationError(_("You cannot create recursive parent checks."))

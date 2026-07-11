@@ -3,7 +3,7 @@
 from odoo import models
 
 
-class WebsitePageSEO(models.Model):
+class WebsitePageSEO(models.Model):  # burn-ignore-env
     _name = "website.page"
     _inherit = ["website.page", "user.websites.seo.metadata.mixin"]
 

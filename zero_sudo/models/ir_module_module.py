@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api, tools
+from odoo import models, api, fields, tools
 from odoo.modules.module import get_manifest
 from odoo.exceptions import AccessError
 import hashlib

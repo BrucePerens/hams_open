@@ -96,6 +96,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
             CREATE OR REPLACE VIEW user_websites_weekly_digest_view AS (
                 SELECT
                     row_number() OVER () as id,
+                    'Weekly Digest SQL View'::varchar as name,
                     f.partner_id as partner_id,
                     p.name as author_name,
                     'res.partner' as owner_model,
@@ -114,6 +115,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
 
                 SELECT
                     row_number() OVER () + 5000000 as id,
+                    'Weekly Digest SQL View'::varchar as name,
                     f.partner_id as partner_id,
                     g.name as author_name,
                     'user.websites.group' as owner_model,
