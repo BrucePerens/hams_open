@@ -3,6 +3,8 @@ import hashlib
 import os
 import shutil
 import logging
+
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
 
@@ -31,7 +33,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         )
 
     @api.model
-    @tools.ormcache("xml_id")
+    @distributed_cache()
     def _get_service_uid(self, xml_id):
         # [@ANCHOR: get_service_uid]
         # Verified by [@ANCHOR: test_get_service_uid]
@@ -301,7 +303,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         self.env["zero_sudo.kv"].invalidate_model()
 
     @api.model
-    @tools.ormcache()
+    @distributed_cache()
     def _get_crypto_secret(self):
         # [@ANCHOR: get_crypto_secret]
         # Verified by [@ANCHOR: test_get_crypto_secret]

@@ -10,6 +10,8 @@ import os
 import odoo
 import logging
 from concurrent.futures import ThreadPoolExecutor
+
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
@@ -227,7 +229,7 @@ class ResUsers(models.Model):
         ) or self.has_group("base.group_system")
 
     @api.model
-    @odoo.tools.ormcache("slug")
+    @distributed_cache()
     def _get_user_id_by_slug(self, slug, override_svc_uid=None):
         if not slug:
             return False

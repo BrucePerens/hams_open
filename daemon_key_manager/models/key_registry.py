@@ -92,14 +92,7 @@ class DaemonKeyRegistry(models.Model):
         # Verified by [@ANCHOR: test_daemon_key_manager_tour]
         # [@ANCHOR: register_daemon_api]
 
-        # Authorization Check: register_daemon is a privileged API
-        # Any service account can register its own daemon, or a Manager can register any daemon.
-        if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
-            if not self.env.user.is_service_account:
-                if not self.env.is_admin() and not self.env.is_superuser():
-                    raise AccessError(
-                        _("Unauthorized attempt to register daemon: %s") % daemon_name
-                    )
+        caller = self.env.user
 
         # Elevate to the internal service account to perform registration
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -120,6 +113,17 @@ class DaemonKeyRegistry(models.Model):
                 raise UserError(
                     _("Service account with login '%s' not found.") % user_xml_id
                 )
+
+        # Authorization Check: register_daemon is a privileged API
+        # Any service account can register its own daemon, or a Manager can register any daemon.
+        if not caller.has_group("daemon_key_manager.group_daemon_key_manager"):
+            if not caller.is_service_account:
+                if not caller._is_admin() and not caller._is_superuser():
+                    raise AccessError(
+                        _("Unauthorized attempt to register daemon: %s") % daemon_name
+                    )
+            elif caller.id != user.id:
+                raise AccessError(_("Service accounts can only provision keys for themselves."))
 
         # [@ANCHOR: register_daemon_logic]
         # Multi-company awareness: search for existing daemon name.
@@ -145,6 +149,10 @@ class DaemonKeyRegistry(models.Model):
                     "company_id": user.company_id.id,
                 }
             )
+            
+        # Flush all pending database changes to trigger @api.constrains now.
+        # This prevents a rollback bypass where file I/O occurs before constraints fail.
+        self.env.flush_all()
 
         # Ensure the service account has the necessary group for extended API key duration
         # as mentioned in the README.

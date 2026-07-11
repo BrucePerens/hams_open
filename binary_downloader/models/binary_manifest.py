@@ -84,7 +84,7 @@ class BinaryManifest(models.Model):
                     % record.archive_type
                 )
 
-    @api.depends("name")
+    @api.depends("name", "checksum", "archive_type", "extract_member")
     def _compute_is_installed(self):
         # [@ANCHOR: binary_compute_installed]
         # Verified by [@ANCHOR: test_binary_manifest_standard]
@@ -128,6 +128,8 @@ class BinaryManifest(models.Model):
                 _("You do not have sufficient permissions to install binaries.")
             )
 
+        # Dispatch the installation to a background worker to avoid blocking the UI thread
+        self.env.ref("binary_downloader.ir_cron_auto_install_binaries", raise_if_not_found=False)
         self.ensure_executable(self.name)
         return {
             "type": "ir.actions.client",
@@ -207,6 +209,11 @@ class BinaryManifest(models.Model):
         self.env.cr.execute("SELECT pg_advisory_xact_lock(%s)", (lock_id,))
 
         if os.path.exists(target_bin):
+            if manifest_record.archive_type != "binary":
+                if not os.access(target_bin, os.X_OK):
+                    os.chmod(target_bin, 0o750)
+                return target_bin
+
             # Checksum verification for existing binary
             hasher = hashlib.sha256()
             try:
@@ -239,14 +246,15 @@ class BinaryManifest(models.Model):
             )
             tmp_path = None
             try:
-                with urllib.request.urlopen(get_req, timeout=600) as response:
+                with urllib.request.urlopen(get_req, timeout=15) as response:
                     etag = response.getheader("ETag")
                     if etag:
                         _logger.info("Download successful, ETag: %s", etag)
 
                     with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
                         tmp_path = tmp.name
-                        shutil.copyfileobj(response, tmp)
+                        for chunk in iter(lambda: response.read(8192), b""):
+                            tmp.write(chunk)
 
                 hasher = hashlib.sha256()
                 with open(  # audit-ignore-path
