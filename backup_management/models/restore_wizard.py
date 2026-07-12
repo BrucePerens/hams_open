@@ -2,9 +2,6 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # This software is released under the AGPL-3.0 License.
 import json
-import os
-import pika
-import logging
 from odoo import models, fields, _
 from odoo.exceptions import UserError, AccessError
 from .utils import validate_backup_path, publish_to_rabbitmq

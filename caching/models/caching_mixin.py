@@ -2,26 +2,18 @@
 # Copyright © HAMS project. AGPL-3.0.
 import os
 import logging
-from odoo import models, api, tools
+from odoo import models, api, tools, fields
 from odoo.modules.module import get_module_path
 import odoo.modules.module
 
-try:
-    from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
-except ImportError:
-    # Fallback if not installed
-    def distributed_cache():
-        def decorator(func):
-            return func
-        return decorator
-    def invalidate_model_cache(env, model_name, local_only=False):
-        pass
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 
 _logger = logging.getLogger(__name__)
 
 class CachingMixin(models.AbstractModel):
     _name = 'caching.mixin'
     _description = 'Caching Utilities'
+    name = fields.Char(string="Name", default="Caching Mixin")
 
     @api.model
     @distributed_cache()
@@ -111,8 +103,4 @@ class CachingMixin(models.AbstractModel):
 
     @api.model
     def force_invalidate_cache(self):
-        try:
-            from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
-            invalidate_model_cache(self.env, self._name)
-        except ImportError:
-            pass
+        invalidate_model_cache(self.env, self._name)

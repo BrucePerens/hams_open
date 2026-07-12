@@ -55,7 +55,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # Verified by [@ANCHOR: test_get_service_uid_sql_verify]
         # Verified by [@ANCHOR: test_privilege_escalation_block_sql]
 
-        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql
+        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: Tested by [@ANCHOR: test_get_service_uid_sql_resolve]
         uid = self.env.cr.fetchone()[0]
         return uid
 
@@ -157,14 +157,14 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     chunk = payloads[i : i + 100]
                     # [@ANCHOR: coherent_cache_signal_batch]
                     # Verified by [@ANCHOR: test_coherent_cache_signal_batch]
-                    self.env.cr.execute(  # audit-ignore-sql
+                    self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_coherent_cache_signal_batch]
                         "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
                         ("cache_invalidation", chunk),
                     )
         elif key_value:
             # [@ANCHOR: coherent_cache_signal_single]
             # Verified by [@ANCHOR: test_coherent_cache_signal_single]
-            self.env.cr.execute(  # audit-ignore-sql
+            self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_coherent_cache_signal_single]
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
             )
@@ -303,7 +303,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         High-performance atomic KV update using a single Postgres procedure call.
         Eliminates Python-side existence checks and round-trips.
         """
-        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql
+        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: Tested by [@ANCHOR: test_set_kv_sql_check]
 
         # Ensure changes are visible to other transactions/round-trips.
         # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,

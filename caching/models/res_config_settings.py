@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import api, fields, models
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class ResConfigSettings(models.TransientModel):
@@ -32,8 +35,8 @@ class ResConfigSettings(models.TransientModel):
         if not website_id:
             try:
                 website_id = self.env['website'].get_current_website().id
-            except Exception:
-                pass
+            except Exception as e: # audit-ignore-catch-all
+                _logger.warning("Could not get current website in get_values: %s", e)
                 
         caching_safe_quota_mb = 35
         caching_inversion = 1

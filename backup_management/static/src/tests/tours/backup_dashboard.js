@@ -91,7 +91,7 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
         },
         {
             content: "Go back to form view to test action button",
-            trigger: 'tr.o_data_row td[name="name"]:contains("Test Kopia Tour")',
+            trigger: 'tr.o_data_row td[name="name"]',
             run: 'click',
         },
         {

@@ -36,7 +36,7 @@ export class SWToast extends Component {
     }
 
     reload() {
-        window.location.reload();
+        document.location.reload();
     }
 }
 

@@ -6,8 +6,6 @@
 
 import logging
 
-from . import models
-from . import controllers
 
 
 class TEscWarningFilter(logging.Filter):

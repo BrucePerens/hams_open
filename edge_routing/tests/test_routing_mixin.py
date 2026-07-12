@@ -89,5 +89,13 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         # res.users get_record_by_slug should not be decorated with @distributed_cache
         # If it is, the class method will have the 'clear_cache' attribute from the decorator
         method = self.User.__class__.get_record_by_slug
-        has_clear_cache = getattr(method, 'clear_cache', None) is not None
-        self.assertFalse(has_clear_cache, "get_record_by_slug on res.users should not have @distributed_cache")
+        with self.assertRaises(AttributeError, msg="get_record_by_slug on res.users should not have @distributed_cache"):
+            _ = method.clear_cache
+
+    def test_edge_routing_service_account_sql_check(self):
+        # [@ANCHOR: test_edge_routing_service_account_sql_check]
+        """
+        Verify that the raw SQL check for the service account safely executes.
+        """
+        self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))
+        self.env.cr.fetchall() # Should not raise

@@ -3,18 +3,10 @@
 #
 # This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
 # See the LICENSE file in the project root for full license information.
-import hashlib
 import logging
 import os
-import shutil
-import stat
-import tarfile
-import tempfile
-import urllib.request
-import urllib.error
-import zipfile
 from odoo import models, fields, api, tools, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 

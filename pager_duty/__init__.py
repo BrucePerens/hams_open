@@ -1,7 +1,6 @@
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 # -*- coding: utf-8 -*-
 import logging
-from . import models
-from . import controllers
-from .hooks import post_init_hook
 
 _logger = logging.getLogger(__name__)

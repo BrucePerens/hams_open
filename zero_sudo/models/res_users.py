@@ -39,7 +39,7 @@ class ResUsersZeroSudo(models.Model):
             vals["password"] = secrets.token_hex(32)
         elif "password" in vals and "is_service_account" not in vals:
             if self.ids:
-                self.env.cr.execute(  # audit-ignore-sql
+                self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_service_account_password]
                     "SELECT id FROM res_users WHERE id IN %s AND is_service_account = True",
                     (tuple(self.ids),)
                 )

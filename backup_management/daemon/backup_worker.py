@@ -55,7 +55,8 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
     except urllib.error.HTTPError as e:
         try:
             err_body = e.read().decode("utf-8")
-        except Exception:  # audit-ignore-catch-all
+        except Exception as exc: # audit-ignore-catch-all
+            logger.warning("Could not decode response body: %s", exc)
             err_body = "Could not decode response body."
         raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
     except (urllib.error.URLError, json.JSONDecodeError) as e:

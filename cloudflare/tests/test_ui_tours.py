@@ -1,3 +1,5 @@
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -92,3 +94,18 @@ class TestCloudflareUITours(HamsHttpCase):
 
         v4 = self.env["cloudflare.waf.rule"].get_view(view_type="list")
         self.assertIn("action", v4["arch"])
+
+        v5 = self.env["cloudflare.dns.record"].get_view(view_type="list")
+        self.assertIn("content", v5["arch"])
+
+        v6 = self.env["cloudflare.zone.settings"].get_view(view_type="form")
+        self.assertIn("ssl_mode", v6["arch"])
+
+        v7 = self.env["cloudflare.rate.limit"].get_view(view_type="list")
+        self.assertIn("mitigation_action", v7["arch"])
+
+        v8 = self.env["cloudflare.cache.rule"].get_view(view_type="list")
+        self.assertIn("edge_cache_ttl", v8["arch"])
+
+        v9 = self.env["cloudflare.zero.trust.policy"].get_view(view_type="form")
+        self.assertIn("policy_action", v9["arch"])

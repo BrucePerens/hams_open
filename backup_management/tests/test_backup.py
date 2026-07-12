@@ -263,7 +263,7 @@ class TestBackupManagement(RealTransactionCase):
     def test_13_restore_action(self):
         # Tests [@ANCHOR: test_restore_action]
         # Tests [@ANCHOR: backup_trigger_restore]
-        self.safe_patch("pika.BlockingConnection")
+        self.safe_patch("pika.BlockingConnection")  # burn-ignore-pika
         snap = self.env["backup.snapshot"].create(
             {
                 "config_id": self.config_kopia.id,

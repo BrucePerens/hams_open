@@ -15,12 +15,12 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr t-foreach="state.logs" t-as="log" t-key="log.id">
-                            <td t-esc="log.create_date"/>
-                            <td t-esc="log.user_id ? log.user_id[1] : ''"/>
-                            <td t-esc="log.login"/>
-                            <td t-esc="log.ip_address"/>
-                            <td t-esc="log.reason"/>
+                        <tr t-foreach="state.logs || []" t-as="log" t-key="log.id">
+                            <td t-out="log.create_date"/>
+                            <td t-out="log.user_id ? log.user_id[1] : ''"/>
+                            <td t-out="log.login"/>
+                            <td t-out="log.ip_address"/>
+                            <td t-out="log.reason"/>
                         </tr>
                         <tr t-if="!state.logs.length">
                             <td colspan="5" class="text-center py-4 text-muted">

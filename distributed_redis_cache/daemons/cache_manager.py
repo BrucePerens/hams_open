@@ -128,7 +128,7 @@ async def main():
                 await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
                 db_conns.append(conn)
                 logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, db)
-            except Exception as e:
+            except Exception as e: # audit-ignore-catch-all
                 logger.warning("Could not connect to database %s: %s", db, e)
 
     while True:

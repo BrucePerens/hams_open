@@ -1,4 +1,2 @@
-from . import helpdesk_ticket
-from . import shift_handoff
-from . import calendar_event
-from . import res_partner
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+

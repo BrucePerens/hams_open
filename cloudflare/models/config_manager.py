@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
-import os
 import json
 import logging
 from odoo import models, api, fields
 from odoo.exceptions import AccessError
-from odoo.modules.module import get_module_path
 from ..utils.cloudflare_api import (
     get_zone_ruleset,
     update_zone_ruleset,
@@ -67,12 +65,8 @@ class CloudflareConfigManager(models.AbstractModel):
             return
 
         # ADR-0002: Use mixin to perform memory-based scan
-        try:
-            max_mtime, _ = self.env["caching.mixin"].sudo().get_fs_stats()
-            latest_mtime = int(max_mtime)
-        except KeyError:
-            _logger.warning("caching.mixin not available, falling back to 0")
-            latest_mtime = 0
+        max_mtime, _ = self.env["caching.mixin"].with_user(facility_uid).get_fs_stats()
+        latest_mtime = int(max_mtime)
 
         try:
             # Use centralized config utilities instead of manual service environments

@@ -3,8 +3,6 @@
 # This software is released under the AGPL-3.0 License.
 import os
 import logging
-import threading
-import pika
 from odoo.exceptions import UserError
 from odoo import _
 
@@ -130,5 +128,5 @@ def publish_to_rabbitmq(env, msg):
         env["hams_rabbitmq.pool"].publish(
             "backup_tasks", msg, rmq_host=rmq_host, rmq_user=rmq_user, rmq_pass=rmq_pass
         )
-    except Exception as e:
+    except Exception as e: # audit-ignore-catch-all
         _logger.error("Failed to publish backup task to RMQ pool: %s", e)

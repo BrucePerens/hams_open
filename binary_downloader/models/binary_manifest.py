@@ -3,17 +3,8 @@
 #
 # This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
 # See the LICENSE file in the project root for full license information.
-import hashlib
 import logging
 import os
-import platform
-import shutil
-import stat
-import tarfile
-import zipfile
-import tempfile
-import urllib.request
-import urllib.error
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -123,30 +114,18 @@ class BinaryManifest(models.Model):
                 _("You do not have sufficient permissions to install binaries.")
             )
 
-        def _bg_install(db_name, cmd_name):
-            import odoo
-            import threading
-            registry = odoo.registry(db_name)
-            with registry.cursor() as cr:
-                env = api.Environment(cr, odoo.SUPERUSER_ID, {})
-                try:
-                    env["binary.manifest"].ensure_executable(cmd_name)
-                except Exception as e:
-                    _logger.exception("Background installation failed for %s", cmd_name)
-
-        import threading
-        thread = threading.Thread(
-            target=_bg_install,
-            args=(self.env.cr.dbname, self.name)
-        )
-        thread.start()
+        try:
+            self.ensure_executable(self.name)
+        except Exception as e: # audit-ignore-catch-all
+            _logger.exception("Installation failed for %s: %s", self.name, e)
+            raise UserError(_("Installation failed: %s") % str(e))
 
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Success"),
-                "message": _("Installation of %s has been dispatched to the background.") % self.name,
+                "message": _("Installation of %s completed successfully.") % self.name,
                 "sticky": False,
                 "type": "success",
             },

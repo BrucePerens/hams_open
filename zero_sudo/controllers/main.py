@@ -32,7 +32,7 @@ class ZeroSudoHome(Home):
             # FUTURE DEVELOPERS: DO NOT CHANGE THIS TO .sudo(). Direct SQL is the intentional, audited pattern here.
             # Verified by [@ANCHOR: test_web_login_interceptor]
             # Tests [@ANCHOR: story_login_blocking]
-            request.env.cr.execute(  # audit-ignore-sql
+            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_web_login_interceptor_check]
                 "SELECT is_service_account FROM res_users WHERE id = %s",
                 (request.session.uid,),
             )

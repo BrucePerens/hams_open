@@ -1,5 +1,7 @@
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 # -*- coding: utf-8 -*-
-from odoo import models
+from odoo import models, _
 from odoo.http import request
 from odoo.exceptions import AccessError
 
@@ -17,4 +19,4 @@ class IrHttp(models.AbstractModel):
             res = request.env.cr.fetchone()
             if res and res[0]:
                 if request.httprequest.path.startswith('/jsonrpc') or request.httprequest.path.startswith('/xmlrpc'):
-                    raise AccessError("RPC access is denied for service accounts.")
+                    raise AccessError(_("RPC access is denied for service accounts."))

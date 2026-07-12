@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
-from odoo import models
+from odoo import models, fields
 
 class CloudflarePurgeMixin(models.AbstractModel):
     _name = "cloudflare.purge.mixin"
     _description = "Cloudflare Purge Mixin"
+    name = fields.Char(string="Name")
 
     def _enqueue_cloudflare_purge(self, url_field):
         purge_map = {}

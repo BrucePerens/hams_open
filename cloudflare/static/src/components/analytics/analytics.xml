@@ -11,7 +11,7 @@
                     <div class="card bg-primary text-white">
                         <div class="card-body">
                             <h5 class="card-title">Total Requests</h5>
-                            <h2 class="card-text"><t t-esc="state.requests"/></h2>
+                            <h2 class="card-text"><t t-out="state.requests"/></h2>
                         </div>
                     </div>
                 </div>
@@ -19,7 +19,7 @@
                     <div class="card bg-success text-white">
                         <div class="card-body">
                             <h5 class="card-title">Bandwidth Served</h5>
-                            <h2 class="card-text"><t t-esc="state.bandwidth"/></h2>
+                            <h2 class="card-text"><t t-out="state.bandwidth"/></h2>
                         </div>
                     </div>
                 </div>
@@ -27,7 +27,7 @@
                     <div class="card bg-danger text-white">
                         <div class="card-body">
                             <h5 class="card-title">Threats Blocked</h5>
-                            <h2 class="card-text"><t t-esc="state.threats"/></h2>
+                            <h2 class="card-text"><t t-out="state.threats"/></h2>
                         </div>
                     </div>
                 </div>

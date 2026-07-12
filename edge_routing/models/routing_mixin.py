@@ -66,14 +66,15 @@ class EdgeRoutingMixin(models.AbstractModel):
             existing_slugs.update(forbidden_slugs)
 
         if self.env.registry.loaded:
-            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
             if self.env.cr.fetchone():
                 try:
                     with self.env.cr.savepoint():
                         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
                             "edge_routing.edge_routing_service_account"
                         )
-                except Exception:  # audit-ignore-catch-all
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.warning("Error: %s", e)
                     env_svc = self.env
             else:
                 env_svc = self.env
@@ -90,7 +91,8 @@ class EdgeRoutingMixin(models.AbstractModel):
 
             try:
                 env_target = env_svc[model_name]
-            except Exception:  # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("Error: %s", e)
                 env_target = self.env[model_name]
 
             slugs = env_target.with_context(active_test=False).search_read(domain, ["website_slug"])
@@ -137,7 +139,7 @@ class EdgeRoutingMixin(models.AbstractModel):
             target_env = self.with_user(override_svc_uid).env
         else:
             if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
                 if self.env.cr.fetchone():
                     try:
                         with self.env.cr.savepoint():

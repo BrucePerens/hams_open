@@ -6,7 +6,6 @@ import json
 import os
 import datetime
 import shutil
-import pika
 import re
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError, ValidationError
@@ -472,6 +471,13 @@ class BackupConfig(models.Model):
 
         if snapshot_list:
             Snap = self.env["backup.snapshot"].with_user(self.env.uid)
+            snapshot_ids = [s["snapshot_id"] for s in snapshot_list]
+            existing_snaps = Snap.search([
+                ("config_id", "=", self.id),
+                ("snapshot_id", "in", snapshot_ids)
+            ])
+            existing_by_snap_id = {s.snapshot_id: s for s in existing_snaps}
+
             new_snapshot_ids = []
             for snap_vals in snapshot_list:
                 snap_vals.update({
@@ -479,10 +485,7 @@ class BackupConfig(models.Model):
                     "website_id": self.website_id.id or False,
                     "company_id": self.company_id.id,
                 })
-                existing = Snap.search([
-                    ("config_id", "=", self.id),
-                    ("snapshot_id", "=", snap_vals["snapshot_id"])
-                ], limit=1)
+                existing = existing_by_snap_id.get(snap_vals["snapshot_id"])
                 if not existing:
                     Snap.create(snap_vals)
                     new_snapshot_ids.append(snap_vals["snapshot_id"])
@@ -513,14 +516,23 @@ class BackupConfig(models.Model):
         )
         configs = self.env["backup.config"].with_user(svc_uid).search([], limit=1000)
         now = fields.Datetime.now()
+        
+        start_times = {}
+        if configs:
+            self.env.cr.execute("""
+                SELECT config_id, MAX(start_time)
+                FROM backup_snapshot
+                WHERE config_id IN %s
+                GROUP BY config_id
+            """, (tuple(configs.ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:test_backup_cron]
+            start_times = {row[0]: row[1] for row in self.env.cr.fetchall()}
+            
         for conf in configs:
             conf.action_sync_snapshots()
 
-            latest_snap = self.env["backup.snapshot"].search(
-                [("config_id", "=", conf.id)], order="start_time desc", limit=1
-            )
-            if latest_snap and latest_snap.start_time:
-                delta = (now - latest_snap.start_time).total_seconds()
+            latest_start_time = start_times.get(conf.id)
+            if latest_start_time:
+                delta = (now - latest_start_time).total_seconds()
                 if delta > (
                     26 * 60 * 60
                 ):  # 26 hours (allows for 24h cron jitter without false positives)

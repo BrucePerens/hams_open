@@ -4,20 +4,9 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
-from . import real_transaction
-from . import common
-from . import test_facility
-from . import test_security_utils
-from . import test_views
-from . import test_controllers
-from . import test_json_rpc_client
-from . import test_integration
-from . import dummy_daemon
-from . import test_tdd_fixes
 
 import logging
 import psycopg2
-import odoo.sql_db
 from odoo.tests.test_cursor import TestCursor
 
 _logger = logging.getLogger(__name__)

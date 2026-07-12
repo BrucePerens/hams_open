@@ -41,4 +41,4 @@ class SecurityLog(models.Model):
     @api.model
     def autovacuum(self):
         ninety_days_ago = fields.Datetime.now() - datetime.timedelta(days=90)
-        self.search([('create_date', '<', ninety_days_ago)]).unlink()
+        self.env['zero_sudo.security.log'].search([('create_date', '<', ninety_days_ago)], limit=10000).unlink()

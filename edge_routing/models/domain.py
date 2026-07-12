@@ -47,7 +47,7 @@ class EdgeRoutingDomain(models.Model):
         try:
             # Resolve service user securely
             if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
                 if self.env.cr.fetchone():
                     svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                         "edge_routing.edge_routing_service_account"
@@ -149,7 +149,7 @@ class EdgeRoutingDomain(models.Model):
         domain = str(domain).lower().strip()
 
         if self.env.registry.loaded:
-            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
             if self.env.cr.fetchone():
                 try:
                     target_env = self.env["zero_sudo.security.utils"]._get_service_env(

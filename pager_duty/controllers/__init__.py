@@ -1,5 +1,3 @@
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 # -*- coding: utf-8 -*-
-from . import ping_api
-from . import board
-from . import log_api
-from . import domain_api

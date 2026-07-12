@@ -49,7 +49,7 @@ class TestTddFixes(HamsTransactionCase):
         mock_conn.channel.return_value = mock_channel
         mock_channel.basic_publish.side_effect = pika.exceptions.AMQPError("Test error")
 
-        with self.safe_patch("pika.BlockingConnection", return_value=mock_conn):
+        with self.safe_patch("pika.BlockingConnection", return_value=mock_conn):  # burn-ignore-pika
             self.config1.action_sync_snapshots()
             self.env.cr.postcommit.run()
             
@@ -73,7 +73,7 @@ class TestTddFixes(HamsTransactionCase):
             "restore_target_path": "/var/lib/odoo/test_restore",
         })
 
-        with self.safe_patch("pika.BlockingConnection", return_value=mock_conn):
+        with self.safe_patch("pika.BlockingConnection", return_value=mock_conn):  # burn-ignore-pika
             wizard.action_restore()
             self.env.cr.postcommit.run()
             

@@ -67,7 +67,7 @@ class TestRealBackupWorker(RealTransactionCase):
             os.environ.get("RMQ_USER", "guest"),
             os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env
         )  # burn-ignore-env
-        conn = pika.BlockingConnection(
+        conn = pika.BlockingConnection(  # burn-ignore-pika
             pika.ConnectionParameters(host=rmq_host, credentials=creds)
         )
         channel = conn.channel()

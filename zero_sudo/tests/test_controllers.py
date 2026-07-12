@@ -40,7 +40,7 @@ class TestZeroSudoControllers(RealTransactionCase):
                 "active": True,
             }
         )
-        self.env.cr.execute(  # audit-ignore-sql
+        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_web_login_interceptor]
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         # MANDATORY: Commit so the HTTP worker thread can see the new user.

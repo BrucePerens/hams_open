@@ -4,7 +4,7 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
-from odoo import models, api, fields, tools
+from odoo import models, api, tools
 from odoo.modules.module import get_manifest
 from odoo.exceptions import AccessError
 import hashlib
@@ -98,11 +98,11 @@ class Module(models.Model):
 
         # Bulk load hashes
         env_svc = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
-        records = env_svc["zero_sudo.kv"].search([("key", "in", hash_keys)])
+        records = env_svc["zero_sudo.kv"].search([("key", "in", hash_keys)], limit=len(hash_keys))
         existing_hashes = {r.key: r.value for r in records}
 
         # Bulk load existing articles
-        existing_articles = Article.search([("name", "in", names)])
+        existing_articles = Article.search([("name", "in", names)], limit=len(names))
         article_by_name = {a.name: a for a in existing_articles}
 
         for mod_name, doc_info in all_doc_infos:

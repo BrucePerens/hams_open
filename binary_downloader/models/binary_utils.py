@@ -15,7 +15,7 @@ import zipfile
 import tempfile
 import urllib.request
 import urllib.error
-from odoo import models, api, tools, _
+from odoo import models, api, tools, fields, _
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -24,6 +24,8 @@ _logger = logging.getLogger(__name__)
 class BinaryDownloaderMixin(models.AbstractModel):
     _name = "binary_downloader.mixin"
     _description = "Binary Downloader Mixin"
+
+    name = fields.Char(string="Name")
 
     @api.model
     def _download_and_extract(self, cmd_name, url, checksum, archive_type, extract_member=None):

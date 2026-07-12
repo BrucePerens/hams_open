@@ -1,14 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields
-import logging
-try:
-    from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
-except ImportError:
-    def distributed_cache():
-        def decorator(func):
-            return func
-        return decorator
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
 
 class WebsiteCloudflare(models.Model):

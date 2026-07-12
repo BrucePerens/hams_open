@@ -1,3 +1,5 @@
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -8,9 +10,7 @@ from odoo.http import Response
 @tagged("post_install", "-at_install")
 class TestCloudflareHeaders(HamsHttpCase):
     def setUp(self):
-        import contextlib
-        with contextlib.suppress(Exception):
-            super().setUp()
+        super().setUp()
         # Create a user to test authenticated routes
         self.user = self.env["res.users"].create(
             {

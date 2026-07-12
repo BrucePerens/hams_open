@@ -565,7 +565,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         cls._crypto_patcher_res_users.start()
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -612,8 +612,10 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         super().setUp()
         r = get_redis_connection(self.env)
         if r:
-            with contextlib.suppress(Exception):
+            try:
                 r.flushall()
+            except Exception as e:  # audit-ignore-catch-all
+                logging.getLogger(__name__).warning("Suppressed: %s", e)
 
     def start_daemon(
         self, script_path, args=None, env_vars=None, health_url=None, timeout=600
@@ -701,7 +703,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().setUpClass()
 
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )

@@ -8,7 +8,7 @@ class PWAController(http.Controller):
 
     @http.route('/manifest.json', type='http', auth='public', website=True, sitemap=False)
     def manifest(self):
-        website = request.website if hasattr(request, 'website') else request.env['website'].get_current_website()
+        website = request.website or request.env['website'].get_current_website()
         app_name = website.name if website else 'Odoo PWA'
         
         manifest_data = {

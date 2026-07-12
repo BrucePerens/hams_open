@@ -8,7 +8,7 @@ from odoo.tests.common import tagged
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, mock_open
 import os
 import odoo
 from odoo.tools import mute_logger
@@ -89,7 +89,7 @@ class TestSecurityUtils(HamsTransactionCase):
         utils._get_service_uid(svc_xml_id)
 
         mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute  # audit-ignore-sql
+            self.env.cr, "execute", wraps=self.env.cr.execute  # audit-ignore-sql: Tested by [@ANCHOR: test_get_service_uid_sql_verify]
         )
         utils._get_service_uid(svc_xml_id)
         for call in mock_execute.call_args_list:
@@ -98,7 +98,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_03_bdd_event_bus_payload_generation(self):
         # [@ANCHOR: test_coherent_cache_signal]
         # Tests [@ANCHOR: coherent_cache_signal]
-        # Tests [@ANCHOR: coherent_cache_signal_single]
+        # [@ANCHOR: test_coherent_cache_signal_single]
         # Tests [@ANCHOR: story_cache_signaling]
         utils = self.env["zero_sudo.security.utils"]
         mock_execute = self.safe_patch_object(self.env.cr, "execute")
@@ -233,14 +233,14 @@ class TestSecurityUtils(HamsTransactionCase):
         original_env = os.environ.copy()  # burn-ignore-env
         os.environ.clear()  # burn-ignore-env
         try:
-            self.safe_patch("os.path.exists", return_value=True)
-            self.safe_patch("builtins.open", mock_open(read_data="test_file_key\n"))
+            self.safe_self.safe_patch("os.path.exists", return_value=True)
+            self.safe_self.safe_patch("builtins.open", mock_open(read_data="test_file_key\n"))
             self.assertEqual(utils._get_crypto_secret(), "test_file_key")
 
             # 3. Test configuration fallback
             invalidate_model_cache(utils.env, "zero_sudo.security.utils")
             utils.env.registry.clear_cache()
-            self.safe_patch("os.path.exists", return_value=False)
+            self.safe_self.safe_patch("os.path.exists", return_value=False)
             self.safe_patch_object(
                 odoo.tools.config, "get", return_value="test_config_key"
             )
@@ -266,7 +266,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
     def test_11_ensure_executable(self):
         """Verify the fallback system for auto-installing binary manifests."""
-        mock_which = self.safe_patch("shutil.which")
+        mock_which = self.safe_self.safe_patch("shutil.which")
         utils = self.env["zero_sudo.security.utils"]
 
         # Scenario 1: Binary exists in system PATH
@@ -290,7 +290,7 @@ class TestSecurityUtils(HamsTransactionCase):
             mock_manifest if k == "binary.manifest" else None
         )
 
-        patcher = patch(
+        patcher = self.safe_patch(
             "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
             return_value=mock_env,
         )
@@ -415,12 +415,12 @@ class TestSecurityUtils(HamsTransactionCase):
             }
         )
 
-        self.env.cr.execute(  # audit-ignore-sql
+        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_service_account_password]
             "SELECT password FROM res_users WHERE id = %s", (service_account_1.id,)
         )
         hash_1 = self.env.cr.fetchone()[0]
 
-        self.env.cr.execute(  # audit-ignore-sql
+        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_service_account_password]
             "SELECT password FROM res_users WHERE id = %s", (service_account_2.id,)
         )
         hash_2 = self.env.cr.fetchone()[0]
@@ -444,7 +444,7 @@ class TestSecurityUtils(HamsTransactionCase):
         mock_clear_cache = self.safe_patch_object(self.env.registry, "clear_cache")
         # We use patch directly because self.safe_patch_object might have issues with some objects
         # Use the class since it's an AbstractModel and 'utils' is just a reference
-        mock_notify = patch(
+        mock_notify = self.safe_patch(
             "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._notify_cache_invalidation"
         )
         mock_notify.start()
@@ -474,7 +474,7 @@ class TestSecurityUtils(HamsTransactionCase):
         # For simplicity, let's use a mock check_access.
         # We need to patch check_access on the model class or instance.
         # Since it's Odoo 19, let's try patching it on the recordset.
-        mock_check = patch("odoo.models.BaseModel.check_access", return_value=True)
+        mock_check = self.safe_patch("odoo.models.BaseModel.check_access", return_value=True)
         mock_check.start()
         self.addCleanup(mock_check.stop)
 

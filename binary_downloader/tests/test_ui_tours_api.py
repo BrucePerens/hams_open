@@ -39,9 +39,10 @@ class TestBinaryDownloaderTour(HamsHttpCase):
         # Clean up the physical dummy binary created by the tour
         test_bin_path = "/var/lib/odoo/hams_bin/tourbin"
         if os.path.exists(test_bin_path):
-            import contextlib
-            with contextlib.suppress(OSError):
+            try:
                 os.remove(test_bin_path)
+            except OSError as e:
+                _logger.warning("Could not remove tour binary: %s", e)
 
     def test_binary_install_tour(self):
         # [!] DIAGNOSTIC FOR AI: Running UI tour for binary installation.

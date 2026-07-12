@@ -17,7 +17,8 @@
     "depends": ["base", "web", "mail"],
     "assets": {
         "web.assets_backend": [
-            "zero_sudo/static/src/components/security_dashboard/**/*",
+            "zero_sudo/static/src/components/security_dashboard/security_dashboard.js",
+            "zero_sudo/static/src/components/security_dashboard/security_dashboard.xml",
         ],
         "web.assets_tests": [
             "zero_sudo/static/src/js/tour_utils.js",

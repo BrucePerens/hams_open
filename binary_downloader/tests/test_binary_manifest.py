@@ -29,9 +29,10 @@ class TestBinaryManifest(HamsTransactionCase):
                 if f.startswith(
                     ("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")
                 ):
-                    import contextlib
-                    with contextlib.suppress(OSError):
+                    try:
                         os.remove(os.path.join(bin_dir, f))
+                    except OSError as exc:
+                        _logger.warning("Could not remove test binary: %s", exc)
         super().tearDown()
 
     def setUp(self):
@@ -43,9 +44,10 @@ class TestBinaryManifest(HamsTransactionCase):
                 if f.startswith(
                     ("testbin", "slippy", "symlinkbin", "fake", "zippy", "zip_slip")
                 ):
-                    import contextlib
-                    with contextlib.suppress(OSError):
+                    try:
                         os.remove(os.path.join(bin_dir, f))
+                    except OSError as exc:
+                        _logger.warning("Could not remove test binary: %s", exc)
         self.service_user = self.env.ref(
             "binary_downloader.user_binary_downloader_service"
         )
