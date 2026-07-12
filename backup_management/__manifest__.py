@@ -23,7 +23,7 @@
         "hams_rabbitmq",
     ],
     "external_dependencies": {
-        "python": [],
+        "python": ["cryptography"],
     },
     "data": [
         "security/security.xml",

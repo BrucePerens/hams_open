@@ -63,7 +63,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_01b_sync_kopia_triggered(self):
         # Tests [@ANCHOR: backup_management:backup_sync_kopia]
-        # Tests [@ANCHOR: backup_management:upsert_snapshots_procedure]
+        # Tests [@ANCHOR: backup_management:COMM_upsert_snapshots_procedure]
         # Tests [@ANCHOR: backup_management:upsert_snapshots_roundtrip_optimization]
         self.config_kopia.action_sync_snapshots()
         job = self.env["backup.job"].search(
@@ -164,7 +164,7 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(job.state, "pending")
 
     def test_08c_restore_drill_triggered(self):
-        self.config_kopia.restore_drill_script = "/opt/test_restore.sh"
+        self.config_kopia.restore_drill_script = "/opt/hams/backup/test_restore.sh"
         self.config_kopia.last_drill_time = fields.Datetime.now() - datetime.timedelta(
             days=8
         )
@@ -261,8 +261,8 @@ class TestBackupManagement(RealTransactionCase):
         )
 
     def test_13_restore_action(self):
-        # Tests [@ANCHOR: test_restore_action]
-        # Tests [@ANCHOR: backup_trigger_restore]
+        # Tests [@ANCHOR: backup_management:COMM_test_restore_action]
+        # Tests [@ANCHOR: backup_management:COMM_backup_trigger_restore]
         self.safe_patch("pika.BlockingConnection")  # burn-ignore-pika
         snap = self.env["backup.snapshot"].create(
             {

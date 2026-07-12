@@ -93,7 +93,7 @@ class BackupConfig(models.Model):
     _min_size_positive = models.Constraint("CHECK(minimum_size_mb >= 0)", "Minimum size threshold cannot be negative.")
 
     def _get_fernet(self):
-        key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env
+        key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env  # fmt: skip
         if not key:
             return None
         return Fernet(key.encode("utf-8"))
@@ -333,8 +333,9 @@ class BackupConfig(models.Model):
 
     def _execute_restore_drill(self):
         """
-        Offloads the restore drill to the worker.
+        Pushes a restore_drill job to RabbitMQ. 
         """
+        self.ensure_one()
         if self.restore_drill_script:
             validate_backup_path(self.restore_drill_script)
         # Use Service ID for security & audit trails
@@ -382,7 +383,7 @@ class BackupConfig(models.Model):
                 ("website_id", "=", False),
                 ("website_id", "=", self.env.context.get("website_id")),
             ]
-        configs = self.search_read(domain, ["name", "engine", "target_path"])
+        configs = self.search_read(domain, ["name", "engine", "target_path"], limit=10000)
         now = fields.Datetime.now()
         
         if not configs:
@@ -391,21 +392,25 @@ class BackupConfig(models.Model):
         config_ids = [c["id"] for c in configs]
 
         latest_snaps = self.env["backup.latest.snapshot.view"].search_read(
-            [("config_id", "in", config_ids)], ["config_id", "snapshot_id", "start_time", "size_bytes", "status"]
+            [("config_id", "in", config_ids)], ["config_id", "snapshot_id", "start_time", "size_bytes", "status"], limit=len(config_ids)
         )
         snap_map = {s["config_id"][0]: s for s in latest_snaps if s.get("config_id")}
 
         job_map = {}
         if configs:
-            for c in configs:
+            self.env.cr.execute("""
+                SELECT DISTINCT ON (config_id) id
+                FROM backup_job
+                WHERE config_id IN %s
+                ORDER BY config_id, create_date DESC
+            """, (tuple(config_ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:test_backup_view]  # fmt: skip
+            latest_job_ids = [row[0] for row in self.env.cr.fetchall()]
+            if latest_job_ids:
                 jobs = self.env["backup.job"].search_read(
-                    [("config_id", "=", c["id"])],
-                    ["state", "job_type", "create_date"],
-                    order="create_date desc",
-                    limit=1,
+                    [("id", "in", latest_job_ids)],
+                    ["config_id", "state", "job_type", "create_date"]
                 )
-                if jobs:
-                    job_map[c["id"]] = jobs[0]
+                job_map = {j["config_id"][0]: j for j in jobs if j.get("config_id")}
 
         for c in configs:
             snap = snap_map.get(c["id"])
@@ -470,15 +475,16 @@ class BackupConfig(models.Model):
                         )
 
         if snapshot_list:
-            Snap = self.env["backup.snapshot"].with_user(self.env.uid)
+            Snap = self.env["backup.snapshot"].with_user(self.env.uid).with_company(self.company_id.id)
             snapshot_ids = [s["snapshot_id"] for s in snapshot_list]
             existing_snaps = Snap.search([
                 ("config_id", "=", self.id),
                 ("snapshot_id", "in", snapshot_ids)
-            ])
+            ], limit=len(snapshot_ids))
             existing_by_snap_id = {s.snapshot_id: s for s in existing_snaps}
 
             new_snapshot_ids = []
+            create_vals = []
             for snap_vals in snapshot_list:
                 snap_vals.update({
                     "config_id": self.id,
@@ -487,10 +493,13 @@ class BackupConfig(models.Model):
                 })
                 existing = existing_by_snap_id.get(snap_vals["snapshot_id"])
                 if not existing:
-                    Snap.create(snap_vals)
+                    create_vals.append(snap_vals)
                     new_snapshot_ids.append(snap_vals["snapshot_id"])
                 else:
                     existing.write(snap_vals)
+                    
+            if create_vals:
+                Snap.create(create_vals)
 
             # Verification and anomaly reporting only for NEW snapshots to prevent alert spam
             if self.minimum_size_mb > 0 and new_snapshot_ids:
@@ -524,7 +533,7 @@ class BackupConfig(models.Model):
                 FROM backup_snapshot
                 WHERE config_id IN %s
                 GROUP BY config_id
-            """, (tuple(configs.ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:test_backup_cron]
+            """, (tuple(configs.ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:test_backup_cron]  # fmt: skip
             start_times = {row[0]: row[1] for row in self.env.cr.fetchall()}
             
         for conf in configs:

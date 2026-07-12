@@ -58,7 +58,8 @@ class BackupJob(models.Model):
             [
                 ("state", "=", "processing"),
                 ("write_date", "<", timeout_limit),
-            ]
+            ],
+            limit=1000
         )
         for job in abandoned_jobs:
             job.write(

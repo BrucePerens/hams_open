@@ -7,14 +7,14 @@ access_backup_snapshot_system,backup.snapshot system,model_backup_snapshot,base.
 access_backup_job_admin,backup.job admin,model_backup_job,group_backup_admin,1,1,1,1
 access_backup_job_system,backup.job system,model_backup_job,base.group_system,1,1,1,1
 access_backup_job_mail_svc,backup.job mail svc,model_backup_job,zero_sudo.group_mail_service,1,1,0,0
-access_mail_message_backup_svc,mail.message svc,mail.model_mail_message,group_backup_admin,1,1,1,0
-access_mail_followers_backup_svc,mail.followers svc,mail.model_mail_followers,group_backup_admin,1,1,1,1
-access_res_partner_backup_svc,res.partner svc,base.model_res_partner,group_backup_admin,1,1,0,0
-access_res_users_backup_svc,res.users svc,base.model_res_users,group_backup_admin,1,0,0,0
-access_res_company_backup_svc,res.company svc,base.model_res_company,group_backup_admin,1,0,0,0
-access_mail_alias_domain_backup_svc,mail.alias.domain svc,mail.model_mail_alias_domain,group_backup_admin,1,0,0,0
-access_binary_manifest_backup_svc,binary.manifest backup svc,binary_downloader.model_binary_manifest,group_backup_admin,1,0,0,0
+access_mail_message_backup_svc,mail.message svc,mail.model_mail_message,group_backup_service_account,1,1,1,0
+access_mail_followers_backup_svc,mail.followers svc,mail.model_mail_followers,group_backup_service_account,1,1,1,1
+access_res_partner_backup_svc,res.partner svc,base.model_res_partner,group_backup_service_account,1,1,0,0
+access_res_users_backup_svc,res.users svc,base.model_res_users,group_backup_service_account,1,0,0,0
+access_res_company_backup_svc,res.company svc,base.model_res_company,group_backup_service_account,1,0,0,0
+access_mail_alias_domain_backup_svc,mail.alias.domain svc,mail.model_mail_alias_domain,group_backup_service_account,1,0,0,0
+access_binary_manifest_backup_svc,binary.manifest backup svc,binary_downloader.model_binary_manifest,group_backup_service_account,1,0,0,0
 access_backup_latest_snapshot_view_admin,backup latest snapshot admin,model_backup_latest_snapshot_view,group_backup_admin,1,1,1,1
 access_backup_latest_snapshot_view_system,backup latest snapshot system,model_backup_latest_snapshot_view,base.group_system,1,1,1,1
-access_backup_restore_wizard,backup.restore.wizard,model_backup_restore_wizard,backup_management.group_backup_admin,1,1,1,1
+access_backup_restore_wizard,backup.restore.wizard,model_backup_restore_wizard,group_backup_admin,1,1,1,1
 access_backup_restore_wizard_sys,backup.restore.wizard,model_backup_restore_wizard,base.group_system,1,1,1,1

@@ -26,7 +26,7 @@ class TestBackupMultiWebsite(HamsTransactionCase):
             {
                 "name": "Global Backup",
                 "engine": "kopia",
-                "target_path": "/var/backups/global",
+                "target_path": "/var/lib/odoo/backups/global",
             }
         )
 
@@ -34,7 +34,7 @@ class TestBackupMultiWebsite(HamsTransactionCase):
             {
                 "name": "Website A Backup",
                 "engine": "kopia",
-                "target_path": "/var/backups/a",
+                "target_path": "/var/lib/odoo/backups/a",
                 "website_id": self.website_a.id,
             }
         )

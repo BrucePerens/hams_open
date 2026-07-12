@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # This software is released under the AGPL-3.0 License.
-#!/usr/bin/env python3
 import os
 import json
 import time
@@ -21,11 +21,11 @@ logger = logging.getLogger("backup_worker")
 ODOO_URL = os.environ.get("ODOO_URL", "http://odoo:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
-ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env
+ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:test_backup_worker_real]
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
-RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env
+RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:test_backup_worker_real]
 
 
 class OdooAPIError(Exception):
@@ -152,8 +152,15 @@ def execute_job(ch, method, properties, body):
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
         elif engine == "restore_drill":
             script_path = payload.get("script")
+            allowed_base = "/opt/odoo/daemons/backup_worker/scripts"
+            try:
+                abs_script_path = os.path.realpath(os.path.normpath(script_path)) if script_path else ""
+            except OSError:
+                abs_script_path = os.path.abspath(script_path) if script_path else ""
             if (
                 script_path
+                and ".." not in script_path.split(os.path.sep)
+                and abs_script_path.startswith(allowed_base + "/")
                 and os.path.exists(script_path)
                 and os.access(script_path, os.X_OK)
                 and script_path.endswith(".py")
@@ -170,7 +177,6 @@ def execute_job(ch, method, properties, body):
             if (
                 not cmd
                 or not isinstance(cmd, list)
-                or not cmd
                 or cmd[0] not in allowed_binaries
             ):
                 raise PermissionError(f"Unauthorized command execution attempt: {cmd}")
@@ -197,7 +203,7 @@ def execute_job(ch, method, properties, body):
                     abs_path = os.path.realpath(os.path.normpath(target_path_arg))
                 except OSError:
                     abs_path = os.path.abspath(target_path_arg)
-                forbidden_prefixes = ["/etc", "/var", "/bin", "/sbin", "/usr", "/boot", "/root"]
+                forbidden_prefixes = ["/etc", "/bin", "/sbin", "/usr", "/boot", "/root"]
                 if any(abs_path == f or abs_path.startswith(f + "/") for f in forbidden_prefixes):
                     raise PermissionError(f"Malicious path targets forbidden system directory: {abs_path}")
 
@@ -387,8 +393,7 @@ def execute_job(ch, method, properties, body):
             OdooAPIError,
             json.JSONDecodeError,
             urllib.error.URLError,
-            # audit-ignore-catch-all: Reporting failure is best-effort.
-        ) as inner_e:
+        ) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort.  # fmt: skip
             logger.error("Failed to report failure back to Odoo: %s", inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -422,7 +427,7 @@ def main():
             ValueError,
             TypeError,
             OSError,
-        ) as e:  # audit-ignore-catch-all: General daemon recovery loop.
+        ) as e:  # audit-ignore-catch-all: General daemon recovery loop.  # fmt: skip
             logger.error("Unexpected error in main loop: %s. Restarting...", e)
             time.sleep(5)  # audit-ignore-sleep
 

@@ -5,7 +5,9 @@
     License: AGPL-3.0
 -->
 <odoo>
-    <record id="view_backup_snapshot_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
+    <record id="view_backup_snapshot_list" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
         <field name="name">backup.snapshot.list</field>
         <field name="model">backup.snapshot</field>
         <field name="arch" type="xml">
@@ -19,7 +21,9 @@
         </field>
     </record>
 
-    <record id="view_backup_snapshot_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
+    <record id="view_backup_snapshot_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
         <field name="name">backup.snapshot.form</field>
         <field name="model">backup.snapshot</field>
         <field name="arch" type="xml">

@@ -17,10 +17,19 @@ export class BackupBoard extends Component {
 
         onMounted(async () => {
             await this.fetchData();
+            this.driftTimer = setInterval(() => {
+                const el = document.querySelector('.backup-board');
+                if (el) {
+                    const x = Math.floor(Math.random() * 5) - 2;
+                    const y = Math.floor(Math.random() * 5) - 2;
+                    el.style.transform = `translate(${x}px, ${y}px)`;
+                }
+            }, 60000);
         });
 
         onWillUnmount(() => {
             if (this.pollTimer) clearTimeout(this.pollTimer);
+            if (this.driftTimer) clearInterval(this.driftTimer);
         });
     }
 

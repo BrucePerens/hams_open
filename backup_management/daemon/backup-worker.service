@@ -11,6 +11,10 @@ EnvironmentFile=/etc/hams_daemons.env
 ExecStart=/usr/bin/env python3 backup_worker.py
 Restart=always
 RestartSec=10
+ProtectSystem=strict
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

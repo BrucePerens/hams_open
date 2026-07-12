@@ -43,8 +43,8 @@ class TestBackupSecurity(RealTransactionCase):
         )
 
     def test_path_traversal_prevention(self):
-        # Tests [@ANCHOR: test_backup_security]
-        # Tests [@ANCHOR: backup_path_validation]
+        # Tests [@ANCHOR: backup_management:COMM_test_backup_security]
+        # Tests [@ANCHOR: backup_management:COMM_backup_path_validation]
 
         forbidden_paths = [
             "/etc/passwd",
@@ -121,8 +121,8 @@ class TestBackupSecurity(RealTransactionCase):
         )
 
     def test_restore_wizard_security(self):
-        # Tests [@ANCHOR: test_restore_action]
-        # Tests [@ANCHOR: backup_trigger_restore]
+        # Tests [@ANCHOR: backup_management:COMM_test_restore_action]
+        # Tests [@ANCHOR: backup_management:COMM_backup_trigger_restore]
 
         snapshot = self.env["backup.snapshot"].create(
             {

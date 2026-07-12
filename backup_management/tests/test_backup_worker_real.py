@@ -25,6 +25,7 @@ class TestRealBackupWorker(RealTransactionCase):
         super().tearDown()
 
     def test_real_backup_worker_rabbitmq(self):
+        # Tests [@ANCHOR: backup_management:test_backup_worker_real]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         daemon_script = os.path.join(base_dir, "daemon", "backup_worker.py")
 
@@ -66,8 +67,8 @@ class TestRealBackupWorker(RealTransactionCase):
         creds = pika.PlainCredentials(
             os.environ.get("RMQ_USER", "guest"),
             os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env
-        )  # burn-ignore-env
-        conn = pika.BlockingConnection(  # burn-ignore-pika
+        )  # burn-ignore-env  # fmt: skip
+        conn = pika.BlockingConnection(  # burn-ignore-pika  # fmt: skip
             pika.ConnectionParameters(host=rmq_host, credentials=creds)
         )
         channel = conn.channel()

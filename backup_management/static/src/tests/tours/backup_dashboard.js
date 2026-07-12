@@ -98,7 +98,26 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             content: "Trigger Backup Now (Tests action_trigger_backup)",
             trigger: 'button[name="action_trigger_backup"]',
             run: 'click',
-            expectUnloadPage: true, // Crucial for button clicks that trigger python actions and refresh/navigate
+        },
+        {
+            content: "Open Backups Submenu again",
+            trigger: '[data-menu-xmlid="backup_management.menu_backup_root"]',
+            run: 'click',
+        },
+        {
+            content: "Go to Backup Dashboard",
+            trigger: '[data-menu-xmlid="backup_management.menu_backup_board"]',
+            run: 'click',
+        },
+        {
+            content: "Wait for dashboard to load",
+            trigger: '.backup-board',
+            run: function() {}
+        },
+        {
+            content: "Click Refresh Board",
+            trigger: '.o_tour_refresh_board_btn',
+            run: 'click',
         }
     ]),
 });

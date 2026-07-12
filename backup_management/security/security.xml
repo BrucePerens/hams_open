@@ -9,6 +9,9 @@
         <record id="group_backup_admin" model="res.groups">
             <field name="name">Backup Administrator</field>
         </record>
+        <record id="group_backup_service_account" model="res.groups">
+            <field name="name">Backup Service Account</field>
+        </record>
     </data>
     <data noupdate="0">
         <record id="user_backup_service_internal" model="res.users">
@@ -18,7 +21,7 @@
             <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('backup_management.group_backup_admin')])]"/>
+            <field name="group_ids" eval="[(6, 0, [ref('backup_management.group_backup_admin'), ref('backup_management.group_backup_service_account')])]"/>
         </record>
 
     </data>

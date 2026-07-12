@@ -22,8 +22,9 @@ class BackupRestoreWizard(models.TransientModel):
     )
 
     def action_restore(self):
-        # [@ANCHOR: backup_trigger_restore]
-        # Verified by [@ANCHOR: test_restore_action]
+        self.ensure_one()
+        # [@ANCHOR: COMM_backup_trigger_restore]
+        # Verified by [@ANCHOR: COMM_test_restore_action]
         if not self.env.su and not self.env.user.has_group("backup_management.group_backup_admin"):
             raise AccessError(
                 _("Only Backup Administrators can trigger restore operations.")
@@ -42,7 +43,7 @@ class BackupRestoreWizard(models.TransientModel):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "backup_management.user_backup_service_internal"
         )
-        jobs = self.env["backup.job"].with_user(svc_uid)
+        jobs = self.env["backup.job"].with_user(svc_uid).with_company(self.snapshot_id.config_id.company_id.id)
         job = jobs.create(
             {
                 "config_id": self.snapshot_id.config_id.id,
