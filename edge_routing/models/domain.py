@@ -46,10 +46,17 @@ class EdgeRoutingDomain(models.Model):
         """
         try:
             # Resolve service user securely
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "edge_routing.edge_routing_service_account"
-            )
-            env_svc = self.with_user(svc_uid).env
+            if self.env.registry.loaded:
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+                if self.env.cr.fetchone():
+                    svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                        "edge_routing.edge_routing_service_account"
+                    )
+                    env_svc = self.with_user(svc_uid).env
+                else:
+                    env_svc = self.env
+            else:
+                env_svc = self.env
 
             all_domains = []
             last_id = 0
@@ -141,12 +148,19 @@ class EdgeRoutingDomain(models.Model):
             return False
         domain = str(domain).lower().strip()
 
-        try:
-            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                "edge_routing.edge_routing_service_account"
-            )
-        except Exception:  # audit-ignore-catch-all
-            _logger.warning("Failed to get service env")
+        if self.env.registry.loaded:
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+            if self.env.cr.fetchone():
+                try:
+                    target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                        "edge_routing.edge_routing_service_account"
+                    )
+                except Exception:  # audit-ignore-catch-all
+                    _logger.warning("Failed to get service env")
+                    target_env = self.env
+            else:
+                target_env = self.env
+        else:
             target_env = self.env
 
         record = (

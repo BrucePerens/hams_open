@@ -11,7 +11,7 @@
     "version": "1.0",
     "category": "Website",
     "author": "HAMS",
-    "depends": ["base", "distributed_redis_cache", "zero_sudo", "mail", "ham_dns"],
+    "depends": ["base", "distributed_redis_cache", "zero_sudo", "mail"],
     "data": [
         "data/security_data.xml",
         "security/ir.model.access.csv",

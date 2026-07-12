@@ -14,7 +14,7 @@
     "category": "Security",
     "version": "1.0",
     "license": "AGPL-3",
-    "depends": ["base", "web", "mail", "distributed_redis_cache", "knowledge"],
+    "depends": ["base", "web", "mail"],
     "assets": {
         "web.assets_backend": [
             "zero_sudo/static/src/components/security_dashboard/**/*",

@@ -38,7 +38,7 @@ def get_redis_connection(env=None):
     """
     if env:
         # Configuration is loaded via zero_sudo security utils to comply with security mandates
-        security_utils = env["zero_sudo.security.utils"]
+        security_utils = env["zero_sudo.security.utils"].with_context(redis_bypass_cache=True)
         host = security_utils._get_system_param(
             "distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT
         )

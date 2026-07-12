@@ -65,11 +65,19 @@ class EdgeRoutingMixin(models.AbstractModel):
         if forbidden_slugs:
             existing_slugs.update(forbidden_slugs)
 
-        try:
-            env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-                "edge_routing.edge_routing_service_account"
-            )
-        except Exception:  # audit-ignore-catch-all
+        if self.env.registry.loaded:
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+            if self.env.cr.fetchone():
+                try:
+                    with self.env.cr.savepoint():
+                        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+                            "edge_routing.edge_routing_service_account"
+                        )
+                except Exception:  # audit-ignore-catch-all
+                    env_svc = self.env
+            else:
+                env_svc = self.env
+        else:
             env_svc = self.env
 
         for model_name in routing_model_names:
@@ -128,12 +136,20 @@ class EdgeRoutingMixin(models.AbstractModel):
         if override_svc_uid:
             target_env = self.with_user(override_svc_uid).env
         else:
-            try:
-                target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                    "edge_routing.edge_routing_service_account"
-                )
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Failed to get service env: %s", e)
+            if self.env.registry.loaded:
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+                if self.env.cr.fetchone():
+                    try:
+                        with self.env.cr.savepoint():
+                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                                "edge_routing.edge_routing_service_account"
+                            )
+                    except Exception as e:  # audit-ignore-catch-all
+                        _logger.warning("Failed to get service env: %s", e)
+                        target_env = self.env
+                else:
+                    target_env = self.env
+            else:
                 target_env = self.env
 
         record = (

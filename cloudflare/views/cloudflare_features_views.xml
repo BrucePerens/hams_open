@@ -32,20 +32,20 @@
             <field name="name">cloudflare.dns.record.tree</field>
             <field name="model">cloudflare.dns.record</field>
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="name"/>
                     <field name="type"/>
                     <field name="content"/>
                     <field name="proxied"/>
                     <field name="website_id"/>
-                </tree>
+                </list>
             </field>
         </record>
 
         <record id="action_cf_dns_record" model="ir.actions.act_window">
             <field name="name">DNS Records</field>
             <field name="res_model">cloudflare.dns.record</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
 
         <menuitem id="menu_cf_dns_record" name="DNS Records" parent="menu_cloudflare_root" action="action_cf_dns_record" sequence="70"/>
@@ -73,18 +73,18 @@
             <field name="name">cloudflare.zone.settings.tree</field>
             <field name="model">cloudflare.zone.settings</field>
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="name"/>
                     <field name="ssl_mode"/>
                     <field name="website_id"/>
-                </tree>
+                </list>
             </field>
         </record>
 
         <record id="action_cf_zone_settings" model="ir.actions.act_window">
             <field name="name">Zone Settings (Advanced)</field>
             <field name="res_model">cloudflare.zone.settings</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
 
         <menuitem id="menu_cf_zone_settings_adv" name="Zone Settings (Advanced)" parent="menu_cloudflare_root" action="action_cf_zone_settings" sequence="80"/>
@@ -111,18 +111,18 @@
             <field name="name">cloudflare.rate.limit.tree</field>
             <field name="model">cloudflare.rate.limit</field>
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="name"/>
                     <field name="mitigation_action"/>
                     <field name="website_id"/>
-                </tree>
+                </list>
             </field>
         </record>
 
         <record id="action_cf_rate_limit" model="ir.actions.act_window">
             <field name="name">Rate Limits</field>
             <field name="res_model">cloudflare.rate.limit</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
 
         <menuitem id="menu_cf_rate_limit" name="Rate Limits" parent="menu_cloudflare_root" action="action_cf_rate_limit" sequence="90"/>
@@ -149,18 +149,18 @@
             <field name="name">cloudflare.cache.rule.tree</field>
             <field name="model">cloudflare.cache.rule</field>
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="name"/>
                     <field name="edge_cache_ttl"/>
                     <field name="website_id"/>
-                </tree>
+                </list>
             </field>
         </record>
 
         <record id="action_cf_cache_rule" model="ir.actions.act_window">
             <field name="name">Cache Rules</field>
             <field name="res_model">cloudflare.cache.rule</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
 
         <menuitem id="menu_cf_cache_rule" name="Cache Rules" parent="menu_cloudflare_root" action="action_cf_cache_rule" sequence="100"/>
@@ -187,18 +187,18 @@
             <field name="name">cloudflare.zero.trust.policy.tree</field>
             <field name="model">cloudflare.zero.trust.policy</field>
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="name"/>
                     <field name="policy_action"/>
                     <field name="website_id"/>
-                </tree>
+                </list>
             </field>
         </record>
 
         <record id="action_cf_zero_trust_policy" model="ir.actions.act_window">
             <field name="name">Zero Trust Policies</field>
             <field name="res_model">cloudflare.zero.trust.policy</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
 
         <menuitem id="menu_cf_zero_trust_policy" name="Zero Trust Policies" parent="menu_cloudflare_root" action="action_cf_zero_trust_policy" sequence="110"/>

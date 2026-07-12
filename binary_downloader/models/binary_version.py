@@ -126,6 +126,46 @@ class BinaryVersion(models.Model):
 
 
 
+    def action_notify_tenants(self):
+        self.ensure_one()
+        limit = 100
+        offset = 0
+        LinkModel = self.env["binary.tenant.link"]
+        IncidentModel = self.env["pager.incident"]
+
+        while True:
+            links = LinkModel.search(
+                [("manifest_id", "=", self.manifest_id.id), ("active_version_id", "!=", self.id)],
+                limit=limit,
+                offset=offset,
+            )
+            if not links:
+                break
+                
+            incident_vals = []
+            for link in links:
+                incident_vals.append({
+                    "source": "binary_update",
+                    "severity": "medium",
+                    "description": _("New binary version %s is available for %s.") % (self.version_number, self.manifest_id.name),
+                    "website_id": link.website_id.id,
+                })
+                
+            if incident_vals:
+                IncidentModel.create(incident_vals)
+                
+            offset += limit
+            
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Success"),
+                "message": _("Tenants notified via PagerDuty."),
+                "type": "success",
+            },
+        }
+
     def unlink(self):
         for record in self:
             if record.manifest_id.name and record.checksum:

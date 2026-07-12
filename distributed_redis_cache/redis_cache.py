@@ -64,6 +64,9 @@ def distributed_cache():
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
+            if self.env.context.get("redis_bypass_cache"):
+                return func(self, *args, **kwargs)
+
             dbname = self.env.cr.dbname
             model_name = self._name
 

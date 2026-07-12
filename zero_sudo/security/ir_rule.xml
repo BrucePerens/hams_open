@@ -7,5 +7,12 @@
             <field name="domain_force">[('is_service_account', '=', False)]</field>
             <field name="groups" eval="[(4, ref('base.group_user'))]"/>
         </record>
+
+        <record id="allow_system_service_accounts_rule" model="ir.rule">
+            <field name="name">Allow System Administrators to manage Service Accounts</field>
+            <field name="model_id" ref="base.model_res_users"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('base.group_system'))]"/>
+        </record>
     </data>
 </odoo>

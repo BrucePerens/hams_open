@@ -9,7 +9,7 @@ import os
 import shutil
 import logging
 
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
 
@@ -178,6 +178,24 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "distributed_redis_cache.redis_port",
             "distributed_redis_cache.test_integration_active",
             "web.base.url",
+            "ham_dns.base_domain",
+            "ham_dns.default_ip",
+            "content_security_policy.report_uri",
+            "backup_management.rmq_host",
+            "backup_management.rmq_user",
+            "backup_management.rmq_pass",
+            "caching.safe_quota_mb",
+            "cloudflare.last_static_mtime",
+            "pager_duty.helpdesk_model",
+            "user_websites.company_abuse_email",
+            "user_websites.max_sites_per_user",
+            "user_websites.max_pages_per_site",
+            "user_websites.allow_custom_domains",
+            "user_websites.allow_html_embed",
+            "user_websites.docs_installed",
+            "user_websites_seo.docs_installed",
+            "user_websites.global_website_page_limit",
+            "content_security_policy.report_url",
         ]
 
     @api.model
@@ -185,6 +203,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """Returns the list of system parameters allowed to be written via Zero-Sudo."""
         return [
             "web.base.url",
+            "user_websites_seo.docs_installed",
+            "cloudflare.last_static_mtime",
         ]
 
     @api.model
@@ -292,6 +312,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         # Direct SQL bypasses the ORM cache. We must invalidate it.
         self.env["zero_sudo.kv"].invalidate_model()
+        invalidate_model_cache(self.env, "zero_sudo.security.utils")
 
     @api.model
     @distributed_cache()

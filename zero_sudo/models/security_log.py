@@ -18,7 +18,7 @@ class SecurityLog(models.Model):
     _order = "create_date desc"
 
     user_id = fields.Many2one(
-        "res.users", string="Target User", required=True, index=True
+        "res.users", string="Target User", required=False, index=True
     )
     login = fields.Char(string="Login Used", index=True)
     ip_address = fields.Char(string="IP Address", index=True)

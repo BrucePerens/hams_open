@@ -30,12 +30,16 @@ class ResUsersEdgeRouting(models.Model):  # burn-ignore-env
                 target_env = self.with_user(override_svc_uid).env
             else:
                 if self.env.registry.loaded:
-                    try:
-                        target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                            "edge_routing.edge_routing_service_account"
-                        )
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.warning("Failed to access website settings: %s", e)
+                    self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql
+                    if self.env.cr.fetchone():
+                        try:
+                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                                "edge_routing.edge_routing_service_account"
+                            )
+                        except Exception as e:  # audit-ignore-catch-all
+                            _logger.warning("Failed to access website settings: %s", e)
+                            target_env = self.env
+                    else:
                         target_env = self.env
                 else:
                     target_env = self.env
