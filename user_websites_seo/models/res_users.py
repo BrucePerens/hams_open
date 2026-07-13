@@ -10,13 +10,13 @@ class ResUsersSEO(models.Model):  # burn-ignore-env
 
     @property
     def SELF_WRITEABLE_FIELDS(self):
-        # [@ANCHOR: res_users_self_writeable_fields]
-        # Verified by [@ANCHOR: test_self_writeable_fields]
+        # [@ANCHOR: COMM_res_users_self_writeable_fields]
+        # Verified by [@ANCHOR: COMM_test_self_writeable_fields]
         return super().SELF_WRITEABLE_FIELDS + list(self._get_seo_fields())
 
     def _check_seo_write_permission(self):
         if not all(record.id == self.env.user.id for record in self):
-            # [@ANCHOR: res_users_seo_write_elevation]
-            # Verified by [@ANCHOR: test_seo_widget_tour]
-            # Verified by [@ANCHOR: test_check_access_rule_res_users]
+            # [@ANCHOR: COMM_res_users_seo_write_elevation]
+            # Verified by [@ANCHOR: COMM_test_seo_widget_tour]
+            # Verified by [@ANCHOR: COMM_test_check_access_rule_res_users]
             raise AccessError(_("You can only modify your own SEO metadata."))

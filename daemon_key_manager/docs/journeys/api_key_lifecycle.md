@@ -14,7 +14,7 @@ This journey describes the full lifecycle of a daemon's credentials, from regist
 
 3.  **Renewal: Periodic Rotation**
     - After 60 days, the cron job triggers [@ANCHOR: cron_rotation_trigger].
-    - `daemon_key_manager` revokes the old key and generates a new one [@ANCHOR: revoke_old_keys_logic] [@ANCHOR: generate_new_key_logic].
+    - `daemon_key_manager` revokes the old key and generates a new one [@ANCHOR: COMM_revoke_old_keys_logic] [@ANCHOR: COMM_generate_new_key_logic].
     - The `.env` file is updated with the new key.
 
 4.  **Transition: Handover**

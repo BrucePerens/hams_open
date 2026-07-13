@@ -12,10 +12,10 @@ from odoo.addons.web.controllers.home import Home
 class ZeroSudoHome(Home):
     @http.route()
     def web_login(self, redirect=None, login=None, **kw):
-        # [@ANCHOR: web_login_interceptor]
-        # Verified by [@ANCHOR: test_web_login_interceptor]
-        # Tests [@ANCHOR: story_login_blocking]
-        # Tests [@ANCHOR: journey_service_account_lifecycle]
+        # [@ANCHOR: COMM_web_login_interceptor]
+        # Verified by [@ANCHOR: COMM_test_web_login_interceptor]
+        # Tests [@ANCHOR: COMM_story_login_blocking]
+        # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
 
         # Explicit input extraction to satisfy strict controller binding audits
         attempted_login = login
@@ -25,14 +25,14 @@ class ZeroSudoHome(Home):
         response = super().web_login(redirect=redirect, login=login, **kw)
 
         if request.session.uid:
-            # [@ANCHOR: web_login_interceptor_check]
-            # Verified by [@ANCHOR: test_web_login_interceptor_check]
+            # [@ANCHOR: COMM_web_login_interceptor_check]
+            # Verified by [@ANCHOR: COMM_test_web_login_interceptor_check]
             # SECURITY MANDATE: We use direct SQL instead of .sudo() or ORM calls to check the is_service_account flag.
             # This bypasses ACLs for the isolation check (ADR-0005) without triggering Zero-Sudo linter violations.
             # FUTURE DEVELOPERS: DO NOT CHANGE THIS TO .sudo(). Direct SQL is the intentional, audited pattern here.
-            # Verified by [@ANCHOR: test_web_login_interceptor]
-            # Tests [@ANCHOR: story_login_blocking]
-            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_web_login_interceptor_check]
+            # Verified by [@ANCHOR: COMM_test_web_login_interceptor]
+            # Tests [@ANCHOR: COMM_story_login_blocking]
+            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_web_login_interceptor_check]
                 "SELECT is_service_account FROM res_users WHERE id = %s",
                 (request.session.uid,),
             )

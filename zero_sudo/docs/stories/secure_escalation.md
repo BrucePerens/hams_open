@@ -15,7 +15,7 @@ The `_get_service_uid` function ensures:
 - The account exists and is resolved via raw SQL `[@ANCHOR: get_service_uid_sql_resolve]`.
 - The account is active and verified as a service account `[@ANCHOR: get_service_uid_sql_verify]`.
 - The account is explicitly flagged as a service account `[@ANCHOR: is_service_account_field]`.
-- The account DOES NOT have global administrative privileges (like `base.group_system`) `[@ANCHOR: privilege_escalation_block_sql]`.
+- The account DOES NOT have global administrative privileges (like `base.group_system`) `[@ANCHOR: COMM_privilege_escalation_block_sql]`.
 
 ## Example
 ```python

@@ -13,16 +13,16 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 class TestZeroSudoControllers(RealTransactionCase):
 
     def test_01_web_login_interceptor(self):
-        # [@ANCHOR: test_web_login_interceptor_check]
-        # [@ANCHOR: test_web_login_interceptor]
-        # Tests [@ANCHOR: web_login_interceptor]
-        # Tests [@ANCHOR: web_login_interceptor_check]
-        # Tests [@ANCHOR: story_login_blocking]
-        # Tests [@ANCHOR: journey_service_account_lifecycle]
-        # Tests [@ANCHOR: zero_sudo_security_log_global]
+        # [@ANCHOR: COMM_test_web_login_interceptor_check]
+        # [@ANCHOR: COMM_test_web_login_interceptor]
+        # Tests [@ANCHOR: COMM_web_login_interceptor]
+        # Tests [@ANCHOR: COMM_web_login_interceptor_check]
+        # Tests [@ANCHOR: COMM_story_login_blocking]
+        # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
+        # Tests [@ANCHOR: COMM_zero_sudo_security_log_global]
         """Verify that service accounts cannot log into the web interface."""
-        # [@ANCHOR: test_is_service_account_field]
-        # Tests [@ANCHOR: is_service_account_field]
+        # [@ANCHOR: COMM_test_is_service_account_field]
+        # Tests [@ANCHOR: COMM_is_service_account_field]
 
         login = "test_service_block"
         password = "test_password"
@@ -40,7 +40,7 @@ class TestZeroSudoControllers(RealTransactionCase):
                 "active": True,
             }
         )
-        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_web_login_interceptor]
+        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_web_login_interceptor]
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         # MANDATORY: Commit so the HTTP worker thread can see the new user.

@@ -6,7 +6,7 @@ This story describes how sensitive system parameters are protected from unauthor
 System parameters (`ir.config_parameter`) often contain configuration that, if leaked, could compromise the system. Server-Side Template Injection (SSTI) is a common vector for exfiltrating these parameters.
 
 ## The Process
-1. **Access Request**: A module needs to retrieve a system parameter using `_get_system_param` `[@ANCHOR: get_system_param]`, or set one using `_set_system_param` `[@ANCHOR: set_system_param]`.
+1. **Access Request**: A module needs to retrieve a system parameter using `_get_system_param` `[@ANCHOR: get_system_param]`, or set one using `_set_system_param` `[@ANCHOR: COMM_set_system_param]`.
 2. **Whitelist Check**: The function checks if the requested key is in the list returned by `_get_param_whitelist`.
 3. **Banned Substring Check**: Even for non-whitelisted keys (if the policy allows), it checks for substrings like `secret`, `key`, `password`, etc.
 4. **Restricted Retrieval**: If the key passes all checks, it is retrieved using a dedicated micro-privilege service account (`zero_sudo.config_service_internal`) and returned.

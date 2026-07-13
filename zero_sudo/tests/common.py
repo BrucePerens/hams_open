@@ -544,7 +544,7 @@ class SafePatchMixin:
 
 
 class HamsTransactionCase(TransactionCase, SafePatchMixin):
-    # [@ANCHOR: hams_transaction_case]
+    # [@ANCHOR: COMM_hams_transaction_case]
     _active_daemons = []
 
     @classmethod
@@ -565,7 +565,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         cls._crypto_patcher_res_users.start()
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -620,7 +620,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
     def start_daemon(
         self, script_path, args=None, env_vars=None, health_url=None, timeout=600
     ):
-        # Verified by [@ANCHOR: test_integration_daemon_testing]
+        # Verified by [@ANCHOR: COMM_test_integration_daemon_testing]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         process = daemon_utils.start_daemon_process(script_path, args, env_vars)
         self.__class__._active_daemons.append(process)
@@ -648,7 +648,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
 
 
 class HamsHttpCase(HttpCase, SafePatchMixin):
-    # [@ANCHOR: hams_http_case]
+    # [@ANCHOR: COMM_hams_http_case]
     _hams_tour_failed = False
     server_thread = None
     server = None
@@ -703,7 +703,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().setUpClass()
 
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )

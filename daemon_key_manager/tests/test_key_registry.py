@@ -66,9 +66,9 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_security_constraints(self):
         """Test that only service accounts and valid paths can be used."""
-        # [@ANCHOR: test_security_constraints]
-        # Tests [@ANCHOR: security_constraints_user]
-        # Tests [@ANCHOR: security_constraints_path]
+        # [@ANCHOR: COMM_test_security_constraints]
+        # Tests [@ANCHOR: COMM_security_constraints_user]
+        # Tests [@ANCHOR: COMM_security_constraints_path]
 
         # We must use a user that has permission to create registries, but not a human user as target
         # Test non-service account
@@ -161,12 +161,12 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_register_daemon_api(self):
         """Test the register_daemon API."""
-        # [@ANCHOR: test_register_daemon_api]
-        # Tests [@ANCHOR: register_daemon_api]
-        # Tests [@ANCHOR: register_daemon_logic]
-        # Tests [@ANCHOR: register_daemon_idempotency]
-        # Tests [@ANCHOR: write_secure_env_file_logic]
-        # Tests [@ANCHOR: daemon_self_healing]
+        # [@ANCHOR: COMM_test_register_daemon_api]
+        # Tests [@ANCHOR: COMM_register_daemon_api]
+        # Tests [@ANCHOR: COMM_register_daemon_logic]
+        # Tests [@ANCHOR: COMM_register_daemon_idempotency]
+        # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
+        # Tests [@ANCHOR: COMM_daemon_self_healing]
         daemon_name = "API Test Daemon"
         user_xml_id = "daemon_key_manager.user_daemon_key_manager_service"
         env_file_path = "/opt/hams/etc/keys/api_test.env"
@@ -188,7 +188,7 @@ class TestKeyRegistry(RealTransactionCase):
         self.assertTrue(os.path.exists(env_file_path))
 
         # Verify usage group assignment
-        # Tests [@ANCHOR: privilege_escalation_bypass]
+        # Tests [@ANCHOR: COMM_privilege_escalation_bypass]
         usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
         target_user = self.env["res.users"].search([("login", "=", user_xml_id)])
         if not target_user:
@@ -197,10 +197,10 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_cron_rotate_all_keys(self):
         """Test cron rotation and trigger functionality."""
-        # [@ANCHOR: test_cron_rotate_all_keys]
-        # Tests [@ANCHOR: cron_rotation_logic]
-        # Tests [@ANCHOR: revoke_old_keys_logic]
-        # Tests [@ANCHOR: generate_new_key_logic]
+        # [@ANCHOR: COMM_test_cron_rotate_all_keys]
+        # Tests [@ANCHOR: COMM_cron_rotation_logic]
+        # Tests [@ANCHOR: COMM_revoke_old_keys_logic]
+        # Tests [@ANCHOR: COMM_generate_new_key_logic]
         # Create a mock daemon
         registry = (
             self.env["daemon.key.registry"]
@@ -218,7 +218,7 @@ class TestKeyRegistry(RealTransactionCase):
         self.env["daemon.key.registry"]._cron_rotate_all_keys()
 
         # Call the actual trigger to fulfill the test anchor requirement
-        # # Tests [@ANCHOR: cron_rotation_trigger]
+        # # Tests [@ANCHOR: COMM_cron_rotation_trigger]
         self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys").with_user(
             self.manager_user.id
         )._trigger()
@@ -227,8 +227,8 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_key_ownership(self):
         """Verify that the generated key belongs to the service account, not SUPERUSER."""
-        # [@ANCHOR: test_key_ownership]
-        # Tests [@ANCHOR: generate_new_key_logic]
+        # [@ANCHOR: COMM_test_key_ownership]
+        # Tests [@ANCHOR: COMM_generate_new_key_logic]
         service_user = self.env["res.users"].create(
             {
                 "name": "Test Ownership Service Account",
@@ -270,10 +270,10 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_force_provisioning(self):
         """Test force provisioning of all keys."""
-        # [@ANCHOR: test_force_provisioning]
-        # Tests [@ANCHOR: action_force_provision_all_api]
-        # Tests [@ANCHOR: force_provision_logic]
-        # Tests [@ANCHOR: force_provision_error_handling]
+        # [@ANCHOR: COMM_test_force_provisioning]
+        # Tests [@ANCHOR: COMM_action_force_provision_all_api]
+        # Tests [@ANCHOR: COMM_force_provision_logic]
+        # Tests [@ANCHOR: COMM_force_provision_error_handling]
         daemon_name = "Force Provision Test"
         env_file_path = "/opt/hams/etc/keys/force_provision.env"
 
@@ -296,7 +296,7 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_ui_rendering(self):
         """Test UI view rendering."""
-        # [@ANCHOR: test_ui_rendering]
+        # [@ANCHOR: COMM_test_ui_rendering]
         # Test Tree View (Now 'list' in Odoo 19)
         tree_view = self.env["ir.ui.view"].get_view(
             res_model="daemon.key.registry", view_type="list"
@@ -311,7 +311,7 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_unauthorized_access(self):
         """Test that unauthorized users cannot manage daemon keys."""
-        # # Tests [@ANCHOR: test_unauthorized_access]
+        # # Tests [@ANCHOR: COMM_test_unauthorized_access]
         # Create a registry entry
         registry = (
             self.env["daemon.key.registry"]
@@ -337,8 +337,8 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_action_rotate_key(self):
         """Test manual rotation of a single key."""
-        # [@ANCHOR: test_action_rotate_key]
-        # Tests [@ANCHOR: action_rotate_key_api]
+        # [@ANCHOR: COMM_test_action_rotate_key]
+        # Tests [@ANCHOR: COMM_action_rotate_key_api]
         daemon_name = "Single Rotation Test"
         env_file_path = "/opt/hams/etc/keys/single_rotation.env"
         self.test_env_paths.append(env_file_path)
@@ -364,8 +364,8 @@ class TestKeyRegistry(RealTransactionCase):
 
     def test_rotation_safety_archived_user(self):
         """Test that keys cannot be rotated for archived service accounts."""
-        # [@ANCHOR: test_rotation_safety_archived_user]
-        # Tests [@ANCHOR: rotation_safety_archived_user]
+        # [@ANCHOR: COMM_test_rotation_safety_archived_user]
+        # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
         archived_user = self.env["res.users"].create(
             {
                 "name": "Archived Service Account",
@@ -436,10 +436,10 @@ class TestKeyRegistry(RealTransactionCase):
 @tagged("post_install", "-at_install")
 class TestKeyRegistryTour(HamsHttpCase):
     def test_daemon_key_manager_tour(self):
-        # [@ANCHOR: test_daemon_key_manager_tour]
+        # [@ANCHOR: COMM_test_daemon_key_manager_tour]
 
-        # Tests [@ANCHOR: register_daemon_api]
-        # Tests [@ANCHOR: action_force_provision_all_api]
+        # Tests [@ANCHOR: COMM_register_daemon_api]
+        # Tests [@ANCHOR: COMM_action_force_provision_all_api]
 
         # Ensure admin has Technical Features enabled for the tour
         admin = self.env.ref("base.user_admin")

@@ -13,10 +13,10 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install", "integration")
 class TestIntegrationFacility(HamsTransactionCase):
-    # Tests [@ANCHOR: integration_daemon_testing]
+    # Tests [@ANCHOR: COMM_integration_daemon_testing]
 
     def test_01_daemon_lifecycle(self):
-        # [@ANCHOR: test_integration_daemon_testing]
+        # [@ANCHOR: COMM_test_integration_daemon_testing]
         """
         Verify that HamsTransactionCase correctly starts a daemon and polls its health.
         """

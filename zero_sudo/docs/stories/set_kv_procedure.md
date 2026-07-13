@@ -11,7 +11,7 @@ The `_set_kv` method delegates the operation to the `zero_sudo_set_kv` PostgreSQ
 This eliminates the need for manual existence checks in Python and reduces the number of database round-trips to exactly one.
 
 **Feature Anchor:** [@ANCHOR: set_kv_procedure]
-**Verified by:** [@ANCHOR: test_set_kv_procedure]
+**Verified by:** [@ANCHOR: COMM_test_set_kv_procedure]
 
 ## Performance Benefits
 * **Reduced Latency:** Exactly one database round-trip.

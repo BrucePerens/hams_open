@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="view_daemon_key_registry_tree" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_ui_rendering] -->
-        <!-- audit-ignore-view: Verified by [@ANCHOR: test_daemon_key_manager_tour] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_ui_rendering] -->
+        <!-- audit-ignore-view: Verified by [@ANCHOR: COMM_test_daemon_key_manager_tour] -->
         <field name="name">daemon.key.registry.tree</field>
         <field name="model">daemon.key.registry</field>
         <field name="arch" type="xml">
@@ -17,8 +17,8 @@
     </record>
 
     <record id="view_daemon_key_registry_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_ui_rendering] -->
-        <!-- audit-ignore-view: Verified by [@ANCHOR: test_daemon_key_manager_tour] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_ui_rendering] -->
+        <!-- audit-ignore-view: Verified by [@ANCHOR: COMM_test_daemon_key_manager_tour] -->
         <field name="name">daemon.key.registry.form</field>
         <field name="model">daemon.key.registry</field>
         <field name="arch" type="xml">

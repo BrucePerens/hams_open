@@ -2,7 +2,7 @@
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
-// Verified by [@ANCHOR: test_seo_widget_tour]
+// Verified by [@ANCHOR: COMM_test_seo_widget_tour]
 registry.category("web_tour.tours").add("user_websites_seo_tour", {
     url: "/odoo?debug=1&action=base.action_res_users",
     steps: () => [

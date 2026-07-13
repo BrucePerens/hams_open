@@ -89,7 +89,7 @@ class TestSEOPagesPosts(RealTransactionCase):
         )
 
     def test_soft_dependency_docs_installation(self):
-        # [@ANCHOR: test_soft_dependency_docs_installation]
+        # [@ANCHOR: COMM_test_soft_dependency_docs_installation]
         utils = self.env["zero_sudo.security.utils"]
         val = utils._get_system_param("user_websites_seo.docs_installed")
         self.assertEqual(val, "True")

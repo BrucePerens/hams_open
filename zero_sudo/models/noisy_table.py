@@ -8,7 +8,7 @@ from odoo import models, fields
 
 
 class NoisyTable(models.Model):
-    # [@ANCHOR: zero_sudo_noisy_table_global]
+    # [@ANCHOR: COMM_zero_sudo_noisy_table_global]
     # This model is logically GLOBAL and NOT multi-tenanted.
     # It contains the names of physical PostgreSQL tables that should be ignored
     # by the leak detection engine. Physical tables are global to the database cluster.

@@ -13,5 +13,5 @@ System parameters managed via `zero_sudo.security.utils` `[@ANCHOR: get_system_p
 
 ## Global Models
 Certain models in `zero_sudo` are logically global and do not track `website_id` or `company_id`:
-- **KV Store (`zero_sudo.kv`) `[@ANCHOR: zero_sudo_kv_global]`**: Stores platform-wide technical state.
-- **Noisy Tables (`zero_sudo.noisy_table`) `[@ANCHOR: zero_sudo_noisy_table_global]`**: Lists PostgreSQL tables ignored globally for leak detection.
+- **KV Store (`zero_sudo.kv`) `[@ANCHOR: COMM_zero_sudo_kv_global]`**: Stores platform-wide technical state.
+- **Noisy Tables (`zero_sudo.noisy_table`) `[@ANCHOR: COMM_zero_sudo_noisy_table_global]`**: Lists PostgreSQL tables ignored globally for leak detection.

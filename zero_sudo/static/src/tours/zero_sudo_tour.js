@@ -4,10 +4,10 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("zero_sudo_tour", {
-    // [@ANCHOR: zero_sudo_tour]
-    // Verified by [@ANCHOR: test_zero_sudo_tour]
-    // Tests [@ANCHOR: story_login_blocking]
-    // Tests [@ANCHOR: journey_service_account_lifecycle]
+    // [@ANCHOR: COMM_zero_sudo_tour]
+    // Verified by [@ANCHOR: COMM_test_zero_sudo_tour]
+    // Tests [@ANCHOR: COMM_story_login_blocking]
+    // Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
     url: "/odoo?debug=1",
     steps: () => [
         {

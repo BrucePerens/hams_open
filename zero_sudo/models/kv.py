@@ -8,7 +8,7 @@ from odoo import models, fields
 
 
 class ZeroSudoKV(models.Model):
-    # [@ANCHOR: zero_sudo_kv_global]
+    # [@ANCHOR: COMM_zero_sudo_kv_global]
     # This model is logically GLOBAL and NOT multi-tenanted.
     # It stores low-level system state and cryptographic flags for service accounts
     # that operate across all companies and websites.
