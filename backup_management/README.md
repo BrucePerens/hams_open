@@ -18,19 +18,19 @@ This module provides a unified interface for managing system backups using Kopia
 
 ### 1. Automated Volume Synchronization
 Handles the execution loops for continuous file system snapshots and system storage mappings.
-* **Core Sync Anchor:** `[@ANCHOR: backup_management:backup_sync_kopia]`
+* **Core Sync Anchor:** `[@ANCHOR: backup_management:COMM_backup_sync_kopia]`
 
-* **Database Target Sync Anchor:** `[@ANCHOR: backup_management:backup_sync_pgbackrest]`
+* **Database Target Sync Anchor:** `[@ANCHOR: backup_management:COMM_backup_sync_pgbackrest]`
 
-* **Cron Routine Orchestration:** `[@ANCHOR: backup_management:cron_sync_all_backups]`
+* **Cron Routine Orchestration:** `[@ANCHOR: backup_management:COMM_cron_sync_all_backups]`
 
-* **Performance Bulk Upsert:** `[@ANCHOR: backup_management:upsert_snapshots_procedure]`
+* **Performance Bulk Upsert:** `[@ANCHOR: backup_management:COMM_upsert_snapshots_procedure]`
 
 ### 2. Retention & Purge Governance
 Ensures structural space recovery processes comply with multi-website tenant data privacy mandates.
-* **Policy Application Engine:** `[@ANCHOR: backup_management:backup_apply_policies]`
+* **Policy Application Engine:** `[@ANCHOR: backup_management:COMM_backup_apply_policies]`
 
-* **Interactive Dashboard Telemetry:** `[@ANCHOR: backup_management:backup_board_data]`
+* **Interactive Dashboard Telemetry:** `[@ANCHOR: backup_management:COMM_backup_board_data]`
 
 ## User Guide
 
@@ -58,3 +58,7 @@ Ensures structural space recovery processes comply with multi-website tenant dat
 When multi-website context isolation checks detect data boundary leakage or cross-tenant contamination, logging structures communicate directly with the core website security system:
 * **Tenant Violation Reports:** For tracking frontend moderation workflow alerts, see `[@ANCHOR: user_websites:UX_REPORT_VIOLATION]`.
 * **Automated Escalation:** System telemetry monitors structural volume metrics and communicates alerts dynamically.
+
+## External Dependencies
+
+- `pager_duty`: Used for failure reporting and stale snapshot alerts.

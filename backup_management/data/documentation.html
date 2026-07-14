@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026. Licensed under AGPL-3. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,10 +32,9 @@
 
         <h2>Getting Started</h2>
 
-        <section id="backup-sync-section">
+        <section id="backup-sync-section" data-trace="[@ANCHOR: backup_management:COMM_UX_BACKUP_SYNC]">
             <h4>1. Setup a Backup Configuration</h4>
             <p>Go to <strong>Backup Management > Configuration > Backup Configurations</strong>. Create a new record, choosing the appropriate engine (Kopia for files, pgBackRest for databases) and providing the target destination. You can also specify how many daily, weekly, and monthly snapshots to keep.</p>
-            <!-- [@ANCHOR: UX_BACKUP_SYNC] -->
         </section>
 
         <h4>2. Monitor via Dashboard</h4>
@@ -45,11 +45,11 @@
 
         <div class="note">
             <strong>Security Note:</strong> Only users with "Backup Administrator" privileges can create configurations or trigger restore operations.
+        </div>
         
     <h2>User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
     <img src="/backup_management/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
-</div>
     </main>
 </body>
 </html>
