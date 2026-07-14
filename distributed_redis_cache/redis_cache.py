@@ -23,7 +23,7 @@ LRU_LOCK = threading.Lock()
 
 
 def _get_hash(*args, **kwargs):
-    # [@ANCHOR: distributed_cache_key_generation]
+    # [@ANCHOR: COMM_distributed_cache_key_generation]
     def _serialize(obj):
         if isinstance(obj, models.Model):
             # Ensure stable serialization for recordsets
@@ -55,7 +55,7 @@ def _get_hash(*args, **kwargs):
 
 
 def distributed_cache():
-    # [@ANCHOR: distributed_cache_decorator]
+    # [@ANCHOR: COMM_distributed_cache_decorator]
     """
     Fine-grained, distributed Redis-backed cache decorator.
     Replaces @tools.ormcache to support precise cross-worker invalidation.
@@ -71,15 +71,15 @@ def distributed_cache():
             model_name = self._name
 
             # Multi-Tenant awareness: Include website_id and company_id in cache key
-            website_id = self.env.context.get("website_id")
+            website_id = self.env.context.get("website_id") or 0
             
             # Use only context to avoid triggering N+1 queries from self.env.company
             allowed_company_ids = self.env.context.get("allowed_company_ids", [])
-            company_id = allowed_company_ids[0] if allowed_company_ids else None
+            company_id = allowed_company_ids[0] if allowed_company_ids else 0
             
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
-            website_suffix = f":w{website_id}" if website_id else ""
-            company_suffix = f":c{company_id}" if company_id else ""
+            website_suffix = f":w{website_id}"
+            company_suffix = f":c{company_id}"
 
             arg_hash = _get_hash(self, *args, **kwargs)
             cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}{company_suffix}:{arg_hash}"
@@ -134,7 +134,7 @@ def distributed_cache():
 
 
 def invalidate_model_cache(env, model_name, local_only=False):
-    # [@ANCHOR: invalidate_model_cache_logic]
+    # [@ANCHOR: COMM_invalidate_model_cache_logic]
     """
     Invalidates all fine-grained cache entries for a specific model
     without triggering a global ORM stampede.
@@ -171,7 +171,7 @@ def invalidate_model_cache(env, model_name, local_only=False):
 
 
 def notify_model_invalidation(env, model_name):
-    # [@ANCHOR: notify_model_invalidation_logic]
+    # [@ANCHOR: COMM_notify_model_invalidation_logic]
     """
     Triggers a cross-worker invalidation signal via PostgreSQL NOTIFY.
     """

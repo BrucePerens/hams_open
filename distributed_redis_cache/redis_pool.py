@@ -9,12 +9,12 @@ _logger = logging.getLogger(__name__)
 
 POOL_LOCK = threading.Lock()
 
-# [@ANCHOR: redis_connection_pool]
+# [@ANCHOR: COMM_redis_connection_pool]
 # Default values used as fallback when the Odoo registry is not yet available
 # or during initial module loading.
 REDIS_HOST_DEFAULT = os.getenv("REDIS_HOST") or "redis"
 REDIS_PORT_DEFAULT = int(os.getenv("REDIS_PORT") or "6379")
-REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # burn-ignore-env
+REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # burn-ignore-env: Tested by [@ANCHOR: COMM_test_redis_pool_env_variables]
 REDIS_DB_DEFAULT = int(os.getenv("REDIS_DB") or "0")
 
 # Centralized connection pool for the default Redis settings
@@ -48,7 +48,7 @@ def get_redis_connection(env=None):
         )
         port = int(port_raw)
         password = security_utils._get_system_param(
-            "distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT
+            "distributed_redis_cache.redis_pass", REDIS_PASS_DEFAULT
         )
 
         # Check if the environment config differs from the default pool

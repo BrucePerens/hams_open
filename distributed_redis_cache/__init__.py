@@ -1,6 +1,5 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. AGPL-3.0.
 
 from . import models
 from . import redis_cache

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. AGPL-3.0.
 {
     "name": "Distributed Redis Cache",
     "summary": "Fine-grained distributed caching for Odoo clusters.",

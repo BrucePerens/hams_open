@@ -35,10 +35,10 @@
 
 <h2>User Instructions</h2>
 
-<h3>Managing the Cache</h3>
+<h3 id="distributed_cache_view" data-trace="[@ANCHOR: COMM_distributed_redis_cache:distributed_cache_view]">Managing the Cache</h3>
 <p>The <b>Distributed Cache Manager</b> is your central dashboard for ensuring synchronization across your Odoo cluster. Administrators can find these tools under the <b>Distributed Cache</b> menu in Odoo Settings.</p>
 
-<h4>Checking System Health</h4>
+<h4 id="check_redis_status_logic" data-trace="[@ANCHOR: COMM_distributed_redis_cache:check_redis_status_logic]">Checking System Health</h4>
 <p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server.
 <ul>
     <li><b>Green Success:</b> Everything is working perfectly.</li>
@@ -46,7 +46,7 @@
 </ul>
 </p>
 
-<h3>Configuration</h3>
+<h3 id="distributed_cache_settings_view" data-trace="[@ANCHOR: COMM_distributed_redis_cache:distributed_cache_settings_view]">Configuration</h3>
 <p>Administrators can configure the Redis connection under the <b>Settings</b> menu in the <b>Distributed Redis Cache</b> section.</p>
 <ul>
     <li><b>Redis Host:</b> The hostname or IP address of your Redis server.</li>
@@ -54,7 +54,7 @@
     <li><b>Redis Password:</b> The password required to connect to your Redis instance.</li>
 </ul>
 
-<h4>Manual Refresh</h4>
+<h4 id="manual_cache_invalidation" data-trace="[@ANCHOR: COMM_distributed_redis_cache:manual_cache_invalidation]">Manual Refresh</h4>
 <p>If you suspect a server is showing old information, you can manually trigger a refresh:</p>
 <ol>
     <li>Select the <b>Data Type</b> (called a "Model", like <code>User</code> or <code>Partner</code>) from the list.</li>
@@ -86,21 +86,21 @@
 </ul>
 
 <!-- Semantic Anchors for System Integration -->
-<!-- [@ANCHOR: distributed_cache_view] -->
+<!-- [@ANCHOR: COMM_distributed_cache_view] -->
 
-<!-- [@ANCHOR: distributed_cache_settings_view] -->
+<!-- [@ANCHOR: COMM_distributed_cache_settings_view] -->
 
-<!-- [@ANCHOR: manual_cache_invalidation] -->
+<!-- [@ANCHOR: COMM_manual_cache_invalidation] -->
 
-<!-- [@ANCHOR: check_redis_status_logic] -->
+<!-- [@ANCHOR: COMM_check_redis_status_logic] -->
 
-<!-- [@ANCHOR: distributed_cache_decorator] -->
+<!-- [@ANCHOR: COMM_distributed_cache_decorator] -->
 
-<!-- [@ANCHOR: notify_model_invalidation_logic] -->
+<!-- [@ANCHOR: COMM_notify_model_invalidation_logic] -->
 
-<!-- [@ANCHOR: doc_inject_distributed_redis_cache] -->
+<!-- [@ANCHOR: COMM_doc_inject_distributed_redis_cache] -->
 
-<!-- [@ANCHOR: story_zero_sudo_cache_manager] -->
+<!-- [@ANCHOR: COMM_story_zero_sudo_cache_manager] -->
 
 </body>
 </html>

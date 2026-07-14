@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("cache_manager")
 
 # --- Configuration ---
-# [@ANCHOR: cache_manager_config]
+# [@ANCHOR: COMM_cache_manager_config]
 ENV_FILE = "/opt/hams/etc/keys/cache_manager.env"
 if os.path.exists(ENV_FILE):
     load_dotenv(ENV_FILE)
@@ -49,7 +49,7 @@ redis_client = None
 
 
 async def broadcast_to_redis(payload):
-    # [@ANCHOR: cache_manager_redis_publish]
+    # [@ANCHOR: COMM_cache_manager_redis_publish]
     """
     Pushes the invalidation payload to the central Redis bus
     for all active Odoo WSGI workers to intercept.
@@ -68,7 +68,7 @@ async def broadcast_to_redis(payload):
         logger.info("Published invalidation to Redis: %s", payload)
     except json.JSONDecodeError:
         logger.error("Malformed JSON payload from Postgres: %s", payload)
-    except Exception as e:  # audit-ignore-catch-all
+    except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
         logger.error("Redis publish failed: %s", e)
 
 
@@ -96,7 +96,7 @@ async def main():
         )
         await redis_client.ping()
         logger.info("Connected to Redis at %s:%s", REDIS_HOST, REDIS_PORT)
-    except Exception as e:  # audit-ignore-catch-all
+    except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
         logger.critical("Fatal Redis connection error: %s", e)
         return
 
@@ -128,7 +128,7 @@ async def main():
                 await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
                 db_conns.append(conn)
                 logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, db)
-            except Exception as e: # audit-ignore-catch-all
+            except Exception as e: # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
                 logger.warning("Could not connect to database %s: %s", db, e)
 
     while True:
@@ -147,7 +147,7 @@ async def main():
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break
-        except Exception as e:  # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
             logger.error("PostgreSQL connection error: %s. Reconnecting in 5s...", e)
             try:
                 await asyncio.sleep(5)  # audit-ignore-sleep

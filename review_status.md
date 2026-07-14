@@ -6,9 +6,9 @@
 - `hams_open/backup_management`: [Done] (Passed linters and manual verification)
 - `hams_open/binary_downloader`: [Done]
 - `hams_open/caching`: [Done]
-- `hams_open/cloudflare`: [ ] Pending
+- `hams_open/cloudflare`: [Done]
 - `hams_open/compliance`: [Done] (Passed linter. Tests blocked by environmental /tmp/hams_test_proxy.lock error)
-- `hams_open/distributed_redis_cache`: [ ] Pending
+- `hams_open/distributed_redis_cache`: [In Progress] (2026-07-14 17:06)
 - `hams_open/zero_sudo`: [ ] Pending
 - `hams_open/hams_helpdesk`: [ ] Pending
 - `hams_open/knowledge`: [ ] Pending
