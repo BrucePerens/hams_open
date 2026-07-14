@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+# Public License v3.0 (AGPL-3.0).
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase  # noqa: E501
 from lxml import etree
 import re
 
@@ -27,8 +28,8 @@ class TestCompliancePages(HamsTransactionCase):
             self.assertIn(
                 url,
                 found_urls,
-                f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in 'website.page'. "
-                f"Check compliance/data/legal_pages_data.xml for missing records.",
+                f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in 'website.page'. "  # noqa: E501
+                f"Check compliance/data/legal_pages_data.xml for missing records.",  # noqa: E501
             )
 
         # Non-Destructive Mandate check:
@@ -39,34 +40,34 @@ class TestCompliancePages(HamsTransactionCase):
                 and page.view_id.key
                 and page.view_id.key.startswith("compliance.compliance_")
             ):
-                # If there's another page for the same URL and SAME WEBSITE scope that isn't ours,
-                # our page should be UNPUBLISHED. Otherwise it should be published.
+                # If there's another page for the same URL and SAME WEBSITE scope that isn't ours,  # noqa: E501
+                # our page should be UNPUBLISHED. Otherwise it should be
+                # published.
                 other_page = pages.filtered(
                     lambda p: (
                         p.url == page.url
                         and p.website_id == page.website_id
                         and p.view_id
                         and p.view_id.key
-                        and not p.view_id.key.startswith("compliance.compliance_")
+                        and not p.view_id.key.startswith("compliance.compliance_")  # noqa: E501
                     )
                 )
                 if other_page:
                     self.assertFalse(
                         page.is_published,
-                        f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {page.url} should be unpublished because a custom one exists in the same scope. "
-                        f"Check compliance/hooks.py logic.",
+                        f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {
+                            page.url} should be unpublished because a custom one exists in the same scope. " f"Check compliance/hooks.py logic.",  # noqa: E501
                     )
                 else:
                     self.assertTrue(
                         page.is_published,
-                        f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {page.url} should be published since no custom one exists in the same scope. "
-                        f"Check compliance/hooks.py logic.",
+                        f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {
+                            page.url} should be published since no custom one exists in the same scope. " f"Check compliance/hooks.py logic.",  # noqa: E501
                     )
             else:
                 self.assertTrue(
-                    page.is_published,
-                    f"[!] DIAGNOSTIC FOR AI: Custom page for {page.url} should be published.",
-                )
+                    page.is_published, f"[!] DIAGNOSTIC FOR AI: Custom page for {  # noqa: E501
+                        page.url} should be published.", )
 
 
 @tagged("post_install", "-at_install")
@@ -87,13 +88,13 @@ class TestCompliancePagesHttp(HamsHttpCase):
             self.assertEqual(
                 response.status_code,
                 200,
-                f"[!] DIAGNOSTIC FOR AI: Page {url} should be reachable (200 OK). Got {response.status_code}. "
-                f"Ensure the website.page record is published and correctly linked to a view.",
+                f"[!] DIAGNOSTIC FOR AI: Page {url} should be reachable (200 OK). Got {response.status_code}. "  # noqa: E501
+                f"Ensure the website.page record is published and correctly linked to a view.",  # noqa: E501
             )
             # Use regex to ignore potential tags/whitespace around the text
             self.assertTrue(
                 re.search(r"Policy|Terms", response.text),
-                f"[!] DIAGNOSTIC FOR AI: Page {url} should contain boilerplate content. "
+                f"[!] DIAGNOSTIC FOR AI: Page {url} should contain boilerplate content. "  # noqa: E501
                 f"Check the rendering of {url} and its associated template.",
             )
 
@@ -125,20 +126,20 @@ class TestCompliancePagesHttp(HamsHttpCase):
             # Normalize whitespace for checking
             normalized_arch = re.sub(r"\s+", " ", arch_str)
 
-            if xml_id != "compliance.compliance_accessibility_statement_template":
+            if xml_id != "compliance.compliance_accessibility_statement_template":  # noqa: E501
                 self.assertIn(
                     "Warning: This is the default version",
                     normalized_arch,
-                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory default version warning.",
+                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory default version warning.",  # noqa: E501
                 )
                 self.assertIn(
                     "It was not produced by a lawyer.",
                     normalized_arch,
-                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory legal disclaimer.",
+                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory legal disclaimer.",  # noqa: E501
                 )
 
             self.assertIn(
                 "Last Updated:",
                 normalized_arch,
-                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing 'Last Updated:' text.",
+                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing 'Last Updated:' text.",  # noqa: E501
             )

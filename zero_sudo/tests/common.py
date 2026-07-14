@@ -732,7 +732,10 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls.registry.clear_cache()
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
-        with open("/tmp/hams_test_proxy.lock", "w") as lockfile:
+        import tempfile
+        import os
+        lock_path = os.path.join(tempfile.gettempdir(), f"hams_test_proxy_{os.getuid()}.lock")
+        with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
                 os.makedirs("/opt/hams/test/socat_certs", exist_ok=True)

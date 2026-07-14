@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Bruce Perens K6BP -->
 <odoo>
     <data noupdate="1">
 
         <template id="compliance_legal_links" name="Legal Pages Links">
-            <!-- audit-ignore-view -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: test_compliance_views] -->
             <div class="mt-5 border-top pt-3">
                 <p class="text-muted small">
                     Related:

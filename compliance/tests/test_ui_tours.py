@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+# Public License v3.0 (AGPL-3.0).
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 

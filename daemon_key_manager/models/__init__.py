@@ -1,3 +1,5 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 from . import key_registry
+from . import res_company
+from . import res_users

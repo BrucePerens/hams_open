@@ -2,4 +2,54 @@
 - `hams_open/database_management`: [Done] (Passed flake8, fixed anchor issues. Global test suite fails on external modules)
 - `hams_open/pager_duty`: [Done] (Passed tests and linter)
 - `hams_open/user_websites_seo`: [Done]
-- `hams_open/user_websites`: [Done] (Passed tests and linter)
+- `hams_open/user_websites`: [Done] (Passed flake8 with 0 errors. Test suite initially passed, but now aborts globally during Odoo DB init / Postgres crashes)
+- `hams_open/backup_management`: [ ] Pending
+- `hams_open/binary_downloader`: [ ] Pending
+- `hams_open/caching`: [ ] Pending
+- `hams_open/cloudflare`: [ ] Pending
+- `hams_open/compliance`: [In Progress] (2026-07-14 09:02)
+- `hams_open/distributed_redis_cache`: [ ] Pending
+- `hams_open/zero_sudo`: [ ] Pending
+- `hams_open/hams_helpdesk`: [ ] Pending
+- `hams_open/knowledge`: [ ] Pending
+- `hams_open/edge_routing`: [ ] Pending
+- `hams_open/external`: [ ] Pending
+- `hams_open/hams_rabbitmq`: [ ] Pending
+- `hams_com/ham_auxcomm_training`: [ ] Pending
+- `hams_com/ham_base`: [ ] Pending
+- `hams_com/ham_callbook`: [ ] Pending
+- `hams_com/ham_classifieds`: [ ] Pending
+- `hams_com/ham_club_management`: [ ] Pending
+- `hams_com/ham_dns`: [ ] Pending
+- `hams_com/ham_dx_cluster`: [ ] Pending
+- `hams_com/ham_events`: [ ] Pending
+- `hams_com/ham_forum_extension`: [ ] Pending
+- `hams_com/ham_init`: [ ] Pending
+- `hams_com/ham_logbook`: [ ] Pending
+- `hams_com/ham_onboarding`: [ ] Pending
+- `hams_com/ham_propagation`: [ ] Pending
+- `hams_com/ham_repeater_dir`: [ ] Pending
+- `hams_com/ham_satellite`: [ ] Pending
+- `hams_com/ham_shack`: [ ] Pending
+- `hams_com/ham_testing`: [ ] Pending
+- `hams_com/ics_forms`: [ ] Pending
+- `hams_com/theme_hams`: [ ] Pending
+- `hams_com/ham_relay_bridge`: [ ] Pending
+- `hams_com/web_map`: [ ] Pending
+- `hams_com/ham_aprs`: [ ] Pending
+- `hams_com/ham_world_map`: [ ] Pending
+- `hams_com/ham_crm_security`: [ ] Pending
+- `hams_com/ham_moderation`: [ ] Pending
+- `hams_com/ham_profile`: [ ] Pending
+- `hams_com/content_security_policy`: [ ] Pending
+- `hams_com/winlink_templates`: [ ] Pending
+- `hams_com/ham_schematics`: [ ] Pending
+- `hams_open/backup_management/daemon`: [ ] Pending
+- `hams_open/distributed_redis_cache/daemons`: [ ] Pending
+- `hams_open/pager_duty/daemon`: [ ] Pending
+- `hams_open/zero_sudo/daemon`: [ ] Pending
+- `hams_open/daemons`: [ ] Pending
+- `hams_com/daemons`: [ ] Pending
+- `hams_open/hams_shared/tools`: [ ] Pending
+- `hams_open/hams_shared/docs`: [ ] Pending
+- `hams_open/hams_shared/agents`: [ ] Pending

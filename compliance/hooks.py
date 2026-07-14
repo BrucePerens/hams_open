@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+# Public License v3.0 (AGPL-3.0).
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -23,12 +24,14 @@ def post_init_hook(env):
 
     # Verified by [@ANCHOR: test_compliance_ui_tour]
 
-    # ADR-0002: Zero-Sudo Architecture. We must not use .sudo() or stay as SUPERUSER.
+    # ADR-0002: Zero-Sudo Architecture. We must not use .sudo()
+    # or stay as SUPERUSER.
     # We switch to a dedicated micro-privilege service account.
     # [@ANCHOR: compliance_zero_sudo_impersonation]
-    env_svc = env["zero_sudo.security.utils"]._get_service_env(
+    svc_uid = env["zero_sudo.security.utils"]._get_service_uid(
         "compliance.user_compliance_service"
     )
+    env_svc = env(user=svc_uid)
 
     # Execute DDL directly instead of using ir.actions.server
     sql = """
@@ -73,16 +76,20 @@ def post_init_hook(env):
     $$ LANGUAGE plpgsql;
     """
     env_svc.flush_all()
-    env_svc.cr.execute(sql)
+    with env_svc.cr.savepoint():
+        env_svc.cr.execute(sql)
 
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
-    # Performance Optimization: Reduced dozens of ORM round-trips to a single Postgres procedure call.
+    # Performance Optimization: Reduced dozens of ORM round-trips
+    # to a single Postgres procedure call.
     # Verified by [@ANCHOR: test_compliance_postgres_procedures]
     env_svc.flush_all()
-    env_svc.cr.execute("SELECT compliance_enforce_protection()")
+    with env_svc.cr.savepoint():
+        env_svc.cr.execute("SELECT compliance_enforce_protection()")
 
     env_svc["ir.module.module"]._bootstrap_knowledge_docs()
 
-    # We must invalidate the ORM cache because the Postgres procedure modified records directly.
+    # We must invalidate the ORM cache because the Postgres procedure modified
+    # records directly.
     env_svc["website"].invalidate_model(["cookies_bar"])
     env_svc["website.page"].invalidate_model(["is_published"])
