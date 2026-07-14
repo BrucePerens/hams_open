@@ -3,6 +3,7 @@
  * This software is released under the AGPL-3.0 License.
  */
 
+// Tests [@ANCHOR: COMM_backup_dashboard_tour]
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 

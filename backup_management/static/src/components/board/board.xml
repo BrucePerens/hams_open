@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of hams_open, an open source module.
+    License: AGPL-3.0
+-->
 <templates xml:space="preserve">
     <t t-name="backup_management.BackupBoardTemplate" owl="1">
-        <div class="backup-board o_content p-4 overflow-auto bg-dark text-light" style="transition: transform 20s linear;">
+        <div class="backup-board o_content p-4 overflow-auto bg-dark text-light">
             <div>
                 <div class="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm bg-view">
                     <h1 class="m-0 text-primary"><i class="fa fa-database me-2" aria-hidden="true"/>Backup &amp; Disaster Recovery</h1>

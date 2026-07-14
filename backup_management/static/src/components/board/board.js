@@ -17,19 +17,9 @@ export class BackupBoard extends Component {
 
         onMounted(async () => {
             await this.fetchData();
-            this.driftTimer = setInterval(() => {
-                const el = document.querySelector('.backup-board');
-                if (el) {
-                    const x = Math.floor(Math.random() * 5) - 2;
-                    const y = Math.floor(Math.random() * 5) - 2;
-                    el.style.transform = `translate(${x}px, ${y}px)`;
-                }
-            }, 60000);
         });
 
         onWillUnmount(() => {
-            if (this.pollTimer) clearTimeout(this.pollTimer);
-            if (this.driftTimer) clearInterval(this.driftTimer);
         });
     }
 
@@ -51,12 +41,6 @@ export class BackupBoard extends Component {
         }
         this.state.configs = await this.orm.call("backup.config", "get_board_data", [], { context: context });
         this.state.isLoading = false;
-
-        const hasActiveJobs = this.state.configs.some(conf => conf.latest_job && ['pending', 'processing'].includes(conf.latest_job.state));
-        if (this.pollTimer) clearTimeout(this.pollTimer);
-        if (hasActiveJobs) {
-            this.pollTimer = setTimeout(() => this.fetchData(), 5000);
-        }
     }
 }
 BackupBoard.template = "backup_management.BackupBoardTemplate";
