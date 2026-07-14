@@ -10,4 +10,5 @@ The `action_install` method allows administrators to manually trigger the downlo
 
 ## Traceability
 - **Code:** `action_install` in `models/binary_manifest.py` `[@ANCHOR: binary_action_install]`
+
 - **View:** `view_binary_downloader_manifest_list` and `view_binary_downloader_manifest_form` in `views/binary_manifest_views.xml` `[@ANCHOR: test_binary_manifest_views]`, `[@ANCHOR: binary_downloader:UX_BINARY_INSTALL]`

@@ -9,6 +9,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 class TestManualLibraryUITours(HamsHttpCase):
     def test_01_manual_toc_tour(self):
         # [@ANCHOR: test_tour_manual_toc]
+
         # Tests [@ANCHOR: story_manual_toc]
         # Create an article with the appropriate HTML headings to trigger the TOC generator
         article = self.env["knowledge.article"].create(

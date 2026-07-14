@@ -22,7 +22,9 @@ class TestPurgeQueue(RealTransactionCase):
 
     def test_01_bdd_queue_batching_and_rate_limiting(self):
         # [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
+
         # Tests [@ANCHOR: COMM_ir_cron_process_cf_purge_queue]
+
         # Tests [@ANCHOR: COMM_cf_process_queue_logic]
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"
@@ -71,6 +73,7 @@ class TestPurgeQueue(RealTransactionCase):
 
     def test_03_purge_queue_website_acl(self):
         # [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
+
         # Tests [@ANCHOR: COMM_enqueue_urls_base_url]
         """
         Verify that the purge queue service account can successfully read

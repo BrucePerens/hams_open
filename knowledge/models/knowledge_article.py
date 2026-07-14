@@ -60,6 +60,17 @@ class KnowledgeArticle(models.Model):
         tracking=True,
     )
 
+    category = fields.Selection(
+        [
+            ("workspace", "Workspace"),
+            ("private", "Private"),
+            ("shared", "Shared"),
+        ],
+        string="Category",
+        default="workspace",
+        tracking=True,
+    )
+
     member_ids = fields.Many2many(
         "res.users",
         "knowledge_article_member_rel",
@@ -121,7 +132,9 @@ class KnowledgeArticle(models.Model):
     @api.depends("body")
     def _compute_reading_time(self):
         # [@ANCHOR: manual_compute_reading_time]
+
         # Verified by [@ANCHOR: test_manual_reading_time]
+
         # Verified by [@ANCHOR: test_manual_ui_rendering]
         for article in self:
             if article.body:

@@ -84,6 +84,7 @@ class BinaryManifest(models.Model):
     @api.depends("name", "checksum", "archive_type", "extract_member")
     def _compute_is_installed(self):
         # [@ANCHOR: binary_compute_installed]
+
         # Verified by [@ANCHOR: test_binary_manifest_standard]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
@@ -108,6 +109,7 @@ class BinaryManifest(models.Model):
 
     def action_install(self):
         # [@ANCHOR: binary_action_install]
+
         # Verified by [@ANCHOR: test_binary_manifest_standard]
         self.ensure_one()
         # Security: ensure only users with appropriate groups can trigger this
@@ -135,7 +137,9 @@ class BinaryManifest(models.Model):
     @api.model
     def ensure_executable(self, cmd_name):
         # [@ANCHOR: binary_ensure_executable]
+
         # [@ANCHOR: binary_resolution]
+
         # Verified by [@ANCHOR: test_binary_manifest_standard]
         if (
             not cmd_name

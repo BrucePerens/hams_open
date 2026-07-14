@@ -7,6 +7,7 @@ from psycopg2 import sql as psql
 from odoo.exceptions import UserError
 from unittest.mock import MagicMock, PropertyMock
 
+
 @tagged("post_install", "-at_install")
 class TestDatabaseManagementTDD(HamsTransactionCase):
     

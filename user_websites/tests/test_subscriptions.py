@@ -79,10 +79,15 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         List-Unsubscribe headers, and that the unsubscribe route works.
         """
         # [@ANCHOR: test_weekly_digest_secret]
+
         # Tests [@ANCHOR: send_weekly_digest]
+
         # [@ANCHOR: test_weekly_digest_mail_template]
+
         # Tests [@ANCHOR: send_weekly_digest]
+
         # [@ANCHOR: test_unsubscribe_secret]
+
         # Tests [@ANCHOR: controller_unsubscribe_digest]
 
         # Execute the cron job method directly
@@ -212,7 +217,9 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
 
 def test_03_subscribe_to_site(self):
     # [@ANCHOR: test_subscribe_to_site]
+
     # [@ANCHOR: test_subscription_creation]
+
     # Tests [@ANCHOR: UX_SUBSCRIBE]
     """
     Verify that users can subscribe to a site.

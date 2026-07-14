@@ -12,9 +12,13 @@ class TestCompliancePages(HamsTransactionCase):
     def test_pages_presence(self):
         """Verify that legal pages are created."""
         # [@ANCHOR: test_compliance_pages_presence]
+
         # Tests [@ANCHOR: compliance_privacy_policy_template]
+
         # Tests [@ANCHOR: compliance_cookie_policy_template]
+
         # Tests [@ANCHOR: compliance_terms_of_service_template]
+
         # Tests [@ANCHOR: story_automatic_legal_pages]
         urls = ["/privacy", "/cookie-policy", "/terms", "/accessibility"]
         pages = self.env["website.page"].search([("url", "in", urls)])
@@ -71,8 +75,11 @@ class TestCompliancePagesHttp(HamsHttpCase):
     def test_pages_reachable(self):
         """Verify that legal pages are reachable via HTTP."""
         # Tests [@ANCHOR: compliance_privacy_policy_template]
+
         # Tests [@ANCHOR: compliance_cookie_policy_template]
+
         # Tests [@ANCHOR: compliance_terms_of_service_template]
+
         # Tests [@ANCHOR: story_automatic_legal_pages]
         urls = ["/privacy", "/cookie-policy", "/terms", "/accessibility"]
         for url in urls:
@@ -93,9 +100,13 @@ class TestCompliancePagesHttp(HamsHttpCase):
     def test_pages_content(self):
         """Verify that legal pages contain the expected boilerplate content."""
         # [@ANCHOR: test_compliance_pages_content]
+
         # Tests [@ANCHOR: compliance_privacy_policy_template]
+
         # Tests [@ANCHOR: compliance_cookie_policy_template]
+
         # Tests [@ANCHOR: compliance_terms_of_service_template]
+
         # Tests [@ANCHOR: story_automatic_legal_pages]
         for xml_id in [
             "compliance.compliance_privacy_policy_template",

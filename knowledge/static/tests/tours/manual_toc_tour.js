@@ -3,7 +3,9 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // Tests [@ANCHOR: story_manual_toc]
+
 // Tests [@ANCHOR: test_tour_manual_toc]
+
 // Tests [@ANCHOR: manual_toc_logic]
 registry.category("web_tour.tours").add("manual_toc_tour", {
     steps: () => [

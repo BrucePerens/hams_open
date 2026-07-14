@@ -10,6 +10,7 @@ class TestManualUIEnhancements(HamsTransactionCase):
 
     def test_01_reading_time_calculation(self):
         # [@ANCHOR: test_manual_reading_time]
+
         # Tests [@ANCHOR: manual_compute_reading_time]
         """Verify that reading time is calculated correctly based on word count."""
         # ~200 words = 1 minute

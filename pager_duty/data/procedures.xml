@@ -3,6 +3,7 @@
     <data noupdate="0">
         <record id="pager_duty_procedures" model="ir.actions.server">
             <!-- [@ANCHOR: pager_duty_postgres_procedures] -->
+
             <!-- Verified by [@ANCHOR: test_pager_duty_procedures] -->
             <field name="name">Pager Duty: Install Postgres Procedures</field>
             <field name="model_id" ref="base.model_ir_actions_server"/>

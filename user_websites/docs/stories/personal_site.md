@@ -15,7 +15,9 @@ As a **Community Member**, I want to create and manage my own personal website a
 ### Writing a Blog Post
 - **Given** I have an active site
 - **When** I navigate to my blog index ([@ANCHOR: controller_user_blog_index])
+
 - **Then** I can create a new blog post ([@ANCHOR: UX_CREATE_BLOG_POST]). Verified by `[@ANCHOR: test_tour_create_blog]`.
+
 - **And** my followers will receive a weekly digest of my new content ([@ANCHOR: send_weekly_digest]). Verified by `[@ANCHOR: test_weekly_digest_mail_template]`.
 
 ### Managing Content Quotas
@@ -25,5 +27,7 @@ As a **Community Member**, I want to create and manage my own personal website a
 
 ## Technical Notes
 - Site creation uses a service account to bypass standard Odoo restrictions while maintaining strict ownership ([@ANCHOR: mixin_proxy_ownership_create]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
+
 - Page edits are restricted to the owner or administrators ([@ANCHOR: mixin_proxy_ownership_write]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
+
 - URL slugs are cached in Redis for high-performance routing ([@ANCHOR: slug_cache_invalidation]). Verified by `[@ANCHOR: test_slug_cache_invalidation]`.

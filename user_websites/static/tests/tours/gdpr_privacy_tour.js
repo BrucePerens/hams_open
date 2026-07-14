@@ -3,8 +3,11 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_gdpr_privacy]
+
 // Tests [@ANCHOR: controller_my_privacy_dashboard]
+
 // Tests [@ANCHOR: UX_GDPR_EXPORT]
+
 // Tests [@ANCHOR: UX_GDPR_ERASURE]
 registry.category("web_tour.tours").add("gdpr_privacy_tour", {
     steps: () => [

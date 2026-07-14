@@ -6,13 +6,17 @@
         <field name="inherit_id" ref="website_blog.view_blog_post_form"/>
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_dropzone_blog_post] -->
+
             <!-- Verified by [@ANCHOR: test_xpath_rendering_blog_post] -->
+
             <!-- [@ANCHOR: xpath_rendering_blog_post] -->
+
             <xpath expr="//field[@name='blog_id']" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_blog_post] -->
                 <field name="owner_user_id"/>
                 <field name="user_websites_group_id" options="{'no_create': True}"/>
                 <div id="user_websites_dropzone_blog_post" style="min-height: 1px;">
                     <!-- [@ANCHOR: dropzone_blog_post] -->
+
                     <!-- Verified by [@ANCHOR: test_dropzone_blog_post] -->
                 </div>
             </xpath>

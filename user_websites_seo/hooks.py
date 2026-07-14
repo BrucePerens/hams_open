@@ -7,6 +7,7 @@ _logger = logging.getLogger(__name__)
 
 def post_init_hook(env):
     # [@ANCHOR: COMM_soft_dependency_docs_installation]
+
     # Verified by [@ANCHOR: COMM_test_soft_dependency_docs_installation]
     utils = env["zero_sudo.security.utils"]
     try:

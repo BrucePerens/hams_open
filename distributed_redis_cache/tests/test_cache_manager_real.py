@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 # Tests [@ANCHOR: cache_manager_config]
+
 # Tests [@ANCHOR: cache_manager_redis_publish]
 import time
 import redis

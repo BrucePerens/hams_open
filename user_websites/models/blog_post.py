@@ -76,6 +76,7 @@ class BlogPost(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         # Tested by [@ANCHOR: user_websites:test_group_blog_post_creation]
+
         # Tested by [@ANCHOR: user_websites:test_tour_create_blog]
         self._check_proxy_ownership_create(vals_list)
         if not (
@@ -251,9 +252,13 @@ class BlogPost(models.Model):
     @api.model
     def send_weekly_digest(self):
         # [@ANCHOR: send_weekly_digest]
+
         # Verified by [@ANCHOR: test_weekly_digest_secret]
+
         # Verified by [@ANCHOR: test_weekly_digest_mail_template]
+
         # Tested by [@ANCHOR: user_websites:test_subscribe_to_site]
+
         # Tested by [@ANCHOR: user_websites:test_subscription_creation]
         """
         Cron job method to send a weekly email digest.

@@ -68,7 +68,9 @@ class TestBinaryManifest(HamsTransactionCase):
 
     def test_01_already_installed(self):
         # [@ANCHOR: test_binary_manifest_standard]
+
         # Tests [@ANCHOR: binary_ensure_executable]
+
         # Tests [@ANCHOR: binary_resolution]
         # [!] DIAGNOSTIC FOR AI: Testing resolution when binary already exists in hams_bin.
 

@@ -14,5 +14,7 @@ The entire group benefits from Bob's SEO optimization, as the group's blog index
 
 ## Technical Anchors
 - Controller Injection for Groups: `[@ANCHOR: controller_user_blog_index_seo_override]`
+
 - Group Permission Elevation: `[@ANCHOR: user_websites_group_seo_write_elevation]`
+
 - Functional Verification: `[@ANCHOR: test_seo_widget_tour]`

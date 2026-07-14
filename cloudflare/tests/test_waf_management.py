@@ -21,6 +21,7 @@ class TestWafManagement(HamsTransactionCase):
 
     def test_01_cf_execute_ban(self):
         # [@ANCHOR: COMM_test_cf_execute_ban]
+
         # Tests [@ANCHOR: COMM_cf_execute_ban]
         mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
         mock_ban_ip.return_value = (True, "fake_rule_123")
@@ -48,6 +49,7 @@ class TestWafManagement(HamsTransactionCase):
 
     def test_02_cf_action_lift_ban(self):
         # [@ANCHOR: COMM_test_cf_action_lift_ban]
+
         # Tests [@ANCHOR: COMM_cf_action_lift_ban]
         ban_record = self.env["cloudflare.ip.ban"].create(
             {

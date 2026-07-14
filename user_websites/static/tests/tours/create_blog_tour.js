@@ -3,7 +3,9 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_create_blog]
+
 // Tests [@ANCHOR: controller_user_blog_index]
+
 // Tests [@ANCHOR: UX_CREATE_BLOG_POST]
 registry.category("web_tour.tours").add("create_blog_tour", {
     url: "/blogtour/blog",

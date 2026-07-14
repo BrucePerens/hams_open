@@ -69,10 +69,15 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, a
 <features>
 ## 3. Core Features & Logic
 *   **Article Feedback:** Atomic helpfulness increments via Postgres Procedures and service accounts `[@ANCHOR: controller_manual_feedback]`.
+
 *   **Search Engine:** Full-text search with multi-tenant filtering `[@ANCHOR: controller_manual_search]`.
+
 *   **URL Resolution:** Dynamic slug generation including ID prefix `[@ANCHOR: manual_compute_website_url]`.
+
 *   **Hierarchy Integrity:** Recursive cycle detection using `_has_cycle()` `[@ANCHOR: manual_check_hierarchy]`.
+
 *   **Recursive Breadcrumbs:** Path computation from root to current node `[@ANCHOR: manual_compute_breadcrumbs]`.
+
 *   **Reading Time Calculation:** Automatic estimation of reading time based on word count `[@ANCHOR: manual_compute_reading_time]`.
 *   **Author Attribution:** Automatically identifies and displays the article author based on the last editor.
 *   **Optimized Sidebar Search:** Combined ORM domain to fetch all root articles in a single database round-trip `[@ANCHOR: manual_sidebar_search_optimization]`.

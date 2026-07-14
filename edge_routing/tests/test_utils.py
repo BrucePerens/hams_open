@@ -12,6 +12,7 @@ from odoo.addons.edge_routing.utils import slugify
 @tagged("post_install", "-at_install")
 class TestUtils(BaseCase):
     # [@ANCHOR: edge_routing:test_utils_slugify]
+
     # Tests [@ANCHOR: edge_routing:utils_slugify]
     """
     Exhaustive unit tests for the custom slugify utility function to ensure

@@ -46,7 +46,9 @@ class TestHelpdeskCore(HamsTransactionCase):
     def test_01_ticket_creation_and_routing(self):
         """Verify ticket creation routes to on-duty user, subscribes customer, and fires bus toast."""
         # [@ANCHOR: test_01_ticket_creation_and_routing]
+
         # Tests [@ANCHOR: helpdesk_ticket_creation]
+
         # Tests [@ANCHOR: helpdesk_ticket_lifecycle]
 
         manager = self.manager_user
@@ -89,7 +91,9 @@ class TestHelpdeskCore(HamsTransactionCase):
     def test_02_shift_handoff_wizard(self):
         """Verify the formal shift handoff transfers ownership and logs the secure history."""
         # [@ANCHOR: test_02_shift_handoff_wizard]
+
         # Tests [@ANCHOR: helpdesk_shift_handoff]
+
         # Tests [@ANCHOR: helpdesk_handoff_execution]
         ticket = self.env["hams_helpdesk.ticket"].create(
             {"name": "Handoff Test Ticket", "user_id": self.manager_user.id}
@@ -198,6 +202,7 @@ class TestHelpdeskCore(HamsTransactionCase):
     def test_05_portal_write_restrictions(self):
         """Verify portal users cannot modify administrative fields."""
         # [@ANCHOR: test_05_portal_write_restrictions]
+
         # Tests [@ANCHOR: helpdesk_micro_privilege]
         ticket = self.env["hams_helpdesk.ticket"].create(
             {
@@ -253,6 +258,7 @@ class TestHelpdeskCore(HamsTransactionCase):
     def test_view_rendering(self):
         """Verify views render correctly without syntax errors."""
         # Tests [@ANCHOR: helpdesk_shift_handoff]
+
         # Tests [@ANCHOR: helpdesk_ticket_lifecycle]
         self.env["hams_helpdesk.shift_handoff"].get_view(
             view_id=self.env.ref(

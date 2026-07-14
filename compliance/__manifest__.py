@@ -17,6 +17,7 @@ Upon installation, it:
         "website",
         "portal",
         "zero_sudo",
+        "knowledge",
     ],
     "data": [
         "security/security_data.xml",

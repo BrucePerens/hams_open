@@ -6,6 +6,7 @@
         <field name="inherit_id" ref="base.view_users_form"/>
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_dropzone_users] -->
+
             <xpath expr="//notebook" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_users] -->
                 <page string="User Websites" name="user_websites_settings">
                     <div id="user_websites_dropzone_users">

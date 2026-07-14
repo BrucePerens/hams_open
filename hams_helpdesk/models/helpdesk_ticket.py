@@ -14,6 +14,7 @@ class HelpdeskTicket(models.Model):
     _inherit = ["mail.thread", "mail.activity.mixin"]
 
     # [@ANCHOR: helpdesk_ticket_lifecycle]
+
     # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
     name = fields.Char(string="Subject", required=True, tracking=True)
     description = fields.Html(string="Description")
@@ -82,6 +83,7 @@ class HelpdeskTicket(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         # [@ANCHOR: helpdesk_ticket_creation]
+
         # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
         
         # Calculate on_duty_user_id before bulk creation
@@ -255,6 +257,7 @@ class HelpdeskTicket(models.Model):
     def action_shift_handoff(self):
         """Opens the formal shift handoff wizard."""
         # [@ANCHOR: helpdesk_shift_handoff]
+
         # Verified by [@ANCHOR: test_02_shift_handoff_wizard]
         self.ensure_one()
         return {

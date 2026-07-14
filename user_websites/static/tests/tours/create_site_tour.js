@@ -3,7 +3,9 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_create_site]
+
 // Tests [@ANCHOR: controller_user_websites_home]
+
 // Tests [@ANCHOR: UX_CREATE_SITE]
 registry.category("web_tour.tours").add("create_site_tour", {
     url: "/sitetour/home",

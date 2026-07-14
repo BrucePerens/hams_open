@@ -3,6 +3,7 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_community_directory]
+
 // Tests [@ANCHOR: UX_COMMUNITY_DIRECTORY]
 registry.category("web_tour.tours").add("community_directory_tour", {
     url: "/community",

@@ -67,7 +67,8 @@ class TestDatabaseManagement(HamsTransactionCase):
             stat.action_vacuum_analyze()
 
     def test_02_bloat_cron(self):
-        # [@ANCHOR: test_dba_cron]
+        # [@ANCHOR: COMM_test_dba_cron]
+
         # Tests [@ANCHOR: bloat_alert_synergy]
         self.env.ref("database_management.cron_check_bloat")._trigger()
 
@@ -94,9 +95,12 @@ class TestDatabaseManagement(HamsTransactionCase):
         self.assertIn("database.activity", self.env)
 
     def test_04_views(self):
-        # [@ANCHOR: test_dba_view]
+        # [@ANCHOR: COMM_test_dba_view]
+
         # Tests [@ANCHOR: db_index_stats]
+
         # Tests [@ANCHOR: db_slow_queries]
+
         # Tests [@ANCHOR: db_active_sessions]
         v1 = self.env["database.table.stat"].get_view(view_type="list")
         self.assertIn("table_name", v1["arch"])

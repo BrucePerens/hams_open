@@ -66,8 +66,11 @@ class TestLifecycleAndGroups(RealTransactionCase):
 
     def test_02_group_member_access(self):
         # [@ANCHOR: test_group_site_creation]
+
         # [@ANCHOR: test_group_site_routing]
+
         # Tests [@ANCHOR: UX_CREATE_SITE]
+
         # Tests [@ANCHOR: controller_user_websites_home]
         self.test_group.write({"member_ids": [(4, self.user_a.id)]})
 
@@ -256,6 +259,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
 
     def test_08_group_inverse_relationships(self):
         # [@ANCHOR: test_group_blog_post_creation]
+
         # Tests [@ANCHOR: UX_CREATE_BLOG_POST]
         page = self.env["website.page"].create(
             {

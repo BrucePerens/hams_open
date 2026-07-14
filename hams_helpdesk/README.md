@@ -31,24 +31,39 @@ The module implements a reactive ticketing system where assignment is driven by 
 This module operates within strict DevSecOps parameters, ensuring all actions are traceable and privileged escalations are explicitly avoided.
 
 * **Ticket Lifecycle (`[@ANCHOR: helpdesk_ticket_lifecycle]`)**: Defines the stages and constraints of an issue, natively integrating with mail threads.
+
     - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+
 * **Ticket Creation (`[@ANCHOR: helpdesk_ticket_creation]`)**: Intercepts the ORM `create` method to automatically execute pre-shift CC logic and route to the currently on-duty personnel based on calendar availability.
+
     - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+
 * **Shift Handoff Initiation (`[@ANCHOR: helpdesk_shift_handoff]`)**: UI action triggering the secure transfer wizard, ensuring the leaving operator leaves context.
+
     - Verified by [@ANCHOR: test_02_shift_handoff_wizard]
+
 * **Handoff Execution (`[@ANCHOR: helpdesk_handoff_execution]`)**: The backend transaction that officially modifies ownership and commits the transfer briefing to the unalterable chatter log.
+
     - Verified by [@ANCHOR: test_02_shift_handoff_wizard]
+
 * **Documentation Injection (`[@ANCHOR: helpdesk_doc_injection]`)**: Automated bootstrapping of user documentation into the central knowledge base via the `zero-sudo` documentation facility.
+
     - Verified by [@ANCHOR: test_05_doc_injection]
+
 * **Multi-Website & Multi-Company Awareness (`[@ANCHOR: helpdesk_multi_website]`)**: Tickets are associated with specific websites and companies to ensure proper data isolation in multi-tenant environments.
+
     - Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
+
 * **Micro-Privilege Security (`[@ANCHOR: helpdesk_micro_privilege]`)**: Access is strictly controlled via record rules and explicit field-level security in the ORM.
+
     - Verified by [@ANCHOR: test_05_portal_write_restrictions]
 * **Helpdesk Operator Workflow**: Verification of the backend operator's ability to manage tickets and execute handoffs.
     - Verified by [@ANCHOR: helpdesk_operator_tour]
 * **Helpdesk Portal Facility**: Verification of the portal customer's ability to submit and view tickets.
     - Verified by [@ANCHOR: helpdesk_portal_tour]
+
 * **Portal Ticket Closure**: Customer ability to close their own tickets. ([@ANCHOR: helpdesk_portal_close])
+
     - Verified by [@ANCHOR: test_portal_close_ticket]
 
 ## Stories and Journeys
@@ -57,6 +72,7 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
 **Goal**: Efficiently track and resolve system issues while maintaining a clear audit trail.
 1.  **Incoming Request**: A new ticket is created, either manually or via automated incident detection.
 2.  **Automated Routing**: The system identifies the currently on-duty administrator (`[@ANCHOR: helpdesk_ticket_creation]`) and assigns the ticket.
+
 3.  **Progression**: The operator manages tickets via the list ([@ANCHOR: helpdesk_ticket_list]) and form ([@ANCHOR: helpdesk_ticket_form]) views, moving through stages: New -> In Progress -> Resolved -> Closed.
 4.  **Customer Communication**: Every stage change triggers an automated update to the reporter.
 
@@ -74,13 +90,17 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
 1.  **Initiation**: The outgoing operator selects "Shift Handoff" on an active ticket (`[@ANCHOR: helpdesk_shift_handoff]`).
 2.  **Context Capture**: A wizard appears requiring the selection of the next assignee and detailed handoff notes.
 3.  **Execution**: Upon confirmation, the system atomically updates ownership and logs a briefing (`[@ANCHOR: helpdesk_handoff_execution]`).
+
 4.  **Verification**: The handoff is recorded in the chatter and the operator workflow is validated by [@ANCHOR: helpdesk_operator_tour].
 
 ### Portal Self-Service ([@ANCHOR: journey_portal_self_service])
 **Goal**: Empower customers to manage their own tickets.
 1.  **Submission**: Customer creates a ticket via the portal ([@ANCHOR: helpdesk_portal_new]).
+
 2.  **Review**: Customer views their tickets in the list ([@ANCHOR: helpdesk_portal_list]) and detail ([@ANCHOR: helpdesk_portal_detail]) views.
+
 3.  **Closure**: Customer closes the ticket when resolved ([@ANCHOR: helpdesk_portal_close]).
+
 4.  **Verification**: Validated by [@ANCHOR: helpdesk_portal_tour].
 
 ## 🧪 Specialized Test Environment

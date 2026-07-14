@@ -1,2 +1,2 @@
-- `hams_open/daemon_key_manager`: Tests aborted due to global anchor violations in `cloudflare` and `distributed_redis_cache` modules.
+- `hams_open/daemon_key_manager`: Tests aborted due to global anchor violations in `user_websites`, `user_websites_seo`, and global scripts.
 - `hams_open/database_management`: Tests aborted due to global anchor violations in `cloudflare` and `distributed_redis_cache` modules.

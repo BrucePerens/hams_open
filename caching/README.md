@@ -64,6 +64,7 @@ Implements a global, root-scoped Service Worker (`/sw.js`) that proxies and cach
 * **No Competing Workers:** DO NOT attempt to register another Service Worker.
 * **WebSockets:** `ws://` protocols are hardcoded to bypass the proxy.
 * **Dynamic Large File Prohibition**: The worker mathematically calculates an active quota limit (approx 35MB) [@ANCHOR: caching_quota_calculation]. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
+
 * **Settings Layout Injection**: The settings UI is injected into `website.res_config_settings_view_form` via XPath [@ANCHOR: xpath_rendering_caching_settings].
 
 ## 3. Zero-Sudo Architecture
@@ -78,19 +79,24 @@ Detailed architectural narratives and process flows are documented in the `docs/
 
 ### Stories
 * [Cache Quota Management](docs/stories/cache_quota_management.md) ([@ANCHOR: caching_quota_calculation])
+
 * [Cache Invalidation Strategy](docs/stories/cache_invalidation_strategy.md) ([@ANCHOR: caching_fs_scan_logic])
 
 ### Journeys
 * [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: caching_sw_fetch_interceptor])
+
 * [Server Startup Scan](docs/journeys/server_startup_scan.md) ([@ANCHOR: caching_sw_serve_route])
+
 * [Manual Invalidation](docs/journeys/manual_invalidation.md) ([@ANCHOR: test_caching_sudo_params])
 
 ## 5. Testing
 Tests are located in the `tests/` directory and cover:
 - Service Worker delivery and headers [@ANCHOR: caching_sw_serve_route].
+
 - Quota calculation logic [@ANCHOR: caching_quota_calculation].
 - Cache invalidation triggers.
 - UI Tour for registration check [@ANCHOR: caching_sw_fetch_interceptor].
+
 - Zero-Sudo compliance for FS scan [@ANCHOR: caching_fs_scan_logic].
 
 ## 6. External Dependencies

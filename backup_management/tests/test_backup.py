@@ -63,7 +63,9 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_01b_sync_kopia_triggered(self):
         # Tests [@ANCHOR: backup_management:backup_sync_kopia]
+
         # Tests [@ANCHOR: backup_management:COMM_upsert_snapshots_procedure]
+
         # Tests [@ANCHOR: backup_management:upsert_snapshots_roundtrip_optimization]
         self.config_kopia.action_sync_snapshots()
         job = self.env["backup.job"].search(
@@ -89,7 +91,9 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_04_cron_trigger(self):
         # Tests [@ANCHOR: backup_management:test_backup_cron]
+
         # Tests [@ANCHOR: backup_management:cron_sync_all_backups]
+
         # Tests [@ANCHOR: backup_management:backup_pager_synergy]
         self.env.ref("backup_management.cron_sync_backups")._trigger()
 
@@ -115,6 +119,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_07_orchestration_trigger(self):
         # Tests [@ANCHOR: backup_management:test_backup_orchestration]
+
         # Tests [@ANCHOR: backup_management:backup_trigger_execution]
         res_kopia = self.config_kopia.action_trigger_backup()
         res_pg = self.config_pg.action_trigger_backup()
@@ -152,6 +157,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_08_apply_policies_triggered(self):
         # Tests [@ANCHOR: backup_management:backup_apply_policies]
+
         # Tests [@ANCHOR: test_apply_policies]
         self.config_kopia.keep_daily = 7
         self.config_kopia.exclude_patterns = "*.log"
@@ -197,8 +203,11 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_09_board_data_rpc(self):
         # Tests [@ANCHOR: backup_management:backup_board_data]
+
         # Tests [@ANCHOR: backup_management:action_test_connection]
+
         # Tests [@ANCHOR: backup_management:action_view_latest_job]
+
         # Tests [@ANCHOR: backup_management:auto_refresh_status]
         data = self.env["backup.config"].get_board_data()
         self.assertIsInstance(data, list)
@@ -214,6 +223,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_10_restore_command_computation(self):
         # Tests [@ANCHOR: backup_management:backup_restore_command]
+
         # Tests [@ANCHOR: test_restore_command_computation]
         snap = self.env["backup.snapshot"].create(
             {
@@ -261,6 +271,7 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_13_restore_action(self):
         # Tests [@ANCHOR: backup_management:COMM_test_restore_action]
+
         # Tests [@ANCHOR: backup_management:COMM_backup_trigger_restore]
         self.safe_patch("pika.BlockingConnection")  # burn-ignore-pika
         snap = self.env["backup.snapshot"].create(

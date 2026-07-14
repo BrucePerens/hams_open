@@ -21,6 +21,7 @@ export class ViolationReportModal extends Interaction {
      * @param {Event} ev
      */
     // [@ANCHOR: violation_report_logic]
+
     // Verified by [@ANCHOR: test_tour_violation_report]
     _onModalShow(ev) {
         // The button that triggered the modal is available via ev.relatedTarget in Bootstrap 5

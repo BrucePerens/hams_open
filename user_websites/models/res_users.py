@@ -616,6 +616,7 @@ class ResUsers(models.Model):
 
     def _get_gdpr_export_data(self):
         # [@ANCHOR: res_users_gdpr_export]
+
         # Verified by [@ANCHOR: test_gdpr_export_hook]
         """
         Packages all the user's data and content into a dictionary so they can download it.
@@ -647,7 +648,9 @@ class ResUsers(models.Model):
         )
 
         # [@ANCHOR: gdpr_sudo_erasure]
+
         # Verified by [@ANCHOR: test_gdpr_erasure_pages]
+
         # Verified by [@ANCHOR: test_gdpr_erasure_posts]
         while True:
             pages = self.env["website.page"].search(

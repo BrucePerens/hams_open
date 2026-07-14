@@ -24,6 +24,7 @@ class BackupRestoreWizard(models.TransientModel):
     def action_restore(self):
         self.ensure_one()
         # [@ANCHOR: COMM_backup_trigger_restore]
+
         # Verified by [@ANCHOR: COMM_test_restore_action]
         if not self.env.su and not self.env.user.has_group("backup_management.group_backup_admin"):
             raise AccessError(

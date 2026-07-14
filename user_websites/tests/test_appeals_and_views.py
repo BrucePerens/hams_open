@@ -76,6 +76,7 @@ class TestAppealsAndViews(RealTransactionCase):
 
     def test_01_privacy_friendly_view_counter(self):
         # Tests [@ANCHOR: test_privacy_friendly_view_counter]
+
         # Tests [@ANCHOR: procedure_flush_view_counters]
         """Verify the view counter increments cleanly on page load."""
         self.assertEqual(self.page.view_count, 0)

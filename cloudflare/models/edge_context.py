@@ -26,6 +26,7 @@ class CloudflareUtils(models.AbstractModel):
     @api.model
     def get_request_context(self):
         # [@ANCHOR: COMM_cf_get_request_context]
+
         # Verified by [@ANCHOR: COMM_test_cf_get_request_context]
         """
         Parses Cloudflare-specific geographic and threat headers injected at the edge.

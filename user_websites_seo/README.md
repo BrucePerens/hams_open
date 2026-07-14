@@ -53,12 +53,19 @@ We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a de
 | Anchor | Description | Verified By |
 |--------|-------------|-------------|
 | `[@ANCHOR: res_users_self_writeable_fields]` | Whitelisting SEO fields for users. | `test_self_writeable_fields` |
+
 | `[@ANCHOR: res_users_seo_write_elevation]` | Elevated write for user SEO metadata. | `test_check_access_rule_res_users` |
+
 | `[@ANCHOR: user_websites_group_seo_write_elevation]` | Elevated write for group SEO metadata. | `test_check_access_rule_user_websites_group` |
+
 | `[@ANCHOR: controller_user_blog_index_seo_override]` | Controller override for SEO widget activation. | `test_controller_no_ssti_elevation` |
+
 | `[@ANCHOR: soft_dependency_docs_installation]` | Automatic documentation installation signaling. | `test_soft_dependency_docs_installation` |
+
 | `[@ANCHOR: test_seo_widget_tour]` | UI tour for SEO optimization. | `test_seo_widget_tour` |
+
 | `[@ANCHOR: test_xpath_rendering_res_users]` | Backend view rendering for users. | `test_xpath_rendering_res_users` |
+
 | `[@ANCHOR: test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `test_xpath_rendering_user_websites_group` |
 
 ## 5. Multi-Website & Multi-Tenant Support

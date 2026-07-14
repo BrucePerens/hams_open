@@ -193,6 +193,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         return super().create(vals_list)
 
     # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
+
     # Verified by [@ANCHOR: user_websites:test_group_slug_cache_invalidation]
     def write(self, vals):
         if vals.get("website_slug"):

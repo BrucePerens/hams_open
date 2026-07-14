@@ -14,5 +14,7 @@ Alice's changes are saved immediately, and she can verify that the `<title>` tag
 
 ## Technical Anchors
 - Frontend SEO Widget Visibility: `[@ANCHOR: controller_user_blog_index_seo_override]`
+
 - Secure Permission Elevation: `[@ANCHOR: res_users_seo_write_elevation]`
+
 - Functional Verification: `[@ANCHOR: test_seo_widget_tour]`

@@ -65,6 +65,7 @@ class CloudflarePurgeQueue(models.Model):
     @api.model
     def enqueue_urls(self, urls, website_id=None):
         # [@ANCHOR: COMM_enqueue_urls_base_url]
+
         # Verified by [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
@@ -73,7 +74,9 @@ class CloudflarePurgeQueue(models.Model):
     @api.model
     def enqueue_tags(self, tags, website_id=None):
         # [@ANCHOR: COMM_cf_enqueue_tags_api]
+
         # Verified by [@ANCHOR: COMM_test_purge_tags_api]
+
         # Verified by [@ANCHOR: test_purge_queue_tags_processing]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()

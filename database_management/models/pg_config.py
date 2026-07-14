@@ -10,6 +10,7 @@ import odoo.tools.sql
 
 class DatabasePgSetting(models.Model):
     # [@ANCHOR: db_settings_audit]
+
     # Tests [@ANCHOR: db_settings_audit]
     # This model is logically global as it tracks the overall PostgreSQL configuration
     # settings for the database cluster.
@@ -64,6 +65,7 @@ class PgOptimizeWizard(models.TransientModel):
 
     def action_apply_optimizations(self):
         # [@ANCHOR: pg_optimize_wizard]
+
         # Tests [@ANCHOR: pg_optimize_wizard]
         if self.ram_gb <= 0 or self.cpu_cores <= 0:
             raise UserError(_("RAM and CPU must be greater than zero."))
@@ -191,6 +193,7 @@ class PgHaWizard(models.TransientModel):
 
     def action_generate(self):
         # [@ANCHOR: pg_ha_wizard]
+
         # Tests [@ANCHOR: pg_ha_wizard]
         self._validate_inputs()
 

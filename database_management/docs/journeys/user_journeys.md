@@ -13,6 +13,7 @@
 **Context:** The Odoo instance has been migrated to a larger server with 64GB RAM and 16 CPU cores.
 
 1. **Audit:** The DevOps engineer reviews the current settings in the **PostgreSQL Configuration** view `[@ANCHOR: db_settings_audit]`.
+
 2. **Wizard Activation:** The engineer launches the **PostgreSQL Optimization Wizard** `[@ANCHOR: pg_optimize_wizard]`.
 2. **Configuration:** They enter the new RAM and CPU specifications and select "SSD" storage.
 3. **Application:** They click "Apply Optimizations", which executes `ALTER SYSTEM` commands for `shared_buffers`, `work_mem`, and other key parameters.

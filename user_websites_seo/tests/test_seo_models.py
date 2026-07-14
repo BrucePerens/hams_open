@@ -42,6 +42,7 @@ class TestSEOModels(RealTransactionCase):
 
     def test_self_writeable_fields(self):
         # Tests [@ANCHOR: COMM_res_users_self_writeable_fields]
+
         # [@ANCHOR: COMM_test_self_writeable_fields]
         """Test that SEO fields are added to writeable fields for users."""
         fields = self.env["res.users"].SELF_WRITEABLE_FIELDS
@@ -57,6 +58,7 @@ class TestSEOModels(RealTransactionCase):
 
     def test_check_access_rule_res_users(self):
         # Tests [@ANCHOR: COMM_res_users_seo_write_elevation]
+
         # [@ANCHOR: COMM_test_check_access_rule_res_users]
         """Test that a user can write to their own SEO fields but not others."""
         # reg1 can write to their own profile
@@ -73,6 +75,7 @@ class TestSEOModels(RealTransactionCase):
 
     def test_check_access_rule_user_websites_group(self):
         # Tests [@ANCHOR: COMM_user_websites_group_seo_write_elevation]
+
         # [@ANCHOR: COMM_test_check_access_rule_user_websites_group]
         """Test that a user can write to a group they are a member of."""
         # reg1 is a member, can write

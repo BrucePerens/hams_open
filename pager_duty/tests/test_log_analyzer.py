@@ -19,6 +19,7 @@ class TestLogAnalyzer(HamsTransactionCase):
 
     def test_02_headless_api_translation(self):
         # Tests [@ANCHOR: pd_log_api_i18n]
+
         # Tests [@ANCHOR: pd_log_api_i18n]
         recs = self.env["pager.log.pattern"].search([], limit=1)
         self.assertIsNotNone(recs)

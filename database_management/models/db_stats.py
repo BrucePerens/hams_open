@@ -63,6 +63,7 @@ class DatabaseTableStat(models.Model):
 
     def action_vacuum_analyze(self):
         # [@ANCHOR: vacuum_analyze]
+
         # Tests [@ANCHOR: vacuum_analyze]
         exe = self._get_executable("vacuumdb")
         db_name = self.env.cr.dbname
@@ -109,6 +110,7 @@ class DatabaseTableStat(models.Model):
     @api.model
     def cron_check_bloat(self):
         # [@ANCHOR: bloat_alert_synergy]
+
         # Tests [@ANCHOR: bloat_alert_synergy]
         high_bloat = self.env["database.table.stat"].search(
             [("dead_percent", ">", 20.0), ("dead_tuples", ">", 10000)], limit=1000
@@ -146,6 +148,7 @@ class DatabaseTableStat(models.Model):
 
 class DatabaseQueryStat(models.Model):
     # [@ANCHOR: db_slow_queries]
+
     # Tests [@ANCHOR: db_slow_queries]
     # This model is logically global as pg_stat_statements tracks all queries
     # hitting the database, regardless of which Odoo company or website initiated them.
@@ -209,6 +212,7 @@ class DatabaseQueryStat(models.Model):
 
 class DatabaseActivity(models.Model):
     # [@ANCHOR: db_active_sessions]
+
     # Tests [@ANCHOR: db_active_sessions]
     # This model is logically global as it tracks all active PostgreSQL backends
     # for the current database, representing the aggregate state of the database server.
@@ -244,6 +248,7 @@ class DatabaseActivity(models.Model):
 
     def action_terminate_backend(self):
         # [@ANCHOR: db_terminate_backend]
+
         # Tests [@ANCHOR: db_terminate_backend]
         # micro-privilege: Use service account for termination
         utils = self.env["zero_sudo.security.utils"]
@@ -264,6 +269,7 @@ class DatabaseActivity(models.Model):
 
 class DatabaseIndexStat(models.Model):
     # [@ANCHOR: db_index_stats]
+
     # Tests [@ANCHOR: db_index_stats]
     # This model is logically global as it tracks index performance at the PostgreSQL storage layer,
     # which is shared by all Odoo tenants in this database.
@@ -349,6 +355,7 @@ class DatabaseReplicationStat(models.Model):
 
 class DatabaseIndexAdvisor(models.Model):
     # [@ANCHOR: db_index_advisor]
+
     # Tests [@ANCHOR: db_index_advisor]
     # This model identifies tables with high sequential scan counts and large
     # sizes that might benefit from additional indexing.
@@ -441,6 +448,7 @@ class DatabaseQueryStatInherit(models.Model):
 
     def action_explain_query(self):
         # [@ANCHOR: db_explain_query]
+
         # Tests [@ANCHOR: db_explain_query]
         self.ensure_one()
         utils = self.env["zero_sudo.security.utils"]

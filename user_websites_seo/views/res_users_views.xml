@@ -5,7 +5,7 @@
         <field name="model">res.users</field>
         <field name="inherit_id" ref="user_websites.view_users_form_user_websites"/>
         <field name="arch" type="xml">
-            <xpath expr="//page[@name='user_websites_settings']" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_res_users] -->
+            <xpath expr="//page[@name='user_websites_settings']" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_xpath_rendering_res_users] -->
                 <page string="SEO Metadata" name="user_websites_seo_settings">
                     <group>
                         <group>

@@ -23,9 +23,13 @@ class TestManualORMLogic(HamsTransactionCase):
 
     def test_01_prevent_circular_hierarchy(self):
         # [@ANCHOR: test_manual_check_hierarchy]
+
         # Tests [@ANCHOR: manual_check_hierarchy]
+
         # Tests [@ANCHOR: manual_compute_breadcrumbs]
+
         # Tests [@ANCHOR: story_manual_hierarchy]
+
         # Tests [@ANCHOR: journey_admin_managing]
         """
         Verify the _check_hierarchy constraint prevents a parent from being nested
@@ -38,6 +42,7 @@ class TestManualORMLogic(HamsTransactionCase):
             self.article_a.write({"parent_id": self.article_c.id})
             self.env.flush_all()
         # Tests [@ANCHOR: manual_compute_website_url]
+
         # Tests [@ANCHOR: story_manual_url_generation]
 
     def test_02_url_slug_generation(self):

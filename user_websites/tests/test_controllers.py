@@ -76,7 +76,9 @@ class TestUserWebsitesControllers(RealTransactionCase):
     def test_01_api_pending_reports_admin_access(self):
         """
         # [@ANCHOR: test_admin_violation_toast_rpc]
+
         # Tests [@ANCHOR: admin_toast_logic]
+
         Tests [@ANCHOR: api_pending_reports]
         Action: Administrator requests the pending reports API.
         Expected: HTTP 200 OK and a valid JSON payload containing the count.

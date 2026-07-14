@@ -28,6 +28,7 @@
                     </ul>
                     <div id="user_websites_dropzone_navbar_actions">
                         <!-- [@ANCHOR: dropzone_navbar_actions] -->
+
                         <!-- Tested by [@ANCHOR: test_dropzone_navbar_actions] -->
                     </div>
                 </div>
@@ -39,6 +40,7 @@
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <xpath expr="//head" position="inside">
             <!-- [@ANCHOR: xpath_rendering_navbar_head] -->
+
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar_head] -->
             <t t-set="profile_user" t-value="profile_user or (main_object.owner_user_id if main_object and 'owner_user_id' in main_object else False)"/>
             <t t-set="profile_group" t-value="profile_group or (main_object.user_websites_group_id if main_object and 'user_websites_group_id' in main_object else False)"/>
@@ -53,9 +55,11 @@
 
         <xpath expr="//header" position="after">
             <!-- [@ANCHOR: xpath_rendering_navbar] -->
+
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar] -->
             <div id="user_websites_dropzone_navbar">
                 <!-- [@ANCHOR: dropzone_navbar] -->
+
                 <!-- Tested by [@ANCHOR: test_dropzone_navbar] -->
             </div>
             <t t-if="resolved_slug">
@@ -68,9 +72,11 @@
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <xpath expr="//div[hasclass('o_portal_my_home')]" position="before">
             <!-- [@ANCHOR: xpath_rendering_appeal] -->
+
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_appeal] -->
             <div id="user_websites_dropzone_templates">
                 <!-- [@ANCHOR: dropzone_templates] -->
+
                 <!-- Tested by [@ANCHOR: test_dropzone_templates] -->
             </div>
             <div class="container mt-4">
@@ -128,6 +134,7 @@
 
         <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
             <!-- [@ANCHOR: xpath_rendering_portal_docs] -->
+
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_portal_docs] -->
             <div class="o_portal_doc_spinner col-12 col-md-6 col-lg-4 mb-4">
                 <a href="/my/privacy" class="text-decoration-none d-flex flex-column h-100 p-3 border rounded shadow-sm bg-white">
@@ -185,6 +192,7 @@
         <t t-call="website.layout">
             <div id="user_websites_dropzone_home_header">
                 <!-- [@ANCHOR: dropzone_home_header] -->
+
                 <!-- Tested by [@ANCHOR: test_dropzone_home_header] -->
             </div>
 
@@ -192,6 +200,7 @@
 
             <div id="user_websites_dropzone_home_footer">
                 <!-- [@ANCHOR: dropzone_home_footer] -->
+
                 <!-- Tested by [@ANCHOR: test_dropzone_home_footer] -->
             </div>
         </t>
@@ -261,6 +270,7 @@
                                     </div>
                                     <div id="user_websites_dropzone_directory_card" class="mt-3">
                                         <!-- [@ANCHOR: dropzone_directory_card] -->
+
                                         <!-- Tested by [@ANCHOR: test_dropzone_directory_card] -->
                                     </div>
                                 </div>

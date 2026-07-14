@@ -11,6 +11,7 @@ class TestComplianceHooks(HamsTransactionCase):
     def test_01_postgres_procedure(self):
         """Verify the compliance enforcement procedure."""
         # [@ANCHOR: test_compliance_postgres_procedures]
+
         # Tests [@ANCHOR: compliance_postgres_procedures]
         # Create a custom page to test shielding
         custom_view = self.env["ir.ui.view"].create(
@@ -46,8 +47,11 @@ class TestComplianceHooks(HamsTransactionCase):
         on all websites.
         """
         # [@ANCHOR: test_compliance_post_init_cookie_bar]
+
         # Tests [@ANCHOR: compliance_post_init_cookie_bar]
+
         # Tests [@ANCHOR: story_cookie_consent]
+
         # Tests [@ANCHOR: journey_compliance_setup]
 
         post_init_hook(self.env)
@@ -63,8 +67,11 @@ class TestComplianceHooks(HamsTransactionCase):
     def test_03_views_rendering(self):
         """Verify that legal templates render correctly."""
         # [@ANCHOR: test_compliance_views]
+
         # Tests [@ANCHOR: compliance_legal_pages_rendering]
+
         # Tests [@ANCHOR: story_automatic_legal_pages]
+
         # Tests [@ANCHOR: journey_compliance_setup]
         self.env.ref("compliance.compliance_privacy_policy_template").with_context(
             lang=None
@@ -81,6 +88,7 @@ class TestComplianceHooks(HamsTransactionCase):
         Verify that if a custom page already exists, the boilerplate is unpublished.
         """
         # [@ANCHOR: test_compliance_non_destructive_mandate]
+
         # Tests [@ANCHOR: story_automatic_legal_pages]
 
         # Create a "custom" page at /privacy

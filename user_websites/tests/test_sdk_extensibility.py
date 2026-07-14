@@ -36,6 +36,7 @@ class TestSDKExtensibility(RealTransactionCase):
 
     def test_01_gdpr_export_hook(self):
         # [@ANCHOR: test_gdpr_export_hook]
+
         # Tests [@ANCHOR: res_users_gdpr_export]
         """Test that the _get_gdpr_export_data method returns the correct extensible dictionary."""
         # Create a page for the user
@@ -99,7 +100,9 @@ class TestSDKExtensibility(RealTransactionCase):
 
     def test_03_mixin_ownership_validation(self):
         # [@ANCHOR: test_mixin_ownership_validation]
+
         # Tests [@ANCHOR: mixin_proxy_ownership_create]
+
         # Tests [@ANCHOR: mixin_proxy_ownership_write]
         """Verify the user_websites.owned.mixin methods directly catch spoofing."""
         intruder = self.env["res.users"].create(
@@ -158,6 +161,7 @@ class TestSDKExtensibility(RealTransactionCase):
 
     def test_05_api_armor_mutual_exclusion(self):
         # [@ANCHOR: test_api_armor_mutual_exclusion]
+
         # Tests [@ANCHOR: mixin_proxy_ownership_write]
         """Verify that a record cannot be owned by both a user and a group."""
         test_group = self.env["user.websites.group"].create(
@@ -201,6 +205,7 @@ class TestSDKExtensibility(RealTransactionCase):
 
     def test_06_api_armor_mandatory_assignment(self):
         # [@ANCHOR: test_api_armor_mandatory_assignment]
+
         # Tests [@ANCHOR: mixin_proxy_ownership_create]
         """Verify that standard users automatically get ownership assigned."""
         page = (

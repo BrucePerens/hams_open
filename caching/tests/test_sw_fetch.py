@@ -10,6 +10,7 @@ class TestServiceWorkerFetch(HamsHttpCase):
 
     def test_01_sw_fetch_presence(self):
         # [@ANCHOR: test_sw_fetch_01]
+
         # Tests [@ANCHOR: COMM_caching_sw_fetch_interceptor]
         """Verify the fetch interceptor is present in the Service Worker source."""
         response = self.url_open("/sw.js")

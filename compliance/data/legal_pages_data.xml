@@ -17,9 +17,13 @@
         
         <template id="compliance_privacy_policy_template" name="Privacy Policy Template">
             <!-- [@ANCHOR: compliance_privacy_policy_template] -->
+
             <!-- [@ANCHOR: compliance_legal_pages_rendering] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
@@ -74,9 +78,13 @@
 
         <template id="compliance_cookie_policy_template" name="Cookie Policy Template">
             <!-- [@ANCHOR: compliance_cookie_policy_template] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_views] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
@@ -125,9 +133,13 @@
 
         <template id="compliance_terms_of_service_template" name="Terms of Service Template">
             <!-- [@ANCHOR: compliance_terms_of_service_template] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_views] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
@@ -176,6 +188,7 @@
 
         <template id="compliance_accessibility_statement_template" name="Accessibility Statement Template">
             <!-- [@ANCHOR: compliance_accessibility_statement_template] -->
+
             <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">

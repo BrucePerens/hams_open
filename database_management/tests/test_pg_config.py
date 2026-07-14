@@ -181,7 +181,8 @@ class TestPgConfig(HamsTransactionCase):
         self.assertEqual(exe_path, "/bin/etcd")
 
     def test_03_views(self):
-        # [@ANCHOR: test_pg_config_views]
+        # [@ANCHOR: COMM_test_pg_config_views]
+
         # Tests [@ANCHOR: db_settings_audit]
         v1 = self.env["database.pg.setting"].get_view(view_type="list")
         self.assertIn("setting", v1["arch"])

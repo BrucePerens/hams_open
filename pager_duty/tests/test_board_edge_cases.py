@@ -33,6 +33,7 @@ class TestBoardEdgeCases(HamsTransactionCase):
         self.env["pager.check"].search([]).unlink()
 
         # Tests [@ANCHOR: pager_board_data]
+
         # Tests [@ANCHOR: pager_board_stats]
         data = self.env["pager.incident"].with_user(self.user).get_board_data()
         self.assertEqual(data["on_duty"], "None")

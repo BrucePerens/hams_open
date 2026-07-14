@@ -17,6 +17,7 @@ export class UrlToastNotification extends Interaction {
     }
 
     // [@ANCHOR: toast_notifications_logic]
+
     // Verified by [@ANCHOR: test_tour_toast_notifications]
     _checkUrlForNotifications() {
         const urlParams = new URLSearchParams(document.location.search);
@@ -66,7 +67,9 @@ export class AdminViolationToast extends Interaction {
     }
 
     // [@ANCHOR: admin_toast_logic]
+
     // Verified by [@ANCHOR: test_tour_toast_notifications]
+
     // Verified by [@ANCHOR: test_admin_violation_toast_rpc]
     _checkPendingReports() {
         fetch('/api/v1/user_websites/pending_reports')

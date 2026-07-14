@@ -60,6 +60,7 @@ class TestPrivacyGDPR(HamsHttpCase):
 
     def test_01_data_portability_export(self):
         # [@ANCHOR: test_gdpr_export_api]
+
         # Tests [@ANCHOR: UX_GDPR_EXPORT]
         """Verify the user can successfully download a JSON payload of their data."""
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
@@ -114,9 +115,13 @@ class TestPrivacyGDPR(HamsHttpCase):
 
         # Trigger Erasure
         # [@ANCHOR: test_gdpr_erasure_pages]
+
         # Tests [@ANCHOR: gdpr_sudo_erasure]
+
         # [@ANCHOR: test_gdpr_erasure_posts]
+
         # Tests [@ANCHOR: gdpr_sudo_erasure]
+
         # Tests [@ANCHOR: UX_GDPR_ERASURE]
         self.env.flush_all()
         response = self.url_open(

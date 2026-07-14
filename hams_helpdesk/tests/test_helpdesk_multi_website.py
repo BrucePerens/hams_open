@@ -31,7 +31,9 @@ class TestHelpdeskMultiWebsite(HamsTransactionCase):
     def test_06_multi_website_awareness_logic(self):
         """Verify tickets are correctly segregated by website_id in multi-website environments."""
         # Tests [@ANCHOR: helpdesk_multi_website]
+
         # Tests [@ANCHOR: multi_website_segregation]
+
         # [@ANCHOR: test_06_multi_website_awareness_logic]
 
         # Ensure company context is consistent

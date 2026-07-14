@@ -13,4 +13,5 @@ This journey covers the setup and management of edge connectivity.
 ## Phase 3: Lifecycle Management
 - Administrator monitors tunnel status.
 - Administrator uses "Sync Tunnels" `[@ANCHOR: COMM_cf_sync_tunnels]` to align Odoo records with Cloudflare state.
+
 - Obsolete tunnels are removed via `[@ANCHOR: COMM_cf_delete_tunnel]`.

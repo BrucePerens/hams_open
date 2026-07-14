@@ -22,6 +22,7 @@ class ShiftHandoffWizard(models.TransientModel):
 
     def action_confirm_handoff(self):
         # [@ANCHOR: helpdesk_handoff_execution]
+
         # Verified by [@ANCHOR: test_02_shift_handoff_wizard]
         self.ensure_one()
 

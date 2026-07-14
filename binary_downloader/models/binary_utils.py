@@ -159,6 +159,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                                     continue
 
                                 with zip_ref.open(zinfo) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
+
                                     with open(target_bin, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                                         shutil.copyfileobj(source, target)
                                 found = True

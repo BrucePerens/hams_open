@@ -19,6 +19,7 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
 ### Automated Security Enforcement
 - **Given** a user attempts to save a page with malicious code (SSTI/XSS)
 - **When** the system sanitizes the architecture ([@ANCHOR: website_page_sanitize_arch])
+
 - **Then** it automatically triggers a security violation report ([@ANCHOR: action_take_action_and_strike]) and strikes the user's account for attempting to bypass security. Verified by `[@ANCHOR: test_moderation_suspension]`.
 
 ### Appealing a Suspension
@@ -28,4 +29,5 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
 
 ## Technical Notes
 - Pending reports are checked via a background RPC call ([@ANCHOR: api_pending_reports]). Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
+
 - Administrators receive periodic email notifications about outstanding reports ([@ANCHOR: cron_notify_pending_reports]). Verified by `[@ANCHOR: test_cron_pending_reports]`.

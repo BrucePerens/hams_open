@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_pg_setting_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] -->
+    <record id="view_pg_setting_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_pg_config_views] -->
         <field name="name">database.pg.setting.list</field>
         <field name="model">database.pg.setting</field>
         <field name="arch" type="xml">
@@ -15,7 +15,7 @@
         </field>
     </record>
 
-    <record id="view_pg_optimize_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] -->
+    <record id="view_pg_optimize_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_pg_config_views] -->
         <field name="name">pg.optimize.wizard.form</field>
         <field name="model">pg.optimize.wizard</field>
         <field name="arch" type="xml">
@@ -41,7 +41,7 @@
         </field>
     </record>
 
-    <record id="view_pg_ha_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] -->
+    <record id="view_pg_ha_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_pg_config_views] -->
         <field name="name">pg.ha.wizard.form</field>
         <field name="model">pg.ha.wizard</field>
         <field name="arch" type="xml">

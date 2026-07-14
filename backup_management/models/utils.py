@@ -11,6 +11,7 @@ _logger = logging.getLogger(__name__)
 
 def validate_backup_path(path):
     # [@ANCHOR: backup_management:COMM_backup_path_validation]
+
     # Verified by [@ANCHOR: backup_management:COMM_test_backup_security]
     if not path:
         return

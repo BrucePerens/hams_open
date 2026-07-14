@@ -58,6 +58,7 @@ class TestManualControllers(HamsHttpCase):
 
     def test_01_public_guest_routing(self):
         # [@ANCHOR: test_controller_manual_article_view]
+
         # Tests [@ANCHOR: controller_manual_article_view]
         """Public guests can hit the root manual route and see published content."""
         self.authenticate(None, None)
@@ -171,6 +172,8 @@ class TestManualControllers(HamsHttpCase):
         # [@ANCHOR: test_manual_templates_rendering]
         self.authenticate(None, None)
         # Tests [@ANCHOR: controller_manual_article_view]
+
         # Tests [@ANCHOR: story_article_view]
+
         # Tests [@ANCHOR: journey_user_browsing]
         self.url_open("/manual")

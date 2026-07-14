@@ -40,7 +40,9 @@ class UserWebsitesController(http.Controller):
     )
     def report_violation(self, url="", reason="", description="", email="", **post):
         # [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
+
         # Triggered by [@ANCHOR: violation_report_logic]
+
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
 
         # Extract referrer if it's missing in POST

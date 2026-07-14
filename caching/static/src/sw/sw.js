@@ -109,6 +109,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
     // [@ANCHOR: COMM_caching_sw_fetch_interceptor]
+
     // Verified by [@ANCHOR: test_sw_fetch_01]
     const request = event.request;
     const url = new URL(request.url);

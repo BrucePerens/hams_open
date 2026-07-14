@@ -19,6 +19,9 @@ As a **Group Member**, I want to manage a shared website and blog for my team or
 
 ## Technical Notes
 - Group site routing follows similar logic to personal sites ([@ANCHOR: controller_user_websites_home]). Verified by `[@ANCHOR: test_group_site_routing]`.
+
 - Access to edit or delete group pages is restricted to members of the associated Odoo group ([@ANCHOR: mixin_proxy_ownership_write]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
+
 - Slugs for groups are also cached in Redis ([@ANCHOR: group_slug_cache_invalidation]). Verified by `[@ANCHOR: test_group_slug_cache_invalidation]`.
+
 - Group members can be unsubscribed from notifications using a secure link ([@ANCHOR: controller_unsubscribe_digest]). Verified by `[@ANCHOR: controller_unsubscribe_digest]`.

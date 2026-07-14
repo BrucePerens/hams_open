@@ -9,14 +9,23 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 _logger = logging.getLogger(__name__)
 
 # Tests [@ANCHOR: redis_connection_pool]
+
 # Tests [@ANCHOR: distributed_cache_key_generation]
+
 # Tests [@ANCHOR: distributed_cache_decorator]
+
 # Tests [@ANCHOR: invalidate_model_cache_logic]
+
 # Tests [@ANCHOR: notify_model_invalidation_logic]
+
 # Tests [@ANCHOR: redis_cache_interceptor]
+
 # Tests [@ANCHOR: manual_cache_invalidation]
+
 # Tests [@ANCHOR: check_redis_status_logic]
+
 # Tests [@ANCHOR: distributed_cache_view]
+
 # Tests [@ANCHOR: distributed_cache_settings_view]
 
 

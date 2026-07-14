@@ -46,7 +46,9 @@ class TestHelpdeskTours(HamsHttpCase):
     def test_helpdesk_portal_rendering(self):
         """Test portal ticket submission rendering and basic visibility."""
         # Tests [@ANCHOR: helpdesk_portal_new]
+
         # Tests [@ANCHOR: helpdesk_portal_list]
+
         # Tests [@ANCHOR: helpdesk_portal_detail]
         self.authenticate("portal_cust_tour", "password")
         # Access portal tickets list
@@ -106,6 +108,7 @@ class TestHelpdeskTours(HamsHttpCase):
     def test_helpdesk_operator_rendering(self):
         """Test operator backend facility rendering."""
         # Tests [@ANCHOR: helpdesk_ticket_form]
+
         # Tests [@ANCHOR: helpdesk_ticket_list]
         ticket = self.env["hams_helpdesk.ticket"].create(
             {

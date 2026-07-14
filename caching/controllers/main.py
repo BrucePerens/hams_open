@@ -13,6 +13,7 @@ class ServiceWorkerController(http.Controller):
     @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True)
     def service_worker(self):
         # [@ANCHOR: COMM_caching_sw_serve_route]
+
         # Verified by [@ANCHOR: COMM_test_service_worker_01]
         """
         Serves the Service Worker script from the root scope.
@@ -68,4 +69,5 @@ class ServiceWorkerController(http.Controller):
         return request.make_response(content, headers=headers)
 
 # Verified by [@ANCHOR: test_service_worker_01]
+
 # Verified by [@ANCHOR: COMM_test_caching_sudo_params]

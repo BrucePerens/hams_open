@@ -3,6 +3,7 @@
 
     <template id="user_websites_snippet_category" inherit_id="website.snippets" name="User Websites Snippets">
         <!-- Verified by [@ANCHOR: test_dropzone_snippets] -->
+
         <xpath expr="/*" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_snippets] -->
             <div id="user_websites_dropzone_snippets">
                 <!-- [@ANCHOR: dropzone_snippets] -->

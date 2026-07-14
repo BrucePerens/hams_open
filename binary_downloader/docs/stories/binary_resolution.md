@@ -21,5 +21,7 @@ To support multi-tenancy, each tenant receives an isolated execution path. The s
 
 ## Traceability
 - **Code:** `ensure_executable` in `models/binary_manifest.py` `[@ANCHOR: binary_ensure_executable]`
+
 - **Code:** `apply_symlink` in `models/binary_tenant_link.py` `[@ANCHOR: pure_python_symlink_engine]`
+
 - **Anchor:** `[@ANCHOR: binary_resolution]`

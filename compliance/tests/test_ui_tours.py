@@ -10,13 +10,21 @@ class TestComplianceUITour(HamsHttpCase):
         # [@ANCHOR: test_compliance_ui_tour]
         """Run the compliance tour to verify cookie bar and legal pages."""
         # Tests [@ANCHOR: compliance_footer_links]
+
         # Tests [@ANCHOR: story_cookie_consent]
+
         # Tests [@ANCHOR: story_automatic_legal_pages]
+
         # Tests [@ANCHOR: journey_compliance_setup]
+
         # Tests [@ANCHOR: compliance_post_init_cookie_bar]
+
         # Tests [@ANCHOR: compliance_privacy_policy_template]
+
         # Tests [@ANCHOR: compliance_cookie_policy_template]
+
         # Tests [@ANCHOR: compliance_terms_of_service_template]
+
         # Tests [@ANCHOR: compliance_accessibility_statement_template]
 
         self.start_tour("/privacy?debug=1", "compliance_tour")

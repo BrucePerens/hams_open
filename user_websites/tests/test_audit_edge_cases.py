@@ -84,6 +84,7 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_02_cron_batching_resumption(self):
         # [@ANCHOR: test_cron_batching_resumption]
+
         # Tests [@ANCHOR: ir_cron_send_weekly_digest]
         """
         Verify that the weekly digest cron successfully parses the last_digest_key
@@ -168,7 +169,9 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_04_bdd_ormcache_query_counting_slugs(self):
         # [@ANCHOR: test_slug_cache_invalidation]
+
         # Tests [@ANCHOR: slug_cache_invalidation]
+
         # Tests [@ANCHOR: slug_cache_invalidation_unlink]
         """
         BDD: Given ADR-0049 Cache Verification
@@ -205,7 +208,9 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_05_bdd_ormcache_query_counting_group_slugs(self):
         # [@ANCHOR: test_group_slug_cache_invalidation]
+
         # Tests [@ANCHOR: group_slug_cache_invalidation]
+
         # Tests [@ANCHOR: group_slug_cache_invalidation_unlink]
         """
         BDD: Given ADR-0049 Cache Verification
@@ -242,6 +247,7 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_06_cron_redis_flush_batching(self):
         # [@ANCHOR: test_cron_redis_flush]
+
         # Tests [@ANCHOR: ir_cron_flush_view_counters]
         """
         BDD: Given the _flush_redis_view_counters cron
@@ -299,7 +305,9 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_08_cron_pending_reports(self):
         # [@ANCHOR: COMM_test_cron_pending_reports]
+
         # Tests [@ANCHOR: ir_cron_notify_pending_reports]
+
         # Tests [@ANCHOR: cron_notify_pending_reports]
         """
         Prove that the cron correctly summarizes pending reports and emails the admin,

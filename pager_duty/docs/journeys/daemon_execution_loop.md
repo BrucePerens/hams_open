@@ -14,10 +14,14 @@ This journey tracks the flow of data from Odoo configuration to the standalone m
 ## 3. Execution Cycle
 - **Boot:** `generalized_monitor.py` starts and parses the JSON.
 - **Dependency Check:** It verifies required system binaries [@ANCHOR: daemon_verify_dependencies].
+
 - **Watchdog:** The main thread starts an execution thread for each check and monitors their heartbeats [@ANCHOR: daemon_main_loop].
+
 - **Isolation:** Each check type (HTTP, XML-RPC, Heartbeat) runs in its own isolated logic block [@ANCHOR: daemon_execute_check].
+
 - **Failover:** If Odoo is unreachable, the daemon falls back to direct `SMTP` or `Webhook` alerts [@ANCHOR: daemon_report_incident].
 
 ## 4. Feedback Loop
 - **Status Reporting:** Results are pushed back to Odoo via XML-RPC [@ANCHOR: daemon_report_incident].
+
 - **Dashboard:** The NOC Board [@ANCHOR: pager_board_data] reflects the latest check statuses in real-time.

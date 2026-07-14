@@ -12,10 +12,15 @@ def post_init_hook(env):
     2. Ensures legal pages are non-destructively provisioned.
     """
     # [@ANCHOR: journey_compliance_setup]
+
     # Verified by [@ANCHOR: test_compliance_ui_tour]
+
     # [@ANCHOR: compliance_post_init_cookie_bar]
+
     # [@ANCHOR: story_cookie_consent]
+
     # Verified by [@ANCHOR: test_compliance_post_init_cookie_bar]
+
     # Verified by [@ANCHOR: test_compliance_ui_tour]
 
     # ADR-0002: Zero-Sudo Architecture. We must not use .sudo() or stay as SUPERUSER.

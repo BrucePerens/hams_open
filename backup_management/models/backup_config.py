@@ -255,6 +255,7 @@ class BackupConfig(models.Model):
 
     def action_trigger_backup(self):
         # [@ANCHOR: backup_management:backup_trigger_execution]
+
         # Verified by [@ANCHOR: backup_management:test_backup_orchestration]
         # Implements ADR-0071: Asynchronous Bastion Pattern
         # Use Service ID for security & audit trails
@@ -270,6 +271,7 @@ class BackupConfig(models.Model):
 
     def action_apply_policies(self):
         # [@ANCHOR: backup_management:backup_apply_policies]
+
         # Verified by [@ANCHOR: test_apply_policies]
         # Use Service ID for security & audit trails
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -288,6 +290,7 @@ class BackupConfig(models.Model):
         For Kopia, it tries to list snapshots. For pgBackRest, it runs 'info'.
         """
         # [@ANCHOR: backup_management:action_test_connection]
+
         # Verified by [@ANCHOR: backup_management:test_backup_orchestration]
         for rec in self:
             rec.action_sync_snapshots()
@@ -305,6 +308,7 @@ class BackupConfig(models.Model):
 
     def action_view_latest_job(self):
         # [@ANCHOR: backup_management:action_view_latest_job]
+
         # Verified by [@ANCHOR: backup_management:test_backup_view]
         self.ensure_one()
         job = self.env["backup.job"].search([("config_id", "=", self.id)], limit=1)
@@ -320,8 +324,11 @@ class BackupConfig(models.Model):
 
     def action_sync_snapshots(self):
         # [@ANCHOR: UX_BACKUP_SYNC]
+
         # [@ANCHOR: backup_management:backup_sync_kopia]
+
         # [@ANCHOR: backup_management:backup_sync_pgbackrest]
+
         # Verified by [@ANCHOR: backup_management:test_backup_cron]
         # Use Service ID for security & audit trails
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -348,7 +355,9 @@ class BackupConfig(models.Model):
 
     def report_backup_failure(self, message):
         # [@ANCHOR: backup_management:backup_pager_synergy]
+
         # Verified by [@ANCHOR: backup_management:test_backup_cron]
+
         # Verified by [@ANCHOR: test_trigger_kopia_and_pgbackrest]
         try:
             Incident = self.env["pager.incident"]
@@ -375,6 +384,7 @@ class BackupConfig(models.Model):
     @api.model
     def get_board_data(self):
         # [@ANCHOR: backup_management:backup_board_data]
+
         # Verified by [@ANCHOR: backup_management:test_backup_view]
         domain = []
         if self.env.context.get("website_id"):
@@ -518,6 +528,7 @@ class BackupConfig(models.Model):
     @api.model
     def cron_sync_all_backups(self):
         # [@ANCHOR: backup_management:cron_sync_all_backups]
+
         # Verified by [@ANCHOR: backup_management:test_backup_cron]
         # Use Service ID for security & audit trails
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

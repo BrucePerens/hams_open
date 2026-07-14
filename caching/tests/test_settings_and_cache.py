@@ -14,7 +14,9 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_01_quota_config_updates_sw(self):
         # [@ANCHOR: test_settings_and_cache_01]
+
         # Tests [@ANCHOR: COMM_caching_quota_calculation]
+
         # Tests [@ANCHOR: COMM_caching_fs_scan_logic]
         """
         Verify that changing the safe quota in settings dynamically
@@ -184,6 +186,7 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_05_zero_sudo_scan(self):
         # [@ANCHOR: test_caching_zero_sudo_scan]
+
         # Tests [@ANCHOR: COMM_caching_fs_scan_logic]
         """Verify that the FS scan correctly uses the service account."""
         controller = ServiceWorkerController()
@@ -199,6 +202,7 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_04_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_caching_settings]
+
         # Tests [@ANCHOR: COMM_xpath_rendering_caching_settings]
         """
         Verify the Caching settings are injected into the website

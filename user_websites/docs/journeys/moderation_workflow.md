@@ -13,6 +13,7 @@ This journey describes the workflow for maintaining community standards through 
 ## Path: Administrative Review
 
 1. **Notification**: An administrator sees a toast notification on their next page load ([@ANCHOR: admin_toast_logic]). Verified by `[@ANCHOR: test_tour_toast_notifications]`.
+
 2. **Back-end Check**: The frontend queries the count of pending reports via a dedicated API endpoint ([@ANCHOR: api_pending_reports]). Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
 3. **Investigation**: The administrator reviews the reported content and the description provided by the reporter.
 4. **Action**: The administrator clicks "Take Action and Strike" ([@ANCHOR: action_take_action_and_strike]). Verified by `[@ANCHOR: test_moderation_suspension]`.

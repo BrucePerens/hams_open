@@ -80,6 +80,7 @@ class ResConfigSettings(models.TransientModel):
 
     def action_generate_tunnel_command(self):
         # [@ANCHOR: COMM_cf_tunnel_setup]
+
         # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
         self.ensure_one()
         website = (

@@ -228,6 +228,7 @@ class TestORMSecurity(RealTransactionCase):
 
     def test_07_qweb_arch_sanitization(self):
         # [@ANCHOR: test_website_page_sanitize_arch]
+
         # Tests [@ANCHOR: website_page_sanitize_arch]
         """
         # Tests [@ANCHOR: website_page_sanitize_arch]

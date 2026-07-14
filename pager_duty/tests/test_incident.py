@@ -23,6 +23,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
     def test_01_rate_limiting_blocks_spam_standard(self):
         # Tests [@ANCHOR: report_incident_rate_limit]
+
         # Tests [@ANCHOR: pd_redis_rate_limit]
         vals = {
             "source": "test_daemon",
@@ -51,6 +52,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
+
         # Tests [@ANCHOR: test_pager_notification]
         vals = {
             "source": "test_daemon_2",
@@ -152,6 +154,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
     def test_07_board_data_procedure(self):
         # Tests [@ANCHOR: pager_duty_postgres_procedures]
+
         # Tests [@ANCHOR: test_pager_duty_procedures]
         self.incident_model.report_incident(
             {

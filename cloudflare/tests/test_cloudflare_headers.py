@@ -23,6 +23,7 @@ class TestCloudflareHeaders(HamsHttpCase):
 
     def test_01_static_asset_caching(self):
         # [@ANCHOR: test_cf_static_asset_caching]
+
         # Tests [@ANCHOR: COMM_ir_http_post_dispatch_headers]
         """Verify media and assets receive the correct cache headers."""
 
@@ -100,6 +101,7 @@ class TestCloudflareHeaders(HamsHttpCase):
 
     def test_03_xpath_rendering(self):
         # [@ANCHOR: test_xpath_rendering_cf_settings]
+
         # Tests [@ANCHOR: COMM_xpath_rendering_cf_settings]
         """Verify the Cloudflare settings block successfully injects into the global website config."""
         res = self.env["res.config.settings"].get_view(

@@ -119,6 +119,7 @@ class TestUserWebsitesUITours(RealTransactionCase):
 
     def test_04_moderation_appeal_tour(self):
         # Tests [@ANCHOR: test_tour_moderation_appeal]
+
         # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
         self.user_test.is_suspended_from_websites = True
         self.env.cr.commit()
@@ -216,6 +217,7 @@ class TestUserWebsitesUITours(RealTransactionCase):
 
     def test_10_violation_report_tour(self):
         # Tests [@ANCHOR: test_tour_violation_report]
+
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
         self.url_open(f"/{self.user_test.website_slug}/home")
         self.start_tour(

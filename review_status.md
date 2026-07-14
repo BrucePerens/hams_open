@@ -1,4 +1,4 @@
-- `hams_open/daemon_key_manager`: [Done] (Passed flake8, fixed linting issues. Global test suite fails on external modules)
+- `hams_open/daemon_key_manager`: [Done] (Passed flake8 with 0 errors. Test suite aborted due to global anchor violations in other modules)
 - `hams_open/database_management`: [Done] (Passed flake8, fixed anchor issues. Global test suite fails on external modules)
 - `hams_open/pager_duty`: [Done] (Passed tests and linter)
 - `hams_open/user_websites_seo`: [Done]

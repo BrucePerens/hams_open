@@ -36,7 +36,9 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
     @api.model
     def _check_proxy_ownership_create(self, vals_list):
         # [@ANCHOR: mixin_proxy_ownership_create]
+
         # Verified by [@ANCHOR: test_mixin_ownership_validation]
+
         # Verified by [@ANCHOR: test_api_armor_mandatory_assignment]
         """Validates that the current user is legally allowed to assign the provided ownership, enforces mandatory ownership, and prevents dual ownership."""
 
@@ -131,7 +133,9 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
 
     def _check_proxy_ownership_write(self, vals):
         # [@ANCHOR: mixin_proxy_ownership_write]
+
         # Verified by [@ANCHOR: test_mixin_ownership_validation]
+
         # Verified by [@ANCHOR: test_api_armor_mutual_exclusion]
         """Prevents malicious actors from spoofing or transferring ownership after creation, and prevents admins from creating dual-owned corrupted states."""
         if (

@@ -46,7 +46,6 @@ class DaemonKeyRegistry(models.Model):
     )
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
 
-
     _name_company_uniq = models.Constraint('unique(name, company_id)', 'The daemon name must be unique per company!')
     _name_not_empty = models.Constraint('CHECK(LENGTH(TRIM(name)) > 0)', 'The daemon name cannot be empty.')
     _path_not_empty = models.Constraint('CHECK(LENGTH(TRIM(env_file_path)) > 0)', 'The environment file path cannot be empty.')
@@ -54,6 +53,7 @@ class DaemonKeyRegistry(models.Model):
     @api.constrains("user_id")
     def _check_user_is_service_account(self):
         # Tested by [@ANCHOR: COMM_test_security_constraints]
+
         # [@ANCHOR: COMM_security_constraints_user]
         for record in self:
             if not record.user_id.is_service_account:
@@ -62,6 +62,7 @@ class DaemonKeyRegistry(models.Model):
     @api.constrains("env_file_path")
     def _check_env_file_path(self):
         # Tested by [@ANCHOR: COMM_test_security_constraints]
+
         # [@ANCHOR: COMM_security_constraints_path]
         mandatory_prefix = "/opt/hams/etc/keys/"
         for record in self:
@@ -90,8 +91,11 @@ class DaemonKeyRegistry(models.Model):
         This registers the daemon for automated 60-day rotations and provisions synchronously.
         """
         # Tested by [@ANCHOR: COMM_test_register_daemon_api]
+
         # Verified by [@ANCHOR: COMM_test_register_daemon_api]
+
         # Verified by [@ANCHOR: COMM_test_daemon_key_manager_tour]
+
         # [@ANCHOR: COMM_register_daemon_api]
 
         caller = self.env.user
@@ -180,7 +184,9 @@ class DaemonKeyRegistry(models.Model):
 
     def action_force_provision_all(self, *args, **kwargs):
         # Tested by [@ANCHOR: COMM_test_force_provisioning]
+
         # [@ANCHOR: COMM_action_force_provision_all_api]
+
         # Verified by [@ANCHOR: COMM_test_unauthorized_access]
         """
         Synchronously provisions API keys for all registered daemons.
@@ -229,6 +235,7 @@ class DaemonKeyRegistry(models.Model):
         Manually rotate the key for a single daemon.
         """
         # [@ANCHOR: COMM_action_rotate_key_api]
+
         # Verified by [@ANCHOR: COMM_test_action_rotate_key]
         self.ensure_one()
 
@@ -251,6 +258,7 @@ class DaemonKeyRegistry(models.Model):
 
     def _rotate_key_and_write_file(self):
         # Tested by [@ANCHOR: COMM_test_force_provisioning]
+
         # Verified by [@ANCHOR: COMM_test_unauthorized_access]
         self.ensure_one()
 
@@ -259,6 +267,7 @@ class DaemonKeyRegistry(models.Model):
 
         if not self.user_id.active:
             # [@ANCHOR: COMM_rotation_safety_archived_user]
+
             # Verified by [@ANCHOR: COMM_test_rotation_safety_archived_user]
             raise UserError(
                 _("Cannot rotate key for archived service account: %s")
@@ -279,7 +288,9 @@ class DaemonKeyRegistry(models.Model):
 
         # Revoke old keys for this specific service account AND daemon
         # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
+
         # [@ANCHOR: COMM_revoke_old_keys_logic]
+
         # Tested by [@ANCHOR: COMM_test_key_ownership]
         # Note: res.users.apikeys access is granted via ir.model.access.csv for our group.
         # We search and unlink keys belonging to the target service account.
@@ -291,8 +302,11 @@ class DaemonKeyRegistry(models.Model):
 
         # Generate new key
         # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
+
         # [@ANCHOR: COMM_generate_new_key_logic]
+
         # Tested by [@ANCHOR: COMM_test_key_ownership]
+
         # Verified by [@ANCHOR: COMM_test_key_ownership]
         expiration_date = fields.Datetime.now() + datetime.timedelta(days=90)
 
@@ -318,6 +332,7 @@ class DaemonKeyRegistry(models.Model):
         Creates directories with 0700 if they do not exist.
         """
         # Tested by [@ANCHOR: COMM_test_register_daemon_api]
+
         # [@ANCHOR: COMM_write_secure_env_file_logic]
         path = os.path.realpath(path)
         # Sandbox check: Prevent writing to sensitive system directories
@@ -376,6 +391,7 @@ class DaemonKeyRegistry(models.Model):
         Uses stateless batching and programmatic re-triggering.
         """
         # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
+
         # [@ANCHOR: COMM_cron_rotation_logic]
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "daemon_key_manager.user_daemon_key_manager_service"

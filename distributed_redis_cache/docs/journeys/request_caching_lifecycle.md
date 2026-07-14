@@ -3,7 +3,9 @@
 This journey describes the path of a data retrieval request when using the distributed cache.
 
 1. **Function Call**: An Odoo business logic function decorated with `@distributed_cache()` ([@ANCHOR: distributed_cache_decorator]) is invoked.
+
 2. **Key Generation**: The decorator serializes the function arguments and generates a unique HMAC-SHA256 hash ([@ANCHOR: distributed_cache_key_generation]).
+
 3. **Redis Lookup**: The system attempts to fetch the value from the Redis connection pool ([@ANCHOR: redis_connection_pool]).
 4. **Cache Hit**:
    - If the key exists in Redis, the JSON-serialized data is retrieved and returned immediately.

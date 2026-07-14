@@ -10,6 +10,7 @@ Odoo instances can have many modules with numerous static assets (JS, CSS, image
 The `caching` module implements a dynamic safety valve.
 
 1. **Scanning**: During server startup or the first request, the system scans all `static/` directories of installed modules ([@ANCHOR: COMM_caching_fs_scan_logic]).
+
 2. **Calculation**: It then calculates a dynamic maximum file size limit ([@ANCHOR: COMM_caching_quota_calculation]).
 3. **Filtering**: If the total size of all assets exceeds the `caching.safe_quota_mb` (default 35MB), the system identifies the largest files and excludes them from the cache until the total remaining size fits within the quota.
 4. **Enforcement**: This calculated `MAX_FILE_SIZE_BYTES` is injected into the Service Worker script ([@ANCHOR: COMM_caching_sw_serve_route]).

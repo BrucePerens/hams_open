@@ -33,10 +33,12 @@ The module follows a strict "minimum privilege" policy. It uses a dedicated serv
 * **Strict Permissions:** `.env` files are created with `0600` (read/write only for the Odoo server process user).
 * **Directory Isolation:** Parent directories are created with `0700` to prevent other users on the system from traversing into the key storage area.
 * **Path Validation:** All paths MUST start with `/opt/hams/etc/keys/`. The module strictly blocks directory traversal (`..`) and symlink attacks by resolving the `os.path.realpath` of the requested path before performing any file operations [@ANCHOR: security_constraints_path].
+
 * **System Directory Protection:** Writing to sensitive system directories (like `/etc`, `/root`, `/boot`, `/home`, `/usr`, `/bin`, `/lib`, `/var/log`) is explicitly forbidden regardless of the prefix check [@ANCHOR: write_secure_env_file_logic].
 
 ### Automated Key Rotation
 Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: cron_rotation_trigger].
+
 * **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue with the next daemon [@ANCHOR: cron_rotation_logic].
 * **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed in case of transient server issues.
 * **Self-Healing Daemons:** Daemons utilizing these keys MUST be designed to catch `AccessError` responses from Odoo, re-read their assigned `.env` file from the disk, and retry the request. This ensures continuous operation across key rotations [@ANCHOR: daemon_self_healing].
@@ -94,9 +96,15 @@ ODOO_RPC_KEY=12345abcd...
 
 ## 🧪 Verification
 * **register_daemon_api**: Verified by [@ANCHOR: test_register_daemon_api]
+
 * **force_provision_all**: Verified by [@ANCHOR: test_force_provisioning]
+
 * **security_constraints**: Verified by [@ANCHOR: test_security_constraints]
+
 * **ui_tour**: Verified by [@ANCHOR: test_daemon_key_manager_tour]
+
 * **unauthorized_access**: Verified by [@ANCHOR: test_unauthorized_access]
+
 * **key_ownership**: Verified by [@ANCHOR: test_key_ownership]
+
 * **documentation_installed**: Verified by [@ANCHOR: documentation_installed] [@ANCHOR: test_documentation_installed]

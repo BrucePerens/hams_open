@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="layout_inherit_report_violation" inherit_id="website.layout" name="Report Violation Global"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_layout] -->
+
         <!-- Verified by [@ANCHOR: test_dropzone_layout] -->
+
         <!-- Verified by [@ANCHOR: test_xpath_rendering_layout] -->
+
         <!-- [@ANCHOR: xpath_rendering_layout] -->
+
         <xpath expr="//footer" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_layout] -->
             <div id="user_websites_dropzone_layout">
                 <!-- [@ANCHOR: dropzone_layout] -->

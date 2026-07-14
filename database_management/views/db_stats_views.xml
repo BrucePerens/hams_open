@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_db_table_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dba_view] -->
+    <record id="view_db_table_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">database.table.stat.list</field>
         <field name="model">database.table.stat</field>
         <field name="arch" type="xml">
@@ -18,7 +18,7 @@
         </field>
     </record>
 
-    <record id="view_db_query_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dba_view] -->
+    <record id="view_db_query_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">database.query.stat.list</field>
         <field name="model">database.query.stat</field>
         <field name="arch" type="xml">
@@ -51,7 +51,7 @@
         </field>
     </record>
 
-    <record id="view_db_activity_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dba_view] -->
+    <record id="view_db_activity_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">database.activity.list</field>
         <field name="model">database.activity</field>
         <field name="arch" type="xml">
@@ -68,7 +68,7 @@
         </field>
     </record>
 
-    <record id="view_db_index_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dba_view] -->
+    <record id="view_db_index_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">database.index.stat.list</field>
         <field name="model">database.index.stat</field>
         <field name="arch" type="xml">

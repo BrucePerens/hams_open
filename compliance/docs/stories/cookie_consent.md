@@ -16,4 +16,5 @@ Bob wants to ensure that no non-essential cookies are placed on his device witho
 
 ## Verification
 - Verified by [@ANCHOR: test_compliance_post_init_cookie_bar]
+
 - Verified by [@ANCHOR: test_compliance_ui_tour]

@@ -67,7 +67,9 @@ class TestKeyRegistry(RealTransactionCase):
     def test_security_constraints(self):
         """Test that only service accounts and valid paths can be used."""
         # [@ANCHOR: COMM_test_security_constraints]
+
         # Tests [@ANCHOR: COMM_security_constraints_user]
+
         # Tests [@ANCHOR: COMM_security_constraints_path]
 
         # We must use a user that has permission to create registries, but not a human user as target
@@ -162,10 +164,15 @@ class TestKeyRegistry(RealTransactionCase):
     def test_register_daemon_api(self):
         """Test the register_daemon API."""
         # [@ANCHOR: COMM_test_register_daemon_api]
+
         # Tests [@ANCHOR: COMM_register_daemon_api]
+
         # Tests [@ANCHOR: COMM_register_daemon_logic]
+
         # Tests [@ANCHOR: COMM_register_daemon_idempotency]
+
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
+
         # Tests [@ANCHOR: COMM_daemon_self_healing]
         daemon_name = "API Test Daemon"
         user_xml_id = "daemon_key_manager.user_daemon_key_manager_service"
@@ -198,8 +205,11 @@ class TestKeyRegistry(RealTransactionCase):
     def test_cron_rotate_all_keys(self):
         """Test cron rotation and trigger functionality."""
         # [@ANCHOR: COMM_test_cron_rotate_all_keys]
+
         # Tests [@ANCHOR: COMM_cron_rotation_logic]
+
         # Tests [@ANCHOR: COMM_revoke_old_keys_logic]
+
         # Tests [@ANCHOR: COMM_generate_new_key_logic]
         # Create a mock daemon
         registry = (
@@ -228,6 +238,7 @@ class TestKeyRegistry(RealTransactionCase):
     def test_key_ownership(self):
         """Verify that the generated key belongs to the service account, not SUPERUSER."""
         # [@ANCHOR: COMM_test_key_ownership]
+
         # Tests [@ANCHOR: COMM_generate_new_key_logic]
         service_user = self.env["res.users"].create(
             {
@@ -271,8 +282,11 @@ class TestKeyRegistry(RealTransactionCase):
     def test_force_provisioning(self):
         """Test force provisioning of all keys."""
         # [@ANCHOR: COMM_test_force_provisioning]
+
         # Tests [@ANCHOR: COMM_action_force_provision_all_api]
+
         # Tests [@ANCHOR: COMM_force_provision_logic]
+
         # Tests [@ANCHOR: COMM_force_provision_error_handling]
         daemon_name = "Force Provision Test"
         env_file_path = "/opt/hams/etc/keys/force_provision.env"
@@ -338,6 +352,7 @@ class TestKeyRegistry(RealTransactionCase):
     def test_action_rotate_key(self):
         """Test manual rotation of a single key."""
         # [@ANCHOR: COMM_test_action_rotate_key]
+
         # Tests [@ANCHOR: COMM_action_rotate_key_api]
         daemon_name = "Single Rotation Test"
         env_file_path = "/opt/hams/etc/keys/single_rotation.env"
@@ -365,6 +380,7 @@ class TestKeyRegistry(RealTransactionCase):
     def test_rotation_safety_archived_user(self):
         """Test that keys cannot be rotated for archived service accounts."""
         # [@ANCHOR: COMM_test_rotation_safety_archived_user]
+
         # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
         archived_user = self.env["res.users"].create(
             {
@@ -418,6 +434,7 @@ class TestKeyRegistry(RealTransactionCase):
         # But since _cron_rotate_all_keys queries registries, we need to mock execute directly.
         original_execute = self.env.cr.execute
         executed_queries = []
+
         def mock_execute(query, params=None):
             executed_queries.append(query)
             return original_execute(query, params)
@@ -433,12 +450,14 @@ class TestKeyRegistry(RealTransactionCase):
         )
         self.assertTrue(found_update, "Cron fallback should use NOW() AT TIME ZONE 'UTC'")
 
+
 @tagged("post_install", "-at_install")
 class TestKeyRegistryTour(HamsHttpCase):
     def test_daemon_key_manager_tour(self):
         # [@ANCHOR: COMM_test_daemon_key_manager_tour]
 
         # Tests [@ANCHOR: COMM_register_daemon_api]
+
         # Tests [@ANCHOR: COMM_action_force_provision_all_api]
 
         # Ensure admin has Technical Features enabled for the tour

@@ -39,6 +39,7 @@ class TestPerformanceORM(HamsHttpCase):
 
     def test_01_site_creation_query_scaling(self):
         # [@ANCHOR: test_site_creation_performance_scaling]
+
         # Tests [@ANCHOR: test_site_creation_performance_scaling]
         """
         BDD: Given the Master Wrapper Architecture (ADR-fix)
@@ -123,6 +124,7 @@ class TestPerformanceRouting(HamsHttpCase):
 
     def test_02_acl_overhead_loop_elimination(self):
         # [@ANCHOR: test_acl_overhead_loop_elimination]
+
         # Tests [@ANCHOR: test_acl_overhead_loop_elimination]
         """
         BDD: Given multiple user websites exist on the platform,
@@ -188,6 +190,7 @@ class TestPerformanceRouting(HamsHttpCase):
 
     def test_03_tenant_view_isolation(self):
         # [@ANCHOR: test_tenant_view_isolation]
+
         # Tests [@ANCHOR: test_tenant_view_isolation]
         """
         BDD: Given two users have provisioned their personal sites using the detached architecture,
