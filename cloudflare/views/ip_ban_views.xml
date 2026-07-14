@@ -24,7 +24,7 @@
         <field name="arch" type="xml">
             <form string="IP Ban Record">
                 <header>
-                    <button name="action_lift_ban" type="object" string="Lift Ban &amp; Unblock API" class="btn-primary" invisible="state != 'active'" confirm="Are you sure you want to restore access for this IP?"/>
+                        <button name="action_lift_ban" type="object" string="Lift Ban &amp; Unblock API" class="btn-primary" invisible="not id or state != 'active'" confirm="Are you sure you want to restore access for this IP?"/>
                     <field name="state" widget="statusbar" statusbar_visible="active,lifted,failed"/>
                 </header>
                 <sheet>

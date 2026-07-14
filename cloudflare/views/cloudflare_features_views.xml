@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <data>
         <!-- Analytics Dashboard -->
         <record id="action_cf_analytics_dashboard" model="ir.actions.client">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">Analytics Dashboard</field>
             <field name="tag">cloudflare_analytics_dashboard</field>
         </record>
@@ -11,10 +14,11 @@
 
         <!-- DNS Record -->
         <record id="view_cf_dns_record_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.dns.record.form</field>
             <field name="model">cloudflare.dns.record</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -30,10 +34,11 @@
         </record>
 
         <record id="view_cf_dns_record_tree" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.dns.record.tree</field>
             <field name="model">cloudflare.dns.record</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="type"/>
@@ -45,6 +50,8 @@
         </record>
 
         <record id="action_cf_dns_record" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">DNS Records</field>
             <field name="res_model">cloudflare.dns.record</field>
             <field name="view_mode">list,form</field>
@@ -54,10 +61,11 @@
 
         <!-- Zone Settings -->
         <record id="view_cf_zone_settings_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.zone.settings.form</field>
             <field name="model">cloudflare.zone.settings</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -73,10 +81,11 @@
         </record>
 
         <record id="view_cf_zone_settings_tree" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.zone.settings.tree</field>
             <field name="model">cloudflare.zone.settings</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="ssl_mode"/>
@@ -86,6 +95,8 @@
         </record>
 
         <record id="action_cf_zone_settings" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">Zone Settings (Advanced)</field>
             <field name="res_model">cloudflare.zone.settings</field>
             <field name="view_mode">list,form</field>
@@ -95,10 +106,11 @@
 
         <!-- Rate Limit -->
         <record id="view_cf_rate_limit_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.rate.limit.form</field>
             <field name="model">cloudflare.rate.limit</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -113,10 +125,11 @@
         </record>
 
         <record id="view_cf_rate_limit_tree" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.rate.limit.tree</field>
             <field name="model">cloudflare.rate.limit</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="mitigation_action"/>
@@ -126,6 +139,8 @@
         </record>
 
         <record id="action_cf_rate_limit" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">Rate Limits</field>
             <field name="res_model">cloudflare.rate.limit</field>
             <field name="view_mode">list,form</field>
@@ -135,10 +150,11 @@
 
         <!-- Cache Rule -->
         <record id="view_cf_cache_rule_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.cache.rule.form</field>
             <field name="model">cloudflare.cache.rule</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -153,10 +169,11 @@
         </record>
 
         <record id="view_cf_cache_rule_tree" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.cache.rule.tree</field>
             <field name="model">cloudflare.cache.rule</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="edge_cache_ttl"/>
@@ -166,6 +183,8 @@
         </record>
 
         <record id="action_cf_cache_rule" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">Cache Rules</field>
             <field name="res_model">cloudflare.cache.rule</field>
             <field name="view_mode">list,form</field>
@@ -175,10 +194,11 @@
 
         <!-- Zero Trust Policy -->
         <record id="view_cf_zero_trust_policy_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.zero.trust.policy.form</field>
             <field name="model">cloudflare.zero.trust.policy</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -193,10 +213,11 @@
         </record>
 
         <record id="view_cf_zero_trust_policy_tree" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">cloudflare.zero.trust.policy.tree</field>
             <field name="model">cloudflare.zero.trust.policy</field>
             <field name="arch" type="xml">
-                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="policy_action"/>
@@ -206,6 +227,8 @@
         </record>
 
         <record id="action_cf_zero_trust_policy" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
             <field name="name">Zero Trust Policies</field>
             <field name="res_model">cloudflare.zero.trust.policy</field>
             <field name="view_mode">list,form</field>

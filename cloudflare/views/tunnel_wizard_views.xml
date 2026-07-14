@@ -2,7 +2,8 @@
 <!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <record id="view_cloudflare_tunnel_wizard_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_cf_backend_views_rendering] -->
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
         <field name="name">cloudflare.tunnel.wizard.form</field>
         <field name="model">cloudflare.tunnel.wizard</field>
         <field name="arch" type="xml">

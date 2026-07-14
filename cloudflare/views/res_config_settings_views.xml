@@ -9,7 +9,7 @@
             <xpath expr="//form" position="inside">
                 <!-- [@ANCHOR: COMM_xpath_rendering_cf_settings] -->
 
-                <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_cf_settings] -->
+                <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_xpath_rendering_cf_settings] -->
                 <div class="app_settings_block" data-string="Cloudflare" data-key="cloudflare">
                     <h2>Cloudflare Edge Orchestration</h2>
                     <div class="row mt16 o_settings_container" id="cloudflare_edge_container">
@@ -21,7 +21,7 @@
                                     Set the API Token, Zone ID, and Account ID specifically for this website. (Overrides fallback .env vars)
                                 </div>
                                 <div class="mt8">
-                                    <field name="cloudflare_api_token"  placeholder="Bearer Token..."/>
+                                    <field name="cloudflare_api_token" password="True" placeholder="Bearer Token..."/>
                                 </div>
                                 <div class="mt8">
                                     <field name="cloudflare_zone_id" placeholder="32-character Zone ID..."/>
@@ -64,7 +64,7 @@
                                     Provide the Secret Key to enable backend validation of invisible CAPTCHA tokens for public forms.
                                 </div>
                                 <div class="mt8">
-                                    <field name="cloudflare_turnstile_secret" class="w-100"  placeholder="0x4A..."/>
+                                    <field name="cloudflare_turnstile_secret" class="w-100" password="True" placeholder="0x4A..."/>
                                 </div>
                             </div>
                         </div>
