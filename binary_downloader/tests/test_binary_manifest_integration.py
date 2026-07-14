@@ -38,7 +38,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         tar_stream = io.BytesIO()
         with tarfile.open(  # audit-ignore-path  # fmt: skip
             fileobj=tar_stream, mode="w:gz"
-        ) as tar:  # audit-ignore-path-traversal  # fmt: skip
+        ) as tar:  # audit-ignore-path  # fmt: skip
             content = b"dummy kopia content"
             tarinfo = tarfile.TarInfo(name="kopia")
             tarinfo.size = len(content)

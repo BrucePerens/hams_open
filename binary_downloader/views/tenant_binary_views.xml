@@ -33,7 +33,7 @@
         <field name="arch" type="xml">
             <form string="Tenant Binary Version">
                 <header>
-                    <button name="action_upgrade_to_latest" type="object" string="1-Click Upgrade to Latest" class="btn-primary" icon="fa-level-up"/>
+                    <button name="action_upgrade_to_latest" type="object" string="1-Click Upgrade to Latest" class="btn-primary" icon="fa-level-up" invisible="not id"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -66,8 +66,8 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_download_to_pool" type="object" string="Download to Pool" invisible="is_downloaded"/>
-                    <button name="action_notify_tenants" type="object" string="Alert Stations via PagerDuty" class="btn-warning"/>
+                    <button name="action_download_to_pool" type="object" string="Download to Pool" invisible="is_downloaded or not id"/>
+                    <button name="action_notify_tenants" type="object" string="Alert Stations via PagerDuty" class="btn-warning" invisible="not id"/>
                 </header>
                 <sheet>
                     <group>

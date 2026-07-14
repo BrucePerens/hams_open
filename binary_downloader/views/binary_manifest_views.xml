@@ -29,8 +29,8 @@
         <field name="model">binary.manifest</field>
         <field name="arch" type="xml">
             <form string="Binary Manifest">
+                <!-- [@ANCHOR: UX_BINARY_INSTALL] -->
                 <header>
-                    <!-- [@ANCHOR: UX_BINARY_INSTALL] -->
                     <button name="action_install" type="object" string="Install Now" class="oe_highlight" invisible="is_installed or not id" groups="binary_downloader.group_binary_downloader_manager,base.group_system"/>
                 </header>
                 <sheet>

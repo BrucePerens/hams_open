@@ -131,5 +131,5 @@ For detailed narratives and end-to-end workflows, refer to the following:
 - `[@ANCHOR: test_binary_version_standard]` - Standard unit tests for versioning.
 
 ## 6. External Dependencies
-* `python`: `[]` (Please explicitly list the external_dependencies defined in __manifest__.py here as per ADR 0075)
+* `python`: `[]`
 </semantic_anchors>

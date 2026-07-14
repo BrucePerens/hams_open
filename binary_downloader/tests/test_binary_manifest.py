@@ -153,6 +153,16 @@ class TestBinaryManifest(HamsTransactionCase):
             "[!] DIAGNOSTIC FOR AI: Form view must contain 'url' field.",
         )
 
+    def test_05_1_version_views_render(self):
+        # [@ANCHOR: test_binary_version_form]
+        v1 = self.env["binary.version"].get_view(view_type="form")
+        self.assertIn("version_number", v1["arch"])
+
+    def test_05_2_tenant_link_views_render(self):
+        # [@ANCHOR: test_tenant_link_form]
+        v1 = self.env["binary.tenant.link"].get_view(view_type="form")
+        self.assertIn("symlink_path", v1["arch"])
+
     def test_06_is_installed_compute(self):
         # Tests [@ANCHOR: binary_compute_installed]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
