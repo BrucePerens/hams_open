@@ -133,12 +133,12 @@ class DaemonKeyRegistry(models.Model):
 
         # [@ANCHOR: COMM_register_daemon_logic]
         # Multi-company awareness: search for existing daemon name.
-        registry = self.env["daemon.key.registry"].search(
+        registry = self.env["daemon.key.registry"].with_company(user.company_id.id).search(
             [("name", "=", daemon_name), ("company_id", "=", user.company_id.id)],
             limit=1,
         )
         if not registry:
-            registry = self.env["daemon.key.registry"].create(
+            registry = self.env["daemon.key.registry"].with_company(user.company_id.id).create(
                 {
                     "name": daemon_name,
                     "user_id": user.id,
@@ -148,7 +148,7 @@ class DaemonKeyRegistry(models.Model):
             )
         else:
             # [@ANCHOR: COMM_register_daemon_idempotency]
-            registry.write(
+            registry.with_company(user.company_id.id).write(
                 {
                     "user_id": user.id,
                     "env_file_path": env_file_path,
@@ -208,7 +208,7 @@ class DaemonKeyRegistry(models.Model):
         for reg in registries:
             _logger.info("Synchronously provisioning key for daemon: %s", reg.name)
             try:
-                reg._rotate_key_and_write_file()
+                reg.with_company(reg.company_id.id)._rotate_key_and_write_file()
             except (UserError, ValidationError, AccessError):
                 # Allow validation and authorization errors to bubble up naturally
                 raise
@@ -242,7 +242,7 @@ class DaemonKeyRegistry(models.Model):
         if not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
             raise AccessError(_("Only Daemon Key Managers can rotate keys."))
 
-        self._rotate_key_and_write_file()
+        self.with_company(self.company_id.id)._rotate_key_and_write_file()
 
         return {
             "type": "ir.actions.client",
@@ -335,28 +335,11 @@ class DaemonKeyRegistry(models.Model):
 
         # [@ANCHOR: COMM_write_secure_env_file_logic]
         path = os.path.realpath(path)
-        # Sandbox check: Prevent writing to sensitive system directories
-        forbidden_prefixes = [
-            "/etc",
-            "/root",
-            "/boot",
-            "/sys",
-            "/proc",
-            "/dev",
-            "/home",
-            "/usr",
-            "/bin",
-            "/sbin",
-            "/lib",
-            "/lib64",
-            "/var/log",
-            "/var/mail",
-            "/var/spool",
-        ]
-        if any(path.startswith(pref) for pref in forbidden_prefixes):
+        mandatory_prefix = "/opt/hams/etc/keys/"
+        if not path.startswith(mandatory_prefix):
             raise UserError(
-                _("Security Alert: Writing to system directory '%s' is forbidden.")
-                % path
+                _("Security Alert: The environment file path must start with '%s'. (Resolved path: %s)")
+                % (mandatory_prefix, path)
             )
 
         try:
@@ -409,7 +392,7 @@ class DaemonKeyRegistry(models.Model):
             reg_id = reg.id
             reg_name = reg.name
             try:
-                reg._rotate_key_and_write_file()
+                reg.with_company(reg.company_id.id)._rotate_key_and_write_file()
                 self.env.cr.commit()
             except (OSError, UserError, ValidationError, AccessError) as e:
                 self.env.cr.rollback()

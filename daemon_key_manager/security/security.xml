@@ -27,6 +27,13 @@
             <field name="groups" eval="[(4, ref('base.group_user'))]"/>
         </record>
 
+        <record id="daemon_key_manager_all_companies_rule" model="ir.rule">
+            <field name="name">Daemon Key Manager cross-company</field>
+            <field name="model_id" ref="model_daemon_key_registry"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('daemon_key_manager.group_daemon_key_manager'))]"/>
+        </record>
+
         <record id="daemon_key_manager_read_service_accounts_rule" model="ir.rule">
             <field name="name">Daemon Key Manager can read Service Accounts</field>
             <field name="model_id" ref="base.model_res_users"/>

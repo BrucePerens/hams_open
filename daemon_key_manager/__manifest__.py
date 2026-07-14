@@ -1,3 +1,4 @@
+# Copyright © Bruce Perens K6BP. AGPL-3.0.
 {
     "name": "Daemon Key Manager",
     "version": "1.0",
@@ -20,7 +21,6 @@
     },
     "knowledge_docs": [
         {
-            # [@ANCHOR: COMM_documentation_installed]
             "name": "Daemon Key Manager Documentation",
             "path": "data/documentation.html",
             "icon": "🔑",

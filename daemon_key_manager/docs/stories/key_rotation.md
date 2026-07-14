@@ -6,22 +6,22 @@ so that the security risk of a leaked key is limited in time and I don't have to
 
 ## Scenario: Periodic Maintenance
 
-1.  Odoo's scheduled actions runner (cron) triggers the `ir_cron_rotate_daemon_keys` job every day [@ANCHOR: cron_rotation_trigger].
+1.  Odoo's scheduled actions runner (cron) triggers the `ir_cron_rotate_daemon_keys` job every day [@ANCHOR: COMM_cron_rotation_trigger].
 
-2.  The job identifies all daemons whose keys were last rotated more than 59 days ago [@ANCHOR: cron_rotation_logic].
+2.  The job identifies all daemons whose keys were last rotated more than 59 days ago [@ANCHOR: COMM_cron_rotation_logic].
 3.  For each eligible daemon, it:
     - Revokes the existing API key [@ANCHOR: COMM_revoke_old_keys_logic].
 
     - Generates a fresh 90-day API key [@ANCHOR: COMM_generate_new_key_logic].
 
-    - Overwrites the existing `.env` file with the new key [@ANCHOR: write_secure_env_file_logic].
+    - Overwrites the existing `.env` file with the new key [@ANCHOR: COMM_write_secure_env_file_logic].
     - Updates the `last_rotated` timestamp.
 4.  The external daemon, upon its next JSON-RPC call, may receive an `AccessError`.
-5.  The daemon's error handler re-reads the `.env` file, acquires the new key, and retries the request successfully [@ANCHOR: daemon_self_healing].
+5.  The daemon's error handler re-reads the `.env` file, acquires the new key, and retries the request successfully [@ANCHOR: COMM_daemon_self_healing].
 
 ## Manual Rotation
 
-If a specific daemon's credentials are suspected of being compromised, a manager can manually trigger a rotation for that specific daemon via the "Rotate Key" button on the registry form [@ANCHOR: action_rotate_key_api].
+If a specific daemon's credentials are suspected of being compromised, a manager can manually trigger a rotation for that specific daemon via the "Rotate Key" button on the registry form [@ANCHOR: COMM_action_rotate_key_api].
 
 ## Safety Safeguards
 

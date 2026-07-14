@@ -188,7 +188,7 @@ class TestKeyRegistry(RealTransactionCase):
         registry = (
             self.env["daemon.key.registry"]
             .with_user(self.manager_user.id)
-            .search([("name", "=", daemon_name)])
+            .search([("name", "=", daemon_name)], limit=1)
         )
         self.assertTrue(registry)
         self.assertEqual(registry.env_file_path, env_file_path)
@@ -197,7 +197,7 @@ class TestKeyRegistry(RealTransactionCase):
         # Verify usage group assignment
         # Tests [@ANCHOR: COMM_privilege_escalation_bypass]
         usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
-        target_user = self.env["res.users"].search([("login", "=", user_xml_id)])
+        target_user = self.env["res.users"].search([("login", "=", user_xml_id)], limit=1)
         if not target_user:
             target_user = self.env.ref(user_xml_id)
         self.assertIn(usage_group, target_user.group_ids)
@@ -462,6 +462,7 @@ class TestKeyRegistryTour(HamsHttpCase):
 
         # Ensure admin has Technical Features enabled for the tour
         admin = self.env.ref("base.user_admin")
+        admin.lang = 'en_US'
         group_no_one = self.env.ref("base.group_no_one")
         if group_no_one not in admin.group_ids:
             admin.write({"group_ids": [(4, group_no_one.id)]})

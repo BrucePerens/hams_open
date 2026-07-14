@@ -7,16 +7,16 @@ so that it receives a secure, auto-rotating API key without me having to manage 
 ## Scenario: Initial Module Installation
 
 1.  The developer creates a new Odoo module for their daemon.
-2.  In the module's `post_init_hook` or a configuration wizard, they call the `register_daemon` API [@ANCHOR: register_daemon_api].
+2.  In the module's `post_init_hook` or a configuration wizard, they call the `register_daemon` API [@ANCHOR: COMM_register_daemon_api].
 
-3.  The `daemon_key_manager` verifies the service account and the requested file path [@ANCHOR: register_daemon_logic].
+3.  The `daemon_key_manager` verifies the service account and the requested file path [@ANCHOR: COMM_register_daemon_logic].
 4.  A new entry is created in the `daemon.key.registry`.
-5.  An initial API key is generated and securely written to the specified `.env` file on disk [@ANCHOR: write_secure_env_file_logic].
+5.  An initial API key is generated and securely written to the specified `.env` file on disk [@ANCHOR: COMM_write_secure_env_file_logic].
 6.  The daemon can now boot and read its credentials from `/opt/hams/etc/keys/my_daemon.env`.
 
 ## Key Logic
-- The registration is idempotent; calling it again updates the existing registration [@ANCHOR: register_daemon_idempotency].
+- The registration is idempotent; calling it again updates the existing registration [@ANCHOR: COMM_register_daemon_idempotency].
 
-- Security constraints ensure that only service accounts can be used [@ANCHOR: COMM_security_constraints_user] and files are written to allowed paths [@ANCHOR: security_constraints_path].
+- Security constraints ensure that only service accounts can be used [@ANCHOR: COMM_security_constraints_user] and files are written to allowed paths [@ANCHOR: COMM_security_constraints_path].
 
 - Automated privilege assignment ensures the daemon has the correct permissions for long-lived keys [@ANCHOR: COMM_privilege_escalation_bypass].

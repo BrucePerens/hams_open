@@ -10,9 +10,9 @@ This journey covers the steps required to provision credentials in a modern, con
     - `daemon_key_manager` is installed.
 
 3.  **Proactive Provisioning**
-    - CI/CD runner executes `action_force_provision_all()` [@ANCHOR: action_force_provision_all_api].
+    - CI/CD runner executes `action_force_provision_all()` [@ANCHOR: COMM_action_force_provision_all_api].
 
-    - This ensures all `.env` files are created *before* the daemons try to read them [@ANCHOR: force_provision_logic].
+    - This ensures all `.env` files are created *before* the daemons try to read them [@ANCHOR: COMM_force_provision_logic].
 
 4.  **Daemon Startup**
     - Daemon containers start.
@@ -20,4 +20,4 @@ This journey covers the steps required to provision credentials in a modern, con
     - Daemons start working immediately without any "key not found" errors.
 
 5.  **Steady State**
-    - Odoo's cron job maintains the keys over the long term [@ANCHOR: cron_rotation_logic].
+    - Odoo's cron job maintains the keys over the long term [@ANCHOR: COMM_cron_rotation_logic].

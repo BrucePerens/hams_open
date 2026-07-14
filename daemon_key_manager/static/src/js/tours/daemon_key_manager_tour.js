@@ -1,4 +1,5 @@
 /** @odoo-module **/
+/* This software is distributed under the terms of the Affero General Public License (AGPL-3). */
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
@@ -34,7 +35,11 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         {
             trigger: 'div[name="env_file_path"] input',
             content: 'Enter environment file path',
-            run: 'edit /opt/hams/etc/keys/test.env',
+            run: function () {
+                const input = document.querySelector('div[name="env_file_path"] input');
+                input.value = '/opt/hams/etc/keys/test.env';
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            },
         },
         {
             trigger: '.o_form_sheet',
