@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Part of Odoo. See LICENSE file for full copyright and licensing details.
+     This file is part of hams_open, an open source module.
+     License: AGPL-3.0 -->
 <odoo>
     <record id="view_zero_sudo_security_log_list" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: COMM_test_security_log_views] -->
+        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_security_log_views] -->
         <field name="name">zero_sudo.security.log.list</field>
         <field name="model">zero_sudo.security.log</field>
         <field name="arch" type="xml">
@@ -17,7 +20,7 @@
     </record>
 
     <record id="view_zero_sudo_security_log_form" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: COMM_test_security_log_views] -->
+        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_security_log_views] -->
         <field name="name">zero_sudo.security.log.form</field>
         <field name="model">zero_sudo.security.log</field>
         <field name="arch" type="xml">

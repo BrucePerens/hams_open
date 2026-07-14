@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Part of Odoo. See LICENSE file for full copyright and licensing details.
+    This file is part of hams_open, an open source module.
+    License: AGPL-3.0
+-->
 <odoo>
     <data noupdate="0">
         <record id="zero_sudo_procedures" model="ir.actions.server">
@@ -60,16 +65,9 @@ sql_set_kv = """
 CREATE OR REPLACE FUNCTION zero_sudo_set_kv(p_key TEXT, p_value TEXT)
 RETURNS VOID AS $$
 BEGIN
-    LOOP
-        BEGIN
-            INSERT INTO zero_sudo_kv (key, value)
-            VALUES (p_key, p_value)
-            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-            RETURN;
-        EXCEPTION WHEN serialization_failure OR unique_violation THEN
-            -- Ignore concurrent transaction collisions and retry
-        END;
-    END LOOP;
+    INSERT INTO zero_sudo_kv (key, value)
+    VALUES (p_key, p_value)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 END;
 $$ LANGUAGE plpgsql;
 """

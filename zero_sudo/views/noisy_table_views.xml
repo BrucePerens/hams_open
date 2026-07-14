@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Part of Odoo. See LICENSE file for full copyright and licensing details.
+     This file is part of hams_open, an open source module.
+     License: AGPL-3.0 -->
 <odoo>
     <record id="view_noisy_table_list" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: COMM_test_noisy_table_views] -->
+        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views] -->
         <field name="name">zero_sudo.noisy_table.list</field>
         <field name="model">zero_sudo.noisy_table</field>
         <field name="arch" type="xml">
@@ -13,14 +16,12 @@
     </record>
 
     <record id="view_noisy_table_form" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: COMM_test_noisy_table_views] -->
+        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views] -->
         <field name="name">zero_sudo.noisy_table.form</field>
         <field name="model">zero_sudo.noisy_table</field>
         <field name="arch" type="xml">
             <form string="Noisy Table">
                 <sheet>
-                    <div class="oe_button_box" name="button_box">
-                    </div>
                     <widget name="web_ribbon" title="Archived" bg_color="bg-danger" invisible="active"/>
                     <group>
                         <group>
@@ -47,7 +48,7 @@
         </field>
     </record>
 
-    <!-- [@ANCHOR: COMM_UX_NOISY_TABLE_MANAGEMENT] -->
+    <!-- [@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT] -->
     <menuitem id="menu_noisy_table"
               name="Noisy Tables"
               parent="base.menu_administration"

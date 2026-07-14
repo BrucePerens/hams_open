@@ -22,7 +22,7 @@ def unstack_file(filepath):
             f.writelines(out)
         print(f"Unstacked {filepath}")
 
-for root, dirs, files in os.walk('/home/bruce/workspace/hams_open'):
+for root, dirs, files in os.walk(os.path.dirname(os.path.abspath(__file__))):
     if '.git' in root or 'node_modules' in root or '__pycache__' in root:
         continue
     for file in files:

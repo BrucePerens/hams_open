@@ -26,6 +26,8 @@ class Module(models.Model):
     def _bootstrap_knowledge_docs(self):
         # Dependencies formally guarantee knowledge.article
         article_model_name = "knowledge.article"
+        if article_model_name not in self.env:
+            return
 
         utils = self.env["zero_sudo.security.utils"]
 

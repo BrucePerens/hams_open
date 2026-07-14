@@ -23,7 +23,7 @@ export class SecurityDashboard extends Component {
                 }
             }, 20000);
             return () => clearInterval(interval);
-        });
+        }, []);
 
         onWillStart(async () => {
             await this.loadLogs();

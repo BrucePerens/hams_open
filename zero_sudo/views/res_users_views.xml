@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Part of Odoo. See LICENSE file for full copyright and licensing details.
+     This file is part of hams_open, an open source module.
+     License: AGPL-3.0 -->
 <odoo>
     <record id="view_users_form_zero_sudo" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_res_users_views] --> <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_res_users_views] --> <!-- burn-ignore-tour -->
         <field name="name">res.users.form.zero_sudo</field>
         <field name="model">res.users</field>
         <field name="inherit_id" ref="base.view_users_form"/>
         <field name="arch" type="xml">
             <xpath expr="//notebook/page[@name='access_rights']//group" position="inside">
-                <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_res_users_views] -->
+                <!-- audit-ignore-xpath: Tested by [@ANCHOR: zero_sudo:COMM_test_res_users_views] -->
                 <field name="is_service_account"/>
             </xpath>
         </field>
     </record>
 
     <record id="view_users_list_zero_sudo" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_res_users_views] --> <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_res_users_views] --> <!-- burn-ignore-tour -->
         <field name="name">res.users.list.zero_sudo</field>
         <field name="model">res.users</field>
         <field name="inherit_id" ref="base.view_users_tree"/>
@@ -26,13 +29,13 @@
     </record>
 
     <record id="view_users_search_zero_sudo" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_res_users_views] --> <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_res_users_views] --> <!-- burn-ignore-tour -->
         <field name="name">res.users.search.zero_sudo</field>
         <field name="model">res.users</field>
         <field name="inherit_id" ref="base.view_users_search"/>
         <field name="arch" type="xml">
             <xpath expr="//filter[@name='Inactive']" position="after">
-                <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_res_users_views] -->
+                <!-- audit-ignore-xpath: Tested by [@ANCHOR: zero_sudo:COMM_test_res_users_views] -->
                 <separator/>
                 <filter string="Service Accounts" name="service_accounts" domain="[('is_service_account', '=', True)]"/>
                 <filter string="Human Users" name="human_users" domain="[('is_service_account', '=', False)]"/>

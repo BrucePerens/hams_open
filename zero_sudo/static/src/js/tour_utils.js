@@ -80,11 +80,16 @@ export const TourUtils = {
             content: "[MACRO] Wait for DOM text: " + (description || text),
             trigger: 'body',
             run: function () {
-                return new Promise((resolve) => {
+                return new Promise((resolve, reject) => {
+                    let elapsed = 0;
                     const interval = setInterval(() => {
+                        elapsed += 250;
                         if (document.body.textContent.includes(text)) {
                             clearInterval(interval);
                             resolve();
+                        } else if (elapsed >= 10000) {
+                            clearInterval(interval);
+                            reject(new Error("Timeout waiting for text: " + text));
                         }
                     }, 250);
                 });
@@ -98,11 +103,16 @@ export const TourUtils = {
             content: "[MACRO] Wait for DOM element: " + (description || selector),
             trigger: 'body',
             run: function () {
-                return new Promise((resolve) => {
+                return new Promise((resolve, reject) => {
+                    let elapsed = 0;
                     const interval = setInterval(() => {
+                        elapsed += 250;
                         if (document.querySelector(selector)) {
                             clearInterval(interval);
                             resolve();
+                        } else if (elapsed >= 10000) {
+                            clearInterval(interval);
+                            reject(new Error("Timeout waiting for element: " + selector));
                         }
                     }, 250);
                 });

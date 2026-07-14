@@ -8,10 +8,11 @@
 from . import common
 from odoo.exceptions import AccessError
 from odoo import _
-import odoo.tools
 
+import os
 import sys
 from odoo.tests.common import tagged
+from odoo.tools.misc import file_path
 
 @tagged("post_install", "-at_install")
 class TestZeroSudoFixes(common.HamsTransactionCase):
@@ -64,7 +65,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.assertNotEqual(pythonpath, "/usr/lib/python3/dist-packages")
 
     def test_ir_http_is_service_account_cached(self):
-        # [@ANCHOR: COMM_test_is_service_account_cached]
+        # [@ANCHOR: zero_sudo:COMM_test_is_service_account_cached]
         user = self.env["res.users"].create({
             "name": "Service Account IrHttp",
             "login": "service_account_irhttp@example.com",
@@ -90,7 +91,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.assertNotEqual(user.password, "new_password")
 
     def test_security_log_autovacuum(self):
-        # [@ANCHOR: COMM_test_security_log_autovacuum]
+        # [@ANCHOR: zero_sudo:COMM_test_security_log_autovacuum]
         log = self.env["zero_sudo.security.log"].create({
             "reason": "cache_invalidation"
         })
@@ -102,7 +103,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.assertEqual(cron.user_id, service_user, "Cron must run as zero_sudo.odoo_facility_service_internal")
 
     def test_poll_health_check(self):
-        # [@ANCHOR: COMM_test_poll_health_check]
+        # [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         
         class MockResponse:
@@ -114,11 +115,12 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             return MockResponse()
             
         self.safe_patch("urllib.request.urlopen", mock_urlopen)
-        res = daemon_utils.poll_health_check("http://localhost:8080/health", timeout=1, interval=0.1)
+        host = os.environ.get("DAEMON_HOST", "odoo")
+        res = daemon_utils.poll_health_check(f"http://{host}:8080/health", timeout=1, interval=0.1)
         self.assertTrue(res)
 
     def test_security_log_immutability(self):
-        # [@ANCHOR: COMM_test_security_log_immutability]
+        # [@ANCHOR: zero_sudo:COMM_test_security_log_immutability]
         log = self.env["zero_sudo.security.log"].create({
             "reason": "test_immutability"
         })
@@ -127,23 +129,25 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         log_sudo = log.with_user(system_user)
         with self.assertRaises(AccessError):
             log_sudo.write({"reason": "changed"})
+            self.env.flush_all()
         with self.assertRaises(AccessError):
             log_sudo.unlink()
+            self.env.flush_all()
             
         # Check facility service group
         facility_user = self.env.ref("zero_sudo.odoo_facility_service_internal")
         log_facility = log.with_user(facility_user)
         with self.assertRaises(AccessError):
             log_facility.write({"reason": "changed_facility"})
+            self.env.flush_all()
         with self.assertRaises(AccessError):
             log_facility.unlink()
+            self.env.flush_all()
 
     def test_documentation_wrappers(self):
-        # [@ANCHOR: COMM_test_documentation_wrappers]
-        import os
-        from odoo.modules.module import get_resource_path
+        # [@ANCHOR: zero_sudo:COMM_test_documentation_wrappers]
         
-        path = get_resource_path("zero_sudo", "data", "testing_documentation.html")
+        path = file_path("zero_sudo/data/testing_documentation.html")
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         self.assertTrue(content.startswith('<div class="o_knowledge_content">'))

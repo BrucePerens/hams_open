@@ -13,29 +13,29 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 class TestZeroSudoControllers(RealTransactionCase):
 
     def test_01_web_login_interceptor(self):
-        # [@ANCHOR: COMM_test_web_login_interceptor_check]
+        # [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
         # ---
-        # Verified by [@ANCHOR: COMM_test_web_login_interceptor_check]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
         # ---
-        # [@ANCHOR: COMM_test_web_login_interceptor]
+        # [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
         # ---
-        # Verified by [@ANCHOR: COMM_test_web_login_interceptor]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
         # ---
-        # Tests [@ANCHOR: COMM_web_login_interceptor]
+        # Tests [@ANCHOR: zero_sudo:COMM_web_login_interceptor]
         # ---
-        # Tests [@ANCHOR: COMM_web_login_interceptor_check]
+        # Tests [@ANCHOR: zero_sudo:COMM_web_login_interceptor_check]
         # ---
-        # Tests [@ANCHOR: COMM_story_login_blocking]
+        # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
         # ---
-        # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
+        # Tests [@ANCHOR: zero_sudo:COMM_journey_service_account_lifecycle]
         # ---
-        # Tests [@ANCHOR: COMM_zero_sudo_security_log_global]
+        # Tests [@ANCHOR: zero_sudo:COMM_zero_sudo_security_log_global]
         """Verify that service accounts cannot log into the web interface."""
-        # [@ANCHOR: COMM_test_is_service_account_field]
+        # [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
         # ---
-        # Verified by [@ANCHOR: COMM_test_is_service_account_field]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
         # ---
-        # Tests [@ANCHOR: COMM_is_service_account_field]
+        # Tests [@ANCHOR: zero_sudo:COMM_is_service_account_field]
 
         login = "test_service_block"
         password = "test_password"
@@ -51,9 +51,10 @@ class TestZeroSudoControllers(RealTransactionCase):
                 "password": password,
                 "is_service_account": False,
                 "active": True,
+                "lang": "en_US",
             }
         )
-        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_web_login_interceptor]
+        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor] # fmt: skip
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         # MANDATORY: Commit so the HTTP worker thread can see the new user.
@@ -71,7 +72,7 @@ class TestZeroSudoControllers(RealTransactionCase):
 
         response = self.url_open(
             "/web/login",
-            data={  # burn-ignore-route
+            data={  # burn-ignore-route # fmt: skip
                 "login": login,
                 "password": password,
                 "csrf_token": csrf_token,

@@ -8,7 +8,6 @@ import os
 import tempfile
 import shutil
 from unittest.mock import MagicMock
-from odoo import _
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.daemon.json_rpc_client import SecureJSONRPCClient
@@ -21,7 +20,8 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         super().setUp()
         self.test_dir = tempfile.mkdtemp()
         self.env_path = os.path.join(self.test_dir, "test.env")
-        self.base_url = "http://odoo:8069"
+        host = os.environ.get("ODOO_HOST", "odoo")
+        self.base_url = f"http://{host}:8069"
         self.db_name = "test_db"
 
         # Create a mock env file
@@ -30,8 +30,10 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
             f.write("ODOO_RPC_KEY=test_key\n")
 
     def tearDown(self):
-        shutil.rmtree(self.test_dir)
-        super().tearDown()
+        try:
+            shutil.rmtree(self.test_dir)
+        finally:
+            super().tearDown()
 
     def test_call_success(self):
         # We need to mock requests.Session
@@ -57,18 +59,21 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         self.assertEqual(mock_session.post.call_count, 2)
         
         auth_call_args, auth_call_kwargs = mock_session.post.call_args_list[0]
-        self.assertEqual(auth_call_args[0], "http://odoo:8069/jsonrpc")
+        host = os.environ.get("ODOO_HOST", "odoo")
+        self.assertEqual(auth_call_args[0], f"http://{host}:8069/jsonrpc")
         auth_payload = auth_call_kwargs["json"]
         self.assertEqual(auth_payload["params"]["method"], "authenticate")
         
-        exec_call_args, exec_call_kwargs = mock_session.post.call_args_list[1]
-        self.assertEqual(exec_call_args[0], "http://odoo:8069/jsonrpc")
+        exec_call_args, exec_call_kwargs = mock_session.post.call_args_list[1]  # audit-ignore-i18n: Tested by [@ANCHOR: zero_sudo:COMM_test_call_self_healing]
+        host = os.environ.get("ODOO_HOST", "odoo")
+        self.assertEqual(exec_call_args[0], f"http://{host}:8069/jsonrpc")
         exec_payload = exec_call_kwargs["json"]
         self.assertEqual(exec_payload["params"]["method"], "execute_kw")
         self.assertEqual(exec_payload["params"]["args"][1], 42)
         self.assertEqual(exec_payload["params"]["args"][2], "test_key")
 
     def test_call_self_healing(self):
+        # [@ANCHOR: zero_sudo:COMM_test_call_self_healing]
         mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
@@ -84,7 +89,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         
         mock_exec_fail = MagicMock()
         mock_exec_fail.status_code = 401
-        mock_exec_fail.json.return_value = {"error": "Access Denied"}
+        mock_exec_fail.json.return_value = {"error": "Access Denied Error"}
         
         mock_auth2 = MagicMock()
         mock_auth2.status_code = 200

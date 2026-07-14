@@ -25,4 +25,4 @@ class TEscWarningFilter(logging.Filter):
 # Attach to the root logger to intercept messages from ir.qweb or any view rendering
 logging.getLogger().addFilter(TEscWarningFilter())
 
-# [@ANCHOR: COMM_zero_sudo_doc_installer]
+# [@ANCHOR: zero_sudo:COMM_zero_sudo_doc_installer]

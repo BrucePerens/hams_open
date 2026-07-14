@@ -23,7 +23,9 @@ class SecureJSONRPCClient:
         self.base_url = base_url.rstrip("/")
         self.db_name = db_name
         self.login = None
+        self.uid = None
         self.api_key = None
+        self.session = requests.Session()
         self._load_credentials()
 
     def _load_credentials(self):
@@ -43,6 +45,29 @@ class SecureJSONRPCClient:
             raise ValueError(
                 f"Malformed credential file at {self.env_path}. Missing LOGIN or KEY."
             )
+        self._authenticate()
+
+    def _authenticate(self):
+        url = f"{self.base_url}/jsonrpc"
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "call",
+            "params": {
+                "service": "common",
+                "method": "authenticate",
+                "args": [self.db_name, self.login, self.api_key, {}],
+            },
+            "id": 1,
+        }
+        response = self.session.post(url, json=payload, timeout=30)
+        try:
+            result = response.json()
+        except ValueError as e:
+            raise RuntimeError(f"Failed to decode JSON response from authenticate: {e}")
+            
+        self.uid = result.get("result")
+        if not self.uid:
+            raise RuntimeError("Authentication failed")
 
     def call(self, model, method, args=None, kwargs=None):
         if args is None:
@@ -59,7 +84,7 @@ class SecureJSONRPCClient:
                 "method": "execute_kw",
                 "args": [
                     self.db_name,
-                    self.login,
+                    self.uid,
                     self.api_key,
                     model,
                     method,
@@ -70,11 +95,11 @@ class SecureJSONRPCClient:
             "id": 1,
         }
 
-        response = requests.post(url, json=payload, timeout=30)
+        response = self.session.post(url, json=payload, timeout=30)
         try:
             result = response.json()
-        except ValueError:
-            result = {}
+        except ValueError as e:
+            raise RuntimeError(f"Failed to decode JSON response: {e}")
 
         # Self-Healing: If key was rotated by Odoo cron, 401/403 or AccessError occurs.
         # Catch, re-read the updated .env file from disk, and retry.
@@ -85,13 +110,16 @@ class SecureJSONRPCClient:
                 "JSON-RPC Access Denied. Attempting to reload rotated keys from env file."
             )
             self._load_credentials()
-            payload["params"]["args"][1] = self.login
+            payload["params"]["args"][1] = self.uid
             payload["params"]["args"][2] = self.api_key
 
-            response = requests.post(url, json=payload, timeout=30)
-            result = response.json()
+            response = self.session.post(url, json=payload, timeout=30)
+            try:
+                result = response.json()
+            except ValueError as e:
+                raise RuntimeError(f"Failed to decode JSON response on retry: {e}")
 
         if result.get("error"):
-            raise Exception(f"JSON-RPC Error: {result['error']}")
+            raise RuntimeError(f"JSON-RPC Error: {result['error']}")
 
         return result.get("result")

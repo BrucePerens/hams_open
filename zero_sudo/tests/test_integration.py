@@ -5,7 +5,6 @@
 # License: AGPL-3.0
 
 import os
-import socket
 import urllib.request
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -13,12 +12,12 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install", "integration")
 class TestIntegrationFacility(HamsTransactionCase):
-    # Tests [@ANCHOR: COMM_integration_daemon_testing]
+    # Tests [@ANCHOR: zero_sudo:COMM_integration_daemon_testing]
 
     def test_01_daemon_lifecycle(self):
-        # [@ANCHOR: COMM_test_integration_daemon_testing]
+        # [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         # ---
-        # Verified by [@ANCHOR: COMM_test_integration_daemon_testing]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         """
         Verify that HamsTransactionCase correctly starts a daemon and polls its health.
         """
@@ -27,7 +26,7 @@ class TestIntegrationFacility(HamsTransactionCase):
 
         # The dummy_daemon.py uses port 1234.
         # We use the hostname here to satisfy the linter's anti-localhost policy.
-        host = socket.gethostname()
+        host = os.environ.get("DAEMON_HOST", "odoo")
         health_url = f"http://{host}:1234"
 
         # start_daemon already verifies health_url returns 200.

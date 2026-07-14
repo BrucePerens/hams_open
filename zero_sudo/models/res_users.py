@@ -19,13 +19,13 @@ class ResUsersZeroSudo(models.Model):
     )
 
     is_service_account = fields.Boolean(
-        # [@ANCHOR: COMM_is_service_account_field]
+        # [@ANCHOR: zero_sudo:COMM_is_service_account_field]
         # ---
-        # Verified by [@ANCHOR: COMM_test_is_service_account_field]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
         # ---
-        # Tests [@ANCHOR: COMM_story_login_blocking]
+        # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
         # ---
-        # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
+        # Tests [@ANCHOR: zero_sudo:COMM_journey_service_account_lifecycle]
         string="Is Service Account",
         default=False,
         help=(
@@ -37,9 +37,9 @@ class ResUsersZeroSudo(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        # [@ANCHOR: COMM_service_account_password_generation]
+        # [@ANCHOR: zero_sudo:COMM_service_account_password_generation]
         # ---
-        # Verified by [@ANCHOR: COMM_COMM_test_service_account_password]
+        # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_service_account_password]
         for vals in vals_list:
             if vals.get("is_service_account"):
                 # Ensure no password for service accounts

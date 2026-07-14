@@ -14,30 +14,30 @@ _logger = logging.getLogger(__name__)
 @tagged("post_install", "-at_install")
 class TestRealTransactionFacility(RealTransactionCase):
     _integration_daemon_process = None
-    # Tests [@ANCHOR: COMM_cursor_hijacking]
+    # Tests [@ANCHOR: zero_sudo:COMM_cursor_hijacking]
     # ---
-    # Tests [@ANCHOR: COMM_leak_snapshotting]
+    # Tests [@ANCHOR: zero_sudo:COMM_leak_snapshotting]
     # ---
-    # Tests [@ANCHOR: COMM_orm_instrumentation]
+    # Tests [@ANCHOR: zero_sudo:COMM_orm_instrumentation]
     # ---
-    # Tests [@ANCHOR: COMM_automated_cleanup]
+    # Tests [@ANCHOR: zero_sudo:COMM_automated_cleanup]
     # ---
-    # Tests [@ANCHOR: COMM_leak_verification]
+    # Tests [@ANCHOR: zero_sudo:COMM_leak_verification]
     # ---
-    # Tests [@ANCHOR: COMM_user_real_transaction_service]
+    # Tests [@ANCHOR: zero_sudo:COMM_user_real_transaction_service]
     # ---
-    # Tests [@ANCHOR: COMM_hams_transaction_case]
+    # Tests [@ANCHOR: zero_sudo:COMM_hams_transaction_case]
     # ---
-    # Tests [@ANCHOR: COMM_hams_http_case]
+    # Tests [@ANCHOR: zero_sudo:COMM_hams_http_case]
 
     def test_00_cursor_hijacking_and_snapshot(self):
-        # [@ANCHOR: COMM_test_cursor_hijacking]
+        # [@ANCHOR: zero_sudo:COMM_test_cursor_hijacking]
         # ---
-        # Verified by [@ANCHOR: COMM_test_cursor_hijacking]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_cursor_hijacking]
         # ---
-        # [@ANCHOR: COMM_test_leak_snapshotting]
+        # [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting]
         # ---
-        # Verified by [@ANCHOR: COMM_test_leak_snapshotting]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting]
         """
         Verify that the cursor is indeed real and that snapshotting occurred.
         """
@@ -51,14 +51,14 @@ class TestRealTransactionFacility(RealTransactionCase):
         self.assertIn("res_users", self._initial_counts)
 
     def test_01_auto_cleanup_tracking(self):
-        # [@ANCHOR: COMM_test_orm_instrumentation]
+        # [@ANCHOR: zero_sudo:COMM_test_orm_instrumentation]
         # ---
-        # Verified by [@ANCHOR: COMM_test_orm_instrumentation]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_orm_instrumentation]
         """
         Prove that the facility accurately tracks and auto-deletes standard ORM creations.
         """
         user = self.env["res.users"].create(
-            {"name": "Cleanup Target", "login": "cleanup_target"}
+            {"name": "Cleanup Target", "login": "cleanup_target", "lang": "en_US"}
         )
         self.env.cr.commit()
 
@@ -68,15 +68,15 @@ class TestRealTransactionFacility(RealTransactionCase):
         # Note: TearDown will automatically delete this user and check for leaks.
 
     def test_02_leak_detector_catches_raw_sql(self):
-        # [@ANCHOR: COMM_test_leak_verification]
+        # [@ANCHOR: zero_sudo:COMM_test_leak_verification]
         # ---
-        # Verified by [@ANCHOR: COMM_test_leak_verification]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_verification]
         """
         Prove that the SQL Leak Detector successfully triggers an AssertionError
         if a test bypasses the ORM tracker using raw SQL inserts.
         """
         # Manually invoke the teardown logic to simulate a leak
-        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_verification]
+        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_verification] # fmt: skip
             "INSERT INTO ir_module_category (name) VALUES ('\"SQL Leak Test\"') RETURNING id"
         )
         leaked_id = self.cr.fetchone()[0]
@@ -89,7 +89,7 @@ class TestRealTransactionFacility(RealTransactionCase):
             noisy_tables_records = self.env["zero_sudo.noisy_table"].search([], limit=1000)
             noisy_tables = {record.name for record in noisy_tables_records}
     
-            self.cr.execute("SELECT count(1) FROM ir_module_category")  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_verification]
+            self.cr.execute("SELECT count(1) FROM ir_module_category")  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_verification]
             final_count = self.cr.fetchone()[0]
             initial_count = self._initial_counts.get("ir_module_category", 0)
     
@@ -106,13 +106,13 @@ class TestRealTransactionFacility(RealTransactionCase):
             )
         finally:
             # Clean up the raw SQL insertion so the REAL tearDown doesn't crash the test suite
-            self.cr.execute("DELETE FROM ir_module_category WHERE id = %s", (leaked_id,))  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_verification]
+            self.cr.execute("DELETE FROM ir_module_category WHERE id = %s", (leaked_id,))  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_verification]
             self.env.cr.commit()
 
     def test_03_foreign_key_cascade_cleanup(self):
-        # [@ANCHOR: COMM_test_automated_cleanup]
+        # [@ANCHOR: zero_sudo:COMM_test_automated_cleanup]
         # ---
-        # Verified by [@ANCHOR: COMM_test_automated_cleanup]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup]
         """
         Prove that the multi-pass auto-cleanup handles hierarchical dependencies.
         """
@@ -123,6 +123,7 @@ class TestRealTransactionFacility(RealTransactionCase):
                 "login": "fk_user",
                 "company_id": company.id,
                 "company_ids": [(4, company.id)],
+                "lang": "en_US",
             }
         )
         self.env.cr.commit()
@@ -133,9 +134,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         # the Leak Detector will catch it and fail the suite.
 
     def test_04_dynamic_noisy_tables(self):
-        # [@ANCHOR: COMM_test_dynamic_noisy_tables]
+        # [@ANCHOR: zero_sudo:COMM_test_dynamic_noisy_tables]
         # ---
-        # Verified by [@ANCHOR: COMM_test_dynamic_noisy_tables]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_dynamic_noisy_tables]
         """
         Prove that adding a table to the noisy_table model prevents the leak detector
         from catching it.
@@ -147,7 +148,7 @@ class TestRealTransactionFacility(RealTransactionCase):
         self.env.cr.commit()
 
         # 2. Simulate a leak
-        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_dynamic_noisy_tables]
+        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_dynamic_noisy_tables] # fmt: skip
             "INSERT INTO ir_module_category (name) VALUES ('\"SQL Leak Test Noisy\"') RETURNING id"
         )
         leaked_id = self.cr.fetchone()[0]
@@ -161,7 +162,7 @@ class TestRealTransactionFacility(RealTransactionCase):
             )
             noisy_tables = {r.name for r in noisy_records}
     
-            self.cr.execute("SELECT count(1) FROM ir_module_category")  # audit-ignore-sql: Tested by [@ANCHOR: test_dynamic_noisy_tables]
+            self.cr.execute("SELECT count(1) FROM ir_module_category")  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_dynamic_noisy_tables]
             final_count = self.cr.fetchone()[0]
             initial_count = self._initial_counts.get("ir_module_category", 0)
     
@@ -178,50 +179,50 @@ class TestRealTransactionFacility(RealTransactionCase):
             )
         finally:
             # 4. Clean up the leak AND the noisy table record to keep the DB clean for tearDown
-            self.cr.execute("DELETE FROM ir_module_category WHERE id = %s", (leaked_id,))  # audit-ignore-sql: Tested by [@ANCHOR: test_dynamic_noisy_tables]
+            self.cr.execute("DELETE FROM ir_module_category WHERE id = %s", (leaked_id,))  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_dynamic_noisy_tables]
             noisy_table.unlink()
             self.env.cr.commit()
 
     def test_06_leak_detector_handles_multiple_initial_counts(self):
-        # [@ANCHOR: COMM_test_leak_detector_handles_multiple_initial_counts]
+        # [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts]
         # ---
-        # Verified by [@ANCHOR: COMM_test_leak_detector_handles_multiple_initial_counts]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts]
         """
         Ensure the leak detector correctly identifies leaks even if initial count was non-zero.
         """
         try:
             # 1. Ensure we have an initial count
-            self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_detector_handles_multiple_initial_counts]
+            self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts] # fmt: skip
                 "INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test')"
             )
             self.env.cr.commit()
 
             # We need to re-run snapshotting logic or simulate it
-            self.cr.execute("SELECT count(1) FROM zero_sudo_noisy_table")  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_detector_handles_multiple_initial_counts]
+            self.cr.execute("SELECT count(1) FROM zero_sudo_noisy_table")  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts]
             initial_count = self.cr.fetchone()[0]
 
             # 2. Add another record via SQL (bypass ORM)
-            self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_detector_handles_multiple_initial_counts]
+            self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts] # fmt: skip
                 "INSERT INTO zero_sudo_noisy_table (name) VALUES ('temp_table_leak_test_2')"
             )
             self.env.cr.commit()
 
             # 3. Verify leak detector would catch it
-            self.cr.execute("SELECT count(1) FROM zero_sudo_noisy_table")  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_detector_handles_multiple_initial_counts]
+            self.cr.execute("SELECT count(1) FROM zero_sudo_noisy_table")  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts]
             final_count = self.cr.fetchone()[0]
 
             self.assertEqual(final_count - initial_count, 1)
         finally:
             # Cleanup
-            self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_detector_handles_multiple_initial_counts]
+            self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_detector_handles_multiple_initial_counts] # fmt: skip
                 "DELETE FROM zero_sudo_noisy_table WHERE name IN ('temp_table_leak_test', 'temp_table_leak_test_2')"
             )
             self.env.cr.commit()
 
     def test_07_common_setup_class_sql(self):
-        # [@ANCHOR: COMM_test_common_setup_class_sql]
+        # [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql]
         # ---
-        # Verified by [@ANCHOR: COMM_test_common_setup_class_sql]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql]
         """
         Verify that the raw SQL used in setUpClass for web.base.url is safe.
         """
@@ -231,9 +232,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         self.assertEqual(val[0], 'https://hams.com')
 
     def test_08_admin_user_fetch(self):
-        # [@ANCHOR: COMM_test_admin_user_fetch]
+        # [@ANCHOR: zero_sudo:COMM_test_admin_user_fetch]
         # ---
-        # Verified by [@ANCHOR: COMM_test_admin_user_fetch]
+        # Verified by [@ANCHOR: zero_sudo:COMM_test_admin_user_fetch]
         """
         Verify that the raw SQL fetch for admin user in setUp is safe and works.
         """

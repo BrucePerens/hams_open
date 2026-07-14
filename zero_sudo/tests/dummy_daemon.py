@@ -17,5 +17,5 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    with socketserver.TCPServer(("0.0.0.0", PORT), Handler) as httpd:
         httpd.serve_forever()
