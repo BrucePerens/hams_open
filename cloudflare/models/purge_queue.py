@@ -109,6 +109,11 @@ class CloudflarePurgeQueue(models.Model):
     @api.model
     def process_queue(self):
         # [@ANCHOR: COMM_cf_process_queue_logic]
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "cloudflare.user_cloudflare_purge"
+        )
+        self = self.with_user(svc_uid)
+
         limit = 30
         max_batches = 10
         batches_processed = 0

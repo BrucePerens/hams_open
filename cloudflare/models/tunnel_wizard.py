@@ -8,4 +8,4 @@ class CloudflareTunnelWizard(models.TransientModel):
     _description = "Cloudflare Tunnel Setup Wizard"
     name = fields.Char(string="Name", default=lambda self: self._description)
 
-    command = fields.Text(string="Installation Command", readonly=True)
+    command = fields.Text(string="Installation Command", readonly=True, help="Copy and execute this command in your terminal to install the Cloudflare Tunnel.")

@@ -10,18 +10,22 @@ class WebsiteCloudflare(models.Model):
     cloudflare_api_token = fields.Char(
         string="CF API Token",
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
+        help="Required to authenticate with Cloudflare API.",
     )
     cloudflare_zone_id = fields.Char(
         string="CF Zone ID",
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
+        help="The Zone ID of your domain on Cloudflare.",
     )
     cloudflare_account_id = fields.Char(
         string="CF Account ID",
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
+        help="The Account ID associated with your Cloudflare account.",
     )
     cloudflare_turnstile_secret = fields.Char(
         string="Turnstile Secret",
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
+        help="Secret key for Cloudflare Turnstile integration.",
     )
 
     @distributed_cache()

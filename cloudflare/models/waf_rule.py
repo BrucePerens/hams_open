@@ -22,7 +22,7 @@ class CloudflareWafRule(models.Model):
         required=True,
         default="managed_challenge",
     )
-    expression = fields.Text(string="Expression", required=True)
+    expression = fields.Text(string="Expression", required=True, help="Cloudflare Ruleset Engine expression (e.g. (http.request.uri.path contains \"/xmlrpc\")).")
     description = fields.Text(string="Comments / Documentation")
     active = fields.Boolean(string="Active", default=True)
     website_id = fields.Many2one(

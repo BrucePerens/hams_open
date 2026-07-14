@@ -22,9 +22,9 @@ class CloudflarePurgeMixin(models.AbstractModel):
             )
 
         for rec in self:
-            url = rec[url_field] if url_field in rec else False
+            url = rec[url_field]
             if url:
-                wid = rec.website_id if "website_id" in rec else False
+                wid = rec.website_id
                 wids = (
                     [wid.id]
                     if wid

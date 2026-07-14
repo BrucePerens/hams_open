@@ -58,7 +58,7 @@ class CloudflareIPBan(models.Model):
             website_id = self.env["cloudflare.utils"].get_current_website_id()
 
         website = self.env["website"].browse(website_id)
-        if website:
+        if website.exists():
             token, zone_id = website._get_cloudflare_credentials()
         else:
             token, zone_id = None, None
@@ -71,7 +71,7 @@ class CloudflareIPBan(models.Model):
                     "mode": mode,
                     "notes": "Failed: Missing Cloudflare credentials.",
                     "state": "failed",
-                    "website_id": website.id,
+                    "website_id": website.id if website.exists() else False,
                 }
             )
             return False

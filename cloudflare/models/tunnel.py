@@ -63,6 +63,11 @@ class CloudflareTunnel(models.Model):
 
     @api.model
     def _sync_tunnels_for_website(self, website_id):
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "cloudflare.user_cloudflare_tunnel"
+        )
+        self = self.with_user(svc_uid)
+
         website = self.env["website"].browse(website_id)
         if not website.exists():
             return

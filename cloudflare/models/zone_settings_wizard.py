@@ -25,9 +25,12 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
             ("under_attack", "Under Attack"),
         ],
         string="Security Level",
+        help="Choose the Cloudflare security profile...",
     )
     development_mode = fields.Selection(
-        [("on", "On"), ("off", "Off")], string="Development Mode"
+        [("on", "On"), ("off", "Off")],
+        string="Development Mode",
+        help="Temporarily bypass Cloudflare cache...",
     )
     browser_cache_ttl = fields.Integer(
         string="Browser Cache TTL (seconds)",
