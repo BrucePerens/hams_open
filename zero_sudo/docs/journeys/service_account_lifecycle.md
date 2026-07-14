@@ -1,4 +1,4 @@
-# Journey: Service Account Lifecycle `[@ANCHOR: journey_service_account_lifecycle]`
+# Journey: Service Account Lifecycle `[@ANCHOR: COMM_journey_service_account_lifecycle]`
 
 This journey tracks the lifecycle of a service account from its creation to its use in a secure execution context.
 
@@ -13,11 +13,14 @@ A module developer defines a service account in an XML data file.
 During creation, the system automatically assigns the account a cryptographically secure, 128-byte random password to ensure it cannot be accessed interactively `[@ANCHOR: COMM_service_account_password_generation]`.
 
 ## 2. Verification of Isolation
-The developer attempts to log in as `my_daemon_service` in the web browser. The `web_login` interceptor `[@ANCHOR: web_login_interceptor]` detects the `is_service_account` flag and blocks access.
+The developer attempts to log in as `my_daemon_service` in the web browser. The `web_login` interceptor `[@ANCHOR: COMM_web_login_interceptor]` detects the `is_service_account` flag and blocks access.
 
 ## 3. Secure Retrieval
-In the module's Python code, the developer needs to perform an operation with elevated rights. They call `_get_service_uid` `[@ANCHOR: get_service_uid]`.
-The system verifies that the account is indeed a service account and does not have dangerous global admin rights. It also utilizes lightweight Key-Value storage `[@ANCHOR: set_kv_sql_check]` for internal state tracking during the retrieval lifecycle.
+In the module's Python code, the developer needs to perform an operation with elevated rights. They call `_get_service_uid` `[@ANCHOR: COMM_get_service_uid]`.
+This step is important for the lifecycle.
+
+
+The system verifies that the account is indeed a service account and does not have dangerous global admin rights. It also utilizes lightweight Key-Value storage `[@ANCHOR: COMM_set_kv_sql_check]` for internal state tracking during the retrieval lifecycle.
 
 ## 4. Execution
 The developer uses the retrieved UID to create a new environment and execute the logic.

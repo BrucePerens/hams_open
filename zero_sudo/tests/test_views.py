@@ -13,6 +13,9 @@ class TestZeroSudoViews(HamsHttpCase):
 
     def test_01_res_users_views(self):
         # [@ANCHOR: COMM_test_res_users_views]
+        # ---
+        # Verified by [@ANCHOR: COMM_test_res_users_views]
+        # ---
         # Tests [@ANCHOR: COMM_test_res_users_views]
         """
         Verify that the zero_sudo res.users views compile and render correctly.
@@ -23,8 +26,13 @@ class TestZeroSudoViews(HamsHttpCase):
 
     def test_02_zero_sudo_tour(self):
         # [@ANCHOR: COMM_test_zero_sudo_tour]
+        # ---
+        # Verified by [@ANCHOR: COMM_test_zero_sudo_tour]
+        # ---
         # Tests [@ANCHOR: COMM_story_login_blocking]
+        # ---
         # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
+        # ---
         # Tests [@ANCHOR: COMM_zero_sudo_tour]
         """Run the zero_sudo_tour to verify UI functionality."""
         # Enforcing ADR-0081 Section 8: Explicitly set ?debug=1 to prevent Owl dev mode crashes
@@ -32,7 +40,11 @@ class TestZeroSudoViews(HamsHttpCase):
 
     def test_03_noisy_table_views(self):
         # [@ANCHOR: COMM_test_noisy_table_views]
+        # ---
+        # Verified by [@ANCHOR: COMM_test_noisy_table_views]
+        # ---
         # Tests [@ANCHOR: COMM_test_noisy_table_views]
+        # ---
         # Tests [@ANCHOR: COMM_UX_NOISY_TABLE_MANAGEMENT]
         """
         Verify that the noisy_table views compile and render correctly.

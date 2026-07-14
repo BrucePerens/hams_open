@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="view_noisy_table_list" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_noisy_table_views] -->
+        <!-- burn-ignore-tour: Tested by [@ANCHOR: COMM_test_noisy_table_views] -->
         <field name="name">zero_sudo.noisy_table.list</field>
         <field name="model">zero_sudo.noisy_table</field>
         <field name="arch" type="xml">
@@ -13,7 +13,7 @@
     </record>
 
     <record id="view_noisy_table_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_noisy_table_views] -->
+        <!-- burn-ignore-tour: Tested by [@ANCHOR: COMM_test_noisy_table_views] -->
         <field name="name">zero_sudo.noisy_table.form</field>
         <field name="model">zero_sudo.noisy_table</field>
         <field name="arch" type="xml">

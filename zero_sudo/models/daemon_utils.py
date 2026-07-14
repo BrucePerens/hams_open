@@ -8,6 +8,7 @@ import logging
 import os
 import subprocess
 import sys
+import signal
 import time
 import urllib.request
 from odoo import models, api, fields, _
@@ -52,13 +53,13 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         if process and process.poll() is None:
             _logger.info("Stopping daemon PID %s", process.pid)
             try:
-                process.terminate()
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 _logger.warning(
                     "Daemon PID %s did not terminate, forcing SIGKILL", process.pid
                 )
-                process.kill()
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
 
     @api.model
     def poll_health_check(self, url, timeout=30, interval=1):
@@ -74,9 +75,6 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                         return True
             except urllib.error.URLError as e:
                 _logger.info("Health check polling connection issue: %s", e)
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Unexpected error during health check: %s", e)
-                raise
             time.sleep(interval)  # audit-ignore-sleep
 
         error_msg = _("Daemon health check failed for %s after %s seconds.") % (

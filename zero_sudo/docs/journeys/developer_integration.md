@@ -1,4 +1,4 @@
-# Journey: Developer Integration `[@ANCHOR: journey_developer_integration]`
+# Journey: Developer Integration `[@ANCHOR: COMM_journey_developer_integration]`
 
 This journey describes how a developer integrates their module with the `zero_sudo` core.
 

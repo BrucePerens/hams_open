@@ -2,7 +2,7 @@
 
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { Component, onWillStart, useState } from "@odoo/owl";
+import { Component, onWillStart, useState, useRef, useEffect } from "@odoo/owl";
 
 export class SecurityDashboard extends Component {
     setup() {
@@ -10,6 +10,18 @@ export class SecurityDashboard extends Component {
         this.action = useService("action");
         this.state = useState({
             logs: [],
+        });
+        this.dashboardRoot = useRef("dashboardRoot");
+
+        useEffect(() => {
+            const interval = setInterval(() => {
+                if (this.dashboardRoot.el) {
+                    const x = Math.floor(Math.random() * 6) - 3;
+                    const y = Math.floor(Math.random() * 6) - 3;
+                    this.dashboardRoot.el.style.transform = `translate(${x}px, ${y}px)`;
+                }
+            }, 20000);
+            return () => clearInterval(interval);
         });
 
         onWillStart(async () => {

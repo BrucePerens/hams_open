@@ -13,8 +13,11 @@ class ZeroSudoHome(Home):
     @http.route()
     def web_login(self, redirect=None, login=None, **kw):
         # [@ANCHOR: COMM_web_login_interceptor]
+        # ---
         # Verified by [@ANCHOR: COMM_test_web_login_interceptor]
+        # ---
         # Tests [@ANCHOR: COMM_story_login_blocking]
+        # ---
         # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
 
         # Explicit input extraction to satisfy strict controller binding audits
@@ -26,13 +29,16 @@ class ZeroSudoHome(Home):
 
         if request.session.uid:
             # [@ANCHOR: COMM_web_login_interceptor_check]
-            # Verified by [@ANCHOR: COMM_test_web_login_interceptor_check]
+            # ---
+            # Verified by [@ANCHOR: test_web_login_interceptor]
             # SECURITY MANDATE: We use direct SQL instead of .sudo() or ORM calls to check the is_service_account flag.
             # This bypasses ACLs for the isolation check (ADR-0005) without triggering Zero-Sudo linter violations.
             # FUTURE DEVELOPERS: DO NOT CHANGE THIS TO .sudo(). Direct SQL is the intentional, audited pattern here.
             # Verified by [@ANCHOR: COMM_test_web_login_interceptor]
+            # ---
             # Tests [@ANCHOR: COMM_story_login_blocking]
-            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_web_login_interceptor_check]
+            # ---
+            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_web_login_interceptor]  # fmt: skip
                 "SELECT is_service_account FROM res_users WHERE id = %s",
                 (request.session.uid,),
             )

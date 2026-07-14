@@ -50,3 +50,14 @@ if test_cursor_cls:
             raise
 
     TestCursor.execute = _monitored_test_execute
+
+from . import real_transaction
+from . import test_integration
+from . import test_json_rpc_client
+from . import test_security_utils
+from . import test_tdd_fixes
+from . import test_views
+from . import test_facility
+from . import test_controllers
+from . import common
+from . import dummy_daemon

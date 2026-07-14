@@ -6,6 +6,7 @@
 
 import logging
 from . import models
+from . import controllers
 
 
 class TEscWarningFilter(logging.Filter):
@@ -23,4 +24,5 @@ class TEscWarningFilter(logging.Filter):
 
 # Attach to the root logger to intercept messages from ir.qweb or any view rendering
 logging.getLogger().addFilter(TEscWarningFilter())
-from . import controllers
+
+# [@ANCHOR: COMM_zero_sudo_doc_installer]

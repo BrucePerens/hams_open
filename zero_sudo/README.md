@@ -134,3 +134,8 @@ Generates a macro that polls and explicitly waits for a specific DOM element to 
 #### `deterministicInput(helpers, text)`
 A direct execution function (used within a tour's `run` step) that safely injects text into the currently active input element and explicitly dispatches the `input`, `change`, and `keyup` events required to reliably awaken Odoo's frontend framework (e.g., Many2one debouncers).
 </tour_utils>
+
+---
+
+## 6. External Dependencies
+* `python`: `["psycopg2", "requests"]`

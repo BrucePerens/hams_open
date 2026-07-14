@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="zero_sudo.SecurityDashboard">
-        <div class="o_security_dashboard overflow-auto p-4 h-100 bg-view">
+        <div class="o_security_dashboard overflow-auto p-4 h-100 bg-dark text-white" style="transition: transform 20s linear;" t-ref="dashboardRoot">
             <h1 class="mb-4">Security Dashboard</h1>
-            <div class="table-responsive border bg-white shadow-sm rounded">
+            <div class="table-responsive border bg-dark text-white shadow-sm rounded">
                 <table class="table table-striped table-hover mb-0">
-                    <thead class="table-light">
+                    <thead class="table-dark">
                         <tr>
                             <th>Date</th>
                             <th>Target User</th>

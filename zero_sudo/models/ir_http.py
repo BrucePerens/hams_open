@@ -18,5 +18,5 @@ class IrHttp(models.AbstractModel):
             )
             res = request.env.cr.fetchone()
             if res and res[0]:
-                if request.httprequest.path.startswith('/jsonrpc') or request.httprequest.path.startswith('/xmlrpc'):
-                    raise AccessError(_("RPC access is denied for service accounts."))
+                if not (request.httprequest.path.startswith('/jsonrpc') or request.httprequest.path.startswith('/xmlrpc')):
+                    raise AccessError(_("Interactive Web UI access is denied for service accounts."))

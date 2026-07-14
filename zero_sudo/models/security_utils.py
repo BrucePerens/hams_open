@@ -24,7 +24,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @api.model
     def _get_deterministic_hash(self, input_string):
         # [@ANCHOR: COMM_deterministic_hash]
+        # ---
         # Verified by [@ANCHOR: COMM_test_deterministic_hash]
+        # ---
         # Tests [@ANCHOR: COMM_story_deterministic_hash]
         """
         Generates a high-speed, deterministic 32-bit integer hash.
@@ -40,8 +42,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @api.model
     def _get_service_uid(self, xml_id):
         # [@ANCHOR: COMM_get_service_uid]
+        # ---
         # Verified by [@ANCHOR: COMM_test_get_service_uid]
+        # ---
         # Verified by [@ANCHOR: COMM_ham_onboarding:test_otp_mail_template]
+        # ---
         # Tests [@ANCHOR: COMM_story_secure_escalation]
 
         if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
@@ -51,11 +56,14 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         # STRICT ZERO-SUDO MANDATE: Resolve and verify via optimized Postgres procedure
         # [@ANCHOR: COMM_get_service_uid_sql_resolve]
+        # ---
         # Verified by [@ANCHOR: COMM_test_get_service_uid_sql_resolve]
+        # ---
         # Verified by [@ANCHOR: COMM_test_get_service_uid_sql_verify]
+        # ---
         # Verified by [@ANCHOR: COMM_test_privilege_escalation_block_sql]
 
-        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_get_service_uid_sql_resolve]
+        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: Tested by [@ANCHOR: test_get_service_uid_sql_resolve]  # fmt: skip
         uid = self.env.cr.fetchone()[0]
         return uid
 
@@ -102,6 +110,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         cache clearing for models they own/manage without needing sudo().
         """
         # [@ANCHOR: COMM_invalidate_model_cache]
+        # ---
         # Verified by [@ANCHOR: COMM_test_invalidate_model_cache]
         if not model_name:
             return
@@ -142,7 +151,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @api.model
     def _notify_cache_invalidation(self, model_name, key_value):
         # [@ANCHOR: COMM_coherent_cache_signal]
+        # ---
         # Verified by [@ANCHOR: COMM_test_coherent_cache_signal]
+        # ---
         # Tests [@ANCHOR: COMM_story_cache_signaling]
         if not model_name:
             return
@@ -156,15 +167,19 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 for i in range(0, len(payloads), 100):
                     chunk = payloads[i : i + 100]
                     # [@ANCHOR: COMM_coherent_cache_signal_batch]
+                    # ---
                     # Verified by [@ANCHOR: COMM_test_coherent_cache_signal_batch]
-                    self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_coherent_cache_signal_batch]
+                    # ---
+                    self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_coherent_cache_signal_batch]  # fmt: skip
                         "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
                         ("cache_invalidation", chunk),
                     )
         elif key_value:
             # [@ANCHOR: COMM_coherent_cache_signal_single]
+            # ---
             # Verified by [@ANCHOR: COMM_test_coherent_cache_signal_single]
-            self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_coherent_cache_signal_single]
+            # ---
+            self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_coherent_cache_signal_single]  # fmt: skip
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
             )
@@ -211,7 +226,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @distributed_cache()
     def _get_system_param(self, key, default=None):
         # [@ANCHOR: COMM_get_system_param]
+        # ---
         # Verified by [@ANCHOR: COMM_test_01_mechanical_secret_block_enforcement]
+        # ---
         # Tests [@ANCHOR: COMM_story_parameter_whitelisting]
         # THE MECHANICAL SECRET BLOCK
         whitelist = self._get_param_read_whitelist()
@@ -296,14 +313,17 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @api.model
     def _set_kv(self, key, value):
         # [@ANCHOR: COMM_set_kv_procedure]
+        # ---
         # Verified by [@ANCHOR: COMM_test_set_kv_procedure]
+        # ---
         # Verified by [@ANCHOR: COMM_test_set_kv_sql_check]
+        # ---
         # Tests [@ANCHOR: COMM_story_set_kv_procedure]
         """
         High-performance atomic KV update using a single Postgres procedure call.
         Eliminates Python-side existence checks and round-trips.
         """
-        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_set_kv_sql_check]
+        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: Tested by [@ANCHOR: test_set_kv_sql_check]  # fmt: skip
 
         # Ensure changes are visible to other transactions/round-trips.
         # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,
@@ -318,6 +338,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     @distributed_cache()
     def _get_crypto_secret(self):
         # [@ANCHOR: COMM_get_crypto_secret]
+        # ---
         # Verified by [@ANCHOR: COMM_test_get_crypto_secret]
         """
         Retrieves the cryptographic secret without requiring .sudo() or database access.
@@ -330,10 +351,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 # We check the file strictly if it exists to avoid repeated failed opens
                 secret_path = "/var/lib/odoo/hams_crypto.secret"
                 if os.path.exists(secret_path):
-                    with open(  # audit-ignore-path
+                    with open(  # audit-ignore-path  # fmt: skip
                         secret_path,
                         "r",
-                        # audit-ignore-path: Tested by [@ANCHOR: COMM_test_deterministic_hash]
+                        # audit-ignore-path: Tested by [@ANCHOR: COMM_test_deterministic_hash]  # fmt: skip
                     ) as f:
                         secret = f.read().strip()
             except OSError as e:

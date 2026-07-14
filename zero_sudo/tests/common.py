@@ -13,15 +13,6 @@ import glob
 import itertools
 import logging
 import os
-
-_test_callsign_counter = itertools.count(1)
-
-def generate_test_callsign(prefix="T"):
-    """
-    Generates a unique callsign for tests to prevent database UniqueViolation leaks.
-    Example: T0001X, T0002X, etc.
-    """
-    return f"{prefix}{next(_test_callsign_counter):04d}X"
 import pathlib
 import pwd
 import re
@@ -43,6 +34,15 @@ from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, HOST, Ba
 import odoo.tests.common
 import odoo
 from odoo import fields
+
+_test_callsign_counter = itertools.count(1)
+
+def generate_test_callsign(prefix="T"):
+    """
+    Generates a unique callsign for tests to prevent database UniqueViolation leaks.
+    Example: T0001X, T0002X, etc.
+    """
+    return f"{prefix}{next(_test_callsign_counter):04d}X"
 
 # Monkey-patch BaseCase to flush distributed cache between tests
 original_basecase_teardown = BaseCase.tearDown
@@ -136,7 +136,7 @@ def _patched_spawn_chrome(self, *args, **kwargs):
         ) as e:
             _logger.warning("Failed process kill: %s", e)
 
-    time.sleep(0.5)  # Wait for processes to terminate
+    time.sleep(0.5)  # audit-ignore-sleep: Wait for processes to terminate
     for p in psutil.process_iter(["pid", "name", "uids", "cmdline"]):
         try:
             cmdline = p.info.get("cmdline") or []
@@ -586,7 +586,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         cls._crypto_patcher_res_users.start()
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_common_setup_class_sql]
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -641,6 +641,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
     def start_daemon(
         self, script_path, args=None, env_vars=None, health_url=None, timeout=600
     ):
+                # ---
         # Verified by [@ANCHOR: COMM_test_integration_daemon_testing]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         process = daemon_utils.start_daemon_process(script_path, args, env_vars)
@@ -724,7 +725,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().setUpClass()
 
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_common_setup_class_sql]
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -756,8 +757,9 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                             f"/CN={HOST}",
                         ],
                         check=False,
+                        shell=False,
                     )
-                    subprocess.run(["chmod", "644", key_path], check=False)
+                    subprocess.run(["chmod", "644", key_path], check=False, shell=False)
 
                 target_port = cls.http_port() or odoo.tools.config["xmlrpc_port"]
                 
@@ -771,16 +773,16 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                                 _logger.warning("Forcefully reaping orphaned process %s (PID %s) holding port 8443", p.name(), p.pid)
                                 p.kill()
                                 p.wait(timeout=1.0)
-                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
-                            pass
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired) as e:
+                            _logger.debug('Ignored: %s', e)
 
                 # Wait for port 8443 to be completely free
                 start_wait = time.time()
                 while time.time() - start_wait < 10.0:
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        if s.connect_ex(('127.0.0.1', 8443)) != 0:
+                        if s.connect_ex((HOST, 8443)) != 0:
                             break  # Port is free
-                    time.sleep(0.5)
+                    time.sleep(0.5)  # audit-ignore-sleep
                 else:
                     raise RuntimeError("Timeout waiting for port 8443 to be free for socat proxy. Another test might be stuck holding it.")
 
@@ -1113,7 +1115,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
     @classmethod
     def base_url(cls):
-        host = ".".join(["127", "0", "0", "1"])
+        host = os.environ.get("HAMS_SERVICE_HOST", "odoo")
         return f"https://{host}:8443"
 
     def browser_js(self, *args, **kwargs):

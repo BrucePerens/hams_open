@@ -74,8 +74,8 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
-env.cr.execute(sql_get_uid)  # audit-ignore-sql
-env.cr.execute(sql_set_kv)  # audit-ignore-sql
+env.cr.execute(sql_get_uid)
+env.cr.execute(sql_set_kv)
             </field>
         </record>
 

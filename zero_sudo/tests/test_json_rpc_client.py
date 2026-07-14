@@ -61,7 +61,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         # Setup mock responses: first failure (401), then success
         mock_fail = MagicMock()
         mock_fail.status_code = 401
-        mock_fail.json.return_value = {"error": _("Access Denied")}
+        mock_fail.json.return_value = {"error": "Access Denied"}  # audit-ignore-i18n
 
         mock_success = MagicMock()
         mock_success.status_code = 200

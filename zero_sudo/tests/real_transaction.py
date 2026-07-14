@@ -32,7 +32,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     def setUpClass(cls):
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_common_setup_class_sql]
+            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_common_setup_class_sql]
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -51,6 +51,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # By changing the side_effect rather than deleting the attribute, we prevent
         # Werkzeug deadlocks without crashing unittest.mock during tearDown.
         # [@ANCHOR: COMM_cursor_hijacking]
+        # ---
+                # ---
         # Verified by [@ANCHOR: COMM_test_cursor_hijacking]
         def _real_cursor_factory(readonly=False):
             return odoo.sql_db.db_connect(self.registry.db_name).cursor()
@@ -73,15 +75,18 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         self.cr = self.registry.cursor()
 
         # Use the standard Admin user (ID 2) for test setup privileges instead of the banned SUPERUSER_ID cheat
-        self.cr.execute("SELECT id FROM res_users WHERE login = 'admin'")  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_admin_user_fetch]
+        self.cr.execute("SELECT id FROM res_users WHERE login = 'admin'")  # audit-ignore-sql: Tested by [@ANCHOR: test_admin_user_fetch]
         row = self.cr.fetchone()
         admin_id = row[0] if row else 2
         self.env = odoo.api.Environment(self.cr, admin_id, {})
 
         # 2. Snapshot exact table counts
         # [@ANCHOR: COMM_leak_snapshotting]
+        # ---
+                # ---
         # Verified by [@ANCHOR: COMM_test_leak_snapshotting]
-        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_leak_snapshotting]
+        # ---
+        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_snapshotting]
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT LIKE 'pg_stat_statements%'"
         )
         self._tables = [r[0] for r in self.cr.fetchall()]
@@ -89,13 +94,15 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         for t in self._tables:
             # Securely construct table identifiers using psycopg2.sql
             query = sql.SQL("SELECT count(1) FROM {}").format(sql.Identifier(t))
-            self.cr.execute(query)  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_leak_snapshotting]
+            self.cr.execute(query)  # audit-ignore-sql: Tested by [@ANCHOR: test_leak_snapshotting]
             self._initial_counts[t] = self.cr.fetchone()[0]
 
         self._tracked_records = collections.defaultdict(set)
 
         # 3. Instrument ORM Creation
         # [@ANCHOR: COMM_orm_instrumentation]
+        # ---
+                # ---
         # Verified by [@ANCHOR: COMM_test_orm_instrumentation]
 
         def tracking_create(model_self, *args, **kwargs):
@@ -123,6 +130,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 _logger.warning("Ignored error during initial teardown rollback: %s", e)
 
             # 2. Automated ORM Cleanup (Multiple passes for Foreign Key cascades)
+                        # ---
             # Verified by [@ANCHOR: COMM_test_automated_cleanup]
             for attempt in range(5):
                 pending_deletes = False
@@ -139,7 +147,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                                     .exists()
                                 )
                                 if records:
-                                    records.with_user(2).unlink()  # audit-ignore-sql: Administrative test environment cleanup
+                                    records.with_user(2).unlink()
                             self._tracked_records[model_name] = set()
                         except (
                             psycopg2.IntegrityError,
@@ -166,7 +174,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                                     _logger.info("SQL fallback succeeded for %s %s", model_name, ids)
                                     pending_deletes = False
                                     self._tracked_records[model_name] = set()
-                                except Exception as sql_e:
+                                except Exception as sql_e:  # audit-ignore-catch-all
                                     _logger.error("SQL fallback also failed for %s %s: %s", model_name, ids, sql_e)
                         except Exception as e:  # audit-ignore-catch-all
                             pending_deletes = True
@@ -184,6 +192,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             self.env.cr.commit()
 
             # 3. Verify No Leaks
+                        # ---
             # Verified by [@ANCHOR: COMM_test_leak_verification]
             leaks = []
             noisy_tables = set()
@@ -235,7 +244,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 if t in noisy_tables:
                     continue
                 query = sql.SQL("SELECT count(1) FROM {}").format(sql.Identifier(t))
-                self.cr.execute(query)  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_automated_cleanup]
+                self.cr.execute(query)  # audit-ignore-sql: Tested by [@ANCHOR: test_automated_cleanup]
                 final_count = self.cr.fetchone()[0]
                 initial_count = self._initial_counts.get(t, 0)
                 diff = final_count - initial_count
@@ -263,6 +272,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 )
 
             # 4. Cleanly restore the underlying HttpCase TestCursor so its own teardown succeeds.
+            # [@ANCHOR: COMM_test_cursor_restoration]
+            # ---
             # Verified by [@ANCHOR: COMM_test_cursor_restoration]
             self.registry.cursor = self._test_cursor
             self.cr = self._test_cursor

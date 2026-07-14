@@ -27,9 +27,6 @@ class Module(models.Model):
         # Dependencies formally guarantee knowledge.article
         article_model_name = "knowledge.article"
 
-        if article_model_name not in self.env:
-            return
-
         utils = self.env["zero_sudo.security.utils"]
 
         svc_account = "knowledge.user_knowledge_service_account"
@@ -49,7 +46,6 @@ class Module(models.Model):
             .with_user(svc_uid)
             .with_context(
                 mail_notrack=True,
-                prefetch_fields=False,
             )
         )
 
@@ -111,7 +107,7 @@ class Module(models.Model):
     @api.model
     def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, article_by_name=None):
         path = doc_info.get("path")
-        if not path:
+        if not path or ".." in path:
             return
 
         try:
@@ -141,15 +137,10 @@ class Module(models.Model):
             "body": doc_body,
         }
 
-        model_fields = Article._fields
-        if "is_published" in model_fields:
-            vals["is_published"] = True
-        if "category" in model_fields:
-            vals["category"] = category
-        if "internal_permission" in model_fields:
-            vals["internal_permission"] = "read"
-        if "icon" in model_fields:
-            vals["icon"] = icon
+        vals["is_published"] = True
+        vals["category"] = category
+        vals["internal_permission"] = "read"
+        vals["icon"] = icon
 
         existing = article_by_name.get(name) if article_by_name else Article.search([("name", "=", name)], limit=1)
         if existing:
