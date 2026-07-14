@@ -15,6 +15,11 @@ registry.category("web_tour.tours").add("cf_zone_settings_tour", {
         },
         { trigger: '[data-menu-xmlid="cloudflare.menu_cloudflare_root"]', content: "Open Cloudflare Edge Menu", run: 'click' },
         {
+            trigger: '.o_breadcrumb',
+            content: "Wait for App Breadcrumb to render",
+            run: function () {}
+        },
+        {
             content: "Open Zone Settings Menu",
             trigger: 'a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]:not(:visible), a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]',
             run: function (actions) {
@@ -37,6 +42,6 @@ registry.category("web_tour.tours").add("cf_zone_settings_tour", {
             trigger: 'button[name="action_apply_settings"]',
             run: "click"
         },
-        { trigger: 'body', run: function() {} } // Final step to wait for click resolution
+        TourUtils.waitForAbsence('.modal', 'Zone Settings Modal')
     ],
 });

@@ -1,7 +1,6 @@
 /** @odoo-module **/
 /** Copyright © HAMS project. AGPL-3.0. **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: COMM_test_tour_cf_ip_ban]
 registry.category("web_tour.tours").add("cf_ip_ban_tour", {

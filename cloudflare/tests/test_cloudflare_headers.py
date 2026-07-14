@@ -32,7 +32,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         # We test both /odoo and /web prefixes
         response_odoo = self.url_open(
             "/web/login", allow_redirects=False
-        )  # burn-ignore-route
+        )  # burn-ignore-route  # fmt: skip
         self.assertEqual(
             response_odoo.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",
@@ -41,8 +41,8 @@ class TestCloudflareHeaders(HamsHttpCase):
 
         company_id = self.env.company.id
         response_web = self.url_open(
-            f"/web/image/res.company/{company_id}/logo"  # burn-ignore-route
-        )  # burn-ignore-route
+            f"/web/image/res.company/{company_id}/logo"
+        )  # burn-ignore-route  # fmt: skip
         self.assertEqual(
             response_web.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",

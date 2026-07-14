@@ -17,6 +17,11 @@ registry.category("web_tour.tours").add("cf_purge_wizard_tour", {
             run: "click"
         },
         {
+            trigger: '.o_breadcrumb',
+            content: "Wait for App Breadcrumb to render",
+            run: function () {}
+        },
+        {
             content: "Open Purge Cache Wizard",
             trigger: 'a[data-menu-xmlid="cloudflare.menu_cf_purge_wizard"]',
             run: "click"
