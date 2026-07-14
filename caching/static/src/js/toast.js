@@ -1,3 +1,4 @@
+/** Copyright © HAMS project. AGPL-3.0. **/
 /** @odoo-module **/
 
 import { Component, useState, xml } from "@odoo/owl";

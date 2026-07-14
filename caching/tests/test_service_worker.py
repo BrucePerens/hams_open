@@ -10,7 +10,7 @@ class TestServiceWorker(HamsHttpCase):
     def test_01_sw_headers(self):
         # [@ANCHOR: test_service_worker_01]
 
-        # Tests [@ANCHOR: caching_sw_serve_route]
+        # Tests [@ANCHOR: COMM_caching_sw_serve_route]
         """
         Verify that the /sw.js route serves the JavaScript file
         with strict no-cache headers. This guarantees that when
@@ -52,4 +52,3 @@ class TestServiceWorker(HamsHttpCase):
             "This prevents the browser from using a stale Service Worker script.",
         )
 
-# Tests [@ANCHOR: COMM_caching_sw_serve_route]

@@ -151,9 +151,11 @@ class TestSettingsAndCache(RealTransactionCase):
         controller = ServiceWorkerController()
 
         # Mock file_open to prevent filesystem dependency in unit test using safe_patch
-        mock_file = MagicMock()
-        mock_file.read.return_value = "const CACHE_NAME = '__CACHE_NAME__'; const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;"
-        mock_open = MagicMock()
+        mock_content = (
+            "const CACHE_NAME = '__CACHE_NAME__'; "
+            "const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;"
+        )
+        mock_file.read.return_value = mock_content
         mock_open.return_value.__enter__.return_value = mock_file
         self.safe_patch(
             "odoo.addons.caching.controllers.main.tools.file_open", mock_open

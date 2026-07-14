@@ -28,7 +28,7 @@ The caching system is fully aware of Odoo's multi-website architecture. Each web
 This module eliminates the need for manual version bumping or complex cache-busting query parameters.
 
 **Filesystem-Linked Invalidation:**
-- **Boot Scan:** During server startup, the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: caching_fs_scan_logic]). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files.
+- **Boot Scan:** During server startup, the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: COMM_caching_fs_scan_logic]). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files.
 - **MTime Tracking:** It identifies the latest modification timestamp (`mtime`) among all discovered assets.
 - **Dynamic SW Generation:** This timestamp is injected into the `/sw.js` payload, effectively versioning the Service Worker script itself.
 - **Automatic Refresh:** When any static file is modified and the server restarts, the Service Worker's signature changes. Browsers detect this update on the next visit, triggering a background installation of the new worker and an immediate purge of the stale cache.
@@ -63,13 +63,13 @@ Implements a global, root-scoped Service Worker (`/sw.js`) that proxies and cach
 * Assets placed in your module's `static/` directory are cached automatically.
 * **No Competing Workers:** DO NOT attempt to register another Service Worker.
 * **WebSockets:** `ws://` protocols are hardcoded to bypass the proxy.
-* **Dynamic Large File Prohibition**: The worker mathematically calculates an active quota limit (approx 35MB) [@ANCHOR: caching_quota_calculation]. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
+* **Dynamic Large File Prohibition**: The worker mathematically calculates an active quota limit (approx 35MB) [@ANCHOR: COMM_caching_quota_calculation]. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
 
-* **Settings Layout Injection**: The settings UI is injected into `website.res_config_settings_view_form` via XPath [@ANCHOR: xpath_rendering_caching_settings].
+* **Settings Layout Injection**: The settings UI is injected into `website.res_config_settings_view_form` via XPath [@ANCHOR: COMM_xpath_rendering_caching_settings].
 
 ## 3. Zero-Sudo Architecture
 This module is built with security as a primary concern, adhering strictly to the Zero-Sudo architecture:
-- **Micro-Privileged Service Account**: A dedicated service user `caching.user_caching_service` is utilized for the filesystem scan ([@ANCHOR: caching_fs_scan_logic]). This account has zero access to business data.
+- **Micro-Privileged Service Account**: A dedicated service user `caching.user_caching_service` is utilized for the filesystem scan ([@ANCHOR: COMM_caching_fs_scan_logic]). This account has zero access to business data.
 - **Secure Parameter Access**: System parameters are retrieved through the `zero_sudo.security.utils` abstraction layer, preventing direct access to `ir.config_parameter` and maintaining strict audit trails.
 - **Configuration Whitelisting**: Only specifically approved parameters (`caching.safe_quota_mb`, `caching.invalidation_version`) are accessible to the caching service, preventing unauthorized configuration leakage.
 - **No Sudo Escalation**: All background operations run within the context of their assigned service accounts without ever requesting global administrative (`sudo`) privileges.
@@ -78,26 +78,26 @@ This module is built with security as a primary concern, adhering strictly to th
 Detailed architectural narratives and process flows are documented in the `docs/` directory:
 
 ### Stories
-* [Cache Quota Management](docs/stories/cache_quota_management.md) ([@ANCHOR: caching_quota_calculation])
+* [Cache Quota Management](docs/stories/cache_quota_management.md) ([@ANCHOR: COMM_caching_quota_calculation])
 
-* [Cache Invalidation Strategy](docs/stories/cache_invalidation_strategy.md) ([@ANCHOR: caching_fs_scan_logic])
+* [Cache Invalidation Strategy](docs/stories/cache_invalidation_strategy.md) ([@ANCHOR: COMM_caching_fs_scan_logic])
 
 ### Journeys
-* [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: caching_sw_fetch_interceptor])
+* [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: COMM_caching_sw_fetch_interceptor])
 
-* [Server Startup Scan](docs/journeys/server_startup_scan.md) ([@ANCHOR: caching_sw_serve_route])
+* [Server Startup Scan](docs/journeys/server_startup_scan.md) ([@ANCHOR: COMM_caching_sw_serve_route])
 
-* [Manual Invalidation](docs/journeys/manual_invalidation.md) ([@ANCHOR: test_caching_sudo_params])
+* [Manual Invalidation](docs/journeys/manual_invalidation.md) ([@ANCHOR: COMM_test_caching_sudo_params])
 
 ## 5. Testing
 Tests are located in the `tests/` directory and cover:
-- Service Worker delivery and headers [@ANCHOR: caching_sw_serve_route].
+- Service Worker delivery and headers [@ANCHOR: COMM_caching_sw_serve_route].
 
-- Quota calculation logic [@ANCHOR: caching_quota_calculation].
+- Quota calculation logic [@ANCHOR: COMM_caching_quota_calculation].
 - Cache invalidation triggers.
-- UI Tour for registration check [@ANCHOR: caching_sw_fetch_interceptor].
+- UI Tour for registration check [@ANCHOR: COMM_caching_sw_fetch_interceptor].
 
-- Zero-Sudo compliance for FS scan [@ANCHOR: caching_fs_scan_logic].
+- Zero-Sudo compliance for FS scan [@ANCHOR: COMM_caching_fs_scan_logic].
 
 ## 6. External Dependencies
 None
