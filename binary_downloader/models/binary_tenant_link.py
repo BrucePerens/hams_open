@@ -65,6 +65,9 @@ class BinaryTenantLink(models.Model):
         if not self.active_version_id.is_downloaded:
             self.active_version_id.action_download_to_pool()
 
+        if not self.symlink_path:
+            return False
+
         central_target = self.active_version_id._get_central_path()
         link_path = self.symlink_path
         tenant_dir = os.path.dirname(link_path)
@@ -145,5 +148,6 @@ class BinaryTenantLink(models.Model):
                 "title": _("Upgrade Successful"),
                 "message": _("Tenant execution path successfully symlinked to version %s.") % latest.version_number,
                 "type": "success",
+                "next": {"type": "ir.actions.client", "tag": "reload"},
             },
         }

@@ -131,6 +131,7 @@ class BinaryManifest(models.Model):
                 "message": _("Installation of %s completed successfully.") % self.name,
                 "sticky": False,
                 "type": "success",
+                "next": {"type": "ir.actions.client", "tag": "reload"},
             },
         }
 
@@ -196,5 +197,8 @@ class BinaryManifest(models.Model):
     def unlink(self):
         for record in self:
             if record.name and record.checksum:
-                self.env["binary_downloader.mixin"]._unlink_binary_file(record.name, record.checksum)
+                manifest_count = self.search_count([("checksum", "=", record.checksum)])
+                version_count = self.env["binary.version"].search_count([("checksum", "=", record.checksum)])
+                if manifest_count + version_count <= 1:
+                    self.env["binary_downloader.mixin"]._unlink_binary_file(record.name, record.checksum)
         return super().unlink()

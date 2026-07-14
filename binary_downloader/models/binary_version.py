@@ -134,24 +134,27 @@ class BinaryVersion(models.Model):
         while True:
             links = LinkModel.search(
                 [("manifest_id", "=", self.manifest_id.id), ("active_version_id", "!=", self.id)],
+                order="id asc",
                 limit=limit,
                 offset=offset,
             )
             if not links:
                 break
                 
-            incident_vals = []
+            company_to_vals = {}
             for link in links:
-                incident_vals.append({
+                comp_id = link.website_id.company_id.id
+                if comp_id not in company_to_vals:
+                    company_to_vals[comp_id] = []
+                company_to_vals[comp_id].append({
                     "source": "binary_update",
                     "severity": "medium",
                     "description": _("New binary version %s is available for %s.") % (self.version_number, self.manifest_id.name),
                     "website_id": link.website_id.id,
                 })
                 
-            if incident_vals:
-                IncidentModel.create(incident_vals)
-                self.env.cr.commit()
+            for comp_id, vals in company_to_vals.items():
+                IncidentModel.with_company(comp_id).create(vals)
                 
             offset += limit
             
@@ -168,5 +171,8 @@ class BinaryVersion(models.Model):
     def unlink(self):
         for record in self:
             if record.manifest_id.name and record.checksum:
-                self.env["binary_downloader.mixin"]._unlink_binary_file(record.manifest_id.name, record.checksum)
+                manifest_count = self.env["binary.manifest"].search_count([("checksum", "=", record.checksum)])
+                version_count = self.search_count([("checksum", "=", record.checksum)])
+                if manifest_count + version_count <= 1:
+                    self.env["binary_downloader.mixin"]._unlink_binary_file(record.manifest_id.name, record.checksum)
         return super().unlink()

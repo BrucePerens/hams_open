@@ -3,8 +3,8 @@
 - `hams_open/pager_duty`: [Done] (Passed tests and linter)
 - `hams_open/user_websites_seo`: [Done]
 - `hams_open/user_websites`: [Done] (Passed flake8 with 0 errors. Test suite initially passed, but now aborts globally during Odoo DB init / Postgres crashes)
-- `hams_open/backup_management`: [In Progress]
-- `hams_open/binary_downloader`: [ ] Pending
+- `hams_open/backup_management`: [Done] (Passed linters and manual verification)
+- `hams_open/binary_downloader`: [In Progress]
 - `hams_open/caching`: [ ] Pending
 - `hams_open/cloudflare`: [ ] Pending
 - `hams_open/compliance`: [Done] (Passed linter. Tests blocked by environmental /tmp/hams_test_proxy.lock error)

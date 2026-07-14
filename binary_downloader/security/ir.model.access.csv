@@ -4,3 +4,5 @@ access_binary_manifest_manager,binary manifest manager,model_binary_manifest,bin
 access_binary_manifest_user,binary manifest user,model_binary_manifest,base.group_portal,1,0,0,0
 access_binary_version_manager,binary.version.manager,model_binary_version,binary_downloader.group_binary_downloader_manager,1,1,1,1
 access_binary_tenant_link_manager,binary.tenant.link.manager,model_binary_tenant_link,binary_downloader.group_binary_downloader_manager,1,1,1,1
+access_binary_version_portal,binary.version.portal,model_binary_version,base.group_portal,1,0,0,0
+access_binary_tenant_link_portal,binary.tenant.link.portal,model_binary_tenant_link,base.group_portal,1,0,0,0
