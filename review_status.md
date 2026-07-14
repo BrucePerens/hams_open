@@ -7,15 +7,15 @@
 - [Done] (2026-07-14 15:11 UTC) `hams_open/binary_downloader`
 - [Done] (2026-07-14 15:11 UTC) `hams_open/caching`
 - [Done] (2026-07-14 15:11 UTC) `hams_open/cloudflare`
-- [In Progress] (2026-07-14 15:33 UTC) `hams_open/compliance`
-- [In Progress] (2026-07-14 15:33 UTC) `hams_open/daemon_key_manager`
-- [In Progress] (2026-07-14 15:33 UTC) `hams_open/database_management`
+- [In Progress] (2026-07-14 20:02 UTC) `hams_open/compliance`
+- [Failed - Timeout] (2026-07-14 15:33 UTC) `hams_open/daemon_key_manager`
+- [Failed - Timeout] (2026-07-14 15:33 UTC) `hams_open/database_management`
 - [Done] (2026-07-14 15:11 UTC) `hams_open/distributed_redis_cache`
 - [Done] (2026-07-14 15:11 UTC) `hams_open/pager_duty`
 - [Done] (2026-07-14 15:11 UTC) `hams_open/user_websites`
 - [Done] (2026-07-14 15:11 UTC) `hams_open/user_websites_seo`
-- [In Progress] (2026-07-14 17:55 UTC) `hams_open/zero_sudo`
-- [In Progress] (2026-07-14 15:44 UTC) `hams_open/hams_helpdesk`
+- [Done] (2026-07-14 17:55 UTC) `hams_open/zero_sudo`
+- [Done] (2026-07-14 20:02 UTC) `hams_open/hams_helpdesk`
 - [ ] Pending `hams_open/knowledge`
 - [ ] Pending `hams_open/edge_routing`
 - [ ] Pending `hams_open/external`

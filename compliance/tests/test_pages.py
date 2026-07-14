@@ -82,21 +82,57 @@ class TestCompliancePagesHttp(HamsHttpCase):
         # Tests [@ANCHOR: compliance_terms_of_service_template]
 
         # Tests [@ANCHOR: story_automatic_legal_pages]
-        urls = ["/privacy", "/cookie-policy", "/terms", "/accessibility"]
-        for url in urls:
-            response = self.url_open(url)
-            self.assertEqual(
-                response.status_code,
-                200,
-                f"[!] DIAGNOSTIC FOR AI: Page {url} should be reachable (200 OK). Got {response.status_code}. "  # noqa: E501
-                "Ensure the website.page record is published and correctly linked to a view.",  # noqa: E501
-            )
-            # Use regex to ignore potential tags/whitespace around the text
-            self.assertTrue(
-                re.search(r"Policy|Terms", response.text),
-                f"[!] DIAGNOSTIC FOR AI: Page {url} should contain boilerplate content. "  # noqa: E501
-                "Check the rendering of {url} and its associated template.",
-            )
+        response = self.url_open("/privacy")
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"[!] DIAGNOSTIC FOR AI: Page /privacy should be reachable (200 OK). Got {response.status_code}. "
+            "Ensure the website.page record is published and correctly linked to a view.",
+        )
+        self.assertTrue(
+            re.search(r"Policy|Terms", response.text),
+            "[!] DIAGNOSTIC FOR AI: Page /privacy should contain boilerplate content. "
+            "Check the rendering of /privacy and its associated template.",
+        )
+
+        response = self.url_open("/cookie-policy")
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"[!] DIAGNOSTIC FOR AI: Page /cookie-policy should be reachable (200 OK). Got {response.status_code}. "
+            "Ensure the website.page record is published and correctly linked to a view.",
+        )
+        self.assertTrue(
+            re.search(r"Policy|Terms", response.text),
+            "[!] DIAGNOSTIC FOR AI: Page /cookie-policy should contain boilerplate content. "
+            "Check the rendering of /cookie-policy and its associated template.",
+        )
+
+        response = self.url_open("/terms")
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"[!] DIAGNOSTIC FOR AI: Page /terms should be reachable (200 OK). Got {response.status_code}. "
+            "Ensure the website.page record is published and correctly linked to a view.",
+        )
+        self.assertTrue(
+            re.search(r"Policy|Terms", response.text),
+            "[!] DIAGNOSTIC FOR AI: Page /terms should contain boilerplate content. "
+            "Check the rendering of /terms and its associated template.",
+        )
+
+        response = self.url_open("/accessibility")
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"[!] DIAGNOSTIC FOR AI: Page /accessibility should be reachable (200 OK). Got {response.status_code}. "
+            "Ensure the website.page record is published and correctly linked to a view.",
+        )
+        self.assertTrue(
+            re.search(r"Policy|Terms", response.text),
+            "[!] DIAGNOSTIC FOR AI: Page /accessibility should contain boilerplate content. "
+            "Check the rendering of /accessibility and its associated template.",
+        )
 
     def test_pages_content(self):
         """Verify that legal pages contain the expected boilerplate content."""
@@ -109,37 +145,80 @@ class TestCompliancePagesHttp(HamsHttpCase):
         # Tests [@ANCHOR: compliance_terms_of_service_template]
 
         # Tests [@ANCHOR: story_automatic_legal_pages]
-        for xml_id in [
-            "compliance.compliance_privacy_policy_template",
-            "compliance.compliance_cookie_policy_template",
-            "compliance.compliance_terms_of_service_template",
-            "compliance.compliance_accessibility_statement_template",
-        ]:
-            view = self.env.ref(xml_id)
-            # Use get_combined_arch to verify the view is well-formed
-            arch_node = view._get_combined_arch()
-            self.assertIsNotNone(arch_node)
+        # /privacy
+        view = self.env.ref("compliance.compliance_privacy_policy_template")
+        arch_node = view._get_combined_arch()
+        self.assertIsNotNone(arch_node)
+        arch_str = etree.tostring(arch_node, encoding="unicode")
+        normalized_arch = re.sub(r"\s+", " ", arch_str)
+        self.assertIn(
+            "Warning: This is the default version",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_privacy_policy_template is missing mandatory default version warning.",
+        )
+        self.assertIn(
+            "It was not produced by a lawyer.",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_privacy_policy_template is missing mandatory legal disclaimer.",
+        )
+        self.assertIn(
+            "Last Updated:",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_privacy_policy_template is missing 'Last Updated:' text.",
+        )
 
-            # Serialize the node to string for content checking
-            arch_str = etree.tostring(arch_node, encoding="unicode")
+        # /cookie-policy
+        view = self.env.ref("compliance.compliance_cookie_policy_template")
+        arch_node = view._get_combined_arch()
+        self.assertIsNotNone(arch_node)
+        arch_str = etree.tostring(arch_node, encoding="unicode")
+        normalized_arch = re.sub(r"\s+", " ", arch_str)
+        self.assertIn(
+            "Warning: This is the default version",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_cookie_policy_template is missing mandatory default version warning.",
+        )
+        self.assertIn(
+            "It was not produced by a lawyer.",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_cookie_policy_template is missing mandatory legal disclaimer.",
+        )
+        self.assertIn(
+            "Last Updated:",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_cookie_policy_template is missing 'Last Updated:' text.",
+        )
 
-            # Normalize whitespace for checking
-            normalized_arch = re.sub(r"\s+", " ", arch_str)
+        # /terms
+        view = self.env.ref("compliance.compliance_terms_of_service_template")
+        arch_node = view._get_combined_arch()
+        self.assertIsNotNone(arch_node)
+        arch_str = etree.tostring(arch_node, encoding="unicode")
+        normalized_arch = re.sub(r"\s+", " ", arch_str)
+        self.assertIn(
+            "Warning: This is the default version",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_terms_of_service_template is missing mandatory default version warning.",
+        )
+        self.assertIn(
+            "It was not produced by a lawyer.",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_terms_of_service_template is missing mandatory legal disclaimer.",
+        )
+        self.assertIn(
+            "Last Updated:",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_terms_of_service_template is missing 'Last Updated:' text.",
+        )
 
-            if xml_id != "compliance.compliance_accessibility_statement_template":  # noqa: E501
-                self.assertIn(
-                    "Warning: This is the default version",
-                    normalized_arch,
-                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory default version warning.",  # noqa: E501
-                )
-                self.assertIn(
-                    "It was not produced by a lawyer.",
-                    normalized_arch,
-                    f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing mandatory legal disclaimer.",  # noqa: E501
-                )
-
-            self.assertIn(
-                "Last Updated:",
-                normalized_arch,
-                f"[!] DIAGNOSTIC FOR AI: Template {xml_id} is missing 'Last Updated:' text.",  # noqa: E501
-            )
+        # /accessibility
+        view = self.env.ref("compliance.compliance_accessibility_statement_template")
+        arch_node = view._get_combined_arch()
+        self.assertIsNotNone(arch_node)
+        arch_str = etree.tostring(arch_node, encoding="unicode")
+        normalized_arch = re.sub(r"\s+", " ", arch_str)
+        self.assertIn(
+            "Last Updated:",
+            normalized_arch,
+            "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_accessibility_statement_template is missing 'Last Updated:' text.",
+        )

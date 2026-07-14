@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Record Tree -->
+    <record id="view_dmarc_record_tree" model="ir.ui.view">
+        <field name="name">hams_base.dmarc.record.tree</field>
+        <field name="model">hams_base.dmarc.record</field>
+        <field name="arch" type="xml">
+            <list string="DMARC Records">
+                <field name="source_ip"/>
+                <field name="count"/>
+                <field name="disposition"/>
+                <field name="dkim_alignment" decoration-success="dkim_alignment == 'pass'" decoration-danger="dkim_alignment == 'fail'"/>
+                <field name="spf_alignment" decoration-success="spf_alignment == 'pass'" decoration-danger="spf_alignment == 'fail'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Report Form -->
+    <record id="view_dmarc_report_form" model="ir.ui.view">
+        <field name="name">hams_base.dmarc.report.form</field>
+        <field name="model">hams_base.dmarc.report</field>
+        <field name="arch" type="xml">
+            <form string="DMARC Report">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="org_name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="report_id" readonly="1"/>
+                            <field name="email" readonly="1" widget="email"/>
+                            <field name="domain" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="date_range_begin" readonly="1"/>
+                            <field name="date_range_end" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Policy Evaluated">
+                        <group>
+                            <field name="p" readonly="1"/>
+                            <field name="sp" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="adkim" readonly="1"/>
+                            <field name="aspf" readonly="1"/>
+                            <field name="pct" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Records">
+                            <field name="record_ids" readonly="1">
+                                <list>
+                                    <field name="source_ip"/>
+                                    <field name="count"/>
+                                    <field name="disposition"/>
+                                    <field name="dkim_alignment"/>
+                                    <field name="spf_alignment"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Report Tree -->
+    <record id="view_dmarc_report_tree" model="ir.ui.view">
+        <field name="name">hams_base.dmarc.report.tree</field>
+        <field name="model">hams_base.dmarc.report</field>
+        <field name="arch" type="xml">
+            <list string="DMARC Reports" decoration-muted="date_range_end &lt; current_date">
+                <field name="date_range_begin"/>
+                <field name="org_name"/>
+                <field name="domain"/>
+                <field name="p"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_dmarc_report" model="ir.actions.act_window">
+        <field name="name">DMARC Reports</field>
+        <field name="res_model">hams_base.dmarc.report</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No DMARC reports received yet.
+            </p>
+            <p>
+                Configure your domain's DMARC record (RUA) to point to your fetchmail alias (e.g. dmarc@yourdomain.com) to receive automated reports here.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item (Under Settings / Technical or a custom menu) -->
+    <menuitem id="menu_dmarc_reports"
+              name="DMARC Reports"
+              parent="base.menu_custom"
+              action="action_dmarc_report"
+              sequence="100"/>
+</odoo>

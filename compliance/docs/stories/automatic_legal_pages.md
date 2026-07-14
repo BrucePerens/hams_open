@@ -1,4 +1,4 @@
-# Story: Automatic Legal Pages Generation [@ANCHOR: story_automatic_legal_pages]
+# Story: Automatic Legal Pages Generation [@ANCHOR: COMM_story_automatic_legal_pages]
 
 ## User Persona
 **Alice**, a small business owner who just launched her first Odoo website.
@@ -20,7 +20,7 @@ Alice is worried about legal compliance but doesn't have the budget for a lawyer
 4. Alice visits her website and sees these links already active and populated with relevant content that covers her use of Odoo features.
 5. She notices that links to these legal pages are automatically added to the footer of every page on her website, ensuring she meets visibility requirements. [@ANCHOR: compliance_footer_links]
 
-7. If she already has a custom page, the module detects it and unpublishes its own boilerplate to avoid duplication. This process is optimized using a high-performance Postgres procedure. [@ANCHOR: compliance_postgres_procedures]
+7. If she already has a custom page, the module detects it and unpublishes its own boilerplate to avoid duplication. This process is optimized using a high-performance Postgres procedure. [@ANCHOR: COMM_compliance_postgres_procedures]
 6. She can now focus on her business, knowing she has basic legal coverage.
 
 ## Verification
@@ -28,6 +28,6 @@ Alice is worried about legal compliance but doesn't have the budget for a lawyer
 
 - Verified by [@ANCHOR: test_compliance_pages_content]
 
-- Verified by [@ANCHOR: test_compliance_ui_tour]
+- Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
 
-- Verified by [@ANCHOR: test_compliance_non_destructive_mandate]
+- Verified by [@ANCHOR: COMM_test_compliance_non_destructive_mandate]

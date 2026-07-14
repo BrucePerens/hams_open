@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+    Public License v3.0 (AGPL-3.0).
+-->
+<odoo>
+    <template id="compliance_index_template" name="Compliance Documents">
+        <!-- burn-ignore-tour -->
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <section class="s_text_image pt32 pb32">
+                    <div class="container">
+                        <div class="row align-items-center">
+                            <div class="col-lg-8 offset-lg-2">
+                                <h1 class="text-center mb-4">Regulatory Compliance &amp; Policies</h1>
+                                <p class="lead text-center text-muted">
+                                    The following documents outline our platform's operating procedures, data handling, and user agreements.
+                                </p>
+                                
+                                <div class="list-group mt-5">
+                                    <t t-foreach="docs" t-as="doc">
+                                        <a t-att-href="doc.url" class="list-group-item list-group-item-action flex-column align-items-start o_tour_compliance_doc_link">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h5 class="mb-1"><t t-out="doc.name"/></h5>
+                                            </div>
+                                            <p class="mb-1"><t t-out="doc.description"/></p>
+                                        </a>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </t>
+    </template>
+</odoo>

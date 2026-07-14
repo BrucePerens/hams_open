@@ -1,5 +1,6 @@
-# This software is distributed under the terms of the Affero General
-# Public License (AGPL-3).
+# -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+# Public License v3.0 (AGPL-3.0).
 
 from . import test_hooks  # noqa: F401
 from . import test_pages  # noqa: F401

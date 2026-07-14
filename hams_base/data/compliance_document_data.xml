@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="doc_email_policy" model="compliance.document">
+            <field name="name">Email Policy &amp; Usage</field>
+            <field name="description">How we use outgoing email and handle communications.</field>
+            <field name="url">/email-policy</field>
+            <field name="sequence">50</field>
+        </record>
+    </data>
+</odoo>

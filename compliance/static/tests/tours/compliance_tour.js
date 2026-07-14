@@ -37,28 +37,28 @@ registry.category("web_tour.tours").add("compliance_tour", {
         },
         // Check footer links
         {
-            trigger: "footer a[href='/privacy']",
+            trigger: ".o_tour_footer_privacy",
             content: 'Verify Privacy Policy link in footer',
         },
         {
-            trigger: "footer a[href='/cookie-policy']",
+            trigger: ".o_tour_footer_cookie_policy",
             content: 'Verify Cookie Policy link in footer',
         },
         {
-            trigger: "footer a[href='/terms']",
+            trigger: ".o_tour_footer_terms",
             content: 'Verify Terms of Service link in footer',
         },
         {
-            trigger: "footer a[href='/accessibility']",
+            trigger: ".o_tour_footer_accessibility",
             content: 'Verify Accessibility Statement link in footer',
         },
         {
-            trigger: "footer a[href='/my/privacy']",
+            trigger: ".o_tour_footer_my_privacy",
             content: 'Verify My Privacy link in footer',
         },
         // Navigate to Cookie Policy
         {
-            trigger: "footer a[href='/cookie-policy']",
+            trigger: ".o_tour_footer_cookie_policy",
             content: 'Click on Cookie Policy link in footer',
             run: 'click',
             expectUnloadPage: true,
@@ -74,7 +74,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
         },
         // Navigate to Terms of Service
         {
-            trigger: "footer a[href='/terms']",
+            trigger: ".o_tour_footer_terms",
             content: 'Click on Terms of Service link in footer',
             run: 'click',
             expectUnloadPage: true,
@@ -90,7 +90,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
         },
         // Navigate to Accessibility Statement
         {
-            trigger: "footer a[href='/accessibility']",
+            trigger: ".o_tour_footer_accessibility",
             content: 'Click on Accessibility Statement link in footer',
             run: 'click',
             expectUnloadPage: true,
@@ -104,6 +104,17 @@ registry.category("web_tour.tours").add("compliance_tour", {
                     throw new Error('[!] DIAGNOSTIC FOR AI: Accessibility Statement page failed to load or content missing.');
                 }
             }
+        },
+        // Navigate to Compliance Index
+        {
+            trigger: "body",
+            content: "Navigate to Compliance Index",
+            run: function () { document.location.href = '/compliance'; },
+            expectUnloadPage: true,
+        },
+        {
+            trigger: ".o_tour_compliance_doc_link",
+            content: 'Verify Compliance Documents link is present',
         },
     ],
 });

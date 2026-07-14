@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+    Public License v3.0 (AGPL-3.0).
+-->
 <odoo>
     <template id="compliance_footer_links" inherit_id="website.layout" priority="100">
         <!-- [@ANCHOR: compliance_footer_links] -->
+
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_compliance_ui_tour] -->
-        <xpath expr="//*[hasclass('o_footer_copyright')]" position="inside">
+        <xpath expr="//div[hasclass('o_footer_copyright')]" position="inside">
             <div class="col-sm text-center text-sm-start small">
-                <a href="/privacy" class="me-3">Privacy Policy</a>
-                <a href="/cookie-policy" class="me-3">Cookie Policy</a>
-                <a href="/terms" class="me-3">Terms of Service</a>
-                <a href="/accessibility" class="me-3">Accessibility Statement</a>
-                <a href="/my/privacy">My Privacy</a>
+                <a href="/privacy" class="me-3 o_tour_footer_privacy">Privacy Policy</a>
+                <a href="/cookie-policy" class="me-3 o_tour_footer_cookie_policy">Cookie Policy</a>
+                <a href="/terms" class="me-3 o_tour_footer_terms">Terms of Service</a>
+                <a href="/accessibility" class="me-3 o_tour_footer_accessibility">Accessibility Statement</a>
+                <a href="/my/privacy" class="me-3 o_tour_footer_my_privacy">My Privacy</a>
             </div>
         </xpath>
     </template>

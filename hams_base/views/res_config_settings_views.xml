@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hams_base</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Hams Base" string="Hams Base" name="hams_base" data-key="hams_base">
+                    <block title="Email Compliance &amp; Reputation" id="hams_base_compliance">
+                        <setting help="The organization name displayed in the universal email footer.">
+                            <field name="compliance_org_name"/>
+                        </setting>
+                        <setting help="The physical mailing address displayed in the universal email footer.">
+                            <field name="compliance_mailing_address"/>
+                        </setting>
+                    </block>
+
+                    <block title="DNS Reputation Records" id="hams_base_dns">
+                        <setting help="You must publish these TXT records to your DNS provider (e.g. Cloudflare, PowerDNS) to ensure high email deliverability.">
+                            <label for="dns_spf_record" string="SPF Record (Name: @)"/>
+                            <field name="dns_spf_record" readonly="1" widget="text"/>
+
+                            <field name="enable_dmarc_instructions" widget="boolean_toggle"/>
+                            <div invisible="not enable_dmarc_instructions">
+                                <label for="dns_dmarc_record" string="DMARC Record (Name: _dmarc)"/>
+                                <field name="dns_dmarc_record" readonly="1" widget="text"/>
+                            </div>
+
+                            <div class="text-muted mt-2">
+                                <strong>Note on DKIM:</strong> You must fetch your unique DKIM record directly from your email provider's dashboard (e.g. Mailgun, SES, Postmark) and add it as a TXT or CNAME record.
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

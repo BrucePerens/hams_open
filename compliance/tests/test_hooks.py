@@ -11,9 +11,9 @@ class TestComplianceHooks(HamsTransactionCase):
 
     def test_01_postgres_procedure(self):
         """Verify the compliance enforcement procedure."""
-        # [@ANCHOR: test_compliance_postgres_procedures]
+        # [@ANCHOR: COMM_test_compliance_postgres_procedures]
 
-        # Tests [@ANCHOR: compliance_postgres_procedures]
+        # Tests [@ANCHOR: COMM_compliance_postgres_procedures]
         # Create a custom page to test shielding
         custom_view = self.env["ir.ui.view"].create(
             {
@@ -37,8 +37,7 @@ class TestComplianceHooks(HamsTransactionCase):
         bp.write({"is_published": True})
 
         # Run the procedure
-        with self.env.cr.savepoint():
-            self.env.cr.execute("SELECT compliance_enforce_protection()")
+        post_init_hook(self.env)
         bp.invalidate_recordset(["is_published"])
 
         self.assertFalse(
@@ -50,13 +49,13 @@ class TestComplianceHooks(HamsTransactionCase):
         Verify that the post_init_hook successfully enables the cookies_bar
         on all websites.
         """
-        # [@ANCHOR: test_compliance_post_init_cookie_bar]
+        # [@ANCHOR: COMM_test_compliance_post_init_cookie_bar]
 
-        # Tests [@ANCHOR: compliance_post_init_cookie_bar]
+        # Tests [@ANCHOR: COMM_compliance_post_init_cookie_bar]
 
-        # Tests [@ANCHOR: story_cookie_consent]
+        # Tests [@ANCHOR: COMM_story_cookie_consent]
 
-        # Tests [@ANCHOR: journey_compliance_setup]
+        # Tests [@ANCHOR: COMM_journey_compliance_setup]
 
         post_init_hook(self.env)
 
@@ -71,13 +70,13 @@ class TestComplianceHooks(HamsTransactionCase):
 
     def test_03_views_rendering(self):
         """Verify that legal templates render correctly."""
-        # [@ANCHOR: test_compliance_views]
+        # [@ANCHOR: COMM_test_compliance_views]
 
-        # Tests [@ANCHOR: compliance_legal_pages_rendering]
+        # Tests [@ANCHOR: COMM_compliance_legal_pages_rendering]
 
-        # Tests [@ANCHOR: story_automatic_legal_pages]
+        # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
 
-        # Tests [@ANCHOR: journey_compliance_setup]
+        # Tests [@ANCHOR: COMM_journey_compliance_setup]
         self.env.ref("compliance.compliance_privacy_policy_template").with_context(  # noqa: E501
             lang=None)._get_combined_arch()
         self.env.ref("compliance.compliance_cookie_policy_template").with_context(  # noqa: E501
@@ -89,9 +88,9 @@ class TestComplianceHooks(HamsTransactionCase):
         """
         Verify that if a custom page already exists, the boilerplate is unpublished.  # noqa: E501
         """
-        # [@ANCHOR: test_compliance_non_destructive_mandate]
+        # [@ANCHOR: COMM_test_compliance_non_destructive_mandate]
 
-        # Tests [@ANCHOR: story_automatic_legal_pages]
+        # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
 
         # Create a "custom" page at /privacy
         custom_view = self.env["ir.ui.view"].create(

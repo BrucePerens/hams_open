@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_dmarc_report,dmarc_report,model_hams_base_dmarc_report,base.group_system,1,1,1,1
+access_dmarc_record,dmarc_record,model_hams_base_dmarc_record,base.group_system,1,1,1,1

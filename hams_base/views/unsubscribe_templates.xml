@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="unsubscribe_page_template" name="Unsubscribe Options">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <section class="s_text_image pt32 pb32">
+                    <div class="container">
+                        <div class="row align-items-center">
+                            <div class="col-lg-8 offset-lg-2">
+                                <h1 class="text-center mb-4">Unsubscribe Options</h1>
+                                <p class="lead text-center text-muted">
+                                    Manage how HAMS communicates with you.
+                                </p>
+                                
+                                <div class="card mt-4 border-info">
+                                    <div class="card-body">
+                                        <h4 class="card-title text-info">Option 1: Mute Non-Critical Nudges</h4>
+                                        <p class="card-text">
+                                            Turn off automated reminders for QSOs and club announcements. You will still receive password resets, security alerts, and administrative emails.
+                                        </p>
+                                        <a href="/my/account" class="btn btn-outline-info">Manage Email Preferences</a>
+                                    </div>
+                                </div>
+
+                                <div class="card mt-4 border-danger">
+                                    <div class="card-body">
+                                        <h4 class="card-title text-danger">Option 2: Total Account Lockout</h4>
+                                        <p class="card-text">
+                                            <strong>WARNING:</strong> This option will immediately disable your account. You will no longer be able to log in, receive lost-password emails, or alter your websites or blogs. This is typically used for compromised accounts or on behalf of Silent Key (SK) hams.
+                                        </p>
+                                        <p class="card-text text-muted">
+                                            <em>Note: This action requires a live system administrator to reverse.</em>
+                                        </p>
+                                        <t t-if="request.env.user.id != request.website.user_id.id">
+                                            <form action="/unsubscribe/lockout" method="post" onsubmit="return confirm('Are you sure you want to permanently lock your account? You will be logged out immediately.');">
+                                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                <button type="submit" class="btn btn-danger">Lock My Account</button>
+                                            </form>
+                                        </t>
+                                        <t t-else="">
+                                            <div class="alert alert-warning mt-3">
+                                                You must be logged in to lock out your account. <a href="/web/login?redirect=/unsubscribe">Log in here</a>.
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </t>
+    </template>
+
+    <template id="unsubscribe_lockout_success" name="Account Locked">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <section class="s_text_image pt32 pb32">
+                    <div class="container text-center">
+                        <h1 class="text-danger mt-5">Account Locked</h1>
+                        <p class="lead mt-3">Your account has been successfully disabled and you have been logged out.</p>
+                        <p>No further emails will be sent to your address. If you need this reversed, you must contact a system administrator at <a href="mailto:admin@hams.com">admin@hams.com</a>.</p>
+                        <a href="/" class="btn btn-primary mt-4">Return to Homepage</a>
+                    </div>
+                </section>
+            </div>
+        </t>
+    </template>
+</odoo>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<odoo>
+    <data noupdate="1">
+        <record id="doc_privacy_policy" model="compliance.document">
+            <field name="name">Privacy Policy</field>
+            <field name="description">How we collect, use, and protect your personal data.</field>
+            <field name="url">/privacy</field>
+            <field name="sequence">10</field>
+        </record>
+        
+        <record id="doc_cookie_policy" model="compliance.document">
+            <field name="name">Cookie Policy</field>
+            <field name="description">Information about tracking and cookies on our platform.</field>
+            <field name="url">/cookie-policy</field>
+            <field name="sequence">20</field>
+        </record>
+
+        <record id="doc_terms_service" model="compliance.document">
+            <field name="name">Terms of Service</field>
+            <field name="description">The rules and agreements for using this platform.</field>
+            <field name="url">/terms</field>
+            <field name="sequence">30</field>
+        </record>
+
+        <record id="doc_accessibility" model="compliance.document">
+            <field name="name">Accessibility Statement</field>
+            <field name="description">Our commitment to ensuring the platform is usable by everyone.</field>
+            <field name="url">/accessibility</field>
+            <field name="sequence">40</field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <template id="mail_notification_layout_hams" inherit_id="mail.mail_notification_layout">
+            <xpath expr="//body" position="inside">
+                <div style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #888888; text-align: center;">
+                    <p style="margin: 0; padding: 0;">
+                        <t t-esc="env['ir.config_parameter'].sudo().get_param('hams_base.compliance_org_name', 'HAMS Organization')"/>
+                        <br/>
+                        <t t-esc="env['ir.config_parameter'].sudo().get_param('hams_base.compliance_mailing_address', '')"/>
+                    </p>
+                    <p style="margin: 5px 0 0 0; padding: 0;">
+                        <a t-attf-href="/compliance/email-policy" style="color: #888888; text-decoration: underline;">How we use your email</a> | 
+                        <a t-attf-href="/unsubscribe" style="color: #888888; text-decoration: underline;">Unsubscribe Options</a>
+                    </p>
+                    <p style="margin: 5px 0 0 0; padding: 0;">
+                        Replies to the sender of this automatic message are not read.
+                    </p>
+                </div>
+            </xpath>
+        </template>
+
+        <template id="mail_notification_light_hams" inherit_id="mail.mail_notification_light">
+            <xpath expr="//body" position="inside">
+                <div style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #888888; text-align: center;">
+                    <p style="margin: 0; padding: 0;">
+                        <t t-esc="env['ir.config_parameter'].sudo().get_param('hams_base.compliance_org_name', 'HAMS Organization')"/>
+                        <br/>
+                        <t t-esc="env['ir.config_parameter'].sudo().get_param('hams_base.compliance_mailing_address', '')"/>
+                    </p>
+                    <p style="margin: 5px 0 0 0; padding: 0;">
+                        <a t-attf-href="/compliance/email-policy" style="color: #888888; text-decoration: underline;">How we use your email</a> | 
+                        <a t-attf-href="/unsubscribe" style="color: #888888; text-decoration: underline;">Unsubscribe Options</a>
+                    </p>
+                    <p style="margin: 5px 0 0 0; padding: 0;">
+                        Replies to the sender of this automatic message are not read.
+                    </p>
+                </div>
+            </xpath>
+        </template>
+    </data>
+</odoo>
