@@ -298,7 +298,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         cron._trigger()
 
     def test_08_cron_pending_reports(self):
-        # [@ANCHOR: test_cron_pending_reports]
+        # [@ANCHOR: COMM_test_cron_pending_reports]
         # Tests [@ANCHOR: ir_cron_notify_pending_reports]
         # Tests [@ANCHOR: cron_notify_pending_reports]
         """

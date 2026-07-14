@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_user_websites_group_form_seo" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_xpath_rendering_user_websites_group] -->
+    <record id="view_user_websites_group_form_seo" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_xpath_rendering_user_websites_group] -->
         <field name="name">user.websites.group.form.seo</field>
         <field name="model">user.websites.group</field>
         <field name="inherit_id" ref="user_websites.view_user_websites_group_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//notebook" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_xpath_rendering_user_websites_group] -->
+            <xpath expr="//notebook" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_user_websites_group] -->
                 <page string="SEO Metadata" name="group_seo_settings">
                     <group>
                         <group>

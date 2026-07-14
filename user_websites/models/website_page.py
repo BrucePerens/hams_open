@@ -732,7 +732,6 @@ class WebsitePage(models.Model):
                     (json.dumps([{"inc": inc, "pid": pid} for inc, pid in updates]),),
                 )
 
-
                 is_test = vars(self.env.registry).get("test_cr") is not None
                 if not is_test:
                     self.env.cr.commit()

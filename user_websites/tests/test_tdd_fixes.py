@@ -3,12 +3,14 @@
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 
+
 @tagged('post_install', '-at_install')
 class TestTDDFixes(HamsHttpCase):
     def test_main_not_found(self):
         self.authenticate('admin', 'admin')
         response = self.url_open('/non_existent_slug_123/create_site', data={}, timeout=10)
         self.assertIn(response.status_code, [404, 400, 405])
+
 
 @tagged('post_install', '-at_install')
 class TestTDDFixesORM(HamsTransactionCase):
