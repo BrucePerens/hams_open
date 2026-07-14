@@ -18,7 +18,7 @@ class CachingMixin(models.AbstractModel):
 
     @api.model
     @distributed_cache()
-    def get_fs_stats(self):
+    def get_fs_stats(self, override_svc_uid=None):
         # [@ANCHOR: COMM_caching_fs_scan_logic]
 
         # Verified by [@ANCHOR: test_settings_and_cache_01]
@@ -65,7 +65,7 @@ class CachingMixin(models.AbstractModel):
 
     @api.model
     @distributed_cache()
-    def get_global_static_info(self, quota_mb):
+    def get_global_static_info(self, quota_mb, override_svc_uid=None):
         # [@ANCHOR: COMM_caching_quota_calculation]
 
         # Verified by [@ANCHOR: test_settings_and_cache_01]

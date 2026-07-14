@@ -3,6 +3,7 @@
 import logging
 from odoo import http, tools
 from odoo.http import request
+import werkzeug.exceptions
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
 
 _logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class ServiceWorkerController(http.Controller):
             if cached_js:
                 content = cached_js.decode('utf-8') if isinstance(cached_js, bytes) else cached_js
         except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Failed to retrieve SW JS from Redis: %s", e)
+            _logger.exception("Failed to retrieve SW JS from Redis: %s", e)
 
         if not content:
             try:
@@ -37,9 +38,9 @@ class ServiceWorkerController(http.Controller):
                     r = get_redis_connection(request.env)
                     r.setex("caching_sw_js_content", 86400, content)
                 except Exception as e: # audit-ignore-catch-all
-                    _logger.warning("Failed to cache SW JS in Redis: %s", e)
+                    _logger.exception("Failed to cache SW JS in Redis: %s", e)
             except FileNotFoundError:
-                raise request.not_found()
+                raise werkzeug.exceptions.NotFound()
 
         # Multi-Website Awareness: Get params
         website = request.website or request.env['website'].get_current_website()

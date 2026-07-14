@@ -10,6 +10,7 @@
     "depends": ["base", "website", "zero_sudo", "distributed_redis_cache"],
     "data": [
         "data/security_data.xml",
+        "data/pwa_offline_template.xml",
         "security/ir.model.access.csv",
         "views/res_config_settings_views.xml",
     ],

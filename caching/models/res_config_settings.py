@@ -24,6 +24,9 @@ class ResConfigSettings(models.TransientModel):
         help=HELP_INVALIDATION,
     )
 
+    caching_pwa_theme_color = fields.Char(related="website_id.caching_pwa_theme_color", readonly=False)
+    caching_pwa_background_color = fields.Char(related="website_id.caching_pwa_background_color", readonly=False)
+
     @api.model
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()

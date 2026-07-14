@@ -24,6 +24,12 @@
                             <button name="action_force_cache_invalidation" type="object" string="Invalidate Cache Now" class="btn btn-primary" icon="fa-refresh" title="Invalidate Cache Now"/>
                         </div>
                     </setting>
+                    <setting string="PWA Theme Color" help="Set the theme color for the PWA Manifest.">
+                        <field name="caching_pwa_theme_color" widget="color"/>
+                    </setting>
+                    <setting string="PWA Background Color" help="Set the background color for the PWA Manifest.">
+                        <field name="caching_pwa_background_color" widget="color"/>
+                    </setting>
                 </block>
             </xpath>
         </field>

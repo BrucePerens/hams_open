@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="pwa_offline_template" name="Offline">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <div class="container text-center mt-5 mb-5">
+                    <i class="fa fa-wifi fa-5x text-muted mb-4"/>
+                    <h1>You are offline</h1>
+                    <p class="lead">Please check your internet connection and try again.</p>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>
