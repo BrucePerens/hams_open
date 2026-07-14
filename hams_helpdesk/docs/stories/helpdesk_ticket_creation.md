@@ -1,6 +1,6 @@
 # Story: Helpdesk Ticket Creation
 
-**[@ANCHOR: helpdesk_ticket_creation]**
+**[@ANCHOR: hams_helpdesk:helpdesk_ticket_creation]**
 
 Ticket creation is an intelligent process that automatically routes incidents to the appropriate on-duty personnel.
 
@@ -10,4 +10,4 @@ Ticket creation is an intelligent process that automatically routes incidents to
 4.  **Notifications**: Toast notifications and emails are sent to the assignee.
 5.  **Pre-Shift Awareness**: Upcoming shift operators are CC'd on tickets created shortly before their shift.
 
-*Verified by [@ANCHOR: test_01_ticket_creation_and_routing]*
+*Verified by [@ANCHOR: hams_helpdesk:test_01_ticket_creation_and_routing]*

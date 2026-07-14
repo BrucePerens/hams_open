@@ -24,6 +24,8 @@
                             <field name="priority" widget="priority"/>
                             <field name="calendar_event_id"/>
                             <field name="website_id" groups="base.group_no_one"/>
+                            <field name="company_id" invisible="1"/>
+                            <field name="ticket_type"/>
                             <field name="active" invisible="1"/>
                         </group>
                     </group>

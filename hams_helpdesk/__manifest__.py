@@ -17,6 +17,7 @@
     "data": [
         "security/helpdesk_security.xml",
         "security/ir.model.access.csv",
+        "data/mail_alias_data.xml",
         "views/helpdesk_ticket_views.xml",
         "views/shift_handoff_views.xml",
         "views/dashboard_views.xml",

@@ -1,42 +1,43 @@
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
 <div class="hams-doc-section">
-    <h1>Hams Helpdesk (Verified)</h1>
+    <h1 id="hams_helpdesk_verified" data-trace="[@ANCHOR: hams_helpdesk:hams_helpdesk_verified]">Hams Helpdesk (Verified)</h1>
     <p>This module has undergone a comprehensive review and repair cycle.</p>
     <p>Hams Helpdesk provides Zero-Sudo compliant ticketing and issue tracking. It deeply integrates with the PagerDuty module via an agnostic Adapter API, allowing automated ticket creation and calendar event scheduling during system incidents.</p>
 
-    <h2>Zero-Sudo Architecture</h2>
+    <h2 id="zero_sudo_architecture" data-trace="[@ANCHOR: hams_helpdesk:zero_sudo_architecture]">Zero-Sudo Architecture</h2>
     <p>This module strictly adheres to the Zero-Sudo mandate. Background operations, automated routing, and notifications are performed using dedicated service accounts:</p>
     <ul>
         <li><strong>Helpdesk Service Account:</strong> (<code>hams_helpdesk.user_helpdesk_service</code>) Handles ticket assignments, notifications, and handoff execution.</li>
         <li><strong>PagerDuty Service Account:</strong> (<code>pager_duty.user_pager_service_internal</code>) Used to safely query on-duty status from the calendar.</li>
     </ul>
 
-    <h2>Ticket Lifecycle</h2>
+    <h2 id="ticket_lifecycle" data-trace="[@ANCHOR: hams_helpdesk:ticket_lifecycle]">Ticket Lifecycle</h2>
     <p>Tickets progress through stages: <strong>New</strong>, <strong>In Progress</strong>, <strong>Resolved</strong>, and <strong>Closed</strong>. Transitioning a ticket automatically notifies the reporting customer.</p>
 
-    <h2>Formal Shift Handoff</h2>
+    <h2 id="formal_shift_handoff" data-trace="[@ANCHOR: hams_helpdesk:formal_shift_handoff]">Formal Shift Handoff</h2>
     <p>Continuity is maintained via a formal handoff wizard. Operators are required to provide detailed briefing notes when transferring ownership, ensuring the next shift has all the necessary context to proceed with resolution.</p>
 
-    <h2>Multi-Website Awareness & Security</h2>
+    <h2 id="multi_website_awareness_security" data-trace="[@ANCHOR: hams_helpdesk:multi_website_awareness_security]">Multi-Website Awareness & Security</h2>
     <p>The module is fully compatible with multi-website Odoo instances. Tickets are associated with the website where they were created. Portal users will only see tickets related to the website they are currently browsing, ensuring strict data segregation between different web portals.</p>
     <p>Access is strictly controlled via micro-privileges. Portal users can only view and message their own tickets and are prohibited from modifying administrative fields such as Status, Assignee, or Priority.</p>
 
-    <h2>Portal Access for Customers</h2>
+    <h2 id="portal_access_for_customers" data-trace="[@ANCHOR: hams_helpdesk:portal_access_for_customers]">Portal Access for Customers</h2>
     <p>Customers can access their tickets via the web portal. After logging in, they can see a list of their tickets, view the status of each ticket, and communicate with the helpdesk team by posting messages in the chatter. The ticket list is filtered based on the portal website to ensure privacy.</p>
 
-    <h2>How to use the Helpdesk</h2>
-    <h3>Creating a Ticket</h3>
+    <h2 id="how_to_use_the_helpdesk" data-trace="[@ANCHOR: hams_helpdesk:how_to_use_the_helpdesk]">How to use the Helpdesk</h2>
+    <h3 id="creating_a_ticket" data-trace="[@ANCHOR: hams_helpdesk:creating_a_ticket]">Creating a Ticket</h3>
     <p>Tickets can be created from the Helpdesk menu in the backend. When a ticket is created, it is automatically assigned to the on-duty administrator if PagerDuty integration is active. The reporting customer is automatically subscribed to receive updates. If a ticket is created via a website portal, it is automatically tagged with that website.</p>
 
-    <h3>Managing a Ticket</h3>
+    <h3 id="managing_a_ticket" data-trace="[@ANCHOR: hams_helpdesk:managing_a_ticket]">Managing a Ticket</h3>
     <p>Operators can move tickets through different stages (New, In Progress, Resolved, Closed). Each stage change triggers an automated email notification to the customer, keeping them informed about the progress. Critical incidents should be prioritized and moved to "In Progress" as soon as investigation begins.</p>
 
-    <h3>Executing a Handoff</h3>
+    <h3 id="executing_a_handoff" data-trace="[@ANCHOR: hams_helpdesk:executing_a_handoff]">Executing a Handoff</h3>
     <p>To hand off a ticket to another operator, use the "Shift Handoff" button. This will open a wizard where you can select the next assignee and enter mandatory handoff notes. This ensures that no context is lost during shift changes. The handoff history is recorded in the ticket's chatter for audit purposes.</p>
 
-    <h3>Closing a Ticket</h3>
+    <h3 id="closing_a_ticket" data-trace="[@ANCHOR: hams_helpdesk:closing_a_ticket]">Closing a Ticket</h3>
     <p>Customers can close their own tickets from the portal once they are satisfied with the resolution. This is done by clicking the "Close Ticket" button on the ticket detail page. This action is logged in the chatter for transparency.</p>
 
-    <h2>User Interface</h2>
+    <h2 id="user_interface" data-trace="[@ANCHOR: hams_helpdesk:user_interface]">User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
     <img src="/hams_helpdesk/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
 </div>

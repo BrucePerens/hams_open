@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<odoo>
+    <data noupdate="1">
+        <!-- Route admin@hams.com to hams_helpdesk.ticket -->
+        <record id="mail_alias_admin_helpdesk" model="mail.alias">
+            <field name="alias_name">admin</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
+    </data>
+</odoo>

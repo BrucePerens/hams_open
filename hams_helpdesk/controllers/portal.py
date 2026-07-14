@@ -11,13 +11,14 @@ class HelpdeskPortal(CustomerPortal):
         values = super()._prepare_home_portal_values(counters)
         if "ticket_count" in counters:
             utils = request.env["zero_sudo.security.utils"]
-            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+            svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
             domain = [("partner_id", "=", request.env.user.partner_id.id)]
             if request.website:
                 domain += [("website_id", "in", [False, request.website.id])]
             values["ticket_count"] = (
                 request.env["hams_helpdesk.ticket"]
-                .with_env(hd_env)
+                .with_user(svc_uid)
+                .with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id)
                 .search_count(domain)
             )
         return values
@@ -29,11 +30,11 @@ class HelpdeskPortal(CustomerPortal):
         website=True,
     )
     def portal_my_tickets(self, page=1, **kw):
-        # [@ANCHOR: multi_website_segregation]
+        # [@ANCHOR: hams_helpdesk:multi_website_segregation]
         values = self._prepare_portal_layout_values()
         utils = request.env["zero_sudo.security.utils"]
-        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-        Ticket = request.env["hams_helpdesk.ticket"].with_env(hd_env)
+        svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
+        Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id)
 
         domain = [("partner_id", "=", request.env.user.partner_id.id)]
         if request.website:
@@ -58,9 +59,9 @@ class HelpdeskPortal(CustomerPortal):
     @http.route(["/my/ticket/<int:ticket_id>"], type="http", auth="user", website=True)
     def portal_ticket_detail(self, ticket_id, **kw):
         utils = request.env["zero_sudo.security.utils"]
-        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
         ticket_sudo = (
-            request.env["hams_helpdesk.ticket"].with_env(hd_env).browse(ticket_id)
+            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id).browse(ticket_id)
         )
 
         if (
@@ -92,9 +93,9 @@ class HelpdeskPortal(CustomerPortal):
     )
     def portal_ticket_close(self, ticket_id, **kw):
         utils = request.env["zero_sudo.security.utils"]
-        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
         ticket_sudo = (
-            request.env["hams_helpdesk.ticket"].with_env(hd_env).browse(ticket_id)
+            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id).browse(ticket_id)
         )
 
         if (
@@ -112,7 +113,9 @@ class HelpdeskPortal(CustomerPortal):
 
         # Exact Schema validation. Fail loudly if callsign isn't present
         callsign = partner.callsign
-
+        if not callsign:
+            import werkzeug
+            raise werkzeug.exceptions.BadRequest("Callsign is required.")
         return request.render(
             "hams_helpdesk.portal_ticket_new",
             {
@@ -130,12 +133,18 @@ class HelpdeskPortal(CustomerPortal):
         csrf=True,
     )
     def portal_ticket_submit(self, name=None, description=None, callsign=None, **kw):
-        # Verified by [@ANCHOR: test_helpdesk_portal_tour]
+        # Verified by [@ANCHOR: hams_helpdesk:test_helpdesk_portal_tour]
         if not name:
             return request.redirect("/my/tickets/new")
 
         utils = request.env["zero_sudo.security.utils"]
-        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
+
+        company_id = (
+            request.website.company_id.id
+            if request.website
+            else request.env.company.id
+        )
 
         vals = {
             "name": name,
@@ -143,11 +152,9 @@ class HelpdeskPortal(CustomerPortal):
             "callsign": callsign,
             "partner_id": request.env.user.partner_id.id,
             "website_id": request.website.id if request.website else False,
-            "company_id": (
-                request.website.company_id.id
-                if request.website
-                else request.env.company.id
-            ),
+            "company_id": company_id,
         }
-        ticket = request.env["hams_helpdesk.ticket"].with_env(hd_env).create(vals)
+        clean_ctx = dict(request.env.context)
+        clean_ctx.pop("prefetch_fields", None)
+        ticket = request.env["hams_helpdesk.ticket"].with_context(**clean_ctx).with_user(svc_uid).with_company(company_id).create(vals)
         return request.redirect("/my/ticket/%s" % ticket.id)

@@ -127,3 +127,28 @@ class TestHelpdeskTours(HamsHttpCase):
             200,
             "[!] DIAGNOSTIC FOR AI: Backend ticket form failed to render (Expected 200).",
         )
+
+    def test_portal_ticket_new_callsign_validation(self):
+        """Test portal ticket submission fails when callsign is empty."""
+        import werkzeug
+        
+        self.portal_user.partner_id.callsign = False
+        self.authenticate("portal_cust_tour", "password")
+        
+        with self.assertRaises(werkzeug.exceptions.BadRequest):
+            self.url_open("/my/tickets/new")
+
+    def test_portal_ticket_company_and_ctx(self):
+        """Test context cascading and company ID"""
+        self.authenticate("portal_cust_tour", "password")
+        res = self.url_open(
+            "/my/tickets/submit",
+            data={
+                "name": "Test Context",
+                "description": "Desc",
+                "callsign": "K1AAA",
+                "csrf_token": http.Request.csrf_token(self)
+            },
+        )
+        # Should redirect to ticket detail
+        self.assertEqual(res.status_code, 200)

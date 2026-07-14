@@ -21,6 +21,14 @@ class HelpdeskTicket(models.Model):
     callsign = fields.Char(
         string="Callsign", tracking=True, help="Relevant amateur radio callsign."
     )
+    ticket_type = fields.Selection(
+        [
+            ("general", "General Inquiry"),
+        ],
+        string="Ticket Type",
+        default="general",
+        tracking=True,
+    )
     active = fields.Boolean(default=True)
 
     user_id = fields.Many2one(
