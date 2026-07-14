@@ -30,7 +30,7 @@ class HelpdeskPortal(CustomerPortal):
         website=True,
     )
     def portal_my_tickets(self, page=1, **kw):
-        # [@ANCHOR: hams_helpdesk:multi_website_segregation]
+        # [@ANCHOR: COMM_helpdesk_multi_website]
         values = self._prepare_portal_layout_values()
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")

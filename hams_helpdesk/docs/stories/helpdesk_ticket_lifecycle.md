@@ -14,3 +14,15 @@ The helpdesk ticket lifecycle ensures that every reported incident is tracked fr
 *Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]*
 <!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_operator_tour] -->
 <!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_tour] -->
+
+### Security and Micro-Privileges
+**[@ANCHOR: COMM_helpdesk_micro_privilege]**
+Portal users cannot modify restricted fields.
+
+### Shift Handoff
+**[@ANCHOR: COMM_helpdesk_shift_handoff]**
+Operators can formally hand off tickets to the next shift.
+
+### Portal Close
+**[@ANCHOR: COMM_helpdesk_portal_close]**
+Portal users can close their own tickets.

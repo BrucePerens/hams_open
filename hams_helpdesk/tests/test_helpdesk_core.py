@@ -45,7 +45,7 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_01_ticket_creation_and_routing(self):
         """Verify ticket creation routes to on-duty user, subscribes customer, and fires bus toast."""
-        # [@ANCHOR: test_01_ticket_creation_and_routing]
+        # [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
 
         # Tests [@ANCHOR: helpdesk_ticket_creation]
 
