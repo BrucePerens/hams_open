@@ -9,7 +9,7 @@
             <field name="code">model.autovacuum()</field>
             <field name="interval_number">1</field>
             <field name="interval_type">days</field>
-            <field name="user_id" ref="base.user_root"/>
+            <field name="user_id" ref="zero_sudo.odoo_facility_service_internal"/>
 
         </record>
     </data>

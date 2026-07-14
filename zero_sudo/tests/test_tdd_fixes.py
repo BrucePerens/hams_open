@@ -90,12 +90,16 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.assertNotEqual(user.password, "new_password")
 
     def test_security_log_autovacuum(self):
-        # Test for models/security_log.py:51
+        # [@ANCHOR: COMM_test_security_log_autovacuum]
         log = self.env["zero_sudo.security.log"].create({
             "reason": "cache_invalidation"
         })
         self.env["zero_sudo.security.log"].autovacuum()
         self.assertTrue(log.exists())
+
+        cron = self.env.ref("zero_sudo.ir_cron_security_log_autovacuum")
+        service_user = self.env.ref("zero_sudo.odoo_facility_service_internal")
+        self.assertEqual(cron.user_id, service_user, "Cron must run as zero_sudo.odoo_facility_service_internal")
 
     def test_poll_health_check(self):
         # [@ANCHOR: COMM_test_poll_health_check]
