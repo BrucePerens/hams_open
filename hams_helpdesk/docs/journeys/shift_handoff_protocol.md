@@ -11,3 +11,4 @@ Ensuring continuity during shift rotations is critical. This journey outlines th
 5.  **Assumption**: The incoming operator sees the ticket in their "My Shift" dashboard and proceeds with full context.
 
 *Verified by [@ANCHOR: hams_helpdesk:test_02_shift_handoff_wizard]*
+<!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_handoff_execution] -->

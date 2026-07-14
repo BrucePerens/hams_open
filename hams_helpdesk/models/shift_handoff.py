@@ -21,9 +21,9 @@ class ShiftHandoffWizard(models.TransientModel):
     )
 
     def action_confirm_handoff(self):
-        # [@ANCHOR: helpdesk_handoff_execution]
+        # [@ANCHOR: COMM_helpdesk_handoff_execution]
 
-        # Verified by [@ANCHOR: test_02_shift_handoff_wizard]
+        # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
         self.ensure_one()
 
         utils = self.env["zero_sudo.security.utils"]
@@ -32,7 +32,7 @@ class ShiftHandoffWizard(models.TransientModel):
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
         ticket = self.ticket_id.with_env(hd_env)
 
-        ticket.write({"user_id": self.new_user_id.id})
+        ticket.with_context(mail_notrack=True).write({"user_id": self.new_user_id.id})
 
         old_name = self.old_user_id.name if self.old_user_id else "Unassigned"
 
@@ -41,7 +41,8 @@ class ShiftHandoffWizard(models.TransientModel):
         body += markupsafe.Markup("<b>Accepted By:</b> {}<br/>").format(self.new_user_id.name)
         body += markupsafe.Markup("<b>Operator Briefing:</b><br/><i>{}</i>").format(self.handoff_notes or "")
 
-        ticket.message_post(
+        facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
+        ticket.with_env(facility_env).message_post(
             body=body,
             subject=_("Shift Handoff: %s") % ticket.name,
             partner_ids=[self.new_user_id.partner_id.id],

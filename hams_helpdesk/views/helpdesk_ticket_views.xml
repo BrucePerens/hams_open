@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
 <odoo>
-    <!-- [@ANCHOR: helpdesk_ticket_form] -->
     <record id="view_hams_helpdesk_ticket_form" model="ir.ui.view">
+        <!-- [@ANCHOR: helpdesk_ticket_form] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_ticket_form] -->
         <field name="name">hams_helpdesk.ticket.form</field>
         <field name="model">hams_helpdesk.ticket</field>
         <field name="arch" type="xml">
             <form string="Helpdesk Ticket">
                 <header>
-                    <button name="action_shift_handoff" string="Shift Handoff" type="object" class="oe_highlight" invisible="stage in ('resolved', 'closed')"/>
+                    <button name="action_shift_handoff" string="Shift Handoff" type="object" class="oe_highlight" invisible="not id or stage in ('resolved', 'closed')"/>
                     <field name="stage" widget="statusbar" options="{'clickable': '1'}"/>
                 </header>
                 <sheet>
@@ -44,8 +45,8 @@
         </field>
     </record>
 
-    <!-- [@ANCHOR: helpdesk_ticket_list] -->
     <record id="view_hams_helpdesk_ticket_list" model="ir.ui.view">
+        <!-- [@ANCHOR: helpdesk_ticket_list] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_ticket_list] -->
         <field name="name">hams_helpdesk.ticket.list</field>
         <field name="model">hams_helpdesk.ticket</field>
@@ -60,8 +61,8 @@
         </field>
     </record>
 
-    <!-- burn-ignore-tour -->
     <record id="action_hams_helpdesk_ticket" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
         <field name="name">Helpdesk Tickets</field>
         <field name="res_model">hams_helpdesk.ticket</field>
         <field name="view_mode">list,form</field>

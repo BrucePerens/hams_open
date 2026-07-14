@@ -1,3 +1,5 @@
+/* This software is distributed under the terms of the Affero General Public License (AGPL-3). */
+// [@ANCHOR: COMM_helpdesk_operator_tour]
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
@@ -39,9 +41,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         {
             content: "Wait for debounce",
             trigger: 'div[name="new_user_id"] input',
-            run: function() {
-                return new Promise(resolve => setTimeout(resolve, 500));
-            }
+            run: function() {}
         },
         {
             content: "Pick First User",
@@ -61,9 +61,7 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
         {
             content: "Wait for OWL state sync",
             trigger: '.modal-body',
-            run: function() {
-                return new Promise(resolve => setTimeout(resolve, 500));
-            }
+            run: function() {}
         },
         {
             content: "Confirm Handoff",

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
 <odoo>
-    <!-- burn-ignore-tour -->
     <template id="portal_my_home_menu_helpdesk" name="Portal layout : helpdesk menu entries" inherit_id="portal.portal_breadcrumbs" priority="20">
+        <!-- burn-ignore-tour -->
         <!-- audit-ignore-xpath: Render proven in test_02_helpdesk_portal_tour -->
         <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
             <li t-if="page_name == 'ticket' or ticket" class="breadcrumb-item">
@@ -14,8 +15,8 @@
         </xpath>
     </template>
 
-    <!-- burn-ignore-tour -->
     <template id="portal_my_home_helpdesk" name="Show Tickets" inherit_id="portal.portal_my_home" priority="20">
+        <!-- burn-ignore-tour -->
         <!-- audit-ignore-xpath: Render proven in test_02_helpdesk_portal_tour -->
         <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
             <t t-call="portal.portal_docs_entry">
@@ -26,8 +27,8 @@
         </xpath>
     </template>
 
-    <!-- [@ANCHOR: helpdesk_portal_list] -->
     <template id="portal_my_tickets" name="My Tickets">
+        <!-- [@ANCHOR: helpdesk_portal_list] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_portal_list] -->
         <t t-call="portal.portal_layout">
             <t t-set="breadcrumbs_searchbar" t-value="True"/>
@@ -68,8 +69,8 @@
         </t>
     </template>
 
-    <!-- [@ANCHOR: helpdesk_portal_detail] -->
     <template id="portal_ticket_detail" name="Ticket Detail">
+        <!-- [@ANCHOR: helpdesk_portal_detail] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_portal_detail] -->
         <t t-call="portal.portal_layout">
             <div id="optional_classes" class="container">
@@ -116,8 +117,8 @@
         </t>
     </template>
 
-    <!-- [@ANCHOR: helpdesk_portal_new] -->
     <template id="portal_ticket_new" name="New Ticket">
+        <!-- [@ANCHOR: helpdesk_portal_new] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_portal_new] -->
         <t t-call="portal.portal_layout">
             <div class="container">

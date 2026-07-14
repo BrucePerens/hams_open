@@ -1,6 +1,6 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
-from odoo import http
+import werkzeug
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -21,6 +21,7 @@ class TestHelpdeskTours(HamsHttpCase):
                 "login": "hd_manager_tour",
                 "password": "password",
                 "email": "manager_tour@example.com",
+                "lang": "en_US",
                 "group_ids": [
                     (6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_manager").id])
                 ],
@@ -32,6 +33,7 @@ class TestHelpdeskTours(HamsHttpCase):
                 "login": "portal_cust_tour",
                 "password": "password",
                 "email": "portal_tour@example.com",
+                "lang": "en_US",
                 "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
             }
         )
@@ -88,9 +90,16 @@ class TestHelpdeskTours(HamsHttpCase):
             }
         )
         self.authenticate("portal_cust_tour", "password")
+        import re
+        res = self.url_open("/my/tickets")
+        csrf_token = ""
+        match = re.search(r'name="csrf_token"\s+value="([^"]+)"', res.text)
+        if match:
+            csrf_token = match.group(1)
+
         self.url_open(
             f"/my/ticket/{ticket.id}/close",
-            data={"csrf_token": http.Request.csrf_token(self)},
+            data={"csrf_token": csrf_token},
         )
         self.assertEqual(
             ticket.stage, "closed", "Ticket should be closed after portal action."
@@ -130,7 +139,6 @@ class TestHelpdeskTours(HamsHttpCase):
 
     def test_portal_ticket_new_callsign_validation(self):
         """Test portal ticket submission fails when callsign is empty."""
-        import werkzeug
         
         self.portal_user.partner_id.callsign = False
         self.authenticate("portal_cust_tour", "password")
@@ -141,13 +149,20 @@ class TestHelpdeskTours(HamsHttpCase):
     def test_portal_ticket_company_and_ctx(self):
         """Test context cascading and company ID"""
         self.authenticate("portal_cust_tour", "password")
+        import re
+        res_page = self.url_open("/my/tickets/new")
+        csrf_token = ""
+        match = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text)
+        if match:
+            csrf_token = match.group(1)
+
         res = self.url_open(
             "/my/tickets/submit",
             data={
                 "name": "Test Context",
                 "description": "Desc",
                 "callsign": "K1AAA",
-                "csrf_token": http.Request.csrf_token(self)
+                "csrf_token": csrf_token
             },
         )
         # Should redirect to ticket detail

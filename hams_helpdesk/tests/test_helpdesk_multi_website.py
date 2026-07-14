@@ -23,6 +23,7 @@ class TestHelpdeskMultiWebsite(HamsTransactionCase):
             {
                 "name": "Portal Customer",
                 "login": "portal_multi_website",
+                "lang": "en_US",
                 "partner_id": self.portal_partner.id,
                 "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
             }
@@ -80,7 +81,7 @@ class TestHelpdeskMultiWebsite(HamsTransactionCase):
             .with_context(website_id=self.website_1.id)
         )
 
-        visible_w1 = Ticket_portal_w1.search([])
+        visible_w1 = Ticket_portal_w1.search([], limit=1000)
         self.assertIn(
             ticket_w1,
             visible_w1,
@@ -106,7 +107,7 @@ class TestHelpdeskMultiWebsite(HamsTransactionCase):
             .with_company(self.env.company.id)
             .with_context(website_id=self.website_2.id)
         )
-        visible_w2 = Ticket_portal_w2.search([])
+        visible_w2 = Ticket_portal_w2.search([], limit=1000)
         self.assertIn(
             ticket_w2,
             visible_w2,

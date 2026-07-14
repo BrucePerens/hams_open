@@ -13,9 +13,9 @@ class HelpdeskTicket(models.Model):
     _description = "Helpdesk Ticket"
     _inherit = ["mail.thread", "mail.activity.mixin"]
 
-    # [@ANCHOR: helpdesk_ticket_lifecycle]
+    # [@ANCHOR: COMM_helpdesk_ticket_lifecycle]
 
-    # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+    # Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
     name = fields.Char(string="Subject", required=True, tracking=True)
     description = fields.Html(string="Description")
     callsign = fields.Char(
@@ -74,7 +74,7 @@ class HelpdeskTicket(models.Model):
         string="Website",
         ondelete="restrict",
         help="The website this ticket was created on.",
-    )  # [@ANCHOR: helpdesk_multi_website]
+    )  # [@ANCHOR: COMM_helpdesk_multi_website]
 
     company_id = fields.Many2one(
         "res.company",
@@ -90,26 +90,20 @@ class HelpdeskTicket(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        # [@ANCHOR: helpdesk_ticket_creation]
+        # [@ANCHOR: COMM_helpdesk_ticket_creation]
 
-        # Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
+        # Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
         
         # Calculate on_duty_user_id before bulk creation
         on_duty_user_id = False
         utils = self.env["zero_sudo.security.utils"]
         Calendar = self.env["calendar.event"]
-        if "is_pager_duty" in Calendar._fields:
-            try:
-                pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
-                Calendar = pager_env["calendar.event"]
-            except Exception as e: # audit-ignore-catch-all
-                _logger.info("PagerDuty service env not loaded: %s", e)
-            try:
-                on_duty_admin = Calendar.get_current_on_duty_admin()
-                if on_duty_admin:
-                    on_duty_user_id = on_duty_admin.id
-            except Exception as e: # audit-ignore-catch-all
-                _logger.warning("Failed to get on_duty_admin: %s", e)
+        try:
+            on_duty_admin = Calendar.get_current_on_duty_admin()
+            if on_duty_admin:
+                on_duty_user_id = on_duty_admin.id
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("Failed to get on_duty_admin: %s", e)
 
         # Pre-fetch records
         website_ids = {vals["website_id"] for vals in vals_list if vals.get("website_id")}
@@ -156,23 +150,11 @@ class HelpdeskTicket(models.Model):
 
         # Use service account if available, otherwise fallback to current env (e.g. during tests or if pager_duty not installed)
         Calendar = self.env["calendar.event"]
-        if "is_pager_duty" in Calendar._fields:
-            try:
-                pager_env = utils._get_service_env("pager_duty.user_pager_service_internal")
-                Calendar = pager_env["calendar.event"]
-            except Exception as e: # audit-ignore-catch-all
-                _logger.info("PagerDuty service env not loaded (optional integration): %s", e)
-            now = fields.Datetime.now()
-            thirty_mins = now + datetime.timedelta(minutes=30)
-            upcoming_shifts = Calendar.search(
-                [
-                    ("is_pager_duty", "=", True),
-                    ("start", ">", now),
-                    ("start", "<=", thirty_mins),
-                ],
-                limit=100,
-            )
+        try:
+            upcoming_shifts = Calendar.get_upcoming_duty_shifts()
             upcoming_partner_ids = upcoming_shifts.mapped("user_id.partner_id.id")
+        except Exception as e: # audit-ignore-catch-all
+            _logger.info("Failed to get upcoming duty shifts: %s", e)
 
         # 2. Apply assignments and send notifications via Helpdesk Service Account
         # We explicitly do NOT catch all exceptions here to ensure that if the service
@@ -184,15 +166,16 @@ class HelpdeskTicket(models.Model):
             ticket_service = ticket.with_env(hd_env).with_company(ticket.company_id)
             
             # Since assignment is now handled in create(), we only check if it was assigned
+            facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
             if ticket_service.user_id:
                 # Email Notification
-                ticket_service.message_post(
+                ticket_service.with_env(facility_env).message_post(
                     body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id,
                     partner_ids=[ticket_service.user_id.partner_id.id],
                     subject=_("Ticket Assigned: %s") % ticket_service.name,
                 )
                 # Bus Toast
-                self.env["bus.bus"]._sendone(
+                facility_env["bus.bus"]._sendone(
                     ticket_service.user_id.partner_id,
                     "simple_notification",
                     {
@@ -214,8 +197,8 @@ class HelpdeskTicket(models.Model):
                     pid for pid in upcoming_partner_ids if pid != current_assignee_pid
                 ]
                 if cc_pids:
-                    ticket_service.message_subscribe(partner_ids=cc_pids)
-                    ticket_service.message_post(
+                    ticket_service.with_env(facility_env).message_subscribe(partner_ids=cc_pids)
+                    ticket_service.with_env(facility_env).message_post(
                         body=_(
                             "Upcoming shift awareness: A new ticket was created near your shift start."
                         ),
@@ -226,12 +209,12 @@ class HelpdeskTicket(models.Model):
 
             # Ensure customer is subscribed
             if ticket_service.partner_id:
-                ticket_service.message_subscribe(
+                ticket_service.with_env(facility_env).message_subscribe(
                     partner_ids=[ticket_service.partner_id.id]
                 )
 
     def write(self, vals):
-        # [@ANCHOR: helpdesk_micro_privilege]
+        # [@ANCHOR: COMM_helpdesk_micro_privilege]
         # Micro-Privilege Security Audit: Prevent portal users from modifying restricted fields.
         if self.env.user.has_group("base.group_portal"):
             restricted_fields = {
@@ -240,6 +223,7 @@ class HelpdeskTicket(models.Model):
                 "priority",
                 "calendar_event_id",
                 "website_id",
+                "company_id",
             }
             if any(f in vals for f in restricted_fields):
                 raise AccessError(
@@ -264,9 +248,9 @@ class HelpdeskTicket(models.Model):
 
     def action_shift_handoff(self):
         """Opens the formal shift handoff wizard."""
-        # [@ANCHOR: helpdesk_shift_handoff]
+        # [@ANCHOR: COMM_helpdesk_shift_handoff]
 
-        # Verified by [@ANCHOR: test_02_shift_handoff_wizard]
+        # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
         self.ensure_one()
         return {
             "name": "Formal Shift Handoff",
@@ -282,7 +266,7 @@ class HelpdeskTicket(models.Model):
 
     def action_portal_close(self):
         """Allows portal users to close their own tickets."""
-        # [@ANCHOR: helpdesk_portal_close]
+        # [@ANCHOR: COMM_helpdesk_portal_close]
         self.ensure_one()
         # Security: Ensure the user is the owner of the ticket
         if self.partner_id != self.env.user.partner_id and not self.env.user.has_group(
@@ -293,5 +277,6 @@ class HelpdeskTicket(models.Model):
         if self.stage != "closed":
             utils = self.env["zero_sudo.security.utils"]
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-            self.with_env(hd_env).write({"stage": "closed"})
-            self.message_post(body=_("Ticket closed by customer."))
+            self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
+            facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
+            self.with_env(facility_env).message_post(body=_("Ticket closed by customer."))

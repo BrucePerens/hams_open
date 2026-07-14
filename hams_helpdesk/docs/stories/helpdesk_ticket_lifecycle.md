@@ -1,6 +1,6 @@
 # Story: Helpdesk Ticket Lifecycle
 
-**[@ANCHOR: helpdesk_ticket_lifecycle]**
+**[@ANCHOR: COMM_helpdesk_ticket_lifecycle]**
 
 The helpdesk ticket lifecycle ensures that every reported incident is tracked from detection to closure with a full audit trail.
 
@@ -11,4 +11,6 @@ The helpdesk ticket lifecycle ensures that every reported incident is tracked fr
 5.  **Validation**: The reporter validates the fix.
 6.  **Closure**: The ticket is moved to "Closed".
 
-*Verified by [@ANCHOR: test_01_ticket_creation_and_routing]*
+*Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]*
+<!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_operator_tour] -->
+<!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_tour] -->

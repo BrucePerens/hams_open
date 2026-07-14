@@ -16,6 +16,7 @@ class TestHelpdeskPersonasUITours(HamsHttpCase):
                 "login": "crm_user_tour",
                 "password": "password",
                 "email": "crm_tour@example.com",
+                "lang": "en_US",
                 "group_ids": [
                     (
                         6,
@@ -33,13 +34,13 @@ class TestHelpdeskPersonasUITours(HamsHttpCase):
                 "login": "club_user_tour",
                 "password": "password",
                 "email": "club_tour@example.com",
+                "lang": "en_US",
                 "group_ids": [
                     (
                         6,
                         0,
                         [
                             self.env.ref("base.group_portal").id,
-                            # Add club group if present, else just portal
                         ],
                     )
                 ],

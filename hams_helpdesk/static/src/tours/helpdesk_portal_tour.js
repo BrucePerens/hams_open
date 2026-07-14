@@ -1,3 +1,5 @@
+/* This software is distributed under the terms of the Affero General Public License (AGPL-3). */
+// [@ANCHOR: COMM_helpdesk_portal_tour]
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
@@ -56,27 +58,8 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
         },
         {
             content: "Verify Closed Status",
-            trigger: 'body',
-            run: function() {
-                return new Promise((resolve, reject) => {
-                    let interval = setInterval(() => {
-                        const badge = document.querySelector('.o_helpdesk_status_badge');
-                        if (badge && badge.textContent.trim() === 'Closed') {
-                            clearInterval(interval);
-                            resolve();
-                        }
-                    }, 250);
-                    setTimeout(() => {
-                        clearInterval(interval);
-                        // Fallback check to avoid blocking the tour if it reached here but badge didn't update instantly
-                        if (document.body.textContent.includes('Closed')) {
-                            resolve();
-                        } else {
-                            reject(new Error("Ticket status is not Closed"));
-                        }
-                    }, 5000);
-                });
-            },
+            trigger: '.o_helpdesk_status_badge:contains("Closed")',
+            run: function() {}
         }
     ]
 });

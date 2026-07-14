@@ -71,13 +71,14 @@ class TestHelpdeskCore(HamsTransactionCase):
             }
         )
 
-        if "is_pager_duty" in self.env["calendar.event"]._fields:
+        try:
+            _ = self.env["calendar.event"].is_pager_duty
             self.assertEqual(
                 ticket.user_id,
                 self.manager_user,
                 "Ticket MUST auto-assign to the currently active on-duty manager.",
             )
-        else:
+        except AttributeError:
             self.assertFalse(
                 ticket.user_id,
                 "Ticket MUST NOT auto-assign when pager_duty is not installed.",
@@ -130,7 +131,8 @@ class TestHelpdeskCore(HamsTransactionCase):
 
         # Verify the audit log was written to the chatter
         messages = self.env["mail.message"].search(
-            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")]
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")],
+            limit=100
         )
         audit_trail = " ".join([m.body for m in messages if m.body])
         self.assertIn("Official Shift Handoff Executed", audit_trail)
@@ -161,7 +163,7 @@ class TestHelpdeskCore(HamsTransactionCase):
             .with_user(self.portal_user)
             .with_company(self.env.company)
         )
-        visible_tickets = Ticket_as_portal.search([])
+        visible_tickets = Ticket_as_portal.search([], limit=1000)
 
         self.assertIn(
             my_ticket,
@@ -173,6 +175,13 @@ class TestHelpdeskCore(HamsTransactionCase):
             visible_tickets,
             "CRITICAL SECURITY FAILURE: Portal user can see another user's ticket.",
         )
+
+        admin_user = self.env.ref("base.user_admin")
+        admin_user.company_id = self.env.company
+        Ticket_as_admin = self.env["hams_helpdesk.ticket"].with_user(admin_user).with_company(self.env.company)
+        admin_tickets = Ticket_as_admin.search([], limit=1000)
+        self.assertIn(my_ticket, admin_tickets, "Admin MUST be able to see all tickets in company.")
+        self.assertIn(other_ticket, admin_tickets, "Admin MUST be able to see all tickets in company.")
 
     def test_04_stage_mailback_automation(self):
         """Verify that transitioning a ticket stage fires an automated mail-back to the subscribed customer."""
@@ -188,7 +197,8 @@ class TestHelpdeskCore(HamsTransactionCase):
         ticket.write({"stage": "in_progress"})
 
         messages = self.env["mail.message"].search(
-            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")]
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")],
+            limit=100
         )
         mailback_found = any(
             "Your issue has been updated" in (m.body or "") for m in messages
@@ -288,7 +298,8 @@ class TestHelpdeskCore(HamsTransactionCase):
         ticket.write({"stage": "in_progress"})
         
         messages = self.env["mail.message"].search(
-            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")]
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")],
+            limit=100
         )
         mailback_found = any("Your issue has been updated" in (m.body or "") for m in messages)
         self.assertTrue(mailback_found)
@@ -319,7 +330,8 @@ class TestHelpdeskCore(HamsTransactionCase):
         wizard.with_company(self.env.company).action_confirm_handoff()
 
         messages = self.env["mail.message"].search(
-            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")]
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")],
+            limit=100
         )
         audit_trail = " ".join([m.body for m in messages if m.body])
         self.assertNotIn("<script>alert", audit_trail, "Handoff notes MUST be escaped.")
@@ -329,7 +341,7 @@ class TestHelpdeskCore(HamsTransactionCase):
         """Verify ticket creation doesn't crash when pager_duty isn't installed."""
         # Un-patch if there's any global mock, or just run directly
         # Since we don't mock get_current_on_duty_admin in this test, it will use the real one.
-        # If pager_duty is not installed, it will raise AttributeError and fail the test.
+        # If pager_duty is not installed, it MUST NOT raise AttributeError and fail the test.
         ticket = self.env["hams_helpdesk.ticket"].create({
             "name": "Crash Test Ticket",
             "partner_id": self.portal_user.partner_id.id,

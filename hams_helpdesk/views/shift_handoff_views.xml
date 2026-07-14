@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
 <odoo>
-    <!-- burn-ignore-tour -->
     <record id="view_hams_helpdesk_shift_handoff_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_shift_handoff] -->
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_operator_tour] -->
         <field name="name">hams_helpdesk.shift_handoff.form</field>
         <field name="model">hams_helpdesk.shift_handoff</field>
         <field name="arch" type="xml">

@@ -8,3 +8,4 @@ class ResPartner(models.Model):
     _inherit = "res.partner"
 
     callsign = fields.Char(string="Callsign", help="Relevant amateur radio callsign.")
+    helpdesk_ticket_ids = fields.One2many("hams_helpdesk.ticket", "partner_id", string="Helpdesk Tickets")
