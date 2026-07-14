@@ -4,3 +4,7 @@
 # CRITICAL LOAD ORDER: 'website' MUST be imported BEFORE 'res_config_settings'.
 # The related fields in res_config_settings depend on the fields being fully
 # materialized on the website model first.
+
+from . import caching_mixin
+from . import website
+from . import res_config_settings

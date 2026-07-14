@@ -51,7 +51,7 @@ class TestBackupMultiWebsite(HamsTransactionCase):
                 ],
             }
         )
-        configs_a = self.env["backup.config"].with_user(user_a).search([])
+        configs_a = self.env["backup.config"].with_user(user_a).search([], limit=100)
 
         self.assertIn(
             self.config_all,
@@ -76,7 +76,7 @@ class TestBackupMultiWebsite(HamsTransactionCase):
                 ],
             }
         )
-        configs_b = self.env["backup.config"].with_user(user_b).search([])
+        configs_b = self.env["backup.config"].with_user(user_b).search([], limit=100)
 
         self.assertIn(
             self.config_all,

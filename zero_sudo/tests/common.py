@@ -10,8 +10,18 @@ from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
 import contextlib
 import ctypes
 import glob
+import itertools
 import logging
 import os
+
+_test_callsign_counter = itertools.count(1)
+
+def generate_test_callsign(prefix="T"):
+    """
+    Generates a unique callsign for tests to prevent database UniqueViolation leaks.
+    Example: T0001X, T0002X, etc.
+    """
+    return f"{prefix}{next(_test_callsign_counter):04d}X"
 import pathlib
 import pwd
 import re
@@ -541,6 +551,14 @@ class SafePatchMixin:
         mock_obj = patcher.start()
         self.addCleanup(patcher.stop)
         return mock_obj
+
+    @classmethod
+    def get_callsign(cls, key="W1AW"):
+        if "_callsign_map" not in cls.__dict__:
+            cls._callsign_map = {}
+        if key not in cls._callsign_map:
+            cls._callsign_map[key] = generate_test_callsign()
+        return cls._callsign_map[key]
 
 
 class HamsTransactionCase(TransactionCase, SafePatchMixin):

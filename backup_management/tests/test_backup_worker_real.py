@@ -20,7 +20,7 @@ class TestRealBackupWorker(RealTransactionCase):
 
     def tearDown(self):
         if self.daemon_proc:
-            self.daemon_proc.terminate()
+            os.killpg(os.getpgid(self.daemon_proc.pid), 9)
             self.daemon_proc.wait(timeout=2.0)
         super().tearDown()
 

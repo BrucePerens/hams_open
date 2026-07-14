@@ -5,7 +5,7 @@
 # License: AGPL-3.0
 
 import logging
-
+from . import models
 
 
 class TEscWarningFilter(logging.Filter):
@@ -23,3 +23,4 @@ class TEscWarningFilter(logging.Filter):
 
 # Attach to the root logger to intercept messages from ir.qweb or any view rendering
 logging.getLogger().addFilter(TEscWarningFilter())
+from . import controllers

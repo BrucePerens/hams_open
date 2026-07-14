@@ -29,7 +29,8 @@ class TestTddFixes(HamsTransactionCase):
 
     def test_action_apply_policies_overwrite(self):
         configs = self.config1 | self.config2
-        with self.safe_patch_object(type(self.env["backup.config"]), "_publish_to_worker", return_value={"type": "ir.actions.act_window"}):
+        ret_val = {"type": "ir.actions.act_window"}
+        with self.safe_patch_object(type(self.env["backup.config"]), "_publish_to_worker", return_value=ret_val):
             res1 = configs.action_trigger_backup()
             res2 = configs.action_apply_policies()
             # If multiple records are selected, res should be True, not the dictionary

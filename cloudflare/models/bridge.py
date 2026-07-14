@@ -37,9 +37,8 @@ class WebsiteMenu(models.Model):
         return res
 
     def unlink(self):
-        res = super().unlink()
         self._purge_cloudflare_menus()
-        return res
+        return super().unlink()
 
 
 class ProductTemplate(models.Model):

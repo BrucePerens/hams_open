@@ -105,13 +105,12 @@ class TestBackupManagement(RealTransactionCase):
 
         self.config_kopia.message_post(body=_("Verifying failure reporting mechanism"))
 
-        mock_msg = self.safe_patch_object(
-            type(self.env["backup.config"]), "message_post"
-        )
+        messages_before = self.env["mail.message"].search_count([("model", "=", "backup.config"), ("res_id", "=", self.config_kopia.id)])
         self.env["backup.config"].cron_sync_all_backups()
-        mock_msg.assert_called()
+        messages_after = self.env["mail.message"].search_count([("model", "=", "backup.config"), ("res_id", "=", self.config_kopia.id)])
+        self.assertGreater(messages_after, messages_before)
 
-        jobs = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)])
+        jobs = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)], limit=100)
         self.assertTrue(jobs)
 
     def test_07_orchestration_trigger(self):
@@ -241,7 +240,7 @@ class TestBackupManagement(RealTransactionCase):
         self.config_kopia.action_trigger_backup()
         self.config_pg.action_trigger_backup()
         jobs = self.env["backup.job"].search(
-            [("config_id", "in", [self.config_kopia.id, self.config_pg.id])]
+            [("config_id", "in", [self.config_kopia.id, self.config_pg.id])], limit=100
         )
         self.assertEqual(len(jobs), 2)
 

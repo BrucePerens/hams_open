@@ -5,6 +5,6 @@
 from . import backup_config
 from . import backup_job
 from . import backup_snapshot
-from . import sql_views
 from . import restore_wizard
+from . import sql_views
 from . import utils
