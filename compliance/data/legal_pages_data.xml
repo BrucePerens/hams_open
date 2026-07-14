@@ -5,7 +5,8 @@
     <data noupdate="1">
 
         <template id="compliance_legal_links" name="Legal Pages Links">
-            <!-- audit-ignore-view: Tested by [@ANCHOR: test_compliance_views] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_views] -->
+            <!-- burn-ignore-tour: Static links template -->
             <div class="mt-5 border-top pt-3">
                 <p class="text-muted small">
                     Related:
@@ -18,15 +19,15 @@
         </template>
         
         <template id="compliance_privacy_policy_template" name="Privacy Policy Template">
-            <!-- [@ANCHOR: compliance_privacy_policy_template] -->
+            <!-- [@ANCHOR: COMM_compliance_privacy_policy_template] -->
 
-            <!-- [@ANCHOR: compliance_legal_pages_rendering] -->
+            <!-- [@ANCHOR: COMM_compliance_legal_pages_rendering] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
+            <!-- Verified by [@ANCHOR: COMM_test_compliance_pages_presence] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
+            <!-- Verified by [@ANCHOR: COMM_test_compliance_pages_content] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
@@ -79,15 +80,15 @@
 
 
         <template id="compliance_cookie_policy_template" name="Cookie Policy Template">
-            <!-- [@ANCHOR: compliance_cookie_policy_template] -->
+            <!-- [@ANCHOR: COMM_compliance_cookie_policy_template] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
+            <!-- Verified by [@ANCHOR: COMM_test_compliance_pages_presence] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
+            <!-- Verified by [@ANCHOR: COMM_test_compliance_pages_content] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_views] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_views] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
@@ -134,15 +135,15 @@
 
 
         <template id="compliance_terms_of_service_template" name="Terms of Service Template">
-            <!-- [@ANCHOR: compliance_terms_of_service_template] -->
+            <!-- [@ANCHOR: COMM_compliance_terms_of_service_template] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_pages_presence] -->
+            <!-- Verified by [@ANCHOR: COMM_test_compliance_pages_presence] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_pages_content] -->
+            <!-- Verified by [@ANCHOR: COMM_test_compliance_pages_content] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_views] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_views] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
@@ -189,9 +190,9 @@
 
 
         <template id="compliance_accessibility_statement_template" name="Accessibility Statement Template">
-            <!-- [@ANCHOR: compliance_accessibility_statement_template] -->
+            <!-- [@ANCHOR: COMM_compliance_accessibility_statement_template] -->
 
-            <!-- Verified by [@ANCHOR: test_compliance_ui_tour] -->
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">

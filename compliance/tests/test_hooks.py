@@ -9,41 +9,6 @@ from odoo.addons.compliance.hooks import post_init_hook
 @tagged("post_install", "-at_install")
 class TestComplianceHooks(HamsTransactionCase):
 
-    def test_01_postgres_procedure(self):
-        """Verify the compliance enforcement procedure."""
-        # [@ANCHOR: COMM_test_compliance_postgres_procedures]
-
-        # Tests [@ANCHOR: COMM_compliance_postgres_procedures]
-        # Create a custom page to test shielding
-        custom_view = self.env["ir.ui.view"].create(
-            {
-                "name": "Custom Privacy",
-                "type": "qweb",
-                "arch": "<div>Custom Content</div>",
-                "key": "custom.privacy_view",
-            }
-        )
-        self.env["website.page"].create(
-            {
-                "url": "/privacy",
-                "view_id": custom_view.id,
-                "is_published": True,
-                "website_id": False,
-            }
-        )
-
-        # Ensure boilerplate is published
-        bp = self.env.ref("compliance.compliance_page_privacy_policy")
-        bp.write({"is_published": True})
-
-        # Run the procedure
-        post_init_hook(self.env)
-        bp.invalidate_recordset(["is_published"])
-
-        self.assertFalse(
-            bp.is_published,
-            "Boilerplate should be shielded by procedure")
-
     def test_02_post_init_hook_cookie_bar(self):
         """
         Verify that the post_init_hook successfully enables the cookies_bar
@@ -63,9 +28,9 @@ class TestComplianceHooks(HamsTransactionCase):
         for website in websites:
             self.assertTrue(
                 website.cookies_bar,
-                f"[!] DIAGNOSTIC FOR AI: Cookie bar must be enabled on website '{  # noqa: E501
+                f"[!] DIAGNOSTIC FOR AI: Cookie bar must be enabled on website '{
                     website.name}' (# {
-                    website.id}). " "The post_init_hook failed to enforce this setting. check compliance/hooks.py.",  # noqa: E501
+                    website.id}). " "The post_init_hook failed to enforce this setting. check compliance/hooks.py.",
             )
 
     def test_03_views_rendering(self):
@@ -77,16 +42,16 @@ class TestComplianceHooks(HamsTransactionCase):
         # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
 
         # Tests [@ANCHOR: COMM_journey_compliance_setup]
-        self.env.ref("compliance.compliance_privacy_policy_template").with_context(  # noqa: E501
+        self.env.ref("compliance.compliance_privacy_policy_template").with_context(
             lang=None)._get_combined_arch()
-        self.env.ref("compliance.compliance_cookie_policy_template").with_context(  # noqa: E501
+        self.env.ref("compliance.compliance_cookie_policy_template").with_context(
             lang=None)._get_combined_arch()
-        self.env.ref("compliance.compliance_terms_of_service_template").with_context(  # noqa: E501
+        self.env.ref("compliance.compliance_terms_of_service_template").with_context(
             lang=None)._get_combined_arch()
 
     def test_04_non_destructive_mandate(self):
         """
-        Verify that if a custom page already exists, the boilerplate is unpublished.  # noqa: E501
+        Verify that if a custom page already exists, the boilerplate is unpublished.
         """
         # [@ANCHOR: COMM_test_compliance_non_destructive_mandate]
 
@@ -122,13 +87,13 @@ class TestComplianceHooks(HamsTransactionCase):
         # Check that the boilerplate is now unpublished
         self.assertFalse(
             boilerplate_page.is_published,
-            "[!] DIAGNOSTIC FOR AI: Boilerplate page should be unpublished when a custom page exists at the same URL. "  # noqa: E501
-            "Ensure compliance/hooks.py correctly identifies and shadows boilerplate pages.",  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: Boilerplate page should be unpublished when a custom page exists at the same URL. "
+            "Ensure compliance/hooks.py correctly identifies and shadows boilerplate pages.",
         )
         # Check that the custom page is still published
         self.assertTrue(
             custom_page.is_published,
-            "[!] DIAGNOSTIC FOR AI: Custom page should remain published even after running compliance hooks.",  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: Custom page should remain published even after running compliance hooks.",
         )
 
         # Multi-Website awareness test
@@ -160,7 +125,7 @@ class TestComplianceHooks(HamsTransactionCase):
         existing_bp_2 = (
             self.env["website.page"]
             .with_context(active_test=False)
-            .search([("url", "=", "/cookie-policy"), ("website_id", "=", website_2.id)], limit=1000)  # noqa: E501
+            .search([("url", "=", "/cookie-policy"), ("website_id", "=", website_2.id)], limit=1000)
             .filtered(
                 lambda p: p.view_id.key
                 and p.view_id.key.startswith("compliance.compliance_")
@@ -175,8 +140,8 @@ class TestComplianceHooks(HamsTransactionCase):
         # custom page
         self.assertTrue(
             boilerplate_cookie.is_published,
-            "[!] DIAGNOSTIC FOR AI: Global boilerplate should NOT be unpublished by a website-specific custom page. "  # noqa: E501
-            "The hook must be website-aware and only shadow within the same scope.",  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: Global boilerplate should NOT be unpublished by a website-specific custom page. "
+            "The hook must be website-aware and only shadow within the same scope.",
         )
 
         # Cleanup
@@ -193,8 +158,8 @@ class TestComplianceHooks(HamsTransactionCase):
             {"name": "New Compliant Website"})
         self.assertTrue(
             new_website.cookies_bar,
-            "[!] DIAGNOSTIC FOR AI: New websites should have cookies_bar=True by default. "  # noqa: E501
-            "Check the default value in compliance/models/compliance_config.py.",  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: New websites should have cookies_bar=True by default. "
+            "Check the default value in compliance/models/compliance_config.py.",
         )
         new_website.unlink()
 
@@ -232,6 +197,6 @@ class TestComplianceHooks(HamsTransactionCase):
         post_init_hook(self.env)
         self.assertTrue(
             boilerplate_page.is_published,
-            "[!] DIAGNOSTIC FOR AI: Boilerplate should be re-published if the custom page is gone. "  # noqa: E501
-            "The hook should be idempotent and capable of restoring boilerplate pages.",  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: Boilerplate should be re-published if the custom page is gone. "
+            "The hook should be idempotent and capable of restoring boilerplate pages.",
         )

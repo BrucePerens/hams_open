@@ -13,12 +13,12 @@ class TestComplianceSecurity(HamsTransactionCase):
         svc_user = self.env.ref("compliance.user_compliance_service")
         self.assertTrue(
             svc_user.active,
-            "[!] DIAGNOSTIC FOR AI: Service account 'user_compliance_service' should be active. "  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: Service account 'user_compliance_service' should be active. "
             "Check compliance/security/security_data.xml.",
         )
         self.assertTrue(
             svc_user.is_service_account,
-            "[!] DIAGNOSTIC FOR AI: User should be marked as a service account (is_service_account=True). "  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: User should be marked as a service account (is_service_account=True). "
             "Check compliance/security/security_data.xml.",
         )
 
@@ -26,6 +26,6 @@ class TestComplianceSecurity(HamsTransactionCase):
         self.assertIn(
             compliance_group,
             svc_user.group_ids,
-            "[!] DIAGNOSTIC FOR AI: Service account should belong to the compliance service group. "  # noqa: E501
+            "[!] DIAGNOSTIC FOR AI: Service account should belong to the compliance service group. "
             "Check compliance/security/security_data.xml.",
         )

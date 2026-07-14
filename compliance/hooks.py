@@ -12,22 +12,22 @@ def post_init_hook(env):
     1. Enforces the use of Odoo's native cookie consent banner.
     2. Ensures legal pages are non-destructively provisioned.
     """
-    # [@ANCHOR: journey_compliance_setup]
+    # [@ANCHOR: COMM_journey_compliance_setup]
 
-    # Verified by [@ANCHOR: test_compliance_ui_tour]
+    # Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
 
-    # [@ANCHOR: compliance_post_init_cookie_bar]
+    # [@ANCHOR: COMM_compliance_post_init_cookie_bar]
 
-    # [@ANCHOR: story_cookie_consent]
+    # [@ANCHOR: COMM_story_cookie_consent]
 
-    # Verified by [@ANCHOR: test_compliance_post_init_cookie_bar]
+    # Verified by [@ANCHOR: COMM_test_compliance_post_init_cookie_bar]
 
-    # Verified by [@ANCHOR: test_compliance_ui_tour]
+    # Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
 
     # ADR-0002: Zero-Sudo Architecture. We must not use .sudo()
     # or stay as SUPERUSER.
     # We switch to a dedicated micro-privilege service account.
-    # [@ANCHOR: compliance_zero_sudo_impersonation]
+    # [@ANCHOR: COMM_compliance_zero_sudo_impersonation]
     svc_uid = env["zero_sudo.security.utils"]._get_service_uid(
         "compliance.user_compliance_service"
     )
@@ -82,7 +82,7 @@ def post_init_hook(env):
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
     # Performance Optimization: Reduced dozens of ORM round-trips
     # to a single Postgres procedure call.
-    # Verified by [@ANCHOR: test_compliance_postgres_procedures]
+    # Verified by [@ANCHOR: COMM_test_compliance_postgres_procedures]
     env_svc.flush_all()
     with env_svc.cr.savepoint():
         env_svc.cr.execute("SELECT compliance_enforce_protection()")

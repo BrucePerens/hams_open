@@ -7,7 +7,7 @@ from odoo import models, fields
 class Website(models.Model):
     _inherit = "website"
 
-    # AI Laziness Fix: Ensure cookies_bar is enabled by default for new websites.  # noqa: E501
+    # AI Laziness Fix: Ensure cookies_bar is enabled by default for new websites.
     # This enforces compliance even for sites created after module
     # installation.
     cookies_bar = fields.Boolean(default=True)

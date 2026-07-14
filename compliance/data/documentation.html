@@ -19,7 +19,8 @@
 <h2 class="mt-4">3. Cookie Consent (ePrivacy Directive)</h2>
 <p>The ePrivacy Directive (often called the "Cookie Law") requires explicit user consent before storing non-essential cookies (like analytics or marketing trackers) on a user's device.</p>
 <ul>
-    <li data-trace="[@ANCHOR: compliance_post_init_cookie_bar]"><strong>Native Integration:</strong> This module automatically enforces Odoo's native Cookie Consent Bar across all active websites upon installation. It also ensures that any new websites you create will have this feature enabled by default.</li>
+    <!-- [@ANCHOR: COMM_compliance_post_init_cookie_bar] -->
+    <li><strong>Native Integration:</strong> This module automatically enforces Odoo's native Cookie Consent Bar across all active websites upon installation. It also ensures that any new websites you create will have this feature enabled by default.</li>
     <li><strong>How to Verify:</strong> To see the cookie bar in action, open your website in a "Private" or "Incognito" browser window. You should see a banner at the bottom of the page asking for your permission to use cookies.</li>
     <li><strong>Compliance Protocol:</strong> Do not bypass this bar by hardcoding third-party tracking scripts into your website templates. All trackers must hook into the core framework's consent state.</li>
 </ul>
@@ -29,13 +30,17 @@
 <h2 class="mt-4">4. Required Legal Boilerplates</h2>
 <p>To operate legally, your website must publicly display specific policy documents. The <code>compliance</code> module automatically provisions editable, AGPL-3 compatible templates for:</p>
 <ul>
-    <li data-trace="[@ANCHOR: compliance_privacy_policy_template]"><strong>Privacy Policy</strong> (accessible at <code>/privacy</code>): Explains data collection, usage, and user rights.</li>
+    <!-- [@ANCHOR: COMM_compliance_privacy_policy_template] -->
+    <li><strong>Privacy Policy</strong> (accessible at <code>/privacy</code>): Explains data collection, usage, and user rights.</li>
 
-    <li data-trace="[@ANCHOR: compliance_cookie_policy_template]"><strong>Cookie Policy</strong> (accessible at <code>/cookie-policy</code>): Details the types of cookies used and how users can manage them.</li>
+    <!-- [@ANCHOR: COMM_compliance_cookie_policy_template] -->
+    <li><strong>Cookie Policy</strong> (accessible at <code>/cookie-policy</code>): Details the types of cookies used and how users can manage them.</li>
 
-    <li data-trace="[@ANCHOR: compliance_terms_of_service_template]"><strong>Terms of Service</strong> (accessible at <code>/terms</code>): Outlines the rules for using the platform, content ownership, and moderation policies.</li>
+    <!-- [@ANCHOR: COMM_compliance_terms_of_service_template] -->
+    <li><strong>Terms of Service</strong> (accessible at <code>/terms</code>): Outlines the rules for using the platform, content ownership, and moderation policies.</li>
 
-    <li data-trace="[@ANCHOR: compliance_accessibility_statement_template]"><strong>Accessibility Statement</strong> (accessible at <code>/accessibility</code>): Demonstrates your commitment to inclusivity and provides contact information for accessibility support.</li>
+    <!-- [@ANCHOR: COMM_compliance_accessibility_statement_template] -->
+    <li><strong>Accessibility Statement</strong> (accessible at <code>/accessibility</code>): Demonstrates your commitment to inclusivity and provides contact information for accessibility support.</li>
 </ul>
 
 <h3 class="mt-3">New Visibility Features</h3>
@@ -53,7 +58,8 @@
 </ol>
 
 <h3 class="mt-3">The "Non-Destructive Mandate"</h3>
-<p data-trace="[@ANCHOR: test_compliance_non_destructive_mandate]">We respect your work. If you have already created a custom page at one of these URLs before installing this module, we will <strong>not</strong> overwrite it. Instead, the module will automatically "unpublish" its own boilerplate version to ensure your custom content remains the one your visitors see.</p>
+<!-- [@ANCHOR: COMM_test_compliance_non_destructive_mandate] -->
+<p>We respect your work. If you have already created a custom page at one of these URLs before installing this module, we will <strong>not</strong> overwrite it. Instead, the module will automatically "unpublish" its own boilerplate version to ensure your custom content remains the one your visitors see.</p>
 <p>If you want to go back to using our boilerplate after having unpublished it (or having it automatically unpublished), simply delete your custom page or unpublish it, and then re-publish the "Global Compliance" version of the page in the <b>Site -&gt; Pages</b> menu. When the module is updated, it will automatically re-publish its boilerplate if no custom version is detected for that specific website.</p>
 <p>Additionally, because these pages are created as "noupdate" records, any edits you make using the website builder will be preserved even when you update the <code>compliance</code> module in the future.</p>
 

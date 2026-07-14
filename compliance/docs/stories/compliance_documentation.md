@@ -1,4 +1,4 @@
-# Story: Site Owner Documentation [@ANCHOR: story_compliance_documentation]
+# Story: Site Owner Documentation [@ANCHOR: COMM_story_compliance_documentation]
 
 ## User Persona
 **Charlie**, an Odoo administrator responsible for regulatory compliance.

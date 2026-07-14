@@ -5,9 +5,9 @@
 -->
 <odoo>
     <template id="compliance_footer_links" inherit_id="website.layout" priority="100">
-        <!-- [@ANCHOR: compliance_footer_links] -->
+        <!-- [@ANCHOR: COMM_compliance_footer_links] -->
 
-        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_compliance_ui_tour] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
         <xpath expr="//div[hasclass('o_footer_copyright')]" position="inside">
             <div class="col-sm text-center text-sm-start small">
                 <a href="/privacy" class="me-3 o_tour_footer_privacy">Privacy Policy</a>

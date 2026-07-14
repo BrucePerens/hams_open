@@ -2,7 +2,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
 # Public License v3.0 (AGPL-3.0).
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase  # noqa: E501
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, HamsHttpCase
 from lxml import etree
 import re
 
@@ -12,15 +12,15 @@ class TestCompliancePages(HamsTransactionCase):
 
     def test_pages_presence(self):
         """Verify that legal pages are created."""
-        # [@ANCHOR: test_compliance_pages_presence]
+        # [@ANCHOR: COMM_test_compliance_pages_presence]
 
-        # Tests [@ANCHOR: compliance_privacy_policy_template]
+        # Tests [@ANCHOR: COMM_compliance_privacy_policy_template]
 
-        # Tests [@ANCHOR: compliance_cookie_policy_template]
+        # Tests [@ANCHOR: COMM_compliance_cookie_policy_template]
 
-        # Tests [@ANCHOR: compliance_terms_of_service_template]
+        # Tests [@ANCHOR: COMM_compliance_terms_of_service_template]
 
-        # Tests [@ANCHOR: story_automatic_legal_pages]
+        # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
         urls = ["/privacy", "/cookie-policy", "/terms", "/accessibility"]
         pages = self.env["website.page"].search([("url", "in", urls)], limit=1000)
         found_urls = pages.mapped("url")
@@ -28,8 +28,8 @@ class TestCompliancePages(HamsTransactionCase):
             self.assertIn(
                 url,
                 found_urls,
-                f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in 'website.page'. "  # noqa: E501
-                "Check compliance/data/legal_pages_data.xml for missing records.",  # noqa: E501
+                f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in 'website.page'. "
+                "Check compliance/data/legal_pages_data.xml for missing records.",
             )
 
         # Non-Destructive Mandate check:
@@ -40,7 +40,7 @@ class TestCompliancePages(HamsTransactionCase):
                 and page.view_id.key
                 and page.view_id.key.startswith("compliance.compliance_")
             ):
-                # If there's another page for the same URL and SAME WEBSITE scope that isn't ours,  # noqa: E501
+                # If there's another page for the same URL and SAME WEBSITE scope that isn't ours,
                 # our page should be UNPUBLISHED. Otherwise it should be
                 # published.
                 other_page = pages.filtered(
@@ -49,24 +49,24 @@ class TestCompliancePages(HamsTransactionCase):
                         and p.website_id == page.website_id
                         and p.view_id
                         and p.view_id.key
-                        and not p.view_id.key.startswith("compliance.compliance_")  # noqa: E501
+                        and not p.view_id.key.startswith("compliance.compliance_")
                     )
                 )
                 if other_page:
                     self.assertFalse(
                         page.is_published,
                         f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {
-                            page.url} should be unpublished because a custom one exists in the same scope. " "Check compliance/hooks.py logic.",  # noqa: E501
+                            page.url} should be unpublished because a custom one exists in the same scope. " "Check compliance/hooks.py logic.",
                     )
                 else:
                     self.assertTrue(
                         page.is_published,
                         f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {
-                            page.url} should be published since no custom one exists in the same scope. " "Check compliance/hooks.py logic.",  # noqa: E501
+                            page.url} should be published since no custom one exists in the same scope. " "Check compliance/hooks.py logic.",
                     )
             else:
                 self.assertTrue(
-                    page.is_published, f"[!] DIAGNOSTIC FOR AI: Custom page for {  # noqa: E501
+                    page.is_published, f"[!] DIAGNOSTIC FOR AI: Custom page for {
                         page.url} should be published.", )
 
 
@@ -75,13 +75,13 @@ class TestCompliancePagesHttp(HamsHttpCase):
 
     def test_pages_reachable(self):
         """Verify that legal pages are reachable via HTTP."""
-        # Tests [@ANCHOR: compliance_privacy_policy_template]
+        # Tests [@ANCHOR: COMM_compliance_privacy_policy_template]
 
-        # Tests [@ANCHOR: compliance_cookie_policy_template]
+        # Tests [@ANCHOR: COMM_compliance_cookie_policy_template]
 
-        # Tests [@ANCHOR: compliance_terms_of_service_template]
+        # Tests [@ANCHOR: COMM_compliance_terms_of_service_template]
 
-        # Tests [@ANCHOR: story_automatic_legal_pages]
+        # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
         response = self.url_open("/privacy")
         self.assertEqual(
             response.status_code,
@@ -136,15 +136,15 @@ class TestCompliancePagesHttp(HamsHttpCase):
 
     def test_pages_content(self):
         """Verify that legal pages contain the expected boilerplate content."""
-        # [@ANCHOR: test_compliance_pages_content]
+        # [@ANCHOR: COMM_test_compliance_pages_content]
 
-        # Tests [@ANCHOR: compliance_privacy_policy_template]
+        # Tests [@ANCHOR: COMM_compliance_privacy_policy_template]
 
-        # Tests [@ANCHOR: compliance_cookie_policy_template]
+        # Tests [@ANCHOR: COMM_compliance_cookie_policy_template]
 
-        # Tests [@ANCHOR: compliance_terms_of_service_template]
+        # Tests [@ANCHOR: COMM_compliance_terms_of_service_template]
 
-        # Tests [@ANCHOR: story_automatic_legal_pages]
+        # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
         # /privacy
         view = self.env.ref("compliance.compliance_privacy_policy_template")
         arch_node = view._get_combined_arch()
@@ -211,6 +211,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
             "[!] DIAGNOSTIC FOR AI: Template compliance.compliance_terms_of_service_template is missing 'Last Updated:' text.",
         )
 
+        # Tests [@ANCHOR: COMM_compliance_accessibility_statement_template]
         # /accessibility
         view = self.env.ref("compliance.compliance_accessibility_statement_template")
         arch_node = view._get_combined_arch()

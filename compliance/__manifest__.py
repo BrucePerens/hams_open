@@ -1,10 +1,10 @@
 {"name": "Global Compliance & Privacy",
-    "summary": "Automated configuration of GDPR/CCPA settings and legal pages.",  # noqa: E501
+    "summary": "Automated configuration of GDPR/CCPA settings and legal pages.",
     "description": """
 This module acts as a central hub for regulatory compliance across the project.
 Upon installation, it:
 - Automatically enables Odoo's native Cookie Consent Bar.
-- Provisions standard editable legal pages (Privacy Policy, Cookie Policy, Terms of Service) via noupdate XML, ensuring site owner edits are never overwritten.  # noqa: E501
+- Provisions standard editable legal pages (Privacy Policy, Cookie Policy, Terms of Service) via noupdate XML, ensuring site owner edits are never overwritten.
     """,
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
@@ -26,7 +26,7 @@ Upon installation, it:
                         "icon": "⚖️",
                         "category": "workspace",
                         }],
-    "assets": {"web.assets_tests": ["compliance/static/tests/tours/compliance_tour.js",  # noqa: E501
+    "assets": {"web.assets_tests": ["compliance/static/tests/tours/compliance_tour.js",
                                     ],
                },
     "anchors": {"COMM_compliance_footer_links": "Compliance Footer Links Coverage",

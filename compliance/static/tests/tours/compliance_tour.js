@@ -5,7 +5,7 @@
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
-// Tests [@ANCHOR: test_compliance_ui_tour]
+// Tests [@ANCHOR: COMM_test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {
     url: "/en_US/privacy?debug=1",
     steps: () => [

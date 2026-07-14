@@ -5,5 +5,6 @@ from odoo import http
 class ComplianceController(http.Controller):
     @http.route('/compliance', type='http', auth='public', website=True)
     def compliance_index(self, **kw):
-        docs = http.request.env['compliance.document'].sudo().search([('active', '=', True)], limit=100)  # burn-ignore-sudo: Public docs access # audit-ignore-search: Tested by [@ANCHOR: COMM_test_compliance_index] # fmt: skip
+        svc_user = http.request.env.ref("compliance.user_compliance_service")
+        docs = http.request.env['compliance.document'].with_user(svc_user).search([('active', '=', True)], limit=100)
         return http.request.render('compliance.compliance_index_template', {'docs': docs})
