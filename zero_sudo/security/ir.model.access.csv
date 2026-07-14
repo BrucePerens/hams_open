@@ -12,5 +12,5 @@ access_ir_config_parameter_config_svc,ir.config_parameter config svc,base.model_
 access_ir_model_cache_invalidator,ir.model cache invalidator,base.model_ir_model,zero_sudo.group_cache_invalidator,1,0,0,0
 access_zero_sudo_daemon_utils,zero_sudo.daemon.utils,model_zero_sudo_daemon_utils,base.group_system,1,1,1,1
 access_zero_sudo_noisy_table,zero_sudo.noisy_table,model_zero_sudo_noisy_table,base.group_system,1,1,1,1
-access_zero_sudo_security_log_system,zero_sudo.security.log system,model_zero_sudo_security_log,base.group_system,1,1,1,1
-access_zero_sudo_security_log_facility,zero_sudo.security.log facility,model_zero_sudo_security_log,zero_sudo.group_odoo_facility_service,1,1,1,0
+access_zero_sudo_security_log_system,zero_sudo.security.log system,model_zero_sudo_security_log,base.group_system,1,0,1,0
+access_zero_sudo_security_log_facility,zero_sudo.security.log facility,model_zero_sudo_security_log,zero_sudo.group_odoo_facility_service,1,0,1,0

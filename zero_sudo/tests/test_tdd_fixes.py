@@ -116,3 +116,35 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.safe_patch("urllib.request.urlopen", mock_urlopen)
         res = daemon_utils.poll_health_check("http://localhost:8080/health", timeout=1, interval=0.1)
         self.assertTrue(res)
+
+    def test_security_log_immutability(self):
+        # [@ANCHOR: COMM_test_security_log_immutability]
+        log = self.env["zero_sudo.security.log"].create({
+            "reason": "test_immutability"
+        })
+        # Check system group
+        system_user = self.env.ref("base.user_admin")
+        log_sudo = log.with_user(system_user)
+        with self.assertRaises(AccessError):
+            log_sudo.write({"reason": "changed"})
+        with self.assertRaises(AccessError):
+            log_sudo.unlink()
+            
+        # Check facility service group
+        facility_user = self.env.ref("zero_sudo.odoo_facility_service_internal")
+        log_facility = log.with_user(facility_user)
+        with self.assertRaises(AccessError):
+            log_facility.write({"reason": "changed_facility"})
+        with self.assertRaises(AccessError):
+            log_facility.unlink()
+
+    def test_documentation_wrappers(self):
+        # [@ANCHOR: COMM_test_documentation_wrappers]
+        import os
+        from odoo.modules.module import get_resource_path
+        
+        path = get_resource_path("zero_sudo", "data", "testing_documentation.html")
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        self.assertTrue(content.startswith('<div class="o_knowledge_content">'))
+        self.assertTrue(content.endswith('</div>'))

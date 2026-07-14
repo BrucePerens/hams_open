@@ -198,6 +198,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return [
             "distributed_redis_cache.redis_host",
             "distributed_redis_cache.redis_password",
+            "distributed_redis_cache.redis_pass",
             "distributed_redis_cache.redis_port",
             "distributed_redis_cache.test_integration_active",
             "web.base.url",
