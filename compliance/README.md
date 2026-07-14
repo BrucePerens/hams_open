@@ -80,27 +80,27 @@ A non-interactive configuration module that enforces baseline regulatory complia
 ### 📚 User Stories & Journeys
 
 #### Stories
-* [Automatic Legal Pages Generation](./docs/stories/automatic_legal_pages.md) `[@ANCHOR: story_automatic_legal_pages]`
+* [Automatic Legal Pages Generation](./docs/stories/automatic_legal_pages.md) `[@ANCHOR: COMM_story_automatic_legal_pages]`
 
-* [Enforced Cookie Consent](./docs/stories/cookie_consent.md) `[@ANCHOR: story_cookie_consent]`
+* [Enforced Cookie Consent](./docs/stories/cookie_consent.md) `[@ANCHOR: COMM_story_cookie_consent]`
 
-* [Site Owner Documentation](./docs/stories/compliance_documentation.md) `[@ANCHOR: story_compliance_documentation]`
+* [Site Owner Documentation](./docs/stories/compliance_documentation.md) `[@ANCHOR: COMM_story_compliance_documentation]`
 
 #### Journeys
-* [Compliance Setup Journey](./docs/journeys/compliance_setup_journey.md) `[@ANCHOR: journey_compliance_setup]`
+* [Compliance Setup Journey](./docs/journeys/compliance_setup_journey.md) `[@ANCHOR: COMM_journey_compliance_setup]`
 
 ## 2. Enforcement Details
-* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean on install and sets it as the default for new websites. `[@ANCHOR: compliance_post_init_cookie_bar]`
+* **Automated Cookie Consent:** Programmatically enables the Odoo `website` native `cookies_bar` boolean on install and sets it as the default for new websites. `[@ANCHOR: COMM_compliance_post_init_cookie_bar]`
 
-* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records. `[@ANCHOR: compliance_legal_pages_rendering]`
+* **Safe Legal Page Provisioning:** Provisions AGPL-3 compatible legal pages safely via `noupdate="1"` XML records. `[@ANCHOR: COMM_compliance_legal_pages_rendering]`
 
-    * Privacy Policy Template `[@ANCHOR: compliance_privacy_policy_template]`
+    * Privacy Policy Template `[@ANCHOR: COMM_compliance_privacy_policy_template]`
 
-    * Cookie Policy Template `[@ANCHOR: compliance_cookie_policy_template]`
+    * Cookie Policy Template `[@ANCHOR: COMM_compliance_cookie_policy_template]`
 
-    * Terms of Service Template `[@ANCHOR: compliance_terms_of_service_template]`
+    * Terms of Service Template `[@ANCHOR: COMM_compliance_terms_of_service_template]`
 
-* **Non-Destructive Mandate:** If a page already exists at one of the target URLs, the module's boilerplate is unpublished to avoid duplication. `[@ANCHOR: test_compliance_non_destructive_mandate]`
+* **Non-Destructive Mandate:** If a page already exists at one of the target URLs, the module's boilerplate is unpublished to avoid duplication. `[@ANCHOR: COMM_test_compliance_non_destructive_mandate]`
 * **Editability Mandate:** Legal pages are standard `website.page` records, allowing administrators to use the Odoo website builder for customization.
 
 ## 3. API & Integration
@@ -121,12 +121,12 @@ Dependent modules requiring legal links MUST use:
 This module adheres to **ADR-0002 (Zero-Sudo)** and **ADR-0005 (Service Account Web Isolation)**.
 
 * **Micro-Privilege Account:** Automated post-install configuration is executed via the `compliance.user_compliance_service` service account.
-* **ACLs:** The service account is granted minimal read/write access to `website`, `website.page`, and `ir.ui.view` models. `[@ANCHOR: compliance_security_acls]`
+* **ACLs:** The service account is granted minimal read/write access to `website`, `website.page`, and `ir.ui.view` models. `[@ANCHOR: COMM_compliance_security_acls]`
 
-* **Impersonation:** Escalation is handled via `env.with_user(svc_uid)` instead of `.sudo()` for core operations. `[@ANCHOR: compliance_zero_sudo_impersonation]`
+* **Impersonation:** Escalation is handled via `env.with_user(svc_uid)` instead of `.sudo()` for core operations. `[@ANCHOR: COMM_compliance_zero_sudo_impersonation]`
 
 ## 5. Website-Aware Scope
-The module is multi-website aware. When detecting custom pages at target URLs, it only unpublishes the boilerplate for the specific website scope (or global scope) where the custom page is found. If a custom page is removed, the boilerplate is automatically restored. `[@ANCHOR: compliance_website_aware_scope]`
+The module is multi-website aware. When detecting custom pages at target URLs, it only unpublishes the boilerplate for the specific website scope (or global scope) where the custom page is found. If a custom page is removed, the boilerplate is automatically restored. `[@ANCHOR: COMM_compliance_website_aware_scope]`
 
 ## 6. Documentation Installation
 This module implements a **soft dependency** on documentation providers (`knowledge` or Odoo Enterprise `knowledge`).
@@ -139,5 +139,5 @@ Comprehensive test coverage ensures ongoing compliance:
 * **Hook Testing:** `test_hooks.py` verifies `cookies_bar` enforcement and non-destructive page provisioning.
 * **Page Integrity:** `test_pages.py` ensures all legal routes are active and contain valid boilerplate content.
 * **Security Audit:** `test_security.py` confirms service account configuration and hook idempotency.
-* **UI Tours:** `compliance_tour.js` simulates end-to-end user navigation across all legal pages. `[@ANCHOR: test_compliance_ui_tour]`
+* **UI Tours:** `compliance_tour.js` simulates end-to-end user navigation across all legal pages. `[@ANCHOR: COMM_test_compliance_ui_tour]`
 </security_architecture>

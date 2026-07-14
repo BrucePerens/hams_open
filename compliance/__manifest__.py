@@ -15,7 +15,6 @@ Upon installation, it:
                 "website",
                 "portal",
                 "zero_sudo",
-                "knowledge",
                 ],
     "data": ["security/security_data.xml",
               "security/ir.model.access.csv",
@@ -30,7 +29,7 @@ Upon installation, it:
     "assets": {"web.assets_tests": ["compliance/static/tests/tours/compliance_tour.js",  # noqa: E501
                                     ],
                },
-    "anchors": {"compliance_footer_links": "Compliance Footer Links Coverage",
+    "anchors": {"COMM_compliance_footer_links": "Compliance Footer Links Coverage",
                 },
     "demo": [],
     "installable": True,
