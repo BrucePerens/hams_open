@@ -53,7 +53,7 @@ class TestBinaryManifest(HamsTransactionCase):
         )
 
         # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
-        base_url = os.environ.get("ODOO_URL", "http://odoo:8069")  # burn-ignore-env
+        base_url = os.environ.get("ODOO_URL", "http://localhost:8069")  # burn-ignore-env
         url = f"{base_url}/test/dummy_bin"
         chksum = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 
@@ -307,7 +307,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertEqual(
             os.path.basename(path),
             self.env["binary.manifest"]
-            .search([("name", "=", "slippy")])
+            .search([("name", "=", "slippy")], limit=1)
             ._get_target_filename(),
         )
 
@@ -359,9 +359,9 @@ class TestBinaryManifest(HamsTransactionCase):
 
         # Create a real zip in memory
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(  # audit-ignore-path
+        with zipfile.ZipFile(  # audit-ignore-path  # fmt: skip
             zip_buffer, "a", zipfile.ZIP_DEFLATED, False
-        ) as zip_file:  # audit-ignore-path
+        ) as zip_file:  # audit-ignore-path  # fmt: skip
             zip_file.writestr("zippybin", b"zipdata")
 
         zip_data = zip_buffer.getvalue()
@@ -468,7 +468,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertEqual(
             os.path.basename(path),
             self.env["binary.manifest"]
-            .search([("name", "=", "zip_slip")])
+            .search([("name", "=", "zip_slip")], limit=1)
             ._get_target_filename(),
         )
 

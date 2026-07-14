@@ -54,6 +54,9 @@ class BinaryTenantLink(models.Model):
             tenant_dir = os.path.join(
                 data_dir, "tenant_bins", f"site_{record.website_id.id}"
             )
+            if ".." in record.manifest_id.name.split(os.path.sep) or "/" in record.manifest_id.name:
+                record.symlink_path = False
+                continue
             record.symlink_path = os.path.join(tenant_dir, record.manifest_id.name)
 
     def apply_symlink(self):

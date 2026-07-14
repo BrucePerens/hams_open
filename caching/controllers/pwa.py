@@ -4,6 +4,7 @@ import json
 from odoo import http
 from odoo.http import request
 
+
 class PWAController(http.Controller):
 
     @http.route('/manifest.json', type='http', auth='public', website=True, sitemap=False)

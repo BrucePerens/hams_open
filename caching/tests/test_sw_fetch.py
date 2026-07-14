@@ -46,11 +46,11 @@ class TestServiceWorkerFetch(HamsHttpCase):
             self.assertTrue(
                 pattern.search("/web/assets/debug/web.assets_backend.js"),
                 "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX failed to match /web/assets path.",
-            )  # burn-ignore-route
+            )  # burn-ignore-route  # fmt: skip
             self.assertTrue(
                 pattern.search("/web/assets/12345/web.assets_frontend.css"),
                 "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX failed to match /web/assets hashed path.",
-            )  # burn-ignore-route
+            )  # burn-ignore-route  # fmt: skip
             self.assertTrue(
                 pattern.search("/my_module/static/src/js/script.js"),
                 "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX failed to match module static path.",
@@ -58,7 +58,7 @@ class TestServiceWorkerFetch(HamsHttpCase):
             self.assertFalse(
                 pattern.search("/odoo/image/123"),
                 "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX incorrectly matched /odoo/image path.",
-            )  # burn-ignore-route
+            )  # burn-ignore-route  # fmt: skip
             self.assertFalse(
                 pattern.search("/api/v1/data"),
                 "[!] DIAGNOSTIC FOR AI: CACHE_URL_REGEX incorrectly matched /api path.",

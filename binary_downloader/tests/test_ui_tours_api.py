@@ -51,7 +51,6 @@ class TestBinaryDownloaderTour(HamsHttpCase):
             "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable",
             return_value="/var/lib/odoo/hams_bin/tourbin",
         )
-        # Tested by [@ANCHOR: test_binary_install_tour]
         self.start_tour(
             "/odoo?debug=1&action=binary_downloader.action_binary_downloader_manifest",
             "binary_install_tour",

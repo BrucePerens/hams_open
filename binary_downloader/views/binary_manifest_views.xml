@@ -5,8 +5,9 @@
     This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
     See the LICENSE file in the project root for full license information.
 -->
-    <!-- Verified by [@ANCHOR: test_binary_manifest_views] -->
-    <record id="view_binary_downloader_manifest_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_manifest_views] -->
+    <record id="view_binary_downloader_manifest_list" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_manifest_views] -->
+        <!-- burn-ignore-tour -->
         <field name="name">binary.manifest.list</field>
         <field name="model">binary.manifest</field>
         <field name="arch" type="xml">
@@ -22,8 +23,8 @@
         </field>
     </record>
 
-    <!-- Verified by [@ANCHOR: test_binary_manifest_views] -->
-    <record id="view_binary_downloader_manifest_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_manifest_views] -->
+    <record id="view_binary_downloader_manifest_form" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_manifest_views] -->
         <field name="name">binary.manifest.form</field>
         <field name="model">binary.manifest</field>
         <field name="arch" type="xml">

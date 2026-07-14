@@ -15,7 +15,6 @@ registry.category("web_tour.tours").add("caching_service_worker_check", {
             trigger: "body",
             run: function () {
                 // Tests [@ANCHOR: caching_sw_fetch_interceptor]
-                // Verified by [@ANCHOR: test_caching_service_worker_tour]
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.ready.then(() => {
                         document.body.classList.add('sw-registered');

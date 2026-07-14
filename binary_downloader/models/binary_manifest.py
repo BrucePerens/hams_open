@@ -5,6 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 import logging
 import os
+import shutil
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
 
@@ -91,6 +92,10 @@ class BinaryManifest(models.Model):
                 record.is_installed = False
                 continue
 
+            if shutil.which(record.name):
+                record.is_installed = True
+                continue
+
             # Check hams_bin
             filename = self.env["binary_downloader.mixin"]._get_target_filename(record.name, record.checksum)
             target_bin = os.path.join(bin_dir, filename)
@@ -114,11 +119,7 @@ class BinaryManifest(models.Model):
                 _("You do not have sufficient permissions to install binaries.")
             )
 
-        try:
-            self.ensure_executable(self.name)
-        except Exception as e: # audit-ignore-catch-all
-            _logger.exception("Installation failed for %s: %s", self.name, e)
-            raise UserError(_("Installation failed: %s") % str(e))
+        self.ensure_executable(self.name)
 
         return {
             "type": "ir.actions.client",
@@ -143,6 +144,10 @@ class BinaryManifest(models.Model):
             or cmd_name in (".", "..")
         ):
             raise ValidationError(_("Invalid binary name: %s") % cmd_name)
+
+        system_path = shutil.which(cmd_name)
+        if system_path:
+            return system_path
 
         # CONDUCT SECURITY AUDIT: Binary manifests are technical system-wide resources.
         # We use the micro-privilege service account for resolution.
@@ -175,7 +180,7 @@ class BinaryManifest(models.Model):
             )
 
 
-        return self.env["binary_downloader.mixin"]._download_and_extract(
+        return self.env["binary_downloader.mixin"].with_user(svc_uid)._download_and_extract(
             cmd_name=manifest_record.name,
             url=manifest_record.url,
             checksum=manifest_record.checksum,

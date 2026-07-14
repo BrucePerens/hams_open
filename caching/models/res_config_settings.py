@@ -6,25 +6,22 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+HELP_SAFE_QUOTA = """Maximum total size in MB of cached files. If total files exceed this, the max single file size cached will be lowered dynamically."""
+HELP_INVALIDATION = """Increment this value to force users' browsers to immediately wipe their cache."""
+
+
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
     caching_safe_quota_mb = fields.Integer(
         string="Safe Quota (MB)",
-        help=(
-            "Maximum total size in MB of cached files. If total "
-            "files exceed this, the max single file size cached "
-            "will be lowered dynamically."
-        ),
+        help=HELP_SAFE_QUOTA,
     )
 
     caching_invalidation_version = fields.Integer(
         string="Cache Invalidation Version",
         readonly=True,
-        help=(
-            "Increment this value to force users' browsers to "
-            "immediately wipe their cache."
-        ),
+        help=HELP_INVALIDATION,
     )
 
     @api.model
@@ -35,7 +32,7 @@ class ResConfigSettings(models.TransientModel):
         if not website_id:
             try:
                 website_id = self.env['website'].get_current_website().id
-            except Exception as e: # audit-ignore-catch-all
+            except ValueError as e:
                 _logger.warning("Could not get current website in get_values: %s", e)
                 
         caching_safe_quota_mb = 35

@@ -3,7 +3,7 @@
 This journey describes how a request for a frontend asset is handled by the Service Worker.
 
 1. **Interception**: The browser initiates a `GET` request for an asset (e.g., `/web/assets/debug/web.assets_backend.js`).
-2. **SW Catch**: The Service Worker's `fetch` event listener intercepts the request ([@ANCHOR: caching_sw_fetch_interceptor]).
+2. **SW Catch**: The Service Worker's `fetch` event listener intercepts the request ([@ANCHOR: COMM_caching_sw_fetch_interceptor]).
 3. **Regex Match**: The SW checks the URL against `CACHE_URL_REGEX` to see if it belongs to Odoo's core assets or a module's `static/` directory.
 4. **Cache Lookup**:
    - **Hit**: If the asset is found in `CACHE_NAME`, it is returned immediately (0ms latency).

@@ -2,13 +2,14 @@
 # Copyright © HAMS project. AGPL-3.0.
 import os
 import logging
-from odoo import models, api, tools, fields
+from odoo import models, api, fields
 from odoo.modules.module import get_module_path
 import odoo.modules.module
 
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 
 _logger = logging.getLogger(__name__)
+
 
 class CachingMixin(models.AbstractModel):
     _name = 'caching.mixin'
@@ -25,11 +26,6 @@ class CachingMixin(models.AbstractModel):
         Scans 'static/' dirs of all installed modules.
         Returns tuple: (latest_mtime, file_sizes).
         """
-        is_test = "test_cr" in vars(self.env.registry)
-        is_boot = tools.config.get("init") or tools.config.get("stop_after_init")
-        if is_test and is_boot and not self.env.context.get("force_fs_scan"):
-            return (0.0, [])
-
         max_mtime = 0.0
         file_sizes = []
 

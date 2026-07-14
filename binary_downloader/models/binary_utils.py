@@ -46,9 +46,13 @@ class BinaryDownloaderMixin(models.AbstractModel):
             os.chmod(bin_dir, 0o750)
 
         # Generate stable filename
+        if ".." in cmd_name.split(os.path.sep):
+            raise UserError(_("Security Alert: Path traversal attempt detected."))
         identifier = hashlib.sha256(f"{cmd_name}_{checksum}".encode()).hexdigest()[:16]
         filename = f"{cmd_name}_{identifier}"
-        target_bin = os.path.join(bin_dir, filename)
+        target_bin = os.path.realpath(os.path.join(bin_dir, filename))
+        if not target_bin.startswith(os.path.realpath(bin_dir)):
+            raise UserError(_("Security Alert: Path traversal attempt detected."))
 
         # Deterministic advisory lock to prevent concurrent downloads of the SAME binary
         lock_id = self.env["zero_sudo.security.utils"]._get_deterministic_hash(
@@ -65,7 +69,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             # Checksum verification for existing raw binary
             hasher = hashlib.sha256()
             try:
-                with open(target_bin, "rb") as f:  # audit-ignore-path
+                with open(target_bin, "rb") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
                 if hasher.hexdigest() == checksum:
@@ -74,11 +78,20 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     return target_bin
                 else:
                     _logger.info("Checksum mismatch for %s, re-downloading...", cmd_name)
-                    os.unlink(target_bin)  # audit-ignore-path
+                    os.unlink(target_bin)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
             except OSError as e:
                 _logger.warning("Failed to check existing binary %s: %s", target_bin, e)
 
         try:
+            head_req = urllib.request.Request(
+                url, headers={"User-Agent": "OdooBinaryDownloader/1.0"}, method="HEAD"
+            )
+            try:
+                with urllib.request.urlopen(head_req, timeout=15) as head_response:
+                    pass
+            except urllib.error.URLError as e:
+                _logger.warning("HEAD request failed for %s: %s", url, e)
+
             get_req = urllib.request.Request(
                 url, headers={"User-Agent": "OdooBinaryDownloader/1.0"}
             )
@@ -95,7 +108,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                             tmp.write(chunk)
 
                 hasher = hashlib.sha256()
-                with open(tmp_path, "rb") as f:  # audit-ignore-path
+                with open(tmp_path, "rb") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
 
@@ -109,7 +122,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     )
 
                 if archive_type == "tar.gz":
-                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path
+                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                         found = False
                         extract_target = extract_member or cmd_name
                         for member in tar:
@@ -124,7 +137,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                                 source = tar.extractfile(member)
                                 if source:
                                     with source:
-                                        with open(target_bin, "wb") as target:  # audit-ignore-path
+                                        with open(target_bin, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                                             shutil.copyfileobj(source, target)
                                     found = True
                                     break
@@ -132,7 +145,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                             raise UserError(_("Member %s not found in archive.") % extract_target)
 
                 elif archive_type == "zip":
-                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path
+                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                         extract_target = extract_member or cmd_name
                         found = False
                         for zinfo in zip_ref.infolist():
@@ -145,8 +158,8 @@ class BinaryDownloaderMixin(models.AbstractModel):
                                 if not member_filename:
                                     continue
 
-                                with zip_ref.open(zinfo) as source:  # audit-ignore-path
-                                    with open(target_bin, "wb") as target:  # audit-ignore-path
+                                with zip_ref.open(zinfo) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
+                                    with open(target_bin, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                                         shutil.copyfileobj(source, target)
                                 found = True
                                 break
@@ -160,7 +173,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             finally:
                 if tmp_path and os.path.exists(tmp_path):
                     try:
-                        os.unlink(tmp_path)  # audit-ignore-path
+                        os.unlink(tmp_path)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
                     except OSError as e:
                         _logger.warning("Failed to remove temporary file %s: %s", tmp_path, e)
         except (UserError, ValidationError):
@@ -180,11 +193,15 @@ class BinaryDownloaderMixin(models.AbstractModel):
         """Safely removes a binary from the hams_bin directory."""
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
+        if ".." in cmd_name.split(os.path.sep):
+            raise UserError(_("Security Alert: Path traversal attempt detected."))
         filename = self._get_target_filename(cmd_name, checksum)
-        target_bin = os.path.join(bin_dir, filename)
+        target_bin = os.path.realpath(os.path.join(bin_dir, filename))
+        if not target_bin.startswith(os.path.realpath(bin_dir)):
+            raise UserError(_("Security Alert: Path traversal attempt detected."))
         
         if os.path.exists(target_bin):
             try:
-                os.unlink(target_bin)  # audit-ignore-path
+                os.unlink(target_bin)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]
             except OSError as e:
                 _logger.warning("Failed to remove binary %s: %s", target_bin, e)

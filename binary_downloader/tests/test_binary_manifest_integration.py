@@ -8,6 +8,7 @@ import tarfile
 import hashlib
 import os
 import stat
+from unittest.mock import MagicMock
 from odoo import tools
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -35,9 +36,9 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
 
         tar_stream = io.BytesIO()
-        with tarfile.open(  # audit-ignore-path
+        with tarfile.open(  # audit-ignore-path  # fmt: skip
             fileobj=tar_stream, mode="w:gz"
-        ) as tar:  # audit-ignore-path-traversal
+        ) as tar:  # audit-ignore-path-traversal  # fmt: skip
             content = b"dummy kopia content"
             tarinfo = tarfile.TarInfo(name="kopia")
             tarinfo.size = len(content)
@@ -135,7 +136,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             website = self.env["website"].create({"name": "Test Tenant"})
             
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
-        mock_response = __import__("unittest.mock").mock.MagicMock()
+        mock_response = MagicMock()
         mock_response.read.side_effect = [b"data", b""]
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response

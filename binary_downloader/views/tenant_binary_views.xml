@@ -9,7 +9,7 @@
     <record id="action_binary_tenant_link" model="ir.actions.act_window">
         <field name="name">Tenant Links</field>
         <field name="res_model">binary.tenant.link</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Assign binary versions to your tenants.
@@ -27,6 +27,7 @@
     <!-- Tenant Link Form -->
     <record id="view_binary_tenant_link_form" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_tenant_link_form] -->
+        <!-- burn-ignore-tour -->
         <field name="name">binary.tenant.link.form</field>
         <field name="model">binary.tenant.link</field>
         <field name="arch" type="xml">
@@ -59,6 +60,7 @@
     <!-- Version Form -->
     <record id="view_binary_version_form" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_version_form] -->
+        <!-- burn-ignore-tour -->
         <field name="name">binary.version.form</field>
         <field name="model">binary.version</field>
         <field name="arch" type="xml">

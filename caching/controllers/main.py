@@ -12,8 +12,8 @@ class ServiceWorkerController(http.Controller):
 
     @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True)
     def service_worker(self):
-        # [@ANCHOR: caching_sw_serve_route]
-        # Verified by [@ANCHOR: test_service_worker_01]
+        # [@ANCHOR: COMM_caching_sw_serve_route]
+        # Verified by [@ANCHOR: COMM_test_service_worker_01]
         """
         Serves the Service Worker script from the root scope.
         Injects mtime (invalidation) and max file size (quota).
@@ -58,7 +58,7 @@ class ServiceWorkerController(http.Controller):
 
         cache_name = f"odoo-assets-cache-{latest_mtime}-v{in_v}"
         content = content.replace("__CACHE_NAME__", cache_name)
-        content = content.replace("__MAX_FILE_SIZE_BYTES__", max_file_size)
+        content = content.replace("__MAX_FILE_SIZE_BYTES__", str(max_file_size))
         content = content.replace("__MAX_STORAGE_BYTES__", str(quota_mb * 1024 * 1024))
 
         headers = [

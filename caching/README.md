@@ -92,3 +92,6 @@ Tests are located in the `tests/` directory and cover:
 - Cache invalidation triggers.
 - UI Tour for registration check [@ANCHOR: caching_sw_fetch_interceptor].
 - Zero-Sudo compliance for FS scan [@ANCHOR: caching_fs_scan_logic].
+
+## 6. External Dependencies
+None

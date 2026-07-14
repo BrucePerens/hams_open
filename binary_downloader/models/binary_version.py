@@ -116,7 +116,13 @@ class BinaryVersion(models.Model):
             os.makedirs(bin_dir, exist_ok=True)
             os.chmod(bin_dir, 0o750)
 
-
+        self._download_and_extract(
+            self.manifest_id.name,
+            self.url,
+            self.checksum,
+            self.archive_type,
+            self.extract_member
+        )
 
     def action_notify_tenants(self):
         self.ensure_one()
@@ -145,6 +151,7 @@ class BinaryVersion(models.Model):
                 
             if incident_vals:
                 IncidentModel.create(incident_vals)
+                self.env.cr.commit()
                 
             offset += limit
             

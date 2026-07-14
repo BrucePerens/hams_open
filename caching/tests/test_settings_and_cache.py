@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
 from unittest.mock import MagicMock
-import os
 from odoo.tests.common import tagged
-from odoo.modules.module import get_module_path
+from odoo.tools import file_open
 from lxml import etree
 import werkzeug
 from odoo.addons.caching.controllers.main import ServiceWorkerController
@@ -57,8 +56,7 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_07_no_dict_manipulation(self):
         """Verify that __dict__ is not manipulated in controllers/main.py and _fs_cache is removed."""
-        main_py = os.path.join(get_module_path("caching"), "controllers", "main.py")
-        with open(main_py, "r") as f:
+        with file_open("caching/controllers/main.py", "r") as f:
             content = f.read()
         self.assertNotIn("__dict__", content, "[!] DIAGNOSTIC FOR AI: Direct __dict__ manipulation is discouraged.")
         self.assertNotIn("_fs_cache = None", content, "[!] DIAGNOSTIC FOR AI: _fs_cache is unused and dead code.")
