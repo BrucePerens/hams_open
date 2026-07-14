@@ -15,13 +15,14 @@ POOL_LOCK = threading.Lock()
 REDIS_HOST_DEFAULT = os.getenv("REDIS_HOST") or "redis"
 REDIS_PORT_DEFAULT = int(os.getenv("REDIS_PORT") or "6379")
 REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # burn-ignore-env
+REDIS_DB_DEFAULT = int(os.getenv("REDIS_DB") or "0")
 
 # Centralized connection pool for the default Redis settings
 redis_pool = redis.ConnectionPool(
     host=REDIS_HOST_DEFAULT,
     port=REDIS_PORT_DEFAULT,
     password=REDIS_PASS_DEFAULT,
-    db=0,
+    db=REDIS_DB_DEFAULT,
     decode_responses=True,
     socket_timeout=1.0,
     socket_connect_timeout=1.0,
@@ -63,7 +64,7 @@ def get_redis_connection(env=None):
                         host=host,
                         port=port,
                         password=password,
-                        db=0,
+                        db=REDIS_DB_DEFAULT,
                         decode_responses=True,
                         socket_timeout=1.0,
                         socket_connect_timeout=1.0,
