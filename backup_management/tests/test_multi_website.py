@@ -53,16 +53,14 @@ class TestBackupMultiWebsite(HamsTransactionCase):
         )
         configs_a = self.env["backup.config"].with_user(user_a).search([], limit=100)
 
-        self.assertIn(
-            self.config_all,
-            configs_a,
-            "Global configs MUST be visible regardless of website context.",
+        msg_a1 = (
+            "Global configs MUST be visible regardless of website context."
         )
-        self.assertIn(
-            self.config_a,
-            configs_a,
-            "Website-specific configs MUST be visible when matching context.",
+        self.assertIn(self.config_all, configs_a, msg_a1)
+        msg_a2 = (
+            "Website-specific configs MUST be visible when matching context."
         )
+        self.assertIn(self.config_a, configs_a, msg_a2)
 
     def test_02_isolated_config_visibility(self):
         """Verify that a backup config linked to Website A is invisible to Website B."""
@@ -78,16 +76,15 @@ class TestBackupMultiWebsite(HamsTransactionCase):
         )
         configs_b = self.env["backup.config"].with_user(user_b).search([], limit=100)
 
-        self.assertIn(
-            self.config_all,
-            configs_b,
-            "Global configs MUST be visible regardless of website context.",
+        msg_b1 = (
+            "Global configs MUST be visible regardless of website context."
         )
-        self.assertNotIn(
-            self.config_a,
-            configs_b,
-            "CRITICAL TENANT LEAK: Website A configs MUST NOT be visible from Website B context.",
+        self.assertIn(self.config_all, configs_b, msg_b1)
+        msg_b2 = (
+            "CRITICAL TENANT LEAK: Website A configs MUST NOT be visible from "
+            "Website B context."
         )
+        self.assertNotIn(self.config_a, configs_b, msg_b2)
 
     def test_03_job_isolation(self):
         """Verify that backup jobs inherit the website_id of their parent config."""

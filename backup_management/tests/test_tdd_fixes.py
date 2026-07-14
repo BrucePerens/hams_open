@@ -28,6 +28,7 @@ class TestTddFixes(HamsTransactionCase):
         })
 
     def test_action_apply_policies_overwrite(self):
+        # Tests [@ANCHOR: backup_management:COMM_action_apply_policies_overwrite]
         configs = self.config1 | self.config2
         ret_val = {"type": "ir.actions.act_window"}
         with self.safe_patch_object(type(self.env["backup.config"]), "_publish_to_worker", return_value=ret_val):
@@ -45,6 +46,7 @@ class TestTddFixes(HamsTransactionCase):
 
 
     def test_backup_worker_stdout_reading(self):
+        # Tests [@ANCHOR: backup_management:COMM_backup_worker_stdout_reading]
         mock_ch = MagicMock()
         mock_method = MagicMock()
         mock_properties = MagicMock()
