@@ -50,3 +50,5 @@ class TestServiceWorker(HamsHttpCase):
             "[!] DIAGNOSTIC FOR AI: Cache-Control MUST contain 'max-age=0'. "
             "This prevents the browser from using a stale Service Worker script.",
         )
+
+# Tests [@ANCHOR: COMM_caching_sw_serve_route]

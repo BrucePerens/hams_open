@@ -33,6 +33,7 @@ class DummyModel:
     def cached_method_datetime(self):
         return fields.Datetime.now()
 
+
 @tagged("-at_install", "post_install")
 class TestDistributedRedisCacheFixes(HamsTransactionCase):
 
@@ -49,9 +50,13 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
     def test_serialization(self):
         """Test that datetime objects can be serialized."""
         model = DummyModel(ids=[1])
+
         class FakeRedis:
-            def get(self, key): return None
-            def setex(self, key, ttl, val): self.val = val
+            def get(self, key):
+                return None
+
+            def setex(self, key, ttl, val):
+                self.val = val
         
         mock_get_conn = self.safe_patch("odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection")
         mock_get_conn.return_value = FakeRedis()
@@ -75,10 +80,16 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
 
         class MockSecurityUtils:
             def _get_system_param(self, key, default):
-                if "host" in key: return "custom_host"
-                if "port" in key: return "6380"
-                if "password" in key: return "pass"
+                if "host" in key:
+                    return "custom_host"
+                if "port" in key:
+                    return "6380"
+                if "password" in key:
+                    return "pass"
                 return default
+                
+            def with_context(self, **kwargs):
+                return self
 
         class MockEnv(dict):
             def __init__(self):

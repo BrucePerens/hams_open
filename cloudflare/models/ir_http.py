@@ -12,7 +12,7 @@ class IrHttp(models.AbstractModel):
 
     @classmethod
     def _post_dispatch(cls, response):
-        # [@ANCHOR: ir_http_post_dispatch_headers]
+        # [@ANCHOR: COMM_ir_http_post_dispatch_headers]
         """
         Intercepts the outgoing HTTP response to inject CDN caching directives.
         Generalized to dynamically check Odoo's public user state without requiring

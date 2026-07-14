@@ -16,7 +16,7 @@ class CloudflareDNSRecord(models.Model):
     )
     content = fields.Char(string="Content", required=True)
     proxied = fields.Boolean(string="Proxied", default=True)
-    website_id = fields.Many2one("website.website", string="Website")
+    website_id = fields.Many2one("website", string="Website")
 
 
 class CloudflareZoneSettings(models.Model):
@@ -35,7 +35,7 @@ class CloudflareZoneSettings(models.Model):
     )
     auto_minify = fields.Boolean(string="Auto Minify")
     bot_fight_mode = fields.Boolean(string="Bot Fight Mode")
-    website_id = fields.Many2one("website.website", string="Website")
+    website_id = fields.Many2one("website", string="Website")
 
 
 class CloudflareRateLimit(models.Model):
@@ -53,7 +53,7 @@ class CloudflareRateLimit(models.Model):
         ],
         string="Mitigation Action",
     )
-    website_id = fields.Many2one("website.website", string="Website")
+    website_id = fields.Many2one("website", string="Website")
 
 
 class CloudflareCacheRule(models.Model):
@@ -63,7 +63,7 @@ class CloudflareCacheRule(models.Model):
     name = fields.Char(string="Name", required=True)
     edge_cache_ttl = fields.Integer(string="Edge Cache TTL (seconds)")
     bypass_rules = fields.Text(string="Bypass Rules")
-    website_id = fields.Many2one("website.website", string="Website")
+    website_id = fields.Many2one("website", string="Website")
 
 
 class CloudflareZeroTrustPolicy(models.Model):
@@ -75,4 +75,4 @@ class CloudflareZeroTrustPolicy(models.Model):
         [("allow", "Allow"), ("block", "Block"), ("bypass", "Bypass")], string="Action"
     )
     idps = fields.Char(string="Identity Providers (IdPs)")
-    website_id = fields.Many2one("website.website", string="Website")
+    website_id = fields.Many2one("website", string="Website")

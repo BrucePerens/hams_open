@@ -3,8 +3,8 @@
 <odoo>
     <data noupdate="1">
         <record id="ir_cron_process_cf_purge_queue" model="ir.cron">
-            <!-- [@ANCHOR: ir_cron_process_cf_purge_queue] -->
-            <!-- audit-ignore-cron: Tested by [@ANCHOR: test_queue_batching_and_rate_limiting] -->
+            <!-- [@ANCHOR: COMM_ir_cron_process_cf_purge_queue] -->
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting] -->
             <field name="name">Cloudflare: Process Cache Purge Queue</field>
             <field name="model_id" ref="model_cloudflare_purge_queue"/>
             <field name="state">code</field>

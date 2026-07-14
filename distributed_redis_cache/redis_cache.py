@@ -194,7 +194,6 @@ def notify_model_invalidation(env, model_name):
     # Fail fast if postcommit API is not present, enforcing architectural contract
     env.cr.postcommit.add(_do_invalidate)
 
-
     # 2. Notify all other workers via Postgres -> Daemon -> Redis Pub/Sub.
     # pg_notify is natively transactional and inherently waits until commit to broadcast.
     payload = json.dumps({"model": model_name, "dbname": dbname})

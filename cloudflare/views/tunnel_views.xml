@@ -2,7 +2,7 @@
 <!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <record id="view_cloudflare_tunnel_list" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_cf_sync_tunnels] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_sync_tunnels] -->
         <field name="name">cloudflare.tunnel.list</field>
         <field name="model">cloudflare.tunnel</field>
         <field name="arch" type="xml">

@@ -157,6 +157,17 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                                     ids,
                                     e,
                                 )
+                                try:
+                                    table = model_env._table
+                                    self.env.cr.execute(
+                                        sql.SQL("DELETE FROM {} WHERE id IN %s").format(sql.Identifier(table)),
+                                        (tuple(ids),)
+                                    )
+                                    _logger.info("SQL fallback succeeded for %s %s", model_name, ids)
+                                    pending_deletes = False
+                                    self._tracked_records[model_name] = set()
+                                except Exception as sql_e:
+                                    _logger.error("SQL fallback also failed for %s %s: %s", model_name, ids, sql_e)
                         except Exception as e:  # audit-ignore-catch-all
                             pending_deletes = True
                             _logger.error(

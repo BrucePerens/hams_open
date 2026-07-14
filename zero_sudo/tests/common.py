@@ -35,6 +35,8 @@ import urllib.request
 import urllib3
 import werkzeug.serving
 import subprocess
+import fcntl
+import socket
 from unittest.mock import MagicMock, patch
 from cryptography.fernet import Fernet
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, HOST, BaseCase
@@ -173,6 +175,7 @@ def _patched_spawn_chrome(self, *args, **kwargs):
         # Wrap chrome in a PID namespace to guarantee all descendants (GPU, renderers)
         # are killed when the test teardown terminates the unshare parent.
         unshare_cmd = [
+            "setsid",
             "unshare",
             "-c",
             "-m",
@@ -728,108 +731,139 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls.registry.clear_cache()
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
-        os.makedirs("/opt/hams/test/socat_certs", exist_ok=True)
-        cert_path = "/opt/hams/test/socat_certs/hams_test_cert.pem"
-        key_path = "/opt/hams/test/socat_certs/hams_test_key.pem"
-        if not os.path.exists(cert_path):
-            subprocess.run(
-                [
-                    "openssl",
-                    "req",
-                    "-x509",
-                    "-newkey",
-                    "rsa:2048",
-                    "-keyout",
-                    key_path,
-                    "-out",
-                    cert_path,
-                    "-days",
-                    "365",
-                    "-nodes",
-                    "-subj",
-                    f"/CN={HOST}",
-                ],
-                check=False,
-            )
-            subprocess.run(["chmod", "644", key_path], check=False)
-
-        target_port = cls.http_port() or odoo.tools.config["xmlrpc_port"]
-        cls._socat_log_file = open(
-            f"/opt/hams/test/socat_certs/socat_{cls.__name__}.log", "w"
-        )
-
-        # Prevent Address already in use if a previous test crashed setUpClass without tearing down
-        def preexec_socat():
+        with open("/tmp/hams_test_proxy.lock", "w") as lockfile:
+            fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
-                libc = ctypes.CDLL("libc.so.6")
-                libc.prctl(1, 15)  # PR_SET_PDEATHSIG, SIGTERM
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning("Ignored prctl exception: %s", e)
+                os.makedirs("/opt/hams/test/socat_certs", exist_ok=True)
+                cert_path = "/opt/hams/test/socat_certs/hams_test_cert.pem"
+                key_path = "/opt/hams/test/socat_certs/hams_test_key.pem"
+                if not os.path.exists(cert_path):
+                    subprocess.run(
+                        [
+                            "openssl",
+                            "req",
+                            "-x509",
+                            "-newkey",
+                            "rsa:2048",
+                            "-keyout",
+                            key_path,
+                            "-out",
+                            cert_path,
+                            "-days",
+                            "365",
+                            "-nodes",
+                            "-subj",
+                            f"/CN={HOST}",
+                        ],
+                        check=False,
+                    )
+                    subprocess.run(["chmod", "644", key_path], check=False)
 
-        cls._socat_proc = subprocess.Popen(
-            [
-                "socat",
-                "-d",
-                "-d",
-                f"OPENSSL-LISTEN:8443,cert={cert_path},key={key_path},verify=0,fork,reuseaddr",
-                f"TCP:{HOST}:{target_port}",
-            ],
-            stdout=cls._socat_log_file,
-            stderr=cls._socat_log_file,
-            preexec_fn=preexec_socat,
-            start_new_session=True,
-        )
-
-        def cleanup_socat():
-            if cls.__dict__.get("_socat_proc"):
-                try:
-                    try:
-                        pgid = os.getpgid(cls._socat_proc.pid)
-                        os.killpg(pgid, signal.SIGTERM)
-                    except OSError as e:
-                        _logger.warning("Ignored killpg error: %s", e)
-                    cls._socat_proc.terminate()
-                    try:
-                        cls._socat_proc.wait(timeout=2.0)
-                    except subprocess.TimeoutExpired:
+                target_port = cls.http_port() or odoo.tools.config["xmlrpc_port"]
+                
+                # Check for appropriate state: reap any orphaned processes holding port 8443
+                my_uid = os.getuid()
+                for conn in psutil.net_connections(kind='inet'):
+                    if conn.laddr.port == 8443 and conn.pid:
                         try:
-                            pgid = os.getpgid(cls._socat_proc.pid)
-                            os.killpg(pgid, signal.SIGKILL)
+                            p = psutil.Process(conn.pid)
+                            if p.uids().real == my_uid:
+                                _logger.warning("Forcefully reaping orphaned process %s (PID %s) holding port 8443", p.name(), p.pid)
+                                p.kill()
+                                p.wait(timeout=1.0)
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+                            pass
+
+                # Wait for port 8443 to be completely free
+                start_wait = time.time()
+                while time.time() - start_wait < 10.0:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        if s.connect_ex(('127.0.0.1', 8443)) != 0:
+                            break  # Port is free
+                    time.sleep(0.5)
+                else:
+                    raise RuntimeError("Timeout waiting for port 8443 to be free for socat proxy. Another test might be stuck holding it.")
+
+                cls._socat_log_file = open(
+                    f"/opt/hams/test/socat_certs/socat_{cls.__name__}.log", "w"
+                )
+
+                # Prevent Address already in use if a previous test crashed setUpClass without tearing down
+                def preexec_socat():
+                    try:
+                        libc = ctypes.CDLL("libc.so.6")
+                        libc.prctl(1, 15)  # PR_SET_PDEATHSIG, SIGTERM
+                    except Exception as e:  # audit-ignore-catch-all
+                        _logger.warning("Ignored prctl exception: %s", e)
+
+                cls._socat_proc = subprocess.Popen(
+                    [
+                        "socat",
+                        "-d",
+                        "-d",
+                        f"OPENSSL-LISTEN:8443,cert={cert_path},key={key_path},verify=0,fork,reuseaddr",
+                        f"TCP:{HOST}:{target_port}",
+                    ],
+                    stdout=cls._socat_log_file,
+                    stderr=cls._socat_log_file,
+                    preexec_fn=preexec_socat,
+                    start_new_session=True,
+                )
+
+                def cleanup_socat():
+                    if cls.__dict__.get("_socat_proc"):
+                        try:
+                            try:
+                                pgid = os.getpgid(cls._socat_proc.pid)
+                                if pgid != os.getpgrp():
+                                    os.killpg(pgid, signal.SIGTERM)
+                            except OSError as e:
+                                _logger.warning("Ignored killpg error: %s", e)
+                            cls._socat_proc.terminate()
+                            try:
+                                cls._socat_proc.wait(timeout=2.0)
+                            except subprocess.TimeoutExpired:
+                                try:
+                                    pgid = os.getpgid(cls._socat_proc.pid)
+                                    if pgid != os.getpgrp():
+                                        os.killpg(pgid, signal.SIGKILL)
+                                except OSError as e:
+                                    _logger.warning(
+                                        "Ignored killpg error: %s",
+                                        e,
+                                    )
+                                cls._socat_proc.kill()
+                                cls._socat_proc.wait()
                         except OSError as e:
+                            _logger.warning("Error terminating socat: %s", e)
+                        finally:
+                            cls._socat_proc = None
+                    log_fh = cls.__dict__.get("_socat_log_file")
+                    if log_fh and not log_fh.closed:
+                        try:
+                            log_fh.close()
+                        except Exception as e:  # audit-ignore-catch-all
                             _logger.warning(
-                                "Ignored killpg error: %s",
+                                "Ignored log file close error: %s",
                                 e,
                             )
-                        cls._socat_proc.kill()
-                        cls._socat_proc.wait()
-                except OSError as e:
-                    _logger.warning("Error terminating socat: %s", e)
-                finally:
-                    cls._socat_proc = None
-            log_fh = cls.__dict__.get("_socat_log_file")
-            if log_fh and not log_fh.closed:
+
+                cls.addClassCleanup(cleanup_socat)
+
+                # Wait and verify socat bound successfully
                 try:
-                    log_fh.close()
-                except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning(
-                        "Ignored log file close error: %s",
-                        e,
+                    cls._socat_proc.wait(timeout=0.5)
+                    # If it returns, it exited unexpectedly.
+                    cls._socat_log_file.flush()
+                    with open(f"/opt/hams/test/socat_certs/socat_{cls.__name__}.log", "r") as f:
+                        err_log = f.read()
+                    raise RuntimeError(
+                        f"socat proxy failed to start! Exited with {cls._socat_proc.returncode}. Log: {err_log}"
                     )
-
-        cls.addClassCleanup(cleanup_socat)
-
-        # Wait and verify socat bound successfully
-        try:
-            cls._socat_proc.wait(timeout=0.5)
-            # If it returns, it exited unexpectedly.
-            cls._socat_log_file.flush()
-            with open(f"/opt/hams/test/socat_certs/socat_{cls.__name__}.log", "r") as f:
-                err_log = f.read()
-            raise RuntimeError(
-                f"socat proxy failed to start! Exited with {cls._socat_proc.returncode}. Log: {err_log}"
-            )
-        except subprocess.TimeoutExpired as e:  # audit-ignore-catch-all
-            _logger.warning("Ignored timeout: %s", e)
+                except subprocess.TimeoutExpired as e:  # audit-ignore-catch-all
+                    _logger.warning("Ignored timeout: %s", e)
+            finally:
+                fcntl.flock(lockfile, fcntl.LOCK_UN)
 
     def setUp(self):
         super().setUp()
@@ -869,122 +903,129 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls._crypto_patcher_res_users.stop()
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        if cls.__dict__.get("_socat_proc"):
+        with open("/tmp/hams_test_proxy.lock", "w") as lockfile:
+            fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
-                try:
-                    pgid = os.getpgid(cls._socat_proc.pid)
-                    os.killpg(pgid, signal.SIGTERM)
-                except OSError as e:
-                    _logger.warning("Ignored killpg error: %s", e)
-                cls._socat_proc.terminate()
-                try:
-                    cls._socat_proc.wait(timeout=2.0)
-                except subprocess.TimeoutExpired:
+                if cls.__dict__.get("_socat_proc"):
                     try:
-                        pgid = os.getpgid(cls._socat_proc.pid)
-                        os.killpg(pgid, signal.SIGKILL)
-                    except OSError as e:
+                        try:
+                            pgid = os.getpgid(cls._socat_proc.pid)
+                            if pgid != os.getpgrp():
+                                os.killpg(pgid, signal.SIGTERM)
+                        except OSError as e:
+                            _logger.warning("Ignored killpg error: %s", e)
+                        cls._socat_proc.terminate()
+                        try:
+                            cls._socat_proc.wait(timeout=2.0)
+                        except subprocess.TimeoutExpired:
+                            try:
+                                pgid = os.getpgid(cls._socat_proc.pid)
+                                if pgid != os.getpgrp():
+                                    os.killpg(pgid, signal.SIGKILL)
+                            except OSError as e:
+                                _logger.warning(
+                                    "Ignored killpg error: %s",
+                                    e,
+                                )
+                            cls._socat_proc.kill()
+                            cls._socat_proc.wait()
+                    except Exception as e:  # audit-ignore-catch-all
                         _logger.warning(
-                            "Ignored killpg error: %s",
+                            "TRACING: Failed to terminate" " socat proxy: %s",
+                            repr(e),
+                        )
+                    finally:
+                        cls._socat_proc = None
+                log_fh = cls.__dict__.get("_socat_log_file")
+                if log_fh and not log_fh.closed:
+                    try:
+                        log_fh.close()
+                    except Exception as e:  # audit-ignore-catch-all
+                        _logger.warning(
+                            "Ignored log file close error: %s",
                             e,
                         )
-                    cls._socat_proc.kill()
-                    cls._socat_proc.wait()
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning(
-                    "TRACING: Failed to terminate" " socat proxy: %s",
-                    repr(e),
-                )
-            finally:
-                cls._socat_proc = None
-        log_fh = cls.__dict__.get("_socat_log_file")
-        if log_fh and not log_fh.closed:
-            try:
-                log_fh.close()
-            except Exception as e:  # audit-ignore-catch-all
-                _logger.warning(
-                    "Ignored log file close error: %s",
-                    e,
-                )
 
-        if cls.server:
-            try:
-                if cls.server.server and cls.server.server.socket:
-                    # Keep this socket close to forcibly interrupt any hanging accept() calls
-                    cls.server.server.socket.close()
-            except Exception as close_e:  # audit-ignore-catch-all
-                _logger.warning(
-                    "TRACING: Ignored Exception closing server socket: %s",
-                    repr(close_e),
-                )
+                if cls.server:
+                    try:
+                        if cls.server.server and cls.server.server.socket:
+                            # Keep this socket close to forcibly interrupt any hanging accept() calls
+                            cls.server.server.socket.close()
+                    except Exception as close_e:  # audit-ignore-catch-all
+                        _logger.warning(
+                            "TRACING: Ignored Exception closing server socket: %s",
+                            repr(close_e),
+                        )
 
-        try:
-            super().tearDownClass()
-            _logger.info("TRACING: Successfully completed super().tearDownClass()")
-        except Exception as e:  # audit-ignore-catch-all
-            if (
-                "socket is already closed" not in str(e)
-                and "WebSocketConnectionClosedException" not in type(e).__name__
-            ):
-                _logger.error("TRACING: Native teardown failed or hung: %s", e)
-        finally:
-            if cls.browser:
                 try:
-                    cleanup_stack = vars(cls.browser).get("cleanup")
-                    if cleanup_stack:
-                        cleanup_stack.close()
+                    super().tearDownClass()
+                    _logger.info("TRACING: Successfully completed super().tearDownClass()")
                 except Exception as e:  # audit-ignore-catch-all
-                    _logger.warning("Ignored cleanup close error: %s", e)
-                proc = vars(cls.browser).get("_process", None) or vars(cls.browser).get(
-                    "chrome_process", None
-                )
-                if proc:
-                    try:
-                        parent = psutil.Process(proc.pid)
-                        for child in parent.children(recursive=True):
+                    if (
+                        "socket is already closed" not in str(e)
+                        and "WebSocketConnectionClosedException" not in type(e).__name__
+                    ):
+                        _logger.error("TRACING: Native teardown failed or hung: %s", e)
+                finally:
+                    if cls.browser:
+                        try:
+                            cleanup_stack = vars(cls.browser).get("cleanup")
+                            if cleanup_stack:
+                                cleanup_stack.close()
+                        except Exception as e:  # audit-ignore-catch-all
+                            _logger.warning("Ignored cleanup close error: %s", e)
+                        proc = vars(cls.browser).get("_process", None) or vars(cls.browser).get(
+                            "chrome_process", None
+                        )
+                        if proc:
                             try:
-                                child.kill()
+                                parent = psutil.Process(proc.pid)
+                                for child in parent.children(recursive=True):
+                                    try:
+                                        child.kill()
+                                    except psutil.NoSuchProcess:
+                                        _logger.debug("Child already dead.")
                             except psutil.NoSuchProcess:
-                                _logger.debug("Child already dead.")
-                    except psutil.NoSuchProcess:
-                        _logger.debug("Parent already dead.")
-                    try:
+                                _logger.debug("Parent already dead.")
+                            try:
 
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.info("Ignored exception: %s", e)
-                    try:
-                        proc.terminate()
-                        proc.wait(timeout=2.0)
-                    except Exception as term_e:  # audit-ignore-catch-all
-                        _logger.warning(
-                            "TRACING: Ignored Exception terminating chrome process: %s",
-                            repr(term_e),
-                        )
-                    try:
-                        proc.kill()
-                    except OSError as kill_e:
-                        _logger.warning(
-                            "TRACING: Ignored OSError killing chrome process: %s",
-                            repr(kill_e),
-                        )
+                                os.killpg(proc.pid, signal.SIGKILL)
+                            except Exception as e:  # audit-ignore-catch-all
+                                _logger.info("Ignored exception: %s", e)
+                            try:
+                                proc.terminate()
+                                proc.wait(timeout=2.0)
+                            except Exception as term_e:  # audit-ignore-catch-all
+                                _logger.warning(
+                                    "TRACING: Ignored Exception terminating chrome process: %s",
+                                    repr(term_e),
+                                )
+                            try:
+                                proc.kill()
+                            except OSError as kill_e:
+                                _logger.warning(
+                                    "TRACING: Ignored OSError killing chrome process: %s",
+                                    repr(kill_e),
+                                )
 
-                # Direct attribute access. Fail fast if missing.
-                ws_thread = vars(cls.browser).get("_websocket_thread")
-                if ws_thread:
-                    ws_thread.join = lambda *args, **kwargs: None
+                        # Direct attribute access. Fail fast if missing.
+                        ws_thread = vars(cls.browser).get("_websocket_thread")
+                        if ws_thread:
+                            ws_thread.join = lambda *args, **kwargs: None
 
-            threads = sys._current_frames()
-            if len(threads) > 100:
-                _logger.info("=== THREAD DUMP (%d active) ===", len(threads))
-                for thread_id, frame in threads.items():
-                    _logger.info(
-                        "Thread %s:\n%s",
-                        thread_id,
-                        "".join(traceback.format_stack(frame)),
-                    )
-                _logger.info("=================================")
-            _logger.info("TRACING: Exiting HamsHttpCase.tearDownClass")
+                    threads = sys._current_frames()
+                    if len(threads) > 100:
+                        _logger.info("=== THREAD DUMP (%d active) ===", len(threads))
+                        for thread_id, frame in threads.items():
+                            _logger.info(
+                                "Thread %s:\n%s",
+                                thread_id,
+                                "".join(traceback.format_stack(frame)),
+                            )
+                        _logger.info("=================================")
+                    _logger.info("TRACING: Exiting HamsHttpCase.tearDownClass")
+            finally:
+                fcntl.flock(lockfile, fcntl.LOCK_UN)
 
     def tearDown(self):
         _logger.info("TRACING: Entering HamsHttpCase.tearDown")

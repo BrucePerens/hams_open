@@ -66,3 +66,6 @@ class ServiceWorkerController(http.Controller):
             ("Cache-Control", "no-cache, max-age=0"),
         ]
         return request.make_response(content, headers=headers)
+
+# Verified by [@ANCHOR: test_service_worker_01]
+# Verified by [@ANCHOR: COMM_test_caching_sudo_params]

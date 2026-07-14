@@ -7,7 +7,7 @@
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <!-- [@ANCHOR: xpath_rendering_cf_settings] -->
+                <!-- [@ANCHOR: COMM_xpath_rendering_cf_settings] -->
                 <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_cf_settings] -->
                 <div class="app_settings_block" data-string="Cloudflare" data-key="cloudflare">
                     <h2>Cloudflare Edge Orchestration</h2>

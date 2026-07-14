@@ -2,7 +2,7 @@
 <!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <record id="view_cloudflare_ip_ban_list" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_cf_ip_ban] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_tour_cf_ip_ban] -->
         <field name="name">cloudflare.ip.ban.list</field>
         <field name="model">cloudflare.ip.ban</field>
         <field name="arch" type="xml">
@@ -18,7 +18,7 @@
         </field>
     </record>
     <record id="view_cloudflare_ip_ban_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_cf_ip_ban] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_tour_cf_ip_ban] -->
         <field name="name">cloudflare.ip.ban.form</field>
         <field name="model">cloudflare.ip.ban</field>
         <field name="arch" type="xml">

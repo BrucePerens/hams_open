@@ -79,8 +79,8 @@ class ResConfigSettings(models.TransientModel):
             raise UserError(_("Failed to pull WAF rules: %s") % msg)
 
     def action_generate_tunnel_command(self):
-        # [@ANCHOR: cf_tunnel_setup]
-        # Verified by [@ANCHOR: test_cf_tunnel_setup]
+        # [@ANCHOR: COMM_cf_tunnel_setup]
+        # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
         self.ensure_one()
         website = (
             self.website_id

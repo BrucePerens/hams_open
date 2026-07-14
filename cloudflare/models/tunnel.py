@@ -21,8 +21,8 @@ class CloudflareTunnel(models.Model):
     )
 
     def action_delete_tunnel(self):
-        # [@ANCHOR: cf_delete_tunnel]
-        # Verified by [@ANCHOR: test_cf_delete_tunnel]
+        # [@ANCHOR: COMM_cf_delete_tunnel]
+        # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
             account_id = tunnel.website_id.cloudflare_account_id
@@ -41,8 +41,8 @@ class CloudflareTunnel(models.Model):
 
     @api.model
     def action_sync_tunnels(self):
-        # [@ANCHOR: cf_sync_tunnels]
-        # Verified by [@ANCHOR: test_cf_sync_tunnels]
+        # [@ANCHOR: COMM_cf_sync_tunnels]
+        # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
             # We defer the actual sync for each website to a background job to avoid synchronous loops

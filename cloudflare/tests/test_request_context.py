@@ -9,8 +9,8 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 @tagged("post_install", "-at_install")
 class TestRequestContext(HamsHttpCase):
     def test_01_get_request_context(self):
-        # [@ANCHOR: test_cf_get_request_context]
-        # Tests [@ANCHOR: cf_get_request_context]
+        # [@ANCHOR: COMM_test_cf_get_request_context]
+        # Tests [@ANCHOR: COMM_cf_get_request_context]
         """Verify that Cloudflare headers are correctly parsed into the request context."""
 
         headers = {

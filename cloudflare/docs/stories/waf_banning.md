@@ -12,3 +12,8 @@ so that the origin server is protected from further attacks.
 5. After the specified duration, the ban is automatically lifted by `_action_lift_ban` `[@ANCHOR: COMM_cf_action_lift_ban]`.
 
 **Status:** Verified by `[@ANCHOR: COMM_test_cf_execute_ban]` and `[@ANCHOR: COMM_test_cf_action_lift_ban]`.
+
+[@ANCHOR: COMM_cf_ip_ban_tour]
+[@ANCHOR: COMM_cf_waf_rule_tour]
+[@ANCHOR: COMM_cf_purge_wizard_tour]
+[@ANCHOR: COMM_cf_zone_settings_tour]

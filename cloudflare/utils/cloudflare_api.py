@@ -66,7 +66,7 @@ def _make_request(method, endpoint, token, error_msg, **kwargs):
 
 
 def purge_urls(urls, token, zone_id):
-    # Verified by [@ANCHOR: test_purge_urls_api]
+    # Verified by [@ANCHOR: COMM_test_purge_urls_api]
     if not token or not zone_id:
         return False
     if not urls:
@@ -154,7 +154,7 @@ def unban_ip(rule_id, token, zone_id):
 
 
 def verify_turnstile(token, remote_ip, secret):
-    # Verified by [@ANCHOR: test_cf_turnstile_verify]
+    # Verified by [@ANCHOR: COMM_test_cf_turnstile_verify]
     if not secret or not token:
         return False
 

@@ -14,8 +14,8 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_01_quota_config_updates_sw(self):
         # [@ANCHOR: test_settings_and_cache_01]
-        # Tests [@ANCHOR: caching_quota_calculation]
-        # Tests [@ANCHOR: caching_fs_scan_logic]
+        # Tests [@ANCHOR: COMM_caching_quota_calculation]
+        # Tests [@ANCHOR: COMM_caching_fs_scan_logic]
         """
         Verify that changing the safe quota in settings dynamically
         updates the MAX_FILE_SIZE_BYTES in the /sw.js payload.
@@ -173,7 +173,7 @@ class TestSettingsAndCache(RealTransactionCase):
     def test_03_caching_sudo_params(self):
         """
         Verify that sudo() calls are secure and tagged correctly.
-        [@ANCHOR: test_caching_sudo_params]
+        [@ANCHOR: COMM_test_caching_sudo_params]
         """
         # This test acts as the anchor verifying that the params are
         # intentionally safe
@@ -184,7 +184,7 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_05_zero_sudo_scan(self):
         # [@ANCHOR: test_caching_zero_sudo_scan]
-        # Tests [@ANCHOR: caching_fs_scan_logic]
+        # Tests [@ANCHOR: COMM_caching_fs_scan_logic]
         """Verify that the FS scan correctly uses the service account."""
         controller = ServiceWorkerController()
         # Reset cache to force re-scan
@@ -199,7 +199,7 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_04_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_caching_settings]
-        # Tests [@ANCHOR: xpath_rendering_caching_settings]
+        # Tests [@ANCHOR: COMM_xpath_rendering_caching_settings]
         """
         Verify the Caching settings are injected into the website
         configuration view.

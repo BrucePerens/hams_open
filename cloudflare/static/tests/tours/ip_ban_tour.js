@@ -3,7 +3,7 @@
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
-// [@ANCHOR: test_tour_cf_ip_ban]
+// [@ANCHOR: COMM_test_tour_cf_ip_ban]
 registry.category("web_tour.tours").add("cf_ip_ban_tour", {
     url: "/odoo?debug=1",
     steps: () => [

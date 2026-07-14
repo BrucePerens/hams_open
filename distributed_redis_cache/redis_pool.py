@@ -60,14 +60,14 @@ def get_redis_connection(env=None):
             with POOL_LOCK:
                 if pool_key not in _custom_pools:
                     _custom_pools[pool_key] = redis.ConnectionPool(
-                    host=host,
-                    port=port,
-                    password=password,
-                    db=0,
-                    decode_responses=True,
-                    socket_timeout=1.0,
-                    socket_connect_timeout=1.0,
-                )
+                        host=host,
+                        port=port,
+                        password=password,
+                        db=0,
+                        decode_responses=True,
+                        socket_timeout=1.0,
+                        socket_connect_timeout=1.0,
+                    )
             return redis.Redis(connection_pool=_custom_pools[pool_key])
 
     _logger.debug("Returning default Redis Connection Pool.")

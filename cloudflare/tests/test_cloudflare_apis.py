@@ -14,7 +14,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
 
     def test_01_waf_ban_ip(self):
         # [@ANCHOR: test_cf_ban_ip_api]
-        # Tests [@ANCHOR: cf_ban_ip_api]
+        # Tests [@ANCHOR: COMM_cf_ban_ip_api]
 
         mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
         mock_ban_ip.return_value = (True, "fake_rule_123")
@@ -28,8 +28,8 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertTrue(res)
 
     def test_02_turnstile_secret_fetch(self):
-        # [@ANCHOR: test_cf_turnstile_verify]
-        # Tests [@ANCHOR: cf_turnstile_verify]
+        # [@ANCHOR: COMM_test_cf_turnstile_verify]
+        # Tests [@ANCHOR: COMM_cf_turnstile_verify]
 
         website = self.env["website"].get_current_website()
         website.write({"cloudflare_turnstile_secret": "my_super_secret_key"})
@@ -51,8 +51,8 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertEqual(called_data["response"], "fake_token_123")
 
     def test_03_tunnel_setup(self):
-        # [@ANCHOR: test_cf_tunnel_setup]
-        # Tests [@ANCHOR: cf_tunnel_setup]
+        # [@ANCHOR: COMM_test_cf_tunnel_setup]
+        # Tests [@ANCHOR: COMM_cf_tunnel_setup]
         mock_create = self.safe_patch(
             "odoo.addons.cloudflare.models.res_config_settings.create_cfd_tunnel"
         )
@@ -76,8 +76,8 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertIn("mock_token_xyz", wizard.command)
 
     def test_04_sync_tunnels(self):
-        # [@ANCHOR: test_cf_sync_tunnels]
-        # Tests [@ANCHOR: cf_sync_tunnels]
+        # [@ANCHOR: COMM_test_cf_sync_tunnels]
+        # Tests [@ANCHOR: COMM_cf_sync_tunnels]
         mock_list = self.safe_patch(
             "odoo.addons.cloudflare.models.tunnel.list_cfd_tunnels"
         )
@@ -102,8 +102,8 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertEqual(tunnel.name, "Tunnel 1")
 
     def test_05_delete_tunnel(self):
-        # [@ANCHOR: test_cf_delete_tunnel]
-        # Tests [@ANCHOR: cf_delete_tunnel]
+        # [@ANCHOR: COMM_test_cf_delete_tunnel]
+        # Tests [@ANCHOR: COMM_cf_delete_tunnel]
         mock_delete = self.safe_patch(
             "odoo.addons.cloudflare.models.tunnel.delete_cfd_tunnel"
         )
@@ -119,7 +119,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertFalse(tunnel.exists())
 
     def test_06_purge_urls(self):
-        # [@ANCHOR: test_purge_urls_api]
+        # [@ANCHOR: COMM_test_purge_urls_api]
 
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"
@@ -164,7 +164,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
             self.assertFalse(purge_urls(["https://a.com"], "tok1", "zone1"))
 
     def test_07_purge_tags(self):
-        # [@ANCHOR: test_purge_tags_api]
+        # [@ANCHOR: COMM_test_purge_tags_api]
 
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"

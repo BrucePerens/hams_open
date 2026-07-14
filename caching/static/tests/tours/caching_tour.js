@@ -14,7 +14,7 @@ registry.category("web_tour.tours").add("caching_service_worker_check", {
             content: "Check if Service Worker is supported and registered",
             trigger: "body",
             run: function () {
-                // Tests [@ANCHOR: caching_sw_fetch_interceptor]
+                // Tests [@ANCHOR: COMM_caching_sw_fetch_interceptor]
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.ready.then(() => {
                         document.body.classList.add('sw-registered');

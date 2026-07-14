@@ -19,7 +19,7 @@ class CachingMixin(models.AbstractModel):
     @api.model
     @distributed_cache()
     def get_fs_stats(self):
-        # [@ANCHOR: caching_fs_scan_logic]
+        # [@ANCHOR: COMM_caching_fs_scan_logic]
         # Verified by [@ANCHOR: test_settings_and_cache_01]
         # Verified by [@ANCHOR: test_caching_zero_sudo_scan]
         """
@@ -64,7 +64,7 @@ class CachingMixin(models.AbstractModel):
     @api.model
     @distributed_cache()
     def get_global_static_info(self, quota_mb):
-        # [@ANCHOR: caching_quota_calculation]
+        # [@ANCHOR: COMM_caching_quota_calculation]
         # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
         Calculates the safe dynamic max file size based on quota.

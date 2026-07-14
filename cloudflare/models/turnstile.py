@@ -11,7 +11,7 @@ class CloudflareTurnstile(models.AbstractModel):
 
     @api.model
     def verify_token(self, token, remote_ip=None, website_id=None):
-        # [@ANCHOR: cf_turnstile_verify]
+        # [@ANCHOR: COMM_cf_turnstile_verify]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
 

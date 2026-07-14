@@ -21,9 +21,9 @@ class TestPurgeQueue(RealTransactionCase):
         )
 
     def test_01_bdd_queue_batching_and_rate_limiting(self):
-        # [@ANCHOR: test_queue_batching_and_rate_limiting]
-        # Tests [@ANCHOR: ir_cron_process_cf_purge_queue]
-        # Tests [@ANCHOR: cf_process_queue_logic]
+        # [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
+        # Tests [@ANCHOR: COMM_ir_cron_process_cf_purge_queue]
+        # Tests [@ANCHOR: COMM_cf_process_queue_logic]
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"
         )
@@ -70,8 +70,8 @@ class TestPurgeQueue(RealTransactionCase):
         cron._trigger()
 
     def test_03_purge_queue_website_acl(self):
-        # [@ANCHOR: test_purge_queue_base_url_sudo]
-        # Tests [@ANCHOR: enqueue_urls_base_url]
+        # [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
+        # Tests [@ANCHOR: COMM_enqueue_urls_base_url]
         """
         Verify that the purge queue service account can successfully read
         the website_id.domain field without triggering an AccessError.
@@ -99,7 +99,7 @@ class TestPurgeQueue(RealTransactionCase):
         self.assertIsInstance(domain_val, str)
 
     def test_04_purge_queue_tags_processing(self):
-        # Tests [@ANCHOR: cf_enqueue_tags_api]
+        # Tests [@ANCHOR: COMM_cf_enqueue_tags_api]
         """Verify that tag purges in the queue are processed correctly."""
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"

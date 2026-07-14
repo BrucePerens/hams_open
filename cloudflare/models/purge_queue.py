@@ -64,16 +64,16 @@ class CloudflarePurgeQueue(models.Model):
 
     @api.model
     def enqueue_urls(self, urls, website_id=None):
-        # [@ANCHOR: enqueue_urls_base_url]
-        # Verified by [@ANCHOR: test_purge_queue_base_url_sudo]
+        # [@ANCHOR: COMM_enqueue_urls_base_url]
+        # Verified by [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
         self.enqueue_urls_batch({website_id: urls})
 
     @api.model
     def enqueue_tags(self, tags, website_id=None):
-        # [@ANCHOR: cf_enqueue_tags_api]
-        # Verified by [@ANCHOR: test_purge_tags_api]
+        # [@ANCHOR: COMM_cf_enqueue_tags_api]
+        # Verified by [@ANCHOR: COMM_test_purge_tags_api]
         # Verified by [@ANCHOR: test_purge_queue_tags_processing]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
@@ -88,7 +88,7 @@ class CloudflarePurgeQueue(models.Model):
 
     @api.model
     def enqueue_everything(self, website_ids=None):
-        # [@ANCHOR: cf_enqueue_everything]
+        # [@ANCHOR: COMM_cf_enqueue_everything]
         if not website_ids:
             website_ids = [self.env["cloudflare.utils"].get_current_website_id()]
 
@@ -105,7 +105,7 @@ class CloudflarePurgeQueue(models.Model):
 
     @api.model
     def process_queue(self):
-        # [@ANCHOR: cf_process_queue_logic]
+        # [@ANCHOR: COMM_cf_process_queue_logic]
         limit = 30
         max_batches = 10
         batches_processed = 0
@@ -149,7 +149,7 @@ class CloudflarePurgeQueue(models.Model):
                     else:
                         everything_records.unlink()
                         # Optimization: Clear all other pending records for this website since we just wiped everything
-                        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_queue_batching_and_rate_limiting]  # fmt: skip
+                        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]  # fmt: skip
                             "DELETE FROM cloudflare_purge_queue WHERE website_id = %s AND state = 'pending'",
                             (first_website.id,),
                         )
