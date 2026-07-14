@@ -26,8 +26,6 @@ class Module(models.Model):
     def _bootstrap_knowledge_docs(self):
         # Dependencies formally guarantee knowledge.article
         article_model_name = "knowledge.article"
-        if article_model_name not in self.env:
-            return
 
         utils = self.env["zero_sudo.security.utils"]
 
@@ -40,15 +38,18 @@ class Module(models.Model):
         # Context for creating documentation
         try:
             svc_uid = utils._get_service_uid(svc_account)
-        except AccessError:
+        except AccessError as e:
+            _logger.warning("AccessError getting service uid: %s", e)
             return
+
+        clean_ctx = dict(self.env.context)
+        clean_ctx.pop("prefetch_fields", None)
+        clean_ctx["mail_notrack"] = True
 
         Article = (
             self.env[article_model_name]
             .with_user(svc_uid)
-            .with_context(
-                mail_notrack=True,
-            )
+            .with_context(**clean_ctx)
         )
 
         # Context for reading the core ERP framework table
@@ -56,7 +57,8 @@ class Module(models.Model):
             facility_uid = utils._get_service_uid(
                 "zero_sudo.odoo_facility_service_internal"
             )
-        except AccessError:
+        except AccessError as e:
+            _logger.warning("AccessError getting facility uid: %s", e)
             return
 
         all_doc_infos = []
@@ -129,7 +131,7 @@ class Module(models.Model):
         category = doc_info.get("category", "workspace")
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
-        existing_hash = existing_hashes.get(hash_key) if existing_hashes else utils._get_kv(hash_key)
+        existing_hash = existing_hashes.get(hash_key) if existing_hashes is not None else utils._get_kv(hash_key)
 
         if existing_hash == content_hash:
             return
@@ -144,7 +146,7 @@ class Module(models.Model):
         vals["internal_permission"] = "read"
         vals["icon"] = icon
 
-        existing = article_by_name.get(name) if article_by_name else Article.search([("name", "=", name)], limit=1)
+        existing = article_by_name.get(name) if article_by_name is not None else Article.search([("name", "=", name)], limit=1)
         if existing:
             existing.write(vals)
         else:

@@ -35,7 +35,7 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_mail_service'), ref('base.group_user')])]"/>
+            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_mail_service')])]"/>
         </record>
 
         <record id="odoo_facility_service_internal" model="res.users">

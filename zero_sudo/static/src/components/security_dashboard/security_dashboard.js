@@ -1,4 +1,5 @@
 /** @odoo-module **/
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
 
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";

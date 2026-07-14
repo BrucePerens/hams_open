@@ -18,14 +18,17 @@ _logger = logging.getLogger(__name__)
 
 class ZeroSudoSecurityUtils(models.AbstractModel):
     _name = "zero_sudo.security.utils"
-    _description = "Centralized Security and Privilege Utilities"
+    _description = (
+        "Centralized Security and "
+        "Privilege Utilities"
+    )
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
     def _get_deterministic_hash(self, input_string):
         # [@ANCHOR: COMM_deterministic_hash]
         # ---
-        # Verified by [@ANCHOR: COMM_test_deterministic_hash]
+        # Verified by [@ANCHOR: COMM_test_get_crypto_secret]
         # ---
         # Tests [@ANCHOR: COMM_story_deterministic_hash]
         """
@@ -51,19 +54,19 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         if not xml_id or not isinstance(xml_id, str) or "." not in xml_id:
             raise AccessError(
-                _("Invalid XML ID format: %s. Expected 'module.name'.") % xml_id
+                _("Invalid XML ID format: %s. " "Expected 'module.name'.") % xml_id
             )
 
         # STRICT ZERO-SUDO MANDATE: Resolve and verify via optimized Postgres procedure
         # [@ANCHOR: COMM_get_service_uid_sql_resolve]
         # ---
-        # Verified by [@ANCHOR: COMM_test_get_service_uid_sql_resolve]
+        # Verified by [@ANCHOR: COMM_COMM_test_get_service_uid_sql_resolve]
         # ---
         # Verified by [@ANCHOR: COMM_test_get_service_uid_sql_verify]
         # ---
         # Verified by [@ANCHOR: COMM_test_privilege_escalation_block_sql]
 
-        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: Tested by [@ANCHOR: test_get_service_uid_sql_resolve]  # fmt: skip
+        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_get_service_uid_sql_resolve]  # fmt: skip
         uid = self.env.cr.fetchone()[0]
         return uid
 
@@ -97,7 +100,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         pkg = pkg_name or cmd_name
         raise UserError(
             _(
-                "Missing dependency: '%s'. Please install via OS package manager (e.g., 'apt-get install %s')."
+                "Missing dependency: '%s'. "
+                "Please install via OS package manager "
+                "(e.g., 'apt-get install %s')."
             )
             % (cmd_name, pkg)
         )
@@ -115,7 +120,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         if not model_name:
             return
 
-        if model_name not in self.env:
+        try:
+            self.env[model_name]
+        except KeyError:
             raise UserError(_("Invalid model name: %s") % model_name)
 
         # Check if the current user has access to the model
@@ -125,7 +132,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             except AccessError:
                 raise AccessError(
                     _(
-                        "Security Alert: You do not have permission to invalidate the cache for model '%s'."
+                        "Security Alert: You do not have permission "
+                        "to invalidate the cache for model '%s'."
                     )
                     % model_name
                 )
@@ -168,18 +176,18 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     chunk = payloads[i : i + 100]
                     # [@ANCHOR: COMM_coherent_cache_signal_batch]
                     # ---
-                    # Verified by [@ANCHOR: COMM_test_coherent_cache_signal_batch]
+                    # Verified by [@ANCHOR: COMM_COMM_test_coherent_cache_signal_batch]
                     # ---
-                    self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_coherent_cache_signal_batch]  # fmt: skip
+                    self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_coherent_cache_signal_batch]  # fmt: skip
                         "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
                         ("cache_invalidation", chunk),
                     )
         elif key_value:
             # [@ANCHOR: COMM_coherent_cache_signal_single]
             # ---
-            # Verified by [@ANCHOR: COMM_test_coherent_cache_signal_single]
+            # Verified by [@ANCHOR: COMM_COMM_test_coherent_cache_signal_single]
             # ---
-            self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_coherent_cache_signal_single]  # fmt: skip
+            self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_coherent_cache_signal_single]  # fmt: skip
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
             )
@@ -260,13 +268,16 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             if any(banned in lower_key for banned in banned_substrings):
                 raise AccessError(
                     _(
-                        "Security Alert: Parameter '%s' matches restricted cryptographic patterns and cannot be extracted via Zero-Sudo."
+                        "Security Alert: Parameter '%s' matches restricted "
+                        "cryptographic patterns and cannot be extracted via Zero-Sudo."
                     )
                     % key
                 )
             raise AccessError(
                 _(
-                    "Security Alert: Parameter '%s' is not in the Zero-Sudo READ whitelist. You must explicitly register it in zero_sudo/models/security_utils.py."
+                    "Security Alert: Parameter '%s' is not in the Zero-Sudo READ "
+                    "whitelist. You must explicitly register it in "
+                    "zero_sudo/models/security_utils.py."
                 )
                 % key
             )
@@ -294,7 +305,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
             raise AccessError(
                 _(
-                    "Security Alert: Parameter '%s' is not in the Zero-Sudo WRITE whitelist. You must explicitly register it in zero_sudo/models/security_utils.py."
+                    "Security Alert: Parameter '%s' is not in the Zero-Sudo WRITE "
+                    "whitelist. You must explicitly register it in "
+                    "zero_sudo/models/security_utils.py."
                 )
                 % key
             )
@@ -316,14 +329,14 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # ---
         # Verified by [@ANCHOR: COMM_test_set_kv_procedure]
         # ---
-        # Verified by [@ANCHOR: COMM_test_set_kv_sql_check]
+        # Verified by [@ANCHOR: COMM_COMM_test_set_kv_sql_check]
         # ---
         # Tests [@ANCHOR: COMM_story_set_kv_procedure]
         """
         High-performance atomic KV update using a single Postgres procedure call.
         Eliminates Python-side existence checks and round-trips.
         """
-        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: Tested by [@ANCHOR: test_set_kv_sql_check]  # fmt: skip
+        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_set_kv_sql_check]  # fmt: skip
 
         # Ensure changes are visible to other transactions/round-trips.
         # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,
@@ -354,7 +367,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     with open(  # audit-ignore-path  # fmt: skip
                         secret_path,
                         "r",
-                        # audit-ignore-path: Tested by [@ANCHOR: COMM_test_deterministic_hash]  # fmt: skip
+                        # audit-ignore-path: Tested by [@ANCHOR: COMM_test_get_crypto_secret]  # fmt: skip
                     ) as f:
                         secret = f.read().strip()
             except OSError as e:
@@ -366,7 +379,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         if not secret or secret == "admin":
             _logger.warning(
-                "System running with insecure or default cryptographic secret!"
+                "System running with insecure or "
+                "default cryptographic secret!"
             )
             secret = "default_insecure_secret_fallback"
 

@@ -20,10 +20,18 @@ class NoisyTable(models.Model):
         string="Table Name",
         required=True,
         index=True,
-        help="Name of the PostgreSQL table to ignore in leak detection.",
+        help=(
+            "Name of the PostgreSQL table to ignore in "
+            "leak detection."
+        ),
     )
     active = fields.Boolean(
-        default=True, index=True, help="If unchecked, it will allow leak detection for this table."
+        default=True,
+        index=True,
+        help=(
+            "If unchecked, it will allow leak "
+            "detection for this table."
+        ),
     )
 
     _name_uniq = models.Constraint("UNIQUE(name)", "The table name must be unique!")

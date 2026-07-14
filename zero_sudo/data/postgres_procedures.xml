@@ -74,8 +74,9 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
-env.cr.execute(sql_get_uid)
-env.cr.execute(sql_set_kv)
+with env.cr.savepoint():
+    env.cr.execute(sql_get_uid)
+    env.cr.execute(sql_set_kv)
             </field>
         </record>
 

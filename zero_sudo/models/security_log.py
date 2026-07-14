@@ -38,7 +38,24 @@ class SecurityLog(models.Model):
 
     create_date = fields.Datetime(index=True)
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        clean_ctx = dict(self.env.context)
+        clean_ctx.pop("mail_notrack", None)
+        clean_ctx.pop("prefetch_fields", None)
+        return super(SecurityLog, self.with_context(**clean_ctx)).create(vals_list)
+
     @api.model
     def autovacuum(self):
         ninety_days_ago = fields.Datetime.now() - datetime.timedelta(days=90)
-        self.env['zero_sudo.security.log'].search([('create_date', '<', ninety_days_ago)], limit=10000).unlink()
+        self.env.cr.execute(
+            """
+            DELETE FROM zero_sudo_security_log
+            WHERE id IN (
+                SELECT id FROM zero_sudo_security_log
+                WHERE create_date < %s
+                LIMIT 10000
+            )
+            """,
+            (ninety_days_ago,)
+        )

@@ -64,6 +64,7 @@ async def broadcast_to_redis(payload):
             return
 
         await redis_client.publish(REDIS_CHANNEL, payload)
+        await redis_client.incr("global_cache_invalidation_counter")
         # [!] DIAGNOSTIC FOR AI: Published invalidation to Redis: %s
         logger.info("Published invalidation to Redis: %s", payload)
     except json.JSONDecodeError:

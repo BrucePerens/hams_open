@@ -1,4 +1,5 @@
 /** @odoo-module **/
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
 
 const originalConsoleError = console.error;
 const originalLog = console.log;

@@ -8,6 +8,7 @@
 from . import common
 from odoo.exceptions import AccessError
 from odoo import _
+import odoo.tools
 
 import sys
 from odoo.tests.common import tagged
@@ -61,3 +62,53 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         if sys.path[0]:
             self.assertIn(sys.path[0], pythonpath)
         self.assertNotEqual(pythonpath, "/usr/lib/python3/dist-packages")
+
+    def test_ir_http_is_service_account_cached(self):
+        # [@ANCHOR: COMM_test_is_service_account_cached]
+        user = self.env["res.users"].create({
+            "name": "Service Account IrHttp",
+            "login": "service_account_irhttp@example.com",
+            "is_service_account": True,
+        })
+        self.assertTrue(self.env["ir.http"]._is_service_account_cached(user.id))
+        
+        user2 = self.env["res.users"].create({
+            "name": "Regular IrHttp",
+            "login": "regular_irhttp@example.com",
+            "is_service_account": False,
+        })
+        self.assertFalse(self.env["ir.http"]._is_service_account_cached(user2.id))
+
+    def test_res_users_filtered(self):
+        # Test for models/res_users.py:45
+        user = self.env["res.users"].create({
+            "name": "Filtered User",
+            "login": "filtered_user@example.com",
+            "is_service_account": True,
+        })
+        user.write({"password": "new_password"})
+        self.assertNotEqual(user.password, "new_password")
+
+    def test_security_log_autovacuum(self):
+        # Test for models/security_log.py:51
+        log = self.env["zero_sudo.security.log"].create({
+            "reason": "cache_invalidation"
+        })
+        self.env["zero_sudo.security.log"].autovacuum()
+        self.assertTrue(log.exists())
+
+    def test_poll_health_check(self):
+        # [@ANCHOR: COMM_test_poll_health_check]
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+        
+        class MockResponse:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            
+        def mock_urlopen(*args, **kwargs):
+            return MockResponse()
+            
+        self.safe_patch("urllib.request.urlopen", mock_urlopen)
+        res = daemon_utils.poll_health_check("http://localhost:8080/health", timeout=1, interval=0.1)
+        self.assertTrue(res)

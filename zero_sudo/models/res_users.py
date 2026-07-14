@@ -12,6 +12,12 @@ from odoo import api, fields, models
 class ResUsersZeroSudo(models.Model):
     _inherit = "res.users"
 
+    security_log_ids = fields.One2many(
+        "zero_sudo.security.log",
+        "user_id",
+        string="Security Logs",
+    )
+
     is_service_account = fields.Boolean(
         # [@ANCHOR: COMM_is_service_account_field]
         # ---
@@ -22,7 +28,10 @@ class ResUsersZeroSudo(models.Model):
         # Tests [@ANCHOR: COMM_journey_service_account_lifecycle]
         string="Is Service Account",
         default=False,
-        help="Flags this user as an internal service account. Prevents interactive web logins.",
+        help=(
+            "Flags this user as an internal service account. "
+            "Prevents interactive web logins."
+        ),
         groups="base.group_system",
     )
 
@@ -30,7 +39,7 @@ class ResUsersZeroSudo(models.Model):
     def create(self, vals_list):
         # [@ANCHOR: COMM_service_account_password_generation]
         # ---
-        # Verified by [@ANCHOR: COMM_test_service_account_password]
+        # Verified by [@ANCHOR: COMM_COMM_test_service_account_password]
         for vals in vals_list:
             if vals.get("is_service_account"):
                 # Ensure no password for service accounts
@@ -43,14 +52,9 @@ class ResUsersZeroSudo(models.Model):
             vals["password"] = secrets.token_hex(32)
         elif "password" in vals and "is_service_account" not in vals:
             if self.ids:
-                self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: test_service_account_password]  # fmt: skip
-                    "SELECT id FROM res_users WHERE id IN %s AND is_service_account = True",
-                    (tuple(self.ids),)
-                )
-                service_accounts_ids = [r[0] for r in self.env.cr.fetchall()]
-                if service_accounts_ids:
-                    regular_accounts = self.filtered(lambda r: r.id not in service_accounts_ids)
-                    service_accounts = self.filtered(lambda r: r.id in service_accounts_ids)
+                service_accounts = self.filtered("is_service_account")
+                if service_accounts:
+                    regular_accounts = self - service_accounts
                     
                     res = True
                     if regular_accounts:

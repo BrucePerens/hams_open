@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <templates xml:space="preserve">
     <t t-name="zero_sudo.SecurityDashboard">
         <div class="o_security_dashboard overflow-auto p-4 h-100 bg-dark text-white" style="transition: transform 20s linear;" t-ref="dashboardRoot">

@@ -9,6 +9,10 @@ User=odoo
 # Removing group specification
 # Adjust WorkingDirectory to point to your specific addons path
 WorkingDirectory=/opt/odoo/addons/distributed_redis_cache/daemons
+ProtectSystem=strict
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
 
 # Database & Redis Configuration
 Environment="DB_HOST=localhost"

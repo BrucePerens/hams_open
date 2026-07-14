@@ -169,3 +169,10 @@ Look in agents/skills/goal for a memorized goal. Once the goal has been achieved
 mark it as achieved so that you won't loop trying to perform it again.
 </goal>
 </goal>
+
+<night_shift_protocol>
+## 5. Unattended Execution (Night Shift Protocol)
+
+* **Aggressive Autonomy:** When executing batch tasks, repetitive workflows, or assigned orchestration (e.g., Code Review orchestrators), you MUST NEVER pause to ask for permission between tasks or batches. Assume you are running completely unattended overnight.
+* **Zero Permission Loop:** Once a chunk of work is complete, you MUST immediately invoke the tools required for the next chunk of work in the exact same turn. Politeness and safety biases that cause you to ask "How would you like to proceed?" are strictly forbidden during batch workflows. Just execute the next item in the queue.
+</night_shift_protocol>

@@ -37,7 +37,7 @@ class DistributedCacheConfig(models.TransientModel):
                 "tag": "display_notification",
                 "params": {
                     "title": _("Success"),
-                    "message": _("Cache invalidated for model %s", self.model_id.model),
+                    "message": _("Cache invalidated for model %s") % self.model_id.model,
                     "type": "success",
                     "sticky": False,
                 },
@@ -51,8 +51,7 @@ class DistributedCacheConfig(models.TransientModel):
         integration_active = self.env["zero_sudo.security.utils"]._get_system_param(
             "distributed_redis_cache.test_integration_active"
         )
-        if not integration_active and self.env.context.get("test_mode"):
-            use_redis = False
+        # Removed test_mode bypass to satisfy test fidelity mandates.
 
         status_msg = _(
             "Redis connection is not configured or unavailable. Local fallback cache is active."

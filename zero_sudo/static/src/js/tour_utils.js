@@ -1,4 +1,5 @@
 /** @odoo-module **/
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
 
 /**
  * Centralized macros for Odoo UI Tours to guarantee architectural compliance.
