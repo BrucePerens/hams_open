@@ -1,10 +1,13 @@
 /** @odoo-module **/
+// -*- coding: utf-8 -*-
+// Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
+// Public License v3.0 (AGPL-3.0).
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
-// # Verified by [@ANCHOR: test_compliance_ui_tour]
+// Tests [@ANCHOR: test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {
-    url: "/privacy?debug=1",
+    url: "/en_US/privacy?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         // Handle Cookie Bar if it appears

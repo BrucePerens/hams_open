@@ -22,14 +22,14 @@ class TestCompliancePages(HamsTransactionCase):
 
         # Tests [@ANCHOR: story_automatic_legal_pages]
         urls = ["/privacy", "/cookie-policy", "/terms", "/accessibility"]
-        pages = self.env["website.page"].search([("url", "in", urls)])
+        pages = self.env["website.page"].search([("url", "in", urls)], limit=1000)
         found_urls = pages.mapped("url")
         for url in urls:
             self.assertIn(
                 url,
                 found_urls,
                 f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in 'website.page'. "  # noqa: E501
-                f"Check compliance/data/legal_pages_data.xml for missing records.",  # noqa: E501
+                "Check compliance/data/legal_pages_data.xml for missing records.",  # noqa: E501
             )
 
         # Non-Destructive Mandate check:
@@ -56,13 +56,13 @@ class TestCompliancePages(HamsTransactionCase):
                     self.assertFalse(
                         page.is_published,
                         f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {
-                            page.url} should be unpublished because a custom one exists in the same scope. " f"Check compliance/hooks.py logic.",  # noqa: E501
+                            page.url} should be unpublished because a custom one exists in the same scope. " "Check compliance/hooks.py logic.",  # noqa: E501
                     )
                 else:
                     self.assertTrue(
                         page.is_published,
                         f"[!] DIAGNOSTIC FOR AI: Boilerplate page for {
-                            page.url} should be published since no custom one exists in the same scope. " f"Check compliance/hooks.py logic.",  # noqa: E501
+                            page.url} should be published since no custom one exists in the same scope. " "Check compliance/hooks.py logic.",  # noqa: E501
                     )
             else:
                 self.assertTrue(
@@ -89,13 +89,13 @@ class TestCompliancePagesHttp(HamsHttpCase):
                 response.status_code,
                 200,
                 f"[!] DIAGNOSTIC FOR AI: Page {url} should be reachable (200 OK). Got {response.status_code}. "  # noqa: E501
-                f"Ensure the website.page record is published and correctly linked to a view.",  # noqa: E501
+                "Ensure the website.page record is published and correctly linked to a view.",  # noqa: E501
             )
             # Use regex to ignore potential tags/whitespace around the text
             self.assertTrue(
                 re.search(r"Policy|Terms", response.text),
                 f"[!] DIAGNOSTIC FOR AI: Page {url} should contain boilerplate content. "  # noqa: E501
-                f"Check the rendering of {url} and its associated template.",
+                "Check the rendering of {url} and its associated template.",
             )
 
     def test_pages_content(self):

@@ -37,7 +37,8 @@ class TestComplianceHooks(HamsTransactionCase):
         bp.write({"is_published": True})
 
         # Run the procedure
-        self.env.cr.execute("SELECT compliance_enforce_protection()")
+        with self.env.cr.savepoint():
+            self.env.cr.execute("SELECT compliance_enforce_protection()")
         bp.invalidate_recordset(["is_published"])
 
         self.assertFalse(
@@ -59,13 +60,13 @@ class TestComplianceHooks(HamsTransactionCase):
 
         post_init_hook(self.env)
 
-        websites = self.env["website"].search([])
+        websites = self.env["website"].search([], limit=1000)
         for website in websites:
             self.assertTrue(
                 website.cookies_bar,
                 f"[!] DIAGNOSTIC FOR AI: Cookie bar must be enabled on website '{  # noqa: E501
                     website.name}' (# {
-                    website.id}). " f"The post_init_hook failed to enforce this setting. check compliance/hooks.py.",  # noqa: E501
+                    website.id}). " "The post_init_hook failed to enforce this setting. check compliance/hooks.py.",  # noqa: E501
             )
 
     def test_03_views_rendering(self):
@@ -160,7 +161,7 @@ class TestComplianceHooks(HamsTransactionCase):
         existing_bp_2 = (
             self.env["website.page"]
             .with_context(active_test=False)
-            .search([("url", "=", "/cookie-policy"), ("website_id", "=", website_2.id)])  # noqa: E501
+            .search([("url", "=", "/cookie-policy"), ("website_id", "=", website_2.id)], limit=1000)  # noqa: E501
             .filtered(
                 lambda p: p.view_id.key
                 and p.view_id.key.startswith("compliance.compliance_")

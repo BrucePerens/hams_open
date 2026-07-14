@@ -28,4 +28,4 @@ class TestComplianceUITour(HamsHttpCase):
 
         # Tests [@ANCHOR: compliance_accessibility_statement_template]
 
-        self.start_tour("/privacy?debug=1", "compliance_tour")
+        self.start_tour("/en_US/privacy?debug=1", "compliance_tour")
