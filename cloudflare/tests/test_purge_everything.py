@@ -14,7 +14,7 @@ class TestPurgeEverything(RealTransactionCase):
         self.PurgeQueue = self.env["cloudflare.purge.queue"]
 
         # Clear queue
-        self.PurgeQueue.search([]).unlink()
+        self.PurgeQueue.search([], limit=10000).unlink()
 
         # Create two websites with different Cloudflare credentials
         self.website_a = self.Website.create(
@@ -100,7 +100,9 @@ class TestPurgeEverything(RealTransactionCase):
         self.PurgeQueue.process_queue()
 
         # Website A should be failed
-        recs_a = self.PurgeQueue.search([("website_id", "=", self.website_a.id)])
+        recs_a = self.PurgeQueue.search(
+            [("website_id", "=", self.website_a.id)], limit=100
+        )
         self.assertTrue(all(r.state == "failed" for r in recs_a))
 
         # Website B should be GONE (success)

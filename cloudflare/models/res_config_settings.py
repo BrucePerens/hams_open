@@ -112,11 +112,7 @@ class ResConfigSettings(models.TransientModel):
         command = f"cloudflared service install {token_val}"
 
         # ADR-0001: Headless Mutation Context
-        wizard = (
-            self.env["cloudflare.tunnel.wizard"]
-            .with_context(mail_notrack=True)
-            .create({"command": command})
-        )
+        wizard = self.env["cloudflare.tunnel.wizard"].create({"command": command})
 
         return {
             "name": _("Cloudflare Tunnel Command"),

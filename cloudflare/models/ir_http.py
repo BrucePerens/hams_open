@@ -78,8 +78,8 @@ class IrHttp(models.AbstractModel):
         # Direct attribute access enforces schema contract
         try:
             website = request.website
-        except Exception as e: # audit-ignore-catch-all
-            _logger.warning("Request website missing: %s", e)
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.exception("Request website missing: %s", e)
             website = False
         website_id = website.id if website else False
 

@@ -74,3 +74,6 @@ The module enforces strict website-level isolation. Users can only manage Cloudf
 * [Infrastructure Provisioning](docs/journeys/infrastructure.md) `[@ANCHOR: journey_infrastructure]`
 * [Intelligent Traffic Handling](docs/journeys/traffic_handling.md) `[@ANCHOR: journey_traffic_handling]`
 </stories_and_journeys>
+
+## 6. External Dependencies
+* `python`: `[]`

@@ -40,7 +40,8 @@ class CloudflareIPBan(models.Model):
     )
 
     _ip_website_uniq = models.Constraint(
-        "UNIQUE(ip_address, website_id)", "An IP address can only be banned once per website."
+        "UNIQUE(ip_address, website_id)",
+        "An IP address can only be banned once per website.",
     )
     _ip_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(ip_address)) > 0)", "The IP address cannot be empty."
@@ -63,7 +64,7 @@ class CloudflareIPBan(models.Model):
 
         if not token or not zone_id:
             # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.ip.ban"].with_context(mail_notrack=True).create(
+            self.env["cloudflare.ip.ban"].create(
                 {
                     "ip_address": ip_address,
                     "mode": mode,
@@ -78,7 +79,7 @@ class CloudflareIPBan(models.Model):
 
         if success:
             # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.ip.ban"].with_context(mail_notrack=True).create(
+            self.env["cloudflare.ip.ban"].create(
                 {
                     "ip_address": ip_address,
                     "mode": mode,
@@ -91,7 +92,7 @@ class CloudflareIPBan(models.Model):
             return True
         else:
             # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.ip.ban"].with_context(mail_notrack=True).create(
+            self.env["cloudflare.ip.ban"].create(
                 {
                     "ip_address": ip_address,
                     "mode": mode,
@@ -119,6 +120,6 @@ class CloudflareIPBan(models.Model):
         success, msg = unban_ip(self.cf_rule_id, token, zone_id)
         if success:
             # ADR-0001: Headless Mutation Context
-            self.with_context(mail_notrack=True).state = "lifted"
+            self.state = "lifted"
         else:
             raise UserError(_("Failed to lift ban via Cloudflare API: %s") % msg)

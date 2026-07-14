@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
-    <!-- Verified by [@ANCHOR: test_cf_backend_views_rendering] -->
     <record id="view_cloudflare_tunnel_wizard_form" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_cf_backend_views_rendering] -->
         <field name="name">cloudflare.tunnel.wizard.form</field>
         <field name="model">cloudflare.tunnel.wizard</field>
         <field name="arch" type="xml">

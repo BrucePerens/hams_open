@@ -31,18 +31,22 @@ class TestCloudflareUITours(HamsHttpCase):
 
         # Ensure the admin has system access to view these menus
         self.admin = self.env.ref("base.user_admin")
+        self.admin.lang = "en_US"
 
     def test_01_ip_ban_tour(self):
+        # Tests [@ANCHOR: cf_ip_ban_tour]
         """Executes the JS tour simulating an administrator reviewing honeypot bans."""
         self.authenticate(self.admin.login, self.admin.login)
         self.start_tour("/odoo?debug=1", "cf_ip_ban_tour", login=self.admin.login)
 
     def test_02_waf_rule_tour(self):
+        # Tests [@ANCHOR: cf_waf_rule_tour]
         """Executes the JS tour simulating an administrator viewing WAF Edge configurations."""
         self.authenticate(self.admin.login, self.admin.login)
         self.start_tour("/odoo?debug=1", "cf_waf_rule_tour", login=self.admin.login)
 
     def test_03_purge_wizard_tour(self):
+        # Tests [@ANCHOR: cf_purge_wizard_tour]
         """Executes the JS tour for the Manual Cache Purge Wizard."""
         # Seed credentials so the wizard doesn't crash
         website = self.env["website"].get_current_website()
@@ -59,6 +63,7 @@ class TestCloudflareUITours(HamsHttpCase):
         self.start_tour("/odoo?debug=1", "cf_purge_wizard_tour", login=self.admin.login)
 
     def test_04_zone_settings_tour(self):
+        # Tests [@ANCHOR: cf_zone_settings_tour]
         """Executes the JS tour for the Zone Settings Wizard."""
         # Seed credentials so the wizard doesn't crash/timeout on API calls
         website = self.env["website"].get_current_website()

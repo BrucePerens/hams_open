@@ -13,8 +13,8 @@
         <record id="view_cf_dns_record_form" model="ir.ui.view">
             <field name="name">cloudflare.dns.record.form</field>
             <field name="model">cloudflare.dns.record</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -32,8 +32,8 @@
         <record id="view_cf_dns_record_tree" model="ir.ui.view">
             <field name="name">cloudflare.dns.record.tree</field>
             <field name="model">cloudflare.dns.record</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="type"/>
@@ -56,8 +56,8 @@
         <record id="view_cf_zone_settings_form" model="ir.ui.view">
             <field name="name">cloudflare.zone.settings.form</field>
             <field name="model">cloudflare.zone.settings</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -75,8 +75,8 @@
         <record id="view_cf_zone_settings_tree" model="ir.ui.view">
             <field name="name">cloudflare.zone.settings.tree</field>
             <field name="model">cloudflare.zone.settings</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="ssl_mode"/>
@@ -97,8 +97,8 @@
         <record id="view_cf_rate_limit_form" model="ir.ui.view">
             <field name="name">cloudflare.rate.limit.form</field>
             <field name="model">cloudflare.rate.limit</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -115,8 +115,8 @@
         <record id="view_cf_rate_limit_tree" model="ir.ui.view">
             <field name="name">cloudflare.rate.limit.tree</field>
             <field name="model">cloudflare.rate.limit</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="mitigation_action"/>
@@ -137,8 +137,8 @@
         <record id="view_cf_cache_rule_form" model="ir.ui.view">
             <field name="name">cloudflare.cache.rule.form</field>
             <field name="model">cloudflare.cache.rule</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -155,8 +155,8 @@
         <record id="view_cf_cache_rule_tree" model="ir.ui.view">
             <field name="name">cloudflare.cache.rule.tree</field>
             <field name="model">cloudflare.cache.rule</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="edge_cache_ttl"/>
@@ -177,8 +177,8 @@
         <record id="view_cf_zero_trust_policy_form" model="ir.ui.view">
             <field name="name">cloudflare.zero.trust.policy.form</field>
             <field name="model">cloudflare.zero.trust.policy</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <form>
                     <sheet>
                         <group>
@@ -195,8 +195,8 @@
         <record id="view_cf_zero_trust_policy_tree" model="ir.ui.view">
             <field name="name">cloudflare.zero.trust.policy.tree</field>
             <field name="model">cloudflare.zero.trust.policy</field>
-            <!-- audit-ignore-view -->
             <field name="arch" type="xml">
+                <!-- audit-ignore-view -->
                 <list>
                     <field name="name"/>
                     <field name="policy_action"/>

@@ -25,10 +25,12 @@ class WebsiteCloudflare(models.Model):
     )
 
     @distributed_cache()
-    def _get_cloudflare_credentials(self):
+    def _get_cloudflare_credentials(self, override_svc_uid=None):
         """
         Returns the API Token and Zone ID for this specific website.
         """
+        if override_svc_uid:
+            self = self.with_user(override_svc_uid)
         self.ensure_one()
         token = self.cloudflare_api_token
         zone = self.cloudflare_zone_id

@@ -30,7 +30,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         # Using a route that is explicitly in the nocache list
         # We test both /odoo and /web prefixes
         response_odoo = self.url_open(
-            "/odoo/login", allow_redirects=False
+            "/web/login", allow_redirects=False
         )  # burn-ignore-route
         self.assertEqual(
             response_odoo.headers.get("Cloudflare-CDN-Cache-Control"),
@@ -114,6 +114,7 @@ class TestCloudflareHeaders(HamsHttpCase):
 
     def test_04_website_cache_tag_localproxy(self):
         """Verify that cache tags are added correctly via getattr on request."""
+
         class DummyBase:
             @classmethod
             def _post_dispatch(cls, response):
@@ -123,20 +124,30 @@ class TestCloudflareHeaders(HamsHttpCase):
             pass
 
         mock_response = Response()
-        
+
         class MockWebsite:
             id = 99
 
         class MockRequest:
-            env = type("MockEnv", (object,), {"user": type("MockUser", (object,), {"_is_public": lambda self: True})()})()
+            env = type(
+                "MockEnv",
+                (object,),
+                {
+                    "user": type(
+                        "MockUser", (object,), {"_is_public": lambda self: True}
+                    )()
+                },
+            )()
             website = MockWebsite()
-            httprequest = type("MockHttpRequest", (object,), {"path": "/some-public-route"})()
-            
+            httprequest = type(
+                "MockHttpRequest", (object,), {"path": "/some-public-route"}
+            )()
+
             # Simulate Werkzeug's LocalProxy hiding __dict__ properties when accessed directly via __dict__
             @property
             def __dict__(self):
                 return {}
-                
+
         mock_request = MockRequest()
 
         self.safe_patch(
@@ -145,4 +156,3 @@ class TestCloudflareHeaders(HamsHttpCase):
 
         res = DummyIrHttp._post_dispatch(mock_response)
         self.assertIn("odoo-website-99", res.headers.get("Cache-Tag", ""))
-

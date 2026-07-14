@@ -13,11 +13,18 @@ class CloudflareConfigBackup(models.Model):
     raw_json = fields.Text(string="Raw JSON Payload", required=True)
     create_date = fields.Datetime(string="Backed Up On", readonly=True)
     website_id = fields.Many2one(
-        "website",
+        "website.website",
         string="Website",
         default=lambda self: self.env["website"].get_current_website().id,
     )
 
-    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The backup name cannot be empty.")
-    _json_not_empty = models.Constraint("CHECK(LENGTH(TRIM(raw_json)) > 0)", "The JSON payload cannot be empty.")
-    _name_website_uniq = models.Constraint("UNIQUE(name, website_id)", "A backup with this name already exists for this website!")
+    _name_not_empty = models.Constraint(
+        "CHECK(LENGTH(TRIM(name)) > 0)", "The backup name cannot be empty."
+    )
+    _json_not_empty = models.Constraint(
+        "CHECK(LENGTH(TRIM(raw_json)) > 0)", "The JSON payload cannot be empty."
+    )
+    _name_website_uniq = models.Constraint(
+        "UNIQUE(name, website_id)",
+        "A backup with this name already exists for this website!",
+    )

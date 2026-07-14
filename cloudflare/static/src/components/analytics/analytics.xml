@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
 <templates xml:space="preserve">
     <t t-name="cloudflare.AnalyticsDashboard" owl="1">
-        <div class="o_cloudflare_analytics_dashboard p-4">
+        <div class="o_cloudflare_analytics_dashboard p-4 bg-dark text-light" t-attf-style="transform: translate({{state.driftX}}px, {{state.driftY}}px); transition: transform 20s linear;">
             <h1>Cloudflare Analytics</h1>
             <div t-if="state.loading" class="text-muted">
                 Loading analytics data...

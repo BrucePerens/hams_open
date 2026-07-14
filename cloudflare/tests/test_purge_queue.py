@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 class TestPurgeQueue(RealTransactionCase):
     def setUp(self):
         super().setUp()
-        self.env["cloudflare.purge.queue"].search([]).unlink()
+        self.env["cloudflare.purge.queue"].search([], limit=10000).unlink()
         self.website = self.env["website"].get_current_website()
         self.website.write(
             {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
@@ -124,33 +124,54 @@ class TestPurgeQueue(RealTransactionCase):
 
     def test_05_process_queue_optimized_exists(self):
         """Verify that process_queue uses the optimized exists() method instead of filtered()."""
-        mock_post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.session.post")
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.session.post"
+        )
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_post.return_value = mock_response
 
         QueueModel = self.env["cloudflare.purge.queue"]
-        QueueModel.create([
-            {"target_item": "https://example.com/opt1", "purge_type": "url", "website_id": self.website.id},
-            {"target_item": "https://example.com/opt2", "purge_type": "url", "website_id": self.website.id},
-            {"target_item": "https://example.com/opt3", "purge_type": "url", "website_id": self.website.id},
-        ])
+        QueueModel.create(
+            [
+                {
+                    "target_item": "https://example.com/opt1",
+                    "purge_type": "url",
+                    "website_id": self.website.id,
+                },
+                {
+                    "target_item": "https://example.com/opt2",
+                    "purge_type": "url",
+                    "website_id": self.website.id,
+                },
+                {
+                    "target_item": "https://example.com/opt3",
+                    "purge_type": "url",
+                    "website_id": self.website.id,
+                },
+            ]
+        )
 
         # Patch exists on the BaseModel class
         original_exists = BaseModel.exists
-        
+
         call_count = [0]
+
         def mocked_exists(self):
             call_count[0] += 1
             return original_exists(self)
-            
+
         self.safe_patch_object(BaseModel, "exists", mocked_exists)
-        
+
         QueueModel.process_queue()
-        
+
         # It should be called a few times (for batch_records, url_records, tag_records etc if any)
-        # But if filtered(lambda r: r.exists()) is used on a recordset of 3 records, 
+        # But if filtered(lambda r: r.exists()) is used on a recordset of 3 records,
         # exists will be called at least 3 times.
         # With batch_records.exists(), it should be called 1 time for the batch.
         # Actually let's just assert call_count[0] <= 2 for the batch.
-        self.assertLess(call_count[0], 3, "exists() was called per-record, indicating N+1 filtered pattern")
+        self.assertLess(
+            call_count[0],
+            3,
+            "exists() was called per-record, indicating N+1 filtered pattern",
+        )

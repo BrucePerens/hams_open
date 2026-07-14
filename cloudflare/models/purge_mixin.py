@@ -2,6 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields
 
+
 class CloudflarePurgeMixin(models.AbstractModel):
     _name = "cloudflare.purge.mixin"
     _description = "Cloudflare Purge Mixin"
@@ -33,8 +34,7 @@ class CloudflarePurgeMixin(models.AbstractModel):
                     purge_map.setdefault(w, []).append(url)
 
         if purge_map:
-            sterile_env = self.env(context={})
-            QueueModel = sterile_env["cloudflare.purge.queue"].with_user(svc_uid)
+            QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
             QueueModel.enqueue_urls_batch(purge_map)
 
     def _purge_cloudflare_menus(self):
@@ -48,7 +48,6 @@ class CloudflarePurgeMixin(models.AbstractModel):
                 self.env["website"].with_user(svc_uid).search([], limit=1000).ids
             )
 
-        sterile_env = self.env(context={})
-        QueueModel = sterile_env["cloudflare.purge.queue"].with_user(svc_uid)
+        QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
         if website_ids:
             QueueModel.enqueue_everything(website_ids=list(set(website_ids)))

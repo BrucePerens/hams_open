@@ -35,7 +35,7 @@ class CloudflareTunnel(models.Model):
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
                 # ADR-0001: Headless Mutation Context
-                tunnel.with_context(mail_notrack=True).unlink()
+                tunnel.unlink()
             else:
                 raise UserError(_("Failed to delete tunnel: %s") % msg)
 
@@ -64,7 +64,7 @@ class CloudflareTunnel(models.Model):
         website = self.env["website"].browse(website_id)
         if not website.exists():
             return
-            
+
         token, _zone = website._get_cloudflare_credentials()
         account_id = website.cloudflare_account_id
 
@@ -74,9 +74,11 @@ class CloudflareTunnel(models.Model):
         tunnels = list_cfd_tunnels(account_id, token)
         existing_tunnels = {
             t.cf_tunnel_id: t
-            for t in self.env["cloudflare.tunnel"].search([("website_id", "=", website.id)], limit=10000)
+            for t in self.env["cloudflare.tunnel"].search(
+                [("website_id", "=", website.id)], limit=10000
+            )
         }
-        
+
         tunnels_to_create = []
         for t in tunnels:
             tunnel_id = t.get("id")
@@ -96,11 +98,9 @@ class CloudflareTunnel(models.Model):
 
             existing = existing_tunnels.get(tunnel_id)
             if existing:
-                existing.with_context(mail_notrack=True).write(vals)
+                existing.write(vals)
             else:
                 tunnels_to_create.append(vals)
 
         if tunnels_to_create:
-            self.env["cloudflare.tunnel"].with_context(mail_notrack=True).create(
-                tunnels_to_create
-            )
+            self.env["cloudflare.tunnel"].create(tunnels_to_create)

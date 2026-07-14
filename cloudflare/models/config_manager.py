@@ -87,7 +87,9 @@ class CloudflareConfigManager(models.AbstractModel):
                 # We use the purger environment to access website credentials securely
                 last_id = 0
                 while True:
-                    websites = env_purger["website"].search([("id", ">", last_id)], order="id asc", limit=1000)
+                    websites = env_purger["website"].search(
+                        [("id", ">", last_id)], order="id asc", limit=1000
+                    )
                     if not websites:
                         break
                     last_id = websites[-1].id
@@ -111,7 +113,9 @@ class CloudflareConfigManager(models.AbstractModel):
         _logger.info("[*] Initializing Cloudflare Edge State across Websites...")
         last_id = 0
         while True:
-            websites = self.env["website"].search([("id", ">", last_id)], order="id asc", limit=1000)
+            websites = self.env["website"].search(
+                [("id", ">", last_id)], order="id asc", limit=1000
+            )
             if not websites:
                 break
             last_id = websites[-1].id
@@ -125,12 +129,11 @@ class CloudflareConfigManager(models.AbstractModel):
                 )
                 if existing_ruleset and existing_ruleset.get("rules"):
                     _logger.info(
-                        "[+] Existing rules detected for %s. Backing up and syncing.", website.name
+                        "[+] Existing rules detected for %s. Backing up and syncing.",
+                        website.name,
                     )
                     # ADR-0001: Headless Mutation Context
-                    self.env["cloudflare.config.backup"].with_context(
-                        mail_notrack=True
-                    ).create(
+                    self.env["cloudflare.config.backup"].create(
                         {
                             "name": f"Pre-Odoo Backup ({website.name})",
                             "raw_json": json.dumps(existing_ruleset, indent=4),
@@ -148,7 +151,7 @@ class CloudflareConfigManager(models.AbstractModel):
 
                 if vals_list:
                     # ADR-0001: Headless Mutation Context
-                    self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(vals_list)
+                    self.env["cloudflare.waf.rule"].create(vals_list)
 
                 self.action_push_waf_rules(website_id=website.id)
 
@@ -172,7 +175,7 @@ class CloudflareConfigManager(models.AbstractModel):
             )
 
         # ADR-0001: Headless Mutation Context
-        self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).search(
+        self.env["cloudflare.waf.rule"].search(
             [("website_id", "=", website.id)], limit=1000
         ).unlink()
 
@@ -194,7 +197,7 @@ class CloudflareConfigManager(models.AbstractModel):
             )
         if vals_list:
             # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.waf.rule"].with_context(mail_notrack=True).create(vals_list)
+            self.env["cloudflare.waf.rule"].create(vals_list)
         return True, f"Successfully pulled rules from Cloudflare for {website.name}."
 
     @api.model

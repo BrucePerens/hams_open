@@ -109,7 +109,7 @@ class TestWafManagement(HamsTransactionCase):
         )
 
         rules = self.env["cloudflare.waf.rule"].search(
-            [("website_id", "=", self.website.id)]
+            [("website_id", "=", self.website.id)], limit=10000
         )
         self.assertEqual(
             len(rules),
@@ -120,7 +120,7 @@ class TestWafManagement(HamsTransactionCase):
 
     def test_04_cf_action_push_waf_rules(self):
         # Tests [@ANCHOR: cf_action_push_waf_rules]
-        self.env["cloudflare.waf.rule"].search([]).unlink()
+        self.env["cloudflare.waf.rule"].search([], limit=10000).unlink()
         self.env["cloudflare.waf.rule"].create(
             {
                 "name": "Local Rule",
@@ -179,4 +179,3 @@ class TestWafManagement(HamsTransactionCase):
         self.assertTrue(ban_record)
         self.assertEqual(ban_record.state, "failed")
         self.assertIn("Missing Cloudflare credentials", ban_record.notes)
-

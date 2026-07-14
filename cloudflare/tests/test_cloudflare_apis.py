@@ -95,7 +95,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
         )
 
         self.env["cloudflare.tunnel"].action_sync_tunnels()
-        tunnel = self.env["cloudflare.tunnel"].search([("cf_tunnel_id", "=", "t1")])
+        tunnel = self.env["cloudflare.tunnel"].search(
+            [("cf_tunnel_id", "=", "t1")], limit=1
+        )
         self.assertTrue(tunnel)
         self.assertEqual(tunnel.name, "Tunnel 1")
 

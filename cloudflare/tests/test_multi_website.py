@@ -34,7 +34,7 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
     def tearDown(self):
         # Clean up Odoo core's automatic implied_ids when multiple websites exist
         group_user_data = self.env["ir.model.data"].search(
-            [("module", "=", "base"), ("name", "=", "group_user")]
+            [("module", "=", "base"), ("name", "=", "group_user")], limit=1
         )
         group_user = (
             self.env["res.groups"].browse(group_user_data.res_id)
@@ -51,7 +51,7 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
     def test_multi_website_purge_queue(self):
         """Verify that the purge queue correctly isolates zones and credentials."""
         # Clear any leftover 'everything' records from previous tests or init that would wipe our queue
-        self.PurgeQueue.search([]).unlink()
+        self.PurgeQueue.search([], limit=10000).unlink()
 
         mock_purge_urls = self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_urls"
@@ -104,14 +104,14 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         )
 
         # Clear queue
-        self.PurgeQueue.search([]).unlink()
+        self.PurgeQueue.search([], limit=10000).unlink()
 
         # Trigger write
         page_a.write({"name": "Page A Updated"})
 
         # Check queue
         queue_items = self.PurgeQueue.search(
-            [("target_item", "=", "https://website-a.com/hook-a")]
+            [("target_item", "=", "https://website-a.com/hook-a")], limit=100
         )
         self.assertEqual(len(queue_items), 1)
         self.assertEqual(queue_items.website_id.id, self.website_a.id)
@@ -134,11 +134,13 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
             }
         )
 
-        self.PurgeQueue.search([]).unlink()
+        self.PurgeQueue.search([], limit=10000).unlink()
         page_global.write({"name": "Global Page Updated"})
 
         # Should enqueue for ALL websites that have CF credentials
-        queue_items = self.PurgeQueue.search([("target_item", "like", "%/hook-global")])
+        queue_items = self.PurgeQueue.search(
+            [("target_item", "like", "%/hook-global")], limit=100
+        )
         websites_in_queue = queue_items.mapped("website_id")
         self.assertIn(self.website_a, websites_in_queue)
         self.assertIn(self.website_b, websites_in_queue)
@@ -153,7 +155,7 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
 
         # Check that ban record is linked to Website B
         ban_record = self.env["cloudflare.ip.ban"].search(
-            [("ip_address", "=", "1.2.3.4")]
+            [("ip_address", "=", "1.2.3.4")], limit=1
         )
         self.assertEqual(ban_record.website_id.id, self.website_b.id)
 
