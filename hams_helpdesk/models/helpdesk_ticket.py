@@ -2,7 +2,6 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError
-import datetime
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -96,7 +95,6 @@ class HelpdeskTicket(models.Model):
         
         # Calculate on_duty_user_id before bulk creation
         on_duty_user_id = False
-        utils = self.env["zero_sudo.security.utils"]
         Calendar = self.env["calendar.event"]
         try:
             on_duty_admin = Calendar.get_current_on_duty_admin()
