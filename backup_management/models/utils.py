@@ -22,7 +22,7 @@ def validate_backup_path(path):
         abs_path = os.path.realpath(os.path.normpath(path))
     except OSError as e:
         _logger.warning("Failed to resolve realpath for %s: %s", path, e)
-        abs_path = os.path.abspath(path)
+        raise UserError(_("Access denied: Unable to securely resolve the path (possible symlink loop)."))
 
     allowed_bases = [
         "/var/lib/odoo/backups",
@@ -79,5 +79,5 @@ def publish_to_rabbitmq(env, msg):
         env["hams_rabbitmq.pool"].publish(
             "", "backup_tasks", msg
         )
-    except Exception as e: # audit-ignore-catch-all
+    except Exception as e:  # audit-ignore-catch-all  # fmt: skip
         _logger.exception("Failed to publish backup task to RMQ pool: %s", e)

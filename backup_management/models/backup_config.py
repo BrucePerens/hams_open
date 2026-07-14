@@ -206,13 +206,16 @@ class BackupConfig(models.Model):
                 _("Only Backup Administrators can trigger backup operations.")
             )
 
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
         jobs = self.env["backup.job"]
         created_jobs = []
 
         for rec in self:
             if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)
-            job = jobs.create(
+            job = jobs.with_user(svc_uid).with_company(rec.company_id.id).create(
                 {
                     "config_id": rec.id,
                     "website_id": rec.website_id.id,
@@ -258,13 +261,10 @@ class BackupConfig(models.Model):
 
         # Verified by [@ANCHOR: backup_management:test_backup_orchestration]
         # Implements ADR-0071: Asynchronous Bastion Pattern
-        # Use Service ID for security & audit trails
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "backup_management.user_backup_service_internal"
-        )
+        # Use Service ID for security & audit trails (moved to _publish_to_worker)
         res = True
         for rec in self:
-            action = rec.with_user(svc_uid)._publish_to_worker(rec.engine)
+            action = rec._publish_to_worker(rec.engine)
             if isinstance(action, dict) and len(self) == 1:
                 res = action
         return res
@@ -273,13 +273,10 @@ class BackupConfig(models.Model):
         # [@ANCHOR: backup_management:backup_apply_policies]
 
         # Verified by [@ANCHOR: test_apply_policies]
-        # Use Service ID for security & audit trails
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "backup_management.user_backup_service_internal"
-        )
+        # Use Service ID for security & audit trails (moved to _publish_to_worker)
         res = True
         for rec in self:
-            action = rec.with_user(svc_uid)._publish_to_worker("kopia_policy")
+            action = rec._publish_to_worker("kopia_policy")
             if isinstance(action, dict) and len(self) == 1:
                 res = action
         return res
@@ -330,12 +327,9 @@ class BackupConfig(models.Model):
         # [@ANCHOR: backup_management:backup_sync_pgbackrest]
 
         # Verified by [@ANCHOR: backup_management:test_backup_cron]
-        # Use Service ID for security & audit trails
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "backup_management.user_backup_service_internal"
-        )
+        # Use Service ID for security & audit trails (moved to _publish_to_worker)
         for rec in self:
-            rec.with_user(svc_uid)._publish_to_worker("sync_snapshots")
+            rec._publish_to_worker("sync_snapshots")
         return True
 
     def _execute_restore_drill(self):
@@ -345,11 +339,8 @@ class BackupConfig(models.Model):
         self.ensure_one()
         if self.restore_drill_script:
             validate_backup_path(self.restore_drill_script)
-        # Use Service ID for security & audit trails
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "backup_management.user_backup_service_internal"
-        )
-        return self.with_user(svc_uid)._publish_to_worker(
+        # Use Service ID for security & audit trails (moved to _publish_to_worker)
+        return self._publish_to_worker(
             "restore_drill", {"script": self.restore_drill_script}
         )
 
@@ -485,31 +476,20 @@ class BackupConfig(models.Model):
                         )
 
         if snapshot_list:
-            Snap = self.env["backup.snapshot"].with_user(self.env.uid).with_company(self.company_id.id)
-            snapshot_ids = [s["snapshot_id"] for s in snapshot_list]
-            existing_snaps = Snap.search([
-                ("config_id", "=", self.id),
-                ("snapshot_id", "in", snapshot_ids)
-            ], limit=len(snapshot_ids))
-            existing_by_snap_id = {s.snapshot_id: s for s in existing_snaps}
-
-            new_snapshot_ids = []
-            create_vals = []
-            for snap_vals in snapshot_list:
-                snap_vals.update({
-                    "config_id": self.id,
-                    "website_id": self.website_id.id or False,
-                    "company_id": self.company_id.id,
-                })
-                existing = existing_by_snap_id.get(snap_vals["snapshot_id"])
-                if not existing:
-                    create_vals.append(snap_vals)
-                    new_snapshot_ids.append(snap_vals["snapshot_id"])
-                else:
-                    existing.write(snap_vals)
-                    
-            if create_vals:
-                Snap.create(create_vals)
+            # Performance: Execute Postgres procedure to upsert snapshots in a single round-trip
+            snapshots_json = json.dumps(snapshot_list)
+            self.env.cr.execute(
+                "SELECT upsert_backup_snapshots(%s, %s, %s, %s, %s)",
+                (
+                    self.id,
+                    self.website_id.id or None,
+                    self.company_id.id or None,
+                    snapshots_json,
+                    self.env.uid,
+                )
+            )
+            # The procedure returns the list of newly inserted snapshot_ids
+            new_snapshot_ids = [row[0] for row in self.env.cr.fetchall()]
 
             # Verification and anomaly reporting only for NEW snapshots to prevent alert spam
             if self.minimum_size_mb > 0 and new_snapshot_ids:
