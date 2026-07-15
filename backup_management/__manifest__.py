@@ -24,7 +24,7 @@
         "daemon_key_manager",
     ],
     "external_dependencies": {
-        "python": ["cryptography"],
+        "python": ["cryptography", "pika"],
     },
     "data": [
         "security/security.xml",

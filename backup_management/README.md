@@ -1,3 +1,5 @@
+import: `hams_open.backup_management`
+
 # Backup Management Module
 
 This module provides a unified interface for managing system backups using Kopia (for files) and pgBackRest (for PostgreSQL databases). It is designed to work in multi-website and multi-company environments.
@@ -62,3 +64,5 @@ When multi-website context isolation checks detect data boundary leakage or cros
 ## External Dependencies
 
 - `pager_duty`: Used for failure reporting and stale snapshot alerts.
+- `pika`: Used for RabbitMQ integration in the daemon.
+- `cryptography`: Used for cryptographic functions and security.
