@@ -2,11 +2,11 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of hams_open, an open source module.
-# License: AGPL-3.0
+# License: AGPL-3.0-or-later
 
 {
     "name": "Backup Management",
-    "summary": "Unified Backup Management Facility (Kopia & pgBackRest)",
+    "summary": "Centralized daemon management for pgBackRest and Kopia",
     "description": "Unified Backup Management Facility (Kopia & pgBackRest).",
     "author": "Bruce Perens K6BP",
     "category": "Administration",

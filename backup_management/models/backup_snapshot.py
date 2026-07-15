@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
-# This software is released under the AGPL-3.0 License.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo import models, fields, api
 
 
@@ -28,7 +28,8 @@ class BackupSnapshot(models.Model):
         string="Restore Command", compute="_compute_restore_command"
     )
 
-    _snapshot_uniq = models.Constraint("UNIQUE(config_id, snapshot_id)", "Snapshot IDs must be unique per configuration!")
+    _snapshot_uniq_msg = """Snapshot IDs must be unique per configuration!"""
+    _snapshot_uniq = models.Constraint("UNIQUE(config_id, snapshot_id)", _snapshot_uniq_msg)
 
     @api.depends("snapshot_id", "config_id.engine", "config_id.target_path")
     def _compute_restore_command(self):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
-# This software is released under the AGPL-3.0 License.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 import json
 import os
@@ -142,7 +142,7 @@ class BackupConfig(models.Model):
     @api.constrains("target_path", "restore_drill_script", "engine", "storage_type")
     def _check_security_paths(self):
         for rec in self:
-            if rec.engine == "kopia":
+            if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)
 
             if rec.engine == "pgbackrest":
@@ -185,7 +185,7 @@ class BackupConfig(models.Model):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "backup_management.user_backup_service_internal"
             )
-            self.with_user(svc_uid).message_post(body=msg_body)  # audit-ignore-mail: # Tested by [@ANCHOR: backup_management:COMM_test_kopia_auto_download]  # fmt: skip
+            self.with_user(svc_uid).message_post(body=msg_body)  # audit-ignore-mail: Tested by [@ANCHOR: backup_management:COMM_test_kopia_auto_download]  # fmt: skip
 
             # Binary manifestation is centralized in binary_downloader
             bin_path = (
@@ -196,7 +196,7 @@ class BackupConfig(models.Model):
             )
 
             msg_body = _("Kopia successfully installed to %s") % bin_path
-            self.with_user(svc_uid).message_post(body=msg_body)  # audit-ignore-mail: # Tested by [@ANCHOR: backup_management:COMM_test_kopia_auto_download]  # fmt: skip
+            self.with_user(svc_uid).message_post(body=msg_body)  # audit-ignore-mail: Tested by [@ANCHOR: backup_management:COMM_test_kopia_auto_download]  # fmt: skip
             return bin_path
 
         raise UserError(_("Unknown engine: %s") % engine)
@@ -272,7 +272,7 @@ class BackupConfig(models.Model):
     def action_trigger_backup(self):
         # [@ANCHOR: backup_management:COMM_backup_trigger_execution]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_orchestration]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_orchestration]
         # Implements ADR-0071: Asynchronous Bastion Pattern
         # Use Service ID for security & audit trails (moved to _publish_to_worker)
         res = True
@@ -285,7 +285,7 @@ class BackupConfig(models.Model):
     def action_apply_policies(self):
         # [@ANCHOR: backup_management:COMM_backup_apply_policies]
         res = True
-        # # Verified by [@ANCHOR: backup_management:COMM_test_apply_policies]
+        # Verified by [@ANCHOR: backup_management:COMM_test_apply_policies]
         # Use Service ID for security & audit trails (moved to _publish_to_worker)
         for rec in self:
             action = rec._publish_to_worker("kopia_policy")
@@ -300,7 +300,7 @@ class BackupConfig(models.Model):
         """
         # [@ANCHOR: backup_management:COMM_action_test_connection]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_orchestration]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_orchestration]
         for rec in self:
             rec.action_sync_snapshots()
         return {
@@ -318,7 +318,7 @@ class BackupConfig(models.Model):
     def action_view_latest_job(self):
         # [@ANCHOR: backup_management:COMM_action_view_latest_job]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_view]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_view]
         self.ensure_one()
         job = self.env["backup.job"].search([("config_id", "=", self.id)], limit=1)
         if not job:
@@ -338,7 +338,7 @@ class BackupConfig(models.Model):
 
         # [@ANCHOR: backup_management:COMM_backup_sync_pgbackrest]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_cron]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_cron]
         # Use Service ID for security & audit trails (moved to _publish_to_worker)
         for rec in self:
             rec._publish_to_worker("sync_snapshots")
@@ -359,9 +359,9 @@ class BackupConfig(models.Model):
     def report_backup_failure(self, message):
         # [@ANCHOR: backup_management:COMM_backup_pager_synergy]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_cron]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_cron]
 
-        # # Verified by [@ANCHOR: test_trigger_kopia_and_pgbackrest]
+        # Verified by [@ANCHOR: test_trigger_kopia_and_pgbackrest]
         try:
             Incident = self.env["pager.incident"]
             pager_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -382,13 +382,13 @@ class BackupConfig(models.Model):
         )
         self.with_user(svc_uid).message_post(
             body=message
-        )  # audit-ignore-mail: # Tested by [@ANCHOR: backup_management:COMM_backup_pager_synergy]  # fmt: skip
+        )  # audit-ignore-mail: Tested by [@ANCHOR: backup_management:COMM_backup_pager_synergy]  # fmt: skip
 
     @api.model
     def get_board_data(self):
         # [@ANCHOR: backup_management:COMM_backup_board_data]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_view]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_view]
         domain = []
         if self.env.context.get("website_id"):
             domain = [
@@ -416,12 +416,12 @@ class BackupConfig(models.Model):
                 FROM backup_job
                 WHERE config_id IN %s
                 ORDER BY config_id, create_date DESC
-            """, (tuple(config_ids),))  # audit-ignore-sql: # Tested by [@ANCHOR: backup_management:COMM_test_backup_view]  # fmt: skip
+            """, (tuple(config_ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:COMM_test_backup_view]  # fmt: skip
             latest_job_ids = [row[0] for row in self.env.cr.fetchall()]
             if latest_job_ids:
                 jobs = self.env["backup.job"].search_read(
                     [("id", "in", latest_job_ids)],
-                    ["config_id", "state", "job_type", "create_date"]
+                    ["config_id", "state", "job_type", "create_date"], limit=len(latest_job_ids)
                 )
                 job_map = {j["config_id"][0]: j for j in jobs if j.get("config_id")}
 
@@ -509,7 +509,7 @@ class BackupConfig(models.Model):
                     s for s in snapshot_list if s["snapshot_id"] in new_snapshot_ids
                 ]
                 # Sort by start_time to check the absolute latest
-                new_snaps.sort(key=lambda x: x["start_time"], reverse=True)
+                new_snaps.sort(key=lambda x: x["start_time"] or "", reverse=True)
                 for c in new_snaps:
                     snap_mb = c.get("size_bytes", 0) / (1024 * 1024)
                     if snap_mb < self.minimum_size_mb:
@@ -520,7 +520,7 @@ class BackupConfig(models.Model):
     def cron_sync_all_backups(self):
         # [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
 
-        # # Verified by [@ANCHOR: backup_management:COMM_test_backup_cron]
+        # Verified by [@ANCHOR: backup_management:COMM_test_backup_cron]
         # Use Service ID for security & audit trails
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "backup_management.user_backup_service_internal"
@@ -535,7 +535,7 @@ class BackupConfig(models.Model):
                 FROM backup_snapshot
                 WHERE config_id IN %s
                 GROUP BY config_id
-            """, (tuple(configs.ids),))  # audit-ignore-sql: # Tested by [@ANCHOR: backup_management:COMM_test_backup_cron]  # fmt: skip
+            """, (tuple(configs.ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:COMM_test_backup_cron]  # fmt: skip
             start_times = {row[0]: row[1] for row in self.env.cr.fetchall()}
             
         for conf in configs:
