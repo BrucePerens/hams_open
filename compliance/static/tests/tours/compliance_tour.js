@@ -30,7 +30,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
             content: 'Verify Privacy Policy content',
             run: function () {
                 const text = document.body.textContent;
-                if (!text.includes('Privacy Policy') || !text.includes('Warning: This is the default') || !text.includes('Data Minimization')) {
+                if (!text.includes('Privacy Policy') || !text.includes('Disclaimer: This document is provided') || !text.includes('Data Minimization')) {
                     throw new Error('[!] DIAGNOSTIC FOR AI: Privacy Policy content missing.');
                 }
             }
@@ -63,6 +63,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
+        { trigger: 'body', run: function() {} },
         {
             trigger: 'h1',
             content: 'Verify Cookie Policy page loaded',
@@ -79,6 +80,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
+        { trigger: 'body', run: function() {} },
         {
             trigger: 'h1',
             content: 'Verify Terms of Service page loaded',
@@ -95,6 +97,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
+        { trigger: 'body', run: function() {} },
         {
             trigger: 'h1',
             content: 'Verify Accessibility Statement page loaded',
@@ -112,6 +115,7 @@ registry.category("web_tour.tours").add("compliance_tour", {
             run: function () { document.location.href = '/compliance'; },
             expectUnloadPage: true,
         },
+        { trigger: 'body', run: function() {} },
         {
             trigger: ".o_tour_compliance_doc_link",
             content: 'Verify Compliance Documents link is present',

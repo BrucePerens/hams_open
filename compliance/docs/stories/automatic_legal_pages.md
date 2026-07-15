@@ -17,6 +17,8 @@ Alice is worried about legal compliance but doesn't have the budget for a lawyer
    - **Terms of Service** (`/terms`) [@ANCHOR: COMM_compliance_terms_of_service_template]
 
    - **Accessibility Statement** (`/accessibility`) [@ANCHOR: COMM_compliance_accessibility_statement_template]
+   
+   - **Compliance Index** (`/compliance`) [@ANCHOR: COMM_compliance_index_route]
 4. Alice visits her website and sees these links already active and populated with relevant content that covers her use of Odoo features.
 5. She notices that links to these legal pages are automatically added to the footer of every page on her website, ensuring she meets visibility requirements. [@ANCHOR: COMM_compliance_footer_links]
 
@@ -31,3 +33,5 @@ Alice is worried about legal compliance but doesn't have the budget for a lawyer
 - Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
 
 - Verified by [@ANCHOR: COMM_test_compliance_non_destructive_mandate]
+
+- Verified by [@ANCHOR: COMM_test_compliance_index_view]

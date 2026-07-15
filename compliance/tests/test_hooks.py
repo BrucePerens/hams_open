@@ -26,12 +26,11 @@ class TestComplianceHooks(HamsTransactionCase):
 
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
-            self.assertTrue(
-                website.cookies_bar,
-                f"[!] DIAGNOSTIC FOR AI: Cookie bar must be enabled on website '{
-                    website.name}' (# {
-                    website.id}). " "The post_init_hook failed to enforce this setting. check compliance/hooks.py.",
+            msg = (
+                f"[!] DIAGNOSTIC FOR AI: Cookie bar must be enabled on website '{website.name}' (# {website.id}). "
+                "The post_init_hook failed to enforce this setting. check compliance/hooks.py."
             )
+            self.assertTrue(website.cookies_bar, msg)
 
     def test_03_views_rendering(self):
         """Verify that legal templates render correctly."""
@@ -85,16 +84,14 @@ class TestComplianceHooks(HamsTransactionCase):
         self.env["website.page"].invalidate_model(["is_published"])
 
         # Check that the boilerplate is now unpublished
-        self.assertFalse(
-            boilerplate_page.is_published,
+        msg1 = (
             "[!] DIAGNOSTIC FOR AI: Boilerplate page should be unpublished when a custom page exists at the same URL. "
-            "Ensure compliance/hooks.py correctly identifies and shadows boilerplate pages.",
+            "Ensure compliance/hooks.py correctly identifies and shadows boilerplate pages."
         )
+        self.assertFalse(boilerplate_page.is_published, msg1)
         # Check that the custom page is still published
-        self.assertTrue(
-            custom_page.is_published,
-            "[!] DIAGNOSTIC FOR AI: Custom page should remain published even after running compliance hooks.",
-        )
+        msg2 = "[!] DIAGNOSTIC FOR AI: Custom page should remain published even after running compliance hooks."
+        self.assertTrue(custom_page.is_published, msg2)
 
         # Multi-Website awareness test
         website_2 = self.env["website"].create({"name": "Test Website 2"})
@@ -138,11 +135,11 @@ class TestComplianceHooks(HamsTransactionCase):
 
         # Global boilerplate should NOT be unpublished by a website-specific
         # custom page
-        self.assertTrue(
-            boilerplate_cookie.is_published,
+        msg3 = (
             "[!] DIAGNOSTIC FOR AI: Global boilerplate should NOT be unpublished by a website-specific custom page. "
-            "The hook must be website-aware and only shadow within the same scope.",
+            "The hook must be website-aware and only shadow within the same scope."
         )
+        self.assertTrue(boilerplate_cookie.is_published, msg3)
 
         # Cleanup
         custom_page.unlink()
@@ -156,11 +153,11 @@ class TestComplianceHooks(HamsTransactionCase):
         # AI Laziness Fix Test: Ensure our model inheritance works.
         new_website = self.env["website"].create(
             {"name": "New Compliant Website"})
-        self.assertTrue(
-            new_website.cookies_bar,
+        msg_def = (
             "[!] DIAGNOSTIC FOR AI: New websites should have cookies_bar=True by default. "
-            "Check the default value in compliance/models/compliance_config.py.",
+            "Check the default value in compliance/models/compliance_config.py."
         )
+        self.assertTrue(new_website.cookies_bar, msg_def)
         new_website.unlink()
 
     def test_06_boilerplate_restoration(self):
@@ -195,8 +192,8 @@ class TestComplianceHooks(HamsTransactionCase):
 
         # Run hook again
         post_init_hook(self.env)
-        self.assertTrue(
-            boilerplate_page.is_published,
+        msg_restore = (
             "[!] DIAGNOSTIC FOR AI: Boilerplate should be re-published if the custom page is gone. "
-            "The hook should be idempotent and capable of restoring boilerplate pages.",
+            "The hook should be idempotent and capable of restoring boilerplate pages."
         )
+        self.assertTrue(boilerplate_page.is_published, msg_restore)
