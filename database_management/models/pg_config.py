@@ -6,6 +6,7 @@ from odoo import models, fields, _
 from odoo.exceptions import UserError
 from psycopg2 import sql
 import odoo.tools.sql
+import contextlib
 
 
 class DatabasePgSetting(models.Model):
@@ -67,15 +68,9 @@ class PgOptimizeWizard(models.TransientModel):
         # [@ANCHOR: pg_optimize_wizard]
 
         # Tests [@ANCHOR: pg_optimize_wizard]
-        if self.ram_gb <= 0 or self.cpu_cores <= 0:
-            raise UserError(_("RAM and CPU must be greater than zero."))
+        if self.ram_gb <= 0 or self.cpu_cores <= 0 or self.max_connections <= 0:
+            raise UserError(_("RAM, CPU and Max Connections must be greater than zero."))
 
-        # micro-privilege: Use service account cursor for sensitive operations
-        utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env(
-            "database_management.user_database_management_service"
-        )
-        cr_svc = env_svc.cr
 
         # Standard DBA Tuning Algorithms
         shared_buffers_mb = int((self.ram_gb * 1024) * 0.25)
@@ -98,14 +93,16 @@ class PgOptimizeWizard(models.TransientModel):
             "max_connections": str(self.max_connections),
         }
 
-        for param, val in settings.items():
-            # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
-            query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
-                sql.Identifier(param), sql.Literal(val)
-            )
-            cr_svc.execute(query)
+        with self.env.registry.cursor() as cr:
+            cr.autocommit(True)
+            for param, val in settings.items():
+                # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
+                query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
+                    sql.Identifier(param), sql.Literal(val)
+                )
+                cr.execute(query)
 
-        cr_svc.execute("SELECT pg_reload_conf()")
+            cr.execute("SELECT pg_reload_conf()")
 
         return {
             "type": "ir.actions.client",
@@ -123,8 +120,8 @@ class PgOptimizeWizard(models.TransientModel):
 
 class PgHaWizard(models.TransientModel):
     _name = "pg.ha.wizard"
-    name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "High Availability Failover Wizard"
+    name = fields.Char(string="Name", default=lambda self: self._description)
 
     cluster_name = fields.Char(
         string="Cluster Name", required=True, default="hams_cluster"

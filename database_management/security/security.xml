@@ -9,12 +9,11 @@
         <record id="group_database_management_manager" model="res.groups">
             <field name="name">Database Manager</field>
             <field name="privilege_id" ref="res_groups_privilege_database_management"/>
-            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
             <field name="comment">Users with this privilege can manage database statistics, active sessions, and PostgreSQL configurations.</field>
         </record>
 
         <record id="base.group_system" model="res.groups">
-            <field name="name">Settings</field> <field name="implied_ids" eval="[(4, ref('database_management.group_database_management_manager'))]"/>
+            <field name="implied_ids" eval="[(4, ref('database_management.group_database_management_manager'))]"/>
         </record>
     </data>
     <data>

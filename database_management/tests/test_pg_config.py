@@ -19,7 +19,7 @@ class TestPgConfig(HamsTransactionCase):
             "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid"
         )
         mock_get_uid.return_value = self.admin.id
-        # Tests [@ANCHOR: pg_optimize_wizard]
+        # Tests [@ANCHOR: COMM_pg_optimize_wizard]
         wizard = (
             self.env["pg.optimize.wizard"]
             .with_user(self.admin)
@@ -76,7 +76,7 @@ class TestPgConfig(HamsTransactionCase):
             "odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable",
             return_value="/bin/mock",
         )
-        # Tests [@ANCHOR: pg_ha_wizard]
+        # Tests [@ANCHOR: COMM_pg_ha_wizard]
         wizard = (
             self.env["pg.ha.wizard"]
             .with_user(self.admin)
@@ -113,10 +113,18 @@ class TestPgConfig(HamsTransactionCase):
         wizard = (
             self.env["pg.optimize.wizard"]
             .with_user(self.admin)
-            .create({"ram_gb": 0, "cpu_cores": 8})
+            .create({"ram_gb": 0, "cpu_cores": 8, "max_connections": 200})
         )
         with self.assertRaises(UserError):
             wizard.action_apply_optimizations()
+
+        wizard2 = (
+            self.env["pg.optimize.wizard"]
+            .with_user(self.admin)
+            .create({"ram_gb": 16, "cpu_cores": 8, "max_connections": 0})
+        )
+        with self.assertRaises(UserError):
+            wizard2.action_apply_optimizations()
 
     def test_02d_ha_wizard_validation_errors(self):
         # Test invalid IP
@@ -181,9 +189,9 @@ class TestPgConfig(HamsTransactionCase):
         self.assertEqual(exe_path, "/bin/etcd")
 
     def test_03_views(self):
-        # [@ANCHOR: COMM_test_pg_config_views]
+        # Tests [@ANCHOR: COMM_COMM_test_pg_config_views]
 
-        # Tests [@ANCHOR: db_settings_audit]
+        # Tests [@ANCHOR: COMM_db_settings_audit]
         v1 = self.env["database.pg.setting"].get_view(view_type="list")
         self.assertIn("setting", v1["arch"])
 

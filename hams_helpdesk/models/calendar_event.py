@@ -1,6 +1,6 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
-from odoo import models
+from odoo import models, fields
 
 
 class CalendarEvent(models.Model):

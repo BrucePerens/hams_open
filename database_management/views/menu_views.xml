@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <menuitem id="menu_admin_root" name="Database &amp; SRE" sequence="70"/>
+    <menuitem id="menu_admin_root" name="Database &amp; SRE" sequence="70" groups="base.group_system"/>
 
     <record id="action_db_table_stat" model="ir.actions.act_window">
         <field name="name">Table Health &amp; Bloat</field>

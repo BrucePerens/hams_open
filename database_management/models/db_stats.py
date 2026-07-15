@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 
-from psycopg2 import sql as psql
+
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError
 import odoo.tools.sql
@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 class DatabaseTableStat(models.Model):
-    # [@ANCHOR: db_security_prefetch]
+    # [@ANCHOR: COMM_db_security_prefetch]
     # This model is logically global as it tracks PostgreSQL internal statistics
     # for the entire database instance, which may be shared by multiple Odoo companies.
     _name = "database.table.stat"
@@ -62,9 +62,7 @@ class DatabaseTableStat(models.Model):
         )
 
     def action_vacuum_analyze(self):
-        # [@ANCHOR: vacuum_analyze]
-
-        # Tests [@ANCHOR: vacuum_analyze]
+        # [@ANCHOR: COMM_vacuum_analyze]
         exe = self._get_executable("vacuumdb")
         db_name = self.env.cr.dbname
         # ADR-0044: Use minimal environment for subprocess to prevent secret leakage
@@ -109,9 +107,7 @@ class DatabaseTableStat(models.Model):
 
     @api.model
     def cron_check_bloat(self):
-        # [@ANCHOR: bloat_alert_synergy]
-
-        # Tests [@ANCHOR: bloat_alert_synergy]
+        # [@ANCHOR: COMM_bloat_alert_synergy]
         high_bloat = self.env["database.table.stat"].search(
             [("dead_percent", ">", 20.0), ("dead_tuples", ">", 10000)], limit=1000
         )
@@ -122,7 +118,7 @@ class DatabaseTableStat(models.Model):
                     "pager_duty.user_pager_service_internal"
                 )
                 tables = ", ".join(
-                    [f"{t.table_name}" f" ({t.dead_percent:.1f}%)" for t in high_bloat]
+                    [f"{t.table_name} ({t.dead_percent:.1f}%)" for t in high_bloat]
                 )
                 desc = (
                     "Database Bloat Warning! The"
@@ -147,9 +143,7 @@ class DatabaseTableStat(models.Model):
 
 
 class DatabaseQueryStat(models.Model):
-    # [@ANCHOR: db_slow_queries]
-
-    # Tests [@ANCHOR: db_slow_queries]
+    # [@ANCHOR: COMM_db_slow_queries]
     # This model is logically global as pg_stat_statements tracks all queries
     # hitting the database, regardless of which Odoo company or website initiated them.
     _name = "database.query.stat"
@@ -208,191 +202,21 @@ class DatabaseQueryStat(models.Model):
                 )
             """
             )
-
-
-class DatabaseActivity(models.Model):
-    # [@ANCHOR: db_active_sessions]
-
-    # Tests [@ANCHOR: db_active_sessions]
-    # This model is logically global as it tracks all active PostgreSQL backends
-    # for the current database, representing the aggregate state of the database server.
-    _name = "database.activity"
-    _description = "Active Database Sessions"
-    name = fields.Char(string="Name", default=lambda self: self._description)
-    _auto = False
-    _order = "duration desc"
-
-    pid = fields.Integer(string="PID", readonly=True)
-    usename = fields.Char(string="User", readonly=True)
-    state = fields.Char(string="State", readonly=True)
-    query = fields.Text(string="Active Query", readonly=True)
-    duration = fields.Float(string="Duration (s)", readonly=True)
-
-    def init(self):
-        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW database_activity AS (
-                SELECT 'SQL View'::varchar as name,
-                    pid as id,
-                    pid,
-                    usename,
-                    state,
-                    query,
-                    EXTRACT(EPOCH FROM (now() - query_start)) as duration
-                FROM pg_stat_activity
-                WHERE datname = current_database() AND pid <> pg_backend_pid()
-            )
-        """
-        )
-
-    def action_terminate_backend(self):
-        # [@ANCHOR: db_terminate_backend]
-
-        # Tests [@ANCHOR: db_terminate_backend]
-        # micro-privilege: Use service account for termination
-        utils = self.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env(
-            "database_management.user_database_management_service"
-        )
-
-        pids = [rec.pid for rec in self if rec.pid]
-        if pids:
-            # Performance: Optimize latency by reducing database operation round-trips to only one.
-            # We use SELECT unnest() to ensure the termination logic runs entirely on the DB server.
-            env_svc.cr.execute(
-                "SELECT pg_terminate_backend(pid) FROM unnest(%s) AS pid;",
-                (pids,),
-            )
-        return True
-
-
-class DatabaseIndexStat(models.Model):
-    # [@ANCHOR: db_index_stats]
-
-    # Tests [@ANCHOR: db_index_stats]
-    # This model is logically global as it tracks index performance at the PostgreSQL storage layer,
-    # which is shared by all Odoo tenants in this database.
-    _name = "database.index.stat"
-    _description = "Database Index Health"
-    name = fields.Char(string="Name", default=lambda self: self._description)
-    _auto = False
-    _order = "idx_scan asc"
-
-    table_name = fields.Char(string="Table Name", readonly=True)
-    index_name = fields.Char(string="Index Name", readonly=True)
-    idx_scan = fields.Integer(string="Total Scans (Usage)", readonly=True)
-    index_size_kb = fields.Float(string="Size (KB)", readonly=True)
-
-    def init(self):
-        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW database_index_stat AS (
-                SELECT
-                    row_number() OVER () as id,
-                    'SQL View'::varchar as name,
-                    relname as table_name,
-                    indexrelname as index_name,
-                    idx_scan,
-                    pg_relation_size(indexrelid) / 1024.0 as index_size_kb
-                FROM pg_stat_user_indexes
-                JOIN pg_index USING (indexrelid)
-                WHERE indisunique IS FALSE
-            )
-        """
-        )
-
-
-class DatabaseReplicationStat(models.Model):
-    # [@ANCHOR: db_replication_stats]
-    # This model tracks PostgreSQL replication lag and status for the entire cluster.
-    _name = "database.replication.stat"
-    _description = "Database Replication Statistics"
-    name = fields.Char(string="Name", default=lambda self: self._description)
-    _auto = False
-
-    usename = fields.Char(string="User", readonly=True)
-    application_name = fields.Char(string="Application", readonly=True)
-    client_addr = fields.Char(string="Client IP", readonly=True)
-    state = fields.Char(string="State", readonly=True)
-    sent_lsn = fields.Char(string="Sent LSN", readonly=True)
-    write_lsn = fields.Char(string="Write LSN", readonly=True)
-    flush_lsn = fields.Char(string="Flush LSN", readonly=True)
-    replay_lsn = fields.Char(string="Replay LSN", readonly=True)
-    write_lag = fields.Char(string="Write Lag", readonly=True)
-    flush_lag = fields.Char(string="Flush Lag", readonly=True)
-    replay_lag = fields.Char(string="Replay Lag", readonly=True)
-    sync_priority = fields.Integer(string="Priority", readonly=True)
-    sync_state = fields.Char(string="Sync State", readonly=True)
-
-    def init(self):
-        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW database_replication_stat AS (
-                SELECT
-                    row_number() OVER () as id,
-                    'SQL View'::varchar as name,
-                    usename,
-                    application_name,
-                    client_addr,
-                    state,
-                    sent_lsn::text,
-                    write_lsn::text,
-                    flush_lsn::text,
-                    replay_lsn::text,
-                    write_lag::text,
-                    flush_lag::text,
-                    replay_lag::text,
-                    sync_priority,
-                    sync_state
-                FROM pg_stat_replication
-            )
-        """
-        )
-
-
-class DatabaseIndexAdvisor(models.Model):
-    # [@ANCHOR: db_index_advisor]
-
-    # Tests [@ANCHOR: db_index_advisor]
-    # This model identifies tables with high sequential scan counts and large
-    # sizes that might benefit from additional indexing.
-    _name = "database.index.advisor"
-    _description = "Index Recommendation Advisor"
-    name = fields.Char(string="Name", default=lambda self: self._description)
-    _auto = False
-    _order = "seq_scan desc"
-
-    table_name = fields.Char(string="Table Name", readonly=True)
-    seq_scan = fields.Integer(string="Sequential Scans", readonly=True)
-    seq_tup_read = fields.Integer(string="Tuples Read (Seq)", readonly=True)
-    idx_scan = fields.Integer(string="Index Scans", readonly=True)
-    table_size_mb = fields.Float(string="Table Size (MB)", readonly=True)
-
-    def init(self):
-        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW database_index_advisor AS (
-                SELECT
-                    relid as id,
-                    relname as table_name,
-                    seq_scan,
-                    seq_tup_read,
-                    idx_scan,
-                    pg_total_relation_size(relid) / (1024.0 * 1024.0) as table_size_mb
-                FROM pg_stat_user_tables
-                WHERE seq_scan > 100 AND pg_total_relation_size(relid) > 10 * 1024 * 1024
-            )
-        """
-        )
-
-
-class DatabaseQueryStatInherit(models.Model):
-    # This consolidation combines methods into a single class block for maintainability
-    _inherit = "database.query.stat"
+            
+        self.env.cr.execute("""
+            CREATE OR REPLACE FUNCTION dba_explain_query(q text) RETURNS text AS $$
+            DECLARE
+                plan_line text;
+                full_plan text := '';
+            BEGIN
+                EXECUTE 'SET LOCAL default_transaction_read_only = on';
+                FOR plan_line IN EXECUTE 'EXPLAIN (ANALYZE, BUFFERS) ' || q LOOP
+                    full_plan := full_plan || plan_line || E'\\n';
+                END LOOP;
+                RETURN full_plan;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
 
     def action_install_extension(self):
         try:
@@ -447,9 +271,7 @@ class DatabaseQueryStatInherit(models.Model):
             raise UserError(_("Could not reset statistics: %s") % str(e))
 
     def action_explain_query(self):
-        # [@ANCHOR: db_explain_query]
-
-        # Tests [@ANCHOR: db_explain_query]
+        # [@ANCHOR: COMM_db_explain_query]
         self.ensure_one()
         utils = self.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env(
@@ -465,16 +287,8 @@ class DatabaseQueryStatInherit(models.Model):
                 msg = _("Only SELECT or WITH queries can be analyzed via Explain.")
                 raise UserError(msg)
 
-            cr_svc.execute("SAVEPOINT explain_sp")
-            try:
-                set_query = psql.SQL("SET LOCAL {} = %s").format(psql.Identifier("default_transaction_read_only"))
-                cr_svc.execute(set_query, ("on",))
-                explain_prefix = psql.SQL("EXPLAIN (ANALYZE, BUFFERS) ")
-                explain_query = explain_prefix + psql.SQL(query_text)
-                cr_svc.execute(explain_query)
-                plan = "\n".join([row[0] for row in cr_svc.fetchall()])
-            finally:
-                cr_svc.execute("ROLLBACK TO SAVEPOINT explain_sp")
+            cr_svc.execute("SELECT dba_explain_query(%s)", (query_text,))
+            plan = cr_svc.fetchone()[0]
 
             wizard = self.env["pg.explain.wizard"].create(
                 {
@@ -494,6 +308,178 @@ class DatabaseQueryStatInherit(models.Model):
         except Exception as e:  # audit-ignore-catch-all
             _logger.warning("Failed to explain query: %s", e)
             raise UserError(_("Could not generate explain plan: %s") % str(e))
+
+
+class DatabaseActivity(models.Model):
+    # [@ANCHOR: COMM_db_active_sessions]
+    # This model is logically global as it tracks all active PostgreSQL backends
+    # for the current database, representing the aggregate state of the database server.
+    _name = "database.activity"
+    _description = "Active Database Sessions"
+    name = fields.Char(string="Name", default=lambda self: self._description)
+    _auto = False
+    _order = "duration desc"
+
+    pid = fields.Integer(string="PID", readonly=True)
+    usename = fields.Char(string="User", readonly=True)
+    state = fields.Char(string="State", readonly=True)
+    query = fields.Text(string="Active Query", readonly=True)
+    duration = fields.Float(string="Duration (s)", readonly=True)
+
+    def init(self):
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute(
+            """
+            CREATE OR REPLACE VIEW database_activity AS (
+                SELECT 'SQL View'::varchar as name,
+                    pid as id,
+                    pid,
+                    usename,
+                    state,
+                    query,
+                    EXTRACT(EPOCH FROM (now() - query_start)) as duration
+                FROM pg_stat_activity
+                WHERE datname = current_database() AND pid <> pg_backend_pid()
+            )
+        """
+        )
+
+    def action_terminate_backend(self):
+        # [@ANCHOR: COMM_db_terminate_backend]
+        # micro-privilege: Use service account for termination
+        utils = self.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env(
+            "database_management.user_database_management_service"
+        )
+
+        pids = [rec.pid for rec in self if rec.pid]
+        if pids:
+            # Performance: Optimize latency by reducing database operation round-trips to only one.
+            # We use SELECT unnest() to ensure the termination logic runs entirely on the DB server.
+            env_svc.cr.execute(
+                "SELECT pg_terminate_backend(pid) FROM unnest(%s) AS pid;",
+                (pids,),
+            )
+        return True
+
+
+class DatabaseIndexStat(models.Model):
+    # [@ANCHOR: COMM_db_index_stats]
+    # This model is logically global as it tracks index performance at the PostgreSQL storage layer,
+    # which is shared by all Odoo tenants in this database.
+    _name = "database.index.stat"
+    _description = "Database Index Health"
+    name = fields.Char(string="Name", default=lambda self: self._description)
+    _auto = False
+    _order = "idx_scan asc"
+
+    table_name = fields.Char(string="Table Name", readonly=True)
+    index_name = fields.Char(string="Index Name", readonly=True)
+    idx_scan = fields.Integer(string="Total Scans (Usage)", readonly=True)
+    index_size_kb = fields.Float(string="Size (KB)", readonly=True)
+
+    def init(self):
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute(
+            """
+            CREATE OR REPLACE VIEW database_index_stat AS (
+                SELECT
+                    row_number() OVER () as id,
+                    'SQL View'::varchar as name,
+                    relname as table_name,
+                    indexrelname as index_name,
+                    idx_scan,
+                    pg_relation_size(indexrelid) / 1024.0 as index_size_kb
+                FROM pg_stat_user_indexes
+                JOIN pg_index USING (indexrelid)
+                WHERE indisunique IS FALSE
+            )
+        """
+        )
+
+
+class DatabaseReplicationStat(models.Model):
+    # [@ANCHOR: COMM_db_replication_stats]
+    # This model tracks PostgreSQL replication lag and status for the entire cluster.
+    _name = "database.replication.stat"
+    _description = "Database Replication Statistics"
+    name = fields.Char(string="Name", default=lambda self: self._description)
+    _auto = False
+
+    usename = fields.Char(string="User", readonly=True)
+    application_name = fields.Char(string="Application", readonly=True)
+    client_addr = fields.Char(string="Client IP", readonly=True)
+    state = fields.Char(string="State", readonly=True)
+    sent_lsn = fields.Char(string="Sent LSN", readonly=True)
+    write_lsn = fields.Char(string="Write LSN", readonly=True)
+    flush_lsn = fields.Char(string="Flush LSN", readonly=True)
+    replay_lsn = fields.Char(string="Replay LSN", readonly=True)
+    write_lag = fields.Char(string="Write Lag", readonly=True)
+    flush_lag = fields.Char(string="Flush Lag", readonly=True)
+    replay_lag = fields.Char(string="Replay Lag", readonly=True)
+    sync_priority = fields.Integer(string="Priority", readonly=True)
+    sync_state = fields.Char(string="Sync State", readonly=True)
+
+    def init(self):
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute(
+            """
+            CREATE OR REPLACE VIEW database_replication_stat AS (
+                SELECT
+                    row_number() OVER () as id,
+                    'SQL View'::varchar as name,
+                    usename,
+                    application_name,
+                    client_addr,
+                    state,
+                    sent_lsn::text,
+                    write_lsn::text,
+                    flush_lsn::text,
+                    replay_lsn::text,
+                    write_lag::text,
+                    flush_lag::text,
+                    replay_lag::text,
+                    sync_priority,
+                    sync_state
+                FROM pg_stat_replication
+            )
+        """
+        )
+
+
+class DatabaseIndexAdvisor(models.Model):
+    # [@ANCHOR: COMM_db_index_advisor]
+    # This model identifies tables with high sequential scan counts and large
+    # sizes that might benefit from additional indexing.
+    _name = "database.index.advisor"
+    _description = "Index Recommendation Advisor"
+    name = fields.Char(string="Name", default=lambda self: self._description)
+    _auto = False
+    _order = "seq_scan desc"
+
+    table_name = fields.Char(string="Table Name", readonly=True)
+    seq_scan = fields.Integer(string="Sequential Scans", readonly=True)
+    seq_tup_read = fields.Integer(string="Tuples Read (Seq)", readonly=True)
+    idx_scan = fields.Integer(string="Index Scans", readonly=True)
+    table_size_mb = fields.Float(string="Table Size (MB)", readonly=True)
+
+    def init(self):
+        odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
+        self.env.cr.execute(
+            """
+            CREATE OR REPLACE VIEW database_index_advisor AS (
+                SELECT
+                    relid as id,
+                    relname as table_name,
+                    seq_scan,
+                    seq_tup_read,
+                    idx_scan,
+                    pg_total_relation_size(relid) / (1024.0 * 1024.0) as table_size_mb
+                FROM pg_stat_user_tables
+                WHERE seq_scan > 100 AND pg_total_relation_size(relid) > 10 * 1024 * 1024
+            )
+        """
+        )
 
 
 class PgExplainWizard(models.TransientModel):

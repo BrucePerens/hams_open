@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from psycopg2 import sql as psql
+
 from odoo.exceptions import UserError
 from unittest.mock import MagicMock, PropertyMock
 
@@ -15,24 +15,24 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         stat = self.env["database.query.stat"].search([], limit=1)
         if not stat:
             stat = self.env["database.query.stat"].browse(1)
-        type(stat).query = PropertyMock(return_value="SELECT 1")
+        self.safe_patch_object(type(stat), "query", new_callable=PropertyMock, return_value="SELECT 1")
         
         mock_cr = MagicMock()
+        mock_cr.fetchone.return_value = ["mock plan"]
         mock_env = MagicMock(cr=mock_cr)
         
         with self.safe_patch(
             "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
             return_value=mock_env,
         ):
-            # This should not raise UserError about semicolon anymore if we just pass "SELECT 1"
-            # And it should call "SET LOCAL default_transaction_read_only = on;"
             stat.action_explain_query()
             
         called = any(
-            isinstance(call[0][0], psql.Composed) and "default_transaction_read_only" in call[0][0].as_string(self.env.cr._obj)
+            "SELECT dba_explain_query" in (call[0][0] if isinstance(call[0][0], str) else "")
             for call in mock_cr.execute.call_args_list
         )
-        self.assertTrue(called, "Transaction must be set to local read only using psycopg2")
+        self.assertTrue(called, "Must use SELECT dba_explain_query(%s) to prevent injection and avoid latency issue.")
+
 
     def test_tdd_db_stats_semicolon(self):
         stat = self.env["database.query.stat"].search([], limit=1)
@@ -41,7 +41,7 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         
         # Semicolon should no longer raise UserError "Multiple statements are not allowed."
         # If we rely on Postgres logic, we just pass it to explain.
-        type(stat).query = PropertyMock(return_value="SELECT 1;")
+        self.safe_patch_object(type(stat), "query", new_callable=PropertyMock, return_value="SELECT 1;")
         
         mock_cr = MagicMock()
         mock_env = MagicMock(cr=mock_cr)

@@ -1,6 +1,9 @@
+// This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
 
+// Used elsewhere: o_tour_cancel_btn, o_tour_close_btn
 registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verified by [@ANCHOR: test_db_bloat_tour]
     url: "/odoo?debug=1",
     steps: () => [

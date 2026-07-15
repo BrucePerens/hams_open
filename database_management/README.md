@@ -46,6 +46,16 @@ Models in this module are designed to be **logically global**. Since they monito
 
 ---
 
+## 📦 External Dependencies
+
+This module requires the following external binaries or Python dependencies:
+*   `vacuumdb`: PostgreSQL client application for cleaning databases.
+*   `patroni`: High availability solution for PostgreSQL.
+*   `pgbouncer`: Lightweight connection pooler for PostgreSQL.
+*   `etcd`: Distributed key-value store for Patroni.
+
+---
+
 ## 📚 Documentation & Help
 
 User-facing documentation is available directly within the Odoo Knowledge or Knowledge modules.

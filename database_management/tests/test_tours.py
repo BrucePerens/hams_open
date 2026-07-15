@@ -8,6 +8,10 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 @tagged("post_install", "-at_install")
 class TestTours(HamsHttpCase):
 
+    def setUp(self):
+        super().setUp()
+        self.env.ref("base.user_admin").lang = "en_US"
+
     def test_01_db_bloat_tour(self):
         # [@ANCHOR: test_db_bloat_tour]
         self.start_tour("/odoo?debug=1", "db_management_bloat_tour", login="admin")

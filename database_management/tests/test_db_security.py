@@ -68,7 +68,7 @@ class TestDbSecurity(HamsTransactionCase):
         )
 
     def test_01_multi_persona_isolation(self):
-        # Tests [@ANCHOR: db_security_prefetch]
+        # Tests [@ANCHOR: COMM_db_security_prefetch]
         """
         BDD: Given ADR-0050 Proxy Ownership IDOR (Multi-Persona Mandate)
         When standard personas attempt to interact with the database APM tools
@@ -111,3 +111,39 @@ class TestDbSecurity(HamsTransactionCase):
                     {"primary_ip": "10.0.0.1"}
                 )
                 self.env.flush_all()
+
+    def test_02_view_models_readonly(self):
+        """
+        Ensure `perm_write`, `perm_create`, and `perm_unlink` are set to `0` for view-backed models.
+        """
+        view_models = [
+            "database.table.stat",
+            "database.query.stat",
+            "database.activity",
+            "database.index.stat",
+            "database.pg.setting",
+            "database.index.advisor",
+            "database.replication.stat",
+        ]
+        model_ids = self.env["ir.model"].search([("model", "in", view_models)])
+        accesses = self.env["ir.model.access"].search([("model_id", "in", model_ids.ids)])
+        for access in accesses:
+            model = access.model_id.model
+            self.assertFalse(access.perm_write, f"{model} should not have perm_write")
+            self.assertFalse(access.perm_create, f"{model} should not have perm_create")
+            self.assertFalse(access.perm_unlink, f"{model} should not have perm_unlink")
+
+    def test_03_admin_success(self):
+        """
+        Ensure self.admin can read protected SQL views and wizards.
+        """
+        if self.table_stat:
+            self.assertTrue(self.table_stat.with_user(self.admin).read(["table_name"]))
+        if self.pg_setting:
+            self.assertTrue(self.pg_setting.with_user(self.admin).read(["name"]))
+
+        opt_wiz = self.env["pg.optimize.wizard"].with_user(self.admin).create({"ram_gb": 16})
+        self.assertTrue(opt_wiz)
+        
+        ha_wiz = self.env["pg.ha.wizard"].with_user(self.admin).create({"primary_ip": "10.0.0.1"})
+        self.assertTrue(ha_wiz)

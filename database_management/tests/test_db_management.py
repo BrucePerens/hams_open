@@ -11,7 +11,7 @@ import subprocess
 @tagged("post_install", "-at_install")
 class TestDatabaseManagement(HamsTransactionCase):
     def test_01_vacuum_analyze(self):
-        # Tests [@ANCHOR: vacuum_analyze]
+        # Tests [@ANCHOR: COMM_vacuum_analyze]
         mock_run = self.safe_patch("subprocess.run")
         self.safe_patch("shutil.which", return_value="/bin/mock")
         mock_res = MagicMock()
@@ -67,13 +67,13 @@ class TestDatabaseManagement(HamsTransactionCase):
             stat.action_vacuum_analyze()
 
     def test_02_bloat_cron(self):
-        # [@ANCHOR: COMM_test_dba_cron]
+        # Tests [@ANCHOR: COMM_test_dba_cron]
 
-        # Tests [@ANCHOR: bloat_alert_synergy]
+        # Tests [@ANCHOR: COMM_bloat_alert_synergy]
         self.env.ref("database_management.cron_check_bloat")._trigger()
 
     def test_03_db_index_stats(self):
-        # Tests [@ANCHOR: db_index_stats]
+        # Tests [@ANCHOR: COMM_db_index_stats]
         mock_search = self.safe_patch_object(
             type(self.env["database.table.stat"]), "search"
         )
@@ -82,7 +82,7 @@ class TestDatabaseManagement(HamsTransactionCase):
         mock_search.assert_called_once()
 
     def test_03_terminate_backend(self):
-        # Tests [@ANCHOR: db_terminate_backend]
+        # Tests [@ANCHOR: COMM_db_terminate_backend]
         # We test termination with a non-existent dummy PID to prevent killing the test runner
         # pg_terminate_backend(pid) returns False if the pid doesn't exist, safely proving execution.
         self.env.cr.execute("SELECT pg_terminate_backend(999999)")
@@ -91,17 +91,18 @@ class TestDatabaseManagement(HamsTransactionCase):
         # We also trigger the actual ORM method to prove it binds properly without crashing
         act = self.env["database.activity"].search([], limit=1)
         if act:
-            act.action_terminate_backend()
+            with self.safe_patch_object(type(self.env.cr), "execute"):
+                act.action_terminate_backend()
         self.assertIn("database.activity", self.env)
 
     def test_04_views(self):
-        # [@ANCHOR: COMM_test_dba_view]
+        # Tests [@ANCHOR: COMM_COMM_test_dba_view]
 
-        # Tests [@ANCHOR: db_index_stats]
+        # Tests [@ANCHOR: COMM_db_index_stats]
 
-        # Tests [@ANCHOR: db_slow_queries]
+        # Tests [@ANCHOR: COMM_db_slow_queries]
 
-        # Tests [@ANCHOR: db_active_sessions]
+        # Tests [@ANCHOR: COMM_db_active_sessions]
         v1 = self.env["database.table.stat"].get_view(view_type="list")
         self.assertIn("table_name", v1["arch"])
 
@@ -114,8 +115,19 @@ class TestDatabaseManagement(HamsTransactionCase):
         v4 = self.env["database.index.stat"].get_view(view_type="list")
         self.assertIn("index_name", v4["arch"])
 
+        # Tests [@ANCHOR: COMM_COMM_db_replication_stats]
+        v5 = self.env["database.replication.stat"].get_view(view_type="list")
+        self.assertIn("usename", v5["arch"])
+
+        # Tests [@ANCHOR: COMM_COMM_db_index_advisor]
+        v6 = self.env["database.index.advisor"].get_view(view_type="list")
+        self.assertIn("table_name", v6["arch"])
+
+        v7 = self.env["pg.explain.wizard"].get_view(view_type="form")
+        self.assertIn("query", v7["arch"])
+
     def test_06_query_stats_ops(self):
-        # Tests [@ANCHOR: db_slow_queries]
+        # Tests [@ANCHOR: COMM_db_slow_queries]
         model = self.env["database.query.stat"]
 
         mock_cr = MagicMock()
@@ -130,12 +142,12 @@ class TestDatabaseManagement(HamsTransactionCase):
         mock_cr.execute.assert_any_call("SELECT pg_stat_statements_reset()")
 
     def test_07_explain_query_security(self):
-        # Tests [@ANCHOR: db_explain_query]
+        # Tests [@ANCHOR: COMM_db_explain_query]
         stat = self.env["database.query.stat"].search([], limit=1)
         if not stat:
             stat = self.env["database.query.stat"].browse(1)
 
-        type(stat).query = PropertyMock(return_value="DELETE FROM res_users")
+        self.safe_patch_object(type(stat), "query", new_callable=PropertyMock, return_value="DELETE FROM res_users")
 
         with self.assertRaises(
             UserError, msg="Only SELECT queries can be analyzed via Explain."

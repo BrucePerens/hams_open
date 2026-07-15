@@ -35,7 +35,7 @@
                 </group>
                 <footer>
                     <button name="action_apply_optimizations" type="object" string="Calculate &amp; Apply Optimizations" class="btn-danger" confirm="This will modify your core database configuration. You must manually restart the PostgreSQL service afterward for shared memory changes to take effect. Proceed?"/>
-                    <button special="cancel" string="Cancel" class="btn-secondary"/>
+                    <button special="cancel" string="Cancel" class="btn-secondary o_tour_cancel_btn"/>
                 </footer>
             </form>
         </field>
@@ -78,7 +78,7 @@
                 </sheet>
                 <footer>
                     <button name="action_generate" type="object" string="Generate Configurations" class="btn-primary" invisible="state == 'generated'"/>
-                    <button special="cancel" string="Close" class="btn-secondary"/>
+                    <button special="cancel" string="Close" class="btn-secondary o_tour_close_btn"/>
                 </footer>
             </form>
         </field>

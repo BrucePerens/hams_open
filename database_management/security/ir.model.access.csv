@@ -1,11 +1,11 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_db_table_stat_manager,db.table manager,model_database_table_stat,group_database_management_manager,1,1,1,1
-access_db_query_stat_manager,db.query manager,model_database_query_stat,group_database_management_manager,1,1,1,1
-access_db_activity_manager,db.activity manager,model_database_activity,group_database_management_manager,1,1,1,1
-access_db_index_stat_manager,db.index manager,model_database_index_stat,group_database_management_manager,1,1,1,1
-access_pg_setting_manager,pg.setting manager,model_database_pg_setting,group_database_management_manager,1,1,1,1
+access_db_table_stat_manager,db.table manager,model_database_table_stat,group_database_management_manager,1,0,0,0
+access_db_query_stat_manager,db.query manager,model_database_query_stat,group_database_management_manager,1,0,0,0
+access_db_activity_manager,db.activity manager,model_database_activity,group_database_management_manager,1,0,0,0
+access_db_index_stat_manager,db.index manager,model_database_index_stat,group_database_management_manager,1,0,0,0
+access_pg_setting_manager,pg.setting manager,model_database_pg_setting,group_database_management_manager,1,0,0,0
 access_pg_optimize_manager,pg.optimize manager,model_pg_optimize_wizard,group_database_management_manager,1,1,1,1
 access_pg_ha_manager,pg.ha manager,model_pg_ha_wizard,group_database_management_manager,1,1,1,1
 access_pg_explain_manager,pg.explain manager,model_pg_explain_wizard,group_database_management_manager,1,1,1,1
-access_db_index_advisor_manager,db.index advisor manager,model_database_index_advisor,group_database_management_manager,1,1,1,1
-access_db_replication_stat_manager,db.replication manager,model_database_replication_stat,group_database_management_manager,1,1,1,1
+access_db_index_advisor_manager,db.index advisor manager,model_database_index_advisor,group_database_management_manager,1,0,0,0
+access_db_replication_stat_manager,db.replication manager,model_database_replication_stat,group_database_management_manager,1,0,0,0

@@ -35,7 +35,7 @@
         </field>
     </record>
 
-    <record id="view_pg_explain_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view -->
+    <record id="view_pg_explain_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">pg.explain.wizard.form</field>
         <field name="model">pg.explain.wizard</field>
         <field name="arch" type="xml">
@@ -81,7 +81,7 @@
         </field>
     </record>
 
-    <record id="view_db_replication_stat_list" model="ir.ui.view"> <!-- audit-ignore-view -->
+    <record id="view_db_replication_stat_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">database.replication.stat.list</field>
         <field name="model">database.replication.stat</field>
         <field name="arch" type="xml">
@@ -96,7 +96,7 @@
         </field>
     </record>
 
-    <record id="view_db_index_advisor_list" model="ir.ui.view"> <!-- audit-ignore-view -->
+    <record id="view_db_index_advisor_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dba_view] -->
         <field name="name">database.index.advisor.list</field>
         <field name="model">database.index.advisor</field>
         <field name="arch" type="xml">
