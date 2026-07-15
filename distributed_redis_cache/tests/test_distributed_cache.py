@@ -111,14 +111,22 @@ class TestDistributedCacheTour(HamsHttpCase):
     def test_redis_cache_interceptor(self):
         from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
         
+        class Env(dict):
+            def __init__(self):
+                self.cr = type("cr", (), {"dbname": "test"})()
+                self.context = {}
+            def __getitem__(self, key):
+                return type("mock", (), {"with_context": lambda self, **kw: self})()
+
         class DummyModel:
             def __init__(self):
                 self._name = "dummy"
-                self.env = type("Env", (), {"cr": type("cr", (), {"dbname": "test"}), "context": {}})()
+                self.env = Env()
                 
             @distributed_cache()
             def test_method(self, x):
                 return x * 2
 
+        self.safe_patch('odoo.addons.distributed_redis_cache.redis_cache.redis_pool', None)
         obj = DummyModel()
         self.assertEqual(obj.test_method(5), 10, "Decorator should return the correct value")
