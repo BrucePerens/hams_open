@@ -25,48 +25,70 @@ def _async_unpublish_group_content(db_name, group_ids):
     registry = Registry(db_name)
     cr = registry.cursor()
     try:
-        cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
+        cr.execute(
+            "SELECT res_id FROM ir_model_data WHERE module = %s AND name = %s",
+            ("user_websites", "user_websites_service_account"),
+        )
         row = cr.fetchone()
-        svc_id = row[0] if row else 2
+        if not row:
+            return
+        svc_id = row[0]
         env = odoo.api.Environment(cr, svc_id, {})
         try:
             env_svc = env["zero_sudo.security.utils"]._get_service_env(
                 "user_websites.user_websites_service_account"
             )
 
-            while True:
-                pages = env_svc["website.page"].search(
-                    [
-                        ("user_websites_group_id", "in", group_ids),
-                        ("website_published", "=", True),
-                    ],
-                    limit=5000,
-                )
-                if not pages:
-                    break
-                pages.with_context(mail_notrack=True).write({"website_published": False})
-                env.cr.commit()
-                if len(pages) < 5000:
-                    break
-                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                    time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+            groups = env_svc["user.websites.group"].search(
+                [("id", "in", group_ids)], limit=10000
+            )
+            company_groups = {}
+            for g in groups:
+                if g.company_id:
+                    company_groups.setdefault(g.company_id.id, []).append(g.id)
 
-            while True:
-                posts = env_svc["blog.post"].search(
-                    [
-                        ("user_websites_group_id", "in", group_ids),
-                        ("is_published", "=", True),
-                    ],
-                    limit=5000,
-                )
-                if not posts:
-                    break
-                posts.with_context(mail_notrack=True).write({"is_published": False})
-                env.cr.commit()
-                if len(posts) < 5000:
-                    break
-                if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                    time.sleep(0.1)  # audit-ignore-sleep
+            def _unpublish_for_company(company_id, comp_group_ids):
+                company_env = env_svc.with_company(company_id)
+                while True:
+                    pages = company_env["website.page"].search(
+                        [
+                            ("user_websites_group_id", "in", comp_group_ids),
+                            ("website_published", "=", True),
+                        ],
+                        limit=5000,
+                    )
+                    if not pages:
+                        break
+                    pages.with_context(mail_notrack=True).write(
+                        {"website_published": False}
+                    )
+                    env.cr.commit()
+                    if len(pages) < 5000:
+                        break
+                    if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                        time.sleep(
+                            0.1
+                        )  # audit-ignore-sleep: Rate limiting background thread
+
+                while True:
+                    posts = company_env["blog.post"].search(
+                        [
+                            ("user_websites_group_id", "in", comp_group_ids),
+                            ("is_published", "=", True),
+                        ],
+                        limit=5000,
+                    )
+                    if not posts:
+                        break
+                    posts.with_context(mail_notrack=True).write({"is_published": False})
+                    env.cr.commit()
+                    if len(posts) < 5000:
+                        break
+                    if not os.environ.get("ODOO_DISABLE_SLEEPS"):
+                        time.sleep(0.1)  # audit-ignore-sleep
+
+            for company_id, comp_group_ids in company_groups.items():
+                _unpublish_for_company(company_id, comp_group_ids)
 
         finally:
             env.cr.rollback()
@@ -121,7 +143,8 @@ class UserWebsitesGroup(models.Model):
         for record in self:
             if record.website_slug and record.website_slug.lower() in RESERVED_SLUGS:
                 raise ValidationError(
-                    _("The slug '%s' is reserved and cannot be used.") % record.website_slug
+                    _("The slug '%s' is reserved and cannot be used.")
+                    % record.website_slug
                 )
 
     member_ids = fields.Many2many(
@@ -146,6 +169,12 @@ class UserWebsitesGroup(models.Model):
         help="Blog posts belonging to this group.",
     )
 
+    blog_blog_ids = fields.One2many(
+        "blog.blog",
+        "user_websites_group_id",
+        string="Group Blogs",
+    )
+
     company_id = fields.Many2one(
         "res.company",
         string="Company",
@@ -163,12 +192,19 @@ class UserWebsitesGroup(models.Model):
         groups_to_create_vals = []
         indices_needing_groups = []
 
-        privilege = self.env.ref(
-            "user_websites.privilege_user_websites", raise_if_not_found=False
+        self.env.cr.execute(
+            "SELECT res_id FROM ir_model_data WHERE module=%s AND name=%s",
+            ("user_websites", "privilege_user_websites"),
         )
-        category = self.env.ref(
-            "user_websites.module_category_user_websites", raise_if_not_found=False
+        row = self.env.cr.fetchone()
+        privilege_id = row[0] if row else False
+
+        self.env.cr.execute(
+            "SELECT res_id FROM ir_model_data WHERE module=%s AND name=%s",
+            ("user_websites", "module_category_user_websites"),
         )
+        row = self.env.cr.fetchone()
+        category_id = row[0] if row else False
 
         for i, vals in enumerate(vals_list):
             # Auto-Create Security Group
@@ -178,10 +214,10 @@ class UserWebsitesGroup(models.Model):
                     "name": f"Website Group: {group_name}",
                 }
 
-                if privilege:
-                    group_vals["privilege_id"] = privilege.id
-                elif category:
-                    group_vals["privilege_id"] = category.id
+                if privilege_id:
+                    group_vals["privilege_id"] = privilege_id
+                elif category_id:
+                    group_vals["privilege_id"] = category_id
 
                 groups_to_create_vals.append(group_vals)
                 indices_needing_groups.append(i)
@@ -206,9 +242,9 @@ class UserWebsitesGroup(models.Model):
             }
 
         try:
-            result = super(UserWebsitesGroup, self).write(vals)
+            with self.env.cr.savepoint():
+                result = super(UserWebsitesGroup, self).write(vals)
         except IntegrityError:
-            self.env.cr.rollback()
             raise ValidationError(_("The Group Website Slug must be unique and valid."))
 
         # --- 301 Redirect Automation ---
@@ -216,10 +252,7 @@ class UserWebsitesGroup(models.Model):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
-            clean_ctx = dict(self.env.context)
-            clean_ctx.pop("prefetch_fields", None)
-            clean_ctx["mail_notrack"] = True
-            redirect_env = self.env["website.rewrite"].with_user(svc_uid).with_context(**clean_ctx)
+            redirect_env = self.env["website.rewrite"].with_user(svc_uid)
 
             group_ids = self.ids
             blog_post_counts = {}
@@ -293,7 +326,9 @@ class UserWebsitesGroup(models.Model):
                 )
                 if not pages:
                     break
-                pages.with_context(mail_notrack=True).write({"is_published": False, "website_published": False})
+                pages.with_context(mail_notrack=True).write(
+                    {"is_published": False, "website_published": False}
+                )
             while True:
                 posts = (
                     self.env["blog.post"]
