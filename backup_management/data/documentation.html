@@ -1,4 +1,5 @@
 <!-- Copyright (c) 2026. Licensed under AGPL-3. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,12 +9,12 @@
 <body>
     <main>
         <!-- [@ANCHOR: backup_management:UX_BACKUP_GUIDE] -->
-<h1 id="UX_BACKUP_GUIDE" >Backup Management User Guide</h1>
+<h1 id="UX_BACKUP_GUIDE" data-trace="[@ANCHOR: backup_management:UX_BACKUP_GUIDE]">Backup Management User Guide</h1>
 
         <p>This module centralizes the management of your system's data protection. It supports both file-level backups (Kopia) and database-level backups (pgBackRest).</p>
 
         <!-- [@ANCHOR: backup_management:UX_CORE_FEATURES] -->
-<h2 id="UX_CORE_FEATURES" >Core Features</h2>
+<h2 id="UX_CORE_FEATURES" data-trace="[@ANCHOR: backup_management:UX_CORE_FEATURES]">Core Features</h2>
         <ul class="feature-list">
             <li><strong>Unified Dashboard:</strong> View the health and status of all your backup configurations in one place.</li>
             <li><strong>Automated Scheduling:</strong> Configure periodic snapshots and retention policies.</li>
@@ -22,20 +23,20 @@
         </ul>
 
         <!-- [@ANCHOR: backup_management:UX_GETTING_STARTED] -->
-<h2 id="UX_GETTING_STARTED" >Getting Started</h2>
+<h2 id="UX_GETTING_STARTED" data-trace="[@ANCHOR: backup_management:UX_GETTING_STARTED]">Getting Started</h2>
 
         <!-- [@ANCHOR: backup_management:UX_BACKUP_SYNC] -->
-<section id="UX_BACKUP_SYNC" >
+<section id="UX_BACKUP_SYNC" data-trace="[@ANCHOR: backup_management:UX_BACKUP_SYNC]">
             <h4>1. Setup a Backup Configuration</h4>
             <p>Go to <strong>Backup Management > Configuration > Backup Configurations</strong>. Create a new record, choosing the appropriate engine (Kopia for files, pgBackRest for databases) and providing the target destination. You can also specify how many daily, weekly, and monthly snapshots to keep.</p>
         </section>
 
         <!-- [@ANCHOR: backup_management:UX_MONITOR_DASHBOARD] -->
-<h4 id="UX_MONITOR_DASHBOARD" >2. Monitor via Dashboard</h4>
+<h4 id="UX_MONITOR_DASHBOARD" data-trace="[@ANCHOR: backup_management:UX_MONITOR_DASHBOARD]">2. Monitor via Dashboard</h4>
         <p>The <strong>Backup Dashboard</strong> shows you at a glance if your backups are up to date. Records highlighted in red indicate that no backup has been successful in the last 26 hours. The dashboard also displays the status of the most recent backup or sync job, providing real-time visibility into background operations.</p>
 
         <!-- [@ANCHOR: backup_management:UX_PERFORM_RESTORE] -->
-<h4 id="UX_PERFORM_RESTORE" >3. Performing a Restore</h4>
+<h4 id="UX_PERFORM_RESTORE" data-trace="[@ANCHOR: backup_management:UX_PERFORM_RESTORE]">3. Performing a Restore</h4>
         <p>In the event of data loss, navigate to <strong>Backups > Snapshots</strong>. Select a known good snapshot and click the <strong>Restore</strong> button. You will be prompted for a target directory where the files should be placed.</p>
 
         <div class="alert alert-warning">
@@ -43,10 +44,9 @@
         </div>
         
     <!-- [@ANCHOR: backup_management:UX_USER_INTERFACE] -->
-<h2 id="UX_USER_INTERFACE" >User Interface</h2>
+<h2 id="UX_USER_INTERFACE" data-trace="[@ANCHOR: backup_management:UX_USER_INTERFACE]">User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
     <img src="/backup_management/static/description/images/form_screenshot.png" alt="Form View Screenshot" class="img-fluid" />
             </main>
 </body>
 </html>
-<!-- [@ANCHOR: COMM_UX_BACKUP_SYNC] -->
