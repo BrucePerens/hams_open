@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
+
 
 // [@ANCHOR: test_tour_create_site]
 
@@ -17,6 +17,7 @@ registry.category("web_tour.tours").add("create_site_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
+        { trigger: 'body', content: 'Wait for page reload to hydrate DOM', run: function() {} },
         {
             content: "Verify site created (targeting invisible dropzone with native pseudo-selector)",
             trigger: '#user_websites_dropzone_home_header:not(:visible)',

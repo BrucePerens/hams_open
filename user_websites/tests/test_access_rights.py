@@ -1,13 +1,14 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
-import odoo.tests
+
 from odoo.tests import tagged
 from odoo.exceptions import AccessError
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestAccessRights(odoo.tests.common.HttpCase):
+class TestAccessRights(HamsTransactionCase):
     def setUp(self):
         super(TestAccessRights, self).setUp()
         self.user_websites_admin_group = self.env.ref(
@@ -55,17 +56,13 @@ class TestAccessRights(odoo.tests.common.HttpCase):
         )
 
     def test_01_regular_user_cannot_access_settings(self):
-        self.authenticate(self.regular_user.login, self.regular_user.login)
         with self.assertRaises(AccessError):
             self.env["res.config.settings"].with_user(self.regular_user).create(
                 {}
-            ).execute()
+            )
             self.env.flush_all()
-        self.logout()
 
     def test_02_admin_can_access_settings_and_see_field(self):
-        self.authenticate("admin", "admin")
-
         try:
             self.env["res.config.settings"].with_user(
                 self.env.ref("base.user_admin")
@@ -75,13 +72,8 @@ class TestAccessRights(odoo.tests.common.HttpCase):
             access = False
 
         self.assertTrue(access, "Admin should have write access to settings")
-        self.logout()
 
     def test_03_websites_admin_can_access_settings_and_see_field(self):
-        self.authenticate(
-            self.websites_admin_user.login, self.websites_admin_user.login
-        )
-
         try:
             self.env["res.config.settings"].with_user(
                 self.websites_admin_user
@@ -103,13 +95,10 @@ class TestAccessRights(odoo.tests.common.HttpCase):
                 "User Websites Admin should be able to read user_websites_administrators_ids"
             )
 
-        self.logout()
-
     def test_04_public_cannot_access_settings(self):
         """
         Verify that a guest (public user) cannot access configuration settings.
         """
-        self.authenticate(None, None)
         public_user = self.env.ref("base.public_user")
 
         with self.assertRaises(AccessError):
@@ -134,7 +123,7 @@ class TestAccessRights(odoo.tests.common.HttpCase):
         visible_reports = (
             self.env["content.violation.report"]
             .with_user(self.test_user_1)
-            .search([("id", "=", report.id)])
+            .search([("id", "=", report.id)], limit=1)
         )
 
         self.assertFalse(

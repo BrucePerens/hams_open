@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
+
 
 // [@ANCHOR: test_tour_create_blog]
 
@@ -17,6 +17,7 @@ registry.category("web_tour.tours").add("create_blog_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
+        { trigger: 'body', content: 'Wait for page reload to hydrate DOM', run: function() {} },
         {
             content: "Verify blog created by targeting the community namespaced dropzone",
             trigger: '#user_websites_dropzone_blog_header:not(:visible)',

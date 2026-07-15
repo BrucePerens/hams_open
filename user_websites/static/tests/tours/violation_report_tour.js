@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
+
 
 // Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
 registry.category("web_tour.tours").add("test_tour_violation_report", {
@@ -17,6 +17,7 @@ registry.category("web_tour.tours").add("test_tour_violation_report", {
             content: "Provide description notes",
             run: "edit Unsolicited advertising links.",
         },
+        { trigger: '.modal-body', content: 'Blur form to commit state', run: 'click' },
         {
             trigger: 'button[type="submit"].btn-danger',
             content: "Submit violation ticket and trigger page reload",

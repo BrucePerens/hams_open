@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
+
 
 // [@ANCHOR: test_tour_gdpr_privacy]
 
@@ -29,6 +29,7 @@ registry.category("web_tour.tours").add("gdpr_privacy_tour", {
             trigger: 'button.o_tour_erasure_initiate',
             run: 'click',
             expectUnloadPage: true,
-        }
+        },
+        { trigger: 'body', content: 'Wait for page reload to hydrate DOM', run: function() {} }
     ],
 });
