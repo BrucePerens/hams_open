@@ -12,7 +12,8 @@
         When an Odoo module needs a specific program, it asks the Binary Downloader to "ensure" it is available. If the program is missing or invalid, it is downloaded, verified for integrity using cryptographic hashes, and installed into a protected internal directory.
     </p>
 
-    <h2 id="UX_BINARY_INSTALL" data-trace="[@ANCHOR: UX_BINARY_INSTALL]">2. Operating the Module</h2>
+    <!-- [@ANCHOR: binary_downloader:UX_BINARY_INSTALL] -->
+    <h2 id="binary_downloader:UX_BINARY_INSTALL">2. Operating the Module</h2>
     <p>
         While most operations happen automatically when other Odoo modules require them, administrators can monitor, configure, and trigger installations manually. This module supports both system-wide "Manifests" (simple, automatic) and fine-grained "Tenant Versions" (advanced control).
     </p>
@@ -71,5 +72,5 @@
 
     <h2>User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
-    <img src="/binary_downloader/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
+    <img src="/binary_downloader/static/description/images/form_screenshot.png" alt="Odoo form view showing binary manifest configuration for kopia" style="max-width: 100%; margin: 10px 0;" />
 </div>

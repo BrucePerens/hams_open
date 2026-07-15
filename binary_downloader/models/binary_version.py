@@ -48,7 +48,7 @@ class BinaryVersion(models.Model):
         string="Downloaded to Central Pool", compute="_compute_is_downloaded"
     )
 
-    _version_uniq = models.Constraint("unique(manifest_id, version_number)", "This version number already exists for this software.")
+    _version_uniq = models.Constraint("UNIQUE(manifest_id, version_number)", "This version number already exists for this software.")
     _url_not_empty = models.Constraint("CHECK(LENGTH(TRIM(url)) > 0)", "The download URL cannot be empty.")
     _chksum_not_empty = models.Constraint("CHECK(LENGTH(TRIM(checksum)) > 0)", "The checksum cannot be empty.")
 
@@ -65,12 +65,9 @@ class BinaryVersion(models.Model):
         for record in self:
             if record.url:
                 url_trimmed = record.url.strip()
-                if not url_trimmed.startswith(("http://", "https://")):
-                    raise ValidationError(
-                        _(
-                            "Only http:// and https:// URLs are allowed for security reasons."
-                        )
-                    )
+                if not url_trimmed.startswith("https://"):
+                    msg = "Only https:// URLs are allowed for security reasons."
+                    raise ValidationError(_(msg))
 
     @api.constrains("archive_type", "extract_member")
     def _check_extract_member(self):
@@ -128,8 +125,11 @@ class BinaryVersion(models.Model):
         self.ensure_one()
         limit = 100
         offset = 0
+        
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("binary_downloader.user_binary_downloader_service")
+        
         LinkModel = self.env["binary.tenant.link"]
-        IncidentModel = self.env["pager.incident"]
+        IncidentModel = self.env["pager.incident"].with_user(svc_uid)
 
         while True:
             links = LinkModel.search(
@@ -146,10 +146,11 @@ class BinaryVersion(models.Model):
                 comp_id = link.website_id.company_id.id
                 if comp_id not in company_to_vals:
                     company_to_vals[comp_id] = []
+                msg = "New binary version %s is available for %s."
                 company_to_vals[comp_id].append({
                     "source": "binary_update",
                     "severity": "medium",
-                    "description": _("New binary version %s is available for %s.") % (self.version_number, self.manifest_id.name),
+                    "description": _(msg) % (self.version_number, self.manifest_id.name),
                     "website_id": link.website_id.id,
                 })
                 
@@ -169,10 +170,18 @@ class BinaryVersion(models.Model):
         }
 
     def unlink(self):
+        checksums = [r.checksum for r in self if r.checksum]
+        checksum_counts = {}
+        if checksums:
+            manifest_groups = self.env["binary.manifest"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
+            for g in manifest_groups:
+                checksum_counts[g["checksum"]] = g["checksum_count"]
+            version_groups = self.env["binary.version"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
+            for g in version_groups:
+                checksum_counts[g["checksum"]] = checksum_counts.get(g["checksum"], 0) + g["checksum_count"]
+
         for record in self:
             if record.manifest_id.name and record.checksum:
-                manifest_count = self.env["binary.manifest"].search_count([("checksum", "=", record.checksum)])
-                version_count = self.search_count([("checksum", "=", record.checksum)])
-                if manifest_count + version_count <= 1:
+                if checksum_counts.get(record.checksum, 0) <= 1:
                     self.env["binary_downloader.mixin"]._unlink_binary_file(record.manifest_id.name, record.checksum)
         return super().unlink()

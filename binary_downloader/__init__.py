@@ -5,3 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 
 from . import models
+
+def _post_init_hook(env):
+    """Inject documentation."""
+    env["ir.module.module"]._bootstrap_knowledge_docs()

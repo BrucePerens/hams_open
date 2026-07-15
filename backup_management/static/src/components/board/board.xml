@@ -47,10 +47,10 @@
                                         </h3>
                                         <h6 class="card-subtitle mb-3 text-muted"><t t-out="conf.engine.toUpperCase()"/> - <t t-out="conf.target_path"/></h6>
                                     <div class="mb-3">
-                                        <button class="btn btn-sm btn-danger me-2 o_tour_trigger_backup_btn" t-on-click="() => this.triggerBackup(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
+                                        <button class="btn btn-sm btn-danger me-2" t-on-click="() => this.triggerBackup(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
                                             <i t-attf-class="fa {{ (conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)) ? 'fa-spinner fa-spin' : 'fa-play' }} me-1" aria-hidden="true"/> Backup
                                         </button>
-                                        <button class="btn btn-sm btn-primary o_tour_sync_snapshots_btn" t-on-click="() => this.syncSnapshots(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
+                                        <button class="btn btn-sm btn-primary" t-on-click="() => this.syncSnapshots(conf.id)" t-att-disabled="conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)">
                                             <i t-attf-class="fa {{ (conf.latest_job and ['pending', 'processing'].includes(conf.latest_job.state)) ? 'fa-spinner fa-spin' : 'fa-refresh' }} me-1" aria-hidden="true"/> Sync
                                         </button>
                                     </div>

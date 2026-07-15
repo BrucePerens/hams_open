@@ -129,24 +129,26 @@ class BinaryTenantLink(models.Model):
             return False
 
         if latest.id == self.active_version_id.id:
+            msg = "The tenant is already running the latest binary version."
             return {
                 "type": "ir.actions.client",
                 "tag": "display_notification",
                 "params": {
                     "title": _("Up to Date"),
-                    "message": _("The tenant is already running the latest binary version."),
+                    "message": _(msg),
                     "type": "info",
                 },
             }
 
         self.active_version_id = latest.id
 
+        msg = "Tenant execution path successfully symlinked to version %s."
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Upgrade Successful"),
-                "message": _("Tenant execution path successfully symlinked to version %s.") % latest.version_number,
+                "message": _(msg) % latest.version_number,
                 "type": "success",
                 "next": {"type": "ir.actions.client", "tag": "reload"},
             },

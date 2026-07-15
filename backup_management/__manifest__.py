@@ -9,7 +9,7 @@
     "summary": "Unified Backup Management Facility (Kopia & pgBackRest)",
     "description": "Unified Backup Management Facility (Kopia & pgBackRest).",
     "author": "Bruce Perens K6BP",
-    "category": "Ham Radio",
+    "category": "Administration",
     "license": "AGPL-3",
     "version": "1.0",
     "depends": [
@@ -21,6 +21,7 @@
         "website",
         "knowledge",
         "hams_rabbitmq",
+        "daemon_key_manager",
     ],
     "external_dependencies": {
         "python": ["cryptography"],
@@ -44,7 +45,7 @@
             "icon": "💾",
             "category": "workspace",
         }
-    ],  # [@ANCHOR: backup_doc_injection]
+    ],  # [@ANCHOR: backup_management:COMM_backup_doc_injection]
     "assets": {
         "web.assets_backend": [
             "backup_management/static/src/components/board/board.js",

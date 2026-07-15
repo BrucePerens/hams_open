@@ -27,13 +27,12 @@
     <!-- Tenant Link Form -->
     <record id="view_binary_tenant_link_form" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_tenant_link_form] -->
-        <!-- burn-ignore-tour -->
         <field name="name">binary.tenant.link.form</field>
         <field name="model">binary.tenant.link</field>
         <field name="arch" type="xml">
             <form string="Tenant Binary Version">
                 <header>
-                    <button name="action_upgrade_to_latest" type="object" string="1-Click Upgrade to Latest" class="btn-primary" icon="fa-level-up" invisible="not id"/>
+                    <button name="action_upgrade_to_latest" type="object" string="1-Click Upgrade to Latest" class="btn-primary" icon="fa-level-up" invisible="not id" aria-label="Upgrade Tenant to Latest Version"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -60,14 +59,13 @@
     <!-- Version Form -->
     <record id="view_binary_version_form" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_binary_version_form] -->
-        <!-- burn-ignore-tour -->
         <field name="name">binary.version.form</field>
         <field name="model">binary.version</field>
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_download_to_pool" type="object" string="Download to Pool" invisible="is_downloaded or not id"/>
-                    <button name="action_notify_tenants" type="object" string="Alert Stations via PagerDuty" class="btn-warning" invisible="not id"/>
+                    <button name="action_download_to_pool" type="object" string="Download to Pool" invisible="is_downloaded or not id" aria-label="Download Version to Pool"/>
+                    <button name="action_notify_tenants" type="object" string="Alert Stations via PagerDuty" class="btn-warning" invisible="not id" aria-label="Notify Tenants via PagerDuty"/>
                 </header>
                 <sheet>
                     <group>

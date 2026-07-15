@@ -8,7 +8,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 class TestServiceWorker(HamsHttpCase):
 
     def test_01_sw_headers(self):
-        # [@ANCHOR: test_service_worker_01]
+        # [@ANCHOR: COMM_test_service_worker_01]
 
         # Tests [@ANCHOR: COMM_caching_sw_serve_route]
         """

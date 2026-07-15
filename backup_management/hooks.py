@@ -17,3 +17,5 @@ def post_init_hook(env):
         user_xml_id="backup_management.user_backup_service_internal",
         env_file_path="/opt/hams/etc/keys/backup_worker.env",
     )
+
+    env(user=svc_uid)["ir.module.module"]._bootstrap_knowledge_docs()

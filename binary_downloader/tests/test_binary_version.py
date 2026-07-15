@@ -22,8 +22,8 @@ class TestBinaryVersion(HamsTransactionCase):
         super().setUp()
         self.manifest = self.env["binary.manifest"].create(
             {
-                "name": "testvbin",
-                "url": "http://example.com/testvbin",
+                "name": "kopia",
+                "url": "http://example.com/kopia",
                 "checksum": "fakehash",
                 "archive_type": "binary",
             }
@@ -32,9 +32,10 @@ class TestBinaryVersion(HamsTransactionCase):
     def test_version_constraints(self):
         # [@ANCHOR: test_binary_version_standard]
         # [!] DIAGNOSTIC FOR AI: Testing constraints for binary.version.
+        msg_non_http = "[!] DIAGNOSTIC FOR AI: Must raise error on non-HTTP URL"
         with self.assertRaises(
             ValidationError,
-            msg="[!] DIAGNOSTIC FOR AI: Must raise error on non-HTTP URL",
+            msg=msg_non_http,
         ):
             self.env["binary.version"].create(
                 {
@@ -46,9 +47,10 @@ class TestBinaryVersion(HamsTransactionCase):
             )
             self.env.flush_all()
 
+        msg_slashes = "[!] DIAGNOSTIC FOR AI: Must raise error on version number with slashes"
         with self.assertRaises(
             ValidationError,
-            msg="[!] DIAGNOSTIC FOR AI: Must raise error on version number with slashes",
+            msg=msg_slashes,
         ):
             self.env["binary.version"].create(
                 {
@@ -60,9 +62,10 @@ class TestBinaryVersion(HamsTransactionCase):
             )
             self.env.flush_all()
 
+        msg_extract = "[!] DIAGNOSTIC FOR AI: Must raise error on missing extract_member for tar.gz"
         with self.assertRaises(
             ValidationError,
-            msg="[!] DIAGNOSTIC FOR AI: Must raise error on missing extract_member for tar.gz",
+            msg=msg_extract,
         ):
             self.env["binary.version"].create(
                 {
@@ -86,10 +89,11 @@ class TestBinaryVersion(HamsTransactionCase):
             }
         )
         path = version._get_central_path()
+        msg_deterministic = "[!] DIAGNOSTIC FOR AI: Path must be deterministic and include name, version and checksum prefix."
         self.assertIn(
-            "testvbin_1.2_aaaaaaaaaaaa",
+            "kopia_1.2_aaaaaaaaaaaa",
             path,
-            "[!] DIAGNOSTIC FOR AI: Path must be deterministic and include name, version and checksum prefix.",
+            msg_deterministic,
         )
 
     def test_download_to_pool_raw(self):
@@ -112,20 +116,23 @@ class TestBinaryVersion(HamsTransactionCase):
         mock_urlopen.return_value = mock_response
 
         success = version.action_download_to_pool()
+        msg_success = "[!] DIAGNOSTIC FOR AI: action_download_to_pool must return True on success"
         self.assertTrue(
             success,
-            "[!] DIAGNOSTIC FOR AI: action_download_to_pool must return True on success",
+            msg_success,
         )
         path = version._get_central_path()
+        msg_exist = "[!] DIAGNOSTIC FOR AI: Versioned binary must exist after download"
         self.assertTrue(
             os.path.exists(path),
-            "[!] DIAGNOSTIC FOR AI: Versioned binary must exist after download",
+            msg_exist,
         )
         with open(path, "rb") as f:
+            msg_match = "[!] DIAGNOSTIC FOR AI: Content must match downloaded data"
             self.assertEqual(
                 f.read(),
                 b"vdata",
-                "[!] DIAGNOSTIC FOR AI: Content must match downloaded data",
+                msg_match,
             )
 
         # Cleanup
@@ -151,7 +158,7 @@ class TestBinaryVersion(HamsTransactionCase):
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response
 
-        mock_zip_open = self.safe_patch("zipfile.ZipFile")  # audit-ignore-path
+        mock_zip_open = self.safe_patch("zipfile.ZipFile")
         mock_zip = MagicMock()
         mock_zip_open.return_value.__enter__.return_value = mock_zip
 

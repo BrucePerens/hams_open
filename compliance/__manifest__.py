@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2024 Bruce Perens K6BP
+# SPDX-License-Identifier: AGPL-3.0-only
 {"name": "Global Compliance & Privacy",
     "summary": "Automated configuration of GDPR/CCPA settings and legal pages.",
     "description": """

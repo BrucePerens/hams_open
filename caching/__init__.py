@@ -3,3 +3,7 @@
 
 from . import controllers
 from . import models
+
+def _post_init_hook(env):
+    """Inject documentation."""
+    pass

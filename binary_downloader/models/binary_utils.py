@@ -37,6 +37,9 @@ class BinaryDownloaderMixin(models.AbstractModel):
             raise UserError(
                 _("Auto-install of %s is only supported on Linux x86_64/aarch64/armv7l. Please install manually.") % cmd_name
             )
+        
+        if not url.startswith(("http://", "https://")):
+            raise UserError(_("Only http:// and https:// URLs are allowed."))
 
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
@@ -69,7 +72,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             # Checksum verification for existing raw binary
             hasher = hashlib.sha256()
             try:
-                with open(target_bin, "rb") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                with open(target_bin, "rb") as f:  # audit-ignore-path  # fmt: skip
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
                 if hasher.hexdigest() == checksum:
@@ -78,22 +81,22 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     return target_bin
                 else:
                     _logger.info("Checksum mismatch for %s, re-downloading...", cmd_name)
-                    os.unlink(target_bin)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                    os.unlink(target_bin)  # audit-ignore-path  # fmt: skip
             except OSError as e:
                 _logger.warning("Failed to check existing binary %s: %s", target_bin, e)
 
         try:
             head_req = urllib.request.Request(
-                url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}, method="HEAD"
+                url, headers={"User-Agent": "HAMS-BinaryDownloader/1.0 (+https://yourdomain.com/bot-info)"}, method="HEAD"
             )
             try:
-                with urllib.request.urlopen(head_req, timeout=15) as head_response:
+                with urllib.request.urlopen(head_req, timeout=15):
                     pass
             except urllib.error.URLError as e:
                 _logger.warning("HEAD request failed for %s: %s", url, e)
 
             get_req = urllib.request.Request(
-                url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
+                url, headers={"User-Agent": "HAMS-BinaryDownloader/1.0 (+https://yourdomain.com/bot-info)"}
             )
             tmp_path = None
             try:
@@ -108,7 +111,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                             tmp.write(chunk)
 
                 hasher = hashlib.sha256()
-                with open(tmp_path, "rb") as f:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                with open(tmp_path, "rb") as f:  # audit-ignore-path  # fmt: skip
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
 
@@ -122,7 +125,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     )
 
                 if archive_type == "tar.gz":
-                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                    with tarfile.open(tmp_path, "r:gz") as tar:  # audit-ignore-path  # fmt: skip
                         found = False
                         extract_target = extract_member or cmd_name
                         for member in tar:
@@ -137,7 +140,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                                 source = tar.extractfile(member)
                                 if source:
                                     with source:
-                                        with open(target_bin, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                                        with open(target_bin, "wb") as target:  # audit-ignore-path  # fmt: skip
                                             shutil.copyfileobj(source, target)
                                     found = True
                                     break
@@ -145,7 +148,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                             raise UserError(_("Member %s not found in archive.") % extract_target)
 
                 elif archive_type == "zip":
-                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                    with zipfile.ZipFile(tmp_path, "r") as zip_ref:  # audit-ignore-path  # fmt: skip
                         extract_target = extract_member or cmd_name
                         found = False
                         for zinfo in zip_ref.infolist():
@@ -158,9 +161,9 @@ class BinaryDownloaderMixin(models.AbstractModel):
                                 if not member_filename:
                                     continue
 
-                                with zip_ref.open(zinfo) as source:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                                with zip_ref.open(zinfo) as source:  # audit-ignore-path  # fmt: skip
 
-                                    with open(target_bin, "wb") as target:  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                                    with open(target_bin, "wb") as target:  # audit-ignore-path  # fmt: skip
                                         shutil.copyfileobj(source, target)
                                 found = True
                                 break
@@ -174,7 +177,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             finally:
                 if tmp_path and os.path.exists(tmp_path):
                     try:
-                        os.unlink(tmp_path)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                        os.unlink(tmp_path)  # audit-ignore-path  # fmt: skip
                     except OSError as e:
                         _logger.warning("Failed to remove temporary file %s: %s", tmp_path, e)
         except (UserError, ValidationError):
@@ -203,6 +206,6 @@ class BinaryDownloaderMixin(models.AbstractModel):
         
         if os.path.exists(target_bin):
             try:
-                os.unlink(target_bin)  # audit-ignore-path: Tested by [@ANCHOR: test_binary_manifest_integration]  # fmt: skip
+                os.unlink(target_bin)  # audit-ignore-path  # fmt: skip
             except OSError as e:
                 _logger.warning("Failed to remove binary %s: %s", target_bin, e)

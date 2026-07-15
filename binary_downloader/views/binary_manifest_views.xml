@@ -18,7 +18,7 @@
                 <field name="url" widget="url"/>
                 <field name="checksum" widget="CopyClipboardChar"/>
                 <field name="is_installed"/>
-                <button name="action_install" type="object" string="Install" icon="fa-download" class="btn-primary" invisible="is_installed" groups="binary_downloader.group_binary_downloader_manager,base.group_system"/>
+                <button name="action_install" type="object" string="Install" icon="fa-download" class="btn-primary" invisible="is_installed" groups="binary_downloader.group_binary_downloader_manager,base.group_system" aria-label="Install Binary"/>
             </list>
         </field>
     </record>
@@ -31,7 +31,7 @@
             <form string="Binary Manifest">
                 <!-- [@ANCHOR: UX_BINARY_INSTALL] -->
                 <header>
-                    <button name="action_install" type="object" string="Install Now" class="oe_highlight" invisible="is_installed or not id" groups="binary_downloader.group_binary_downloader_manager,base.group_system"/>
+                    <button name="action_install" type="object" string="Install Now" class="oe_highlight" invisible="is_installed or not id" groups="binary_downloader.group_binary_downloader_manager,base.group_system" aria-label="Install Binary Now"/>
                 </header>
                 <sheet>
                     <div class="oe_title">

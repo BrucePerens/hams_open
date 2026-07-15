@@ -16,10 +16,10 @@
     </style>
 </head>
 <body>
-    <h1>Daemon Key Manager</h1>
+    <h1 id="daemon-key-manager" data-trace="daemon_key_manager">Daemon Key Manager</h1>
     <p>The Daemon Key Manager is a security tool that manages the connection between Odoo and external background programs (often called "daemons"). Its job is to make these connections secure and easy to manage without you ever needing to handle passwords manually.</p>
 
-    <h2>What does this module do?</h2>
+    <h2 id="what-does-this-module-do" data-trace="what_does_this_module_do">What does this module do?</h2>
     <p>When an external program needs to talk to Odoo—for example, a service that monitors your server or a tool that automatically clears your website's cache—it needs a way to prove who it is. Usually, people use passwords for this, but passwords can be lost, stolen, or forgotten.</p>
     <p>This module replaces passwords with <b>API Keys</b>. An API Key is a long, random string of characters that acts like a single-purpose password. The Daemon Key Manager:</p>
     <ul>
@@ -28,10 +28,10 @@
         <li><b>Rotates</b> them every 60 days, meaning it throws away the old key and makes a new one, so even if a key were somehow discovered, it would soon become useless.</li>
     </ul>
 
-    <h2>How to use the Registry</h2>
+    <h2 id="how-to-use-the-registry" data-trace="how_to_use_the_registry">How to use the Registry</h2>
     <p>You can find the management screen by going to <b>Settings > Security > Daemon Key Registry</b>.</p>
 
-    <h3>1. Viewing Connections</h3>
+    <h3 id="1-viewing-connections" data-trace="1_viewing_connections">1. Viewing Connections</h3>
     <p>The main list shows you all the external programs currently registered to talk to your Odoo system. For each one, you can see:</p>
     <ul>
         <li><b>Daemon Name:</b> The name of the external program.</li>
@@ -41,7 +41,7 @@
         <li><b>Last Rotated:</b> When the key was last updated.</li>
     </ul>
 
-    <h3>2. Refreshing Keys Manually</h3>
+    <h3 id="2-refreshing-keys-manually" data-trace="2_refreshing_keys_manually">2. Refreshing Keys Manually</h3>
     <p>Normally, the system handles everything automatically. However, if you suspect a key might have been compromised, or if you've just moved your system to a new server, you can refresh the keys immediately.</p>
     <ol>
         <li>Open the <b>Daemon Key Registry</b>.</li>
@@ -54,7 +54,7 @@
         <b>Tip:</b> If an external program stops working after a refresh, it should be designed to "self-heal" by re-reading its configuration file. If it doesn't, you may need to restart that specific external program.
     </div>
 
-    <h3>3. Automated Key Rotation</h3>
+    <h3 id="3-automated-key-rotation" data-trace="3_automated_key_rotation">3. Automated Key Rotation</h3>
     <p>The system is designed to be "set and forget." Every 60 days, a background task automatically:</p>
     <ul>
         <li>Identifies keys that are about to expire.</li>
@@ -64,7 +64,7 @@
     </ul>
     <p>This ensures that even if a key were somehow leaked, it would only be valid for a short window of time.</p>
 
-    <h3>4. Adding a New Connection Manually</h3>
+    <h3 id="4-adding-a-new-connection-manually" data-trace="4_adding_a_new_connection_manually">4. Adding a New Connection Manually</h3>
     <p>While most external programs register themselves automatically when their corresponding module is installed, you can add one manually:</p>
     <ol>
         <li>Click the <b>New</b> button in the Daemon Key Registry.</li>
@@ -74,7 +74,7 @@
         <li>Click <b>Save</b>. A new key will be generated and written to the file immediately.</li>
     </ol>
 
-    <h2>Security Rules and Safety</h2>
+    <h2 id="security-rules-and-safety" data-trace="security_rules_and_safety">Security Rules and Safety</h2>
     <p>To protect your data, this module follows strict safety rules:</p>
     <ul>
         <li><b>Strict Locations:</b> All key files MUST be stored inside the <code>/opt/hams/etc/keys/</code> folder. The system will block any attempt to save keys in sensitive areas like your system's configuration folders, user home directories, or system logs.</li>
@@ -82,8 +82,8 @@
         <li><b>File Protection:</b> When a key file is created, the system sets the permissions so that only the Odoo process can read or write it.</li>
     </ul>
 
-    <h2>Common Troubleshooting</h2>
-    <h3>A daemon cannot connect</h3>
+    <h2 id="common-troubleshooting" data-trace="common_troubleshooting">Common Troubleshooting</h2>
+    <h3 id="a-daemon-cannot-connect" data-trace="a_daemon_cannot_connect">A daemon cannot connect</h3>
     <p>If a daemon says "Access Denied," check the following:</p>
     <ol>
         <li>Ensure the <b>Environment File Path</b> in Odoo matches where the daemon is looking for its file.</li>
@@ -91,16 +91,16 @@
         <li>Ensure the <b>Service Account</b> assigned to the daemon is still "Active" in the Users menu.</li>
     </ol>
 
-    <h3>The "Last Rotated" date is very old</h3>
+    <h3 id="the-last-rotated-date-is-very-old" data-trace="the_last_rotated_date_is_very_old">The "Last Rotated" date is very old</h3>
     <p>If the keys haven't been updated in more than 60 days, it might mean the Odoo "Scheduled Actions" (Crons) are not running. Ask your system administrator to check if the Odoo Cron runner is active.</p>
 
     <div class="warning">
         <b>Important:</b> Never share the contents of the <code>.env</code> files with anyone. They contain the "master keys" for your background services.
     </div>
     
-    <h2>User Interface</h2>
+    <h2 id="user-interface" data-trace="user_interface">User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
-    <img src="/daemon_key_manager/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
+    <img src="/daemon_key_manager/static/description/images/form_screenshot.png" alt="Odoo Form View showing Daemon Key Registry with fields for Daemon Name, Service Account, Company, Environment File Path, and Last Rotated" style="max-width: 100%; margin: 10px 0;" />
 
 </body>
 </html>

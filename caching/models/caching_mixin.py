@@ -42,6 +42,8 @@ class CachingMixin(models.AbstractModel):
                         if entry.name.startswith("."):
                             continue
                         if entry.is_dir(follow_symlinks=False):
+                            if entry.name == "description" and path.endswith("static"):
+                                continue
                             _scan_recursive(entry.path)
                         elif entry.is_file(follow_symlinks=False):
                             stat = entry.stat()

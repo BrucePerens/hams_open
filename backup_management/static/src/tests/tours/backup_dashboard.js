@@ -71,7 +71,10 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
         },
         {
             trigger: 'div[name="target_path"] input, input[id="target_path"]',
-            run: "edit /var/lib/odoo/backups/tour_repo",
+            run: function () {
+                this.value = '/var/lib/odoo/backups/tour_repo';
+                this.dispatchEvent(new Event('change', { bubbles: true }));
+            },
             content: "Enter target path",
         },
         {

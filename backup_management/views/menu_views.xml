@@ -19,7 +19,7 @@
         <field name="view_mode">list,form</field>
     </record>
 
-    <menuitem id="menu_backup_root" name="Backups" parent="menu_admin_root" sequence="60"/>
+    <menuitem id="menu_backup_root" name="Management" parent="menu_admin_root" sequence="60"/>
     <menuitem id="menu_backup_board" name="Backup Dashboard" parent="menu_backup_root" action="action_backup_board_client" sequence="5"/>
     <menuitem id="menu_backup_config" name="Configurations" parent="menu_backup_root" action="action_backup_config" sequence="10"/>
     <menuitem id="menu_backup_snapshot" name="Snapshots" parent="menu_backup_root" action="action_backup_snapshot" sequence="20"/>

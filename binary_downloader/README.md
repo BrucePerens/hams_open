@@ -130,6 +130,10 @@ For detailed narratives and end-to-end workflows, refer to the following:
 
 - `[@ANCHOR: test_binary_version_standard]` - Standard unit tests for versioning.
 
+- `[@ANCHOR: test_tenant_link_form]` - View rendering tests for tenant links.
+
+- `[@ANCHOR: test_binary_version_form]` - View rendering tests for binary versions.
+
 ## 6. External Dependencies
 * `python`: `[]`
 </semantic_anchors>

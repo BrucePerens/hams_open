@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
-# Public License v3.0 (AGPL-3.0).
+# Copyright (c) 2024 Bruce Perens K6BP
+# SPDX-License-Identifier: AGPL-3.0-only
 import logging
 
 _logger = logging.getLogger(__name__)

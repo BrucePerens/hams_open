@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
 {
     "name": "Caching PWA",
@@ -26,4 +25,5 @@
     "installable": True,
     "application": False,
     "license": "AGPL-3",
+    "post_init_hook": "_post_init_hook",
 }

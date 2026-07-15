@@ -226,6 +226,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "web.base.url",
             "user_websites_seo.docs_installed",
             "cloudflare.last_static_mtime",
+            "caching.safe_quota_mb",
         ]
 
     @api.model

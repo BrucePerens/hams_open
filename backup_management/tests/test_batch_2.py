@@ -3,7 +3,7 @@
 # This software is released under the AGPL-3.0 License.
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 import psycopg2
 from odoo.tools import mute_logger
 import json
@@ -38,9 +38,10 @@ class TestBatch2Fixes(HamsTransactionCase):
                     "target_path": "/var/lib/odoo/backups/dup",
                     "storage_type": "local",
                 })
+                self.env.flush_all()
 
     def test_sql_constraints_snapshot(self):
-        snap1 = self.env["backup.snapshot"].create({
+        self.env["backup.snapshot"].create({
             "config_id": self.config1.id,
             "snapshot_id": "snap123",
         })
@@ -50,6 +51,7 @@ class TestBatch2Fixes(HamsTransactionCase):
                     "config_id": self.config1.id,
                     "snapshot_id": "snap123", # Duplicate for same config
                 })
+                self.env.flush_all()
 
     def test_upsert_crash_empty_string(self):
         # Mock payload with empty start time

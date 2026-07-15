@@ -6,7 +6,7 @@
 -->
 <odoo>
     <record id="view_backup_job_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:COMM_test_backup_view] -->
         <field name="name">backup.job.form</field>
         <field name="model">backup.job</field>
         <field name="arch" type="xml">
@@ -39,7 +39,7 @@
     </record>
 
     <record id="view_backup_job_list" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:test_backup_view] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: backup_management:COMM_test_backup_view] -->
         <field name="name">backup.job.list</field>
         <field name="model">backup.job</field>
         <field name="arch" type="xml">
@@ -60,7 +60,7 @@
     </record>
 
     <record id="ir_cron_auto_refresh_backup_jobs" model="ir.cron">
-        <!-- audit-ignore-cron: Tested by [@ANCHOR: backup_management:test_backup_cron] -->
+        <!-- audit-ignore-cron: Tested by [@ANCHOR: backup_management:COMM_test_backup_cron] -->
         <field name="name">Backup Job Auto-Refresh</field>
         <field name="model_id" ref="model_backup_job"/>
         <field name="state">code</field>

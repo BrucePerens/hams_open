@@ -19,14 +19,7 @@
             "daemon_key_manager/static/src/js/tours/daemon_key_manager_tour.js",
         ],
     },
-    "knowledge_docs": [
-        {
-            "name": "Daemon Key Manager Documentation",
-            "path": "data/documentation.html",
-            "icon": "🔑",
-            "category": "workspace",
-        }
-    ],
+    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
 }

@@ -17,8 +17,8 @@ class PWAController(http.Controller):
             "short_name": app_name,
             "start_url": "/",
             "display": "standalone",
-            "background_color": website.caching_pwa_background_color if website and hasattr(website, 'caching_pwa_background_color') else "#ffffff",
-            "theme_color": website.caching_pwa_theme_color if website and hasattr(website, 'caching_pwa_theme_color') else "#875A7B",
+            "background_color": website.caching_pwa_background_color if website and website.caching_pwa_background_color else "#ffffff",
+            "theme_color": website.caching_pwa_theme_color if website and website.caching_pwa_theme_color else "#875A7B",
             "icons": [
                 {
                     "src": "/web/static/img/logo.png",

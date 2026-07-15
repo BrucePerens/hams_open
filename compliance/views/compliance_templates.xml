@@ -5,7 +5,7 @@
 -->
 <odoo>
     <template id="compliance_index_template" name="Compliance Documents">
-        <!-- burn-ignore-tour -->
+        <!-- burn-ignore-tour --> <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_index_view] -->
         <t t-call="website.layout">
             <div id="wrap" class="oe_structure oe_empty">
                 <section class="s_text_image pt32 pb32">

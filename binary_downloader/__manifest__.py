@@ -34,5 +34,6 @@
     },
     "installable": True,
     "application": False,
+    "post_init_hook": "_post_init_hook",
     "license": "AGPL-3",
 }

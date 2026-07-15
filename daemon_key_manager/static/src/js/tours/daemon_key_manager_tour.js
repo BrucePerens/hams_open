@@ -35,11 +35,7 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         {
             trigger: 'div[name="env_file_path"] input',
             content: 'Enter environment file path',
-            run: function () {
-                const input = document.querySelector('div[name="env_file_path"] input');
-                input.value = '/opt/hams/etc/keys/test.env';
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            },
+            run: 'edit /opt/hams/etc/keys/test.env',
         },
         {
             trigger: '.o_form_sheet',
@@ -58,25 +54,9 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
         },
         TourUtils.waitForAbsence('.o_notification', 'success toast to disappear'),
         {
-            content: 'Discard form via JS to bypass concurrency or dirty state issues, or click breadcrumb if clean',
-            trigger: 'body',
-            run: function () {
-                const btn = document.querySelector('.o_form_button_cancel');
-                const modalClose = document.querySelector('.modal-footer .btn-secondary');
-                
-                if (modalClose) {
-                    modalClose.click();
-                }
-
-                if (btn && btn.offsetParent !== null) {
-                    btn.click();
-                } else {
-                    const breadcrumb = document.querySelector('.o_control_panel .breadcrumb-item:not(.active):first, .o_control_panel .o_back_button');
-                    if (breadcrumb) {
-                        breadcrumb.click();
-                    }
-                }
-            }
+            content: 'Click breadcrumb to return to list',
+            trigger: '.o_control_panel .breadcrumb-item:not(.active):first, .o_control_panel .o_back_button',
+            run: 'click',
         },
         {
             content: 'Wait for list view to load',

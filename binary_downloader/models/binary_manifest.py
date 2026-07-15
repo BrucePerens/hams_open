@@ -48,12 +48,9 @@ class BinaryManifest(models.Model):
         for record in self:
             if record.url:
                 url_trimmed = record.url.strip()
-                if not url_trimmed.startswith(("http://", "https://")):
-                    raise ValidationError(
-                        _(
-                            "Only http:// and https:// URLs are allowed for security reasons."
-                        )
-                    )
+                if not url_trimmed.startswith("https://"):
+                    msg = "Only https:// URLs are allowed for security reasons."
+                    raise ValidationError(_(msg))
 
     is_installed = fields.Boolean(string="Installed", compute="_compute_is_installed")
 
@@ -105,8 +102,6 @@ class BinaryManifest(models.Model):
             else:
                 record.is_installed = False
 
-
-
     def action_install(self):
         # [@ANCHOR: binary_action_install]
 
@@ -117,9 +112,8 @@ class BinaryManifest(models.Model):
             self.env.user.has_group("binary_downloader.group_binary_downloader_manager")
             or self.env.is_admin()
         ):
-            raise UserError(
-                _("You do not have sufficient permissions to install binaries.")
-            )
+            msg = "You do not have sufficient permissions to install binaries."
+            raise UserError(_(msg))
 
         self.ensure_executable(self.name)
 
@@ -150,10 +144,6 @@ class BinaryManifest(models.Model):
         ):
             raise ValidationError(_("Invalid binary name: %s") % cmd_name)
 
-        system_path = shutil.which(cmd_name)
-        if system_path:
-            return system_path
-
         # CONDUCT SECURITY AUDIT: Binary manifests are technical system-wide resources.
         # We use the micro-privilege service account for resolution.
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -164,6 +154,7 @@ class BinaryManifest(models.Model):
         manifest_record = (
             self.env["binary.manifest"]
             .with_user(svc_uid)
+            .with_company(self.env.company)
             .search(
                 [("name", "=", cmd_name), ("company_id", "=", self.env.company.id)],
                 limit=1,
@@ -177,12 +168,8 @@ class BinaryManifest(models.Model):
             )
 
         if not manifest_record:
-            raise UserError(
-                _(
-                    "Missing dependency: '%s'. Please configure it in Settings -> Technical -> Binary Manifests or install via OS package manager."
-                )
-                % cmd_name
-            )
+            msg = "Missing dependency: '%s'. Please configure it in Settings -> Technical -> Binary Manifests or install via OS package manager."
+            raise UserError(_(msg) % cmd_name)
 
 
         return self.env["binary_downloader.mixin"].with_user(svc_uid)._download_and_extract(
@@ -195,10 +182,18 @@ class BinaryManifest(models.Model):
 
 
     def unlink(self):
+        checksums = [r.checksum for r in self if r.checksum]
+        checksum_counts = {}
+        if checksums:
+            manifest_groups = self.env["binary.manifest"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
+            for g in manifest_groups:
+                checksum_counts[g["checksum"]] = g["checksum_count"]
+            version_groups = self.env["binary.version"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
+            for g in version_groups:
+                checksum_counts[g["checksum"]] = checksum_counts.get(g["checksum"], 0) + g["checksum_count"]
+
         for record in self:
             if record.name and record.checksum:
-                manifest_count = self.search_count([("checksum", "=", record.checksum)])
-                version_count = self.env["binary.version"].search_count([("checksum", "=", record.checksum)])
-                if manifest_count + version_count <= 1:
+                if checksum_counts.get(record.checksum, 0) <= 1:
                     self.env["binary_downloader.mixin"]._unlink_binary_file(record.name, record.checksum)
         return super().unlink()

@@ -2,10 +2,12 @@
     <h1>⚡ Caching Module (<code>caching</code>)</h1>
     <p><em>Copyright © Bruce Perens K6BP. AGPL-3.0.</em></p>
 
-    <h2 id="overview" data-trace="[@ANCHOR: COMM_caching_overview]">1. Overview</h2>
+    <!-- [@ANCHOR: COMM_caching_overview] -->
+    <h2 id="overview">1. Overview</h2>
     <p>The Caching module dramatically speeds up your website by saving essential design files (like JavaScript, CSS, and UI icons) directly in your browser's local storage. This means that after the first time you visit, the website loads almost instantly because it doesn't have to wait for the same files to download over the internet again. This module acts like a high-speed personal library for your web browser, keeping the website's interface ready for use at a moment's notice.</p>
 
-    <h2 id="how_it_works" data-trace="[@ANCHOR: COMM_caching_how_it_works]">2. How it Works</h2>
+    <!-- [@ANCHOR: COMM_caching_how_it_works] -->
+    <h2 id="how_it_works">2. How it Works</h2>
     <p>When you visit the site, a "Service Worker" is installed in your browser. This is a small, specialized script that acts as an intelligent assistant for your web requests.</p>
     <ul>
         <li><strong>Smart Asset Interception:</strong> It automatically identifies and saves Odoo's core assets and custom module files.</li>
@@ -13,7 +15,8 @@
         <li><strong>Automatic Background Updates:</strong> If the website design is updated, your browser will automatically detect the change on the next visit, download the new versions in the background, and seamlessly update your local cache.</li>
     </ul>
 
-    <h2 id="safety_features" data-trace="[@ANCHOR: COMM_caching_safety_features]">3. Important Safety Features</h2>
+    <!-- [@ANCHOR: COMM_caching_safety_features] -->
+    <h2 id="safety_features">3. Important Safety Features</h2>
     <ul>
         <li><strong>Intelligent Quota Management:</strong> Browsers limit how much data a Service Worker can save. To prevent the browser from "panicking" and deleting the entire cache, our assistant calculates exactly how much space is safe. It prioritizes small, essential UI files and automatically skips very large media files, while always reserving at least 10MB for critical system bundles and overhead.</li>
         <li><strong>Privacy-First Architecture:</strong> The module only saves public technical assets required to display the website. It never saves your personal information, login credentials, or private data.</li>
@@ -21,20 +24,24 @@
         <li><strong>High-Performance Delivery:</strong> The module uses advanced database procedures to ensure that checking for cache updates doesn't slow down the server, even with thousands of simultaneous visitors.</li>
     </ul>
 
-    <h2 id="administrator_controls" data-trace="[@ANCHOR: COMM_caching_admin_controls]">4. Administrator Controls</h2>
+    <!-- [@ANCHOR: COMM_caching_admin_controls] -->
+    <h2 id="administrator_controls">4. Administrator Controls</h2>
     <p>Administrators can fine-tune the caching behavior from the <strong>Website Settings</strong> (Configuration &gt; Settings &gt; Website section):</p>
     <ul>
         <li><strong>Safe Quota (MB):</strong> Adjust the maximum total size of files the browser is allowed to save. The default is 35MB, which is safe for most modern browsers. If your website's assets exceed this limit, the module will automatically prioritize essential files and skip the heaviest ones to maintain stability.</li>
         <li><strong>Force Cache Invalidation:</strong> If you have made major visual changes (like updating logos, brand colors, or custom scripts) and want to ensure all users see the update immediately on their next visit, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version and forces all browsers to purge their saved assets and download fresh ones.</li>
     </ul>
 
-    <h2 id="multi_website" data-trace="[@ANCHOR: COMM_caching_multi_website]">5. Multi-Website Management</h2>
+    <!-- [@ANCHOR: COMM_caching_multi_website] -->
+    <h2 id="multi_website">5. Multi-Website Management</h2>
     <p>Each website in your Odoo system has its own independent cache settings. When you change the <strong>Safe Quota</strong> or click <strong>Invalidate Cache Now</strong>, it only affects the website you are currently configuring. This allows you to manage multiple brands and websites on the same server without them interfering with each other's performance optimization.</p>
 
-    <h2 id="troubleshooting" data-trace="[@ANCHOR: COMM_caching_troubleshooting]">6. Troubleshooting</h2>
+    <!-- [@ANCHOR: COMM_caching_troubleshooting] -->
+    <h2 id="troubleshooting">6. Troubleshooting</h2>
     <p>If the website layout appears inconsistent or "broken" after a major update, it is possible that some browsers are still holding onto stale cached files. An administrator can resolve this globally by using the <strong>Invalidate Cache Now</strong> button in the Website Settings. For individual users, a simple page refresh is usually enough to trigger the Service Worker's background update mechanism.</p>
 
-    <h2 id="developer_tips" data-trace="[@ANCHOR: COMM_caching_developer_tips]">7. Developer Tips</h2>
+    <!-- [@ANCHOR: COMM_caching_developer_tips] -->
+    <h2 id="developer_tips">7. Developer Tips</h2>
     <p>For developers creating new modules:</p>
     <ul>
         <li>Assets in <code>/your_module/static/src/js/</code> and <code>/your_module/static/src/css/</code> are automatically cached.</li>

@@ -17,3 +17,4 @@ def post_init_hook(env):
     utils = env["zero_sudo.security.utils"]
     svc_uid = utils._get_service_uid("cloudflare.user_cloudflare_waf")
     env["cloudflare.config.manager"].with_user(svc_uid).initialize_cloudflare_state()
+    env["ir.module.module"].with_user(svc_uid)._bootstrap_knowledge_docs()

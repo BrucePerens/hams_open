@@ -6,12 +6,12 @@
 
         <!-- Verified by [@ANCHOR: test_xpath_rendering_caching_settings] -->
 
-        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_caching_settings] -->
         <!-- burn-ignore-tour -->
         <field name="name">res.config.settings.view.form.inherit.caching</field>
         <field name="model">res.config.settings</field>
         <field name="inherit_id" ref="website.res_config_settings_view_form"/>
         <field name="arch" type="xml">
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_caching_settings] -->
             <xpath expr="//block[@id='website_settings']" position="after">
                 <block title="Caching Service Worker" id="caching_settings">
                     <setting string="Safe Quota" help="Configure the browser storage limit (in MB) for the service worker.">

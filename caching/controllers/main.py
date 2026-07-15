@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class ServiceWorkerController(http.Controller):
 
-    @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True)
+    @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True) # burn-ignore-route
     def service_worker(self):
         # [@ANCHOR: COMM_caching_sw_serve_route]
 
@@ -22,23 +22,17 @@ class ServiceWorkerController(http.Controller):
         """
         # Use Redis for JS content cache
         content = None
-        try:
-            r = get_redis_connection(request.env)
-            cached_js = r.get("caching_sw_js_content")
-            if cached_js:
-                content = cached_js.decode('utf-8') if isinstance(cached_js, bytes) else cached_js
-        except Exception as e: # audit-ignore-catch-all
-            _logger.exception("Failed to retrieve SW JS from Redis: %s", e)
+        r = get_redis_connection(request.env)
+        cached_js = r.get("caching_sw_js_content")
+        if cached_js:
+            content = cached_js.decode('utf-8') if isinstance(cached_js, bytes) else cached_js
 
         if not content:
             try:
                 with tools.file_open("caching/static/src/sw/sw.js", "r") as f:
                     content = f.read()
-                try:
-                    r = get_redis_connection(request.env)
-                    r.setex("caching_sw_js_content", 86400, content)
-                except Exception as e: # audit-ignore-catch-all
-                    _logger.exception("Failed to cache SW JS in Redis: %s", e)
+                r = get_redis_connection(request.env)
+                r.setex("caching_sw_js_content", 86400, content)
             except FileNotFoundError:
                 raise werkzeug.exceptions.NotFound()
 
@@ -69,6 +63,6 @@ class ServiceWorkerController(http.Controller):
         ]
         return request.make_response(content, headers=headers)
 
-# Verified by [@ANCHOR: test_service_worker_01]
+# Verified by [@ANCHOR: COMM_test_service_worker_01]
 
 # Verified by [@ANCHOR: COMM_test_caching_sudo_params]

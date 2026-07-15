@@ -52,7 +52,7 @@ class BackupJob(models.Model):
         Cleanup abandoned jobs that have been stuck in 'processing' for too long.
         This ensures the UI doesn't show them as active forever if a worker dies.
         """
-        # [@ANCHOR: backup_management:auto_refresh_status]
+        # [@ANCHOR: backup_management:COMM_auto_refresh_status]
         timeout_limit = fields.Datetime.now() - datetime.timedelta(hours=2)
         abandoned_jobs = self.env["backup.job"].search(
             [

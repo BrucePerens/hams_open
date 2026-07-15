@@ -21,11 +21,11 @@ logger = logging.getLogger("backup_worker")
 ODOO_URL = os.environ.get("ODOO_URL", "http://odoo:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
-ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:test_backup_worker_real]
+ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
-RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:test_backup_worker_real]
+RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 
 class OdooAPIError(Exception):
@@ -55,7 +55,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
     except urllib.error.HTTPError as e:
         try:
             err_body = e.read().decode("utf-8")
-        except Exception as exc: # audit-ignore-catch-all
+        except Exception as exc: # audit-ignore-catch-all: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_1]
             logger.warning("Could not decode response body: %s", exc)
             err_body = "Could not decode response body."
         raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
@@ -379,7 +379,7 @@ def execute_job(ch, method, properties, body):
             OdooAPIError,
             json.JSONDecodeError,
             urllib.error.URLError,
-        ) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort.  # fmt: skip
+        ) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_2]  # fmt: skip
             logger.error("Failed to report failure back to Odoo: %s", inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -402,20 +402,20 @@ def main():
             channel.start_consuming()
         except pika.exceptions.AMQPConnectionError:
             logger.warning("RabbitMQ offline. Retrying in 5s...")
-            time.sleep(5)  # audit-ignore-sleep
+            time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_1]
         except pika.exceptions.AMQPError as e:
             logger.error("RabbitMQ protocol error: %s. Restarting...", e)
-            time.sleep(5)  # audit-ignore-sleep
+            time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_3]
         except OdooAPIError as e:
             logger.error("Fatal Odoo API error in main loop: %s. Retrying in 10s...", e)
-            time.sleep(10)  # audit-ignore-sleep
+            time.sleep(10)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_2]
         except (
             ValueError,
             TypeError,
             OSError,
-        ) as e:  # audit-ignore-catch-all: General daemon recovery loop.  # fmt: skip
+        ) as e:  # audit-ignore-catch-all: General daemon recovery loop: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_3]  # fmt: skip
             logger.error("Unexpected error in main loop: %s. Restarting...", e)
-            time.sleep(5)  # audit-ignore-sleep
+            time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]
 
 
 if __name__ == "__main__":

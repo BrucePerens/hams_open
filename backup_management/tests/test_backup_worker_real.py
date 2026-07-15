@@ -25,7 +25,7 @@ class TestRealBackupWorker(RealTransactionCase):
         super().tearDown()
 
     def test_real_backup_worker_rabbitmq(self):
-        # Tests [@ANCHOR: backup_management:test_backup_worker_real]
+        # Tests [@ANCHOR: backup_management:COMM_test_backup_worker_real]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         daemon_script = os.path.join(base_dir, "daemon", "backup_worker.py")
 

@@ -62,13 +62,17 @@ registry.category("web_tour.tours").add("binary_install_tour", {
             trigger: '.o_notification_manager .o_notification',
             content: "Wait for the success notification to ensure the RPC resolved",
             run: function () {
-                const notifications = document.querySelectorAll('.o_notification');
-                for (const note of notifications) {
-                    if (note.innerText.includes('Success')) {
-                        return;
-                    }
-                }
-                throw new Error('Success notification not found');
+                return new Promise((resolve) => {
+                    const interval = setInterval(() => {
+                        const notifications = document.querySelectorAll('.o_notification');
+                        for (const note of notifications) {
+                            if (note.innerText.includes('Success')) {
+                                clearInterval(interval);
+                                resolve();
+                            }
+                        }
+                    }, 500);
+                });
             }
         },
     ]),

@@ -2,12 +2,15 @@
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields, _
 from odoo.exceptions import UserError
-from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
+from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 
 
 class CloudflarePurgeWizard(models.TransientModel):
     _name = "cloudflare.purge.wizard"
     _description = "Cloudflare Manual Cache Purge Wizard"
+    
+    # [@ANCHOR: COMM_cf_purge_wizard_tour]
+    
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     website_id = fields.Many2one(
@@ -40,6 +43,8 @@ class CloudflarePurgeWizard(models.TransientModel):
             )
 
         close_action = {"type": "ir.actions.act_window_close"}
+        msg_success_all = _("Purged everything from Cloudflare cache successfully.")
+        msg_fail_all = _("Failed to purge everything from Cloudflare cache.")
 
         if self.purge_type == "everything":
             success = purge_everything(token, zone_id)
@@ -49,20 +54,18 @@ class CloudflarePurgeWizard(models.TransientModel):
                     "tag": "display_notification",
                     "params": {
                         "title": _("Success"),
-                        "message": _(
-                            "Purged everything from Cloudflare cache successfully."
-                        ),
+                        "message": msg_success_all,
                         "type": "success",
                         "sticky": False,
                         "next": close_action,
                     },
                 }
             else:
-                raise UserError(_("Failed to purge everything from Cloudflare cache."))
+                raise UserError(msg_fail_all)
 
         items = [
             i.strip()
-            for i in self.items_to_purge.replace(",", "\n").split("\n")
+            for i in (self.items_to_purge or "").replace(",", "\n").split("\n")
             if i.strip()
         ]
         if not items:
@@ -82,42 +85,42 @@ class CloudflarePurgeWizard(models.TransientModel):
                 f"{base_url}{u}" if str(u).startswith("/") else u for u in items
             ]
             success = purge_urls(normalized_urls, token, zone_id)
+            
+            msg_success_urls = _("Purged specific URLs from Cloudflare cache successfully.")
+            msg_fail_urls = _("Failed to purge specific URLs from Cloudflare cache.")
+            
             if success:
                 return {
                     "type": "ir.actions.client",
                     "tag": "display_notification",
                     "params": {
                         "title": _("Success"),
-                        "message": _(
-                            "Purged specific URLs from Cloudflare cache successfully."
-                        ),
+                        "message": msg_success_urls,
                         "type": "success",
                         "sticky": False,
                         "next": close_action,
                     },
                 }
             else:
-                raise UserError(
-                    _("Failed to purge specific URLs from Cloudflare cache.")
-                )
+                raise UserError(msg_fail_urls)
 
         elif self.purge_type == "tags":
             success = purge_tags(items, token, zone_id)
+            
+            msg_success_tags = _("Purged specific Cache-Tags from Cloudflare cache successfully.")
+            msg_fail_tags = _("Failed to purge specific Cache-Tags from Cloudflare cache.")
+            
             if success:
                 return {
                     "type": "ir.actions.client",
                     "tag": "display_notification",
                     "params": {
                         "title": _("Success"),
-                        "message": _(
-                            "Purged specific Cache-Tags from Cloudflare cache successfully."
-                        ),
+                        "message": msg_success_tags,
                         "type": "success",
                         "sticky": False,
                         "next": close_action,
                     },
                 }
             else:
-                raise UserError(
-                    _("Failed to purge specific Cache-Tags from Cloudflare cache.")
-                )
+                raise UserError(msg_fail_tags)

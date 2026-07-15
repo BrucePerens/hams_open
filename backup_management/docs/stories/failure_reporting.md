@@ -17,3 +17,25 @@ Reliable backups are critical. If a backup fails or hasn't run recently, the SRE
 
 ## Verification
 This behavior is verified by simulating failures in tests `[@ANCHOR: backup_management:COMM_test_backup_cron]`.
+
+### Additional Internal Anchors
+We also have some other features.
+- `[@ANCHOR: backup_management:COMM_action_apply_policies_overwrite]` 
+Next:
+- `[@ANCHOR: backup_management:COMM_backup_worker_stdout_reading]`
+Next:
+- `[@ANCHOR: backup_management:COMM_backup_dashboard_tour]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_1]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_2]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_1]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_2]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_3]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_3]`
+Next:
+- `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]`

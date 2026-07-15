@@ -3,8 +3,6 @@
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo.tools import file_open
-from lxml import etree
-import werkzeug
 from odoo.addons.caching.controllers.main import ServiceWorkerController
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -65,18 +63,16 @@ class TestSettingsAndCache(RealTransactionCase):
 
     def test_06_quota_edge_cases(self):
         """Test quota calculation edge cases with mocked filesystem data."""
-        controller = ServiceWorkerController()
-
         mock_req = MagicMock()
         mock_req.env = self.env["res.users"].env
         website = self.env["website"].get_current_website()
         mock_req.website = website
+        self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
 
         # Case 1: No files
-        self.safe_patch_object(controller, "_get_fs_stats", return_value=(1000.0, []))
-        self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
+        self.safe_patch("odoo.addons.caching.models.caching_mixin.CachingMixin.get_fs_stats", return_value=(1000.0, []))
         website.caching_safe_quota_mb = 35
-        mtime, max_size = controller._get_global_static_info()
+        mtime, max_size = self.env["caching.mixin"].get_global_static_info(35)
         self.assertEqual(
             max_size,
             str(10 * 1024 * 1024),
@@ -85,12 +81,8 @@ class TestSettingsAndCache(RealTransactionCase):
 
         # Case 2: Files fit within quota
         # Total size: 15MB. Quota: 35MB.
-        self.safe_patch_object(
-            controller,
-            "_get_fs_stats",
-            return_value=(1000.0, [10 * 1024 * 1024, 5 * 1024 * 1024]),
-        )
-        mtime, max_size = controller._get_global_static_info()
+        self.safe_patch("odoo.addons.caching.models.caching_mixin.CachingMixin.get_fs_stats", return_value=(1000.0, [10 * 1024 * 1024, 5 * 1024 * 1024]))
+        mtime, max_size = self.env["caching.mixin"].get_global_static_info(35)
         self.assertEqual(
             max_size,
             str(10 * 1024 * 1024 + 1024),
@@ -99,15 +91,8 @@ class TestSettingsAndCache(RealTransactionCase):
 
         # Case 3: Files exceed quota
         # Total size: 40MB. Quota: 35MB.
-        self.safe_patch_object(
-            controller,
-            "_get_fs_stats",
-            return_value=(
-                1000.0,
-                [30 * 1024 * 1024, 10 * 1024 * 1024],
-            ),
-        )
-        mtime, max_size = controller._get_global_static_info()
+        self.safe_patch("odoo.addons.caching.models.caching_mixin.CachingMixin.get_fs_stats", return_value=(1000.0, [30 * 1024 * 1024, 10 * 1024 * 1024]))
+        mtime, max_size = self.env["caching.mixin"].get_global_static_info(35)
         self.assertEqual(
             max_size,
             str(30 * 1024 * 1024 - 1),
@@ -117,7 +102,7 @@ class TestSettingsAndCache(RealTransactionCase):
         # Case 4: Quota is less than reservation (e.g. 5MB)
         # Reservation is 10MB.
         website.caching_safe_quota_mb = 5
-        mtime, max_size = controller._get_global_static_info()
+        mtime, max_size = self.env["caching.mixin"].get_global_static_info(5)
         self.assertEqual(
             max_size,
             str(0),
@@ -140,36 +125,10 @@ class TestSettingsAndCache(RealTransactionCase):
         settings.action_force_cache_invalidation()
         self.env.flush_all()  # Ensure data is written to DB
 
-        # To safely bypass the Odoo test cursor constraint (which blocks self.env.cr.commit),
-        # we will mock the website retrieval in the controller to directly read our uncommitted
-        # ORM object memory space rather than relying on a new HTTP thread.
-        mock_req = MagicMock()
-        mock_req.env = self.env
-        mock_req.website = website
-        self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
+        self.env.cr.commit()
 
-        controller = ServiceWorkerController()
-
-        # Mock file_open to prevent filesystem dependency in unit test using safe_patch
-        mock_content = (
-            "const CACHE_NAME = '__CACHE_NAME__'; "
-            "const MAX_FILE_SIZE_BYTES = __MAX_FILE_SIZE_BYTES__;"
-        )
-        mock_file.read.return_value = mock_content
-        mock_open.return_value.__enter__.return_value = mock_file
-        self.safe_patch(
-            "odoo.addons.caching.controllers.main.tools.file_open", mock_open
-        )
-
-        mock_req.make_response = MagicMock(
-            side_effect=lambda content, headers: werkzeug.wrappers.Response(
-                content, headers=headers
-            )
-        )
-
-        response_2 = controller.service_worker()
-
-        content_2 = response_2.get_data(as_text=True)
+        response_2 = self.url_open("/sw.js")
+        content_2 = response_2.text
 
         self.assertIn("-v2", content_2)
         self.assertNotIn("-v1", content_2)
@@ -191,14 +150,13 @@ class TestSettingsAndCache(RealTransactionCase):
 
         # Tests [@ANCHOR: COMM_caching_fs_scan_logic]
         """Verify that the FS scan correctly uses the service account."""
-        controller = ServiceWorkerController()
         # Reset cache to force re-scan
 
         mock_req = MagicMock()
         mock_req.env = self.env["res.users"].with_context(force_fs_scan=True).env
 
         self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
-        mtime, sizes = controller._get_fs_stats()
+        mtime, sizes = self.env["caching.mixin"].get_fs_stats()
         self.assertGreater(mtime, 0)
         self.assertIsInstance(sizes, list)
 
@@ -212,8 +170,7 @@ class TestSettingsAndCache(RealTransactionCase):
         """
 
         view = self.env.ref("website.res_config_settings_view_form")
-        arch = view.with_context(lang=None)._get_combined_arch()
-        arch_str = etree.tostring(arch, encoding="unicode")
+        arch_str = self.env["res.config.settings"].with_context(lang=None).get_view(view_id=view.id, view_type="form")["arch"]
 
         self.assertIn(
             "Caching Service Worker",

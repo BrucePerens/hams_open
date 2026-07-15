@@ -28,13 +28,11 @@ class BackupSnapshot(models.Model):
         string="Restore Command", compute="_compute_restore_command"
     )
 
-    _sql_constraints = [
-        ("snapshot_uniq", "UNIQUE(config_id, snapshot_id)", "Snapshot IDs must be unique per configuration!")
-    ]
+    _snapshot_uniq = models.Constraint("UNIQUE(config_id, snapshot_id)", "Snapshot IDs must be unique per configuration!")
 
     @api.depends("snapshot_id", "config_id.engine", "config_id.target_path")
     def _compute_restore_command(self):
-        # [@ANCHOR: backup_management:backup_restore_command]
+        # [@ANCHOR: backup_management:COMM_backup_restore_command]
 
         # Verified by [@ANCHOR: test_restore_command_computation]
         for rec in self:

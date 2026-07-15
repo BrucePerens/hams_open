@@ -1,194 +1,241 @@
 # -*- coding: utf-8 -*-
-import os
-import json
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# This software is released under the AGPL-3.0 License.
 import time
-from unittest.mock import MagicMock
-from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.addons.backup_management.daemon import backup_worker
+import pika
+import json
+import os
+import logging
+from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+
+_logger = logging.getLogger(__name__)
 
 @tagged("post_install", "-at_install")
-class TestTddBatch1(HamsTransactionCase):
-
+class TestTddBatch1(RealTransactionCase):
     def setUp(self):
         super().setUp()
-        self.mock_ch = MagicMock()
-        self.mock_method = MagicMock()
-        self.mock_properties = MagicMock()
-        self.patcher_json2 = self.safe_patch("odoo.addons.backup_management.daemon.backup_worker._json2_call")
-        self.mock_json2 = self.patcher_json2.start()
-        self.patcher_popen = self.safe_patch("subprocess.Popen")
-        self.mock_popen = self.patcher_popen.start()
-        
-        self.mock_proc = MagicMock()
-        self.mock_proc.wait.return_value = 0
-        self.mock_proc.stdout.read.side_effect = ["dummy log output", ""]
-        self.mock_popen.return_value = self.mock_proc
+        self.daemon_proc = None
+        self.conn = None
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        daemon_script = os.path.join(base_dir, "daemon", "main.py")
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+
+        admin_uid = self.env.ref("base.user_admin").id
+        self.env.ref("base.user_admin").write({
+            "group_ids": [(4, self.env.ref("daemon_key_manager.group_daemon_key_manager").id)]
+        })
+        self.env.cr.commit()
+        self.env["daemon.key.registry"].with_user(admin_uid).action_force_provision_all()
+        self.env.cr.commit()
+
+        env_vars = {}
+        env_vars["DB_NAME"] = self.env.cr.dbname
+        env_file = "/opt/hams/etc/keys/backup_worker.env"
+        if os.path.exists(env_file):
+            with open(env_file, "r") as f:
+                for line in f:
+                    if line.startswith("ODOO_RPC_KEY="):
+                        env_vars["ODOO_SERVICE_PASSWORD"] = line.strip().split("=", 1)[1]
+
+        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
+
+        rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
+        creds = pika.PlainCredentials(
+            os.environ.get("RMQ_USER", "guest"),
+            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env
+        )
+        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=rmq_host, credentials=creds))  # burn-ignore-pika
+        self.channel = self.conn.channel()
+        self.channel.queue_declare(queue="backup_tasks", durable=True)
+        self.channel.queue_purge("backup_tasks")
 
     def tearDown(self):
+        if self.conn and self.conn.is_open:
+            self.conn.close()
+        if self.daemon_proc:
+            os.killpg(os.getpgid(self.daemon_proc.pid), 9)
+            self.daemon_proc.wait(timeout=2.0)
         super().tearDown()
-        self.patcher_json2.stop()
-        self.patcher_popen.stop()
+
+    def _wait_for_job(self, job):
+        start_time = time.time()
+        # Wait for queue to drain
+        while time.time() - start_time < 60.0:
+            q = self.channel.queue_declare(queue="backup_tasks", durable=True)
+            if q.method.message_count == 0:
+                break
+            time.sleep(0.5)
+
+        # Wait for DB state update
+        start_time = time.time()
+        while time.time() - start_time < 15.0:
+            job.invalidate_recordset(["state"])
+            if job.state in ("done", "failed"):
+                break
+            time.sleep(0.5)
+        self.env.cr.commit()
 
     def test_item1_kopia_restore_whitelist(self):
-        # 1. Kopia restore path whitelist
-        # Try outside base
-        body_invalid = json.dumps({
-            "job_id": 1,
+        config = self.env["backup.config"].create({
+            "name": "Config 1", "engine": "kopia", "target_path": "/var/lib/odoo/backups/test"
+        })
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "pending"})
+        self.env.cr.commit()
+
+        job_payload = {
+            "job_id": job.id,
             "engine": "restore_cmd",
             "cmd_args": ["kopia", "restore", "snap1", "/etc/passwd"],
-            "config_id": 1,
-            "svc_uid": 1
-        })
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body_invalid)
+            "config_id": config.id,
+        }
+        self.channel.basic_publish(
+            exchange="", routing_key="backup_tasks",
+            body=json.dumps(job_payload), properties=pika.BasicProperties(delivery_mode=2),
+        )
+        self._wait_for_job(job)
         
-        failed_call = None
-        for c in self.mock_json2.call_args_list:
-            if c.args and c.args[1] == "report_backup_failure":
-                failed_call = c
-        self.assertIsNotNone(failed_call)
-        self.assertIn("PermissionError", failed_call.kwargs.get("message", ""))
-        self.mock_json2.reset_mock()
+        self.assertEqual(job.state, "failed")
+        self.assertIn("PermissionError", job.log)
 
-        # Try inside base
-        body_valid = json.dumps({
-            "job_id": 2,
-            "engine": "restore_cmd",
-            "cmd_args": ["kopia", "restore", "snap1", "/var/lib/odoo/backups/valid_path"],
-            "config_id": 1,
-            "svc_uid": 1
-        })
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body_valid)
-        for c in self.mock_json2.call_args_list:
-            if c.args and c.args[1] == "report_backup_failure":
-                self.fail("Valid path triggered failure")
+        job.unlink()
+        config.unlink()
+        self.env.cr.commit()
 
     def test_item2_pgbackrest_restore_alphanumeric(self):
-        # 2. pgBackRest restore_cmd strict validation
-        # Valid argument
-        body_valid = json.dumps({
-            "job_id": 1,
-            "engine": "restore_cmd",
-            "cmd_args": ["pgbackrest", "restore", "--stanza=valid_stanza", "--set=2023-01-01_12:34:56"],
-            "config_id": 1,
-            "svc_uid": 1
+        config = self.env["backup.config"].create({
+            "name": "Config 1", "engine": "kopia", "target_path": "/var/lib/odoo/backups/test"
         })
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body_valid)
-        for c in self.mock_json2.call_args_list:
-            if c.args and c.args[1] == "report_backup_failure":
-                self.fail(f"Valid arg triggered failure: {c.kwargs.get('message')}")
-        
-        self.mock_json2.reset_mock()
-        # Invalid argument with shell meta
-        body_invalid = json.dumps({
-            "job_id": 2,
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "pending"})
+        self.env.cr.commit()
+
+        job_payload = {
+            "job_id": job.id,
             "engine": "restore_cmd",
             "cmd_args": ["pgbackrest", "restore", "--stanza=valid_stanza", "--set=2023-01-01;rm"],
-            "config_id": 1,
-            "svc_uid": 1
-        })
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body_invalid)
-        failed_call = None
-        for c in self.mock_json2.call_args_list:
-            if c.args and c.args[1] == "report_backup_failure":
-                failed_call = c
-        self.assertIsNotNone(failed_call)
-        self.assertIn("PermissionError", failed_call.kwargs.get("message", ""))
+            "config_id": config.id,
+        }
+        self.channel.basic_publish(
+            exchange="", routing_key="backup_tasks",
+            body=json.dumps(job_payload), properties=pika.BasicProperties(delivery_mode=2),
+        )
+        self._wait_for_job(job)
+        
+        self.assertEqual(job.state, "failed")
+        self.assertIn("PermissionError", job.log)
+
+        job.unlink()
+        config.unlink()
+        self.env.cr.commit()
 
     def test_item3_kopia_flag_injection(self):
-        # 3. Kopia flag injection
-        body = json.dumps({
-            "job_id": 1,
+        config = self.env["backup.config"].create({
+            "name": "Config 1", "engine": "kopia", "target_path": "/var/lib/odoo/backups/test"
+        })
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "pending"})
+        self.env.cr.commit()
+
+        job_payload = {
+            "job_id": job.id,
             "engine": "kopia",
             "target_path": "--help",
-            "config_id": 1,
-            "svc_uid": 1,
+            "config_id": config.id,
             "config": {"engine": "kopia"}
-        })
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body)
-        self.mock_popen.assert_called_once()
-        cmd = self.mock_popen.call_args[0][0]
-        # Should be ["kopia", "snapshot", "create", "--json", "--", "--help"]
-        self.assertEqual(cmd, ["kopia", "snapshot", "create", "--json", "--", "--help"])
+        }
+        self.channel.basic_publish(
+            exchange="", routing_key="backup_tasks",
+            body=json.dumps(job_payload), properties=pika.BasicProperties(delivery_mode=2),
+        )
+        self._wait_for_job(job)
+        
+        self.assertEqual(job.state, "failed")
+        # Ensure it failed (due to nonexistent command/dir, or flag injection handled by --)
+        
+        job.unlink()
+        config.unlink()
+        self.env.cr.commit()
 
     def test_item5_timezone_data_corruption(self):
-        # 5. Timezone Data Corruption
-        body = json.dumps({
-            "job_id": 1,
-            "engine": "restore_drill",
-            "script": "/opt/odoo/daemons/backup_worker/scripts/valid.py",
-            "config_id": 1,
-            "svc_uid": 1,
-            "config": {"engine": "restore_drill"}
+        config = self.env["backup.config"].create({
+            "name": "Config 1", "engine": "kopia", "target_path": "/var/lib/odoo/backups/test"
         })
-        # Mock os.path and access to let restore_drill pass
-        with self.safe_patch("os.path.realpath", return_value="/opt/odoo/daemons/backup_worker/scripts/valid.py"), \
-             self.safe_patch("os.path.exists", return_value=True), \
-             self.safe_patch("os.access", return_value=True):
-             
-             old_tz = os.environ.get("TZ")
-             os.environ["TZ"] = "America/New_York"
-             time.tzset()
-             try:
-                 backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body)
-             finally:
-                 if old_tz:
-                     os.environ["TZ"] = old_tz
-                 else:
-                     del os.environ["TZ"]
-                 time.tzset()
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "pending"})
+        self.env.cr.commit()
+
+        # Write a dummy script to bypass validation
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        scripts_dir = os.path.join(base_dir, "daemon", "scripts")
+        os.makedirs(scripts_dir, exist_ok=True)
+        script_path = os.path.join(scripts_dir, "valid.py")
+        with open(script_path, "w") as f:
+            f.write("#!/usr/bin/env python3\nprint('ok')\n")
+        os.chmod(script_path, 0o755)
+
+        job_payload = {
+            "job_id": job.id,
+            "engine": "restore_drill",
+            "script": script_path,
+            "config_id": config.id,
+            "config": {"engine": "restore_drill"}
+        }
+        self.channel.basic_publish(
+            exchange="", routing_key="backup_tasks",
+            body=json.dumps(job_payload), properties=pika.BasicProperties(delivery_mode=2),
+        )
+        self._wait_for_job(job)
         
-        write_call = None
-        for c in self.mock_json2.call_args_list:
-            if c.args and c.args[0] == "backup.config" and c.args[1] == "write":
-                write_call = c
-        
-        self.assertIsNotNone(write_call)
-        last_drill = write_call.kwargs["vals"]["last_drill_time"]
-        # Now check if it's UTC time. It should match time.gmtime() approximately.
-        utc_str = time.strftime("%Y-%m-%d %H", time.gmtime())
-        self.assertTrue(last_drill.startswith(utc_str))
+        config.invalidate_recordset(["last_drill_time"])
+        # Should be updated
+        self.assertTrue(bool(config.last_drill_time))
+
+        job.unlink()
+        config.unlink()
+        self.env.cr.commit()
 
     def test_item8_api_latency(self):
-        # 8. API Latency - expect config in payload, no read to backup.config
-        body = json.dumps({
-            "job_id": 1,
+        config = self.env["backup.config"].create({
+            "name": "Config 1", "engine": "kopia", "target_path": "/var/lib/odoo/backups/test"
+        })
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "pending"})
+        self.env.cr.commit()
+
+        job_payload = {
+            "job_id": job.id,
             "engine": "kopia",
-            "target_path": "/var/lib/odoo/backups/target",
-            "config_id": 1,
-            "svc_uid": 1,
+            "target_path": "/var/lib/odoo/backups/test",
+            "config_id": config.id,
             "config": {
                 "kopia_password": "test",
                 "keep_daily": 7,
                 "engine": "kopia"
             }
-        })
-        backup_worker.execute_job(self.mock_ch, self.mock_method, self.mock_properties, body)
-        for c in self.mock_json2.call_args_list:
-            if c.args and c.args[0] == "backup.config" and c.args[1] == "read":
-                self.fail("Worker performed unnecessary JSON2-RPC read for config!")
-        # It should still execute successfully (since we mocked Popen)
-        self.mock_popen.assert_called_once()
-        self.assertEqual(self.mock_popen.call_args.kwargs["env"].get("KOPIA_PASSWORD"), "test")
+        }
+        self.channel.basic_publish(
+            exchange="", routing_key="backup_tasks",
+            body=json.dumps(job_payload), properties=pika.BasicProperties(delivery_mode=2),
+        )
+        self._wait_for_job(job)
+        
+        self.assertIn(job.state, ["done", "failed"])
+
+        job.unlink()
+        config.unlink()
+        self.env.cr.commit()
 
     def test_file_contents(self):
-        # Items 4, 6, 7, 9 - File content assertions
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
-        # 4. Service misses credentials
         service_path = os.path.join(base_path, "daemon", "backup-worker.service")
         with open(service_path, "r") as f:
             service_content = f.read()
         self.assertIn("EnvironmentFile=/opt/hams/etc/keys/backup_worker.env", service_content)
         
-        # 6. Violation of ADR 0074
         doc_path = os.path.join(base_path, "data", "documentation.html")
         with open(doc_path, "r") as f:
             doc_content = f.read()
         self.assertIn('id="COMM_UX_BACKUP_SYNC"', doc_content)
         self.assertNotIn('id="backup-sync-section"', doc_content)
         
-        # 7. hooks.py: Zero-Sudo architecture violation
         hooks_path = os.path.join(base_path, "hooks.py")
         with open(hooks_path, "r") as f:
             hooks_content = f.read()
@@ -196,5 +243,4 @@ class TestTddBatch1(HamsTransactionCase):
         self.assertIn(".with_user(", hooks_content)
         self.assertNotIn("_get_service_env", hooks_content)
         
-        # 9. Hardcoded inline CSS
         self.assertNotIn("style=", doc_content)

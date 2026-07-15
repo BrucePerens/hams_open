@@ -9,6 +9,11 @@ class CloudflareDNSRecord(models.Model):
     _description = "Cloudflare DNS Record"
 
     name = fields.Char(string="Name", required=True)
+
+    _sql_constraints = [
+        ("name_not_empty", "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty.")
+    ]
+
     type = fields.Selection(
         [("A", "A"), ("AAAA", "AAAA"), ("CNAME", "CNAME"), ("TXT", "TXT")],
         string="Type",
@@ -33,9 +38,13 @@ class CloudflareZoneSettings(models.Model):
         ],
         string="SSL Mode",
     )
-    auto_minify = fields.Boolean(string="Auto Minify")
-    bot_fight_mode = fields.Boolean(string="Bot Fight Mode")
+    auto_minify = fields.Boolean(string="Auto Minify", help="Automatically minify HTML, CSS, and JS.")
+    bot_fight_mode = fields.Boolean(string="Bot Fight Mode", help="Challenge bad bots.")
     website_id = fields.Many2one("website", string="Website")
+
+    _sql_constraints = [
+        ("name_not_empty", "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty.")
+    ]
 
 
 class CloudflareRateLimit(models.Model):
@@ -43,6 +52,10 @@ class CloudflareRateLimit(models.Model):
     _description = "Cloudflare Rate Limit"
 
     name = fields.Char(string="Name", required=True)
+
+    _sql_constraints = [
+        ("name_not_empty", "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty.")
+    ]
     match_criteria = fields.Char(string="Matching Criteria")
     mitigation_action = fields.Selection(
         [
@@ -61,6 +74,10 @@ class CloudflareCacheRule(models.Model):
     _description = "Cloudflare Cache Rule"
 
     name = fields.Char(string="Name", required=True)
+
+    _sql_constraints = [
+        ("name_not_empty", "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty.")
+    ]
     edge_cache_ttl = fields.Integer(string="Edge Cache TTL (seconds)")
     bypass_rules = fields.Text(string="Bypass Rules")
     website_id = fields.Many2one("website", string="Website")
@@ -71,6 +88,10 @@ class CloudflareZeroTrustPolicy(models.Model):
     _description = "Cloudflare Zero Trust Policy"
 
     name = fields.Char(string="Name", required=True)
+
+    _sql_constraints = [
+        ("name_not_empty", "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty.")
+    ]
     policy_action = fields.Selection(
         [("allow", "Allow"), ("block", "Block"), ("bypass", "Bypass")], string="Action"
     )
