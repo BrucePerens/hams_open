@@ -19,6 +19,9 @@
                         <setting string="Redis Port" help="The port your Redis server is listening on.">
                             <field name="redis_port"/>
                         </setting>
+                        <setting string="Redis Password" help="The password for your Redis server.">
+                            <field name="redis_password" password="True"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

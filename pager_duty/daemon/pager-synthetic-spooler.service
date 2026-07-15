@@ -13,6 +13,14 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/log
 
 [Install]
 WantedBy=multi-user.target

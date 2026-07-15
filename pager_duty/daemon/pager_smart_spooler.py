@@ -1,4 +1,4 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import subprocess
@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import logging
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,8 @@ def generate_smart_spool():
         spool_file = "/var/log/pager_smart_spool.json"
 
         # Atomic Write: Write to a tmp file and rename to prevent the main daemon from reading a partial write
-        tmp_file = spool_file + ".tmp"
-        with open(tmp_file, "w") as f:
+        fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(spool_file))
+        with os.fdopen(fd, "w") as f:
             json.dump(out, f)
 
         os.chmod(tmp_file, 0o644)

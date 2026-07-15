@@ -1,4 +1,4 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import os
@@ -36,12 +36,14 @@ def execute_check(check):
                     parts = [p.strip() for p in line.split("|")]
                     if len(parts) == 3:
                         url, checksum, fname = parts
-                        target_path = os.path.join(tmpdir, fname)
+                        if not url.startswith(("http://", "https://")):
+                            raise ValueError(f"Invalid URL scheme: {url}")
+                        target_path = os.path.join(tmpdir, os.path.basename(fname))
                         req = urllib.request.Request(
                             url,
                             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
                         )
-                        with urllib.request.urlopen(req) as response, open(target_path, "wb") as out_file:
+                        with urllib.request.urlopen(req, timeout=30) as response, open(target_path, "wb") as out_file:
                             out_file.write(response.read())
 
                         hasher = hashlib.sha256()
@@ -260,8 +262,8 @@ def main():
                     logger.warning("Future result extraction error: %s", e)
 
         if spool_data:
-            tmp_file = SPOOL_FILE + ".tmp"
-            with open(tmp_file, "w") as f:
+            fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(SPOOL_FILE))
+            with os.fdopen(fd, "w") as f:
                 json.dump(spool_data, f)
             os.chmod(tmp_file, 0o644)
             os.rename(tmp_file, SPOOL_FILE)

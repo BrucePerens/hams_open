@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. AGPL-3.0.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import os
 import logging
 import redis
