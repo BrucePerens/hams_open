@@ -49,48 +49,9 @@ class ResUsersModeration(models.Model):
         """Forcefully unpublishes all user content and flags them as suspended."""
         user_ids = self.ids
 
-        is_test = vars(self.env.registry).get("test_cr") is not None
-
-        if not is_test:
-            db_name = self.env.cr.dbname
-            # Fire and forget safely without unbounded thread growth
-            BACKGROUND_EXECUTOR.submit(_async_unpublish_content, db_name, user_ids)
-        else:
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_websites_service_account"
-            )
-            while True:
-                pages = (
-                    self.env["website.page"]
-                    .with_user(svc_uid)
-                    .search(
-                        [
-                            ("owner_user_id", "in", user_ids),
-                            "|",
-                            ("is_published", "=", True),
-                            ("website_published", "=", True),
-                        ],
-                        limit=5000,
-                    )
-                )
-                if not pages:
-                    break
-                pages.with_context(mail_notrack=True).write({"is_published": False, "website_published": False})
-            while True:
-                posts = (
-                    self.env["blog.post"]
-                    .with_user(svc_uid)
-                    .search(
-                        [
-                            ("owner_user_id", "in", user_ids),
-                            ("is_published", "=", True),
-                        ],
-                        limit=5000,
-                    )
-                )
-                if not posts:
-                    break
-                posts.with_context(mail_notrack=True).write({"is_published": False})
+        db_name = self.env.cr.dbname
+        # Fire and forget safely without unbounded thread growth
+        BACKGROUND_EXECUTOR.submit(_async_unpublish_content, db_name, user_ids)
 
         for user in self:
             user.is_suspended_from_websites = True
