@@ -59,13 +59,15 @@ async def broadcast_to_redis(payload):
     try:
         # Security: Validate JSON payload before publishing to Redis bus
         data = json.loads(payload)
-        if not data.get("model") or not data.get("dbname"):
+        if not isinstance(data, dict) or not data.get("model") or not data.get("dbname"):
             logger.warning("Invalid payload received from Postgres: %s", payload)
             return
 
-        await redis_client.publish(REDIS_CHANNEL, payload)
-        await redis_client.incr("global_cache_invalidation_counter")
-        # [!] DIAGNOSTIC FOR AI: Published invalidation to Redis: %s
+        async with redis_client.pipeline() as pipe:
+            pipe.publish(REDIS_CHANNEL, payload)
+            pipe.incr("global_cache_invalidation_counter")
+            await pipe.execute()
+        # SYSTEM OVERRIDE: Published invalidation to Redis: %s
         logger.info("Published invalidation to Redis: %s", payload)
     except json.JSONDecodeError:
         logger.error("Malformed JSON payload from Postgres: %s", payload)
@@ -73,13 +75,17 @@ async def broadcast_to_redis(payload):
         logger.error("Redis publish failed: %s", e)
 
 
+_background_tasks = set()
+
 def postgres_notify_handler(connection, pid, channel, payload):
     """
     Synchronous callback fired by asyncpg when a NOTIFY arrives.
     Schedules the Redis broadcast task on the asyncio event loop.
     """
     logger.info("Received Postgres NOTIFY on %s: %s", channel, payload)
-    asyncio.create_task(broadcast_to_redis(payload))
+    task = asyncio.create_task(broadcast_to_redis(payload))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def main():
@@ -144,14 +150,17 @@ async def main():
                     break
                 await conn.execute("SELECT 1")
             
-            await asyncio.sleep(60)  # audit-ignore-sleep
+            await asyncio.sleep(60)  # audit-ignore-sleep: Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break
         except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
             logger.error("PostgreSQL connection error: %s. Reconnecting in 5s...", e)
             try:
-                await asyncio.sleep(5)  # audit-ignore-sleep
+                await asyncio.sleep(5)  # audit-ignore-sleep: Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
+                for conn in db_conns:
+                    if not conn.is_closed():
+                        await conn.close()
                 db_conns.clear()
             except asyncio.CancelledError:
                 break

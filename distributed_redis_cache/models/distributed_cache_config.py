@@ -27,7 +27,7 @@ class DistributedCacheConfig(models.TransientModel):
     )
 
     def action_invalidate_model_cache(self):
-        # [@ANCHOR: manual_cache_invalidation]
+        # [@ANCHOR: COMM_manual_cache_invalidation]
         self.ensure_one()
         if self.model_id:
             model_name = self.model_id.model
@@ -44,13 +44,10 @@ class DistributedCacheConfig(models.TransientModel):
             }
 
     def check_redis_status(self):
-        # [@ANCHOR: check_redis_status_logic]
+        # [@ANCHOR: COMM_check_redis_status_logic]
         use_redis = bool(redis and redis_pool)
 
-        # Use zero_sudo security utils for system parameter read to comply with security mandates
-        integration_active = self.env["zero_sudo.security.utils"]._get_system_param(
-            "distributed_redis_cache.test_integration_active"
-        )
+
         # Removed test_mode bypass to satisfy test fidelity mandates.
 
         status_msg = _(

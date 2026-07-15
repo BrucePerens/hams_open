@@ -163,12 +163,17 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
 
         class FakeRedisClient:
             def pipeline(self):
-                self.pipe = FakePipeline()
+                if not hasattr(self, 'pipe'):
+                    self.pipe = FakePipeline()
                 return self.pipe
+            async def publish(self, channel, payload):
+                pass
+            async def incr(self, key):
+                pass
 
         cm.redis_client = FakeRedisClient()
         asyncio.run(broadcast_to_redis('{"model": "res.users", "dbname": "test"}'))
-        self.assertTrue(getattr(cm.redis_client.pipe, 'executed', False), "Redis pipeline was not executed")
+        self.assertTrue(getattr(cm.redis_client.pipeline(), 'executed', False), "Redis pipeline was not executed")
 
     def test_cache_manager_strong_reference(self):
         """Test that postgres_notify_handler stores task in _background_tasks."""
@@ -179,26 +184,24 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         if not hasattr(cm, '_background_tasks'):
             cm._background_tasks = set()
 
-        # Run handler in a mock event loop
         async def mock_broadcast(payload):
             pass
 
         original_broadcast = cm.broadcast_to_redis
         cm.broadcast_to_redis = mock_broadcast
         
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        async def run_test():
             postgres_notify_handler(None, None, "test_channel", '{"model": "test"}')
             self.assertTrue(len(cm._background_tasks) > 0, "Task was not added to _background_tasks")
             
-            # Run pending tasks to let the callback remove it
-            pending = asyncio.all_tasks(loop)
-            loop.run_until_complete(asyncio.gather(*pending))
+            # Wait for task to finish
+            await asyncio.gather(*cm._background_tasks)
             self.assertEqual(len(cm._background_tasks), 0, "Task was not removed from _background_tasks")
+            
+        try:
+            asyncio.run(run_test())
         finally:
             cm.broadcast_to_redis = original_broadcast
-            loop.close()
 
     def test_cache_manager_db_conns_leak(self):
         """Test that db_conns are closed on exception before clearing."""

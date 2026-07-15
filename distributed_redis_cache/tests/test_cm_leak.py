@@ -1,7 +1,9 @@
-import asyncio
-import unittest
-from unittest.mock import MagicMock, AsyncMock, patch
+from odoo.tests.common import TransactionCase, tagged
+import os
+import gc
+from unittest.mock import patch, MagicMock
 
-class TestCMLeak(unittest.IsolatedAsyncioTestCase):
+@tagged('post_install', '-at_install')
+class TestCMLeak(TransactionCase):
     async def test_leak(self):
         pass

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. AGPL-3.0.
-import json
 import logging
 
 from odoo import models, tools

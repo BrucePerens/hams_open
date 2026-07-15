@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Copyright © Bruce Perens K6BP. AGPL-3.0. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -27,11 +28,11 @@
 
 <div class="note">
     <strong>Smart Cleanup:</strong> Instead of clearing everything and slowing down your system, this module only clears the specific data that actually changed.
+</div>
 
     <h2>User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
     <img src="/distributed_redis_cache/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
-</div>
 
 <h2>User Instructions</h2>
 
@@ -39,12 +40,11 @@
 <p>The <b>Distributed Cache Manager</b> is your central dashboard for ensuring synchronization across your Odoo cluster. Administrators can find these tools under the <b>Distributed Cache</b> menu in Odoo Settings.</p>
 
 <h4 id="check_redis_status_logic" data-trace="[@ANCHOR: COMM_distributed_redis_cache:check_redis_status_logic]">Checking System Health</h4>
-<p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server.
+<p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server.</p>
 <ul>
     <li><b>Green Success:</b> Everything is working perfectly.</li>
     <li><b>Red Error:</b> The shared memory is unreachable. Don't worry—Odoo will automatically switch to "Fail-Open" mode and use standard local memory so your website stays online.</li>
 </ul>
-</p>
 
 <h3 id="distributed_cache_settings_view" data-trace="[@ANCHOR: COMM_distributed_redis_cache:distributed_cache_settings_view]">Configuration</h3>
 <p>Administrators can configure the Redis connection under the <b>Settings</b> menu in the <b>Distributed Redis Cache</b> section.</p>

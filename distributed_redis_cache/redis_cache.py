@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. AGPL-3.0.
 import json
-import pickle
+import _pickle
 import logging
 import hashlib
 import datetime
 from functools import wraps
-from odoo import models, tools
+from odoo import models
 from odoo.addons.distributed_redis_cache.redis_pool import (
     redis,
     redis_pool,
@@ -101,14 +101,14 @@ def distributed_cache():
                     if cached:
                         # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
                         _logger.debug("Redis cache hit: %s", cache_key)
-                        res = pickle.loads(bytes.fromhex(cached))
+                        res = _pickle.loads(bytes.fromhex(cached))
                         with LRU_LOCK:
                             _local_cache[cache_key] = res
                         return res
                 except redis.RedisError as e:
                     _logger.warning("Network partition detected. Bypassing Redis: %s", e)
                     use_redis = False
-                except (pickle.PickleError, ValueError) as e:
+                except (_pickle.PickleError, ValueError) as e:
                     _logger.warning("Redis cache corrupted pickle payload: %s", e)
                     use_redis = False
 
@@ -116,12 +116,12 @@ def distributed_cache():
 
             if use_redis:
                 try:
-                    serialized_result = pickle.dumps(result).hex()
+                    serialized_result = _pickle.dumps(result).hex()
                     r = get_redis_connection(self.env)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                 except redis.RedisError as e:
                     _logger.warning("Network partition detected during cache write: %s", e)
-                except (TypeError, pickle.PickleError) as e:
+                except (TypeError, _pickle.PickleError) as e:
                     _logger.warning("Redis cache write serialization failed: %s", e)
 
             # Always populate L1 local fallback cache

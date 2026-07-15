@@ -3,26 +3,30 @@
 import datetime
 import ast
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
-from odoo.tests.common import TransactionCase
+from odoo.tests.common import tagged
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.distributed_redis_cache import redis_pool
 from odoo.addons.distributed_redis_cache import redis_cache
 from odoo.addons.distributed_redis_cache.models import ir_http
 
-class TestB2Fixes(TransactionCase):
+@tagged('post_install', '-at_install')
+class TestB2Fixes(HamsTransactionCase):
     
     def setUp(self):
         super().setUp()
-        if hasattr(redis_pool, "_db_configs"):
+        try:
             redis_pool._db_configs = {}
+        except AttributeError:
+            pass
         redis_pool._custom_pools = {}
             
     def test_b2_1_redis_pool_caching(self):
         env_mock = MagicMock()
         env_mock.cr.dbname = "test_db"
         sec_mock = MagicMock()
-        sec_mock._get_system_param.side_effect = ["localhost", "6379", "password"] * 5
+        sec_mock._get_system_param.side_effect = ["redis", "6379", "password"] * 5
         env_mock.__getitem__.return_value.with_context.return_value = sec_mock
         
         redis_pool.get_redis_connection(env_mock)
@@ -46,12 +50,12 @@ class TestB2Fixes(TransactionCase):
         with redis_cache.LRU_LOCK:
             redis_cache._local_cache.clear()
             
-        with patch('odoo.addons.distributed_redis_cache.redis_cache.redis_pool', None):
-            obj1 = MockSelf([1, 2])
-            dummy_method(obj1)
-            
-            obj2 = MockSelf([1, 3])
-            dummy_method(obj2)
+        self.safe_patch('odoo.addons.distributed_redis_cache.redis_cache.redis_pool', None)
+        obj1 = MockSelf([1, 2])
+        dummy_method(obj1)
+        
+        obj2 = MockSelf([1, 3])
+        dummy_method(obj2)
             
         with redis_cache.LRU_LOCK:
             keys = list(redis_cache._local_cache.d.keys())
@@ -79,7 +83,8 @@ class TestB2Fixes(TransactionCase):
                         if name.name in ("_local_cache", "LRU_LOCK"):
                             found_import = True
                             
-        self.assertTrue(found_import and not inside_func, "Imports must be at module level")
+        self.assertTrue(found_import, "Imports must be present")
+        self.assertFalse(inside_func, "Imports must be at module level")
 
     def test_b2_4_ai_laziness_getattr(self):
         with open(ir_http.__file__, "r") as f:
@@ -113,22 +118,23 @@ class TestB2Fixes(TransactionCase):
         mock_redis = MagicMock()
         mock_redis.get.return_value = None
         
-        with patch('odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection', return_value=mock_redis):
-            with patch('odoo.addons.distributed_redis_cache.redis_cache.redis', MagicMock()):
-                with patch('odoo.addons.distributed_redis_cache.redis_cache.redis_pool', MagicMock()):
-                    obj = MockSelf()
-                    res1 = return_datetime(obj)
-                    
-                    mock_redis.setex.assert_called_once()
-                    args, kwargs = mock_redis.setex.call_args
-                    data = args[2]
-                    
-                    mock_redis.get.return_value = data
-                    
-                    with redis_cache.LRU_LOCK:
-                        redis_cache._local_cache.clear()
-                        
-                    res2 = return_datetime(obj)
+        self.safe_patch('odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection', MagicMock(return_value=mock_redis))
+        self.safe_patch('odoo.addons.distributed_redis_cache.redis_cache.redis', MagicMock())
+        self.safe_patch('odoo.addons.distributed_redis_cache.redis_cache.redis_pool', MagicMock())
+        
+        obj = MockSelf()
+        res1 = return_datetime(obj)
+        
+        mock_redis.setex.assert_called_once()
+        args, kwargs = mock_redis.setex.call_args
+        data = args[2]
+        
+        mock_redis.get.return_value = data
+        
+        with redis_cache.LRU_LOCK:
+            redis_cache._local_cache.clear()
+            
+        res2 = return_datetime(obj)
                     
         self.assertEqual(type(res1), datetime.datetime)
         self.assertEqual(type(res2), datetime.datetime)
@@ -137,7 +143,7 @@ class TestB2Fixes(TransactionCase):
         env_mock = MagicMock()
         env_mock.cr.dbname = "test_db7"
         sec_mock = MagicMock()
-        sec_mock._get_system_param.side_effect = ["localhost", "invalid_port", "password", "localhost", "invalid_port", "password"]
+        sec_mock._get_system_param.side_effect = ["redis", "invalid_port", "password", "redis", "invalid_port", "password"]
         env_mock.__getitem__.return_value.with_context.return_value = sec_mock
         
         redis_pool.get_redis_connection(env_mock)
@@ -146,7 +152,7 @@ class TestB2Fixes(TransactionCase):
         env_mock = MagicMock()
         env_mock.cr.dbname = "test_db8"
         sec_mock = MagicMock()
-        sec_mock._get_system_param.side_effect = ["localhost", "6379", "password", "localhost", "6379", "password"]
+        sec_mock._get_system_param.side_effect = ["redis", "6379", "password", "redis", "6379", "password"]
         env_mock.__getitem__.return_value.with_context.return_value = sec_mock
         
         redis_pool.get_redis_connection(env_mock)

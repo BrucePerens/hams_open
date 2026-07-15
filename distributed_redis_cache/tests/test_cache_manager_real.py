@@ -1,9 +1,9 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
-# Tests [@ANCHOR: cache_manager_config]
+# Tests [@ANCHOR: COMM_cache_manager_config]
 
-# Tests [@ANCHOR: cache_manager_redis_publish]
+# Tests [@ANCHOR: COMM_cache_manager_redis_publish]
 import time
 import redis
 import json
