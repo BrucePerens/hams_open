@@ -18,4 +18,4 @@ def post_init_hook(env):
         env_file_path="/opt/hams/etc/keys/backup_worker.env",
     )
 
-    env(user=svc_uid)["ir.module.module"]._bootstrap_knowledge_docs()
+    env["ir.module.module"].with_user(svc_uid)._bootstrap_knowledge_docs()
