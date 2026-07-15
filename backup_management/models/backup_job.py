@@ -62,11 +62,11 @@ class BackupJob(models.Model):
             limit=1000
         )
         for job in abandoned_jobs:
+            timeout_msg = """\n[SYSTEM] Job timed out after 2 hours of inactivity."""
             job.write(
                 {
                     "state": "failed",
-                    "output_log": (job.output_log or "")
-                    + "\n[SYSTEM] Job timed out after 2 hours of inactivity.",
+                    "output_log": (job.output_log or "") + timeout_msg,
                 }
             )
 
