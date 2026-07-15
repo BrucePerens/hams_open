@@ -15,6 +15,7 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 _logger = logging.getLogger(__name__)
 
 
+
 @tagged("post_install", "-at_install")
 class TestRealCacheManager(RealTransactionCase):
     def setUp(self):
@@ -30,6 +31,7 @@ class TestRealCacheManager(RealTransactionCase):
         super().tearDown()
 
     def test_real_cache_manager_redis(self):
+        # Tests [@ANCHOR: COMM_test_cache_manager_sleep]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         daemon_script = os.path.join(base_dir, "daemons", "cache_manager.py")
 

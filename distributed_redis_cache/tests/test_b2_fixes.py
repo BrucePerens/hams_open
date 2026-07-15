@@ -18,8 +18,8 @@ class TestB2Fixes(HamsTransactionCase):
         super().setUp()
         try:
             redis_pool._db_configs = {}
-        except AttributeError:
-            pass
+        except Exception:
+            _logger.debug("no configs yet")
         redis_pool._custom_pools = {}
             
     def test_b2_1_redis_pool_caching(self):

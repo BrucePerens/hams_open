@@ -94,6 +94,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         class MockEnv(dict):
             def __init__(self):
                 self["zero_sudo.security.utils"] = MockSecurityUtils()
+                self.cr = type("cr", (), {"dbname": "test"})()
 
         env = MockEnv()
         
@@ -108,9 +109,16 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         from odoo.addons.distributed_redis_cache.daemons.cache_manager import broadcast_to_redis
         import odoo.addons.distributed_redis_cache.daemons.cache_manager as cm
         
+        class FakePipeline:
+            async def __aenter__(self): return self
+            async def __aexit__(self, exc_type, exc_val, exc_tb): pass
+            def publish(self, channel, payload): return self
+            def incr(self, key): return self
+            async def execute(self): raise ValueError("Intentional fake exception")
+
         class FakeRedisClient:
-            async def publish(self, channel, payload):
-                raise ValueError("Intentional fake exception")
+            def pipeline(self):
+                return FakePipeline()
         
         cm.redis_client = FakeRedisClient()
         try:
@@ -130,11 +138,18 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         from odoo.addons.distributed_redis_cache.daemons.cache_manager import broadcast_to_redis
         import odoo.addons.distributed_redis_cache.daemons.cache_manager as cm
 
+        class FakePipeline:
+            async def __aenter__(self): return self
+            async def __aexit__(self, exc_type, exc_val, exc_tb): pass
+            def publish(self, channel, payload): return self
+            def incr(self, key): return self
+            async def execute(self): pass
+
         class FakeRedisClient:
-            async def publish(self, channel, payload):
-                pass
-            async def incr(self, key):
-                pass
+            def pipeline(self):
+                return FakePipeline()
+            async def publish(self, channel, payload): pass
+            async def incr(self, key): pass
 
         cm.redis_client = FakeRedisClient()
         try:
@@ -154,10 +169,10 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
                 return self
             async def __aexit__(self, exc_type, exc_val, exc_tb):
                 pass
-            async def publish(self, channel, payload):
-                pass
-            async def incr(self, key):
-                pass
+            def publish(self, channel, payload):
+                return self
+            def incr(self, key):
+                return self
             async def execute(self):
                 self.executed = True
 
@@ -232,8 +247,8 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         from unittest.mock import patch
         
         with patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncpg') as mock_asyncpg, \
-             patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.redis.Redis') as mock_redis, \
-             patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncio.sleep') as mock_sleep:
+             patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.redis.Redis'), \
+             patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncio.sleep'):
              
             # Make sleep raise CancelledError so main() loop breaks
             def sleep_side_effect(delay):

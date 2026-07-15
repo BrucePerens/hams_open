@@ -38,7 +38,7 @@ class IrHttp(models.AbstractModel):
                     with LRU_LOCK:
                         _local_cache.clear()
                     cls._last_cache_counter = latest
-            except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+            except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: redis_cache_interceptor]
                 _logger.exception("Failed to execute stateless Redis poll: %s", e)
 
         return super()._authenticate(endpoint)

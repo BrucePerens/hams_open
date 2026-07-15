@@ -18,7 +18,6 @@ _logger = logging.getLogger(__name__)
 
 # Tests [@ANCHOR: COMM_notify_model_invalidation_logic]
 
-# Tests [@ANCHOR: COMM_redis_cache_interceptor]
 
 # Tests [@ANCHOR: COMM_manual_cache_invalidation]
 
@@ -37,6 +36,7 @@ class TestDistributedCacheTour(HamsHttpCase):
         self.env.ref('base.user_admin').lang = 'en_US'
 
     def test_distributed_cache_admin_tour(self):
+        # Tests [@ANCHOR: redis_cache_interceptor]
         """
         Executes the UI tour for the Distributed Redis Cache Manager.
         - Standard Mode: Mocks the backend RPCs to simulate success without network calls.
