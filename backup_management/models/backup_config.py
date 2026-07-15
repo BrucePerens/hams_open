@@ -85,12 +85,18 @@ class BackupConfig(models.Model):
     snapshot_ids = fields.One2many("backup.snapshot", "config_id", string="Snapshots")
 
 
-    _name_uniq = models.Constraint("UNIQUE(name)", "The backup configuration name must be unique!")
-    _target_uniq = models.Constraint("UNIQUE(engine, target_path)", "The target path must be unique per engine!")
-    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The configuration name cannot be empty.")
-    _target_path_not_empty = models.Constraint("CHECK(LENGTH(TRIM(target_path)) > 0)", "The target path cannot be empty.")
-    _retention_positive = models.Constraint("CHECK(keep_daily >= 0 AND keep_weekly >= 0 AND keep_monthly >= 0)", "Retention values cannot be negative.")
-    _min_size_positive = models.Constraint("CHECK(minimum_size_mb >= 0)", "Minimum size threshold cannot be negative.")
+    _name_uniq_msg = """The backup configuration name must be unique!"""
+    _name_uniq = models.Constraint("UNIQUE(name)", _name_uniq_msg)
+    _target_uniq_msg = """The target path must be unique per engine!"""
+    _target_uniq = models.Constraint("UNIQUE(engine, target_path)", _target_uniq_msg)
+    _name_not_empty_msg = """The configuration name cannot be empty."""
+    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", _name_not_empty_msg)
+    _target_empty_msg = """The target path cannot be empty."""
+    _target_path_not_empty = models.Constraint("CHECK(LENGTH(TRIM(target_path)) > 0)", _target_empty_msg)
+    _retention_pos_msg = """Retention values cannot be negative."""
+    _retention_positive = models.Constraint("CHECK(keep_daily >= 0 AND keep_weekly >= 0 AND keep_monthly >= 0)", _retention_pos_msg)
+    _min_size_pos_msg = """Minimum size threshold cannot be negative."""
+    _min_size_positive = models.Constraint("CHECK(minimum_size_mb >= 0)", _min_size_pos_msg)
 
     def _get_fernet(self):
         key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_env_key]  # fmt: skip
@@ -507,9 +513,8 @@ class BackupConfig(models.Model):
                 for c in new_snaps:
                     snap_mb = c.get("size_bytes", 0) / (1024 * 1024)
                     if snap_mb < self.minimum_size_mb:
-                        self.report_backup_failure(
-                            f"Snapshot Anomaly: Snapshot {c.get('snapshot_id')} is {snap_mb:.2f} MB, below the {self.minimum_size_mb} MB minimum."
-                        )
+                        err_msg = f"""Snapshot Anomaly: Snapshot {c.get('snapshot_id')} is {snap_mb:.2f} MB, below the {self.minimum_size_mb} MB minimum."""
+                        self.report_backup_failure(err_msg)
 
     @api.model
     def cron_sync_all_backups(self):
@@ -542,9 +547,8 @@ class BackupConfig(models.Model):
                 if delta > (
                     26 * 60 * 60
                 ):  # 26 hours (allows for 24h cron jitter without false positives)
-                    conf.report_backup_failure(
-                        f"Stale Backup Alert: No new snapshots detected for {conf.name} in over 26 hours."
-                    )
+                    stale_msg = f"""Stale Backup Alert: No new snapshots detected for {conf.name} in over 26 hours."""
+                    conf.report_backup_failure(stale_msg)
 
             if conf.restore_drill_script:
                 delta_drill = (
