@@ -17,6 +17,11 @@ _logger = logging.getLogger(__name__)
 @tagged("post_install", "-at_install")
 class TestBackupManagement(RealTransactionCase):
     def tearDown(self):
+        if hasattr(self, 'config_kopia') and self.config_kopia.exists():
+            self.config_kopia.unlink()
+        if hasattr(self, 'config_pg') and self.config_pg.exists():
+            self.config_pg.unlink()
+        self.env.cr.commit()
         if os.path.exists("/var/lib/odoo/backup_repo"):
             if os.path.isdir("/var/lib/odoo/backup_repo"):
                 shutil.rmtree("/var/lib/odoo/backup_repo")
@@ -186,15 +191,15 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_08d_kopia_auto_download(self):
         # Tests [@ANCHOR: test_kopia_auto_download]
-        mock_get_exe = self.safe_patch_object(
-            type(self.config_kopia), "_get_executable", return_value="/bin/kopia"
+        mock_ensure = self.safe_patch_object(
+            type(self.env["binary.manifest"]), "ensure_executable", return_value="/opt/kopia"
         )
 
         self.config_kopia.message_post(body=_("Simulating executable resolution logs"))
 
         exe_path = self.config_kopia._get_executable("kopia")
-        mock_get_exe.assert_called_once_with("kopia")
-        self.assertEqual(exe_path, "/bin/kopia")
+        mock_ensure.assert_called_once_with("kopia")
+        self.assertEqual(exe_path, "/opt/kopia")
 
     def test_08e_security_path_validation(self):
         with self.assertRaises(UserError):

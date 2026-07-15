@@ -38,7 +38,8 @@ class BackupRestoreWizard(models.TransientModel):
         if self.snapshot_id.config_id.engine == "pgbackrest":
             if not self.restore_target_path:
                 raise UserError(_("Restore target stanza is required."))
-            validate_backup_path(self.restore_target_path)
+            if not self.restore_target_path.replace("_", "").isalnum():
+                raise UserError(_("Invalid pgBackRest stanza name. Use only alphanumeric characters and underscores."))
 
         # Use Service ID for security & audit trails
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

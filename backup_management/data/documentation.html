@@ -4,17 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Backup Management User Documentation</title>
-    <style>
-        body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        h2 { color: #34495e; margin-top: 30px; }
-        h4 { color: #7f8c8d; }
-        .feature-list { list-style: none; padding: 0; }
-        .feature-list li { margin-bottom: 10px; padding-left: 20px; position: relative; }
-        .feature-list li:before { content: "✓"; position: absolute; left: 0; color: #27ae60; }
-        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        .note { background: #fff3cd; border-left: 5px solid #ffeeba; padding: 15px; margin: 20px 0; }
-    </style>
 </head>
 <body>
     <main>
@@ -32,7 +21,7 @@
 
         <h2>Getting Started</h2>
 
-        <section id="backup-sync-section" data-trace="[@ANCHOR: backup_management:COMM_UX_BACKUP_SYNC]">
+        <section id="COMM_UX_BACKUP_SYNC" data-trace="[@ANCHOR: backup_management:COMM_UX_BACKUP_SYNC]">
             <h4>1. Setup a Backup Configuration</h4>
             <p>Go to <strong>Backup Management > Configuration > Backup Configurations</strong>. Create a new record, choosing the appropriate engine (Kopia for files, pgBackRest for databases) and providing the target destination. You can also specify how many daily, weekly, and monthly snapshots to keep.</p>
         </section>
@@ -43,13 +32,13 @@
         <h4>3. Performing a Restore</h4>
         <p>In the event of data loss, navigate to <strong>Backups > Snapshots</strong>. Select a known good snapshot and click the <strong>Restore</strong> button. You will be prompted for a target directory where the files should be placed.</p>
 
-        <div class="note">
+        <div class="alert alert-warning">
             <strong>Security Note:</strong> Only users with "Backup Administrator" privileges can create configurations or trigger restore operations.
         </div>
         
     <h2>User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
-    <img src="/backup_management/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
+    <img src="/backup_management/static/description/images/form_screenshot.png" alt="Form View Screenshot" class="img-fluid" />
     </main>
 </body>
 </html>

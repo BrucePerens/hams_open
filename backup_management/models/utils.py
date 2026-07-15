@@ -79,5 +79,5 @@ def publish_to_rabbitmq(env, msg):
         env["hams_rabbitmq.pool"].publish(
             "", "backup_tasks", msg
         )
-    except Exception as e:  # audit-ignore-catch-all  # fmt: skip
+    except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: backup_management:test_rmq_publish_failure]  # fmt: skip
         _logger.exception("Failed to publish backup task to RMQ pool: %s", e)

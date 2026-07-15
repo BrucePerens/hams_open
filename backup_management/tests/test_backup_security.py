@@ -92,7 +92,7 @@ class TestBackupSecurity(RealTransactionCase):
     def test_symlink_traversal(self):
         # Create a symlink to a forbidden path
         symlink_path = "/var/lib/odoo/backups/evil_link_test"
-        if os.path.exists(symlink_path):
+        if os.path.lexists(symlink_path):
             os.remove(symlink_path)
 
         try:
@@ -185,6 +185,9 @@ class TestBackupSecurity(RealTransactionCase):
 
     def tearDown(self):
         # Explicit cleanup to avoid zero_sudo teardown issues with res.users/res.partner cleanup order
+        if self.config.exists():
+            self.config.unlink()
+            self.env.cr.commit()
         if self.user_no_group.exists():
             partner = self.user_no_group.partner_id
             self.user_no_group.unlink()

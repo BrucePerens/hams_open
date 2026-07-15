@@ -97,21 +97,7 @@ def execute_job(ch, method, properties, body):
             },
         )
 
-        config_records = _json2_call(
-            "backup.config",
-            "read",
-            svc_uid=svc_uid,
-            ids=[config_id],
-            fields=[
-                "kopia_password",
-                "keep_daily",
-                "keep_weekly",
-                "keep_monthly",
-                "exclude_patterns",
-                "engine",
-            ],
-        )
-        config = config_records[0] if config_records else {}
+        config = payload.get("config", {})
 
         env_vars = os.environ.copy()
         if engine == "kopia" and config.get("kopia_password"):
@@ -119,7 +105,7 @@ def execute_job(ch, method, properties, body):
 
         cmd = []
         if engine == "kopia":
-            cmd = ["kopia", "snapshot", "create", target_path, "--json"]
+            cmd = ["kopia", "snapshot", "create", "--json", "--", target_path]
         elif engine == "pgbackrest":
             cmd = ["pgbackrest", "backup", f"--stanza={target_path}", "--type=full"]
             keep_daily = config.get("keep_daily", 0)
@@ -203,9 +189,9 @@ def execute_job(ch, method, properties, body):
                     abs_path = os.path.realpath(os.path.normpath(target_path_arg))
                 except OSError:
                     abs_path = os.path.abspath(target_path_arg)
-                forbidden_prefixes = ["/etc", "/bin", "/sbin", "/usr", "/boot", "/root"]
-                if any(abs_path == f or abs_path.startswith(f + "/") for f in forbidden_prefixes):
-                    raise PermissionError(f"Malicious path targets forbidden system directory: {abs_path}")
+                allowed_restore_base = "/var/lib/odoo/backups"
+                if not (abs_path == allowed_restore_base or abs_path.startswith(allowed_restore_base + "/")):
+                    raise PermissionError(f"Malicious path outside allowed base directory: {abs_path}")
 
             elif cmd[0] == "pgbackrest":
                 # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
@@ -217,7 +203,7 @@ def execute_job(ch, method, properties, body):
                             raise PermissionError(f"Invalid stanza name in worker: {val}")
                     if arg.startswith("--") and "=" in arg:
                         key, val = arg.split("=", 1)
-                        if any(c in val for c in "; &|`$()<>*?[]{\n"):
+                        if not re.match(r"^[a-zA-Z0-9_.:-]+$", val):
                             raise PermissionError(
                                 f"Malicious argument detected in worker: {arg}"
                             )
@@ -329,7 +315,7 @@ def execute_job(ch, method, properties, body):
                     "write",
                     svc_uid=svc_uid,
                     ids=[config_id],
-                    vals={"last_drill_time": time.strftime("%Y-%m-%d %H:%M:%S")},
+                    vals={"last_drill_time": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
                 )
 
         else:

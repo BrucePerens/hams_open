@@ -5,7 +5,7 @@
     License: AGPL-3.0
 -->
 <odoo>
-    <menuitem id="menu_admin_root" name="Backups" sequence="70"/>
+    <menuitem id="menu_admin_root" name="Backups" sequence="70" groups="backup_management.group_backup_admin"/>
 
     <record id="action_backup_config" model="ir.actions.act_window">
         <field name="name">Backup Configurations</field>

@@ -85,15 +85,17 @@ class BackupConfig(models.Model):
     snapshot_ids = fields.One2many("backup.snapshot", "config_id", string="Snapshots")
 
 
-    _name_uniq = models.Constraint("UNIQUE(name)", "The backup configuration name must be unique!")
-    _target_uniq = models.Constraint("UNIQUE(engine, target_path)", "The target path must be unique per engine!")
-    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The configuration name cannot be empty.")
-    _target_path_not_empty = models.Constraint("CHECK(LENGTH(TRIM(target_path)) > 0)", "The target path cannot be empty.")
-    _retention_positive = models.Constraint("CHECK(keep_daily >= 0 AND keep_weekly >= 0 AND keep_monthly >= 0)", "Retention values cannot be negative.")
-    _min_size_positive = models.Constraint("CHECK(minimum_size_mb >= 0)", "Minimum size threshold cannot be negative.")
+    _sql_constraints = [
+        ("name_uniq", "UNIQUE(name)", "The backup configuration name must be unique!"),
+        ("target_uniq", "UNIQUE(engine, target_path)", "The target path must be unique per engine!"),
+        ("name_not_empty", "CHECK(LENGTH(TRIM(name)) > 0)", "The configuration name cannot be empty."),
+        ("target_path_not_empty", "CHECK(LENGTH(TRIM(target_path)) > 0)", "The target path cannot be empty."),
+        ("retention_positive", "CHECK(keep_daily >= 0 AND keep_weekly >= 0 AND keep_monthly >= 0)", "Retention values cannot be negative."),
+        ("min_size_positive", "CHECK(minimum_size_mb >= 0)", "Minimum size threshold cannot be negative.")
+    ]
 
     def _get_fernet(self):
-        key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env  # fmt: skip
+        key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:test_env_key]  # fmt: skip
         if not key:
             return None
         return Fernet(key.encode("utf-8"))
@@ -235,6 +237,13 @@ class BackupConfig(models.Model):
                 "target_path": rec.target_path,
                 "svc_uid": self.env.uid,
                 "website_id": rec.website_id.id,
+                "storage_type": rec.storage_type,
+                "bucket_name": rec.bucket_name,
+                "endpoint_url": rec.endpoint_url,
+                "access_key": rec.access_key,
+                "secret_key": rec.secret_key,
+                "kopia_password": rec.kopia_password,
+                "exclude_patterns": rec.exclude_patterns,
             }
             if payload_extra:
                 payload_dict.update(payload_extra)
@@ -447,7 +456,7 @@ class BackupConfig(models.Model):
                             "snapshot_id": sid,
                             "start_time": snap.get("startTime", "")[:19].replace(
                                 "T", " "
-                            ),
+                            ) or None,
                             "size_bytes": snap.get("summary", {}).get("totalBytes", 0),
                             "status": "completed",
                         }
@@ -464,7 +473,7 @@ class BackupConfig(models.Model):
                                 tz=datetime.timezone.utc,
                             ).strftime("%Y-%m-%d %H:%M:%S")
                             if ts
-                            else False
+                            else None
                         )
                         snapshot_list.append(
                             {

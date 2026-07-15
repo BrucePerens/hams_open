@@ -30,19 +30,18 @@ class TestTddFixes(HamsTransactionCase):
     def test_action_apply_policies_overwrite(self):
         # Tests [@ANCHOR: backup_management:COMM_action_apply_policies_overwrite]
         configs = self.config1 | self.config2
-        ret_val = {"type": "ir.actions.act_window"}
-        with self.safe_patch_object(type(self.env["backup.config"]), "_publish_to_worker", return_value=ret_val):
-            res1 = configs.action_trigger_backup()
-            res2 = configs.action_apply_policies()
-            # If multiple records are selected, res should be True, not the dictionary
-            self.assertTrue(res1)
-            self.assertTrue(res2)
-            
-            res3 = self.config1.action_trigger_backup()
-            res4 = self.config1.action_apply_policies()
-            # If a single record is selected, res should be the action dictionary
-            self.assertIsInstance(res3, dict)
-            self.assertIsInstance(res4, dict)
+        
+        res1 = configs.action_trigger_backup()
+        res2 = configs.action_apply_policies()
+        # If multiple records are selected, res should be True, not the dictionary
+        self.assertIs(res1, True)
+        self.assertIs(res2, True)
+        
+        res3 = self.config1.action_trigger_backup()
+        res4 = self.config1.action_apply_policies()
+        # If a single record is selected, res should be the action dictionary
+        self.assertIsInstance(res3, dict)
+        self.assertIsInstance(res4, dict)
 
 
     def test_backup_worker_stdout_reading(self):
