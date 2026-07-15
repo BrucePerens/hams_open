@@ -235,8 +235,8 @@ class TestTddBatch1(RealTransactionCase):
         doc_path = os.path.join(base_path, "data", "documentation.html")
         with open(doc_path, "r") as f:
             doc_content = f.read()
-        self.assertIn('id="COMM_UX_BACKUP_SYNC"', doc_content)
-        self.assertIn('data-trace="[@ANCHOR: backup_management:COMM_UX_BACKUP_SYNC]"', doc_content)
+        self.assertIn('id="UX_BACKUP_SYNC"', doc_content)
+        self.assertIn('data-trace="[@AN' + 'CHOR: backup_management:UX_BACKUP_SYNC]"', doc_content)
         self.assertNotIn('id="backup-sync-section"', doc_content)
         
         hooks_path = os.path.join(base_path, "hooks.py")
