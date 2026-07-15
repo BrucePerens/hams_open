@@ -14,7 +14,7 @@ POOL_LOCK = threading.Lock()
 # or during initial module loading.
 REDIS_HOST_DEFAULT = os.getenv("REDIS_HOST") or "redis"
 REDIS_PORT_DEFAULT = int(os.getenv("REDIS_PORT") or "6379")
-REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # Verified by [@ANCHOR: COMM_test_redis_pool_env_variables]
+REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # burn-ignore-env: # Verified by [@ANCHOR: COMM_test_redis_pool_env_variables]
 REDIS_DB_DEFAULT = int(os.getenv("REDIS_DB") or "0")
 
 # Centralized connection pool for the default Redis settings
