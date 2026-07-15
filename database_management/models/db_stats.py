@@ -176,8 +176,8 @@ class DatabaseQueryStat(models.Model):
                 )
                 if self.env.cr.fetchone():
                     can_query = True
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Graceful degradation check failed: %s", e)
+        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_slow_queries]
+            _logger.exception("Graceful degradation check failed: %s", e)
 
         if can_query:
             self.env.cr.execute(
@@ -235,8 +235,8 @@ class DatabaseQueryStat(models.Model):
                     "sticky": False,
                 },
             }
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Failed to install pg_stat_statements extension: %s", e)
+        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_slow_queries]
+            _logger.exception("Failed to install pg_stat_statements extension: %s", e)
             raise UserError(
                 _(
                     "PostgreSQL Extension Installation Failed.\n\n"
@@ -267,8 +267,8 @@ class DatabaseQueryStat(models.Model):
                     "sticky": False,
                 },
             }
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Failed to reset query stats: %s", e)
+        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_slow_queries]
+            _logger.exception("Failed to reset query stats: %s", e)
             raise UserError(_("Could not reset statistics: %s") % str(e))
 
     def action_explain_query(self):
@@ -306,8 +306,8 @@ class DatabaseQueryStat(models.Model):
                 "view_mode": "form",
                 "target": "new",
             }
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.warning("Failed to explain query: %s", e)
+        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_explain_query]
+            _logger.exception("Failed to explain query: %s", e)
             raise UserError(_("Could not generate explain plan: %s") % str(e))
 
 

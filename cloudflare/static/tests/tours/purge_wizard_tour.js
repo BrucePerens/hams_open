@@ -32,11 +32,6 @@ registry.category("web_tour.tours").add("cf_purge_wizard_tour", {
             trigger: 'button[name="action_purge"]',
             run: "click"
         },
-        {
-            trigger: 'body:not(:has(.modal))',
-            content: 'Wait for modal to disappear',
-            run: function () {}
-        },
         TourUtils.waitForAbsence('.modal', 'Purge Wizard Modal')
     ],
 });

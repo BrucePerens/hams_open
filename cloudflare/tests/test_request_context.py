@@ -40,6 +40,7 @@ class TestRequestContext(HamsHttpCase):
         self.assertEqual(context["threat_score"], "10")
 
     def test_02_get_request_context_no_headers(self):
+        # [@ANCHOR: COMM_test_02_get_request_context_no_headers]
         """Verify fallback when Cloudflare headers are missing."""
         mock_obj = MagicMock()
         mock_obj.httprequest.headers = {}

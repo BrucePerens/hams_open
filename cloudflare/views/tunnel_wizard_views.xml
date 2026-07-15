@@ -2,7 +2,7 @@
 <!-- Copyright © HAMS project. AGPL-3.0. -->
 <odoo>
     <record id="view_cloudflare_tunnel_wizard_form" model="ir.ui.view">
-        <!-- burn-ignore-tour -->
+        <!-- burn-ignore-tour: Justified exception -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
         <field name="name">cloudflare.tunnel.wizard.form</field>
         <field name="model">cloudflare.tunnel.wizard</field>

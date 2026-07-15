@@ -24,9 +24,9 @@ class CloudflarePurgeMixin(models.AbstractModel):
         for rec in self:
             url = rec[url_field]
             if url:
-                wid = rec.website_id
+                wid = rec.website_id.id if 'website_id' in rec._fields and rec.website_id else False
                 wids = (
-                    [wid.id]
+                    [wid]
                     if wid
                     else (all_website_ids if any_missing_website else [])
                 )

@@ -909,7 +909,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls._crypto_patcher_res_users.stop()
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        with open("/tmp/hams_test_proxy.lock", "w") as lockfile:
+        lock_path = os.path.join(tempfile.gettempdir(), f"hams_test_proxy_{os.getuid()}.lock")
+        with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
                 if cls.__dict__.get("_socat_proc"):

@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 import re
+import ipaddress
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 from psycopg2 import sql
@@ -64,9 +65,9 @@ class PgOptimizeWizard(models.TransientModel):
     )
 
     def action_apply_optimizations(self):
-        # [@ANCHOR: pg_optimize_wizard]
+        # [@ANCHOR: COMM_pg_optimize_wizard]
 
-        # Tests [@ANCHOR: pg_optimize_wizard]
+        # Verified by [@ANCHOR: COMM_pg_optimize_wizard]
         if self.ram_gb <= 0 or self.cpu_cores <= 0 or self.max_connections <= 0:
             raise UserError(_("RAM, CPU and Max Connections must be greater than zero."))
 
@@ -169,10 +170,13 @@ class PgHaWizard(models.TransientModel):
         )
 
     def _validate_inputs(self):
-        ip_pattern = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-        if not self.primary_ip or not ip_pattern.match(self.primary_ip):
+        try:
+            ipaddress.ip_address(self.primary_ip)
+        except ValueError:
             raise UserError(_("Invalid Primary Node IP format."))
-        if not self.secondary_ip or not ip_pattern.match(self.secondary_ip):
+        try:
+            ipaddress.ip_address(self.secondary_ip)
+        except ValueError:
             raise UserError(_("Invalid Secondary Node IP format."))
         if not self.replication_pass or len(self.replication_pass) < 8:
             raise UserError(
@@ -188,9 +192,9 @@ class PgHaWizard(models.TransientModel):
             raise UserError(_("Invalid replication user name. Must be alphanumeric."))
 
     def action_generate(self):
-        # [@ANCHOR: pg_ha_wizard]
+        # [@ANCHOR: COMM_pg_ha_wizard]
 
-        # Tests [@ANCHOR: pg_ha_wizard]
+        # Verified by [@ANCHOR: COMM_pg_ha_wizard]
         self._validate_inputs()
 
         # Check required binaries before generating config

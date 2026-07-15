@@ -1,3 +1,5 @@
+# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+
 # -*- coding: utf-8 -*-
 {
     "name": "Database Management",
@@ -7,6 +9,9 @@
     "category": "Ham Radio",
     "license": "AGPL-3",
     "version": "1.0",
+        "external_dependencies": {
+        "bin": ["vacuumdb"],
+    },
     "depends": [
         "base",
         "mail",

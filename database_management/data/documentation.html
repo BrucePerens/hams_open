@@ -10,7 +10,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_bloat_alert_synergy] -->
-    <h2 id="monitoring_table_health">1. Monitoring Table Health &amp; Bloat</h2>
+    <h2 id="monitoring_table_health" data-trace="COMM_bloat_alert_synergy">1. Monitoring Table Health &amp; Bloat</h2>
     <p>Database "bloat" occurs when many records are updated or deleted, leaving behind "dead tuples" that still occupy disk space. Over time, this can significantly slow down your system.</p>
     <h3>How to identify bloat:</h3>
     <ol>
@@ -19,7 +19,7 @@
         <li>The <strong>Cache Hit %</strong> indicates how much data is being read from memory vs. disk. Higher is better (ideally > 95%).</li>
     </ol>
     <!-- [@ANCHOR: COMM_vacuum_analyze] -->
-    <h3 id="reclaim_space">How to reclaim space:</h3>
+    <h3 id="reclaim_space" data-trace="COMM_vacuum_analyze">How to reclaim space:</h3>
     <ol>
         <li>Select the tables you wish to clean in the list view.</li>
         <li>Click <strong>Vacuum Analyze Selected</strong>. This triggers the PostgreSQL <code>VACUUM ANALYZE</code> command, which removes dead tuples and updates optimizer statistics.
@@ -27,7 +27,7 @@
     </ol>
 
     <!-- [@ANCHOR: COMM_db_index_advisor] -->
-    <h3 id="index_advisor">Index Advisor:</h3>
+    <h3 id="index_advisor" data-trace="COMM_db_index_advisor">Index Advisor:</h3>
     <p>Tables that are large and have many sequential scans are prime candidates for new indexes.</p>
     <ul>
         <li>Navigate to <strong>Database Health > Index Advisor</strong>.</li>
@@ -39,7 +39,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_db_index_stats] -->
-    <h2 id="index_health_usage">2. Index Health &amp; Usage</h2>
+    <h2 id="index_health_usage" data-trace="COMM_db_index_stats">2. Index Health &amp; Usage</h2>
     <p>Indexes speed up read operations but slow down writes and consume disk space. Unused indexes should be removed.</p>
     <ul>
         <li>Navigate to <strong>Database Health > Index Health</strong>.</li>
@@ -49,7 +49,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_db_slow_queries] [@ANCHOR: COMM_db_explain_query] -->
-    <h2 id="slow_query_tracking">3. Slow Query Tracking (APM)</h2>
+    <h2 id="slow_query_tracking" data-trace="COMM_db_slow_queries, COMM_db_explain_query">3. Slow Query Tracking (APM)</h2>
     <p>Application Performance Monitoring (APM) is built-in to help you find the "heaviest" queries hitting your database.</p>
     <ul>
         <li>Go to <strong>Database Health > Slow Queries (APM)</strong>.</li>
@@ -61,7 +61,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_db_active_sessions] [@ANCHOR: COMM_db_terminate_backend] -->
-    <h2 id="active_sessions_kill">4. Active Sessions &amp; Kill Switch</h2>
+    <h2 id="active_sessions_kill" data-trace="COMM_db_active_sessions, COMM_db_terminate_backend">4. Active Sessions &amp; Kill Switch</h2>
     <p>Sometimes a single "runaway" query or a deadlocked session can freeze parts of the system.</p>
 
     <h3>Replication Monitoring:</h3>
@@ -80,7 +80,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_pg_optimize_wizard] [@ANCHOR: COMM_db_settings_audit] [@ANCHOR: COMM_test_pg_config_views] -->
-    <h2 id="performance_optimization_wizard">5. Performance Optimization Wizard</h2>
+    <h2 id="performance_optimization_wizard" data-trace="COMM_pg_optimize_wizard, COMM_db_settings_audit, COMM_test_pg_config_views">5. Performance Optimization Wizard</h2>
     <p>Configuring PostgreSQL for Odoo can be complex. Our wizard automates this using industry-standard DBA formulas.</p>
     <ol>
         <li>Go to <strong>Configuration & Tuning > Optimization Wizard</strong>.</li>
@@ -93,7 +93,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_pg_ha_wizard] -->
-    <h2 id="ha_orchestrator">6. High Availability (HA) Orchestrator</h2>
+    <h2 id="ha_orchestrator" data-trace="COMM_pg_ha_wizard">6. High Availability (HA) Orchestrator</h2>
     <p>For production environments requiring high availability, this tool generates configuration templates for <strong>Patroni</strong>, <strong>etcd</strong>, and <strong>PgBouncer</strong>.</p>
     <ol>
         <li>Go to <strong>Configuration & Tuning > High Availability Orchestrator</strong>.</li>

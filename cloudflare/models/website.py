@@ -7,6 +7,11 @@ from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 class WebsiteCloudflare(models.Model):
     _inherit = "website"
 
+    cloudflare_ip_ban_ids = fields.One2many("cloudflare.ip.ban", "website_id")
+    cloudflare_tunnel_ids = fields.One2many("cloudflare.tunnel", "website_id")
+    cloudflare_waf_rule_ids = fields.One2many("cloudflare.waf.rule", "website_id")
+    cloudflare_purge_queue_ids = fields.One2many("cloudflare.purge.queue", "website_id")
+
     cloudflare_api_token = fields.Char(
         string="CF API Token",
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",

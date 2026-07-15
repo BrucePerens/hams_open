@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_pg_setting_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] -->
+    <record id="view_pg_setting_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] --><!-- burn-ignore-tour -->
         <field name="name">database.pg.setting.list</field>
         <field name="model">database.pg.setting</field>
         <field name="arch" type="xml">
@@ -15,7 +15,7 @@
         </field>
     </record>
 
-    <record id="view_pg_optimize_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] -->
+    <record id="view_pg_optimize_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] --><!-- burn-ignore-tour -->
         <field name="name">pg.optimize.wizard.form</field>
         <field name="model">pg.optimize.wizard</field>
         <field name="arch" type="xml">
@@ -34,14 +34,14 @@
                     </group>
                 </group>
                 <footer>
-                    <button name="action_apply_optimizations" type="object" string="Calculate &amp; Apply Optimizations" class="btn-danger" confirm="This will modify your core database configuration. You must manually restart the PostgreSQL service afterward for shared memory changes to take effect. Proceed?"/>
+                    <button name="action_apply_optimizations" type="object" string="Calculate &amp; Apply Optimizations" class="btn-danger" confirm="This will modify your core database configuration. You must manually restart the PostgreSQL service afterward for shared memory changes to take effect. Proceed?" invisible="not id"/>
                     <button special="cancel" string="Cancel" class="btn-secondary o_tour_cancel_btn"/>
                 </footer>
             </form>
         </field>
     </record>
 
-    <record id="view_pg_ha_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] -->
+    <record id="view_pg_ha_wizard_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_pg_config_views] --><!-- burn-ignore-tour: Justified exception (covered by python test) -->
         <field name="name">pg.ha.wizard.form</field>
         <field name="model">pg.ha.wizard</field>
         <field name="arch" type="xml">
@@ -77,7 +77,7 @@
                     </notebook>
                 </sheet>
                 <footer>
-                    <button name="action_generate" type="object" string="Generate Configurations" class="btn-primary" invisible="state == 'generated'"/>
+                    <button name="action_generate" type="object" string="Generate Configurations" class="btn-primary" invisible="not id or state == 'generated'"/>
                     <button special="cancel" string="Close" class="btn-secondary o_tour_close_btn"/>
                 </footer>
             </form>

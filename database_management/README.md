@@ -30,19 +30,19 @@ This module strictly adheres to a Zero-Sudo policy. Sensitive operations (like `
 Models in this module are designed to be **logically global**. Since they monitor PostgreSQL system statistics (such as `pg_stat_user_tables`, `pg_stat_statements`, and `pg_stat_replication`), the data they provide represents the aggregate state of the entire database cluster. In multi-tenant environments where multiple Odoo companies share a single database, these statistics correctly reflect the performance and health of the shared infrastructure.
 
 ### Security Hardening
-*   **SQL Injection Prevention:** All raw SQL queries utilize the `psycopg2.sql` library for AST-compliant parameterization. `[@ANCHOR: pg_optimize_wizard]`
+*   **SQL Injection Prevention:** All raw SQL queries utilize the `psycopg2.sql` library for AST-compliant parameterization. `[@ANCHOR: COMM_pg_optimize_wizard]`
 
-*   **Input Validation:** Strict regex validation for IP addresses and complexity requirements for replication passwords. `[@ANCHOR: pg_ha_wizard]`
+*   **Input Validation:** Strict regex validation for IP addresses and complexity requirements for replication passwords. `[@ANCHOR: COMM_pg_ha_wizard]`
 
-*   **Binary Safety:** Execution of external binaries (e.g., `vacuumdb`) is restricted to authorized paths and managed via `zero_sudo.security.utils`. `[@ANCHOR: vacuum_analyze]`
+*   **Binary Safety:** Execution of external binaries (e.g., `vacuumdb`) is restricted to authorized paths and managed via `zero_sudo.security.utils`. `[@ANCHOR: COMM_vacuum_analyze]`
 *   **Access Control:** All DBA functionality is restricted to the `base.group_system` role, with additional granular privileges defined in `res.groups.privilege`. Managers have the `database_management.group_database_management_manager` group.
 
 ### Components
-*   **Stat Views:** Native PostgreSQL statistics are exposed via Odoo models (`database.table.stat`, `database.index.stat`, `database.query.stat`, `database.activity`, `database.replication.stat`) using PostgreSQL views. `[@ANCHOR: db_index_stats]`
+*   **Stat Views:** Native PostgreSQL statistics are exposed via Odoo models (`database.table.stat`, `database.index.stat`, `database.query.stat`, `database.activity`, `database.replication.stat`) using PostgreSQL views. `[@ANCHOR: COMM_db_index_stats]`
 
-*   **Vacuum Automation:** Manual `VACUUM ANALYZE` is triggered via `subprocess` calling `vacuumdb`, bypassing Odoo's transaction blocks to allow physical cleanup. `[@ANCHOR: vacuum_analyze]`
+*   **Vacuum Automation:** Manual `VACUUM ANALYZE` is triggered via `subprocess` calling `vacuumdb`, bypassing Odoo's transaction blocks to allow physical cleanup. `[@ANCHOR: COMM_vacuum_analyze]`
 
-*   **Configuration Management:** The Optimization Wizard `[@ANCHOR: pg_optimize_wizard]` writes to `postgresql.auto.conf` and reloads the configuration.
+*   **Configuration Management:** The Optimization Wizard `[@ANCHOR: COMM_pg_optimize_wizard]` writes to `postgresql.auto.conf` and reloads the configuration.
 
 ---
 
@@ -66,32 +66,32 @@ User-facing documentation is available directly within the Odoo Knowledge or Kno
 ## 🧪 Testing & Verification
 
 The module includes an exhaustive test suite covering standard and integration scenarios:
-*   **Standard Tests:** Verify model logic, view rendering, and security constraints. `[@ANCHOR: test_dba_view]`
+*   **Standard Tests:** Verify model logic, view rendering, and security constraints. `[@ANCHOR: COMM_test_dba_view]`
 
-*   **Integration Tests:** Simulate `vacuumdb` execution and HA configuration generation. `[@ANCHOR: test_dba_cron]`
+*   **Integration Tests:** Simulate `vacuumdb` execution and HA configuration generation. `[@ANCHOR: COMM_test_dba_cron]`
 
-*   **Security Tests:** Verify that only authorized users can access sensitive DBA tools and that standard users are isolated. `[@ANCHOR: test_db_security]`
+*   **Security Tests:** Verify that only authorized users can access sensitive DBA tools and that standard users are isolated. `[@ANCHOR: COMM_test_db_security]`
 
-*   **UI Tours:** Automated browser tours verify the end-to-end user journeys for bloat management and slow query analysis. `[@ANCHOR: test_db_bloat_tour]`
+*   **UI Tours:** Automated browser tours verify the end-to-end user journeys for bloat management and slow query analysis. `[@ANCHOR: COMM_test_db_bloat_tour]`
 
 ---
 
 ## 🔄 Semantic Anchors (Internal Reference)
 
-*   `[@ANCHOR: db_index_stats]`: Stats collection for tables and indexes.
+*   `[@ANCHOR: COMM_db_index_stats]`: Stats collection for tables and indexes.
 
-*   `[@ANCHOR: db_terminate_backend]`: Logic for killing active sessions.
+*   `[@ANCHOR: COMM_db_terminate_backend]`: Logic for killing active sessions.
 
-*   `[@ANCHOR: vacuum_analyze]`: Subprocess orchestration for `vacuumdb`.
+*   `[@ANCHOR: COMM_vacuum_analyze]`: Subprocess orchestration for `vacuumdb`.
 
-*   `[@ANCHOR: pg_optimize_wizard]`: Hardware-based tuning calculations.
+*   `[@ANCHOR: COMM_pg_optimize_wizard]`: Hardware-based tuning calculations.
 
-*   `[@ANCHOR: pg_ha_wizard]`: HA cluster configuration generation.
+*   `[@ANCHOR: COMM_pg_ha_wizard]`: HA cluster configuration generation.
 
-*   `[@ANCHOR: db_slow_queries]`: APM tracking via `pg_stat_statements`.
+*   `[@ANCHOR: COMM_db_slow_queries]`: APM tracking via `pg_stat_statements`.
 
-*   `[@ANCHOR: db_replication_stats]`: Replication lag monitoring.
+*   `[@ANCHOR: COMM_db_replication_stats]`: Replication lag monitoring.
 
-*   `[@ANCHOR: bloat_alert_synergy]`: PagerDuty integration logic.
+*   `[@ANCHOR: COMM_bloat_alert_synergy]`: PagerDuty integration logic.
 
-*   `[@ANCHOR: db_doc_injection]`: Documentation bootstrap verification.
+*   `[@ANCHOR: COMM_db_doc_injection]`: Documentation bootstrap verification.

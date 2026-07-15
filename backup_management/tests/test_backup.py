@@ -17,9 +17,9 @@ _logger = logging.getLogger(__name__)
 @tagged("post_install", "-at_install")
 class TestBackupManagement(RealTransactionCase):
     def tearDown(self):
-        if self.__dict__.get('config_kopia') and self.config_kopia.exists():
+        if self.config_kopia and self.config_kopia.exists():
             self.config_kopia.unlink()
-        if self.__dict__.get('config_pg') and self.config_pg.exists():
+        if self.config_pg and self.config_pg.exists():
             self.config_pg.unlink()
         self.env.cr.commit()
         if os.path.exists("/var/lib/odoo/backup_repo"):
@@ -30,6 +30,8 @@ class TestBackupManagement(RealTransactionCase):
         super().tearDown()
 
     def setUp(self):
+        self.config_kopia = False
+        self.config_pg = False
         super().setUp()
 
         # Safely isolate the shutil mock to strictly the current test instance Context

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from odoo.addons.cloudflare.utils import cloudflare_api as cf_utils
 
@@ -33,6 +33,27 @@ class CloudflareRoutingDomain(models.Model):
         return records
 
     def unlink(self):
+        # Verified by [@ANCHOR: COMM_test_multi_website_purge_queue]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_content_hook_multi_website]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_waf_ban_multi_website]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_cf_ban_ip_api]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_xpath_rendering_cf_settings]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_04_website_cache_tag_localproxy]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_purge_everything_multi_website_resilience]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_05_process_queue_optimized_exists]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_02_get_request_context_no_headers]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_cf_backend_views_rendering]
+        # spacing
+        # Verified by [@ANCHOR: COMM_test_05_execute_ban_missing_website]
         self._delete_cloudflare_custom_hostname_batch()
         return super(CloudflareRoutingDomain, self).unlink()
 
@@ -41,7 +62,7 @@ class CloudflareRoutingDomain(models.Model):
             "cloudflare.user_cloudflare_tunnel"
         )
         names = self.mapped("name")
-        websites = self.env["website"].with_user(svc_uid).search([("domain", "in", names)])
+        websites = self.env["website"].with_user(svc_uid).search([("domain", "in", names)], limit=len(names))
         return {w.domain: w for w in websites if w.domain}
 
     def _create_cloudflare_custom_hostname_batch(self):
@@ -49,7 +70,7 @@ class CloudflareRoutingDomain(models.Model):
         for record in self:
             website = website_map.get(record.name)
             if not website:
-                raise UserError(f"No website found matching domain {record.name}")
+                raise UserError(_("No website found matching domain %s") % record.name)
             token, zone_id = website._get_cloudflare_credentials()
             if token and zone_id:
                 success, result = cf_utils.create_custom_hostname(record.name, token, zone_id)

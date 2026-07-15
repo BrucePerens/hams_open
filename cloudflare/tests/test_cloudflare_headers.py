@@ -41,7 +41,7 @@ class TestCloudflareHeaders(HamsHttpCase):
 
         company_id = self.env.company.id
         response_web = self.url_open(
-            f"/web/image/res.company/{company_id}/logo"
+            f"/odoo/image/res.company/{company_id}/logo"
         )  # burn-ignore-route  # fmt: skip
         self.assertEqual(
             response_web.headers.get("Cloudflare-CDN-Cache-Control"),
@@ -115,6 +115,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         )
 
     def test_04_website_cache_tag_localproxy(self):
+        # [@ANCHOR: COMM_test_04_website_cache_tag_localproxy]
         """Verify that cache tags are added correctly via getattr on request."""
 
         class DummyBase:

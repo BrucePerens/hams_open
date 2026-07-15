@@ -35,6 +35,8 @@ class TestPurgeEverything(RealTransactionCase):
         )
 
     def test_purge_everything_logic(self):
+        # [@ANCHOR: COMM_test_purge_everything_logic]
+        # spacing
         # Tests [@ANCHOR: COMM_cf_enqueue_everything]
         """Verify that enqueue_everything correctly wipes other pending records for the same website."""
         mock_purge_everything = self.safe_patch(
@@ -75,6 +77,7 @@ class TestPurgeEverything(RealTransactionCase):
         )
 
     def test_purge_everything_multi_website_resilience(self):
+        # [@ANCHOR: COMM_test_purge_everything_multi_website_resilience]
         """Verify that one website failing doesn't stop others."""
         mock_purge_everything = self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.purge_everything"

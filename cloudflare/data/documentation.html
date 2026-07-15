@@ -10,7 +10,8 @@
         <li><strong>CF Account ID:</strong> Your main Cloudflare account ID, required if you want to use Zero Trust Tunnels.</li>
     </ul>
 
-    <h2 id="CACHE_MANAGEMENT" data-trace="[@ANCHOR: COMM_cloudflare:CACHE_MANAGEMENT]">2. Making Your Site Fast: Cache Management</h2>
+    <!-- [@ANCHOR: COMM_cloudflare:CACHE_MANAGEMENT] -->
+    <h2 id="CACHE_MANAGEMENT">2. Making Your Site Fast: Cache Management</h2>
     <p>This module uses Cloudflare to store copies of your website content around the world, so it loads instantly for users everywhere.</p>
     <ul>
         <li><strong>Smart Caching:</strong> Odoo automatically tells Cloudflare how long to keep different types of content. Static files (like images and scripts) are cached for a year, while website pages are cached for 24 hours for public visitors.</li>
@@ -19,7 +20,8 @@
         <li><strong>Manual Control:</strong> If you ever need to clear the cache manually, you can use the <strong>Purge Cache</strong> wizard under <strong>Website > Configuration > Cloudflare</strong>. You can clear everything, specific pages, or groups of content using tags.</li>
     </ul>
 
-    <h2 id="FIREWALL_IP_BANS" data-trace="[@ANCHOR: COMM_cloudflare:FIREWALL_IP_BANS]">3. Keeping Your Site Secure: Firewall &amp; IP Bans</h2>
+    <!-- [@ANCHOR: COMM_cloudflare:FIREWALL_IP_BANS] -->
+    <h2 id="FIREWALL_IP_BANS">3. Keeping Your Site Secure: Firewall &amp; IP Bans</h2>
     <p>Protect your Odoo instance from bots and attackers using Cloudflare's security edge.</p>
     <ul>
         <li><strong>Honeypot Protection:</strong> The module integrates with silent "honeypot" traps. If a malicious bot triggers one of these traps, its IP address is instantly banned at the Cloudflare network level. You can review and manage these bans under <strong>Website > Configuration > Cloudflare > IP Bans</strong>.</li>
@@ -27,14 +29,16 @@
         <li><strong>Security Level:</strong> Quickly adjust how aggressive Cloudflare's security should be (e.g., enabling "Under Attack" mode if you are experiencing a surge of malicious traffic) using the <strong>Zone Settings Wizard</strong>.</li>
     </ul>
 
-    <h2 id="ZERO_TRUST_TUNNELS" data-trace="[@ANCHOR: COMM_cloudflare:ZERO_TRUST_TUNNELS]">4. Secure Connections: Zero Trust Tunnels</h2>
+    <!-- [@ANCHOR: COMM_cloudflare:ZERO_TRUST_TUNNELS] -->
+    <h2 id="ZERO_TRUST_TUNNELS">4. Secure Connections: Zero Trust Tunnels</h2>
     <p>Cloudflare Tunnels allow you to host your Odoo server securely without opening any ports on your firewall. This creates a private, encrypted "tunnel" between your server and Cloudflare.</p>
     <ul>
         <li><strong>Easy Setup:</strong> Use the <strong>Generate Tunnel Command</strong> button in the settings. Odoo will create the tunnel in Cloudflare and give you a simple command to run on your server.</li>
         <li><strong>Management:</strong> View the health and status of your tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>. You can sync the list from Cloudflare or delete tunnels directly from the Odoo interface.</li>
     </ul>
 
-    <h2 id="ADVANCED_INTEGRATION" data-trace="[@ANCHOR: COMM_cloudflare:ADVANCED_INTEGRATION]">5. Advanced Integration &amp; Security</h2>
+    <!-- [@ANCHOR: COMM_cloudflare:ADVANCED_INTEGRATION] -->
+    <h2 id="ADVANCED_INTEGRATION">5. Advanced Integration &amp; Security</h2>
     <p>For developers and advanced users, the module provides several tools designed for high security and performance:</p>
     <ul>
         <li><strong>Geographic Data:</strong> The module extracts location information (Country, City, etc.) provided by Cloudflare for every request. This data is handled safely even in background tasks where a standard web request might not be present.</li>
@@ -42,7 +46,8 @@
         <li><strong>Safe Caching:</strong> Sensitive areas like your shopping cart, checkout, and portal pages are automatically excluded from edge caching to protect user privacy.</li>
     </ul>
 
-    <h2 id="USER_INTERFACE" data-trace="[@ANCHOR: COMM_cloudflare:USER_INTERFACE]">User Interface</h2>
+    <!-- [@ANCHOR: COMM_cloudflare:USER_INTERFACE] -->
+    <h2 id="USER_INTERFACE">User Interface</h2>
     <p>The web facilities for this module have been tested and verified. Below are representative screenshots of the user interface.</p>
     <img src="/cloudflare/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />
 </div>

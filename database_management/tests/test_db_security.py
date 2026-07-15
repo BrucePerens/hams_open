@@ -84,30 +84,22 @@ class TestDbSecurity(HamsTransactionCase):
         ]:
             # Assert SQL Views are protected
             if self.table_stat:
-                with self.assertRaises(
-                    AccessError,
-                    msg=f"{user.name} MUST NOT be able to read DB table stats.",
-                ):
+                msg_table = f"{user.name} MUST NOT be able to read DB table stats."
+                with self.assertRaises(AccessError, msg=msg_table):
                     self.table_stat.with_user(user).read(["table_name"])
             if self.pg_setting:
-                with self.assertRaises(
-                    AccessError,
-                    msg=f"{user.name} MUST NOT be able to read PG configurations.",
-                ):
+                msg_pg = f"{user.name} MUST NOT be able to read PG configurations."
+                with self.assertRaises(AccessError, msg=msg_pg):
                     self.pg_setting.with_user(user).read(["name"])
 
             # Assert Wizards are protected
-            with self.assertRaises(
-                AccessError,
-                msg=f"{user.name} MUST NOT be able to access the Optimize Wizard.",
-            ):
+            msg_opt = f"{user.name} MUST NOT be able to access the Optimize Wizard."
+            with self.assertRaises(AccessError, msg=msg_opt):
                 self.env["pg.optimize.wizard"].with_user(user).create({"ram_gb": 16})
                 self.env.flush_all()
 
-            with self.assertRaises(
-                AccessError,
-                msg=f"{user.name} MUST NOT be able to access the HA Wizard.",
-            ):
+            msg_ha = f"{user.name} MUST NOT be able to access the HA Wizard."
+            with self.assertRaises(AccessError, msg=msg_ha):
                 self.env["pg.ha.wizard"].with_user(user).create(
                     {"primary_ip": "10.0.0.1"}
                 )

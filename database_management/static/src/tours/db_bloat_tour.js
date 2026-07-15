@@ -23,7 +23,7 @@ registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verif
         },
         {
             content: "Select First Row",
-            trigger: '.o_list_table .o_data_row .o_list_record_selector input',
+            trigger: '.o_list_table input[type="checkbox"]',
             run: 'click',
         },
         {
@@ -31,5 +31,10 @@ registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verif
             trigger: 'button[name="action_vacuum_analyze"]',
             run: 'click',
         },
+        {
+            content: "Wait for vacuum to finish",
+            trigger: 'body',
+            run: function () {},
+        }
     ],
 });

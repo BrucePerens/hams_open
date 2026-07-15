@@ -2,9 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import models, api, fields
 from odoo.http import request
-import logging
 
-_logger = logging.getLogger(__name__)
 
 
 class CloudflareUtils(models.AbstractModel):

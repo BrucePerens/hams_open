@@ -87,7 +87,7 @@ class TestCloudflareUITours(HamsHttpCase):
         )
 
     def test_05_backend_views_rendering(self):
-        # [@ANCHOR: test_cf_backend_views_rendering]
+        # Tests [@ANCHOR: COMM_cf_backend_views_rendering]
         v1 = self.env["cloudflare.config.backup"].get_view(view_type="list")
         self.assertIn("create_date", v1["arch"])
 

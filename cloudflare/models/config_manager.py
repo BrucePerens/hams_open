@@ -86,6 +86,7 @@ class CloudflareConfigManager(models.AbstractModel):
                 # Multi-Website Purge: Static assets should be purged across all configured websites
                 # We use the purger environment to access website credentials securely
                 last_id = 0
+                create_vals = []
                 while True:
                     websites = env_purger["website"].search(
                         [("id", ">", last_id)], order="id asc", limit=1000
@@ -96,9 +97,13 @@ class CloudflareConfigManager(models.AbstractModel):
                     for website in websites:
                         token, zone_id = website._get_cloudflare_credentials()
                         if token and zone_id:
-                            env_purger["cloudflare.purge.queue"].enqueue_tags(
-                                ["odoo-static-assets"], website_id=website.id
-                            )
+                            create_vals.append({
+                                "target_item": "odoo-static-assets",
+                                "purge_type": "tag",
+                                "website_id": website.id
+                            })
+                if create_vals:
+                    env_purger["cloudflare.purge.queue"].create(create_vals)
 
                 _logger.info(
                     "[*] Static assets modified (%s > %s). Triggered Cloudflare purge for 'odoo-static-assets' across all websites.",
@@ -111,6 +116,8 @@ class CloudflareConfigManager(models.AbstractModel):
     @api.model
     def initialize_cloudflare_state(self):
         _logger.info("[*] Initializing Cloudflare Edge State across Websites...")
+        websites_to_pull = []
+        websites_to_push = []
         last_id = 0
         while True:
             websites = self.env["website"].search(
@@ -140,19 +147,48 @@ class CloudflareConfigManager(models.AbstractModel):
                             "website_id": website.id,
                         }
                     )
-                    self.action_pull_waf_rules(website_id=website.id)
-                    continue
+                    websites_to_pull.append((website, existing_ruleset))
+                else:
+                    websites_to_push.append(website)
 
-                vals_list = []
+        if websites_to_pull:
+            pull_website_ids = [w.id for w, _ in websites_to_pull]
+            self.env["cloudflare.waf.rule"].search(
+                [("website_id", "in", pull_website_ids)], limit=10000
+            ).unlink()
+            
+            pull_vals = []
+            for website, existing_ruleset in websites_to_pull:
+                rules = existing_ruleset.get("rules", [])
+                for i, r in enumerate(rules):
+                    pull_vals.append(
+                        {
+                            "sequence": (i + 1) * 10,
+                            "name": r.get(
+                                "description", "Imported Rule " + r.get("id", "")
+                            ).split(":")[0][:50],
+                            "action": r.get("action", "block"),
+                            "expression": r.get("expression", ""),
+                            "description": r.get("description", ""),
+                            "active": r.get("enabled", True),
+                            "website_id": website.id,
+                        }
+                    )
+            if pull_vals:
+                self.env["cloudflare.waf.rule"].create(pull_vals)
+                
+        if websites_to_push:
+            push_vals = []
+            for website in websites_to_push:
                 for rule_vals in DEFAULT_WAF_RULES:
                     vals = dict(rule_vals)
                     vals["website_id"] = website.id
-                    vals_list.append(vals)
+                    push_vals.append(vals)
 
-                if vals_list:
-                    # ADR-0001: Headless Mutation Context
-                    self.env["cloudflare.waf.rule"].create(vals_list)
+            if push_vals:
+                self.env["cloudflare.waf.rule"].create(push_vals)
 
+            for website in websites_to_push:
                 self.action_push_waf_rules(website_id=website.id)
 
     @api.model

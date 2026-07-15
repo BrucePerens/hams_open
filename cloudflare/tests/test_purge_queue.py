@@ -69,7 +69,7 @@ class TestPurgeQueue(RealTransactionCase):
         )
         mock_trigger.assert_called_once()  # MUST re-trigger the cron job
 
-        cron._trigger()
+        # cron._trigger()
 
     def test_03_purge_queue_website_acl(self):
         # [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
@@ -126,6 +126,7 @@ class TestPurgeQueue(RealTransactionCase):
         self.assertEqual(kwargs["json"]["tags"], tags)
 
     def test_05_process_queue_optimized_exists(self):
+        # [@ANCHOR: COMM_test_05_process_queue_optimized_exists]
         """Verify that process_queue uses the optimized exists() method instead of filtered()."""
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"

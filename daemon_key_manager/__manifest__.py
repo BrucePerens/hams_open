@@ -7,7 +7,7 @@
     "category": "Security",
     "author": "Bruce Perens K6BP",
     "license": "AGPL-3",
-    "depends": ["base", "zero_sudo"],
+    "depends": ["base", "zero_sudo", "knowledge"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",

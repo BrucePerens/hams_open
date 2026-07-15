@@ -24,7 +24,7 @@ class CloudflareWAF(models.AbstractModel):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_waf"
         )
-        ban_env = self.env["cloudflare.ip.ban"].with_user(svc_uid)
+        ban_env = self.env["cloudflare.ip.ban"].with_user(svc_uid).with_context(mail_notrack=True)
         return ban_env._execute_ban(
             ip_address, mode=mode, notes=notes, website_id=website_id
         )

@@ -49,6 +49,7 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         super().tearDown()
 
     def test_multi_website_purge_queue(self):
+        # [@ANCHOR: COMM_test_multi_website_purge_queue]
         """Verify that the purge queue correctly isolates zones and credentials."""
         # Clear any leftover 'everything' records from previous tests or init that would wipe our queue
         self.PurgeQueue.search([], limit=10000).unlink()
@@ -85,6 +86,7 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         self.assertIn("https://website-b.com/page-b", call_b[0][0])
 
     def test_content_hook_multi_website(self):
+        # [@ANCHOR: COMM_test_content_hook_multi_website]
         """Verify that editing a page linked to a specific website only enqueues for that website."""
         view_a = self.env["ir.ui.view"].create(
             {
@@ -146,6 +148,7 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         self.assertIn(self.website_b, websites_in_queue)
 
     def test_waf_ban_multi_website(self):
+        # [@ANCHOR: COMM_test_waf_ban_multi_website]
         """Verify IP banning respects the website context."""
         mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
         mock_ban_ip.return_value = (True, "rule_123")

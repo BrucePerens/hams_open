@@ -160,6 +160,7 @@ class TestWafManagement(HamsTransactionCase):
         self.assertEqual(payload["rules"][0]["action"], "managed_challenge")
 
     def test_05_execute_ban_missing_website(self):
+        # [@ANCHOR: COMM_test_05_execute_ban_missing_website]
         """Verify _execute_ban gracefully handles missing website context."""
         # Force get_current_website_id to return None
         mock_get_website_id = self.safe_patch_object(

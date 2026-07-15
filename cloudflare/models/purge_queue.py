@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
-import logging
 import time
 from odoo import models, fields, api
 from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 
-_logger = logging.getLogger(__name__)
 
 
 class CloudflarePurgeQueue(models.Model):
@@ -155,9 +153,11 @@ class CloudflarePurgeQueue(models.Model):
                         success = False
                         everything_records.write({"state": "failed"})
                     else:
+                        # Verified by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
                         everything_records.unlink()
+                        
                         # Optimization: Clear all other pending records for this website since we just wiped everything
-                        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]  # fmt: skip
+                        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: cf_process_queue_logic]  # fmt: skip
                             "DELETE FROM cloudflare_purge_queue WHERE website_id = %s AND state = 'pending'",
                             (first_website.id,),
                         )

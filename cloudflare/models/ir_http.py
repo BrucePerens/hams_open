@@ -35,7 +35,7 @@ class IrHttp(models.AbstractModel):
         # Verified by [@ANCHOR: test_cf_static_asset_caching]
         if any(
             path.startswith(prefix) for prefix in ("/web/static", "/web/assets")
-        ):  # burn-ignore-route
+        ):  # burn-ignore-route  # fmt: skip
             response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=31536000"
             response.headers["Cache-Tag"] = "odoo-static-assets"
             return res
@@ -49,14 +49,14 @@ class IrHttp(models.AbstractModel):
             for prefix in (
                 "/my/",
                 "/odoo",
-                "/web/",  # burn-ignore-route
+                "/web/",  # burn-ignore-route  # fmt: skip
                 "/api/",
                 "/shop/cart",
                 "/shop/checkout",
                 "/shop/confirm_order",
                 "/helpdesk/",
             )
-        ):  # burn-ignore-route
+        ):  # burn-ignore-route  # fmt: skip
             response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
             return res
 

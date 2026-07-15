@@ -11,7 +11,7 @@
                     <group>
                         <field name="website_id" groups="website.group_multi_website"/>
                         <field name="purge_type"/>
-                        <field name="items_to_purge" invisible="purge_type == 'everything'" required="purge_type != 'everything'"/>
+                        <field name="items_to_purge" placeholder="https://example.com/page\nhttps://example.com/image.png" invisible="purge_type == 'everything'" required="purge_type != 'everything'"/>
                     </group>
                 </sheet>
                 <footer>

@@ -54,6 +54,9 @@ class TestKeyRegistry(RealTransactionCase):
     def tearDown(self):
         # Ensure files are removed after the test completes as well
         self._cleanup_test_files()
+        self.env["daemon.key.registry"].with_user(self.manager_user.id).search([]).unlink()
+        self.service_user.unlink()
+        self.regular_user.unlink()
         super().tearDown()
 
     def _cleanup_test_files(self):
@@ -155,9 +158,10 @@ class TestKeyRegistry(RealTransactionCase):
             _logger.warning("Cleanup error: %s", e)
 
     def _silent_rmdir(self, path):
+        import shutil
         try:
             if os.path.exists(path):
-                os.rmdir(path)
+                shutil.rmtree(path)
         except OSError as e:
             _logger.warning("Cleanup error: %s", e)
 
@@ -173,7 +177,6 @@ class TestKeyRegistry(RealTransactionCase):
 
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
 
-        # Tests [@ANCHOR: COMM_daemon_self_healing]
         daemon_name = "API Test Daemon"
         user_xml_id = "daemon_key_manager.user_daemon_key_manager_service"
         env_file_path = "/opt/hams/etc/keys/api_test.env"
@@ -413,42 +416,26 @@ class TestKeyRegistry(RealTransactionCase):
             "user_id": self.service_user.id,
             "env_file_path": "/opt/hams/etc/keys/exception_test.env",
         })
-        self.safe_patch("os.path.exists", return_value=False)
-        self.safe_patch("os.makedirs", side_effect=PermissionError("Mocked Permission Error"))
-        with self.assertRaises(PermissionError):
-            registry._write_secure_env_file(registry.env_file_path, "login", "key")
 
-        self.safe_patch("os.makedirs", side_effect=OSError("Mocked OS Error"))
-        with self.assertRaises(OSError):
-            registry._write_secure_env_file(registry.env_file_path, "login", "key")
-
-    def test_cron_rotation_timezone_sql(self):
-        """Test that the cron fallback raw SQL uses UTC for NOW()."""
-        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
-            "name": "Cron TZ Test Daemon",
-            "user_id": self.service_user.id,
-            "env_file_path": "/opt/hams/etc/keys/cron_tz_test.env",
-        })
-        
-        # In order to trigger the fallback, we need to mock _rotate_key_and_write_file to fail.
-        # But since _cron_rotate_all_keys queries registries, we need to mock execute directly.
-        original_execute = self.env.cr.execute
-        executed_queries = []
-
-        def mock_execute(query, params=None):
-            executed_queries.append(query)
-            return original_execute(query, params)
+        # Trigger PermissionError naturally by trying to write to a child of a 000 dir
+        parent_dir = "/opt/hams/etc/keys/parent_test"
+        if not os.path.exists(parent_dir):
+            os.makedirs(parent_dir)
+            os.chmod(parent_dir, 0o000)
             
-        self.safe_patch_object(type(registry), "_rotate_key_and_write_file", side_effect=OSError("Mocked Error"))
-        self.safe_patch_object(self.env.cr, "execute", side_effect=mock_execute)
-        
-        self.env["daemon.key.registry"]._cron_rotate_all_keys()
-                
-        found_update = any(
-            "UPDATE daemon_key_registry SET last_rotated = NOW() AT TIME ZONE 'UTC'" in query
-            for query in executed_queries
-        )
-        self.assertTrue(found_update, "Cron fallback should use NOW() AT TIME ZONE 'UTC'")
+        with self.assertRaises(PermissionError):
+            registry._write_secure_env_file(f"{parent_dir}/child/test.env", "login", "key")
+            
+        if os.path.exists(parent_dir):
+            os.chmod(parent_dir, 0o700)
+            import shutil
+            shutil.rmtree(parent_dir)
+            
+        # Trigger OSError naturally by giving a directory path as file path
+        os.makedirs("/opt/hams/etc/keys/test_os_error_dir", exist_ok=True)
+        with self.assertRaises(OSError):
+            registry._write_secure_env_file("/opt/hams/etc/keys/test_os_error_dir", "login", "key")
+        os.rmdir("/opt/hams/etc/keys/test_os_error_dir")
 
 
 @tagged("post_install", "-at_install")

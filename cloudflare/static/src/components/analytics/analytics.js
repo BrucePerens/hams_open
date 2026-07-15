@@ -11,8 +11,6 @@ export class CloudflareAnalyticsDashboard extends Component {
             bandwidth: '0 GB',
             threats: 0,
             loading: true,
-            driftX: 0,
-            driftY: 0,
         });
 
         onWillStart(async () => {
@@ -25,14 +23,9 @@ export class CloudflareAnalyticsDashboard extends Component {
         });
 
         onMounted(() => {
-            this.driftInterval = setInterval(() => {
-                this.state.driftX = Math.floor(Math.random() * 4) - 2;
-                this.state.driftY = Math.floor(Math.random() * 4) - 2;
-            }, 20000);
         });
 
         onWillUnmount(() => {
-            clearInterval(this.driftInterval);
         });
     }
 }

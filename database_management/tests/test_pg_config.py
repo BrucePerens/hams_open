@@ -33,13 +33,10 @@ class TestPgConfig(HamsTransactionCase):
             )
         )
         # Execute the optimization (mocked to prevent ActiveSqlTransaction and actual config changes)
-        mock_execute = self.safe_patch_object(type(self.env.cr), "execute")
-        res = wizard.action_apply_optimizations()
-        self.assertEqual(
-            res.get("type"),
-            "ir.actions.client",
-            "[!] DIAGNOSTIC FOR AI: pg.optimize.wizard.action_apply_optimizations should return a client action.",
-        )
+        with self.safe_patch_object(type(self.env.cr), "execute") as mock_execute:
+            res = wizard.action_apply_optimizations()
+        msg_client = "[!] DIAGNOSTIC FOR AI: pg.optimize.wizard.action_apply_optimizations should return a client action."
+        self.assertEqual(res.get("type"), "ir.actions.client", msg_client)
 
         # Verify specific calculations
         # 16GB * 0.25 = 4GB = 4096MB
@@ -90,11 +87,8 @@ class TestPgConfig(HamsTransactionCase):
         )
         wizard.action_generate()
 
-        self.assertEqual(
-            wizard.state,
-            "generated",
-            "[!] DIAGNOSTIC FOR AI: pg.ha.wizard state should be 'generated' after generation.",
-        )
+        msg_gen = "[!] DIAGNOSTIC FOR AI: pg.ha.wizard state should be 'generated' after generation."
+        self.assertEqual(wizard.state, "generated", msg_gen)
         # Assert Patroni Primary details
         self.assertIn("192.168.1.10:8008", wizard.patroni_primary)
         self.assertIn("password: testpass", wizard.patroni_primary)
@@ -133,7 +127,8 @@ class TestPgConfig(HamsTransactionCase):
             .with_user(self.admin)
             .create({"primary_ip": "invalid-ip", "secondary_ip": "10.0.0.2"})
         )
-        with self.assertRaisesRegex(UserError, "Invalid Primary Node IP format"):
+        msg_ip = "Invalid Primary Node IP format"
+        with self.assertRaisesRegex(UserError, msg_ip):
             wizard.action_generate()
 
         # Test short password
@@ -148,9 +143,8 @@ class TestPgConfig(HamsTransactionCase):
                 }
             )
         )
-        with self.assertRaisesRegex(
-            UserError, "Password must be at least 8 characters"
-        ):
+        msg_pass = "Password must be at least 8 characters"
+        with self.assertRaisesRegex(UserError, msg_pass):
             wizard2.action_generate()
 
     def test_02b_ha_wizard_missing_binaries(self):
@@ -189,8 +183,8 @@ class TestPgConfig(HamsTransactionCase):
         self.assertEqual(exe_path, "/bin/etcd")
 
     def test_03_views(self):
-        # [@ANCHOR: COMM_test_pg_config_views]
-
+        # Tests [@ANCHOR: COMM_test_pg_config_views]
+        
         # Tests [@ANCHOR: COMM_db_settings_audit]
         v1 = self.env["database.pg.setting"].get_view(view_type="list")
         self.assertIn("setting", v1["arch"])

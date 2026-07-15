@@ -31,9 +31,8 @@ registry.category("web_tour.tours").add("cf_zone_settings_tour", {
                         moreBtn.click();
                     }
                 }
-                setTimeout(() => {
+                // setTimeout(() => {
                     document.querySelector('a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]').click();
-                }, 100);
             }
         },
         { trigger: '.modal-content', content: 'Wait for Zone Settings Modal to mount and render', run: function() {} },

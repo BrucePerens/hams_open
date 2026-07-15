@@ -24,6 +24,7 @@ class CloudflareTunnel(models.Model):
         # [@ANCHOR: COMM_cf_delete_tunnel]
 
         # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
+        tunnels_to_unlink = self.env["cloudflare.tunnel"]
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
             account_id = tunnel.website_id.cloudflare_account_id
@@ -35,10 +36,13 @@ class CloudflareTunnel(models.Model):
 
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
-                # ADR-0001: Headless Mutation Context
-                tunnel.unlink()
+                tunnels_to_unlink |= tunnel
             else:
                 raise UserError(_("Failed to delete tunnel: %s") % msg)
+        
+        if tunnels_to_unlink:
+            # ADR-0001: Headless Mutation Context
+            tunnels_to_unlink.unlink()
 
     @api.model
     def action_sync_tunnels(self):

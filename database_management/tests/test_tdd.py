@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, PropertyMock
 class TestDatabaseManagementTDD(HamsTransactionCase):
     
     def test_tdd_db_stats_transaction(self):
+        # Tests [@ANCHOR: COMM_db_explain_query]
         stat = self.env["database.query.stat"].search([], limit=1)
         if not stat:
             stat = self.env["database.query.stat"].browse(1)
@@ -31,10 +32,12 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
             "SELECT dba_explain_query" in (call[0][0] if isinstance(call[0][0], str) else "")
             for call in mock_cr.execute.call_args_list
         )
-        self.assertTrue(called, "Must use SELECT dba_explain_query(%s) to prevent injection and avoid latency issue.")
+        msg = "Must use SELECT dba_explain_query(%s) to prevent injection and avoid latency issue."
+        self.assertTrue(called, msg)
 
 
     def test_tdd_db_stats_semicolon(self):
+        # Tests [@ANCHOR: COMM_db_explain_query]
         stat = self.env["database.query.stat"].search([], limit=1)
         if not stat:
             stat = self.env["database.query.stat"].browse(1)
@@ -53,9 +56,11 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
             try:
                 stat.action_explain_query()
             except UserError as e:
-                self.assertNotIn("Multiple statements are not allowed.", str(e))
+                msg = "Multiple statements are not allowed."
+                self.assertNotIn(msg, str(e))
 
     def test_tdd_pg_config_yaml_injection(self):
+        # Tests [@ANCHOR: COMM_pg_ha_wizard]
         admin = self.env.ref("base.user_admin")
         wizard = self.env["pg.ha.wizard"].with_user(admin).create({
             "primary_ip": "10.0.0.1",
