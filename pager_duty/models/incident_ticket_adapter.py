@@ -36,7 +36,9 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         if user:
             assignee_id = user.id
 
-        if target_model not in self.env:
+        try:
+            target_env = self.env[target_model]
+        except KeyError:
             _logger.warning(
                 "Target helpdesk model '%s' not found. Ensure the module is installed.",
                 target_model,
@@ -61,7 +63,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         hd_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "hams_helpdesk.user_helpdesk_service"
         )
-        tickets = self.env[target_model].with_user(hd_uid).with_context(
+        tickets = target_env.with_user(hd_uid).with_context(
             mail_create_nosubscribe=True, mail_create_nolog=True, mail_auto_subscribe_no_notify=True
         ).create(payloads)
         
