@@ -61,7 +61,7 @@ class TestB2Fixes(HamsTransactionCase):
         dummy_method(obj2)
             
         with redis_cache.LRU_LOCK:
-            keys = list(redis_cache._local_cache.d.keys())
+            keys = list(redis_cache._local_cache)
             
         self.assertEqual(len(keys), 2, "Cache keys should differentiate between different secondary companies")
 

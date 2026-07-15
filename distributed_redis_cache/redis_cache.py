@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. AGPL-3.0.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 import _pickle
 import logging
@@ -166,7 +166,7 @@ def invalidate_model_cache(env, model_name, local_only=False):
     # Always clear local fallback cache for this process to ensure consistency
     prefix_local = f"{dbname}:distributed_cache:{model_name}:"
     with LRU_LOCK:
-        keys_to_delete = [k for k in _local_cache.keys() if k.startswith(prefix_local)]
+        keys_to_delete = [k for k in _local_cache if k.startswith(prefix_local)]
         for k in keys_to_delete:
             _local_cache.pop(k, None)
 
