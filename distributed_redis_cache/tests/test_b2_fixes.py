@@ -19,15 +19,11 @@ class TestB2Fixes(HamsTransactionCase):
     
     def setUp(self):
         super().setUp()
-        try:
-            redis_pool._db_configs = {}
-        except (KeyError, ValueError):
-            _logger.debug("no configs yet")
+        redis_pool._db_configs = {}
         redis_pool._custom_pools = {}
             
     def test_b2_1_redis_pool_caching(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         env_mock = MagicMock()
         env_mock.cr.dbname = "test_db"
         sec_mock = MagicMock()
@@ -40,8 +36,7 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertEqual(sec_mock._get_system_param.call_count, 3, "Should cache by dbname and not query again")
 
     def test_b2_2_cache_key_secondary_companies(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         @redis_cache.distributed_cache()
         def dummy_method(self):
             return "ok"
@@ -70,8 +65,7 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertEqual(len(keys), 2, "Cache keys should differentiate between different secondary companies")
 
     def test_b2_3_banned_local_imports(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         with open(ir_http.__file__, "r") as f:
             content = f.read()
             
@@ -96,16 +90,14 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertFalse(inside_func, "Imports must be at module level")
 
     def test_b2_4_ai_laziness_getattr(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         with open(ir_http.__file__, "r") as f:
             content = f.read()
         self.assertNotIn("getattr(cls", content, "Use explicit try...except instead of getattr")
         self.assertNotIn('getattr(cls, "_last_cache_counter"', content)
 
     def test_b2_5_readme_external_dependencies(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         readme_path = os.path.join(os.path.dirname(redis_pool.__file__), "README.md")
         with open(readme_path, "r") as f:
             content = f.read()
@@ -113,8 +105,7 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertIn("python-dotenv", content)
 
     def test_b2_6_pickle_serialization(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         @redis_cache.distributed_cache()
         def return_datetime(self):
             return datetime.datetime(2025, 1, 1, 12, 0, 0)
@@ -155,8 +146,7 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertEqual(type(res2), datetime.datetime)
 
     def test_b2_7_redis_pool_unsafe_type_casting(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         env_mock = MagicMock()
         env_mock.cr.dbname = "test_db7"
         sec_mock = MagicMock()
@@ -166,8 +156,7 @@ class TestB2Fixes(HamsTransactionCase):
         redis_pool.get_redis_connection(env_mock)
 
     def test_b2_8_parameter_mismatch(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         env_mock = MagicMock()
         env_mock.cr.dbname = "test_db8"
         sec_mock = MagicMock()
@@ -181,8 +170,7 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertNotIn("distributed_redis_cache.redis_pass", keys)
 
     def test_b2_9_flake8_unused_variable(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+
         config_model_path = os.path.join(os.path.dirname(redis_pool.__file__), "models", "distributed_cache_config.py")
         with open(config_model_path, "r") as f:
             content = f.read()
