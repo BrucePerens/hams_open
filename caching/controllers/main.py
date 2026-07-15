@@ -31,7 +31,6 @@ class ServiceWorkerController(http.Controller):
             try:
                 with tools.file_open("caching/static/src/sw/sw.js", "r") as f:
                     content = f.read()
-                r = get_redis_connection(request.env)
                 r.setex("caching_sw_js_content", 86400, content)
             except FileNotFoundError:
                 raise werkzeug.exceptions.NotFound()
@@ -50,7 +49,7 @@ class ServiceWorkerController(http.Controller):
         if request.env.context.get("force_fs_scan"):
             request.env["caching.mixin"].with_user(svc_uid).force_invalidate_cache()
 
-        latest_mtime, max_file_size = request.env["caching.mixin"].with_user(svc_uid).get_global_static_info(quota_mb)
+        latest_mtime, max_file_size = request.env["caching.mixin"].get_global_static_info(quota_mb, override_svc_uid=svc_uid)
 
         cache_name = f"odoo-assets-cache-{latest_mtime}-v{in_v}"
         content = content.replace("__CACHE_NAME__", cache_name)

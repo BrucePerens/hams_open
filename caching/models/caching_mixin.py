@@ -75,7 +75,7 @@ class CachingMixin(models.AbstractModel):
         Calculates the safe dynamic max file size based on quota.
         Returns tuple: (latest_mtime_string, dynamic_max_size_string).
         """
-        max_mtime, file_sizes = self.get_fs_stats()
+        max_mtime, file_sizes = self.get_fs_stats(override_svc_uid=override_svc_uid)
 
         SAFE_QUOTA = max(0, quota_mb - 10) * 1024 * 1024
         total_size = sum(file_sizes)
