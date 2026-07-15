@@ -274,6 +274,5 @@ class PagerIncident(models.Model):
             if current_website:
                 website_id = current_website.id
         
-        company_id = self.env.company.id
-        self.env.cr.execute("SELECT pager_get_board_data(%s, %s)", [company_id, website_id])
+        self.env.cr.execute("SELECT pager_get_board_data(%s)", [website_id])
         return self.env.cr.fetchone()[0]
