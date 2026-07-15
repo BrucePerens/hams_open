@@ -22,3 +22,4 @@ access_mail_message_pager_svc,mail.message svc,mail.model_mail_message,pager_dut
 access_calendar_event_pager_svc,calendar.event svc,calendar.model_calendar_event,pager_duty.group_pager_service,1,1,1,0
 access_calendar_attendee_pager_svc,calendar.attendee svc,calendar.model_calendar_attendee,pager_duty.group_pager_service,1,1,1,0
 access_mail_template_pager_svc,mail.template svc,mail.model_mail_template,pager_duty.group_pager_service,1,0,0,0
+access_pager_log_search_job,pager.log.search.job,model_pager_log_search_job,base.group_user,1,1,1,1

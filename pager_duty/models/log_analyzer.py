@@ -1,7 +1,7 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 
 
 class PagerLogPattern(models.Model):
@@ -54,3 +54,20 @@ class PagerLogFile(models.Model):
     active = fields.Boolean(default=True)
 
     _path_uniq = models.Constraint("UNIQUE(filepath, website_id)", "The file path must be unique per website!")
+
+class PagerLogSearchJob(models.TransientModel):
+    _name = "pager.log.search.job"
+    _description = "Log Search Job State"
+
+    name = fields.Char(string="Name", default="Log Search Job")
+    uuid = fields.Char(string="UUID", required=True, index=True)
+    state = fields.Selection([("pending", "Pending"), ("done", "Done"), ("error", "Error")], default="pending")
+    result_payload = fields.Text(string="Result JSON")
+
+    @api.model
+    def rpc_update_state(self, uuid, state, result_payload):
+        job = self.env["pager.log.search.job"].search([("uuid", "=", uuid)], limit=1)
+        if job:
+            job.write({"state": state, "result_payload": result_payload})
+            return True
+        return False

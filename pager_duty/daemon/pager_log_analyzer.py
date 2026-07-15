@@ -1,4 +1,5 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 """
@@ -195,7 +196,12 @@ def redis_search_listener():
                     chroot_path = "/" + chroot_path
 
                 matches_deque = collections.deque(maxlen=500)
-                c_reg = re.compile(regex, re.IGNORECASE)
+                try:
+                    c_reg = re.compile(regex, re.IGNORECASE)
+                except re.error as e:
+                    res_payload = {"error": f"Invalid regex: {e}"}
+                    r_client.lpush("pager_log_search_res_queue", json.dumps({"uuid": uuid_str, "payload": res_payload}))
+                    continue
 
                 # Perform a simple full scan and keep the 500 most recent matches
                 if os.path.exists(chroot_path):
@@ -206,9 +212,9 @@ def redis_search_listener():
                 
                 matches = list(matches_deque)
 
-                # Publish results back to the specific request UUID channel
+                # Push results back to queue for Asynchronous Bastion Pattern
                 res_payload = {"matches": matches}
-                r_client.publish(f"log_search_res:{uuid_str}", json.dumps(res_payload))
+                r_client.lpush("pager_log_search_res_queue", json.dumps({"uuid": uuid_str, "payload": res_payload}))
             except (OSError, json.JSONDecodeError, KeyError) as e:
                 logger.error(f"Search failure: {e}")
 

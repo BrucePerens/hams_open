@@ -1,3 +1,4 @@
+// #FAILED_VALIDATION
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";

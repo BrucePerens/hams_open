@@ -68,11 +68,35 @@ export class LogViewer extends Component {
 
             if (data.error) {
                 this.state.error = data.error;
-            } else {
-                this.state.results = data.matches || [];
-                if (this.state.results.length === 0) {
-                    this.state.error = "0 matches found.";
+            } else if (data.job_id) {
+                let done = false;
+                let attempts = 0;
+                while (!done && attempts < 30) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    attempts++;
+                    const pollRes = await fetch("/api/v1/pager/logs/search_poll", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ params: { job_id: data.job_id } })
+                    }).then(r => r.json());
+                    const pollData = pollRes.result || {};
+                    
+                    if (pollData.error) {
+                        this.state.error = pollData.error;
+                        done = true;
+                    } else if (pollData.status === "done") {
+                        this.state.results = pollData.matches || [];
+                        if (this.state.results.length === 0) {
+                            this.state.error = "0 matches found.";
+                        }
+                        done = true;
+                    }
                 }
+                if (!done) {
+                    this.state.error = "Search timed out.";
+                }
+            } else {
+                this.state.error = "Invalid API response.";
             }
         } catch (e) {
             this.state.error = "IPC Request Failed.";

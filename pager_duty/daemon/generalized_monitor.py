@@ -1,4 +1,5 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import binascii
@@ -557,7 +558,7 @@ def execute_check(check, client=None):
             return False, err
         try:
             res = subprocess.run(
-                [exe, "-s", "--http3", target],
+                [exe, "-s", "--http3", "--", target],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -1502,7 +1503,39 @@ if __name__ == "__main__":
                 logger.warning("Anomaly proxy loop error: %s", e)
                 time.sleep(1)  # audit-ignore-sleep
 
+    def log_search_proxy(cl):
+        r = redis_lib.Redis(
+            host=os.environ.get("REDIS_HOST") or "redis",
+            port=int(os.environ.get("REDIS_PORT") or "6379"),
+            db=0,
+            decode_responses=True,
+        )
+        while True:
+            try:
+                res = r.blpop("pager_log_search_res_queue", timeout=5)
+                if res:
+                    _, data = res
+                    data_dict = json.loads(data)
+                    uuid_str = data_dict.get("uuid")
+                    payload = data_dict.get("payload", {})
+                    state = "error" if "error" in payload else "done"
+                    cl.execute(
+                        "pager.log.search.job",
+                        "rpc_update_state",
+                        uuid=uuid_str,
+                        state=state,
+                        result_payload=json.dumps(payload),
+                    )
+            except (
+                ConnectionError,
+                socket.timeout,
+                Exception,
+            ) as e:  # audit-ignore-catch-all
+                logger.warning("Search proxy loop error: %s", e)
+                time.sleep(1)  # audit-ignore-sleep
+
     futures.append(executor.submit(log_anomaly_proxy, client))
+    futures.append(executor.submit(log_search_proxy, client))
 
     for check in checks:
         if check.get("type") == "log":

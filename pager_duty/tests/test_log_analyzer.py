@@ -28,30 +28,27 @@ class TestLogAnalyzer(HamsTransactionCase):
         recs = self.env["pager.log.pattern"].search([], limit=1)
         self.assertTrue(recs)
 
-    def test_03_timeout_removed(self):
+    def test_03_async_bastion_pattern(self):
         """
-        Verify that get_message is called without a timeout to prevent synchronous thread blocking.
+        Verify that search_logs creates a pager.log.search.job and returns its UUID instead of blocking.
         """
         api = PagerLogAPI()
         
-        # Patch redis components using safe_patch
         mock_redis_mod = self.safe_patch('odoo.addons.pager_duty.controllers.log_api.redis')
         self.safe_patch('odoo.addons.pager_duty.controllers.log_api.redis_pool', MagicMock())
         mock_req = self.safe_patch('odoo.addons.pager_duty.controllers.log_api.request')
         
         mock_req.env.user.has_group.return_value = True
-        self.safe_patch('odoo.addons.pager_duty.controllers.log_api._', side_effect=lambda x: x)
+        mock_req.env = self.env
         
-        mock_pubsub = MagicMock()
         mock_redis = MagicMock()
-        mock_redis.pubsub.return_value = mock_pubsub
         mock_redis_mod.Redis.return_value = mock_redis
         
-        mock_pubsub.get_message.return_value = None
+        res = api.search_logs('/var/log/syslog', 'test')
         
-        api.search_logs('/var/log/syslog', 'test')
-        
-        mock_pubsub.get_message.assert_called_once()
-        kwargs = mock_pubsub.get_message.call_args.kwargs
-        self.assertNotIn('timeout', kwargs, "The timeout argument must be removed to avoid thread blocking.")
+        self.assertIn('job_id', res)
+        job = self.env["pager.log.search.job"].search([("uuid", "=", res['job_id'])])
+        self.assertTrue(job)
+        self.assertEqual(job.state, "pending")
+        mock_redis.publish.assert_called_once()
 

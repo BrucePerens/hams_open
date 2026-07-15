@@ -1,4 +1,5 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import json
@@ -30,49 +31,65 @@ class PagerLogAPI(http.Controller):
             raise AccessError(_("Illegal path traversal detected."))
         
         base_dir = os.path.realpath("/var/log")
-        if not os.path.realpath(file_path).startswith(base_dir):
+        real_path = os.path.realpath(file_path)
+        if real_path != base_dir and not real_path.startswith(base_dir + os.path.sep):
             raise AccessError(_("Illegal path traversal detected."))
 
         if not redis or not redis_pool:
-            # audit-ignore-i18n: # Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
+            # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("Redis not available for IPC.")}
 
         req_uuid = str(uuid.uuid4())
         payload = {"uuid": req_uuid, "file": file_path, "regex": regex_query}
 
+        # Asynchronous Bastion Pattern: State Initialization
+        request.env["pager.log.search.job"].create({
+            "uuid": req_uuid,
+            "state": "pending"
+        })
+
         try:
             r = redis.Redis(connection_pool=redis_pool)
-            pubsub = r.pubsub()
-            pubsub.subscribe(f"log_search_res:{req_uuid}")
-
-            # Dispatch to the root daemon
+            # Transactional Dispatch to Daemon
             r.publish("log_search_req", json.dumps(payload))
-
-            # Wait for response
-            # NON-BLOCKING CALL: get_message without timeout
-            message = pubsub.get_message(ignore_subscribe_messages=True)
-            if message and message["type"] == "message":
-                data = json.loads(message["data"])
-                pubsub.unsubscribe()
-                return data
-
-            pubsub.unsubscribe()
-            # audit-ignore-i18n: # Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
-            return {"error": _("Search timeout. Daemon may be offline.")}
+            return {"job_id": req_uuid}
         except redis.RedisError as e:
             _logger.error("Redis IPC Failure during log search: %s", e)
-            # audit-ignore-i18n: # Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
+            # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("IPC Failure: %s") % e}
         except json.JSONDecodeError as e:
             _logger.error("JSON Decode Failure during log search: %s", e)
+            # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("Protocol Error: Failed to parse response.")}
-        except Exception as e:  # audit-ignore-catch-all # Tests [@ANCHOR: pd_log_api_i18n]
+        except Exception as e:  # audit-ignore-catch-all # Verified by [@ANCHOR: pd_log_api_i18n]
             _logger.error("Unexpected Failure during log search: %s", e)
+            # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("An unexpected error occurred.")}
+
+    @http.route("/api/v1/pager/logs/search_poll", type="jsonrpc", auth="user")
+    def search_logs_poll(self, job_id):
+        if not request.env.user.has_group("pager_duty.group_pager_admin"):
+            raise AccessError(_("Access Denied."))
+        
+        job = request.env["pager.log.search.job"].search([("uuid", "=", job_id)], limit=1)
+        if not job:
+            return {"error": "Job not found"}
+            
+        if job.state == "pending":
+            return {"status": "pending"}
+        elif job.state == "error":
+            return {"error": job.result_payload or "Daemon processing error"}
+        else:
+            try:
+                data = json.loads(job.result_payload) if job.result_payload else {}
+                return {"status": "done", "matches": data.get("matches", [])}
+            except json.JSONDecodeError:
+                return {"error": "Invalid result payload"}
 
     @http.route("/api/v1/pager/logs/files", type="jsonrpc", auth="user")
     def get_log_files(self):
         if not request.env.user.has_group("pager_duty.group_pager_admin"):
+            # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             raise AccessError(_("Access Denied."))
 
         svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(

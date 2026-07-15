@@ -425,7 +425,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
         )
         self.assertTrue(success)
         mock_run.assert_called_with(
-            ["/bin/mock", "-s", "--http3", "https://example.com"],
+            ["/bin/mock", "-s", "--http3", "--", "https://example.com"],
             capture_output=True,
             text=True,
             timeout=10,
