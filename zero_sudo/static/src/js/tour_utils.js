@@ -15,11 +15,7 @@ export const TourUtils = {
                 trigger: saveButtonTrigger,
                 run: 'click',
             },
-            {
-                content: "[MACRO] Wait for DOM element: RPC resolution / Dirty Form safe save (" + waitTrigger + ")",
-                trigger: waitTrigger,
-                run: function() {}
-            }
+            TourUtils.waitForElement(waitTrigger, "RPC resolution / Dirty Form safe save")
         ];
     },
 
@@ -69,8 +65,22 @@ export const TourUtils = {
         description = description || "";
         return {
             content: "[MACRO] Wait for DOM absence: " + (description || selector),
-            trigger: 'body:not(:has(' + selector + '))',
-            run: function () {}
+            trigger: 'body',
+            run: function () {
+                return new Promise((resolve, reject) => {
+                    let elapsed = 0;
+                    const interval = setInterval(() => {
+                        elapsed += 250;
+                        if (!document.querySelector(selector)) {
+                            clearInterval(interval);
+                            resolve();
+                        } else if (elapsed >= 10000) {
+                            clearInterval(interval);
+                            reject(new Error("Timeout waiting for absence of element: " + selector));
+                        }
+                    }, 250);
+                });
+            }
         };
     },
 

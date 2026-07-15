@@ -27,9 +27,10 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             content: 'Type service account name',
             run: 'edit facility',
         },
+        TourUtils.waitForElement('.o-autocomplete--dropdown-item', 'autocomplete dropdown'),
         {
             trigger: '.o-autocomplete--dropdown-item',
-            content: 'Wait for autocomplete dropdown and click the item',
+            content: 'Click the autocomplete item',
             run: 'click',
         },
         {
@@ -43,15 +44,13 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             run: 'click',
         }
     ].concat(TourUtils.safeSave()).concat([
+        TourUtils.waitForElement('button[name="action_force_provision_all"]:not([disabled])', 'Force provision all keys button to be active'),
         {
             trigger: 'button[name="action_force_provision_all"]:not([disabled])',
-            content: 'Force provision all keys (ensuring button is active)',
+            content: 'Force provision all keys',
             run: 'click',
         },
-        {
-            content: 'Wait for success toast',
-            trigger: '.o_notification_manager .o_notification',
-        },
+        TourUtils.waitForElement('.o_notification', 'success toast'),
         TourUtils.waitForAbsence('.o_notification', 'success toast to disappear'),
         {
             content: 'Click breadcrumb to return to list',
