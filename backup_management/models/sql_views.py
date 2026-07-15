@@ -43,7 +43,7 @@ class BackupLatestSnapshotView(models.Model):
                 p_company_id INTEGER,
                 p_snapshots JSONB,
                 p_user_id INTEGER
-            ) RETURNS TABLE(snapshot_id TEXT) AS $$
+            ) RETURNS TABLE(out_snapshot_id TEXT) AS $$
             BEGIN
                 RETURN QUERY
                 INSERT INTO backup_snapshot (

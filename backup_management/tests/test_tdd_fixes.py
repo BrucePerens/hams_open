@@ -13,24 +13,20 @@ _logger = logging.getLogger(__name__)
 
 @tagged("post_install", "-at_install")
 class TestTddFixes(RealTransactionCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.config1 = cls.env["backup.config"].create({
+    def setUp(self):
+        super().setUp()
+        self.config1 = self.env["backup.config"].create({
             "name": "Config 1",
             "engine": "kopia",
             "target_path": "/var/lib/odoo/backups/test_kopia1",
             "storage_type": "local",
         })
-        cls.config2 = cls.env["backup.config"].create({
+        self.config2 = self.env["backup.config"].create({
             "name": "Config 2",
             "engine": "kopia",
             "target_path": "/var/lib/odoo/backups/test_kopia2",
             "storage_type": "local",
         })
-
-    def setUp(self):
-        super().setUp()
         self.daemon_proc = None
 
     def tearDown(self):

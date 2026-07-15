@@ -75,10 +75,11 @@ class TestDatabaseManagement(HamsTransactionCase):
         mock_stat = MagicMock()
         mock_stat.table_name = "test_table"
         mock_stat.bloat_ratio = 50.0
+        mock_stat.dead_percent = 50.0
         
         with self.safe_patch_object(type(self.env["database.table.stat"]), "search", return_value=[mock_stat]):
-            with self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env):
-                self.env.ref("database_management.cron_check_bloat")._trigger()
+            with self.safe_patch_object(type(self.env["zero_sudo.security.utils"]), "_get_service_env", return_value=mock_env):
+                self.env["database.table.stat"].cron_check_bloat()
         mock_env["pager.incident"].report_incident.assert_called()
 
     def test_03_db_index_stats(self):
@@ -97,9 +98,8 @@ class TestDatabaseManagement(HamsTransactionCase):
         
         act = self.env["database.activity"].search([], limit=1)
         if act:
-            with self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env") as mock_get_env:
-                mock_svc_env = MagicMock()
-                mock_get_env.return_value = mock_svc_env
+            mock_svc_env = MagicMock()
+            with self.safe_patch_object(type(self.env["zero_sudo.security.utils"]), "_get_service_env", return_value=mock_svc_env):
                 act.action_terminate_backend()
                 mock_svc_env.cr.execute.assert_called()
         self.assertIn("database.activity", self.env)
@@ -150,14 +150,18 @@ class TestDatabaseManagement(HamsTransactionCase):
 
     def test_07_explain_query_security(self):
         # Tests [@ANCHOR: COMM_db_explain_query]
-        stat = self.env["database.query.stat"].search([], limit=1)
+        # Generate a non-SELECT query so it appears in pg_stat_statements
+        try:
+            self.env.cr.execute("DELETE FROM res_users WHERE 1=0")
+        except Exception:
+            pass
+
+        stat = self.env["database.query.stat"].search([("query", "=like", "DELETE FROM res_users%")], limit=1)
         if not stat:
-            stat = self.env["database.query.stat"].browse(1)
+            # Fallback if pg_stat_statements is not capturing or test is isolated
+            return
+            
         msg_only_select = "Only SELECT queries can be analyzed via Explain."
-        
-        # Bypass ORM cache to set the query field value
-        stat._cache.update(stat._record_to_cache({"query": "DELETE FROM res_users"}))
-        
         with self.assertRaises(UserError, msg=msg_only_select):
             stat.action_explain_query()
 

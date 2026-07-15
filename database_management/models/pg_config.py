@@ -94,7 +94,6 @@ class PgOptimizeWizard(models.TransientModel):
         }
 
         with self.env.registry.cursor() as cr:
-            cr.autocommit(True)
             for param, val in settings.items():
                 # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
                 query = sql.SQL("ALTER SYSTEM SET {} = {}").format(

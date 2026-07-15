@@ -10,7 +10,7 @@ class CloudflareDNSRecord(models.Model):
 
     name = fields.Char(string="Name", required=True)
 
-    constraint_name = models.Constraint(
+    _check_name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
 
@@ -42,7 +42,7 @@ class CloudflareZoneSettings(models.Model):
     bot_fight_mode = fields.Boolean(string="Bot Fight Mode", help="Challenge bad bots.")
     website_id = fields.Many2one("website", string="Website")
 
-    constraint_name = models.Constraint(
+    _check_name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
 
@@ -53,7 +53,7 @@ class CloudflareRateLimit(models.Model):
 
     name = fields.Char(string="Name", required=True)
 
-    constraint_name = models.Constraint(
+    _check_name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
     match_criteria = fields.Char(string="Matching Criteria")
@@ -75,7 +75,7 @@ class CloudflareCacheRule(models.Model):
 
     name = fields.Char(string="Name", required=True)
 
-    constraint_name = models.Constraint(
+    _check_name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
     edge_cache_ttl = fields.Integer(string="Edge Cache TTL (seconds)")
@@ -89,7 +89,7 @@ class CloudflareZeroTrustPolicy(models.Model):
 
     name = fields.Char(string="Name", required=True)
 
-    constraint_name = models.Constraint(
+    _check_name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
     policy_action = fields.Selection(

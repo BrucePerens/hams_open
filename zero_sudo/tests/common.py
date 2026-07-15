@@ -735,7 +735,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls.registry.clear_cache()
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
-        lock_path = os.path.join(tempfile.gettempdir(), f"hams_test_proxy_{os.getuid()}.lock")
+        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}.lock"
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
@@ -909,7 +909,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls._crypto_patcher_res_users.stop()
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        lock_path = os.path.join(tempfile.gettempdir(), f"hams_test_proxy_{os.getuid()}.lock")
+        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}.lock"
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
