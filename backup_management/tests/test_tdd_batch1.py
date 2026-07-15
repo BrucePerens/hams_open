@@ -2,7 +2,7 @@
 import os
 import json
 import time
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.backup_management.daemon import backup_worker
@@ -36,7 +36,7 @@ class TestTddBatch1(HamsTransactionCase):
         body_invalid = json.dumps({
             "job_id": 1,
             "engine": "restore_cmd",
-            "cmd_args": ["kopia", "restore", "snap1", "/tmp/hack"],
+            "cmd_args": ["kopia", "restore", "snap1", "/etc/passwd"],
             "config_id": 1,
             "svc_uid": 1
         })
