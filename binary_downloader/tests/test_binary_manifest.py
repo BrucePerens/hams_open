@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
@@ -53,7 +54,7 @@ class TestBinaryManifest(HamsTransactionCase):
         )
 
         # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
-        base_url = os.environ.get("ODOO_URL", "http://localhost:8069")  # burn-ignore-env
+        base_url = os.environ.get("ODOO_URL", "https://localhost:8069")  # burn-ignore-env
         url = f"{base_url}/test/dummy_bin"
         chksum = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 
@@ -286,7 +287,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "slippy",
-                "url": "http://example.com/slippy.tar.gz",
+                "url": "https://example.com/slippy.tar.gz",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "tar.gz",
                 "extract_member": "slippy",
@@ -333,7 +334,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "symlinkbin",
-                "url": "http://example.com/symlink.tar.gz",
+                "url": "https://example.com/symlink.tar.gz",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "tar.gz",
                 "extract_member": "symlinkbin",
@@ -381,7 +382,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "zippy",
-                "url": "http://example.com/zippy.zip",
+                "url": "https://example.com/zippy.zip",
                 "checksum": hashlib.sha256(zip_data).hexdigest(),
                 "archive_type": "zip",
                 "extract_member": "zippybin",
@@ -410,7 +411,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "symlinkzip",
-                "url": "http://example.com/symlink.zip",
+                "url": "https://example.com/symlink.zip",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "zip",
                 "extract_member": "symlinkbin",
@@ -449,7 +450,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "zip_slip",
-                "url": "http://example.com/slip.zip",
+                "url": "https://example.com/slip.zip",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "zip",
                 "extract_member": "slip",
@@ -494,7 +495,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "regzip",
-                "url": "http://example.com/reg.zip",
+                "url": "https://example.com/reg.zip",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "zip",
                 "extract_member": "regbin",
@@ -536,7 +537,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.env["binary.manifest"].create(
             {
                 "name": "shadowbin",
-                "url": "http://example.com/shadowbin",
+                "url": "https://example.com/shadowbin",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "binary",
             }
@@ -551,3 +552,35 @@ class TestBinaryManifest(HamsTransactionCase):
         path = self.env["binary.manifest"].ensure_executable("shadowbin")
         # Ensure that ensure_executable doesn't return the path returned by shutil.which
         self.assertNotEqual(path, "/usr/bin/testbin")
+
+    def test_19_unlink_privilege_escalation(self):
+        # [!] DIAGNOSTIC FOR AI: Testing prevention of privilege escalation in unlink.
+        company_b = self.env["res.company"].create({"name": "Company B"})
+        user_b = self.env["res.users"].create({
+            "name": "User B",
+            "login": "user_b",
+            "company_id": company_b.id,
+            "company_ids": [(4, company_b.id)],
+            "groups_id": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+
+        chksum = "escalation_test_hash"
+        global_manifest = self.env["binary.manifest"].create({
+            "name": "globalbin",
+            "url": "https://example.com/globalbin",
+            "checksum": chksum,
+            "archive_type": "binary",
+        })
+
+        company_b_manifest = self.env["binary.manifest"].with_user(user_b).create({
+            "name": "companyb_bin",
+            "url": "https://example.com/companyb_bin",
+            "checksum": chksum,
+            "archive_type": "binary",
+        })
+
+        mock_unlink_file = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._unlink_binary_file")
+        
+        company_b_manifest.with_user(user_b).unlink()
+
+        mock_unlink_file.assert_not_called()

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
@@ -50,7 +51,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         # Update the manifest record in the database to use our dummy checksum and url
         manifest = self.env.ref("binary_downloader.binary_manifest_kopia")
         manifest.write(
-            {"checksum": expected_checksum, "url": "http://dummy.internal/kopia.tar.gz"}
+            {"checksum": expected_checksum, "url": "https://dummy.internal/kopia.tar.gz"}
         )
 
         # Update test_bin to the variant name and clean it
@@ -91,7 +92,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         manifest = self.env["binary.manifest"].create(
             {
                 "name": "test_symlink_bin",
-                "url": "http://odoo-service.internal",
+                "url": "https://odoo-service.internal",
                 "checksum": "fake_checksum",
             }
         )
@@ -99,7 +100,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             {
                 "manifest_id": manifest.id,
                 "version_number": "1.0",
-                "url": "http://odoo-service.internal/1.0",
+                "url": "https://odoo-service.internal/1.0",
                 "checksum": "fake",
             }
         )
@@ -144,31 +145,32 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         
         manifest = self.env["binary.manifest"].create({
             "name": "pager_test",
-            "url": "http://example.com/pager",
+            "url": "https://example.com/pager",
             "checksum": "fake",
         })
         version1 = self.env["binary.version"].create({
             "manifest_id": manifest.id,
             "version_number": "1.0",
-            "url": "http://example.com/1.0",
+            "url": "https://example.com/1.0",
             "checksum": "fake1",
         })
         version2 = self.env["binary.version"].create({
             "manifest_id": manifest.id,
             "version_number": "2.0",
-            "url": "http://example.com/2.0",
+            "url": "https://example.com/2.0",
             "checksum": "fake2",
         })
         
         # Create many links for different websites
-        links = []
-        for i in range(15):
-            new_site = self.env["website"].create({"name": f"Test Tenant {i}"})
-            links.append({
-                "website_id": new_site.id,
+        new_sites = self.env["website"].create([{"name": f"Test Tenant {i}"} for i in range(15)])
+        links = [
+            {
+                "website_id": site.id,
                 "manifest_id": manifest.id,
                 "active_version_id": version1.id,
-            })
+            }
+            for site in new_sites
+        ]
             
         self.safe_patch_object(type(self.env["binary.version"]), "action_download_to_pool")
         self.env["binary.tenant.link"].create(links)
@@ -183,7 +185,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         self.safe_patch_object(type(self.env["binary.tenant.link"]), "search", mock_search)
         
         mock_incident_create = self.safe_patch_object(type(self.env["pager.incident"]), "create")
-        self.safe_patch_object(type(self.env['ir.config_parameter']), 'get_param', return_value='http://test')
+        self.safe_patch_object(type(self.env['ir.config_parameter']), 'get_param', return_value='https://test')
         
         version2.action_notify_tenants()
         

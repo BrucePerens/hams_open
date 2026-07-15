@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
@@ -23,7 +24,7 @@ class TestBinaryVersion(HamsTransactionCase):
         self.manifest = self.env["binary.manifest"].create(
             {
                 "name": "kopia",
-                "url": "http://example.com/kopia",
+                "url": "https://example.com/kopia",
                 "checksum": "fakehash",
                 "archive_type": "binary",
             }
@@ -71,7 +72,7 @@ class TestBinaryVersion(HamsTransactionCase):
                 {
                     "manifest_id": self.manifest.id,
                     "version_number": "1.1",
-                    "url": "http://example.com/a.tar.gz",
+                    "url": "https://example.com/a.tar.gz",
                     "checksum": "hash",
                     "archive_type": "tar.gz",
                 }
@@ -84,7 +85,7 @@ class TestBinaryVersion(HamsTransactionCase):
             {
                 "manifest_id": self.manifest.id,
                 "version_number": "1.2",
-                "url": "http://example.com/v1.2",
+                "url": "https://example.com/v1.2",
                 "checksum": "a" * 64,
             }
         )
@@ -103,7 +104,7 @@ class TestBinaryVersion(HamsTransactionCase):
             {
                 "manifest_id": self.manifest.id,
                 "version_number": "1.3",
-                "url": "http://example.com/v1.3",
+                "url": "https://example.com/v1.3",
                 "checksum": hashlib.sha256(b"vdata").hexdigest(),
                 "archive_type": "binary",
             }
@@ -145,7 +146,7 @@ class TestBinaryVersion(HamsTransactionCase):
             {
                 "manifest_id": self.manifest.id,
                 "version_number": "1.5",
-                "url": "http://example.com/reg.zip",
+                "url": "https://example.com/reg.zip",
                 "checksum": hashlib.sha256(b"data").hexdigest(),
                 "archive_type": "zip",
                 "extract_member": "regbin",
@@ -158,7 +159,7 @@ class TestBinaryVersion(HamsTransactionCase):
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response
 
-        mock_zip_open = self.safe_patch("zipfile.ZipFile")
+        mock_zip_open = self.safe_patch("zipfile.ZipFile")  # audit-ignore-path
         mock_zip = MagicMock()
         mock_zip_open.return_value.__enter__.return_value = mock_zip
 
