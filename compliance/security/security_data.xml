@@ -16,7 +16,7 @@
             <field name="privilege_id" ref="res_groups_privilege_compliance"/>
         </record>
     </data>
-    <data noupdate="1">
+    <data noupdate="0">
         <record id="user_compliance_service" model="res.users">
             <field name="name">Compliance Service Account</field>
             <field name="login">user_compliance_service</field>

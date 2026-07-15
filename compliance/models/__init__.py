@@ -4,3 +4,4 @@
 
 from . import compliance_config
 from . import res_users
+from . import compliance_document

@@ -8,9 +8,8 @@ class ComplianceController(http.Controller):
     @http.route('/compliance', type='http', auth='public', website=True)
     def compliance_index(self):
         env = http.request.env
-        svc_uid = env["zero_sudo.security.utils"]._get_service_uid("compliance.user_compliance_service")
         
         domain = [('active', '=', True)]
-        docs = env['compliance.document'].with_user(svc_uid).with_company(env.company).search(domain, limit=100)
+        docs = env['compliance.document'].with_company(env.company).search(domain, limit=100)
         
         return http.request.render('compliance.compliance_index_template', {'docs': docs})

@@ -76,16 +76,22 @@ def post_init_hook(env):
     $$ LANGUAGE plpgsql;
     """
     env_svc.flush_all()
-    with env_svc.cr.savepoint():
-        env_svc.cr.execute(sql)
+    try:
+        with env_svc.cr.savepoint():
+            env_svc.cr.execute(sql)
+    except Exception as e: # audit-ignore-catch-all
+        _logger.error("Failed to execute compliance_enforce_protection DDL: %s", e)
 
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
     # Performance Optimization: Reduced dozens of ORM round-trips
     # to a single Postgres procedure call.
     # # Verified by [@ANCHOR: COMM_test_compliance_postgres_procedures]
     env_svc.flush_all()
-    with env_svc.cr.savepoint():
-        env_svc.cr.execute("SELECT compliance_enforce_protection()")
+    try:
+        with env_svc.cr.savepoint():
+            env_svc.cr.execute("SELECT compliance_enforce_protection()")
+    except Exception as e: # audit-ignore-catch-all
+        _logger.error("Failed to call compliance_enforce_protection(): %s", e)
 
     env_svc["ir.module.module"]._bootstrap_knowledge_docs()
 

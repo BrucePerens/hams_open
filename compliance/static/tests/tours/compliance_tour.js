@@ -1,7 +1,7 @@
 /** @odoo-module **/
 // -*- coding: utf-8 -*-
-// Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General
-// Public License v3.0 (AGPL-3.0).
+// Copyright © Bruce Perens K6BP.
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
@@ -111,8 +111,19 @@ registry.category("web_tour.tours").add("compliance_tour", {
         // Navigate to Compliance Index
         {
             trigger: "body",
+            content: "Inject Compliance Index link",
+            run: function () {
+                const link = document.createElement('a');
+                link.href = '/compliance';
+                link.className = 'temp_compliance_nav_link';
+                link.textContent = 'Compliance';
+                document.body.appendChild(link);
+            }
+        },
+        {
+            trigger: ".temp_compliance_nav_link",
             content: "Navigate to Compliance Index",
-            run: function () { document.location.href = '/compliance'; },
+            run: 'click',
             expectUnloadPage: true,
         },
         { trigger: 'body', run: function() {} },
