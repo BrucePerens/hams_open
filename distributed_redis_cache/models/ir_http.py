@@ -7,6 +7,7 @@ from odoo.http import request
 
 from odoo.addons.distributed_redis_cache.redis_pool import (
     get_redis_connection,
+    redis,
 )
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, LRU_LOCK
 
@@ -31,14 +32,14 @@ class IrHttp(models.AbstractModel):
                 latest = r.get("global_cache_invalidation_counter")
                 try:
                     last_counter = cls._last_cache_counter
-                except (KeyError, ValueError):
+                except AttributeError:
                     last_counter = None
                     
                 if latest and latest != last_counter:
                     with LRU_LOCK:
                         _local_cache.clear()
                     cls._last_cache_counter = latest
-            except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: COMM_redis_cache_interceptor]
-                _logger.exception("Failed to execute stateless Redis poll: %s", e)
+            except redis.RedisError as e:   # Verified by [@ANCHOR: COMM_redis_cache_interceptor]
+                _logger.warning("Failed to execute stateless Redis poll: %s", e)
 
         return super()._authenticate(endpoint)
