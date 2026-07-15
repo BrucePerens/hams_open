@@ -11,7 +11,7 @@ import datetime
 class SecurityLog(models.Model):
     # [@ANCHOR: zero_sudo:COMM_zero_sudo_security_log_global]
     # ---
-    # Verified by [@ANCHOR: zero_sudo:COMM_test_security_log_immutability]
+    # # Verified by [@ANCHOR: zero_sudo:COMM_test_security_log_immutability]
     # ---
     # This model is logically GLOBAL and NOT multi-tenanted.
     # It records blocked service account login attempts for auditing.

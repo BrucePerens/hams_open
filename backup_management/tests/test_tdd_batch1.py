@@ -44,9 +44,9 @@ class TestTddBatch1(RealTransactionCase):
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
         creds = pika.PlainCredentials(
             os.environ.get("RMQ_USER", "guest"),
-            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]  # fmt: skip
+            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]  # fmt: skip
         )
-        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=rmq_host, credentials=creds))  # burn-ignore-pika: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]
+        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=rmq_host, credentials=creds))  # burn-ignore-pika: # Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]
         self.channel = self.conn.channel()
         self.channel.queue_declare(queue="backup_tasks", durable=True)
         self.channel.queue_purge("backup_tasks")

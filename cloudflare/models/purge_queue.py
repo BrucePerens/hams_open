@@ -73,7 +73,7 @@ class CloudflarePurgeQueue(models.Model):
     def enqueue_urls(self, urls, website_id=None):
         # [@ANCHOR: COMM_enqueue_urls_base_url]
 
-        # Verified by [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
+        # # Verified by [@ANCHOR: COMM_test_purge_queue_base_url_sudo]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
         self.enqueue_urls_batch({website_id: urls})
@@ -82,9 +82,9 @@ class CloudflarePurgeQueue(models.Model):
     def enqueue_tags(self, tags, website_id=None):
         # [@ANCHOR: COMM_cf_enqueue_tags_api]
 
-        # Verified by [@ANCHOR: COMM_test_purge_tags_api]
+        # # Verified by [@ANCHOR: COMM_test_purge_tags_api]
 
-        # Verified by [@ANCHOR: test_purge_queue_tags_processing]
+        # # Verified by [@ANCHOR: test_purge_queue_tags_processing]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
 
@@ -162,11 +162,11 @@ class CloudflarePurgeQueue(models.Model):
                         success = False
                         everything_records.write({"state": "failed"})
                     else:
-                        # Verified by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
+                        # # Verified by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
                         everything_records.unlink()
                         
                         # Optimization: Clear all other pending records for this website since we just wiped everything
-                        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: cf_process_queue_logic]  # fmt: skip
+                        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: cf_process_queue_logic]  # fmt: skip
                             "DELETE FROM cloudflare_purge_queue WHERE website_id = %s AND state = 'pending'",
                             (first_website.id,),
                         )

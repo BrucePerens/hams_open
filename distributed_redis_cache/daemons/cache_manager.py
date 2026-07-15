@@ -38,9 +38,9 @@ DB_PASS = os.getenv("DB_PASS", "odoo")
 if os.getenv("PGHOST"):
     DB_HOST = os.getenv("PGHOST")
 
-REDIS_HOST = os.getenv("REDIS_HOST") or os.getenv("redis_host") or "localhost"
-REDIS_PORT = int(os.getenv("REDIS_PORT") or os.getenv("redis_port") or "6379")
-REDIS_PASS = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
+REDIS_HOST = os.getenv("REDIS_HOST", os.getenv("redis_host", "localhost"))
+REDIS_PORT = int(os.getenv("REDIS_PORT", os.getenv("redis_port", "6379")))
+REDIS_PASS = os.getenv("REDIS_PASSWORD", os.getenv("redis_password"))
 
 PG_CHANNEL = "distributed_cache_invalidation"
 REDIS_CHANNEL = "odoo_cache_invalidation_bus"
@@ -71,8 +71,8 @@ async def broadcast_to_redis(payload):
         logger.info("Published invalidation to Redis: %s", payload)
     except json.JSONDecodeError:
         logger.error("Malformed JSON payload from Postgres: %s", payload)
-    except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
-        logger.error("Redis publish failed: %s", e)
+    except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+        logger.exception("Redis publish failed: %s", e)
 
 
 _background_tasks = set()
@@ -103,7 +103,7 @@ async def main():
         )
         await redis_client.ping()
         logger.info("Connected to Redis at %s:%s", REDIS_HOST, REDIS_PORT)
-    except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+    except redis.exceptions.RedisError as e:
         logger.critical("Fatal Redis connection error: %s", e)
         return
 
@@ -120,7 +120,12 @@ async def main():
         sys_conn = await asyncpg.connect(
             host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database='postgres', timeout=10
         )
-        records = await sys_conn.fetch("SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';")
+        query = """
+            SELECT datname FROM pg_database 
+            WHERE datistemplate = false 
+            AND datname != 'postgres';
+        """
+        records = await sys_conn.fetch(query)
         dbs = [r['datname'] for r in records]
         # Also include the default DB_NAME just in case it wasn't caught
         if DB_NAME and DB_NAME not in dbs and DB_NAME != 'postgres':
@@ -135,8 +140,8 @@ async def main():
                 await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
                 db_conns.append(conn)
                 logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, db)
-            except Exception as e: # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
-                logger.warning("Could not connect to database %s: %s", db, e)
+            except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+                logger.exception("Could not connect to database %s: %s", db, e)
 
     while True:
         try:
@@ -150,14 +155,14 @@ async def main():
                     break
                 await conn.execute("SELECT 1")
             
-            await asyncio.sleep(60)  # audit-ignore-sleep: Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
+            await asyncio.sleep(60)  # audit-ignore-sleep: # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break
-        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
-            logger.error("PostgreSQL connection error: %s. Reconnecting in 5s...", e)
+        except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+            logger.exception("PostgreSQL connection error: %s. Reconnecting in 5s...", e)
             try:
-                await asyncio.sleep(5)  # audit-ignore-sleep: Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
+                await asyncio.sleep(5)  # audit-ignore-sleep: # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
                 for conn in db_conns:
                     if not conn.is_closed():
                         await conn.close()

@@ -2,6 +2,7 @@
 <odoo>
     <!-- Record Tree -->
     <record id="view_dmarc_record_tree" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_base:view_dmarc_record_tree] -->
         <field name="name">hams_base.dmarc.record.tree</field>
         <field name="model">hams_base.dmarc.record</field>
         <field name="arch" type="xml">
@@ -17,6 +18,7 @@
 
     <!-- Report Form -->
     <record id="view_dmarc_report_form" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_base:view_dmarc_report_form] -->
         <field name="name">hams_base.dmarc.report.form</field>
         <field name="model">hams_base.dmarc.report</field>
         <field name="arch" type="xml">
@@ -38,7 +40,8 @@
                             <field name="date_range_end" readonly="1"/>
                         </group>
                     </group>
-                    <group string="Policy Evaluated">
+                    <separator string="Policy Evaluated"/>
+                    <group>
                         <group>
                             <field name="p" readonly="1"/>
                             <field name="sp" readonly="1"/>
@@ -73,6 +76,7 @@
 
     <!-- Report Tree -->
     <record id="view_dmarc_report_tree" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_base:view_dmarc_report_tree] -->
         <field name="name">hams_base.dmarc.report.tree</field>
         <field name="model">hams_base.dmarc.report</field>
         <field name="arch" type="xml">

@@ -11,7 +11,7 @@
     "version": "1.0",
     "category": "Hidden",
     "author": "Bruce Perens K6BP",
-    "depends": ["base", "zero_sudo", "website", "pager_duty"],
+    "depends": ["base", "zero_sudo", "website", "pager_duty", "knowledge"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",

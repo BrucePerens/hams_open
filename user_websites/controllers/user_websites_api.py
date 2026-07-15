@@ -43,7 +43,7 @@ class UserWebsitesApi(http.Controller):
                     dns_env_svc["ham.dns.zone"].search([], limit=5000).mapped("name")
                 )
                 all_domains.extend(zone_names)
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_domains_api_returns_all_domains]
                 _logger.warning("Failed to fetch ham.dns.zone domains: %s", e)
 
         # Deduplicate and format

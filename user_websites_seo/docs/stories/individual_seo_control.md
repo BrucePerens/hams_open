@@ -13,8 +13,8 @@ When she clicks "Save", the system validates that she is indeed the user she cla
 Alice's changes are saved immediately, and she can verify that the `<title>` tag on her blog index now reflects her new custom title.
 
 ## Technical Anchors
-- Frontend SEO Widget Visibility: `[@ANCHOR: controller_user_blog_index_seo_override]`
+- Frontend SEO Widget Visibility: `[ANCHOR: controller_user_blog_index_seo_override]`
 
-- Secure Permission Elevation: `[@ANCHOR: res_users_seo_write_elevation]`
+- Secure Permission Elevation: `[ANCHOR: res_users_seo_write_elevation]`
 
-- Functional Verification: `[@ANCHOR: test_seo_widget_tour]`
+- Functional Verification: `[ANCHOR: test_seo_widget_tour]`

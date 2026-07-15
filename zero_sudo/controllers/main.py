@@ -14,7 +14,7 @@ class ZeroSudoHome(Home):
     def web_login(self, redirect=None, login=None, **kw):
         # [@ANCHOR: zero_sudo:COMM_web_login_interceptor]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
         # ---
@@ -30,14 +30,14 @@ class ZeroSudoHome(Home):
         if request.session.uid:
             # [@ANCHOR: zero_sudo:COMM_web_login_interceptor_check]
             # ---
-            # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
+            # # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
             # SECURITY MANDATE: We use direct SQL instead of .sudo() or ORM calls to check the is_service_account flag.
             # This bypasses ACLs for the isolation check (ADR-0005) without triggering Zero-Sudo linter violations.
             # FUTURE DEVELOPERS: DO NOT CHANGE THIS TO .sudo(). Direct SQL is the intentional, audited pattern here.
             # ---
             # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
             # ---
-            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
+            request.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
                 "SELECT is_service_account FROM res_users WHERE id = %s",
                 (request.session.uid,),
             )
@@ -49,7 +49,7 @@ class ZeroSudoHome(Home):
                 facility_env = utils._get_service_env(
                     "zero_sudo.odoo_facility_service_internal"
                 )
-                facility_env["zero_sudo.security.log"].with_context(prefetch_fields=False).create(
+                facility_env["zero_sudo.security.log"].create(
                     {
                         "user_id": request.session.uid,
                         "login": attempted_login,
@@ -62,5 +62,5 @@ class ZeroSudoHome(Home):
                 # Use query parameter to show error on login page after redirect
                 return request.redirect(
                     "/web/login?error=access_denied_service"
-                )  # burn-ignore-route: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
+                )  # burn-ignore-route: # Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
         return response

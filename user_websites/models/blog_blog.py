@@ -41,7 +41,8 @@ class BlogBlog(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        return super(BlogBlog, self.with_user(svc_uid)).create(vals_list)
+        self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
+        return super(BlogBlog, self_svc).create(vals_list)
 
     def check_access(self, operation):
         """Proactively catch write/unlink access violations to prevent ir.rule INFO log spam."""
@@ -111,11 +112,13 @@ class BlogBlog(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        return super(BlogBlog, self.with_user(svc_uid)).write(vals)
+        self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
+        return super(BlogBlog, self_svc).write(vals)
 
     def unlink(self):
         self.check_access("unlink")
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        return super(BlogBlog, self.with_user(svc_uid)).unlink()
+        self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
+        return super(BlogBlog, self_svc).unlink()

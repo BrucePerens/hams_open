@@ -1,5 +1,7 @@
+from odoo import models
+from odoo.tools.translate import _
 # -*- coding: utf-8 -*-
-from odoo import models, api, _
+# from odoo import models, api, _
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -20,13 +22,14 @@ class ResPartner(models.Model):
         # Attempt to find club relationships if ham_club_management is installed
         # In ham_club_management, partners might have a club_id or club_membership_ids
         try:
-            # We use sudo to bypass access rights for system-level notifications
-            partner_sudo = partner.sudo()
+            # We use the odoo_facility_service_internal service account to bypass access rights for system-level notifications
+            svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('zero_sudo.odoo_facility_service_internal')
+            partner_sudo = partner.with_user(svc_uid)
             clubs_to_notify = self.env['res.partner'] # empty recordset
 
-            if hasattr(partner_sudo, 'club_ids'):
+            if 'club_ids' in partner_sudo._fields:
                 clubs_to_notify = partner_sudo.club_ids
-            elif hasattr(partner_sudo, 'parent_id') and partner_sudo.parent_id and partner_sudo.parent_id.is_company:
+            elif partner_sudo.parent_id and partner_sudo.parent_id.is_company:
                 clubs_to_notify = partner_sudo.parent_id
             
             for club in clubs_to_notify:
@@ -46,5 +49,5 @@ class ResPartner(models.Model):
                     message_type='notification',
                     subtype_xmlid='mail.mt_comment',
                 )
-        except Exception as e:
-            _logger.warning("Failed to notify club officers of bounce for %s: %s", email, e)
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+            _logger.exception("Failed to notify club officers of bounce for %s: %s", email, e)

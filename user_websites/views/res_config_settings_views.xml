@@ -2,14 +2,14 @@
 <odoo>
     <!-- Verified by [@ANCHOR: test_dropzone_settings] -->
 
-    <record id="res_config_settings_view_form_inherit_user_websites" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_settings] -->
+    <record id="res_config_settings_view_form_inherit_user_websites" model="ir.ui.view"> 
         <field name="name">res.config.settings.view.form.inherit.user.websites</field>
         <field name="model">res.config.settings</field>
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_dropzone_settings] -->
 
-            <xpath expr="//form" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_settings] -->
+            <xpath expr="//form" position="inside"> 
                 <div id="user_websites_dropzone_settings">
                     <!-- [@ANCHOR: dropzone_settings] -->
                 </div>

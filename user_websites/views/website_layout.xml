@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="layout_inherit_report_violation" inherit_id="website.layout" name="Report Violation Global"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_layout] -->
+    <template id="layout_inherit_report_violation" inherit_id="website.layout" name="Report Violation Global"> 
 
         <!-- Verified by [@ANCHOR: test_dropzone_layout] -->
 
@@ -8,14 +8,14 @@
 
         <!-- [@ANCHOR: xpath_rendering_layout] -->
 
-        <xpath expr="//footer" position="after"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_layout] -->
+        <xpath expr="//footer" position="after"> 
             <div id="user_websites_dropzone_layout">
                 <!-- [@ANCHOR: dropzone_layout] -->
             </div>
             <t t-call="user_websites.report_violation_modal"/>
         </xpath>
 
-        <xpath expr="//footer" position="before"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_layout] -->
+        <xpath expr="//footer" position="before"> 
             <t t-set="is_user_content" t-value="False"/>
             <t t-set="is_owner" t-value="False"/>
 

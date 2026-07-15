@@ -1,13 +1,13 @@
 <div class="o_knowledge_content">
     <!-- [@ANCHOR: zero_sudo:COMM_UX_zero_sudo_user_guide] -->
-<h1 id="COMM_UX_zero_sudo_user_guide">Zero-Sudo Security: User Guide</h1>
+<h1 id="COMM_UX_zero_sudo_user_guide" data-trace="[@ANCHOR: zero_sudo:COMM_UX_zero_sudo_user_guide]">Zero-Sudo Security: User Guide</h1>
     <p>The <code>zero_sudo</code> module is the foundational security layer of the platform. It enforces a "Zero-Sudo" policy, ensuring that background tasks and automated processes operate with minimal, strictly-defined permissions.</p>
 
     <!-- [@ANCHOR: zero_sudo:COMM_UX_key_security_features] -->
-<h2 id="COMM_UX_key_security_features">Key Security Features</h2>
+<h2 id="COMM_UX_key_security_features" data-trace="[@ANCHOR: zero_sudo:COMM_UX_key_security_features]">Key Security Features</h2>
 
     <!-- [@ANCHOR: zero_sudo:COMM_UX_service_accounts] -->
-<h3 id="COMM_UX_service_accounts">Service Accounts</h3>
+<h3 id="COMM_UX_service_accounts" data-trace="[@ANCHOR: zero_sudo:COMM_UX_service_accounts]">Service Accounts</h3>
     <p>A "Service Account" is a special user profile created for automated tasks (like sending emails or backing up data). These accounts are hardened to prevent misuse:</p>
     <ul>
         <li><strong>Web Login Block:</strong> Service Accounts are strictly <strong>forbidden</strong> from logging in through a web browser. Any attempt to do so is instantly blocked and logged for auditing.</li>
@@ -16,11 +16,11 @@
     </ul>
 
     <!-- [@ANCHOR: zero_sudo:COMM_UX_safe_configuration] -->
-<h3 id="COMM_UX_safe_configuration">Safe Configuration & Parameter Whitelisting</h3>
+<h3 id="COMM_UX_safe_configuration" data-trace="[@ANCHOR: zero_sudo:COMM_UX_safe_configuration]">Safe Configuration & Parameter Whitelisting</h3>
     <p>To prevent sensitive data leaks, the system uses a strict whitelist for configuration parameters. Parameters like encryption keys or master passwords cannot be accessed or modified via standard tools unless they are explicitly registered in the security core. This protects against several classes of system-level attacks.</p>
 
     <!-- [@ANCHOR: zero_sudo:COMM_UX_centralized_security_logs] -->
-<h3 id="COMM_UX_centralized_security_logs">Centralized Security Logs</h3>
+<h3 id="COMM_UX_centralized_security_logs" data-trace="[@ANCHOR: zero_sudo:COMM_UX_centralized_security_logs]">Centralized Security Logs</h3>
     <p>The system maintains a centralized audit trail for critical security events. Administrators can monitor these in <strong>Settings > Security Logs</strong>. Tracked events include:</p>
     <div style="text-align: center; margin: 20px 0;">
         <img src="/zero_sudo/static/description/images/zero_sudo_settings.png" alt="Zero Sudo Settings and Logs" style="max-width: 100%; border: 1px solid #ccc; border-radius: 5px;">
@@ -34,13 +34,13 @@
 
     <!-- [@ANCHOR: UX_CACHE_INVALIDATION] -->
     <!-- [@ANCHOR: zero_sudo:COMM_UX_CACHE_INVALIDATION] -->
-<h3 id="COMM_UX_CACHE_INVALIDATION">Safe Cache Invalidation</h3>
+<h3 id="COMM_UX_CACHE_INVALIDATION" data-trace="[@ANCHOR: zero_sudo:COMM_UX_CACHE_INVALIDATION]">Safe Cache Invalidation</h3>
     <p>To optimize performance without compromising security, the system provides a granular way to refresh data caches. Users with appropriate permissions can safely trigger a refresh for specific parts of the system, ensuring that data is always up-to-date without needing full administrative rights. This prevents "stale data" issues while maintaining strict isolation between different parts of the platform.</p>
     <!-- [@ANCHOR: UX_CACHE_INVALIDATION] -->
     <!-- - -->
     <!-- [@ANCHOR: COMM_UX_NOISY_TABLE_MANAGEMENT] -->
     <!-- [@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT] -->
-<h3 id="COMM_UX_NOISY_TABLE_MANAGEMENT">Noisy Table Management</h3>
+<h3 id="COMM_UX_NOISY_TABLE_MANAGEMENT" data-trace="[@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT]">Noisy Table Management</h3>
     <p>System administrators can flag specific technical tables as "Noisy" to streamline security audits. This reduces false positives by indicating that certain tables are known to have high-frequency, non-sensitive data changes.</p>
     <!-- [@ANCHOR: COMM_UX_NOISY_TABLE_MANAGEMENT] -->
 

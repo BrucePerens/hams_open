@@ -15,6 +15,7 @@ class DmarcReport(models.Model):
     _inherit = ["mail.thread"]
     _order = "date_range_begin desc"
 
+    name = fields.Char(string="Name", default="New Report")
     org_name = fields.Char(string="Organization")
     email = fields.Char(string="Contact Email")
     report_id = fields.Char(string="Report ID", index=True)
@@ -72,7 +73,7 @@ class DmarcReport(models.Model):
 
         try:
             if attachment_name.endswith('.zip'):
-                with zipfile.ZipFile(io.BytesIO(raw_data)) as z:
+                with zipfile.ZipFile(io.BytesIO(raw_data)) as z:  # audit-ignore-path
                     for name in z.namelist():
                         if name.endswith('.xml'):
                             xml_content = z.read(name)
@@ -81,8 +82,8 @@ class DmarcReport(models.Model):
                 xml_content = gzip.decompress(raw_data)
             elif attachment_name.endswith('.xml'):
                 xml_content = raw_data
-        except Exception as e:
-            _logger.warning("Failed to extract DMARC report from %s: %s", attachment_name, e)
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.exception("Failed to extract DMARC report from %s: %s", attachment_name, e)
             return False
 
         if not xml_content:
@@ -114,7 +115,7 @@ class DmarcReport(models.Model):
         end = int(date_range.findtext("end")) if date_range is not None else 0
 
         # Check if report already exists
-        existing = self.search([('report_id', '=', report_id)], limit=1)
+        existing = self.env['hams_base.dmarc.report'].search([('report_id', '=', report_id)], limit=1)
         if existing:
             return existing
 
@@ -134,7 +135,7 @@ class DmarcReport(models.Model):
             "pct": int(policy_published.findtext("pct") or 100),
         }
 
-        report = self.create(report_vals)
+        report = self.env['hams_base.dmarc.report'].create(report_vals)
 
         record_vals_list = []
         for record in root.findall("record"):
@@ -165,6 +166,7 @@ class DmarcRecord(models.Model):
     _name = "hams_base.dmarc.record"
     _description = "DMARC RUA Record Details"
 
+    name = fields.Char(string="Name", default="Record")
     report_id = fields.Many2one("hams_base.dmarc.report", string="Report", required=True, ondelete="cascade")
     source_ip = fields.Char(string="Source IP", index=True)
     count = fields.Integer(string="Message Count")

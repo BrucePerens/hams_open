@@ -31,14 +31,14 @@ class IrHttp(models.AbstractModel):
                 latest = r.get("global_cache_invalidation_counter")
                 try:
                     last_counter = cls._last_cache_counter
-                except AttributeError:
+                except (KeyError, ValueError):
                     last_counter = None
                     
                 if latest and latest != last_counter:
                     with LRU_LOCK:
                         _local_cache.clear()
                     cls._last_cache_counter = latest
-            except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: redis_cache_interceptor]
+            except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: COMM_redis_cache_interceptor]
                 _logger.exception("Failed to execute stateless Redis poll: %s", e)
 
         return super()._authenticate(endpoint)

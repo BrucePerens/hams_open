@@ -68,7 +68,7 @@ checks:
   sandbox_network_access: loopback
 - name: PostgreSQL DB (Ping)
   type: postgres
-  target: 127.0.0.1
+  target: postgres
   interval: 60
   port: 5432
   dbname: postgres
@@ -78,7 +78,7 @@ checks:
   sandbox_network_access: loopback
 - name: Redis Ping
   type: redis
-  target: 127.0.0.1
+  target: redis
   interval: 60
   port: 6379
   snmp_community: public
@@ -118,7 +118,7 @@ checks:
   sandbox_network_access: loopback
 - name: WSGI HTTP Ping
   type: http
-  target: http://127.0.0.1:8069/api/v1/pager/ping
+  target: http://odoo:8069/api/v1/pager/ping
   interval: 60
   expect: '{"status": "ok"}'
   snmp_community: public

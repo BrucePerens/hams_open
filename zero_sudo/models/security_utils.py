@@ -28,7 +28,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_deterministic_hash(self, input_string):
         # [@ANCHOR: zero_sudo:COMM_deterministic_hash]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_deterministic_hash]
         """
@@ -46,9 +46,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_service_uid(self, xml_id):
         # [@ANCHOR: zero_sudo:COMM_get_service_uid]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_ham_onboarding:test_otp_mail_template]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_ham_onboarding:test_otp_mail_template]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_secure_escalation]
 
@@ -60,13 +60,13 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # STRICT ZERO-SUDO MANDATE: Resolve and verify via optimized Postgres procedure
         # [@ANCHOR: zero_sudo:COMM_get_service_uid_sql_resolve]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_get_service_uid_sql_resolve]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_get_service_uid_sql_resolve]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
 
-        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]  # fmt: skip
+        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]  # fmt: skip
         uid = self.env.cr.fetchone()[0]
         return uid
 
@@ -116,7 +116,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         # [@ANCHOR: zero_sudo:COMM_invalidate_model_cache]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_invalidate_model_cache]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_invalidate_model_cache]
         if not model_name:
             return
 
@@ -157,7 +157,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _notify_cache_invalidation(self, model_name, key_value):
         # [@ANCHOR: zero_sudo:COMM_coherent_cache_signal]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_cache_signaling]
         if not model_name:
@@ -173,18 +173,18 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     chunk = payloads[i : i + 100]
                     # [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_batch]
                     # ---
-                    # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_coherent_cache_signal_batch]
+                    # # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_coherent_cache_signal_batch]
                     # ---
-                    self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]  # fmt: skip
+                    self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]  # fmt: skip
                         "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
                         ("cache_invalidation", chunk),
                     )
         elif key_value:
             # [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_single]
             # ---
-            # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_coherent_cache_signal_single]
+            # # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_coherent_cache_signal_single]
             # ---
-            self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]  # fmt: skip
+            self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]  # fmt: skip
                 "SELECT pg_notify(%s, %s)",
                 ("cache_invalidation", f"{model_name}:{key_value}"),
             )
@@ -217,6 +217,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "user_websites_seo.docs_installed",
             "user_websites.global_website_page_limit",
             "content_security_policy.report_url",
+            "user_websites.last_digest_id",
         ]
 
     @api.model
@@ -227,6 +228,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "user_websites_seo.docs_installed",
             "cloudflare.last_static_mtime",
             "caching.safe_quota_mb",
+            "user_websites.last_digest_id",
         ]
 
     @api.model
@@ -234,7 +236,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_system_param(self, key, default=None):
         # [@ANCHOR: zero_sudo:COMM_get_system_param]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_01_mechanical_secret_block_enforcement]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_01_mechanical_secret_block_enforcement]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_parameter_whitelisting]
         # THE MECHANICAL SECRET BLOCK
@@ -326,16 +328,16 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _set_kv(self, key, value):
         # [@ANCHOR: zero_sudo:COMM_set_kv_procedure]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_set_kv_sql_check]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_set_kv_sql_check]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_set_kv_procedure]
         """
         High-performance atomic KV update using a single Postgres procedure call.
         Eliminates Python-side existence checks and round-trips.
         """
-        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_set_kv_sql_check]  # fmt: skip
+        self.env.cr.execute("SELECT zero_sudo_set_kv(%s, %s)", (key, value))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_set_kv_sql_check]  # fmt: skip
 
         # Ensure changes are visible to other transactions/round-trips.
         # CRITICAL TEST EVASION FIX: We use RealTransactionCase for commit handling natively,
@@ -351,7 +353,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_crypto_secret(self):
         # [@ANCHOR: zero_sudo:COMM_get_crypto_secret]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
         """
         Retrieves the cryptographic secret without requiring .sudo() or database access.
         Checks environment variables first, then a local file, and falls back to config.
@@ -366,7 +368,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     with open(  # audit-ignore-path  # fmt: skip
                         secret_path,
                         "r",
-                        # audit-ignore-path: Tested by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]  # fmt: skip
+                        # audit-ignore-path: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]  # fmt: skip
                     ) as f:
                         secret = f.read().strip()
             except OSError as e:

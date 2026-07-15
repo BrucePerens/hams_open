@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="email_policy_template" name="HAMS Email Policy">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_base:email_policy_template] -->
         <t t-call="website.layout">
             <div id="wrap" class="oe_structure oe_empty">
                 <section class="s_text_image pt32 pb32">

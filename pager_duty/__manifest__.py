@@ -18,6 +18,7 @@
         "distributed_redis_cache",
         "hams_helpdesk",
         "website",
+        "knowledge",
     ],
     "external_dependencies": {
         "python": [],

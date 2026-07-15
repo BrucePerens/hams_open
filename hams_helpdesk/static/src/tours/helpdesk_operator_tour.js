@@ -8,11 +8,13 @@ registry.category("web_tour.tours").add("helpdesk_operator_tour", {
     url: "/odoo?debug=1&action=hams_helpdesk.action_hams_helpdesk_ticket",
     steps: () => [
         {
+            // Tests [@ANCHOR: COMM_helpdesk_ticket_list]
             content: "Click Create Ticket",
             trigger: '.o_list_button_add',
             run: 'click',
         },
         {
+            // Tests [@ANCHOR: COMM_helpdesk_ticket_form]
             content: "Fill Subject",
             trigger: 'div[name="name"] input',
             run: 'edit Operator Tour Ticket',

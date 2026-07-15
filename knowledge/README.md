@@ -90,3 +90,8 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, a
 *   **Admin:** Full CRUD.
 *   **Service Account:** `knowledge.user_knowledge_service_account` for background operations.
 </security>
+
+<dependencies>
+## 5. External Dependencies
+*   `markdown`
+</dependencies>

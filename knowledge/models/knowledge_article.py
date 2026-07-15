@@ -133,9 +133,9 @@ class KnowledgeArticle(models.Model):
     def _compute_reading_time(self):
         # [@ANCHOR: manual_compute_reading_time]
 
-        # Verified by [@ANCHOR: test_manual_reading_time]
+        # # Verified by [@ANCHOR: test_manual_reading_time]
 
-        # Verified by [@ANCHOR: test_manual_ui_rendering]
+        # # Verified by [@ANCHOR: test_manual_ui_rendering]
         for article in self:
             if article.body:
                 words = html2plaintext(article.body).split()
@@ -149,9 +149,9 @@ class KnowledgeArticle(models.Model):
     def _check_hierarchy(self):
         # [@ANCHOR: manual_check_hierarchy]
         # See story_manual_hierarchy and journey_admin_managing
-        # Verified by [@ANCHOR: test_manual_check_hierarchy]
         """Prevent circular references in the article tree."""
         if self._has_cycle():
+            # # Verified by [@ANCHOR: test_manual_check_hierarchy]
             raise ValidationError(_("You cannot create recursive articles."))
 
     def copy(self, default=None):
@@ -166,10 +166,10 @@ class KnowledgeArticle(models.Model):
     def _compute_website_url(self):
         # [@ANCHOR: manual_compute_website_url]
         # See story_manual_url_generation and journey_admin_managing
-        # Verified by [@ANCHOR: test_manual_url_slug_generation]
         """Override from website.published.mixin to provide a proper slug."""
         super(KnowledgeArticle, self)._compute_website_url()
         for article in self:
+            # # Verified by [@ANCHOR: test_manual_url_slug_generation]
             if article.id:
                 s = str(article.name or "").strip().lower()
                 s = (

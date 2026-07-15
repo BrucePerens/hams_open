@@ -1,6 +1,6 @@
 /** @odoo-module **/
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// [@ANCHOR: COMM_distributed_cache_view]
+// Tests [@ANCHOR: COMM_distributed_cache_view]
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 

@@ -9,6 +9,7 @@
         <!-- [@ANCHOR: story_manual_backend_views] [@ANCHOR: journey_admin_managing] -->
 
         <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_backend_views_rendering] -->
+        <!-- burn-ignore-tour -->
         <field name="name">knowledge.article.list</field>
         <field name="model">knowledge.article</field>
         <field name="arch" type="xml">
@@ -27,6 +28,7 @@
         <!-- [@ANCHOR: story_manual_backend_views] [@ANCHOR: journey_admin_managing] -->
 
         <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_backend_views_rendering] -->
+        <!-- burn-ignore-tour -->
         <field name="name">knowledge.article.form</field>
         <field name="model">knowledge.article</field>
         <field name="arch" type="xml">

@@ -32,7 +32,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     def setUpClass(cls):
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
+            cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -53,7 +53,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # [@ANCHOR: zero_sudo:COMM_cursor_hijacking]
         # ---
                 # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_cursor_hijacking]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_cursor_hijacking]
         def _real_cursor_factory(readonly=False):
             return odoo.sql_db.db_connect(self.registry.db_name).cursor()
 
@@ -75,7 +75,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         self.cr = self.registry.cursor()
 
         # Use the standard Admin user (ID 2) for test setup privileges instead of the banned SUPERUSER_ID cheat
-        self.cr.execute("SELECT id FROM res_users WHERE login = 'admin'")  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_admin_user_fetch]
+        self.cr.execute("SELECT id FROM res_users WHERE login = 'admin'")  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_admin_user_fetch]
         row = self.cr.fetchone()
         admin_id = row[0] if row else 2
         self.env = odoo.api.Environment(self.cr, admin_id, {})
@@ -84,9 +84,9 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # [@ANCHOR: zero_sudo:COMM_leak_snapshotting]
         # ---
                 # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting]
         # ---
-        self.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting] # fmt: skip
+        self.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting] # fmt: skip
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT LIKE 'pg_stat_statements%'"
         )
         self._tables = [r[0] for r in self.cr.fetchall()]
@@ -97,7 +97,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 query_parts.append(sql.SQL("SELECT {}, count(1) FROM {}").format(sql.Literal(t), sql.Identifier(t)))
             
             union_query = sql.SQL(" UNION ALL ").join(query_parts)
-            self.cr.execute(union_query)  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting] # fmt: skip
+            self.cr.execute(union_query)  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting] # fmt: skip
             for row in self.cr.fetchall():
                 self._initial_counts[row[0]] = row[1]
 
@@ -107,7 +107,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # [@ANCHOR: zero_sudo:COMM_orm_instrumentation]
         # ---
                 # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_orm_instrumentation]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_orm_instrumentation]
 
         def tracking_create(model_self, *args, **kwargs):
             records = _original_create(model_self, *args, **kwargs)
@@ -135,7 +135,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
 
             # 2. Automated ORM Cleanup (Multiple passes for Foreign Key cascades)
                         # ---
-            # Verified by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup]
+            # # Verified by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup]
             for attempt in range(5):
                 pending_deletes = False
                 for model_name, ids in reversed(list(self._tracked_records.items())):
@@ -197,7 +197,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
 
             # 3. Verify No Leaks
                         # ---
-            # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_verification]
+            # # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_verification]
             leaks = []
             noisy_tables = set()
             try:
@@ -252,7 +252,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                         query_parts.append(sql.SQL("SELECT {}, count(1) FROM {}").format(sql.Literal(t), sql.Identifier(t)))
                     
                     union_query = sql.SQL(" UNION ALL ").join(query_parts)
-                    self.cr.execute(union_query)  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup] # fmt: skip
+                    self.cr.execute(union_query)  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup] # fmt: skip
                     for row in self.cr.fetchall():
                         t_name, final_count = row
                         initial_count = self._initial_counts.get(t_name, 0)
@@ -283,7 +283,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             # 4. Cleanly restore the underlying HttpCase TestCursor so its own teardown succeeds.
             # [@ANCHOR: zero_sudo:COMM_test_cursor_restoration]
             # ---
-            # Verified by [@ANCHOR: zero_sudo:COMM_test_cursor_restoration]
+            # # Verified by [@ANCHOR: zero_sudo:COMM_test_cursor_restoration]
             self.registry.cursor = self._test_cursor
             self.cr = self._test_cursor
             self.env = self._test_env

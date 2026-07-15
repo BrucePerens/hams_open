@@ -82,7 +82,7 @@ class TestRealCacheManager(RealTransactionCase):
                 if data.get("model") == "res.users":
                     message_received = True
                     break
-            time.sleep(0.5)  # audit-ignore-sleep: Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
+            time.sleep(0.5)   # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
 
         pubsub.close()
         r.close()

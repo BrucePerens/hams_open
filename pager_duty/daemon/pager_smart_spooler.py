@@ -14,7 +14,7 @@ def generate_smart_spool():
     try:
         # 1. Autodiscover all block devices supporting SMART
         scan_res = subprocess.run(
-            ["smartctl", "--scan", "-j"], capture_output=True, text=True, check=True
+            ["smartctl", "--scan", "-j"], shell=False, capture_output=True, text=True, check=True
         )
         devices = json.loads(scan_res.stdout).get("devices", [])
 
@@ -24,7 +24,7 @@ def generate_smart_spool():
             if name:
                 # 2. Query overall health status (-H) for each device
                 health_res = subprocess.run(
-                    ["smartctl", "-H", "-j", name], capture_output=True, text=True
+                    ["smartctl", "-H", "-j", name], shell=False, capture_output=True, text=True
                 )
                 try:
                     out[name] = json.loads(health_res.stdout)
@@ -42,7 +42,7 @@ def generate_smart_spool():
         os.chmod(tmp_file, 0o644)
         os.rename(tmp_file, spool_file)
 
-    except Exception as e:  # audit-ignore-catch-all
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError) as e:
         logger.error(f"Failed to generate SMART spool: {e}")
         sys.exit(1)
 

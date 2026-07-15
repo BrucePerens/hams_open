@@ -38,17 +38,9 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: "click",
         },
         {
-            trigger: '.o_select_menu_item',
+            trigger: '.o_select_menu_item[data-value="high"]',
             content: "Select High severity",
-            run: function () {
-                const items = document.querySelectorAll('.o_select_menu_item');
-                for (const item of items) {
-                    if (item.innerText.includes('High')) {
-                        item.click();
-                        break;
-                    }
-                }
-            }
+            run: "click",
         },
         {
             trigger: '[name="description"] textarea',

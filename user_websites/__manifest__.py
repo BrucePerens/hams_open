@@ -24,10 +24,8 @@ This module enables:
         "portal",
         "zero_sudo",
         "distributed_redis_cache",
-        "cloudflare",
         "knowledge",
         "compliance",
-        "edge_routing",
     ],
     "external_dependencies": {
         "python": [],

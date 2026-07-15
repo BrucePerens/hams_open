@@ -60,7 +60,7 @@ class DaemonKeyRegistry(models.Model):
 
     @api.constrains("user_id")
     def _check_user_is_service_account(self):
-        # Tested by [@ANCHOR: COMM_test_security_constraints]
+        # # Tested by [@ANCHOR: COMM_test_security_constraints]
 
         # [@ANCHOR: COMM_security_constraints_user]
         for record in self:
@@ -69,7 +69,7 @@ class DaemonKeyRegistry(models.Model):
 
     @api.constrains("env_file_path")
     def _check_env_file_path(self):
-        # Tested by [@ANCHOR: COMM_test_security_constraints]
+        # # Tested by [@ANCHOR: COMM_test_security_constraints]
 
         # [@ANCHOR: COMM_security_constraints_path]
         mandatory_prefix = "/opt/hams/etc/keys/"
@@ -96,11 +96,11 @@ class DaemonKeyRegistry(models.Model):
         API for other modules to request a bearer token/API key for their daemon.
         This registers the daemon for automated 60-day rotations and provisions synchronously.
         """
-        # Tested by [@ANCHOR: COMM_test_register_daemon_api]
+        # # Tested by [@ANCHOR: COMM_test_register_daemon_api]
 
-        # Verified by [@ANCHOR: COMM_test_register_daemon_api]
+        # # Verified by [@ANCHOR: COMM_test_register_daemon_api]
 
-        # Verified by [@ANCHOR: COMM_test_daemon_key_manager_tour]
+        # # Verified by [@ANCHOR: COMM_test_daemon_key_manager_tour]
 
         # [@ANCHOR: COMM_register_daemon_api]
 
@@ -189,11 +189,11 @@ class DaemonKeyRegistry(models.Model):
         return True
 
     def action_force_provision_all(self, *args, **kwargs):
-        # Tested by [@ANCHOR: COMM_test_force_provisioning]
+        # # Tested by [@ANCHOR: COMM_test_force_provisioning]
 
         # [@ANCHOR: COMM_action_force_provision_all_api]
 
-        # Verified by [@ANCHOR: COMM_test_unauthorized_access]
+        # # Verified by [@ANCHOR: COMM_test_unauthorized_access]
         """
         Synchronously provisions API keys for all registered daemons.
         Designed to be called via `odoo-bin shell` during systemd bootstrapping
@@ -254,7 +254,7 @@ class DaemonKeyRegistry(models.Model):
         """
         # [@ANCHOR: COMM_action_rotate_key_api]
 
-        # Verified by [@ANCHOR: COMM_test_action_rotate_key]
+        # # Verified by [@ANCHOR: COMM_test_action_rotate_key]
         self.ensure_one()
 
         has_grp = self.env.user.has_group(
@@ -279,9 +279,9 @@ class DaemonKeyRegistry(models.Model):
         }
 
     def _rotate_key_and_write_file(self, pre_fetched_keys=None):
-        # Tested by [@ANCHOR: COMM_test_force_provisioning]
+        # # Tested by [@ANCHOR: COMM_test_force_provisioning]
 
-        # Verified by [@ANCHOR: COMM_test_unauthorized_access]
+        # # Verified by [@ANCHOR: COMM_test_unauthorized_access]
         self.ensure_one()
 
         has_grp = self.env.user.has_group(
@@ -294,7 +294,7 @@ class DaemonKeyRegistry(models.Model):
         if not self.user_id.active:
             # [@ANCHOR: COMM_rotation_safety_archived_user]
 
-            # Verified by [@ANCHOR: COMM_test_rotation_safety_archived_user]
+            # # Verified by [@ANCHOR: COMM_test_rotation_safety_archived_user]
             msg = _("Cannot rotate key for archived service account: %s")
             raise UserError(msg % self.user_id.login)
 
@@ -311,11 +311,11 @@ class DaemonKeyRegistry(models.Model):
         key_name = f"{self.name}_key"
 
         # Revoke old keys for this specific service account AND daemon
-        # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
+        # # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
 
         # [@ANCHOR: COMM_revoke_old_keys_logic]
 
-        # Tested by [@ANCHOR: COMM_test_key_ownership]
+        # # Tested by [@ANCHOR: COMM_test_key_ownership]
         # Note: res.users.apikeys access is granted via ir.model.access.csv for our group.
         # We search and unlink keys belonging to the target service account.
         if pre_fetched_keys is not None:
@@ -328,13 +328,13 @@ class DaemonKeyRegistry(models.Model):
             old_keys.unlink()
 
         # Generate new key
-        # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
+        # # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
 
         # [@ANCHOR: COMM_generate_new_key_logic]
 
-        # Tested by [@ANCHOR: COMM_test_key_ownership]
+        # # Tested by [@ANCHOR: COMM_test_key_ownership]
 
-        # Verified by [@ANCHOR: COMM_test_key_ownership]
+        # # Verified by [@ANCHOR: COMM_test_key_ownership]
         expiration_date = fields.Datetime.now() + datetime.timedelta(days=90)
 
         # Odoo enforces a strict expiration limit on API keys based on the user's groups.
@@ -358,7 +358,7 @@ class DaemonKeyRegistry(models.Model):
         Writes the credentials to the specified path and locks permissions to 0600.
         Creates directories with 0700 if they do not exist.
         """
-        # Tested by [@ANCHOR: COMM_test_register_daemon_api]
+        # # Tested by [@ANCHOR: COMM_test_register_daemon_api]
 
         # [@ANCHOR: COMM_write_secure_env_file_logic]
         path = os.path.realpath(path)
@@ -411,7 +411,7 @@ class DaemonKeyRegistry(models.Model):
         Executes via ir.cron. Rotates keys for all registered daemons.
         Uses stateless batching and programmatic re-triggering.
         """
-        # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
+        # # Tested by [@ANCHOR: COMM_test_cron_rotate_all_keys]
 
         # [@ANCHOR: COMM_cron_rotation_logic]
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

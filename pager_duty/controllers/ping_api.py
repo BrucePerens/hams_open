@@ -31,7 +31,7 @@ class PagerPingAPI(http.Controller):
             hb_uuid, override_svc_uid=svc_uid
         )
         if check_id:
-            check = request.env["pager.check"].with_user(svc_uid).browse(check_id)
+            check = request.env["pager.check"].with_user(svc_uid).with_context(mail_notrack=True).browse(check_id)
             check.last_heartbeat = fields.Datetime.now()
             return http.Response(
                 json.dumps({"status": "ok"}), content_type="application/json"

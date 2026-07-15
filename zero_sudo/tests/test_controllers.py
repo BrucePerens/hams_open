@@ -15,11 +15,11 @@ class TestZeroSudoControllers(RealTransactionCase):
     def test_01_web_login_interceptor(self):
         # [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
         # ---
         # [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_web_login_interceptor]
         # ---
@@ -33,7 +33,7 @@ class TestZeroSudoControllers(RealTransactionCase):
         """Verify that service accounts cannot log into the web interface."""
         # [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_is_service_account_field]
 
@@ -54,7 +54,7 @@ class TestZeroSudoControllers(RealTransactionCase):
                 "lang": "en_US",
             }
         )
-        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor] # fmt: skip
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor] # fmt: skip
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         # MANDATORY: Commit so the HTTP worker thread can see the new user.

@@ -18,7 +18,7 @@ class TestZeroSudoViews(HamsHttpCase):
     def test_01_res_users_views(self):
         # [@ANCHOR: zero_sudo:COMM_test_res_users_views]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_res_users_views]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_res_users_views]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_test_res_users_views]
         """
@@ -31,7 +31,7 @@ class TestZeroSudoViews(HamsHttpCase):
     def test_02_zero_sudo_tour(self):
         # [@ANCHOR: zero_sudo:COMM_test_zero_sudo_tour]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_zero_sudo_tour]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_zero_sudo_tour]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
         # ---
@@ -45,7 +45,7 @@ class TestZeroSudoViews(HamsHttpCase):
     def test_03_noisy_table_views(self):
         # [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
         # ---
@@ -59,7 +59,7 @@ class TestZeroSudoViews(HamsHttpCase):
     def test_04_security_log_views(self):
         # [@ANCHOR: zero_sudo:COMM_test_security_log_views]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_security_log_views]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_security_log_views]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_test_security_log_views]
         """Verify that the security.log views compile and render correctly."""

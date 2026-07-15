@@ -50,7 +50,7 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager'), ref('base.group_user')])]"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager')])]"/>
         </record>
     </data>
 </odoo>

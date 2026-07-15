@@ -2,10 +2,10 @@
 <!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
 <odoo>
     <record id="view_hams_helpdesk_ticket_form" model="ir.ui.view">
-        <!-- [@ANCHOR: helpdesk_ticket_form] -->
-        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_ticket_form] -->
+        <!-- [@ANCHOR: COMM_helpdesk_ticket_form] -->
         <field name="name">hams_helpdesk.ticket.form</field>
         <field name="model">hams_helpdesk.ticket</field>
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_helpdesk_operator_tour] -->
         <field name="arch" type="xml">
             <form string="Helpdesk Ticket">
                 <header>
@@ -46,9 +46,9 @@
     </record>
 
     <record id="view_hams_helpdesk_ticket_list" model="ir.ui.view">
-        <!-- [@ANCHOR: helpdesk_ticket_list] -->
-        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_ticket_list] -->
+        <!-- [@ANCHOR: COMM_helpdesk_ticket_list] -->
         <field name="name">hams_helpdesk.ticket.list</field>
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_helpdesk_operator_tour] -->
         <field name="model">hams_helpdesk.ticket</field>
         <field name="arch" type="xml">
             <list string="Helpdesk Tickets">

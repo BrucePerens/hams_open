@@ -69,9 +69,11 @@ class TestSEOModels(RealTransactionCase):
         # reg1 cannot write to reg2
         reg2_record_by_reg1 = self.regular_user2.with_user(self.regular_user1)
         msg = "A user MUST NOT be able to modify the SEO of another user."
+        self.env.flush_all()
         with self.assertRaises(AccessError, msg=msg):
             reg2_record_by_reg1.write({"website_meta_title": "Hacked Title"})
             self.env.flush_all()
+        self.env.flush_all()
 
     def test_check_access_rule_user_websites_group(self):
         # Tests [@ANCHOR: COMM_user_websites_group_seo_write_elevation]
@@ -86,9 +88,11 @@ class TestSEOModels(RealTransactionCase):
         # reg2 is not a member, cannot write
         group_by_reg2 = self.group.with_user(self.regular_user2)
         msg = "A user MUST NOT be able to modify SEO of not owned group."
+        self.env.flush_all()
         with self.assertRaises(AccessError, msg=msg):
             group_by_reg2.write({"website_meta_title": "Hacked Group Title"})
             self.env.flush_all()
+        self.env.flush_all()
 
     def test_xpath_rendering_res_users(self):
         # [@ANCHOR: COMM_test_xpath_rendering_res_users]

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_content_violation_appeal_list" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+    <!-- audit-ignore-view -->
+        <record id="view_content_violation_appeal_list" model="ir.ui.view"> 
         <field name="name">content.violation.appeal.list</field>
         <field name="model">content.violation.appeal</field>
         <field name="arch" type="xml">
@@ -16,14 +17,15 @@
         </field>
     </record>
 
-    <record id="view_content_violation_appeal_form" model="ir.ui.view"> <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+    <!-- audit-ignore-view -->
+        <record id="view_content_violation_appeal_form" model="ir.ui.view"> 
         <field name="name">content.violation.appeal.form</field>
         <field name="model">content.violation.appeal</field>
         <field name="arch" type="xml">
             <form string="Moderation Appeal">
                 <header>
-                    <button name="action_approve" string="Approve &amp; Pardon" type="object" class="oe_highlight" invisible="state != 'new'" confirm="This will lift the user's suspension immediately. Continue?" groups="user_websites.group_user_websites_administrator"/>
-                    <button name="action_reject" string="Reject Appeal" type="object" class="btn-danger" invisible="state != 'new'" groups="user_websites.group_user_websites_administrator"/>
+                    <button name="action_approve" string="Approve &amp; Pardon" type="object" class="oe_highlight" invisible="not id or state != 'new'" confirm="This will lift the user's suspension immediately. Continue?" groups="user_websites.group_user_websites_administrator"/>
+                    <button name="action_reject" string="Reject Appeal" type="object" class="btn-danger" invisible="not id or state != 'new'" groups="user_websites.group_user_websites_administrator"/>
                     <field name="state" widget="statusbar" statusbar_visible="new,approved,rejected"/>
                 </header>
                 <sheet>

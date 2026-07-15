@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import shutil
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -158,7 +159,7 @@ class TestKeyRegistry(RealTransactionCase):
             _logger.warning("Cleanup error: %s", e)
 
     def _silent_rmdir(self, path):
-        import shutil
+        pass # import shutil
         try:
             if os.path.exists(path):
                 shutil.rmtree(path)
@@ -428,10 +429,9 @@ class TestKeyRegistry(RealTransactionCase):
             
         if os.path.exists(parent_dir):
             os.chmod(parent_dir, 0o700)
-            import shutil
+            pass # import shutil
+            # shutil is needed here, so let's import it safely at top? No, I will just do:
             shutil.rmtree(parent_dir)
-            
-        # Trigger OSError naturally by giving a directory path as file path
         os.makedirs("/opt/hams/etc/keys/test_os_error_dir", exist_ok=True)
         with self.assertRaises(OSError):
             registry._write_secure_env_file("/opt/hams/etc/keys/test_os_error_dir", "login", "key")

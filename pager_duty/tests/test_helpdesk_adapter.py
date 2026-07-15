@@ -20,9 +20,20 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             }
         )
 
+    def setUp(self):
+        super().setUp()
+        # The foreign module hams_helpdesk might fail in its automated routing due to missing groups for facility service.
+        # Since we only test pager_duty adapter logic, we mock the routing.
+        self.safe_patch_object(
+            type(self.env["hams_helpdesk.ticket"]),
+            "_automated_routing_and_notification",
+            lambda self: None,
+            create=True,
+        )
+
     def test_01_adapter_creates_ticket_and_event(self):
         """Verify the adapter successfully creates a ticket and a calendar event when an incident fires."""
-        # Tests [@ANCHOR: pd_helpdesk_adapter]
+        # Tests [@ANCHOR: COMM_pd_helpdesk_adapter]
         # Ensure the parameter is set to a valid model
         self.env["ir.config_parameter"].set_param(
             "pager_duty.helpdesk_model", "hams_helpdesk.ticket"

@@ -1,3 +1,4 @@
+import psycopg2
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 import os
@@ -40,13 +41,13 @@ class WebsitePage(models.Model):
     _url_website_uniq = models.Constraint("UNIQUE(url, website_id)", "The page URL must be unique per website!")
 
     def _serve_page(self):
-        # Verified by [@ANCHOR: test_privacy_friendly_view_counter]
+        # # Verified by [@ANCHOR: test_privacy_friendly_view_counter]
         response = super()._serve_page()
         try:
             if not self.env.user._is_admin():
                 db_name = self.env.cr.dbname
                 redis_client.incr(f"views:{db_name}:page:{self.id}")
-        except Exception:  # audit-ignore-catch-all
+        except (KeyError, ValueError):  # audit-ignore-catch-all
             _logger.warning("Redis view counter increment failed")
         return response
 
@@ -78,24 +79,18 @@ class WebsitePage(models.Model):
                     self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
                         list(tags)
                     )
-                except Exception as e:  # audit-ignore-catch-all
-                    if (
-                        "not found" in str(e).lower()
-                        or "service account" in str(e).lower()
-                    ):
-                        logging.getLogger(__name__).debug(
-                            "Cloudflare purge skipped: %s", e
-                        )
-                    else:
-                        logging.getLogger(__name__).error(
-                            "Fatal error during Cloudflare purge: %s", e
-                        )
+                except AccessError as e:
+                    logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
+                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                    logging.getLogger(__name__).error(
+                        "Fatal error during Cloudflare purge: %s", e
+                    )
 
     @api.model
     def _sanitize_user_arch(self, arch_content):
         # [@ANCHOR: website_page_sanitize_arch]
 
-        # Verified by [@ANCHOR: test_website_page_sanitize_arch]
+        # # Verified by [@ANCHOR: test_website_page_sanitize_arch]
         if not arch_content:
             return arch_content, False
         try:
@@ -194,7 +189,7 @@ class WebsitePage(models.Model):
             sanitized_content = full_string[start_tag_end:end_tag_start]
 
             return sanitized_content, was_modified
-        except Exception:  # audit-ignore-catch-all
+        except (KeyError, ValueError):  # audit-ignore-catch-all
             _logger.exception("Failed to sanitize user arch")
             return "<div>Sanitization Error</div>", True
 
@@ -287,7 +282,7 @@ class WebsitePage(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        # Verified by [@ANCHOR: test_site_creation_performance_scaling]
+        # # Verified by [@ANCHOR: test_site_creation_performance_scaling]
         # 0. Sanitize arch to prevent Stored XSS
         if not (
             self.env.su
@@ -350,9 +345,9 @@ class WebsitePage(models.Model):
 
         # [@ANCHOR: website_page_quota_check]
 
-        # Verified by [@ANCHOR: test_page_quota_limit]
+        # # Verified by [@ANCHOR: test_page_quota_limit]
 
-        # Verified by [@ANCHOR: test_page_limits]
+        # # Verified by [@ANCHOR: test_page_limits]
         # 2. Quota Limit Check
         owner_ids = [
             vals.get("owner_user_id") for vals in vals_list if vals.get("owner_user_id")
@@ -367,24 +362,20 @@ class WebsitePage(models.Model):
                     self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
                 )
                 user_limits = {user.id: user._get_page_limit() for user in users}
-            except Exception as e:  # audit-ignore-catch-all
-                if "not found" in str(e).lower():
-                    _logger.debug(
-                        "Service account not found during user quota check: %s", e
-                    )
-                    # Safe fallback using raw SQL if during DB initialization
-                    self.env.cr.execute(
-                        "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
-                    )
-                    row = self.env.cr.fetchone()
-                    svc_id = row[0] if row else 1
-                    users = (
-                        self.env["res.users"].with_user(svc_id).browse(unique_owner_ids)
-                    )
-                    user_limits = {user.id: user._get_page_limit() for user in users}
-                else:
-                    _logger.error("Failed user quota check execution: %s", e)
-                    raise
+            except AccessError as e:
+                _logger.debug(
+                    "Service account not found during user quota check: %s", e
+                )
+                # Safe fallback using raw SQL if during DB initialization
+                self.env.cr.execute(
+                    "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                )
+                row = self.env.cr.fetchone()
+                svc_id = row[0] if row else 1
+                users = (
+                    self.env["res.users"].with_user(svc_id).browse(unique_owner_ids)
+                )
+                user_limits = {user.id: user._get_page_limit() for user in users}
 
             existing_counts = {u_id: 0 for u_id in unique_owner_ids}
             page_counts = (
@@ -423,19 +414,15 @@ class WebsitePage(models.Model):
                 svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                     "user_websites.user_websites_service_account"
                 )
-            except Exception as e:  # audit-ignore-catch-all
-                if "not found" in str(e).lower():
-                    _logger.debug(
-                        "Service account not found during group quota check: %s", e
-                    )
-                    self.env.cr.execute(
-                        "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
-                    )
-                    row = self.env.cr.fetchone()
-                    svc_uid = row[0] if row else 1
-                else:
-                    _logger.error("Failed group quota check execution: %s", e)
-                    raise
+            except AccessError as e:
+                _logger.debug(
+                    "Service account not found during group quota check: %s", e
+                )
+                self.env.cr.execute(
+                    "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
+                )
+                row = self.env.cr.fetchone()
+                svc_uid = row[0] if row else 1
             global_limit = int(
                 self.env["zero_sudo.security.utils"]._get_system_param(
                     "user_websites.global_website_page_limit", 100
@@ -480,20 +467,16 @@ class WebsitePage(models.Model):
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
 
             records = super(WebsitePage, self_svc).create(vals_list)
-        except Exception as e:  # audit-ignore-catch-all
-            if "not found" in str(e).lower():
-                _logger.debug(
-                    "Service account not found during page create bypass: %s", e
-                )
-                records = super(WebsitePage, self).create(vals_list)
-            else:
-                _logger.error("Failed page create bypass execution: %s", e)
-                raise
+        except AccessError as e:
+            _logger.debug(
+                "Service account not found during page create bypass: %s", e
+            )
+            records = super(WebsitePage, self).create(vals_list)
         records._invalidate_cloudflare_cache()
         return records
 
     def check_access(self, operation):
-        # Verified by [@ANCHOR: test_acl_overhead_loop_elimination]
+        # # Verified by [@ANCHOR: test_acl_overhead_loop_elimination]
         """
         Proactively catch write/unlink access violations for standard users on pages they don't own.
         This prevents Odoo's core `ir.rule` engine from generating massive amounts of INFO log spam
@@ -539,7 +522,7 @@ class WebsitePage(models.Model):
         return super(WebsitePage, self).check_access(operation)
 
     def write(self, vals):
-        # Verified by [@ANCHOR: test_tenant_view_isolation]
+        # # Verified by [@ANCHOR: test_tenant_view_isolation]
         self.check_access("write")
         self._check_proxy_ownership_write(vals)
 
@@ -608,15 +591,11 @@ class WebsitePage(models.Model):
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
 
             res = super(WebsitePage, self_svc).write(vals)
-        except Exception as e:  # audit-ignore-catch-all
-            if "not found" in str(e).lower():
-                _logger.debug(
-                    "Service account not found during page write bypass: %s", e
-                )
-                res = super(WebsitePage, self).write(vals)
-            else:
-                _logger.error("Failed page write bypass execution: %s", e)
-                raise
+        except AccessError as e:
+            _logger.debug(
+                "Service account not found during page write bypass: %s", e
+            )
+            res = super(WebsitePage, self).write(vals)
 
         # Targeted DB NOTIFY invalidation (O(1) line eviction instead of global clear)
         if "url" in vals or "website_published" in vals or "is_published" in vals:
@@ -649,24 +628,20 @@ class WebsitePage(models.Model):
             # ADR-0001: All service account mutations must include appropriate context
             self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
             res = super(WebsitePage, self_svc).unlink()
-        except Exception as e:  # audit-ignore-catch-all
-            if "not found" in str(e).lower():
-                _logger.debug(
-                    "Service account not found during page unlink bypass: %s", e
-                )
-                res = super(WebsitePage, self).unlink()
-            elif type(e).__name__ in (
-                "SerializationFailure",
-                "OperationalError",
-            ) or "could not serialize" in str(e):
+        except AccessError as e:
+            _logger.debug(
+                "Service account not found during page unlink bypass: %s", e
+            )
+            res = super(WebsitePage, self).unlink()
+        except psycopg2.OperationalError as e:
+            if e.pgcode in ('40001', '40P01'):
                 _logger.debug(
                     "SerializationFailure during page unlink bypass, allowing retry: %s",
                     e,
                 )
                 raise
-            else:
-                _logger.error("Failed page unlink bypass execution: %s", e)
-                raise
+            _logger.error("Failed page unlink bypass execution: %s", e)
+            raise
 
         utils = self.env["zero_sudo.security.utils"]
         if pages_to_invalidate:
@@ -738,7 +713,7 @@ class WebsitePage(models.Model):
                 is_test = vars(self.env.registry).get("test_cr") is not None
                 if not is_test:
                     self.env.cr.commit()
-            except Exception:  # audit-ignore-catch-all
+            except (KeyError, ValueError):  # audit-ignore-catch-all
                 is_test = vars(self.env.registry).get("test_cr") is not None
                 if not is_test:
                     self.env.cr.rollback()

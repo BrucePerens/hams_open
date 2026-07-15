@@ -7,5 +7,8 @@
     "version": "1.0",
     "category": "Hidden",
     "depends": ["base"],
+    "external_dependencies": {
+        "python": ["pika"],
+    },
     "license": "AGPL-3",
 }

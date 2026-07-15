@@ -42,32 +42,35 @@ This module extends `user_websites` by adding SEO metadata to users and groups t
 We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a dedicated service account: `user_websites.user_websites_service_account`.
 
 *   **Model Mixin:** `user.websites.seo.metadata.mixin` centralizes the secure write logic.
-*   **Self-Writable Fields:** SEO fields are whitelisted in `res.users` to allow users to edit their own profiles without elevated backend rights. `[@ANCHOR: res_users_self_writeable_fields]`
+*   **Self-Writable Fields:** SEO fields are whitelisted in `res.users` to allow users to edit their own profiles without elevated backend rights. `[@ANCHOR: COMM_res_users_self_writeable_fields]`
 
 ## 3. Implementation Details
-*   **Controller Override:** `UserWebsitesSEOController` intercepts the blog index route to inject the `main_object`. This is required for the Odoo frontend SEO widget to function. `[@ANCHOR: controller_user_blog_index_seo_override]`
+*   **Controller Override:** `UserWebsitesSEOController` intercepts the blog index route to inject the `main_object`. This is required for the Odoo frontend SEO widget to function. `[@ANCHOR: COMM_controller_user_blog_index_seo_override]`
 *   **Traceability:** All critical logic is mapped to semantic anchors and verified by the test suite.
 
 ## 4. 🔗 Semantic Anchors & Traceability
 
 | Anchor | Description | Verified By |
 |--------|-------------|-------------|
-| `[@ANCHOR: res_users_self_writeable_fields]` | Whitelisting SEO fields for users. | `test_self_writeable_fields` |
+| `[@ANCHOR: COMM_res_users_self_writeable_fields]` | Whitelisting SEO fields for users. | `COMM_test_self_writeable_fields` |
 
-| `[@ANCHOR: res_users_seo_write_elevation]` | Elevated write for user SEO metadata. | `test_check_access_rule_res_users` |
+| `[@ANCHOR: COMM_res_users_seo_write_elevation]` | Elevated write for user SEO metadata. | `COMM_test_check_access_rule_res_users` |
 
-| `[@ANCHOR: user_websites_group_seo_write_elevation]` | Elevated write for group SEO metadata. | `test_check_access_rule_user_websites_group` |
+| `[@ANCHOR: COMM_user_websites_group_seo_write_elevation]` | Elevated write for group SEO metadata. | `COMM_test_check_access_rule_user_websites_group` |
 
-| `[@ANCHOR: controller_user_blog_index_seo_override]` | Controller override for SEO widget activation. | `test_controller_no_ssti_elevation` |
+| `[@ANCHOR: COMM_controller_user_blog_index_seo_override]` | Controller override for SEO widget activation. | `COMM_test_controller_no_ssti_elevation` |
 
-| `[@ANCHOR: soft_dependency_docs_installation]` | Automatic documentation installation signaling. | `test_soft_dependency_docs_installation` |
+| `[@ANCHOR: COMM_soft_dependency_docs_installation]` | Automatic documentation installation signaling. | `COMM_test_soft_dependency_docs_installation` |
 
-| `[@ANCHOR: test_seo_widget_tour]` | UI tour for SEO optimization. | `test_seo_widget_tour` |
+| `[@ANCHOR: COMM_test_seo_widget_tour]` | UI tour for SEO optimization. | `COMM_test_seo_widget_tour` |
 
-| `[@ANCHOR: test_xpath_rendering_res_users]` | Backend view rendering for users. | `test_xpath_rendering_res_users` |
+| `[@ANCHOR: COMM_test_xpath_rendering_res_users]` | Backend view rendering for users. | `COMM_test_xpath_rendering_res_users` |
 
-| `[@ANCHOR: test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `test_xpath_rendering_user_websites_group` |
+| `[@ANCHOR: COMM_test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `COMM_test_xpath_rendering_user_websites_group` |
 
 ## 5. Multi-Website & Multi-Tenant Support
 - **Multi-Tenancy:** Inherits from `res.users` and `user.websites.group`, ensuring natural isolation between organizations.
 - **Multi-Website:** Fully compatible with Odoo's multi-website routing and context switching.
+
+## External Dependencies
+*None.*

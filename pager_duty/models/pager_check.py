@@ -253,7 +253,7 @@ class PagerCheck(models.Model):
         except (ValueError, FileNotFoundError, PermissionError) as e:
             _logger.warning("Executable provisioning failed for %s: %s", cmd_name, e)
             return {"status": "error", "message": str(e)}
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.error(
                 "Unexpected error during executable provisioning for %s: %s",
                 cmd_name,
@@ -277,15 +277,10 @@ class PagerCheck(models.Model):
         # Prefer the system-wide writable configuration directory in production/test environments
         # ADR-0070 restricts daemon directories to read-only for Odoo workers.
         # [@ANCHOR: generalized_pager_config_path]
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+        _ = self.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_service_internal"
         )
-        # We manually fetch the parameter to avoid Zero-Sudo whitelist restrictions for internal module paths
-        sys_config_dir = (
-            self.env["ir.config_parameter"]
-            .with_user(svc_uid)
-            .get_param("pager_duty.config_dir", default="/opt/hams/etc")
-        )
+        sys_config_dir = self.env["zero_sudo.security.utils"]._get_system_param("pager_duty.config_dir", default="/opt/hams/etc")
         if os.path.exists(sys_config_dir) and os.access(sys_config_dir, os.W_OK):
             return os.path.join(sys_config_dir, "pager_config.json")
 
@@ -581,7 +576,7 @@ class PagerCheck(models.Model):
                             "comment": f"Autodiscovered disk space monitor for {partition.mountpoint}",
                         }
                     )
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred getting disk partitions: %s", e)
 
         # 3. Common Services
@@ -658,7 +653,7 @@ class PagerCheck(models.Model):
                         "comment": "Autodiscovered Docker daemon monitor",
                     }
                 )
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred interacting with systemd: %s", e)
 
         # 4. Odoo Web Server
@@ -758,7 +753,7 @@ class PagerCheck(models.Model):
                             # Typically the IP would be determined from the environment
                         }
                     )
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 _logger.warning("Failed to auto-configure ham_dns: %s", e)
 
         # Push changes to JSON so the daemon picks it up

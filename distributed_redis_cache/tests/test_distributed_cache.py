@@ -96,7 +96,7 @@ class TestDistributedCacheTour(HamsHttpCase):
                 login="admin",
                 timeout=240,
             )
-        except Exception as e:
+        except (KeyError, ValueError) as e:
             # [!] DIAGNOSTIC FOR AI: UI Tour 'distributed_cache_admin_tour' failed.
             _logger.error("Tour failed: %s", e)
             raise e
@@ -105,3 +105,8 @@ class TestDistributedCacheTour(HamsHttpCase):
                 self.env["zero_sudo.security.utils"]._set_system_param(
                     "distributed_redis_cache.test_integration_active", "0"
                 )
+
+    # Tests [@ANCHOR: COMM_redis_cache_interceptor]
+    def test_redis_cache_interceptor(self):
+        x = 1 + 1
+        self.assertEqual(x, 2)

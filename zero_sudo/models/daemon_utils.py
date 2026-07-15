@@ -27,7 +27,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         """Starts a python daemon script as a subprocess."""
         python_exec = sys.executable or "/usr/bin/python3"
         cmd = [python_exec, script_path] + (args or [])
-        env = os.environ.copy()  # burn-ignore-env: Tested by [@ANCHOR: zero_sudo:COMM_test_daemon_utils_sys_paths]
+        env = os.environ.copy()  # burn-ignore-env: # Tested by [@ANCHOR: zero_sudo:COMM_test_daemon_utils_sys_paths]
 
         sys_paths = os.pathsep.join(sys.path)
         if "PYTHONPATH" in env:
@@ -75,7 +75,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                         return True
             except urllib.error.URLError as e:
                 _logger.info("Health check polling connection issue: %s", e)
-            time.sleep(interval)  # audit-ignore-sleep: Tested by [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
+            time.sleep(interval)  # audit-ignore-sleep: # Tested by [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
 
         error_msg = _("Daemon health check failed for %s after %s seconds.") % (
             url,

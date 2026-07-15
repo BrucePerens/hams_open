@@ -71,9 +71,9 @@
         <field name="arch" type="xml">
             <form string="Violation Report">
                 <header>
-                    <button name="action_mark_under_review" string="Reviewing" type="object" class="oe_highlight" invisible="state != 'new'" groups="user_websites.group_user_websites_administrator"/>
-                    <button name="action_take_action_and_strike" string="Take Action &amp; Strike User" type="object" class="btn-danger" invisible="state in ('action_taken', 'dismissed')" confirm="This will add a strike to the user's account. Continue?" groups="user_websites.group_user_websites_administrator"/>
-                    <button name="action_dismiss" string="Dismiss Report" type="object" class="btn-secondary" invisible="state in ('action_taken', 'dismissed')" groups="user_websites.group_user_websites_administrator"/>
+                    <button name="action_mark_under_review" string="Reviewing" type="object" class="oe_highlight" invisible="not id or state != 'new'" groups="user_websites.group_user_websites_administrator"/>
+                    <button name="action_take_action_and_strike" string="Take Action &amp; Strike User" type="object" class="btn-danger" invisible="not id or state in ('action_taken', 'dismissed')" confirm="This will add a strike to the user's account. Continue?" groups="user_websites.group_user_websites_administrator"/>
+                    <button name="action_dismiss" string="Dismiss Report" type="object" class="btn-secondary" invisible="not id or state in ('action_taken', 'dismissed')" groups="user_websites.group_user_websites_administrator"/>
                     <field name="state" widget="statusbar" statusbar_visible="new,under_review,action_taken,dismissed"/>
                 </header>
                 <sheet>

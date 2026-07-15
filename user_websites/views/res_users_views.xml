@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_dropzone_users] -->
 
-            <xpath expr="//notebook" position="inside"> <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_users] -->
+            <xpath expr="//notebook" position="inside"> 
                 <page string="User Websites" name="user_websites_settings">
                     <div id="user_websites_dropzone_users">
                         <!-- [@ANCHOR: dropzone_users] -->
@@ -25,7 +25,7 @@
                             <field name="is_suspended_from_websites" widget="boolean_toggle"/>
                             <div class="mt-2" invisible="not is_suspended_from_websites">
                                 <span class="text-danger fw-bold"><i class="fa fa-ban" aria-hidden="true"/> User is currently suspended.</span>
-                                <button name="action_pardon_user_websites" string="Pardon &amp; Lift Suspension" type="object" class="btn-link text-success ms-2"/>
+                                <button name="action_pardon_user_websites" string="Pardon &amp; Lift Suspension" type="object" class="btn-link text-success ms-2" invisible="not id"/>
                             </div>
                         </group>
                     </group>

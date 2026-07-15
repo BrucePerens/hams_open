@@ -15,7 +15,7 @@ class ServiceWorkerController(http.Controller):
     def service_worker(self):
         # [@ANCHOR: COMM_caching_sw_serve_route]
 
-        # Verified by [@ANCHOR: COMM_test_service_worker_01]
+        # # Verified by [@ANCHOR: COMM_test_service_worker_01]
         """
         Serves the Service Worker script from the root scope.
         Injects mtime (invalidation) and max file size (quota).
@@ -63,6 +63,6 @@ class ServiceWorkerController(http.Controller):
         ]
         return request.make_response(content, headers=headers)
 
-# Verified by [@ANCHOR: COMM_test_service_worker_01]
+# # Verified by [@ANCHOR: COMM_test_service_worker_01]
 
-# Verified by [@ANCHOR: COMM_test_caching_sudo_params]
+# # Verified by [@ANCHOR: COMM_test_caching_sudo_params]

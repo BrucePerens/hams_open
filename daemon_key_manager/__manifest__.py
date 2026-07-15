@@ -19,7 +19,6 @@
             "daemon_key_manager/static/src/js/tours/daemon_key_manager_tour.js",
         ],
     },
-    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
 }

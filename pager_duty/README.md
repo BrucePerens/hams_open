@@ -66,7 +66,7 @@ The module follows a **Command Query Responsibility Segregation (CQRS)** pattern
 *   **Data Plane (Daemons):**
     *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.) via a micro-privilege service account. It is designed to "fail fast" if system dependencies are missing. [@ANCHOR: daemon_execute_check]
 
-    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time. It runs chrooted to `/var/log`, drops all kernel capabilities, and de-escalates to `nobody:adm`. [@ANCHOR: pd_log_api_i18n]
+    *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time. It runs chrooted to `/var/log`, drops all kernel capabilities, and de-escalates to `nobody:adm`. [@ANCHOR: COMM_pd_log_api_i18n]
     *   `pager_smart_spooler.py`: Securely collects hardware health data (SMART).
     *   `pager_synthetic_spooler.py`: Executes sandboxed (Bubblewrap) Playwright/Bash tests. [@ANCHOR: synthetic_i18n]
 *   **Inter-Process Communication (IPC):** Uses Redis Pub/Sub and Queues for high-speed communication between Odoo workers and background daemons.
@@ -104,7 +104,7 @@ self.env["pager.incident"].report_incident({
 
 ### Helpdesk Adapter
 The module automatically bridges incidents to Helpdesk tickets using an adapter pattern. It respects the `pager_duty.helpdesk_model` system parameter.
-[@ANCHOR: pd_helpdesk_adapter]
+[@ANCHOR: COMM_pd_helpdesk_adapter]
 
 ---
 

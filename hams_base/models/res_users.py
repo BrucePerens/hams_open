@@ -1,5 +1,7 @@
+from odoo import models
+from odoo.tools.translate import _
 # -*- coding: utf-8 -*-
-from odoo import models, api, _
+# from odoo import models, api, _
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -40,9 +42,11 @@ class ResUsers(models.Model):
                             'email_to': old_email,
                             'email_from': self.env.company.catchall_formatted or self.env.company.email_formatted or 'admin@hams.com',
                         }
-                        mail = self.env['mail.mail'].sudo().create(mail_values)
+                        # Use the facility service account for mailing
+                        svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('zero_sudo.odoo_facility_service_internal')
+                        mail = self.env['mail.mail'].with_user(svc_uid).create(mail_values)
                         mail.send()
-                    except Exception as e:
-                        _logger.error("Failed to send security warning to old email %s: %s", old_email, e)
+                    except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                        _logger.exception("Failed to send security warning to old email %s: %s", old_email, e)
 
         return res

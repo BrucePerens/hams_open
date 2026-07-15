@@ -14,7 +14,7 @@ class MailThread(models.AbstractModel):
         from cluttering up the system or creating unexpected records.
         """
         # We also want to intercept auto-mail-failure if it's hitting standard routes
-        bounce_alias = self.env['ir.config_parameter'].sudo().get_param('mail.bounce.alias', 'auto-mail-failure')
+        bounce_alias = self.env['zero_sudo.security.utils']._get_system_param('mail.bounce.alias') or 'auto-mail-failure'
         not_read_alias = 'not-read'
         
         to_emails = message_dict.get('to', '').lower()

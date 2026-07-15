@@ -63,7 +63,7 @@ class ManualLibraryController(http.Controller):
                 if cache_key:
                     _md_cache[cache_key] = res
                 return res
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:   # Verified by [@ANCHOR: test_manual_markdown_fallback]
                 _logger.warning("Markdown compilation failed: %s", e)
 
         res = Markup(html_body)
@@ -123,7 +123,7 @@ class ManualLibraryController(http.Controller):
 
         # See [@ANCHOR: story_article_view] and [@ANCHOR: journey_user_browsing]
 
-        # Verified by [@ANCHOR: test_controller_manual_article_view]
+        # # Verified by [@ANCHOR: test_controller_manual_article_view]
         """
         Public/Frontend controller to render articles.
         Enforces access securely through the ORM environment.
@@ -203,7 +203,7 @@ class ManualLibraryController(http.Controller):
     def manual_search(self, search="", **kwargs):
         # [@ANCHOR: controller_manual_search]
 
-        # Verified by [@ANCHOR: test_tour_manual_search]
+        # # Verified by [@ANCHOR: test_tour_manual_search]
         # See story_manual_search and journey_user_browsing
         """
         Provides full-text search across accessible articles.
@@ -243,7 +243,10 @@ class ManualLibraryController(http.Controller):
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
-        domain = [("name", "=ilike", normalized_name)]
+        domain = [
+            ("name", "=ilike", normalized_name),
+            ("website_id", "in", (False, request.website.id)),
+        ]
         is_internal = request.env.user.has_group("base.group_user")
         if not is_internal:
             domain.append(("is_published", "=", True))
@@ -261,7 +264,7 @@ class ManualLibraryController(http.Controller):
     ):
         # [@ANCHOR: controller_manual_feedback]
 
-        # Verified by [@ANCHOR: test_tour_manual_feedback]
+        # # Verified by [@ANCHOR: test_tour_manual_feedback]
         # See story_manual_feedback and journey_user_browsing
         """
         Handles article helpfulness ratings via Service Account isolation.

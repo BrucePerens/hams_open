@@ -28,9 +28,13 @@ class PagerLogAPI(http.Controller):
         # CWE-22 Path Traversal Prevention
         if ".." in file_path.split(os.path.sep):
             raise AccessError(_("Illegal path traversal detected."))
+        
+        base_dir = os.path.realpath("/var/log")
+        if not os.path.realpath(file_path).startswith(base_dir):
+            raise AccessError(_("Illegal path traversal detected."))
 
         if not redis or not redis_pool:
-            # # Tests [@ANCHOR: pd_log_api_i18n]  # fmt: skip
+            # audit-ignore-i18n: # Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("Redis not available for IPC.")}
 
         req_uuid = str(uuid.uuid4())
@@ -45,7 +49,7 @@ class PagerLogAPI(http.Controller):
             r.publish("log_search_req", json.dumps(payload))
 
             # Wait for response
-            # BLOCKING CALL: get_message without timeout
+            # NON-BLOCKING CALL: get_message without timeout
             message = pubsub.get_message(ignore_subscribe_messages=True)
             if message and message["type"] == "message":
                 data = json.loads(message["data"])
@@ -53,16 +57,16 @@ class PagerLogAPI(http.Controller):
                 return data
 
             pubsub.unsubscribe()
-            # # Tests [@ANCHOR: pd_log_api_i18n]  # fmt: skip
+            # audit-ignore-i18n: # Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("Search timeout. Daemon may be offline.")}
         except redis.RedisError as e:
             _logger.error("Redis IPC Failure during log search: %s", e)
-            # # Tests [@ANCHOR: pd_log_api_i18n]  # fmt: skip
+            # audit-ignore-i18n: # Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("IPC Failure: %s") % e}
         except json.JSONDecodeError as e:
             _logger.error("JSON Decode Failure during log search: %s", e)
             return {"error": _("Protocol Error: Failed to parse response.")}
-        except Exception as e:  # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all # Tests [@ANCHOR: pd_log_api_i18n]
             _logger.error("Unexpected Failure during log search: %s", e)
             return {"error": _("An unexpected error occurred.")}
 

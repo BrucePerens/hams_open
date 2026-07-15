@@ -11,6 +11,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 )
 import logging
 import requests
+import os
 
 _logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class EdgeRoutingDomain(models.Model):
         try:
             # Resolve service user securely
             if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
                 if self.env.cr.fetchone():
                     svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                         "edge_routing.edge_routing_service_account"
@@ -76,13 +77,14 @@ class EdgeRoutingDomain(models.Model):
                         break
                     all_domains.extend(dns_batch.mapped("name"))
                     last_id = dns_batch[-1].id
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 _logger.warning("Hard dependency ham.dns.zone failed: %s", e)
 
             unique_domains = list(set(all_domains))
             # Send to the API
+            host = os.environ.get("ODOO_HOST", "odoo")
             response = requests.post(
-                "http://odoo:8069/api/v1/pager_duty/update_domains",
+                f"http://{host}:8069/api/v1/pager_duty/update_domains",
                 json={
                     "jsonrpc": "2.0",
                     "method": "call",
@@ -91,7 +93,7 @@ class EdgeRoutingDomain(models.Model):
                 timeout=5,
             )
             response.raise_for_status()
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.warning("Failed to sync domains to PagerDuty: %s", e)
 
     def _invalidate_cache(self, names):
@@ -101,7 +103,7 @@ class EdgeRoutingDomain(models.Model):
                 self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
                     self._name, valid_names
                 )
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 _logger.warning("Failed to notify cache invalidation: %s", e)
 
         try:
@@ -109,7 +111,7 @@ class EdgeRoutingDomain(models.Model):
             cron = self.env.ref('edge_routing.ir_cron_push_pager_duty', raise_if_not_found=False)
             if cron:
                 cron._trigger()
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.warning("Failed to trigger PagerDuty sync cron: %s", e)
 
     @api.model_create_multi
@@ -140,7 +142,7 @@ class EdgeRoutingDomain(models.Model):
 
     @api.model
     @distributed_cache()
-    def get_target_slug_by_domain(self, domain):
+    def get_target_slug_by_domain(self, domain, override_svc_uid=None):
         """
         High-performance RAM cache for domain to slug resolution.
         """
@@ -148,20 +150,23 @@ class EdgeRoutingDomain(models.Model):
             return False
         domain = str(domain).lower().strip()
 
-        if self.env.registry.loaded:
-            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-            if self.env.cr.fetchone():
-                try:
-                    target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                        "edge_routing.edge_routing_service_account"
-                    )
-                except Exception:  # audit-ignore-catch-all
-                    _logger.warning("Failed to get service env")
+        if override_svc_uid:
+            target_env = self.with_user(override_svc_uid).env
+        else:
+            if self.env.registry.loaded:
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+                if self.env.cr.fetchone():
+                    try:
+                        target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                            "edge_routing.edge_routing_service_account"
+                        )
+                    except (KeyError, ValueError):  # audit-ignore-catch-all
+                        _logger.warning("Failed to get service env")
+                        target_env = self.env
+                else:
                     target_env = self.env
             else:
                 target_env = self.env
-        else:
-            target_env = self.env
 
         record = (
             target_env[self._name]

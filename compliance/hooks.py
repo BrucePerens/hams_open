@@ -14,15 +14,15 @@ def post_init_hook(env):
     """
     # [@ANCHOR: COMM_journey_compliance_setup]
 
-    # Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
+    # # Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
 
     # [@ANCHOR: COMM_compliance_post_init_cookie_bar]
 
     # [@ANCHOR: COMM_story_cookie_consent]
 
-    # Verified by [@ANCHOR: COMM_test_compliance_post_init_cookie_bar]
+    # # Verified by [@ANCHOR: COMM_test_compliance_post_init_cookie_bar]
 
-    # Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
+    # # Verified by [@ANCHOR: COMM_test_compliance_ui_tour]
 
     # ADR-0002: Zero-Sudo Architecture. We must not use .sudo()
     # or stay as SUPERUSER.
@@ -82,7 +82,7 @@ def post_init_hook(env):
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
     # Performance Optimization: Reduced dozens of ORM round-trips
     # to a single Postgres procedure call.
-    # Verified by [@ANCHOR: COMM_test_compliance_postgres_procedures]
+    # # Verified by [@ANCHOR: COMM_test_compliance_postgres_procedures]
     env_svc.flush_all()
     with env_svc.cr.savepoint():
         env_svc.cr.execute("SELECT compliance_enforce_protection()")

@@ -64,7 +64,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         auth_payload = auth_call_kwargs["json"]
         self.assertEqual(auth_payload["params"]["method"], "authenticate")
         
-        exec_call_args, exec_call_kwargs = mock_session.post.call_args_list[1]  # audit-ignore-i18n: Tested by [@ANCHOR: zero_sudo:COMM_test_call_self_healing]
+        exec_call_args, exec_call_kwargs = mock_session.post.call_args_list[1]  # audit-ignore-i18n: # Tested by [@ANCHOR: zero_sudo:COMM_test_call_self_healing]
         host = os.environ.get("ODOO_HOST", "odoo")
         self.assertEqual(exec_call_args[0], f"http://{host}:8069/jsonrpc")
         exec_payload = exec_call_kwargs["json"]

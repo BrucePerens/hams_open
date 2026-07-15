@@ -13,8 +13,8 @@ The `user_websites_seo` module checks Bob's membership in the group. Since he is
 The entire group benefits from Bob's SEO optimization, as the group's blog index now presents better on social media shares and search engine results.
 
 ## Technical Anchors
-- Controller Injection for Groups: `[@ANCHOR: controller_user_blog_index_seo_override]`
+- Controller Injection for Groups: `[ANCHOR: controller_user_blog_index_seo_override]`
 
-- Group Permission Elevation: `[@ANCHOR: user_websites_group_seo_write_elevation]`
+- Group Permission Elevation: `[ANCHOR: user_websites_group_seo_write_elevation]`
 
-- Functional Verification: `[@ANCHOR: test_seo_widget_tour]`
+- Functional Verification: `[ANCHOR: test_seo_widget_tour]`

@@ -1,12 +1,16 @@
+from unittest.mock import MagicMock
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from unittest.mock import MagicMock, PropertyMock
+# from unittest.mock import MagicMock, PropertyMock
 from odoo.exceptions import UserError
 import subprocess
 import odoo
+import logging
+
+_logger = logging.getLogger(__name__)
 @tagged("post_install", "-at_install")
 class TestDatabaseManagement(HamsTransactionCase):
     def test_01_vacuum_analyze(self):
@@ -153,8 +157,8 @@ class TestDatabaseManagement(HamsTransactionCase):
         # Generate a non-SELECT query so it appears in pg_stat_statements
         try:
             self.env.cr.execute("DELETE FROM res_users WHERE 1=0")
-        except Exception:
-            pass
+        except (KeyError, ValueError):
+            _logger.warning("Query failed")
 
         stat = self.env["database.query.stat"].search([("query", "=like", "DELETE FROM res_users%")], limit=1)
         if not stat:

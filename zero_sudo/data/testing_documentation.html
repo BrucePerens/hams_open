@@ -1,23 +1,19 @@
 <div class="o_knowledge_content">
-<!-- [@ANCHOR: zero_sudo:COMM_UX_real_transaction_testing_facility] -->
-<h1 id="COMM_UX_real_transaction_testing_facility">Real Transaction Testing Facility</h1>
+<h1 id="COMM_UX_real_transaction_testing_facility" data-trace="[@ANCHOR: zero_sudo:COMM_UX_real_transaction_testing_facility]">Real Transaction Testing Facility</h1>
 
 <p>This module provides the core testing facilities for the repository, ensuring that our software is reliable, secure, and functions as expected in a production-like environment.</p>
 <!-- Verified by [@ANCHOR: zero_sudo:COMM_test_documentation_wrappers] -->
 
-<!-- [@ANCHOR: zero_sudo:COMM_UX_real_transaction_testing] -->
-<h2 id="COMM_UX_real_transaction_testing">Real Transaction Testing</h2>
+<h2 id="COMM_UX_real_transaction_testing" data-trace="[@ANCHOR: zero_sudo:COMM_UX_real_transaction_testing]">Real Transaction Testing</h2>
 
 <p>Most tests in Odoo are "pretend" tests—they don't actually save any data to the database permanently. While this is fast, it can sometimes hide bugs that only appear when data is truly saved.</p>
 
 <p>Our <strong>Real Transaction Testing Facility</strong> allows developers to write tests that behave exactly like the real world. It saves data for real during the test, then carefully cleans it all up when the test is finished.</p>
 
-<!-- [@ANCHOR: zero_sudo:COMM_UX_database_leak_protection] -->
-<h3 id="COMM_UX_database_leak_protection">Database Leak Protection</h3>
+<h3 id="COMM_UX_database_leak_protection" data-trace="[@ANCHOR: zero_sudo:COMM_UX_database_leak_protection]">Database Leak Protection</h3>
 <p>Because these tests save real data, we have to be very careful not to leave any "trash" behind in the database. The system automatically tracks every record created during a test and deletes it afterward. As an extra safety measure, it counts all the rows in every table before and after the test. If any extra rows are left over, the test fails, alerting the developer that something wasn't cleaned up properly.</p>
 
-<!-- [@ANCHOR: zero_sudo:COMM_UX_noisy_tables] -->
-<h3 id="COMM_UX_noisy_tables">Noisy Tables</h3>
+<h3 id="COMM_UX_noisy_tables" data-trace="[@ANCHOR: zero_sudo:COMM_UX_noisy_tables]">Noisy Tables</h3>
 <p>Some tables in Odoo are naturally "noisy"—they get new data all the time from background processes (like system logs or internal message tracking). If the leak protector caught these, tests would fail for no reason.</p>
 
 <p>Administrators can manage which tables are ignored by the leak protector using the <strong>Noisy Tables</strong> interface. You can find this under <strong>Settings &gt; Technical &gt; Database Structure &gt; Noisy Tables</strong>.</p>
@@ -28,18 +24,15 @@
     <li>This management interface is crucial for ensuring tests pass without false positives.</li>
 </ul>
 
-<!-- [@ANCHOR: zero_sudo:COMM_UX_external_service_testing] -->
-<h2 id="COMM_UX_external_service_testing">External Service Testing</h2>
+<h2 id="COMM_UX_external_service_testing" data-trace="[@ANCHOR: zero_sudo:COMM_UX_external_service_testing]">External Service Testing</h2>
 
 <p>Many of our modules talk to external services or run background processes (daemons). This module provides the tools to automatically start these services before a test begins and shut them down afterward. It also makes sure the service is actually "awake" and responding before the test starts sending it commands.</p>
 
-<!-- [@ANCHOR: zero_sudo:COMM_UX_user_interface_tours] -->
-<h2 id="COMM_UX_user_interface_tours">User Interface (UI) Tours</h2>
+<h2 id="COMM_UX_user_interface_tours" data-trace="[@ANCHOR: zero_sudo:COMM_UX_user_interface_tours]">User Interface (UI) Tours</h2>
 
 <p>To make sure our screens and buttons work correctly for users, we use <strong>UI Tours</strong>. These are automated scripts that "drive" the web browser, clicking buttons and typing into forms just like a human would. This ensures that even the most complex parts of the interface remain easy to use and bug-free.</p>
 
-<!-- [@ANCHOR: zero_sudo:COMM_UX_diagnostic_tools] -->
-<h2 id="COMM_UX_diagnostic_tools">Diagnostic Tools</h2>
+<h2 id="COMM_UX_diagnostic_tools" data-trace="[@ANCHOR: zero_sudo:COMM_UX_diagnostic_tools]">Diagnostic Tools</h2>
 
 <p>If a UI tour fails, the system provides a specialized "Skeleton Dump" in the error logs. This dump strips away the visual clutter and provides a simplified view of the interactive elements on the page at the time of failure. This helps developers quickly identify if a button was missing or if the page redirected unexpectedly.</p>
 </div>

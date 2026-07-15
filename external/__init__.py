@@ -2,4 +2,4 @@
 
 # Init
 
-from . import fetch_assets
+# fetch_assets.py is a standalone script and should not be imported

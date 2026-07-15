@@ -12,7 +12,11 @@ The helpdesk ticket lifecycle ensures that every reported incident is tracked fr
 6.  **Closure**: The ticket is moved to "Closed".
 
 *Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]*
+
+Operator interface tracking:
 <!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_operator_tour] -->
+
+Portal interface tracking:
 <!-- [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_tour] -->
 
 ### Security and Micro-Privileges

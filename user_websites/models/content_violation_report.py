@@ -61,9 +61,9 @@ class ContentViolationReport(models.Model):
     def _cron_notify_pending_reports(self):
         # [@ANCHOR: cron_notify_pending_reports]
 
-        # Verified by [@ANCHOR: test_cron_pending_reports]
+        # # Verified by [@ANCHOR: test_cron_pending_reports]
 
-        # Verified by [@ANCHOR: COMM_test_cron_pending_reports]
+        # # Verified by [@ANCHOR: COMM_test_cron_pending_reports]
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
@@ -85,7 +85,7 @@ class ContentViolationReport(models.Model):
                 mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                     "zero_sudo.mail_service_internal"
                 )
-                template.with_user(mail_svc).with_context(pending_count=count).send_mail(self.env.company.id, force_send=False, email_values=email_vals)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]  # fmt: skip
+                template.with_user(mail_svc).with_context(pending_count=count).send_mail(self.env.company.id, force_send=False, email_values=email_vals)  # audit-ignore-mail: # Tested by [@ANCHOR: test_cron_pending_reports]  # fmt: skip
 
     # --- Moderation Action Methods ---
     def action_mark_under_review(self):
@@ -97,7 +97,7 @@ class ContentViolationReport(models.Model):
     def action_take_action_and_strike(self):
         # [@ANCHOR: action_take_action_and_strike]
 
-        # Verified by [@ANCHOR: test_moderation_suspension]
+        # # Verified by [@ANCHOR: test_moderation_suspension]
         """
         Marks the report as validated, sets state to 'action_taken',
         and increments the owner's strike count. Enforces the 3-strike rule.

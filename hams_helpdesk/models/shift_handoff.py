@@ -23,7 +23,7 @@ class ShiftHandoffWizard(models.TransientModel):
     def action_confirm_handoff(self):
         # [@ANCHOR: COMM_helpdesk_handoff_execution]
 
-        # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
+        # # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
         self.ensure_one()
 
         utils = self.env["zero_sudo.security.utils"]

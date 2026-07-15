@@ -25,7 +25,7 @@ class CloudflareUtils(models.AbstractModel):
     def get_request_context(self):
         # [@ANCHOR: COMM_cf_get_request_context]
 
-        # Verified by [@ANCHOR: COMM_test_cf_get_request_context]
+        # # Verified by [@ANCHOR: COMM_test_cf_get_request_context]
         """
         Parses Cloudflare-specific geographic and threat headers injected at the edge.
         Returns a dictionary to be used by proprietary modules for default routing.

@@ -8,3 +8,4 @@ from . import test_multi_website
 from . import test_tdd_fixes
 from . import test_tour
 from . import test_batch_2
+from . import test_tdd_batch1

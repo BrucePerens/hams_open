@@ -44,7 +44,7 @@ def _async_unpublish_group_content(db_name, group_ids):
                 )
                 if not pages:
                     break
-                pages.write({"website_published": False})
+                pages.with_context(mail_notrack=True).write({"website_published": False})
                 env.cr.commit()
                 if len(pages) < 5000:
                     break
@@ -61,12 +61,12 @@ def _async_unpublish_group_content(db_name, group_ids):
                 )
                 if not posts:
                     break
-                posts.write({"is_published": False})
+                posts.with_context(mail_notrack=True).write({"is_published": False})
                 env.cr.commit()
                 if len(posts) < 5000:
                     break
                 if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                    time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                    time.sleep(0.1)  # audit-ignore-sleep
 
         finally:
             env.cr.rollback()
@@ -155,7 +155,7 @@ class UserWebsitesGroup(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        # Tested by [@ANCHOR: user_websites:test_group_site_creation]
+        # # Tested by [@ANCHOR: user_websites:test_group_site_creation]
         """
         Overrides create to automate the creation of the Odoo security group
         and intelligently generate or format the group's website slug.
@@ -216,7 +216,10 @@ class UserWebsitesGroup(models.Model):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
-            redirect_env = self.env["website.rewrite"].with_user(svc_uid)
+            clean_ctx = dict(self.env.context)
+            clean_ctx.pop("prefetch_fields", None)
+            clean_ctx["mail_notrack"] = True
+            redirect_env = self.env["website.rewrite"].with_user(svc_uid).with_context(**clean_ctx)
 
             group_ids = self.ids
             blog_post_counts = {}
@@ -290,7 +293,7 @@ class UserWebsitesGroup(models.Model):
                 )
                 if not pages:
                     break
-                pages.write({"is_published": False, "website_published": False})
+                pages.with_context(mail_notrack=True).write({"is_published": False, "website_published": False})
             while True:
                 posts = (
                     self.env["blog.post"]
@@ -305,7 +308,7 @@ class UserWebsitesGroup(models.Model):
                 )
                 if not posts:
                     break
-                posts.write({"is_published": False})
+                posts.with_context(mail_notrack=True).write({"is_published": False})
 
         for group in self:
             group.is_suspended_from_websites = True

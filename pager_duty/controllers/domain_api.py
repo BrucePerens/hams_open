@@ -21,13 +21,17 @@ class PagerDutyController(http.Controller):
         payload = request.jsonrequest
         if not payload:
             return {"status": "error", "message": _("Empty payload")}
+            
+        api_identity = request.env["zero_sudo.security.utils"]._get_system_param("pager_duty.domain_api_identity")
+        if not api_identity or payload.get("api_identity") != api_identity:
+            return {"status": "error", "message": _("Unauthorized")}
 
         domains = payload.get("domains", [])
         # Call the model method to handle this using a service account
         svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_service_internal"
         )
-        request.env["pager.check"].with_user(svc_uid).update_lets_encrypt_domains(
+        request.env["pager.check"].with_user(svc_uid).with_context(mail_notrack=True).update_lets_encrypt_domains(
             domains
         )
         return {"status": "success"}

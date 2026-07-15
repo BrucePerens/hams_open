@@ -21,9 +21,9 @@ class CachingMixin(models.AbstractModel):
     def get_fs_stats(self, override_svc_uid=None):
         # [@ANCHOR: COMM_caching_fs_scan_logic]
 
-        # Verified by [@ANCHOR: test_settings_and_cache_01]
+        # # Verified by [@ANCHOR: test_settings_and_cache_01]
 
-        # Verified by [@ANCHOR: test_caching_zero_sudo_scan]
+        # # Verified by [@ANCHOR: test_caching_zero_sudo_scan]
         """
         Scans 'static/' dirs of all installed modules.
         Returns tuple: (latest_mtime, file_sizes).
@@ -70,7 +70,7 @@ class CachingMixin(models.AbstractModel):
     def get_global_static_info(self, quota_mb, override_svc_uid=None):
         # [@ANCHOR: COMM_caching_quota_calculation]
 
-        # Verified by [@ANCHOR: test_settings_and_cache_01]
+        # # Verified by [@ANCHOR: test_settings_and_cache_01]
         """
         Calculates the safe dynamic max file size based on quota.
         Returns tuple: (latest_mtime_string, dynamic_max_size_string).

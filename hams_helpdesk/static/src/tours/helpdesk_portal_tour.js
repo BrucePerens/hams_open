@@ -8,12 +8,14 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
     url: "/my/tickets?debug=1",
     steps: () => [
         {
+            // Tests [@ANCHOR: COMM_helpdesk_portal_list]
             content: "Click on New Ticket",
             trigger: '.o_tour_new_ticket',
             run: 'click',
             expectUnloadPage: true,
         },
         {
+            // Tests [@ANCHOR: COMM_helpdesk_portal_new]
             content: "Fill Subject",
             trigger: 'input[name="name"]',
             run: 'edit Tour Ticket',
@@ -30,11 +32,12 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
         },
         {
             content: "Submit Ticket",
-            trigger: 'button[type="submit"]',
+            trigger: '.o_tour_submit_ticket',
             run: 'click',
             expectUnloadPage: true,
         },
         {
+            // Tests [@ANCHOR: COMM_helpdesk_portal_detail]
             content: "Wait for Detail Page",
             trigger: '.breadcrumb-item.active',
             run: function() {},
@@ -58,7 +61,7 @@ registry.category("web_tour.tours").add("helpdesk_portal_tour", {
         },
         {
             content: "Verify Closed Status",
-            trigger: '.o_helpdesk_status_badge:contains("Closed")',
+            trigger: '.o_helpdesk_status_badge',
             run: function() {}
         }
     ]

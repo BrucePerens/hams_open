@@ -66,14 +66,14 @@ class EdgeRoutingMixin(models.AbstractModel):
             existing_slugs.update(forbidden_slugs)
 
         if self.env.registry.loaded:
-            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
             if self.env.cr.fetchone():
                 try:
                     with self.env.cr.savepoint():
                         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
                             "edge_routing.edge_routing_service_account"
                         )
-                except Exception as e:  # audit-ignore-catch-all
+                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                     _logger.warning("Error: %s", e)
                     env_svc = self.env
             else:
@@ -82,16 +82,13 @@ class EdgeRoutingMixin(models.AbstractModel):
             env_svc = self.env
 
         for model_name in routing_model_names:
-            if model_name not in self.env:
-                continue
-
             domain = [("website_slug", "=like", f"{base_slug}%")]
             if record_id and model_name == self._name:
                 domain.append(("id", "!=", record_id))
 
             try:
                 env_target = env_svc[model_name]
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 _logger.warning("Error: %s", e)
                 env_target = self.env[model_name]
 
@@ -123,7 +120,7 @@ class EdgeRoutingMixin(models.AbstractModel):
             slug = f"{base_slug}-{counter}"
             counter += 1
 
-    # Verified by [@ANCHOR: user_websites:test_group_site_routing]
+    # # Verified by [@ANCHOR: user_websites:test_group_site_routing]
     @api.model
     @distributed_cache()
     def get_record_by_slug(self, slug, override_svc_uid=None):
@@ -139,14 +136,14 @@ class EdgeRoutingMixin(models.AbstractModel):
             target_env = self.with_user(override_svc_uid).env
         else:
             if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account')) # audit-ignore-sql: Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
                 if self.env.cr.fetchone():
                     try:
                         with self.env.cr.savepoint():
                             target_env = self.env["zero_sudo.security.utils"]._get_service_env(
                                 "edge_routing.edge_routing_service_account"
                             )
-                    except Exception as e:  # audit-ignore-catch-all
+                    except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                         _logger.warning("Failed to get service env: %s", e)
                         target_env = self.env
                 else:
@@ -171,7 +168,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         if not domain:
             return False
 
-        slug = self.env["edge.routing.domain"].get_target_slug_by_domain(domain)
+        slug = self.env["edge.routing.domain"].get_target_slug_by_domain(domain, override_svc_uid=override_svc_uid)
         if not slug:
             return False
 
@@ -192,9 +189,9 @@ class EdgeRoutingMixin(models.AbstractModel):
                 assigned_slugs.add(vals["website_slug"])
         return super().create(vals_list)
 
-    # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
+    # # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
 
-    # Verified by [@ANCHOR: user_websites:test_group_slug_cache_invalidation]
+    # # Verified by [@ANCHOR: user_websites:test_group_slug_cache_invalidation]
     def write(self, vals):
         if vals.get("website_slug"):
             slug_to_check = slugify(vals["website_slug"])
@@ -223,12 +220,12 @@ class EdgeRoutingMixin(models.AbstractModel):
                     self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
                         self._name, all_slugs_to_invalidate
                     )
-                except Exception as e:  # audit-ignore-catch-all
+                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                     _logger.warning("Failed to notify cache invalidation for %s: %s", all_slugs_to_invalidate, e)
                     
             # Handle the batch write edge case for missing slugs when name is updated
             if "name" in vals and len(self) > 1:
-                records_to_update = self.filtered(lambda r: not r.website_slug and "name" in r._fields and r.name)
+                records_to_update = self.filtered(lambda r: not r.website_slug and r.name)
                 if records_to_update:
                     updates = []
                     assigned_slugs = set(all_slugs_to_invalidate)
@@ -261,6 +258,6 @@ class EdgeRoutingMixin(models.AbstractModel):
                 self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
                     self._name, slugs
                 )
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 _logger.warning("Failed to notify local cache invalidation on unlink for %s: %s", slugs, e)
         return res

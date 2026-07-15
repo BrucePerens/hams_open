@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="pager_duty.PagerBoardTemplate" owl="1">
-        <div class="pager-board p-4" style="background: #121212; min-height: 100vh; color: #e0e0e0; overflow: hidden;">
+        <div class="pager-board p-4" style="background: #121212; min-height: 100vh; color: #e0e0e0; overflow: hidden;" t-att-aria-live="state.isPaused ? 'off' : 'polite'">
             <div t-att-style="state.transformStyle" style="will-change: transform;">
                 <div class="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style="background: #1e1e1e;">
                     <div>
@@ -12,7 +12,14 @@
                             <span class="badge bg-warning"><t t-out="state.stats.maintenance"/> Maintenance</span>
                         </div>
                     </div>
-                    <h3 class="m-0 text-secondary">On Duty: <strong class="text-info" t-out="state.on_duty"/></h3>
+                    <div>
+                        <h3 class="m-0 text-secondary">On Duty: <strong class="text-info" t-out="state.on_duty"/></h3>
+                        <button class="btn btn-sm btn-outline-light mt-2" t-on-click="togglePause">
+                            <i t-attf-class="fa {{ state.isPaused ? 'fa-play' : 'fa-pause' }} me-1" aria-hidden="true"/>
+                            <t t-if="state.isPaused">Resume Updates</t>
+                            <t t-else="">Pause Updates</t>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="row">

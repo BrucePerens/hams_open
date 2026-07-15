@@ -24,7 +24,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_01_mechanical_secret_block_enforcement(self):
         # [@ANCHOR: zero_sudo:COMM_test_01_mechanical_secret_block_enforcement]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_01_mechanical_secret_block_enforcement]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_01_mechanical_secret_block_enforcement]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
         # ---
@@ -79,15 +79,15 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_02_bdd_ormcache_query_counting_service_uid(self):
         # [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]
         # ---
         # [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]
         # ---
         # [@ANCHOR: zero_sudo:COMM_test_get_service_uid]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_service_uid]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
         # ---
@@ -109,7 +109,7 @@ class TestSecurityUtils(HamsTransactionCase):
         utils._get_service_uid(svc_xml_id)
 
         mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]  # fmt: skip
+            self.env.cr, "execute", wraps=self.env.cr.execute  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]  # fmt: skip
         )
         utils._get_service_uid(svc_xml_id)
         for call in mock_execute.call_args_list:
@@ -118,13 +118,13 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_03_bdd_event_bus_payload_generation(self):
         # [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal]
         # ---
         # [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_single]
         # ---
@@ -151,7 +151,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_04_privilege_escalation_block_enforcement(self):
         # [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_privilege_escalation_block_sql]
         """Verify that any Service Account granted base.group_system is violently rejected."""
@@ -188,7 +188,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_05_notify_cache_invalidation_list(self):
         # [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_batch]
         """Test _notify_cache_invalidation with a list payload."""
@@ -223,7 +223,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_06_get_deterministic_hash(self):
         # [@ANCHOR: zero_sudo:COMM_test_deterministic_hash]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_deterministic_hash]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_deterministic_hash]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_deterministic_hash]
         # ---
@@ -249,7 +249,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_08_get_crypto_secret(self):
         # [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_get_crypto_secret]
         """Test the cryptographic secret retrieval hierarchy."""
@@ -349,11 +349,11 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_12_kv_store(self):
         # [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
         # ---
         # [@ANCHOR: zero_sudo:COMM_test_set_kv_sql_check]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_sql_check]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_sql_check]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_set_kv_procedure]
         # ---
@@ -443,7 +443,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_14_service_account_password_generation(self):
         # [@ANCHOR: zero_sudo:COMM_test_service_account_password]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_service_account_password]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_service_account_password]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_is_service_account_field]
         # ---
@@ -468,7 +468,7 @@ class TestSecurityUtils(HamsTransactionCase):
             }
         )
 
-        self.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_service_account_password]  # fmt: skip
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_service_account_password]  # fmt: skip
             "SELECT id, password FROM res_users WHERE id IN %s", ((service_account_1.id, service_account_2.id),)
         )
         results = dict(self.env.cr.fetchall())
@@ -486,7 +486,7 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_15_invalidate_model_cache(self):
         # [@ANCHOR: zero_sudo:COMM_test_invalidate_model_cache]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_invalidate_model_cache]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_invalidate_model_cache]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_invalidate_model_cache]
         """Verify secure record-level cache invalidation for specific models."""

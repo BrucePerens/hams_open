@@ -19,7 +19,7 @@ import re
 import signal
 import threading
 import sys
-import tempfile
+# import tempfile
 import traceback
 
 import time
@@ -76,7 +76,8 @@ odoo.tests.common.HttpCase.fetch_proxy = None
 def _patched_handle_request_paused(self, *args, **kwargs):
     params = kwargs if kwargs else (args[0] if args else {})
     url = params.get("request", {}).get("url", "")
-    if url.startswith(f"http://{HOST}") or url.startswith(f"https://{HOST}"):
+    _logger.info("Fetch intercept: %s", url)
+    if url.startswith(f"http://{HOST}") or url.startswith(f"https://{HOST}") or url.startswith("data:") or url.startswith("about:"):
         cmd = "Fetch.continueRequest"
         response = {}
     else:
@@ -177,6 +178,7 @@ def _patched_spawn_chrome(self, *args, **kwargs):
         # are killed when the test teardown terminates the unshare parent.
         unshare_cmd = [
             "setsid",
+            "-w",
             "unshare",
             "-c",
             "-m",
@@ -377,7 +379,7 @@ def _patched_chrome_init(self, *args, **kwargs):
 
 
 ChromeBrowser.__init__ = _patched_chrome_init
-ChromeBrowser.executable = "/tmp/chrome_wrapper.sh"
+
 
 original_chrome_stop = ChromeBrowser.stop
 
@@ -444,7 +446,7 @@ def _patched_chrome_start(self, *args, **kwargs):
                     try:
                         parent = psutil.Process(proc_obj.pid)
                         children_to_kill = parent.children(recursive=True)
-                    except Exception as e:  # audit-ignore-catch-all
+                    except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                         _logger.info("Ignored exception fetching children: %s", e)
             yield res
     except psutil.NoSuchProcess:
@@ -455,22 +457,22 @@ def _patched_chrome_start(self, *args, **kwargs):
                 # Update the children list one last time in case new ones spawned
                 parent = psutil.Process(proc_obj.pid)
                 children_to_kill.extend(parent.children(recursive=True))
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                 _logger.info("Ignored exception updating children: %s", e)
 
             try:
                 os.killpg(proc_obj.pid, signal.SIGKILL)
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                 _logger.info("Ignored exception: %s", e)
             try:
                 proc_obj.terminate()
                 proc_obj.wait(timeout=2.0)
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                 _logger.info("Ignored exception: %s", e)
             try:
                 proc_obj.kill()
                 proc_obj.wait(timeout=1.0)
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                 _logger.info("Ignored exception: %s", e)
 
         for child in set(children_to_kill):
@@ -552,6 +554,8 @@ class SafePatchMixin:
         return mock_obj
 
     def safe_patch_object(self, target, attribute, *args, **kwargs):
+        if "Cursor" in type(target).__name__:
+            raise RuntimeError("Mocking database cursors is strictly forbidden as it corrupts the test teardown sequence.")
         if not args and "new" not in kwargs and "new_callable" not in kwargs:
             kwargs["new_callable"] = DiagnosticMock
         patcher = patch.object(target, attribute, *args, **kwargs)
@@ -590,7 +594,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         cls._crypto_patcher_res_users.start()
         super().setUpClass()
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
+            cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
@@ -646,7 +650,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         self, script_path, args=None, env_vars=None, health_url=None, timeout=600
     ):
                 # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         process = daemon_utils.start_daemon_process(script_path, args, env_vars)
         self.__class__._active_daemons.append(process)
@@ -729,14 +733,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             super().setUpClass()
 
         with cls.registry.cursor() as cr:
-            cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
+            cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
                 "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
         cls.registry.clear_cache()
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
-        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}_{cls.__name__}.lock"
+        os.makedirs("/opt/hams/test/socat_certs", exist_ok=True)
+        lock_path = f"/opt/hams/test/socat_certs/hams_test_proxy_{os.getuid()}_{cls.__name__}.lock"
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
@@ -910,7 +915,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls._crypto_patcher_res_users.stop()
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}_{cls.__name__}.lock"
+        lock_path = f"/opt/hams/test/socat_certs/hams_test_proxy_{os.getuid()}_{cls.__name__}.lock"
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
@@ -1119,10 +1124,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
             _logger.info("TRACING: Exiting HamsHttpCase.tearDown")
 
-    @classmethod
-    def base_url(cls):
-        host = os.environ.get("HAMS_SERVICE_HOST", "odoo")
-        return f"https://{host}:8443"
+
 
     def browser_js(self, *args, **kwargs):
         _logger.info("TRACING: Entering browser_js wrapper.")

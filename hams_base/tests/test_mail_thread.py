@@ -5,7 +5,7 @@ from odoo.tests import common, tagged
 class TestMailThread(common.TransactionCase):
     def setUp(self):
         super().setUp()
-        self.env['ir.config_parameter'].sudo().set_param('mail.bounce.alias', 'auto-mail-failure')
+        self.env['ir.config_parameter'].with_user(self.env.ref('base.user_admin').id).set_param('mail.bounce.alias', 'auto-mail-failure')
 
     def test_vacation_reply_dropped(self):
         msg_dict = {

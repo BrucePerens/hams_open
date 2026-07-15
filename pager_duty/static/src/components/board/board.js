@@ -12,7 +12,8 @@ export class PagerBoard extends Component {
             resolved_incidents: [],
             on_duty: "Loading...",
             stats: { passing: 0, failing: 0, maintenance: 0 },
-            transformStyle: ""
+            transformStyle: "",
+            isPaused: false
         });
 
         onMounted(async () => {
@@ -54,7 +55,12 @@ export class PagerBoard extends Component {
         await this.fetchData();
     }
 
+    togglePause() {
+        this.state.isPaused = !this.state.isPaused;
+    }
+
     onNotification({ detail: notifications }) {
+        if (this.state.isPaused) return;
         for (const { type } of notifications) {
             if (type === "update_board") {
                 this.fetchData();

@@ -15,6 +15,7 @@
         "website_blog",
         "website_sale",
         "edge_routing",
+        "knowledge",
     ],
     "data": [
         "security/security_data.xml",

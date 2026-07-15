@@ -3,7 +3,7 @@
 <odoo>
     <template id="portal_my_home_menu_helpdesk" name="Portal layout : helpdesk menu entries" inherit_id="portal.portal_breadcrumbs" priority="20">
         <!-- burn-ignore-tour -->
-        <!-- audit-ignore-xpath: Render proven in test_02_helpdesk_portal_tour -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_helpdesk_portal_tour] -->
         <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
             <li t-if="page_name == 'ticket' or ticket" class="breadcrumb-item">
                 <a t-if="ticket" t-attf-href="/my/tickets?{{ keep_query() }}">Tickets</a>
@@ -17,7 +17,7 @@
 
     <template id="portal_my_home_helpdesk" name="Show Tickets" inherit_id="portal.portal_my_home" priority="20">
         <!-- burn-ignore-tour -->
-        <!-- audit-ignore-xpath: Render proven in test_02_helpdesk_portal_tour -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_helpdesk_portal_tour] -->
         <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
             <t t-call="portal.portal_docs_entry">
                 <t t-set="title">Helpdesk Tickets</t>
@@ -28,9 +28,9 @@
     </template>
 
     <template id="portal_my_tickets" name="My Tickets">
-        <!-- [@ANCHOR: helpdesk_portal_list] -->
-        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_portal_list] -->
+        <!-- [@ANCHOR: COMM_helpdesk_portal_list] -->
         <t t-call="portal.portal_layout">
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_helpdesk_portal_tour] -->
             <t t-set="breadcrumbs_searchbar" t-value="True"/>
             <t t-call="portal.portal_searchbar">
                 <t t-set="title">Tickets</t>
@@ -70,9 +70,9 @@
     </template>
 
     <template id="portal_ticket_detail" name="Ticket Detail">
-        <!-- [@ANCHOR: helpdesk_portal_detail] -->
-        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_portal_detail] -->
+        <!-- [@ANCHOR: COMM_helpdesk_portal_detail] -->
         <t t-call="portal.portal_layout">
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_helpdesk_portal_tour] -->
             <div id="optional_classes" class="container">
                 <div class="card mt-3">
                     <div class="card-header bg-light">
@@ -91,7 +91,7 @@
                     <div class="card-body">
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <div><strong>Status:</strong> <span class="badge rounded-pill text-bg-info" t-field="ticket.stage"/></div>
+                                <div><strong>Status:</strong> <span class="badge rounded-pill text-bg-info o_helpdesk_status_badge" t-field="ticket.stage"/></div>
                                 <div t-if="ticket.callsign"><strong>Callsign:</strong> <span class="o_helpdesk_callsign" t-field="ticket.callsign"/></div>
                             </div>
                             <div class="col-md-6 text-end">
@@ -118,9 +118,9 @@
     </template>
 
     <template id="portal_ticket_new" name="New Ticket">
-        <!-- [@ANCHOR: helpdesk_portal_new] -->
-        <!-- audit-ignore-view: Tested by [@ANCHOR: helpdesk_portal_new] -->
+        <!-- [@ANCHOR: COMM_helpdesk_portal_new] -->
         <t t-call="portal.portal_layout">
+            <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_helpdesk_portal_tour] -->
             <div class="container">
                 <div class="row">
                     <div class="col-lg-12">
@@ -148,7 +148,7 @@
                                         <textarea name="description" id="description" class="form-control" rows="5" placeholder="Detailed steps to reproduce, error messages, or context..."></textarea>
                                     </div>
                                     <div class="text-end">
-                                        <button type="submit" class="btn btn-primary">Submit Ticket</button>
+                                        <button type="submit" class="btn btn-primary o_tour_submit_ticket">Submit Ticket</button>
                                     </div>
                                 </form>
                             </div>

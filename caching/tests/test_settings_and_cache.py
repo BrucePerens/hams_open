@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo.tools import file_open
-from odoo.addons.caching.controllers.main import ServiceWorkerController
+# from odoo.addons.caching.controllers.main import ServiceWorkerController
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 

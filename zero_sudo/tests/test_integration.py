@@ -17,7 +17,7 @@ class TestIntegrationFacility(HamsTransactionCase):
     def test_01_daemon_lifecycle(self):
         # [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         # ---
-        # Verified by [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         """
         Verify that HamsTransactionCase correctly starts a daemon and polls its health.
         """
@@ -25,7 +25,7 @@ class TestIntegrationFacility(HamsTransactionCase):
         script_path = os.path.join(base_dir, "tests", "dummy_daemon.py")
 
         # The dummy_daemon.py uses port 1234.
-        # We use the hostname here to satisfy the linter's anti-localhost policy.
+        # We use the hostname here to satisfy the linter's anti-odoo policy.
         host = os.environ.get("DAEMON_HOST", "odoo")
         health_url = f"http://{host}:1234"
 

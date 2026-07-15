@@ -5,6 +5,10 @@
 import os
 import json
 import time
+import hmac
+import hashlib
+import secrets
+import shutil
 import pika
 import subprocess
 import urllib.request
@@ -18,15 +22,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("backup_worker")
 
-ODOO_HOST = os.environ.get("ODOO_HOST", "localhost")
+ODOO_HOST = os.environ.get("ODOO_HOST", "odoo")
 ODOO_URL = os.environ.get("ODOO_URL", f"http://{ODOO_HOST}:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
-ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "redis")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
-RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 
 class OdooAPIError(Exception):
@@ -34,10 +38,19 @@ class OdooAPIError(Exception):
 
 
 def _json2_call(model, method_name, svc_uid=None, **kwargs):
+    timestamp = str(int(time.time()))
+    nonce = secrets.token_hex(16)
+    payload_str = json.dumps(kwargs)
+    message = f"{timestamp}|{nonce}|{payload_str}".encode("utf-8")
+    signature = hmac.new(ODOO_PASS.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
     headers = {
-        "Authorization": f"bearer {ODOO_PASS}",
         "X-Odoo-Database": ODOO_DB,
         "Content-Type": "application/json",
+        "X-Auth-User": ODOO_USER,
+        "X-Auth-Timestamp": timestamp,
+        "X-Auth-Nonce": nonce,
+        "X-Auth-Signature": signature,
     }
     if svc_uid:
         headers["X-Odoo-Service-Uid"] = str(svc_uid)
@@ -56,7 +69,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
     except urllib.error.HTTPError as e:
         try:
             err_body = e.read().decode("utf-8")
-        except Exception as exc: # audit-ignore-catch-all: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_1]
+        except UnicodeDecodeError as exc:
             logger.exception("Could not decode response body: %s", exc)
             err_body = "Could not decode response body."
         raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
@@ -154,9 +167,11 @@ def execute_job(ch, method, properties, body):
             ):
                 cmd = [script_path]
             else:
-                raise ValueError(
-                    f"Invalid or missing restore drill script: {script_path}. Must be a .py script."
+                error_msg = (
+                    """Invalid or missing restore drill script: """
+                    f"""{script_path}. Must be a .py script."""
                 )
+                raise ValueError(error_msg)
         elif engine == "restore_cmd":
             cmd = payload.get("cmd_args", [])
             # Security hardening: ensure cmd is a list and contains only allowed binaries
@@ -214,6 +229,10 @@ def execute_job(ch, method, properties, body):
 
         if not cmd:
             raise ValueError(f"No command generated for engine: {engine}")
+
+        if not shutil.which(cmd[0]):
+            logger.warning(f"Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here.")
+            raise OSError(f"Binary {cmd[0]} not found in PATH.")
 
         logger.info("Executing: %s", " ".join(shlex.quote(c) for c in cmd))
 
@@ -384,7 +403,7 @@ def execute_job(ch, method, properties, body):
             json.JSONDecodeError,
             urllib.error.URLError,
         ) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_2]  # fmt: skip
-            logger.error("Failed to report failure back to Odoo: %s", inner_e)
+            logger.exception("Failed to report failure back to Odoo: %s", inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
@@ -418,7 +437,7 @@ def main():
             TypeError,
             OSError,
         ) as e:  # audit-ignore-catch-all: General daemon recovery loop: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_3]  # fmt: skip
-            logger.error("Unexpected error in main loop: %s. Restarting...", e)
+            logger.exception("Unexpected error in main loop: %s. Restarting...", e)
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]
 
 

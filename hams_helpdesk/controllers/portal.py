@@ -3,6 +3,7 @@
 from odoo import http
 from odoo.http import request
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
+import werkzeug
 
 
 class HelpdeskPortal(CustomerPortal):
@@ -18,7 +19,7 @@ class HelpdeskPortal(CustomerPortal):
             values["ticket_count"] = (
                 request.env["hams_helpdesk.ticket"]
                 .with_user(svc_uid)
-                .with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id)
+                .with_company(request.website.company_id.id if request.website else request.env.company.id)
                 .search_count(domain)
             )
         return values
@@ -30,11 +31,11 @@ class HelpdeskPortal(CustomerPortal):
         website=True,
     )
     def portal_my_tickets(self, page=1, **kw):
-        # [@ANCHOR: COMM_helpdesk_multi_website]
+        # # Tested by [@ANCHOR: COMM_test_06_multi_website_awareness_logic]
         values = self._prepare_portal_layout_values()
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
-        Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id)
+        Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if request.website else request.env.company.id)
 
         domain = [("partner_id", "=", request.env.user.partner_id.id)]
         if request.website:
@@ -61,7 +62,7 @@ class HelpdeskPortal(CustomerPortal):
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
         ticket_sudo = (
-            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id).browse(ticket_id)
+            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if request.website else request.env.company.id).browse(ticket_id)
         )
 
         if (
@@ -95,7 +96,7 @@ class HelpdeskPortal(CustomerPortal):
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
         ticket_sudo = (
-            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if getattr(request, 'website', None) else request.env.company.id).browse(ticket_id)
+            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if request.website else request.env.company.id).browse(ticket_id)
         )
 
         if (
@@ -114,7 +115,6 @@ class HelpdeskPortal(CustomerPortal):
         # Exact Schema validation. Fail loudly if callsign isn't present
         callsign = partner.callsign
         if not callsign:
-            import werkzeug
             raise werkzeug.exceptions.BadRequest("Callsign is required.")
         return request.render(
             "hams_helpdesk.portal_ticket_new",
@@ -133,7 +133,7 @@ class HelpdeskPortal(CustomerPortal):
         csrf=True,
     )
     def portal_ticket_submit(self, name=None, description=None, callsign=None, **kw):
-        # Verified by [@ANCHOR: hams_helpdesk:test_helpdesk_portal_tour]
+        # # Verified by [@ANCHOR: hams_helpdesk:test_helpdesk_portal_tour]
         if not name:
             return request.redirect("/my/tickets/new")
 

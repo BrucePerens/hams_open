@@ -53,7 +53,7 @@ class CloudflareIPBan(models.Model):
     ):
         # [@ANCHOR: COMM_cf_execute_ban]
 
-        # Verified by [@ANCHOR: COMM_test_cf_execute_ban]
+        # # Verified by [@ANCHOR: COMM_test_cf_execute_ban]
         if not website_id:
             website_id = self.env["cloudflare.utils"].get_current_website_id()
 
@@ -107,7 +107,7 @@ class CloudflareIPBan(models.Model):
     def action_lift_ban(self):
         # [@ANCHOR: COMM_cf_action_lift_ban]
 
-        # Verified by [@ANCHOR: COMM_test_cf_action_lift_ban]
+        # # Verified by [@ANCHOR: COMM_test_cf_action_lift_ban]
         for rec in self:
             if rec.state == "active" and rec.cf_rule_id:
                 rec._action_lift_ban_sync()

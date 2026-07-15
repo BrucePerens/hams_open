@@ -19,7 +19,7 @@ class DatabaseTableStat(models.Model):
     # for the entire database instance, which may be shared by multiple Odoo companies.
     _name = "database.table.stat"
     _description = "Database Table Statistics (Bloat & Vacuum)"
-    # Verified by [@ANCHOR: COMM_test_dba_view]
+    # # Verified by [@ANCHOR: COMM_test_dba_view]
     name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "dead_percent desc"
@@ -176,7 +176,7 @@ class DatabaseQueryStat(models.Model):
                 )
                 if self.env.cr.fetchone():
                     can_query = True
-        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_slow_queries]
+        except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: db_slow_queries]
             _logger.exception("Graceful degradation check failed: %s", e)
 
         if can_query:
@@ -235,7 +235,7 @@ class DatabaseQueryStat(models.Model):
                     "sticky": False,
                 },
             }
-        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_slow_queries]
+        except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: db_slow_queries]
             _logger.exception("Failed to install pg_stat_statements extension: %s", e)
             raise UserError(
                 _(
@@ -267,7 +267,7 @@ class DatabaseQueryStat(models.Model):
                     "sticky": False,
                 },
             }
-        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_slow_queries]
+        except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: db_slow_queries]
             _logger.exception("Failed to reset query stats: %s", e)
             raise UserError(_("Could not reset statistics: %s") % str(e))
 
@@ -306,7 +306,7 @@ class DatabaseQueryStat(models.Model):
                 "view_mode": "form",
                 "target": "new",
             }
-        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: db_explain_query]
+        except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: db_explain_query]
             _logger.exception("Failed to explain query: %s", e)
             raise UserError(_("Could not generate explain plan: %s") % str(e))
 
@@ -404,7 +404,7 @@ class DatabaseReplicationStat(models.Model):
     # This model tracks PostgreSQL replication lag and status for the entire cluster.
     _name = "database.replication.stat"
     _description = "Database Replication Statistics"
-    # Verified by [@ANCHOR: COMM_test_dba_cron]
+    # # Verified by [@ANCHOR: COMM_test_dba_cron]
     name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
 
@@ -455,7 +455,7 @@ class DatabaseIndexAdvisor(models.Model):
     # sizes that might benefit from additional indexing.
     _name = "database.index.advisor"
     _description = "Index Recommendation Advisor"
-    # Verified by [@ANCHOR: COMM_test_dba_cron]
+    # # Verified by [@ANCHOR: COMM_test_dba_cron]
     name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "seq_scan desc"

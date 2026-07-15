@@ -34,7 +34,7 @@ RESERVED_SLUGS = {
 def slugify(s, max_length=None):
     # [@ANCHOR: edge_routing:utils_slugify]
 
-    # Verified by [@ANCHOR: test_utils_slugify]
+    # # Verified by [@ANCHOR: test_utils_slugify]
     """
     Transform a string to a slug.
 

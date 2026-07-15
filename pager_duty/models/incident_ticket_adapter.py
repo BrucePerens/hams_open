@@ -59,7 +59,9 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         hd_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "hams_helpdesk.user_helpdesk_service"
         )
-        tickets = self.env[target_model].with_user(hd_uid).create(payloads)
+        tickets = self.env[target_model].with_user(hd_uid).with_context(
+            mail_create_nosubscribe=True, mail_create_nolog=True, mail_auto_subscribe_no_notify=True
+        ).create(payloads)
         
         for incident, ticket in zip(incidents_to_process, tickets):
             incident.write(

@@ -85,7 +85,7 @@ class UserWebsitesController(http.Controller):
                     create_vals["content_group_id"] = group_id
 
             env_svc["content.violation.report"].create(create_vals)
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_tour_violation_report]
             _logger.warning("Report creation failed: %s", e)
             return request.redirect("/?error=creation_failed")
 
@@ -218,7 +218,7 @@ class UserWebsitesController(http.Controller):
                 if not request.env.user._is_admin():
                     db_name = request.env.cr.dbname
                     redis_client.incr(f"views:{db_name}:page:{page.id}")
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_cron_redis_flush]
                 _logger.warning(
                     "Redis view counter increment failed in controller: %s", e
                 )
@@ -354,7 +354,7 @@ class UserWebsitesController(http.Controller):
 
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     def documentation(self, **kwargs):
-        # Tested by [@ANCHOR: user_websites:test_documentation_route]
+        # # Tested by [@ANCHOR: user_websites:test_documentation_route]
         # We explicitly use request.env here instead of env_svc to ensure
         # the current user has the correct portal/public access rights to view the article,
         # avoiding artificial AccessErrors from the backend service account.
@@ -377,7 +377,7 @@ class UserWebsitesController(http.Controller):
 
     @http.route("/community", type="http", auth="public", website=True)
     def community_directory(self, **kwargs):
-        # Tested by [@ANCHOR: user_websites:test_tour_community_directory]
+        # # Tested by [@ANCHOR: user_websites:test_tour_community_directory]
         pager = {
             "page_count": 0,
             "page": dict(),
@@ -387,8 +387,8 @@ class UserWebsitesController(http.Controller):
 
         # Load directory entries (Users who opted in)
         utils = request.env["zero_sudo.security.utils"]
-        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
-        entries = env_svc["user_websites.public_directory_view"].search([], limit=1000)
+        _ = utils._get_service_env("user_websites.user_websites_service_account")
+        entries = request.env["user_websites.public_directory_view"].search([], limit=1000)
 
         return request.render(
             "user_websites.community_directory", {"pager": pager, "entries": entries}
@@ -400,7 +400,7 @@ class UserWebsitesController(http.Controller):
 
     @http.route("/my/privacy/export", type="http", auth="user", website=True)
     def privacy_export(self, **kwargs):
-        # Tested by [@ANCHOR: user_websites:test_gdpr_export_api]
+        # # Tested by [@ANCHOR: user_websites:test_gdpr_export_api]
         user = request.env.user
         data = user._get_gdpr_export_data()
         streamed = user._get_gdpr_streamed_keys()
@@ -477,7 +477,7 @@ class UserWebsitesController(http.Controller):
                 vals["user_id"] = request.env.user.id
 
             env_svc["content.violation.appeal"].create(vals)
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: UX_SUBMIT_APPEAL]
             _logger.warning("Appeal creation failed: %s", e)
             return request.redirect("/my/home?error=appeal_failed")
 
@@ -558,9 +558,9 @@ class UserWebsitesController(http.Controller):
         auth="public",
         website=True,
         csrf=True,
-    )  # burn-ignore-route
+    )  # burn-ignore-route  # fmt: skip
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
-        # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
+        # # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 

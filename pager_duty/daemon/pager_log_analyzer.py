@@ -19,7 +19,7 @@ import concurrent.futures
 import ctypes
 import pwd
 import grp
-
+import collections
 import redis
 
 logging.basicConfig(
@@ -36,7 +36,7 @@ if not os.path.exists(config_path):
 try:
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
-except Exception as e:  # audit-ignore-catch-all
+except (OSError, json.JSONDecodeError) as e:
     logger.critical(f"Failed to parse JSON config: {e}")
     sys.exit(1)
 
@@ -63,13 +63,17 @@ try:
     )
     r_client.ping()
     logger.info("Connected to Redis successfully.")
-except Exception as e:  # audit-ignore-catch-all
+except redis.RedisError as e:
     logger.critical(f"Redis connection failed: {e}")
     sys.exit(1)
 
 # --- 2. Isolation & Privilege Dropping ---
 if os.geteuid() == 0:
     logger.info("Executing isolation sequence...")
+
+    # Resolve UID/GID before chrooting because /etc/passwd won't be accessible
+    uid = pwd.getpwnam("nobody").pw_uid
+    gid = grp.getgrnam("adm").gr_gid
 
     # A. Chroot to /var/log
     # Assume POSIX environment with os.chroot available
@@ -86,18 +90,16 @@ if os.geteuid() == 0:
         for cap in range(40):
             libc.prctl(24, cap, 0, 0, 0)
         logger.info("All kernel bounding capabilities successfully dropped.")
-    except Exception as e:  # audit-ignore-catch-all
+    except OSError as e:
         logger.warning(f"Could not drop bounding capabilities: {e}")
 
     # C. Drop to nobody:adm
     try:
-        uid = pwd.getpwnam("nobody").pw_uid
-        gid = grp.getgrnam("adm").gr_gid
         os.setgroups([])
         os.setresgid(gid, gid, gid)
         os.setresuid(uid, uid, uid)
         logger.info("Privileges successfully de-escalated to nobody:adm")
-    except Exception as e:  # audit-ignore-catch-all
+    except OSError as e:
         logger.warning(f"Could not setuid to nobody:adm: {e}")
 
 
@@ -169,7 +171,7 @@ def tail_file(fp, compiled_patterns):
                         r_client.lpush("pager_log_anomalies", json.dumps(payload))
             else:
                 time.sleep(5)  # audit-ignore-sleep
-        except Exception as e:  # audit-ignore-catch-all
+        except OSError as e:
             logger.error(f"Error tailing {chroot_path}: {e}")
             time.sleep(5)  # audit-ignore-sleep
 
@@ -192,22 +194,22 @@ def redis_search_listener():
                 if not chroot_path.startswith("/"):
                     chroot_path = "/" + chroot_path
 
-                matches = []
+                matches_deque = collections.deque(maxlen=500)
                 c_reg = re.compile(regex, re.IGNORECASE)
 
-                # Perform a reverse-read or simple full scan (capped at 500 matches)
+                # Perform a simple full scan and keep the 500 most recent matches
                 if os.path.exists(chroot_path):
                     with open(chroot_path, "r") as f:
                         for line in f:
                             if len(c_reg.findall(line)) > 0:
-                                matches.append(line.strip())
-                                if len(matches) > 500:
-                                    break
+                                matches_deque.append(line.strip())
+                
+                matches = list(matches_deque)
 
                 # Publish results back to the specific request UUID channel
                 res_payload = {"matches": matches}
                 r_client.publish(f"log_search_res:{uuid_str}", json.dumps(res_payload))
-            except Exception as e:  # audit-ignore-catch-all
+            except (OSError, json.JSONDecodeError, KeyError) as e:
                 logger.error(f"Search failure: {e}")
 
 

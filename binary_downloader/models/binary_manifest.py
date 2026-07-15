@@ -82,7 +82,7 @@ class BinaryManifest(models.Model):
     def _compute_is_installed(self):
         # [@ANCHOR: binary_compute_installed]
 
-        # Verified by [@ANCHOR: test_binary_manifest_standard]
+        # # Verified by [@ANCHOR: test_binary_manifest_standard]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
         for record in self:
@@ -105,7 +105,7 @@ class BinaryManifest(models.Model):
     def action_install(self):
         # [@ANCHOR: binary_action_install]
 
-        # Verified by [@ANCHOR: test_binary_manifest_standard]
+        # # Verified by [@ANCHOR: test_binary_manifest_standard]
         self.ensure_one()
         # Security: ensure only users with appropriate groups can trigger this
         if not (
@@ -135,7 +135,7 @@ class BinaryManifest(models.Model):
 
         # [@ANCHOR: binary_resolution]
 
-        # Verified by [@ANCHOR: test_binary_manifest_standard]
+        # # Verified by [@ANCHOR: test_binary_manifest_standard]
         if (
             not cmd_name
             or "/" in cmd_name

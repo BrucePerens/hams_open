@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="unsubscribe_page_template" name="Unsubscribe Options">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_base:unsubscribe_page_template] -->
         <t t-call="website.layout">
             <div id="wrap" class="oe_structure oe_empty">
                 <section class="s_text_image pt32 pb32">
@@ -31,7 +32,7 @@
                                         <p class="card-text text-muted">
                                             <em>Note: This action requires a live system administrator to reverse.</em>
                                         </p>
-                                        <t t-if="request.env.user.id != request.website.user_id.id">
+                                        <t t-if="not is_public_user">
                                             <form action="/unsubscribe/lockout" method="post" onsubmit="return confirm('Are you sure you want to permanently lock your account? You will be logged out immediately.');">
                                                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                                 <button type="submit" class="btn btn-danger">Lock My Account</button>
@@ -54,6 +55,7 @@
     </template>
 
     <template id="unsubscribe_lockout_success" name="Account Locked">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_base:unsubscribe_lockout_success] -->
         <t t-call="website.layout">
             <div id="wrap" class="oe_structure oe_empty">
                 <section class="s_text_image pt32 pb32">

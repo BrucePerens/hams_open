@@ -75,7 +75,7 @@ class ResUsersModeration(models.Model):
                 )
                 if not pages:
                     break
-                pages.write({"is_published": False, "website_published": False})
+                pages.with_context(mail_notrack=True).write({"is_published": False, "website_published": False})
             while True:
                 posts = (
                     self.env["blog.post"]
@@ -90,7 +90,7 @@ class ResUsersModeration(models.Model):
                 )
                 if not posts:
                     break
-                posts.write({"is_published": False})
+                posts.with_context(mail_notrack=True).write({"is_published": False})
 
         for user in self:
             user.is_suspended_from_websites = True

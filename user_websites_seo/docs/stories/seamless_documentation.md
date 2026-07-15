@@ -11,4 +11,4 @@ The module reads its internal documentation file and creates a new article title
 Charlie can now find the "User Websites SEO Guide" in his Knowledge base, providing him and his users with immediate guidance on how to use the SEO features.
 
 ## Technical Anchors
-- Dynamic Documentation Bootstrap: `[@ANCHOR: soft_dependency_docs_installation]`
+- Dynamic Documentation Bootstrap: `[ANCHOR: soft_dependency_docs_installation]`

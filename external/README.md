@@ -33,3 +33,7 @@ For modules using dynamic imports, use the local path:
 ```javascript
 const module = await import('/external/static/src/node_modules/transformers/transformers.js');
 ```
+
+## External Dependencies
+
+- None

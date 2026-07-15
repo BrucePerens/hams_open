@@ -6,7 +6,7 @@ from odoo.exceptions import UserError
 from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token
 
 
-# Verified by [@ANCHOR: test_xpath_rendering_cf_settings]
+# # Verified by [@ANCHOR: test_xpath_rendering_cf_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
@@ -82,7 +82,7 @@ class ResConfigSettings(models.TransientModel):
     def action_generate_tunnel_command(self):
         # [@ANCHOR: COMM_cf_tunnel_setup]
 
-        # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
+        # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
         self.ensure_one()
         website = (
             self.website_id

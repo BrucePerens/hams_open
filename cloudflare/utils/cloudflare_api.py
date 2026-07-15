@@ -66,7 +66,7 @@ def _make_request(method, endpoint, token, error_msg, **kwargs):
 
 
 def purge_urls(urls, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_purge_urls_api]
+    # # Verified by [@ANCHOR: COMM_test_purge_urls_api]
     if not token or not zone_id:
         return False
     if not urls:
@@ -114,9 +114,9 @@ def purge_tags(tags, token, zone_id):
     return success
 
 
-# Verified by [@ANCHOR: test_cf_ban_ip_api]
+# # Verified by [@ANCHOR: test_cf_ban_ip_api]
 def ban_ip(ip_address, mode, notes, token, zone_id):
-    # Verified by [@ANCHOR: test_cf_ban_ip_api]
+    # # Verified by [@ANCHOR: test_cf_ban_ip_api]
     if not token or not zone_id:
         return False, "Missing credentials"
 
@@ -142,7 +142,7 @@ def ban_ip(ip_address, mode, notes, token, zone_id):
 
 
 def unban_ip(rule_id, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_02_cf_action_lift_ban]
+    # # Verified by [@ANCHOR: COMM_test_02_cf_action_lift_ban]
     if not token or not zone_id:
         return False, "Missing credentials"
 
@@ -156,7 +156,7 @@ def unban_ip(rule_id, token, zone_id):
 
 
 def verify_turnstile(token, remote_ip, secret):
-    # Verified by [@ANCHOR: COMM_test_cf_turnstile_verify]
+    # # Verified by [@ANCHOR: COMM_test_cf_turnstile_verify]
     if not secret or not token:
         return False
 
@@ -175,7 +175,7 @@ def verify_turnstile(token, remote_ip, secret):
 
 
 def get_zone_ruleset(phase, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_03_cf_action_pull_waf_rules]
+    # # Verified by [@ANCHOR: COMM_test_03_cf_action_pull_waf_rules]
     if not token or not zone_id:
         return None
 
@@ -191,7 +191,7 @@ def get_zone_ruleset(phase, token, zone_id):
 
 
 def update_zone_ruleset(ruleset_id, payload, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
+    # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
         return False, "Missing credentials."
 
@@ -212,7 +212,7 @@ def update_zone_ruleset(ruleset_id, payload, token, zone_id):
 
 
 def create_zone_ruleset(payload, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
+    # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
         return False, "Missing credentials."
 
@@ -231,7 +231,7 @@ def create_zone_ruleset(payload, token, zone_id):
 
 
 def create_cfd_tunnel(account_id, token, tunnel_name):
-    # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
+    # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
     if not token or not account_id:
         return False, "Missing credentials"
 
@@ -253,7 +253,7 @@ def create_cfd_tunnel(account_id, token, tunnel_name):
 
 
 def get_cfd_tunnel_token(account_id, token, tunnel_id):
-    # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
+    # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
     if not token or not account_id:
         return False, "Missing credentials"
 
@@ -267,7 +267,7 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
 
 
 def purge_everything(token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_purge_everything_logic]
+    # # Verified by [@ANCHOR: COMM_test_purge_everything_logic]
     if not token or not zone_id:
         return False
 
@@ -287,7 +287,7 @@ def purge_everything(token, zone_id):
 
 
 def get_zone_settings(token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
+    # # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
     if not token or not zone_id:
         return None
 
@@ -303,7 +303,7 @@ def get_zone_settings(token, zone_id):
 
 
 def update_zone_setting(setting_name, value, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
+    # # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
     if not token or not zone_id:
         return False, "Missing credentials"
 
@@ -325,7 +325,7 @@ def update_zone_setting(setting_name, value, token, zone_id):
 
 
 def list_cfd_tunnels(account_id, token):
-    # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
+    # # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
     if not token or not account_id:
         return []
 
@@ -339,7 +339,7 @@ def list_cfd_tunnels(account_id, token):
 
 
 def delete_cfd_tunnel(account_id, token, tunnel_id):
-    # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
+    # # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
     if not token or not account_id or not tunnel_id:
         return False, "Missing credentials or tunnel ID"
 
@@ -353,7 +353,7 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
 
 
 def create_custom_hostname(hostname, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_03_tunnel_setup]
+    # # Verified by [@ANCHOR: COMM_test_03_tunnel_setup]
     if not token or not zone_id or not hostname:
         return False, "Missing credentials or hostname"
 
@@ -376,7 +376,7 @@ def create_custom_hostname(hostname, token, zone_id):
 
 
 def get_custom_hostname(hostname_id, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_04_sync_tunnels]
+    # # Verified by [@ANCHOR: COMM_test_04_sync_tunnels]
     if not token or not zone_id or not hostname_id:
         return False, "Missing credentials or hostname ID"
 
@@ -390,7 +390,7 @@ def get_custom_hostname(hostname_id, token, zone_id):
 
 
 def delete_custom_hostname(hostname_id, token, zone_id):
-    # Verified by [@ANCHOR: COMM_test_05_delete_tunnel]
+    # # Verified by [@ANCHOR: COMM_test_05_delete_tunnel]
     if not token or not zone_id or not hostname_id:
         return False, "Missing credentials or hostname ID"
 

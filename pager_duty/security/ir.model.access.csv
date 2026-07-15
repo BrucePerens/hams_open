@@ -1,10 +1,9 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_pager_incident,pager.incident,model_pager_incident,group_pager_admin,1,1,1,1
+access_pager_check,pager.check,model_pager_check,group_pager_admin,1,1,1,1
 access_pager_incident_svc,pager.incident svc,model_pager_incident,group_pager_service,1,1,1,0
 access_pager_check_svc,pager.check svc,model_pager_check,group_pager_service,1,1,0,0
 access_pager_incident_mail_svc,pager.incident mail svc,model_pager_incident,zero_sudo.group_mail_service,1,1,0,0
-access_pager_incident_admin,pager.incident admin,model_pager_incident,base.group_system,1,1,1,1
-access_pager_check_admin,pager.check admin,model_pager_check,base.group_system,1,1,1,1
 access_res_company_pager_admin,res.company pager admin,base.model_res_company,pager_duty.group_pager_admin,1,0,0,0
 access_mail_message_pager_admin,mail.message pager admin,mail.model_mail_message,pager_duty.group_pager_admin,1,1,1,0
 access_discuss_channel_pager_admin,discuss.channel pager admin,mail.model_discuss_channel,pager_duty.group_pager_admin,1,1,0,0
@@ -13,14 +12,11 @@ access_mail_template_pager_admin,mail.template pager admin,mail.model_mail_templ
 access_res_users_pager_admin,res.users pager admin,base.model_res_users,pager_duty.group_pager_admin,1,0,0,0
 access_mail_alias_domain_pager_admin,mail.alias.domain pager admin,mail.model_mail_alias_domain,pager_duty.group_pager_admin,1,0,0,0
 access_res_partner_pager_admin,res.partner pager admin,base.model_res_partner,pager_duty.group_pager_admin,1,1,0,0
-access_pager_log_pattern_admin,pager.log.pattern admin,model_pager_log_pattern,base.group_system,1,1,1,1
-access_pager_log_file_admin,pager.log.file admin,model_pager_log_file,base.group_system,1,1,1,1
 access_pager_log_pattern_svc,pager.log.pattern svc,model_pager_log_pattern,pager_duty.group_pager_admin,1,1,1,1
 access_pager_log_file_svc,pager.log.file svc,model_pager_log_file,pager_duty.group_pager_admin,1,1,1,1
 access_res_users_pager_svc,res.users pager svc,base.model_res_users,group_pager_service,1,0,0,0
 access_res_partner_pager_svc,res.partner pager svc,base.model_res_partner,group_pager_service,1,0,0,0
 access_res_company_pager_svc,res.company pager svc,base.model_res_company,group_pager_service,1,0,0,0
-access_ir_config_parameter_pager_svc,ir.config_parameter pager svc,base.model_ir_config_parameter,group_pager_service,1,0,0,0
 access_mail_activity_type_pager_svc,mail.activity.type svc,mail.model_mail_activity_type,pager_duty.group_pager_service,1,0,0,0
 access_mail_message_pager_svc,mail.message svc,mail.model_mail_message,pager_duty.group_pager_service,1,0,1,0
 access_calendar_event_pager_svc,calendar.event svc,calendar.model_calendar_event,pager_duty.group_pager_service,1,1,1,0

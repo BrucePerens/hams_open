@@ -14,9 +14,9 @@ class ResConfigSettings(models.TransientModel):
     @api.depends('company_id')
     def _compute_dns_records(self):
         for record in self:
-            domain = self.env['ir.config_parameter'].sudo().get_param('mail.catchall.domain')
+            domain = self.env['zero_sudo.security.utils']._get_system_param('mail.catchall.domain')
             if not domain:
-                domain = self.env['ir.config_parameter'].sudo().get_param('web.base.url') or "hams.com"
+                domain = self.env['zero_sudo.security.utils']._get_system_param('web.base.url') or "hams.com"
             # Strip http:// or https://
             if "://" in domain:
                 domain = domain.split("://")[1].split("/")[0]

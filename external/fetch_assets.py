@@ -38,8 +38,10 @@ def download_file(url, dest_path, expected_hash):
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     _logger.info("Downloading %s\n -> %s", url, dest_path)
 
-    req = urllib.request.Request(url, headers={"User-Agent": "Hams-DevSecOps/1.0"})
+    # [@ANCHOR: external:HTTP_NO_MASKING]
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"})
     
+    # [@ANCHOR: external:HTTP_NO_HEAD]
     with urllib.request.urlopen(req, timeout=10) as response:
         tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(dest_path))
         try:
@@ -58,7 +60,7 @@ def download_file(url, dest_path, expected_hash):
             
             os.chmod(tmp_path, 0o644)
             shutil.move(tmp_path, dest_path)
-        except Exception as e:  # audit-ignore-catch-all
+        except (urllib.error.URLError, ValueError, OSError) as e:
             _logger.error("Failed to download %s: %s", url, e)
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
@@ -89,6 +91,7 @@ def main():
         download_file(url, dest, expected_hash)
 
     # Transformers.js 2.16.1 (Minified version used to avoid dependency audit issues)
+    # [@ANCHOR: external:TRANSFORMERS_MIN]
     transformers_dir = os.path.join(lib_dir, "transformers")
     transformers_url = (
         "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.1/dist/transformers.min.js"

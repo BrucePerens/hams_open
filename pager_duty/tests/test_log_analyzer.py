@@ -18,11 +18,15 @@ class TestLogAnalyzer(HamsTransactionCase):
         self.assertIn("filepath", v2["arch"])
 
     def test_02_headless_api_translation(self):
-        # Tests [@ANCHOR: pd_log_api_i18n]
+        # Tests [@ANCHOR: COMM_pd_log_api_i18n]
 
-        # Tests [@ANCHOR: pd_log_api_i18n]
+        self.env["pager.log.pattern"].create({
+            "name": "Dummy",
+            "regex": ".*",
+            "severity": "low",
+        })
         recs = self.env["pager.log.pattern"].search([], limit=1)
-        self.assertIsNotNone(recs)
+        self.assertTrue(recs)
 
     def test_03_timeout_removed(self):
         """

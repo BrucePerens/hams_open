@@ -16,9 +16,9 @@ class UserWebsitesGroupSEO(models.Model):  # burn-ignore-env
         if not all(self.env.user in group.member_ids for group in self):
             # [@ANCHOR: COMM_user_websites_group_seo_write_elevation]
 
-            # Verified by [@ANCHOR: COMM_test_seo_widget_tour]
+            # # Verified by [@ANCHOR: COMM_test_seo_widget_tour]
 
-            # Verified by [@ANCHOR: COMM_test_check_access_rule_user_websites_group]
+            # # Verified by [@ANCHOR: COMM_test_check_access_rule_user_websites_group]
             raise AccessError(
                 _("You can only modify SEO metadata for groups " "you are a member of.")
             )

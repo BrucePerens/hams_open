@@ -54,7 +54,7 @@ def _async_unpublish_content(db_name, user_ids):
                 if len(pages) < 5000:
                     break
                 if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                    time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                    time.sleep(0.1)  # audit-ignore-sleep
 
             while True:
                 posts = env_svc["blog.post"].search(
@@ -71,7 +71,7 @@ def _async_unpublish_content(db_name, user_ids):
                 if len(posts) < 5000:
                     break
                 if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                    time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                    time.sleep(0.1)  # audit-ignore-sleep
 
             while True:
                 blogs = env_svc["blog.blog"].search(
@@ -84,13 +84,13 @@ def _async_unpublish_content(db_name, user_ids):
                 if len(blogs) < 5000:
                     break
                 if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                    time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                    time.sleep(0.1)  # audit-ignore-sleep
         except (odoo.exceptions.AccessError, odoo.exceptions.ValidationError) as e:
             env.cr.rollback()
             logging.getLogger(__name__).warning(
                 "Background unpublish business logic failure: %s", e
             )
-        except Exception as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             env.cr.rollback()
             logging.getLogger(__name__).error(
                 "Fatal error during background unpublish: %s", e
@@ -596,14 +596,8 @@ class ResUsers(models.Model):
                     offset += 1000
 
         mro = self.__class__.__mro__
-        start_idx = mro.index(ResUsers) + 1
-        has_parent_method = any(
-            "_get_gdpr_streamed_keys" in cls.__dict__ for cls in mro[start_idx:]
-        )
-        if has_parent_method:
-            res = super()._get_gdpr_streamed_keys()
-        else:
-            res = {}
+        _ = mro.index(ResUsers) + 1
+        res = super()._get_gdpr_streamed_keys()
         res.update(
             {
                 "pages": generate_pages,
@@ -617,16 +611,13 @@ class ResUsers(models.Model):
     def _get_gdpr_export_data(self):
         # [@ANCHOR: res_users_gdpr_export]
 
-        # Verified by [@ANCHOR: test_gdpr_export_hook]
+        # # Verified by [@ANCHOR: test_gdpr_export_hook]
         """
         Packages all the user's data and content into a dictionary so they can download it.
         """
         self.ensure_one()
         
-        if hasattr(super(), "_get_gdpr_export_data"):
-            res = super()._get_gdpr_export_data()
-        else:
-            res = {}
+        res = super()._get_gdpr_export_data()
 
         if "user" not in res:
             res["user"] = {}
@@ -649,9 +640,9 @@ class ResUsers(models.Model):
 
         # [@ANCHOR: gdpr_sudo_erasure]
 
-        # Verified by [@ANCHOR: test_gdpr_erasure_pages]
+        # # Verified by [@ANCHOR: test_gdpr_erasure_pages]
 
-        # Verified by [@ANCHOR: test_gdpr_erasure_posts]
+        # # Verified by [@ANCHOR: test_gdpr_erasure_posts]
         while True:
             pages = self.env["website.page"].search(
                 [("owner_user_id", "=", self.id)], limit=5000
@@ -661,7 +652,7 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["website.page"].browse(pages.ids).unlink()
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update pages: %s", e
                 )
@@ -670,7 +661,7 @@ class ResUsers(models.Model):
                     or "serialization" in str(e).lower()
                     or "deadlock" in str(e).lower()
                 ):
-                    time.sleep(0.5)  # audit-ignore-sleep: Retry backoff
+                    time.sleep(0.5)  # audit-ignore-sleep
                     continue
                 raise
 
@@ -680,7 +671,7 @@ class ResUsers(models.Model):
             if len(pages) < 5000:
                 break
             if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                time.sleep(0.1)  # audit-ignore-sleep
 
         while True:
             posts = self.env["blog.post"].search(
@@ -691,7 +682,7 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["blog.post"].browse(posts.ids).unlink()
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update posts: %s", e
                 )
@@ -700,7 +691,7 @@ class ResUsers(models.Model):
                     or "serialization" in str(e).lower()
                     or "deadlock" in str(e).lower()
                 ):
-                    time.sleep(0.5)  # audit-ignore-sleep: Retry backoff
+                    time.sleep(0.5)  # audit-ignore-sleep
                     continue
                 raise
 
@@ -710,7 +701,7 @@ class ResUsers(models.Model):
             if len(posts) < 5000:
                 break
             if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                time.sleep(0.1)  # audit-ignore-sleep
 
         while True:
             blogs = self.env["blog.blog"].search(
@@ -721,7 +712,7 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["blog.blog"].browse(blogs.ids).unlink()
-            except Exception as e:  # audit-ignore-catch-all
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update blogs: %s", e
                 )
@@ -730,7 +721,7 @@ class ResUsers(models.Model):
                     or "serialization" in str(e).lower()
                     or "deadlock" in str(e).lower()
                 ):
-                    time.sleep(0.5)  # audit-ignore-sleep: Retry backoff
+                    time.sleep(0.5)  # audit-ignore-sleep
                     continue
                 raise
 
@@ -740,7 +731,7 @@ class ResUsers(models.Model):
             if len(blogs) < 5000:
                 break
             if not os.environ.get("ODOO_DISABLE_SLEEPS"):
-                time.sleep(0.1)  # audit-ignore-sleep: Rate limiting background thread
+                time.sleep(0.1)  # audit-ignore-sleep
 
         # ADR-0001: All service account mutations must include appropriate context
         self.with_env(env_svc).write({"privacy_show_in_directory": False})

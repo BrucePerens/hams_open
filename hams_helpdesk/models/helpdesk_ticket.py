@@ -14,7 +14,7 @@ class HelpdeskTicket(models.Model):
 
     # [@ANCHOR: COMM_helpdesk_ticket_lifecycle]
 
-    # Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
+    # # Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
     name = fields.Char(string="Subject", required=True, tracking=True)
     description = fields.Html(string="Description")
     callsign = fields.Char(
@@ -68,6 +68,7 @@ class HelpdeskTicket(models.Model):
         help="Linked calendar event for incident response or scheduled assistance.",
     )
 
+    # # Verified by [@ANCHOR: COMM_test_06_multi_website_awareness_logic]
     website_id = fields.Many2one(
         "website",
         string="Website",
@@ -91,7 +92,7 @@ class HelpdeskTicket(models.Model):
     def create(self, vals_list):
         # [@ANCHOR: COMM_helpdesk_ticket_creation]
 
-        # Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
+        # # Verified by [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
         
         # Calculate on_duty_user_id before bulk creation
         on_duty_user_id = False
@@ -248,7 +249,7 @@ class HelpdeskTicket(models.Model):
         """Opens the formal shift handoff wizard."""
         # [@ANCHOR: COMM_helpdesk_shift_handoff]
 
-        # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
+        # # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
         self.ensure_one()
         return {
             "name": "Formal Shift Handoff",

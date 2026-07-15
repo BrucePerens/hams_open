@@ -32,7 +32,7 @@ class IrHttp(models.AbstractModel):
         # 1. Media & Assets (Max aggressive caching: 1 year)
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
         # as it bypasses Odoo ACLs and causes Edge Cache IDORs for private attachments.
-        # Verified by [@ANCHOR: test_cf_static_asset_caching]
+        # # Verified by [@ANCHOR: test_cf_static_asset_caching]
         if any(
             path.startswith(prefix) for prefix in ("/web/static", "/web/assets")
         ):  # burn-ignore-route  # fmt: skip

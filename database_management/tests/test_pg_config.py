@@ -5,6 +5,9 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
 from psycopg2 import sql
+from unittest.mock import MagicMock
+from contextlib import contextmanager
+from odoo.sql_db import Cursor
 
 
 @tagged("post_install", "-at_install")
@@ -32,11 +35,20 @@ class TestPgConfig(HamsTransactionCase):
                 }
             )
         )
-        # Execute the optimization (mocked to prevent ActiveSqlTransaction and actual config changes)
-        with self.safe_patch_object(type(self.env.cr), "execute") as mock_execute:
-            res = wizard.action_apply_optimizations()
+        mock_cr = MagicMock(spec=Cursor)
+        mock_cr.transaction = MagicMock()
+        
+        @contextmanager
+        def mock_cursor():
+            yield mock_cr
+
+        self.safe_patch_object(self.env.registry, "cursor", side_effect=mock_cursor)
+        res = wizard.action_apply_optimizations()
+            
         msg_client = "[!] DIAGNOSTIC FOR AI: pg.optimize.wizard.action_apply_optimizations should return a client action."
         self.assertEqual(res.get("type"), "ir.actions.client", msg_client)
+
+        mock_execute = mock_cr.execute
 
         # Verify specific calculations
         # 16GB * 0.25 = 4GB = 4096MB

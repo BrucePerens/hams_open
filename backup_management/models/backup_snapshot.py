@@ -34,7 +34,7 @@ class BackupSnapshot(models.Model):
     def _compute_restore_command(self):
         # [@ANCHOR: backup_management:COMM_backup_restore_command]
 
-        # Verified by [@ANCHOR: test_restore_command_computation]
+        # # Verified by [@ANCHOR: test_restore_command_computation]
         for rec in self:
             if not rec.snapshot_id or not rec.config_id:
                 rec.restore_command = ""
