@@ -20,8 +20,39 @@ This behavior is verified by simulating failures in tests `[@ANCHOR: backup_mana
 
 ### Internal Mechanisms (Pending Documentation)
 The following internal mechanisms require full documentation expansion:
-* Apply Policies Overwrite: Handles policy overwrite `[@ANCHOR: backup_management:COMM_action_apply_policies_overwrite]`.
-* Worker Stdout Reading: Processes the stdout from backup worker `[@ANCHOR: backup_management:COMM_backup_worker_stdout_reading]`.
-* Dashboard Tour: Evaluates dashboard UI `[@ANCHOR: backup_management:COMM_backup_dashboard_tour]`.
-* Catch-All Exception Handlers: Handles unhandled daemon exceptions `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_1]`, `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_2]`, `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_3]`.
-* Sleep Rate Limiting: Limits daemon loop execution `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_1]`, `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_2]`, `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_3]`, `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]`.
+* Apply Policies Overwrite: 
+  Handles policy overwrite
+  `[@ANCHOR: backup_management:COMM_action_apply_policies_overwrite]`.
+
+* Worker Stdout Reading: 
+  Processes the stdout from backup worker
+  `[@ANCHOR: backup_management:COMM_backup_worker_stdout_reading]`.
+
+* Dashboard Tour: 
+  Evaluates dashboard UI
+  `[@ANCHOR: backup_management:COMM_backup_dashboard_tour]`.
+
+* Catch-All Exception Handlers: 
+  Handles unhandled daemon exceptions.
+  Primary exception wrapper:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_1]`
+  
+  Secondary worker wrapper:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_2]`
+  
+  Tertiary RPC wrapper:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_catch_all_3]`
+
+* Sleep Rate Limiting: 
+  Limits daemon loop execution.
+  Primary loop sleep:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_1]`
+  
+  Secondary connection retry sleep:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_2]`
+  
+  Tertiary task backoff sleep:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_3]`
+  
+  Quaternary shutdown sleep:
+  `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]`
