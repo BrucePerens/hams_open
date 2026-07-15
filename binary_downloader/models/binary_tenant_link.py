@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
-#
-# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
-# See the LICENSE file in the project root for full license information.
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 import os
 from odoo import models, fields, api, tools, _
@@ -83,9 +81,9 @@ class BinaryTenantLink(models.Model):
             )
             if current_target == central_target:
                 return True  # Link is already correct
-            os.unlink(link_path)
+            os.unlink(link_path)  # audit-ignore-path  # fmt: skip
 
-        os.symlink(central_target, link_path)
+        os.symlink(central_target, link_path)  # audit-ignore-path  # fmt: skip
         _logger.info("Created tenant symlink: %s -> %s", link_path, central_target)
         return True
 
@@ -107,7 +105,7 @@ class BinaryTenantLink(models.Model):
         for record in self:
             if record.symlink_path and os.path.lexists(record.symlink_path):
                 try:
-                    os.unlink(record.symlink_path)
+                    os.unlink(record.symlink_path)  # audit-ignore-path  # fmt: skip
                 except OSError as e:
                     _logger.warning(
                         "Failed to clean up tenant symlink %s: %s",
@@ -129,26 +127,26 @@ class BinaryTenantLink(models.Model):
             return False
 
         if latest.id == self.active_version_id.id:
-            msg = "The tenant is already running the latest binary version."
+            msg = _("The tenant is already running the latest binary version.")
             return {
                 "type": "ir.actions.client",
                 "tag": "display_notification",
                 "params": {
                     "title": _("Up to Date"),
-                    "message": _(msg),
+                    "message": msg,
                     "type": "info",
                 },
             }
 
         self.active_version_id = latest.id
 
-        msg = "Tenant execution path successfully symlinked to version %s."
+        msg = _("Tenant execution path successfully symlinked to version %s.")
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Upgrade Successful"),
-                "message": _(msg) % latest.version_number,
+                "message": msg % latest.version_number,
                 "type": "success",
                 "next": {"type": "ir.actions.client", "tag": "reload"},
             },

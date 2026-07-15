@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
-#
-# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
-# See the LICENSE file in the project root for full license information.
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import hashlib
 import logging
@@ -87,7 +85,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
 
         try:
             head_req = urllib.request.Request(
-                url, headers={"User-Agent": "HAMS-BinaryDownloader/1.0 (+https://yourdomain.com/bot-info)"}, method="HEAD"
+                url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}, method="HEAD"
             )
             try:
                 with urllib.request.urlopen(head_req, timeout=15):
@@ -96,7 +94,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                 _logger.warning("HEAD request failed for %s: %s", url, e)
 
             get_req = urllib.request.Request(
-                url, headers={"User-Agent": "HAMS-BinaryDownloader/1.0 (+https://yourdomain.com/bot-info)"}
+                url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
             )
             tmp_path = None
             try:

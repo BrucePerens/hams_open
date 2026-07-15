@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
-#
-# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
-# See the LICENSE file in the project root for full license information.
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 import os
 from odoo import models, fields, api, tools, _
@@ -66,8 +64,8 @@ class BinaryVersion(models.Model):
             if record.url:
                 url_trimmed = record.url.strip()
                 if not url_trimmed.startswith("https://"):
-                    msg = "Only https:// URLs are allowed for security reasons."
-                    raise ValidationError(_(msg))
+                    msg = _("Only https:// URLs are allowed for security reasons.")
+                    raise ValidationError(msg)
 
     @api.constrains("archive_type", "extract_member")
     def _check_extract_member(self):
@@ -146,11 +144,11 @@ class BinaryVersion(models.Model):
                 comp_id = link.website_id.company_id.id
                 if comp_id not in company_to_vals:
                     company_to_vals[comp_id] = []
-                msg = "New binary version %s is available for %s."
+                msg = _("New binary version %s is available for %s.")
                 company_to_vals[comp_id].append({
                     "source": "binary_update",
                     "severity": "medium",
-                    "description": _(msg) % (self.version_number, self.manifest_id.name),
+                    "description": msg % (self.version_number, self.manifest_id.name),
                     "website_id": link.website_id.id,
                 })
                 
@@ -173,12 +171,12 @@ class BinaryVersion(models.Model):
         checksums = [r.checksum for r in self if r.checksum]
         checksum_counts = {}
         if checksums:
-            manifest_groups = self.env["binary.manifest"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
-            for g in manifest_groups:
-                checksum_counts[g["checksum"]] = g["checksum_count"]
-            version_groups = self.env["binary.version"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
-            for g in version_groups:
-                checksum_counts[g["checksum"]] = checksum_counts.get(g["checksum"], 0) + g["checksum_count"]
+            manifest_groups = self.env["binary.manifest"]._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
+            for checksum, count in manifest_groups:
+                checksum_counts[checksum] = count
+            version_groups = self.env["binary.version"]._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
+            for checksum, count in version_groups:
+                checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
 
         for record in self:
             if record.manifest_id.name and record.checksum:
