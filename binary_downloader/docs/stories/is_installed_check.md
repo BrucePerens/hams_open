@@ -10,4 +10,4 @@ The `_compute_is_installed` method dynamically tracks whether a binary is curren
 4. **State Update:** Updates the `is_installed` boolean field on the `binary.manifest` record.
 
 ## Traceability
-- **Code:** `_compute_is_installed` in `models/binary_manifest.py` `[@ANCHOR: binary_compute_installed]`
+- **Code:** `_compute_is_installed` in `models/binary_manifest.py` `[@ANCHOR: COMM_binary_compute_installed]`

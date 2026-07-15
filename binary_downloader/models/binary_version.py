@@ -155,6 +155,7 @@ class BinaryVersion(models.Model):
             for comp_id, vals in company_to_vals.items():
                 IncidentModel.with_company(comp_id).create(vals)
                 
+            self.env.cr.commit()
             offset += limit
             
         return {
@@ -170,16 +171,17 @@ class BinaryVersion(models.Model):
     def unlink(self):
         checksums = [r.checksum for r in self if r.checksum]
         checksum_counts = {}
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("binary_downloader.user_binary_downloader_service")
         if checksums:
-            manifest_groups = self.env["binary.manifest"]._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
+            manifest_groups = self.env["binary.manifest"].with_user(svc_uid)._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
             for checksum, count in manifest_groups:
                 checksum_counts[checksum] = count
-            version_groups = self.env["binary.version"]._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
+            version_groups = self.env["binary.version"].with_user(svc_uid)._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
             for checksum, count in version_groups:
                 checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
 
         for record in self:
             if record.manifest_id.name and record.checksum:
                 if checksum_counts.get(record.checksum, 0) <= 1:
-                    self.env["binary_downloader.mixin"]._unlink_binary_file(record.manifest_id.name, record.checksum)
+                    self.env["binary_downloader.mixin"].with_user(svc_uid)._unlink_binary_file(record.manifest_id.name, record.checksum)
         return super().unlink()

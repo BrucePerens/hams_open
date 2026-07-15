@@ -5,9 +5,6 @@
 import os
 import json
 import time
-import hmac
-import hashlib
-import secrets
 import shutil
 import pika
 import subprocess
@@ -22,13 +19,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("backup_worker")
 
-ODOO_HOST = os.environ.get("ODOO_HOST", "localhost")
+ODOO_HOST = os.environ.get("ODOO_HOST", "odoo")
 ODOO_URL = os.environ.get("ODOO_URL", f"http://{ODOO_HOST}:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
 ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
@@ -38,7 +35,6 @@ class OdooAPIError(Exception):
 
 
 def _json2_call(model, method_name, svc_uid=None, **kwargs):
-    timestamp = str(int(time.time()))
     payload_str = json.dumps(kwargs)
 
     headers = {

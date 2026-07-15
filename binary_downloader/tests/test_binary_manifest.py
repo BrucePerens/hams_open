@@ -72,7 +72,7 @@ class TestBinaryManifest(HamsTransactionCase):
 
         # Tests [@ANCHOR: binary_ensure_executable]
 
-        # Tests [@ANCHOR: binary_resolution]
+        # Tests [@ANCHOR: COMM_binary_resolution]
         # [!] DIAGNOSTIC FOR AI: Testing resolution when binary already exists in hams_bin.
 
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
@@ -140,7 +140,7 @@ class TestBinaryManifest(HamsTransactionCase):
             )
 
     def test_05_views_render(self):
-        # [@ANCHOR: test_binary_manifest_views]
+        # [@ANCHOR: COMM_test_binary_manifest_views]
         v1 = self.env["binary.manifest"].get_view(view_type="list")
         self.assertIn(
             "name",
@@ -565,7 +565,7 @@ class TestBinaryManifest(HamsTransactionCase):
         })
 
         chksum = "escalation_test_hash"
-        global_manifest = self.env["binary.manifest"].create({
+        self.env["binary.manifest"].create({
             "name": "globalbin",
             "url": "https://example.com/globalbin",
             "checksum": chksum,

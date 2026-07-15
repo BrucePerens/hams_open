@@ -9,6 +9,6 @@ The `action_install` method allows administrators to manually trigger the downlo
 3. **Feedback:** Upon successful completion, it returns a client-side notification to inform the user that the binary was successfully installed.
 
 ## Traceability
-- **Code:** `action_install` in `models/binary_manifest.py` `[@ANCHOR: binary_action_install]`
+- **Code:** `action_install` in `models/binary_manifest.py` `[@ANCHOR: COMM_binary_action_install]`
 
-- **View:** `view_binary_downloader_manifest_list` and `view_binary_downloader_manifest_form` in `views/binary_manifest_views.xml` `[@ANCHOR: test_binary_manifest_views]`, `[@ANCHOR: binary_downloader:UX_BINARY_INSTALL]`
+- **View:** `view_binary_downloader_manifest_list` and `view_binary_downloader_manifest_form` in `views/binary_manifest_views.xml` `[@ANCHOR: COMM_test_binary_manifest_views]`, `[@ANCHOR: binary_downloader:UX_BINARY_INSTALL]`

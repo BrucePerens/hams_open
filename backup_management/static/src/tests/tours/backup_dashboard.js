@@ -52,16 +52,13 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             run: 'click',
         },
         {
-            trigger: '.o_select_menu_item:contains("Kopia")',
+            trigger: '.o_select_menu_item[data-value="kopia"]',
             content: "Select Kopia engine value",
             run: 'click',
         },
         {
             trigger: 'div[name="target_path"] input, input[id="target_path"]',
-            run: function () {
-                this.value = '/var/lib/odoo/backups/tour_repo';
-                this.dispatchEvent(new Event('change', { bubbles: true }));
-            },
+            run: "edit /var/lib/odoo/backups/tour_repo",
             content: "Enter target path",
         },
         {

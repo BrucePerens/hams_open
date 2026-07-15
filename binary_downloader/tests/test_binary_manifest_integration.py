@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 from odoo import tools
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install", "integration")
@@ -84,7 +85,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         )
 
     def test_pure_python_symlink_engine(self):
-        # Tests [@ANCHOR: pure_python_symlink_engine]
+        # Tests [@ANCHOR: COMM_pure_python_symlink_engine]
         website = self.env["website"].search([], limit=1)
         if not website:
             website = self.env["website"].create({"name": "Test Tenant"})
@@ -129,6 +130,9 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             "/fake/central/path",
             link.symlink_path,
         )
+
+@tagged("post_install", "-at_install", "integration")
+class TestBinaryManifestReal(RealTransactionCase):
 
     def test_pager_integration_batching(self):
         # [!] DIAGNOSTIC FOR AI: Testing that PagerDuty notification batches iteratively.
@@ -192,4 +196,5 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         self.assertTrue(len(call_limits) >= 2, "[!] DIAGNOSTIC FOR AI: Search was not called in a batched loop")
         self.assertTrue(any(offset > 0 for offset, limit in call_limits), "[!] DIAGNOSTIC FOR AI: Offset was not incremented")
         self.assertTrue(mock_incident_create.called, "[!] DIAGNOSTIC FOR AI: Pager incidents should be created")
+
 

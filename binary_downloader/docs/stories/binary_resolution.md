@@ -17,11 +17,11 @@ The `ensure_executable` function is the core of the `binary_downloader` module. 
 9. **Return Path:** Returns the absolute path to the verified executable.
 
 ## Tenant Symlink Isolation
-To support multi-tenancy, each tenant receives an isolated execution path. The system utilizes a pure Python symlink engine (`[@ANCHOR: pure_python_symlink_engine]`) to create OS-level symlinks pointing from the tenant's isolated directory to the central version pool. This ensures tenants can be upgraded independently without duplicating binary payloads on disk.
+To support multi-tenancy, each tenant receives an isolated execution path. The system utilizes a pure Python symlink engine (`[@ANCHOR: COMM_pure_python_symlink_engine]`) to create OS-level symlinks pointing from the tenant's isolated directory to the central version pool. This ensures tenants can be upgraded independently without duplicating binary payloads on disk.
 
 ## Traceability
-- **Code:** `ensure_executable` in `models/binary_manifest.py` `[@ANCHOR: binary_ensure_executable]`
+- **Code:** `ensure_executable` in `models/binary_manifest.py` `[@ANCHOR: COMM_binary_ensure_executable]`
 
-- **Code:** `apply_symlink` in `models/binary_tenant_link.py` `[@ANCHOR: pure_python_symlink_engine]`
+- **Code:** `apply_symlink` in `models/binary_tenant_link.py` `[@ANCHOR: COMM_pure_python_symlink_engine]`
 
-- **Anchor:** `[@ANCHOR: binary_resolution]`
+- **Anchor:** `[@ANCHOR: COMM_binary_resolution]`

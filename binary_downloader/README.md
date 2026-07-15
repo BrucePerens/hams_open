@@ -1,6 +1,7 @@
 # Binary Downloader Module (`binary_downloader`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Copyright © Bruce Perens K6BP.*
+SPDX-License-Identifier: AGPL-3.0-or-later
 
 The **Binary Downloader** is a secure, database-backed orchestration module designed to provide static executable dependencies (e.g., `kopia`, `etcd`, `cloudflared`) to other Odoo subsystems. It implements a robust lifecycle management system for external tools while maintaining strict security standards.
 
@@ -50,10 +51,11 @@ In a multi-tenant environment, you can assign specific versions of software to d
 ## 2. API Reference
 
 ### `binary.manifest` model
+**Import Path:** `odoo.addons.binary_downloader.models.binary_manifest`
 The primary interface for dependency resolution.
 
 #### `ensure_executable(cmd_name)`
-`[@ANCHOR: binary_ensure_executable]`
+`[@ANCHOR: COMM_binary_ensure_executable]`
 
 Resolves and ensures a binary is available and executable. Returns the absolute path to the binary. It first checks the system `PATH`, then Odoo's private binary directory (`hams_bin`). If not found, it attempts an automatic download and installation.
 
@@ -68,12 +70,12 @@ Resolves and ensures a binary is available and executable. Returns the absolute 
 - `UserError`: If the manifest is missing, the platform is unsupported, or checksum/integrity checks fail.
 
 #### `_compute_is_installed()`
-`[@ANCHOR: binary_compute_installed]`
+`[@ANCHOR: COMM_binary_compute_installed]`
 
 Tracks whether a binary is available in the system `PATH` or `hams_bin` and has appropriate execution permissions.
 
 #### `action_install()`
-`[@ANCHOR: binary_action_install]`
+`[@ANCHOR: COMM_binary_action_install]`
 
 Triggers manual installation via the UI.
 
@@ -87,10 +89,10 @@ Triggers manual installation via the UI.
 ```python
 # To be called by other modules needing a binary dependency
 bin_path = self.env["binary.manifest"].ensure_executable("kopia")
-# Verified by [@ANCHOR: test_binary_manifest_standard]
+# Verified by [@ANCHOR: COMM_test_binary_manifest_standard]
 
-# Verified by [@ANCHOR: test_binary_manifest_integration]
-subprocess.run([bin_path, "--version"], check=True)
+# Verified by [@ANCHOR: COMM_test_binary_manifest_integration]
+subprocess.run([bin_path, "--version"], check=True, shell=False)
 ```
 </usage>
 
@@ -110,17 +112,21 @@ For detailed narratives and end-to-end workflows, refer to the following:
 
 <semantic_anchors>
 ## 5. Semantic Anchors
-- `[@ANCHOR: binary_ensure_executable]` - Core binary resolution method.
+- `[@ANCHOR: COMM_binary_ensure_executable]` - Core binary resolution method.
 
-- `[@ANCHOR: binary_compute_installed]` - Installation status computation.
+- `[@ANCHOR: COMM_binary_compute_installed]` - Installation status computation.
 
-- `[@ANCHOR: binary_action_install]` - UI installation trigger.
+- `[@ANCHOR: COMM_binary_action_install]` - UI installation trigger.
 
-- `[@ANCHOR: UX_BINARY_INSTALL]` - UI elements for installation.
+- `[@ANCHOR: binary_downloader:UX_BINARY_INSTALL]` - UI elements for installation.
 
-- `[@ANCHOR: test_binary_manifest_standard]` - Standard unit tests.
+- `[@ANCHOR: COMM_test_binary_manifest_standard]` - Standard unit tests.
 
-- `[@ANCHOR: test_binary_manifest_integration]` - Unmocked physical integration tests.
+- `[@ANCHOR: COMM_test_binary_manifest_integration]` - Unmocked physical integration tests.
+
+- `[@ANCHOR: COMM_pure_python_symlink_engine]` - Pure Python symlink engine.
+
+- `[@ANCHOR: COMM_binary_resolution]` - Binary resolution tenant isolation.
 
 - `[@ANCHOR: test_binary_install_tour]` - UI tour for binary installation.
 

@@ -70,7 +70,7 @@ class BinaryTenantLink(models.Model):
         link_path = self.symlink_path
         tenant_dir = os.path.dirname(link_path)
 
-        # [@ANCHOR: pure_python_symlink_engine]
+        # [@ANCHOR: COMM_pure_python_symlink_engine]
         if not os.path.exists(tenant_dir):
             os.makedirs(tenant_dir, exist_ok=True)
             os.chmod(tenant_dir, 0o750)

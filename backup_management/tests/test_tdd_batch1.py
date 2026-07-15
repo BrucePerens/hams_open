@@ -168,7 +168,6 @@ class TestTddBatch1(RealTransactionCase):
         self.env.cr.commit()
 
         # Write a dummy script to bypass validation
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         script_path = os.path.join(self.scripts_dir, "valid.py")
         with open(script_path, "w") as f:
             f.write("#!/usr/bin/env python3\nprint('ok')\n")

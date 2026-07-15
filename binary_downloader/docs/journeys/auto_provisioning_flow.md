@@ -15,7 +15,7 @@ The calling module invokes the API:
 ```python
 bin_path = self.env["binary.manifest"].ensure_executable("kopia")
 ```
-- **Anchor:** `[@ANCHOR: binary_ensure_executable]`
+- **Anchor:** `[@ANCHOR: COMM_binary_ensure_executable]`
 
 ### 2. Resolution
 Binary Downloader checks the system. If `kopia` is not in the PATH, it looks up the `binary.manifest` record.
@@ -31,7 +31,7 @@ If the local cache in `the Odoo data directory (e.g., /var/lib/odoo/hams_bin/)` 
 ### 4. Execution
 The calling module receives the absolute path and executes the binary.
 ```python
-subprocess.run([bin_path, "--version"], check=True)
+subprocess.run([bin_path, "--version"], check=True, shell=False)
 ```
 
 ## Summary

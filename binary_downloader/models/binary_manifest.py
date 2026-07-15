@@ -133,7 +133,7 @@ class BinaryManifest(models.Model):
     def ensure_executable(self, cmd_name):
         # [@ANCHOR: binary_ensure_executable]
 
-        # [@ANCHOR: binary_resolution]
+        # [@ANCHOR: COMM_binary_resolution]
 
         # # Verified by [@ANCHOR: test_binary_manifest_standard]
         if (
@@ -180,8 +180,11 @@ class BinaryManifest(models.Model):
     def unlink(self):
         checksums = [r.checksum for r in self if r.checksum]
         checksum_counts = {}
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "binary_downloader.user_binary_downloader_service"
+        )
         if checksums:
-            manifest_groups = self.env["binary.manifest"]._read_group(
+            manifest_groups = self.env["binary.manifest"].with_user(svc_uid)._read_group(
                 [("checksum", "in", checksums)],
                 groupby=["checksum"],
                 aggregates=["__count"]
@@ -189,7 +192,7 @@ class BinaryManifest(models.Model):
             for checksum, count in manifest_groups:
                 checksum_counts[checksum] = count
 
-            version_groups = self.env["binary.version"]._read_group(
+            version_groups = self.env["binary.version"].with_user(svc_uid)._read_group(
                 [("checksum", "in", checksums)],
                 groupby=["checksum"],
                 aggregates=["__count"]
@@ -197,9 +200,7 @@ class BinaryManifest(models.Model):
             for checksum, count in version_groups:
                 checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
 
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "binary_downloader.user_binary_downloader_service"
-        )
+
         for record in self:
             if record.name and record.checksum:
                 if checksum_counts.get(record.checksum, 0) <= 1:
