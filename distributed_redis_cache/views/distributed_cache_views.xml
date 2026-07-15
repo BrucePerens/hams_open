@@ -3,13 +3,14 @@
 <odoo>
     <data>
         <record id="view_distributed_cache_config_form" model="ir.ui.view">
+            <!-- Tour: distributed_cache_admin_tour -->
             <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_distributed_cache_view] -->
             <field name="name">distributed.cache.config.form</field>
             <field name="model">distributed.cache.config</field>
             <field name="arch" type="xml">
                 <form string="Distributed Cache Manager">
                     <group>
-                        <field name="model_id" options="{'no_create': True}"/>
+                        <field name="model_id" required="1" options="{'no_create': True}"/>
                     </group>
                     <footer>
                         <button string="Invalidate Model Cache" type="object" name="action_invalidate_model_cache" class="btn btn-primary"/>
