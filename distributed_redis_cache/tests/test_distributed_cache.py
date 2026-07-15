@@ -96,7 +96,7 @@ class TestDistributedCacheTour(HamsHttpCase):
                 login="admin",
                 timeout=240,
             )
-        except (KeyError, ValueError) as e:
+        except AssertionError as e:
             # [!] DIAGNOSTIC FOR AI: UI Tour 'distributed_cache_admin_tour' failed.
             _logger.error("Tour failed: %s", e)
             raise e
@@ -108,5 +108,16 @@ class TestDistributedCacheTour(HamsHttpCase):
 
     # Tests [@ANCHOR: COMM_redis_cache_interceptor]
     def test_redis_cache_interceptor(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+        
+        class DummyModel:
+            def __init__(self):
+                self._name = "dummy"
+                self.env = type("Env", (), {"cr": type("cr", (), {"dbname": "test"}), "context": {}})()
+                
+            @distributed_cache()
+            def test_method(self, x):
+                return x * 2
+
+        obj = DummyModel()
+        self.assertEqual(obj.test_method(5), 10, "Decorator should return the correct value")
