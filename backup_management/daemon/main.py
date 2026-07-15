@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
-# This software is released under the AGPL-3.0 License.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import os
 import json
 import time
@@ -56,7 +56,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
         try:
             err_body = e.read().decode("utf-8")
         except Exception as exc: # audit-ignore-catch-all: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_1]
-            logger.warning("Could not decode response body: %s", exc)
+            logger.exception("Could not decode response body: %s", exc)
             err_body = "Could not decode response body."
         raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
     except (urllib.error.URLError, json.JSONDecodeError) as e:
@@ -172,8 +172,10 @@ def execute_job(ch, method, properties, body):
                 # Kopia restore usually takes a target path as the last argument
                 # Odoo-side validation already checks this, but we reinforce here.
                 # Expected: ['kopia', 'restore', <snap_id>, <target_path>]
-                if len(cmd) < 4:
-                    raise ValueError(f"Insufficient arguments for kopia restore: {cmd}")
+                if len(cmd) != 4 or cmd[1] != "restore":
+                    raise ValueError(f"Invalid arguments for kopia restore: {cmd}")
+                if cmd[2].startswith("-"):
+                    raise PermissionError(f"Malicious snap_id detected: {cmd[2]}")
                 target_path_arg = cmd[-1]
                 # Re-validate the path in the worker context
                 if (
@@ -196,17 +198,18 @@ def execute_job(ch, method, properties, body):
             elif cmd[0] == "pgbackrest":
                 # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
                 # Ensure no dangerous flags are injected
-                for arg in cmd:
-                    if arg.startswith("--stanza="):
-                        val = arg.split("=", 1)[1]
-                        if not re.match(r"^[a-zA-Z0-9_]+$", val):
-                            raise PermissionError(f"Invalid stanza name in worker: {val}")
-                    if arg.startswith("--") and "=" in arg:
-                        key, val = arg.split("=", 1)
-                        if not re.match(r"^[a-zA-Z0-9_.:-]+$", val):
-                            raise PermissionError(
-                                f"Malicious argument detected in worker: {arg}"
-                            )
+                if len(cmd) < 2 or cmd[1] != "restore":
+                    raise ValueError(f"Invalid pgbackrest command: {cmd}")
+                for arg in cmd[2:]:
+                    if not arg.startswith("--") or "=" not in arg:
+                        raise PermissionError(f"Invalid argument format in worker: {arg}")
+                    key, val = arg.split("=", 1)
+                    if key == "--stanza" and not re.match(r"^[a-zA-Z0-9_]+$", val):
+                        raise PermissionError(f"Invalid stanza name in worker: {val}")
+                    elif not re.match(r"^[a-zA-Z0-9_.:-]+$", val):
+                        raise PermissionError(
+                            f"Malicious argument detected in worker: {arg}"
+                        )
 
         if not cmd:
             raise ValueError(f"No command generated for engine: {engine}")
@@ -292,7 +295,7 @@ def execute_job(ch, method, properties, body):
                     data = json.loads(json_str)
                     _json2_call(
                         "backup.config",
-                        "_process_snapshot_data",
+                        "action_process_snapshot_data",
                         svc_uid=svc_uid,
                         ids=[config_id],
                         data=data,

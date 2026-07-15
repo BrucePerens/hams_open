@@ -44,7 +44,7 @@ class TestTddBatch1(RealTransactionCase):
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
         creds = pika.PlainCredentials(
             os.environ.get("RMQ_USER", "guest"),
-            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]
+            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]  # fmt: skip
         )
         self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=rmq_host, credentials=creds))  # burn-ignore-pika: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]
         self.channel = self.conn.channel()
@@ -235,6 +235,7 @@ class TestTddBatch1(RealTransactionCase):
         with open(doc_path, "r") as f:
             doc_content = f.read()
         self.assertIn('id="COMM_UX_BACKUP_SYNC"', doc_content)
+        self.assertIn('data-trace="[@ANCHOR: backup_management:COMM_UX_BACKUP_SYNC]"', doc_content)
         self.assertNotIn('id="backup-sync-section"', doc_content)
         
         hooks_path = os.path.join(base_path, "hooks.py")
