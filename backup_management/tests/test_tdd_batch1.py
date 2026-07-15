@@ -30,6 +30,7 @@ class TestTddBatch1(RealTransactionCase):
         self.env["daemon.key.registry"].with_user(admin_uid).action_force_provision_all()
         self.env.cr.commit()
 
+        import tempfile
         env_vars = {}
         env_vars["DB_NAME"] = self.env.cr.dbname
         env_file = "/opt/hams/etc/keys/backup_worker.env"
@@ -39,6 +40,9 @@ class TestTddBatch1(RealTransactionCase):
                     if line.startswith("ODOO_RPC_KEY="):
                         env_vars["ODOO_SERVICE_PASSWORD"] = line.strip().split("=", 1)[1]
 
+        self.scripts_dir = tempfile.mkdtemp()
+        env_vars["BACKUP_WORKER_SCRIPTS_DIR"] = self.scripts_dir
+        
         self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
 
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
@@ -97,7 +101,7 @@ class TestTddBatch1(RealTransactionCase):
         self._wait_for_job(job)
         
         self.assertEqual(job.state, "failed")
-        self.assertIn("PermissionError", job.output_log)
+        self.assertIn("Malicious path outside allowed base directory", job.output_log)
 
         job.unlink()
         config.unlink()
@@ -123,7 +127,7 @@ class TestTddBatch1(RealTransactionCase):
         self._wait_for_job(job)
         
         self.assertEqual(job.state, "failed")
-        self.assertIn("PermissionError", job.output_log)
+        self.assertIn("Malicious argument detected in worker", job.output_log)
 
         job.unlink()
         config.unlink()
@@ -165,9 +169,7 @@ class TestTddBatch1(RealTransactionCase):
 
         # Write a dummy script to bypass validation
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        scripts_dir = os.path.join(base_dir, "daemon", "scripts")
-        os.makedirs(scripts_dir, exist_ok=True)
-        script_path = os.path.join(scripts_dir, "valid.py")
+        script_path = os.path.join(self.scripts_dir, "valid.py")
         with open(script_path, "w") as f:
             f.write("#!/usr/bin/env python3\nprint('ok')\n")
         os.chmod(script_path, 0o755)

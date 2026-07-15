@@ -39,18 +39,12 @@ class OdooAPIError(Exception):
 
 def _json2_call(model, method_name, svc_uid=None, **kwargs):
     timestamp = str(int(time.time()))
-    nonce = secrets.token_hex(16)
     payload_str = json.dumps(kwargs)
-    message = f"{timestamp}|{nonce}|{payload_str}".encode("utf-8")
-    signature = hmac.new(ODOO_PASS.encode("utf-8"), message, hashlib.sha256).hexdigest()
 
     headers = {
         "X-Odoo-Database": ODOO_DB,
         "Content-Type": "application/json",
-        "X-Auth-User": ODOO_USER,
-        "X-Auth-Timestamp": timestamp,
-        "X-Auth-Nonce": nonce,
-        "X-Auth-Signature": signature,
+        "Authorization": f"Bearer {ODOO_PASS}",
     }
     if svc_uid:
         headers["X-Odoo-Service-Uid"] = str(svc_uid)
@@ -153,7 +147,7 @@ def execute_job(ch, method, properties, body):
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
         elif engine == "restore_drill":
             script_path = payload.get("script")
-            allowed_base = "/opt/odoo/daemons/backup_worker/scripts"
+            allowed_base = os.environ.get("BACKUP_WORKER_SCRIPTS_DIR", "/opt/odoo/daemons/backup_worker/scripts")
             try:
                 abs_script_path = os.path.realpath(os.path.normpath(script_path)) if script_path else ""
             except OSError:

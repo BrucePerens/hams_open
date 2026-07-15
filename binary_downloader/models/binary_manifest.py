@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
-#
-# This file is part of the HAMS project and is licensed under the AGPL-3.0 license.
-# See the LICENSE file in the project root for full license information.
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 import os
 import shutil
@@ -49,23 +47,26 @@ class BinaryManifest(models.Model):
             if record.url:
                 url_trimmed = record.url.strip()
                 if not url_trimmed.startswith("https://"):
-                    msg = "Only https:// URLs are allowed for security reasons."
-                    raise ValidationError(_(msg))
+                    msg = _("""Only https:// URLs are allowed for security reasons.""")
+                    raise ValidationError(msg)
 
     is_installed = fields.Boolean(string="Installed", compute="_compute_is_installed")
 
-    _name_uniq = models.Constraint("UNIQUE(name, company_id)", "The binary name must be unique per company!")
-    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The binary name cannot be empty.")
-    _url_not_empty = models.Constraint("CHECK(LENGTH(TRIM(url)) > 0)", "The download URL cannot be empty.")
-    _chksum_not_empty = models.Constraint("CHECK(LENGTH(TRIM(checksum)) > 0)", "The checksum cannot be empty.")
+    _msg_name_uniq = """The binary name must be unique per company!"""
+    _name_uniq = models.Constraint("UNIQUE(name, company_id)", _msg_name_uniq)
+    _msg_name_not_empty = """The binary name cannot be empty."""
+    _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", _msg_name_not_empty)
+    _msg_url_not_empty = """The download URL cannot be empty."""
+    _url_not_empty = models.Constraint("CHECK(LENGTH(TRIM(url)) > 0)", _msg_url_not_empty)
+    _msg_chksum_not_empty = """The checksum cannot be empty."""
+    _chksum_not_empty = models.Constraint("CHECK(LENGTH(TRIM(checksum)) > 0)", _msg_chksum_not_empty)
 
     @api.constrains("name")
     def _check_name_no_slashes(self):
         for record in self:
             if "/" in record.name or "\\" in record.name:
-                raise ValidationError(
-                    _("The binary name cannot contain slashes or backslashes.")
-                )
+                msg = _("""The binary name cannot contain slashes or backslashes.""")
+                raise ValidationError(msg)
             if record.name in (".", ".."):
                 raise ValidationError(_("The binary name cannot be '.' or '..'."))
 
@@ -73,10 +74,8 @@ class BinaryManifest(models.Model):
     def _check_extract_member(self):
         for record in self:
             if record.archive_type in ("tar.gz", "zip") and not record.extract_member:
-                raise ValidationError(
-                    _("Extract Member is required for %s archives.")
-                    % record.archive_type
-                )
+                msg = _("""Extract Member is required for %s archives.""")
+                raise ValidationError(msg % record.archive_type)
 
     @api.depends("name", "checksum", "archive_type", "extract_member")
     def _compute_is_installed(self):
@@ -112,17 +111,18 @@ class BinaryManifest(models.Model):
             self.env.user.has_group("binary_downloader.group_binary_downloader_manager")
             or self.env.is_admin()
         ):
-            msg = "You do not have sufficient permissions to install binaries."
-            raise UserError(_(msg))
+            msg = _("""You do not have sufficient permissions to install binaries.""")
+            raise UserError(msg)
 
         self.ensure_executable(self.name)
 
+        msg_success = _("""Installation of %s completed successfully.""")
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Success"),
-                "message": _("Installation of %s completed successfully.") % self.name,
+                "message": msg_success % self.name,
                 "sticky": False,
                 "type": "success",
                 "next": {"type": "ir.actions.client", "tag": "reload"},
@@ -151,25 +151,21 @@ class BinaryManifest(models.Model):
         )
 
         # Strict Multi-Tenant Resolution: Current Company -> Global Fallback
-        manifest_record = (
+        manifest_records = (
             self.env["binary.manifest"]
             .with_user(svc_uid)
-            .with_company(self.env.company)
-            .search(
-                [("name", "=", cmd_name), ("company_id", "=", self.env.company.id)],
-                limit=1,
-            )
+            .search([
+                ("name", "=", cmd_name), 
+                ("company_id", "in", [self.env.company.id, False])
+            ], limit=2)
         )
+        manifest_record = manifest_records.filtered(lambda r: r.company_id.id == self.env.company.id)
         if not manifest_record:
-            manifest_record = (
-                self.env["binary.manifest"]
-                .with_user(svc_uid)
-                .search([("name", "=", cmd_name), ("company_id", "=", False)], limit=1)
-            )
+            manifest_record = manifest_records.filtered(lambda r: not r.company_id)
 
         if not manifest_record:
-            msg = "Missing dependency: '%s'. Please configure it in Settings -> Technical -> Binary Manifests or install via OS package manager."
-            raise UserError(_(msg) % cmd_name)
+            msg = _("""Missing dependency: '%s'. Please configure it in Settings -> Technical -> Binary Manifests or install via OS package manager.""")
+            raise UserError(msg % cmd_name)
 
 
         return self.env["binary_downloader.mixin"].with_user(svc_uid)._download_and_extract(
@@ -185,15 +181,27 @@ class BinaryManifest(models.Model):
         checksums = [r.checksum for r in self if r.checksum]
         checksum_counts = {}
         if checksums:
-            manifest_groups = self.env["binary.manifest"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
-            for g in manifest_groups:
-                checksum_counts[g["checksum"]] = g["checksum_count"]
-            version_groups = self.env["binary.version"].read_group([("checksum", "in", checksums)], ["checksum"], ["checksum"])
-            for g in version_groups:
-                checksum_counts[g["checksum"]] = checksum_counts.get(g["checksum"], 0) + g["checksum_count"]
+            manifest_groups = self.env["binary.manifest"]._read_group(
+                [("checksum", "in", checksums)],
+                groupby=["checksum"],
+                aggregates=["__count"]
+            )
+            for checksum, count in manifest_groups:
+                checksum_counts[checksum] = count
 
+            version_groups = self.env["binary.version"]._read_group(
+                [("checksum", "in", checksums)],
+                groupby=["checksum"],
+                aggregates=["__count"]
+            )
+            for checksum, count in version_groups:
+                checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "binary_downloader.user_binary_downloader_service"
+        )
         for record in self:
             if record.name and record.checksum:
                 if checksum_counts.get(record.checksum, 0) <= 1:
-                    self.env["binary_downloader.mixin"]._unlink_binary_file(record.name, record.checksum)
+                    self.env["binary_downloader.mixin"].with_user(svc_uid)._unlink_binary_file(record.name, record.checksum)
         return super().unlink()

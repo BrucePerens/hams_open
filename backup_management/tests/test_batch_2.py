@@ -14,6 +14,7 @@ class TestBatch2Fixes(HamsTransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.env.user.groups_id |= cls.env.ref("backup_management.group_backup_admin")
         cls.config1 = cls.env["backup.config"].create({
             "name": "Config 1",
             "engine": "kopia",
@@ -102,7 +103,8 @@ class TestBatch2Fixes(HamsTransactionCase):
 
     def test_payload_publisher_variables(self):
         with self.safe_patch("odoo.addons.backup_management.models.backup_config.publish_to_rabbitmq") as mock_pub:
-            self.config1.action_trigger_backup()
+            self.config1.with_env(self.env).action_trigger_backup()
+            print("Postcommit funcs:", self.env.cr.postcommit._funcs)
             self.env.cr.postcommit.run()
             
             mock_pub.assert_called_once()

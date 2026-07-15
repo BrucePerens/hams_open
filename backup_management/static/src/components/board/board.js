@@ -1,6 +1,6 @@
 /** @odoo-module **/
 /* Copyright © Bruce Perens K6BP. All Rights Reserved.
- * This software is released under the AGPL-3.0 License.
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { Component, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";

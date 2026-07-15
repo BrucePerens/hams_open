@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
-# This software is released under the AGPL-3.0 License.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 from odoo import models, fields, _
 from odoo.exceptions import UserError, AccessError
@@ -26,7 +26,7 @@ class BackupRestoreWizard(models.TransientModel):
         # [@ANCHOR: COMM_backup_trigger_restore]
 
         # # Verified by [@ANCHOR: COMM_test_restore_action]
-        if not self.env.su and not self.env.user.has_group("backup_management.group_backup_admin"):
+        if not self.env.user.has_group("backup_management.group_backup_admin"):
             raise AccessError(
                 _("Only Backup Administrators can trigger restore operations.")
             )

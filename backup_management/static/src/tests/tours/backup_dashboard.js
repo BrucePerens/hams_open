@@ -1,6 +1,6 @@
 /** @odoo-module **/
 /* Copyright © Bruce Perens K6BP. All Rights Reserved.
- * This software is released under the AGPL-3.0 License.
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 // Tests [@ANCHOR: COMM_backup_dashboard_tour]
@@ -52,22 +52,9 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             run: 'click',
         },
         {
-            trigger: '.o_select_menu_item',
+            trigger: '.o_select_menu_item:contains("Kopia")',
             content: "Select Kopia engine value",
-            run: function () {
-                const items = document.querySelectorAll('.o_select_menu_item');
-                let found = false;
-                for (const item of items) {
-                    if (item.textContent.includes('Kopia')) {
-                        item.click();
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    throw new Error("Kopia engine option not found in dropdown.");
-                }
-            }
+            run: 'click',
         },
         {
             trigger: 'div[name="target_path"] input, input[id="target_path"]',
