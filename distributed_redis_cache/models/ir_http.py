@@ -30,7 +30,10 @@ class IrHttp(models.AbstractModel):
             try:
                 r = get_redis_connection(request.env)
                 latest = r.get("global_cache_invalidation_counter")
-                last_counter = getattr(cls, '_last_cache_counter', None)
+                try:
+                    last_counter = cls._last_cache_counter
+                except (KeyError, ValueError):
+                    last_counter = None
                     
                 if latest and latest != last_counter:
                     with LRU_LOCK:

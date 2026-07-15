@@ -1,4 +1,5 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import logging
@@ -50,9 +51,8 @@ class DistributedCacheConfig(models.TransientModel):
 
         # Removed test_mode bypass to satisfy test fidelity mandates.
 
-        status_msg = _(
-            "Redis connection is not configured or unavailable. Local fallback cache is active."
-        )
+        fallback_msg = """Redis connection is not configured or unavailable. Local fallback cache is active."""
+        status_msg = _(fallback_msg)
         msg_type = "warning"
 
         if use_redis:
@@ -63,7 +63,7 @@ class DistributedCacheConfig(models.TransientModel):
                 msg_type = "success"
             except redis.RedisError as e:
                 _logger.warning("Redis connection check failed: %s", e)
-                status_msg = _("Redis connection failed: %s", e)
+                status_msg = _("Redis connection failed: %s") % e
                 msg_type = "danger"
 
         return {
