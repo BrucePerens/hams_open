@@ -1,4 +1,4 @@
-<!-- Copyright © Bruce Perens K6BP. AGPL-3.0. -->
+<!-- Copyright © Bruce Perens K6BP. SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 # Journey: Request Caching Lifecycle
 
