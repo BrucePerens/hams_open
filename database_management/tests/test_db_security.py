@@ -69,7 +69,6 @@ class TestDbSecurity(HamsTransactionCase):
 
     def test_01_security(self):
         # Tests [@ANCHOR: COMM_db_security_prefetch]
-        # Tests [@ANCHOR: COMM_db_doc_injection]
         self.assertIn("database.table.stat", self.env)
         """
         BDD: Given ADR-0050 Proxy Ownership IDOR (Multi-Persona Mandate)

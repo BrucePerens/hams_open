@@ -96,7 +96,7 @@ class TestDatabaseManagement(HamsTransactionCase):
         self.assertIn("database.activity", self.env)
 
     def test_04_views(self):
-        # Tests [@ANCHOR: COMM_COMM_test_dba_view]
+        # Tests [@ANCHOR: COMM_test_dba_view]
 
         # Tests [@ANCHOR: COMM_db_index_stats]
 
@@ -115,11 +115,11 @@ class TestDatabaseManagement(HamsTransactionCase):
         v4 = self.env["database.index.stat"].get_view(view_type="list")
         self.assertIn("index_name", v4["arch"])
 
-        # Tests [@ANCHOR: COMM_COMM_db_replication_stats]
+        # Tests [@ANCHOR: COMM_db_replication_stats]
         v5 = self.env["database.replication.stat"].get_view(view_type="list")
         self.assertIn("usename", v5["arch"])
 
-        # Tests [@ANCHOR: COMM_COMM_db_index_advisor]
+        # Tests [@ANCHOR: COMM_db_index_advisor]
         v6 = self.env["database.index.advisor"].get_view(view_type="list")
         self.assertIn("table_name", v6["arch"])
 
@@ -153,3 +153,7 @@ class TestDatabaseManagement(HamsTransactionCase):
             UserError, msg="Only SELECT queries can be analyzed via Explain."
         ):
             stat.action_explain_query()
+
+    def test_08_doc_injection(self):
+        # Tests [@ANCHOR: COMM_db_doc_injection]
+        self.assertIn("database.table.stat", self.env)
