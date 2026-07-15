@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
@@ -53,7 +54,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
 
         m_open.assert_called_once()
 
-        check = self.env["pager.check"].search([("name", "=", "Test DNS Check")])
+        check = self.env["pager.check"].search([("name", "=", "Test DNS Check")], limit=1)
         self.assertTrue(
             check.exists(), "The JSON must be successfully parsed into DB records."
         )
@@ -64,7 +65,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertTrue(check.maintenance_end)
 
         bash_check = self.env["pager.check"].search(
-            [("name", "=", "Test Sandboxed Bash")]
+            [("name", "=", "Test Sandboxed Bash")], limit=1
         )
         self.assertTrue(bash_check.exists())
         self.assertEqual(bash_check.code_payload, "echo test")
@@ -74,20 +75,21 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertEqual(bash_check.ignored_services, "ignored.service")
 
     def test_02_autodiscovery(self):
-        mock_push = self.safe_patch(
-            "odoo.addons.pager_duty.models.pager_check.PagerCheck.action_push_to_json"
+        """Verify the autodiscover action builds checks safely without crashing."""
+        mock_push = self.safe_patch_object(
+            type(self.env["pager.check"]),
+            "action_push_to_json"
         )
         mock_run = self.safe_patch(
             "odoo.addons.pager_duty.models.pager_check.subprocess.run"
         )
-        """Verify the autodiscover action builds checks safely without crashing."""
         mock_res = MagicMock()
         mock_res.stdout = "postgresql.service\nnginx.service"
         mock_run.return_value = mock_res
 
         self.env["pager.check"].with_user(self.admin).action_autodiscover()
 
-        checks = self.env["pager.check"].search([])
+        checks = self.env["pager.check"].search([], limit=100)
         self.assertTrue(
             len(checks) > 0, "Autodiscovery should generate multiple baseline checks."
         )

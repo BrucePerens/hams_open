@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
@@ -36,6 +37,7 @@ class TestPagerControllers(HamsHttpCase):
                 "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
             }
         )
+        self.env.flush_all()
         self.authenticate("tester", "testpassword")
         response_auth = self.url_open("/pager/board")
         self.assertEqual(response_auth.status_code, 200)

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
@@ -13,6 +14,7 @@ class TestBoardEdgeCases(HamsTransactionCase):
             {
                 "name": "Board Admin",
                 "login": "board_admin_test",
+                "lang": "en_US",
                 "group_ids": [
                     (
                         6,
@@ -28,9 +30,9 @@ class TestBoardEdgeCases(HamsTransactionCase):
 
     def test_01_board_data_rpc(self):
         """Verify the board loads successfully when no incidents and no on-duty admin exist."""
-        self.env["calendar.event"].search([]).unlink()
-        self.env["pager.incident"].search([]).unlink()
-        self.env["pager.check"].search([]).unlink()
+        self.env["calendar.event"].search([], limit=1000).unlink()
+        self.env["pager.incident"].search([], limit=1000).unlink()
+        self.env["pager.check"].search([], limit=1000).unlink()
 
         # Tests [@ANCHOR: pager_board_data]
 

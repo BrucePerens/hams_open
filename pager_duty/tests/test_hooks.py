@@ -19,8 +19,7 @@ class TestPagerDutyHooks(HamsTransactionCase):
         Test that post_init_hook properly registers the daemon with the admin user
         to avoid Zero-Sudo architecture constraints.
         """
-        if "daemon.key.registry" not in self.env:
-            return  # skip naturally without raising skipTest
+
 
         # Mock register_daemon to ensure it is called with the expected user
         original_register = type(self.env["daemon.key.registry"]).register_daemon

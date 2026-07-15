@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
@@ -73,7 +74,7 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             [
                 ("partner_ids", "in", self.on_duty_user.partner_id.id),
                 ("name", "ilike", incident.name),
-            ]
+            ], limit=10
         )
         self.assertTrue(
             events, "A calendar event MUST be created for the incident response."
@@ -114,7 +115,7 @@ class TestHelpdeskAdapter(HamsTransactionCase):
         self.env.flush_all()
         # Verify the fallback message was posted to the incident chatter, alerting the on-duty user
         messages = self.env["mail.message"].search(
-            [("res_id", "=", incident.id), ("model", "=", "pager.incident")]
+            [("res_id", "=", incident.id), ("model", "=", "pager.incident")], limit=100
         )
         fallback_found = any(
             "EMERGENCY PAGE (Helpdesk Fallback)" in (m.body or "") for m in messages

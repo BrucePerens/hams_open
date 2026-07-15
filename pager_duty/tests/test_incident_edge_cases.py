@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
@@ -13,11 +14,11 @@ class TestIncidentEdgeCases(HamsTransactionCase):
         self.incident_model = self.env["pager.incident"]
 
     def test_01_redis_fail_open(self):
+        """Verify that if Redis crashes during report_incident, it safely fails open and logs the incident."""
         mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
         self.safe_patch(
             "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
         )
-        """Verify that if Redis crashes during report_incident, it safely fails open and logs the incident."""
         mock_redis.Redis.side_effect = Exception("Redis connection timeout")
         mock_redis.exceptions.RedisError = Exception
 

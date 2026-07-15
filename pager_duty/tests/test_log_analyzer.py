@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
@@ -47,7 +48,7 @@ class TestLogAnalyzer(HamsTransactionCase):
         res = api.search_logs('/var/log/syslog', 'test')
         
         self.assertIn('job_id', res)
-        job = self.env["pager.log.search.job"].search([("uuid", "=", res['job_id'])])
+        job = self.env["pager.log.search.job"].search([("uuid", "=", res['job_id'])], limit=1)
         self.assertTrue(job)
         self.assertEqual(job.state, "pending")
         mock_redis.publish.assert_called_once()
