@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Verified by [@ANCHOR: test_log_analyzer_views] -->
     <record id="view_pager_log_pattern_list" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_log_analyzer_views] -->
+        <!-- burn-ignore-tour -->
         <field name="name">pager.log.pattern.list</field>
         <field name="model">pager.log.pattern</field>
         <field name="arch" type="xml">
@@ -15,8 +16,9 @@
         </field>
     </record>
 
-    <!-- Verified by [@ANCHOR: test_log_analyzer_views] -->
     <record id="view_pager_log_file_list" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_log_analyzer_views] -->
+        <!-- burn-ignore-tour -->
         <field name="name">pager.log.file.list</field>
         <field name="model">pager.log.file</field>
         <field name="arch" type="xml">

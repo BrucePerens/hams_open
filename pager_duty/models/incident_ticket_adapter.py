@@ -36,9 +36,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         if user:
             assignee_id = user.id
 
-        try:
-            target_env = self.env[target_model]
-        except KeyError:
+        if target_model not in self.env:
             _logger.warning(
                 "Target helpdesk model '%s' not found. Ensure the module is installed.",
                 target_model,
@@ -48,6 +46,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                     incident, "Target model not installed.", assignee_id
                 )
             return
+        target_env = self.env[target_model]
 
         payloads = []
         for incident in incidents_to_process:

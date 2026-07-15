@@ -49,7 +49,10 @@ class TestLogAnalyzerReal(RealTransactionCase):
             self.assertTrue("Redis" in data["error"] or "IPC" in data["error"])
         else:
             self.assertIn("job_id", data)
-            job = self.env["pager.log.search.job"].search([("uuid", "=", data["job_id"])], limit=1)
-            self.assertTrue(job)
-            self.assertEqual(job.state, "pending")
+            self.env.invalidate_all()
+            with self.registry.cursor() as new_cr:
+                new_env = self.env(cr=new_cr)
+                job = new_env["pager.log.search.job"].search([("uuid", "=", data["job_id"])], limit=1)
+                self.assertTrue(job)
+                self.assertEqual(job.state, "pending")
 
