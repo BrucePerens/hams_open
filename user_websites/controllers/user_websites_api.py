@@ -1,4 +1,4 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 from odoo import http
@@ -30,21 +30,21 @@ class UserWebsitesApi(http.Controller):
         all_domains = []
 
         # 1. Fetch edge routing domains
-        edge_domains = (
-            env_svc["edge.routing.domain"].search([], limit=5000).mapped("name")
-        )
+        edge_domains = [
+            d['name'] for d in env_svc["edge.routing.domain"].search_read([], ['name'], limit=5000)
+        ]
         all_domains.extend(edge_domains)
 
         # 2. Soft-depend on ham_dns
         if "ham.dns.zone" in env_svc:
             try:
                 dns_env_svc = utils._get_service_env("ham_dns.user_dns_api_service")
-                zone_names = (
-                    dns_env_svc["ham.dns.zone"].search([], limit=5000).mapped("name")
-                )
+                zone_names = [
+                    d['name'] for d in dns_env_svc["ham.dns.zone"].search_read([], ['name'], limit=5000)
+                ]
                 all_domains.extend(zone_names)
-            except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_domains_api_returns_all_domains]
-                _logger.warning("Failed to fetch ham.dns.zone domains: %s", e)
+            except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: test_domains_api_returns_all_domains]
+                _logger.exception("Failed to fetch ham.dns.zone domains: %s", e)
 
         # Deduplicate and format
         unique_domains = list(set(all_domains))

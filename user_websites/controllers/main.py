@@ -1,4 +1,4 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 from odoo import http
@@ -15,7 +15,7 @@ from werkzeug.wrappers import Response
 
 _logger = logging.getLogger(__name__)
 
-REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 redis_pool = redis.ConnectionPool(
     host=REDIS_HOST,
@@ -218,7 +218,7 @@ class UserWebsitesController(http.Controller):
                 if not request.env.user._is_admin():
                     db_name = request.env.cr.dbname
                     redis_client.incr(f"views:{db_name}:page:{page.id}")
-            except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_cron_redis_flush]
+            except (KeyError, ValueError, redis.exceptions.RedisError) as e:   # Tested by [@ANCHOR: test_cron_redis_flush]
                 _logger.warning(
                     "Redis view counter increment failed in controller: %s", e
                 )
@@ -271,7 +271,11 @@ class UserWebsitesController(http.Controller):
 
         if profile_user and profile_user.id != user.id:
             raise request.not_found()
+        if profile_user and profile_user.is_suspended_from_websites:
+            raise request.not_found()
         if profile_group:
+            if profile_group.is_suspended_from_websites:
+                raise request.not_found()
             is_member = env_svc["user.websites.group"].search_count(
                 [("id", "=", profile_group.id), ("member_ids", "=", user.id)]
             )
@@ -333,8 +337,13 @@ class UserWebsitesController(http.Controller):
 
         if profile_user and profile_user.id != user.id:
             raise request.not_found()
-        if profile_group and user.id not in profile_group.member_ids.ids:
+        if profile_user and profile_user.is_suspended_from_websites:
             raise request.not_found()
+        if profile_group:
+            if profile_group.is_suspended_from_websites:
+                raise request.not_found()
+            if user.id not in profile_group.member_ids.ids:
+                raise request.not_found()
 
         entity_name = profile_user.name if profile_user else profile_group.name
 
