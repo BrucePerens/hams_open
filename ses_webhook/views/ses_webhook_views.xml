@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- View for Webhook Domains -->
+    <record id="view_ses_webhook_domain_list" model="ir.ui.view">
+        <field name="name">ses.webhook.domain.list</field>
+        <field name="model">ses.webhook.domain</field>
+        <field name="arch" type="xml">
+            <list string="SES Webhook Domains">
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="webhook_url" widget="url"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_ses_webhook_domain_form" model="ir.ui.view">
+        <field name="name">ses.webhook.domain.form</field>
+        <field name="model">ses.webhook.domain</field>
+        <field name="arch" type="xml">
+            <form string="SES Webhook Domain">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="e.g. example.com"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="secret_token"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="webhook_url" widget="CopyClipboardChar" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="AWS Configuration Instructions">
+                            <div class="alert alert-info mt-3" role="alert">
+                                <strong>Step 1: Amazon SNS</strong><br/>
+                                1. In your AWS Console, navigate to Amazon SNS and create a new Standard Topic.<br/>
+                                2. Create a Subscription for that topic, select 'HTTPS' as the protocol, and paste the <b>Webhook URL</b> shown above.<br/>
+                                3. AWS will immediately send a confirmation request. This module will automatically intercept it and confirm the subscription (Check the Webhook Logs to verify).<br/>
+                                <br/>
+                                <strong>Step 2: Amazon SES</strong><br/>
+                                1. Navigate to Amazon SES -> Email Receiving -> Rule Sets.<br/>
+                                2. Create a receipt rule to match this domain.<br/>
+                                3. Add an action to <b>Publish to Amazon SNS topic</b> and select the topic you created in Step 1.<br/>
+                                4. Ensure the Message encoding is set to 'Base64' or 'Raw'.<br/>
+                            </div>
+                        </page>
+                        <page string="Webhook Logs">
+                            <field name="log_ids" readonly="1">
+                                <list decoration-danger="status == 'failed'" decoration-success="status == 'success'" decoration-muted="status == 'ignored'">
+                                    <field name="create_date" string="Date"/>
+                                    <field name="payload_type"/>
+                                    <field name="status"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Views for Webhook Logs -->
+    <record id="view_ses_webhook_log_list" model="ir.ui.view">
+        <field name="name">ses.webhook.log.list</field>
+        <field name="model">ses.webhook.log</field>
+        <field name="arch" type="xml">
+            <list string="SES Webhook Logs" decoration-danger="status == 'failed'" decoration-success="status == 'success'" decoration-muted="status == 'ignored'">
+                <field name="create_date" string="Date"/>
+                <field name="domain_id"/>
+                <field name="name" string="Message ID"/>
+                <field name="payload_type"/>
+                <field name="status"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_ses_webhook_log_form" model="ir.ui.view">
+        <field name="name">ses.webhook.log.form</field>
+        <field name="model">ses.webhook.log</field>
+        <field name="arch" type="xml">
+            <form string="SES Webhook Log">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date" string="Date"/>
+                            <field name="domain_id"/>
+                            <field name="name" string="Message ID"/>
+                        </group>
+                        <group>
+                            <field name="payload_type"/>
+                            <field name="status"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Raw Payload" name="raw_payload">
+                            <field name="raw_payload" widget="text"/>
+                        </page>
+                        <page string="Error Message" name="error_message" invisible="status != 'failed'">
+                            <field name="error_message" widget="text"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Actions and Menus -->
+    <record id="action_ses_webhook_domain" model="ir.actions.act_window">
+        <field name="name">Webhook Domains</field>
+        <field name="res_model">ses.webhook.domain</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_ses_webhook_log" model="ir.actions.act_window">
+        <field name="name">Webhook Logs</field>
+        <field name="res_model">ses.webhook.log</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_ses_webhook_root" name="SES Webhooks" parent="base.menu_custom" sequence="100"/>
+    <menuitem id="menu_ses_webhook_domains" name="Domains" parent="menu_ses_webhook_root" action="action_ses_webhook_domain" sequence="10"/>
+    <menuitem id="menu_ses_webhook_logs" name="Logs" parent="menu_ses_webhook_root" action="action_ses_webhook_log" sequence="20"/>
+</odoo>

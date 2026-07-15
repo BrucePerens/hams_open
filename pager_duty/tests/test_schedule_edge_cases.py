@@ -11,7 +11,7 @@ from datetime import timedelta
 class TestScheduleEdgeCases(HamsTransactionCase):
     def test_01_empty_schedule(self):
         """Verify get_current_on_duty_admin returns False when no shifts exist."""
-        self.env["calendar.event"].search([]).unlink()
+        self.env["calendar.event"].search([], limit=10000).unlink()
         admin = self.env["calendar.event"].get_current_on_duty_admin()
         self.assertFalse(
             admin, "MUST return False when the schedule is completely empty."
@@ -19,7 +19,7 @@ class TestScheduleEdgeCases(HamsTransactionCase):
 
     def test_02_overlapping_shifts(self):
         """Verify the method safely returns exactly one admin when shifts overlap."""
-        self.env["calendar.event"].search([]).unlink()
+        self.env["calendar.event"].search([], limit=10000).unlink()
         user1 = self.env["res.users"].create({"name": "User 1", "login": "u1"})
         user2 = self.env["res.users"].create({"name": "User 2", "login": "u2"})
         now = fields.Datetime.now()

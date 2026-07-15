@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_board_url] -->
     <template id="board_template" name="Pager Duty Board">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_board_url] -->
         <html>
             <head>
                 <title>NOC Board</title>

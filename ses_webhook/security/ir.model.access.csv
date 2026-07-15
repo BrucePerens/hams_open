@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_ses_webhook_domain_system,ses.webhook.domain.system,model_ses_webhook_domain,base.group_system,1,1,1,1
+access_ses_webhook_domain_user,ses.webhook.domain.user,model_ses_webhook_domain,base.group_user,1,0,0,0
+access_ses_webhook_log_system,ses.webhook.log.system,model_ses_webhook_log,base.group_system,1,1,1,1
+access_ses_webhook_log_user,ses.webhook.log.user,model_ses_webhook_log,base.group_user,1,0,0,0
