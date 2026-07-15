@@ -46,6 +46,9 @@ class Module(models.Model):
         clean_ctx.pop("prefetch_fields", None)
         clean_ctx["mail_notrack"] = True
 
+        if article_model_name not in self.env:
+            return
+
         Article = (
             self.env[article_model_name]
             .with_user(svc_uid)
