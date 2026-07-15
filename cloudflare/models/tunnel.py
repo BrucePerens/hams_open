@@ -51,8 +51,8 @@ class CloudflareTunnel(models.Model):
         # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
-            # We defer the actual sync for each website to a background job to avoid synchronous loops
-            self.with_delay()._sync_tunnels_for_website(website.id)
+            # We sync synchronously because this is called via cron or manually, and we don't have queue_job.
+            self._sync_tunnels_for_website(website.id)
 
         return {
             "type": "ir.actions.client",

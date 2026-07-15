@@ -5,6 +5,7 @@ import time
 import pika
 import json
 import os
+import signal
 import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -43,9 +44,9 @@ class TestTddBatch1(RealTransactionCase):
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
         creds = pika.PlainCredentials(
             os.environ.get("RMQ_USER", "guest"),
-            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env
+            os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]
         )
-        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=rmq_host, credentials=creds))  # burn-ignore-pika
+        self.conn = pika.BlockingConnection(pika.ConnectionParameters(host=rmq_host, credentials=creds))  # burn-ignore-pika: Tested by [@ANCHOR: backup_management:COMM_test_backup_daemon]
         self.channel = self.conn.channel()
         self.channel.queue_declare(queue="backup_tasks", durable=True)
         self.channel.queue_purge("backup_tasks")
@@ -54,7 +55,7 @@ class TestTddBatch1(RealTransactionCase):
         if self.conn and self.conn.is_open:
             self.conn.close()
         if self.daemon_proc:
-            os.killpg(os.getpgid(self.daemon_proc.pid), 9)
+            os.killpg(os.getpgid(self.daemon_proc.pid), signal.SIGKILL)
             self.daemon_proc.wait(timeout=2.0)
         super().tearDown()
 
@@ -65,7 +66,7 @@ class TestTddBatch1(RealTransactionCase):
             q = self.channel.queue_declare(queue="backup_tasks", durable=True)
             if q.method.message_count == 0:
                 break
-            time.sleep(0.5)
+            time.sleep(0.5)  # audit-ignore-sleep
 
         # Wait for DB state update
         start_time = time.time()
@@ -73,7 +74,7 @@ class TestTddBatch1(RealTransactionCase):
             job.invalidate_recordset(["state"])
             if job.state in ("done", "failed"):
                 break
-            time.sleep(0.5)
+            time.sleep(0.5)  # audit-ignore-sleep
         self.env.cr.commit()
 
     def test_item1_kopia_restore_whitelist(self):
@@ -96,7 +97,7 @@ class TestTddBatch1(RealTransactionCase):
         self._wait_for_job(job)
         
         self.assertEqual(job.state, "failed")
-        self.assertIn("PermissionError", job.log)
+        self.assertIn("PermissionError", job.output_log)
 
         job.unlink()
         config.unlink()
@@ -122,7 +123,7 @@ class TestTddBatch1(RealTransactionCase):
         self._wait_for_job(job)
         
         self.assertEqual(job.state, "failed")
-        self.assertIn("PermissionError", job.log)
+        self.assertIn("PermissionError", job.output_log)
 
         job.unlink()
         config.unlink()

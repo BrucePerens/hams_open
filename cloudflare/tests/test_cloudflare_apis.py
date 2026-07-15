@@ -24,6 +24,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
         website.write(
             {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
         )
+        
+        mock_creds = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_cloudflare_credentials")
+        mock_creds.return_value = ("fake_token", "fake_zone")
 
         res = self.env["cloudflare.waf"].ban_ip("192.168.1.100", website_id=website.id)
         self.assertTrue(res)

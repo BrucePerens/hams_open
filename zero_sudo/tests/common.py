@@ -377,6 +377,7 @@ def _patched_chrome_init(self, *args, **kwargs):
 
 
 ChromeBrowser.__init__ = _patched_chrome_init
+ChromeBrowser.executable = "/tmp/chrome_wrapper.sh"
 
 original_chrome_stop = ChromeBrowser.stop
 
@@ -735,7 +736,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls.registry.clear_cache()
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
-        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}.lock"
+        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}_{cls.__name__}.lock"
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
@@ -909,7 +910,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         cls._crypto_patcher_res_users.stop()
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
 
-        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}.lock"
+        lock_path = f"/tmp/hams_test_proxy_{os.getuid()}_{cls.__name__}.lock"
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:

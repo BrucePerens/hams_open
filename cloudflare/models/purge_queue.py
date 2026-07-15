@@ -37,6 +37,13 @@ class CloudflarePurgeQueue(models.Model):
             .rstrip("/")
         )
 
+        existing = self.env["cloudflare.purge.queue"].search([
+            ("website_id", "in", [w for w in website_ids if w]),
+            ("state", "=", "pending"),
+            ("purge_type", "=", "url")
+        ], limit=1000)
+        existing_set = set((r.website_id.id if r.website_id else False, r.target_item) for r in existing)
+
         create_vals = []
         for wid, urls in purge_map.items():
             website = website_dict.get(wid)
@@ -45,17 +52,19 @@ class CloudflarePurgeQueue(models.Model):
                 if website and website.domain
                 else default_base_url
             )
-            for u in urls:
+            for u in set(urls):
                 if not u:
                     continue
                 full_url = f"{base_url}{u}" if str(u).startswith("/") else u
-                create_vals.append(
-                    {
-                        "target_item": full_url,
-                        "purge_type": "url",
-                        "website_id": wid if wid else False,
-                    }
-                )
+                
+                if (wid if wid else False, full_url) not in existing_set:
+                    create_vals.append(
+                        {
+                            "target_item": full_url,
+                            "purge_type": "url",
+                            "website_id": wid if wid else False,
+                        }
+                    )
 
         if create_vals:
             self.env["cloudflare.purge.queue"].create(create_vals)
