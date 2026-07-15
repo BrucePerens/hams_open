@@ -16,6 +16,6 @@ class TestBatch2Security(RealTransactionCase):
         
         self.assertNotIn(
             group_user,
-            user_backup_service_internal.groups_id,
+            user_backup_service_internal.group_ids,
             "Service account user_backup_service_internal should NOT have base.group_user."
         )
