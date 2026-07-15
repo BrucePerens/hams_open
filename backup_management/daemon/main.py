@@ -22,13 +22,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("backup_worker")
 
-ODOO_HOST = os.environ.get("ODOO_HOST", "odoo")
+ODOO_HOST = os.environ.get("ODOO_HOST", "localhost")
 ODOO_URL = os.environ.get("ODOO_URL", f"http://{ODOO_HOST}:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
 ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "redis")
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
 RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
 RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
@@ -56,7 +56,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
         headers["X-Odoo-Service-Uid"] = str(svc_uid)
     req = urllib.request.Request(
         f"{ODOO_URL}/json/2/{model}/{method_name}",
-        data=json.dumps(kwargs).encode("utf-8"),
+        data=payload_str.encode("utf-8"),
         headers=headers,
         method="POST",
     )
@@ -132,7 +132,7 @@ def execute_job(ch, method, properties, body):
             keep_monthly = config.get("keep_monthly", 6)
             exclude_patterns = config.get("exclude_patterns", "")
 
-            cmd = ["kopia", "policy", "set", target_path]
+            cmd = ["kopia", "policy", "set", "--", target_path]
             cmd.extend(
                 [
                     f"--keep-latest={keep_daily}",
