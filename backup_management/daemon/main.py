@@ -82,7 +82,8 @@ def execute_job(ch, method, properties, body):
         try:
             payload = json.loads(body)
         except json.JSONDecodeError as e:
-            logger.error("Failed to decode RabbitMQ message body: %s", e)
+            decode_err_msg = """Failed to decode RabbitMQ message body: %s"""
+            logger.error(decode_err_msg, e)
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
 
@@ -323,9 +324,8 @@ def execute_job(ch, method, properties, body):
                         engine=config.get("engine"),
                     )
                 except (json.JSONDecodeError, KeyError, ValueError) as e:
-                    logger.error(
-                        "Failed to parse sync data for engine %s: %s", engine, e
-                    )
+                    sync_err_msg = """Failed to parse sync data for engine %s: %s"""
+                    logger.error(sync_err_msg, engine, e)
                     _json2_call(
                         "backup.config",
                         "report_backup_failure",
@@ -405,7 +405,8 @@ def execute_job(ch, method, properties, body):
             json.JSONDecodeError,
             urllib.error.URLError,
         ) as inner_e:
-            logger.exception("Failed to report failure back to Odoo: %s", inner_e)
+            report_err_msg = """Failed to report failure back to Odoo: %s"""
+            logger.exception(report_err_msg, inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
@@ -430,7 +431,8 @@ def main():
             logger.warning("RabbitMQ offline. Retrying in 5s...")
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_1]
         except pika.exceptions.AMQPError as e:
-            logger.error("RabbitMQ protocol error: %s. Restarting...", e)
+            proto_err_msg = """RabbitMQ protocol error: %s. Restarting..."""
+            logger.error(proto_err_msg, e)
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_3]
         except OdooAPIError as e:
             err_msg = """Fatal Odoo API error in main loop: %s. Retrying in 10s..."""
