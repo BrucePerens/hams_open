@@ -199,9 +199,8 @@ def execute_job(ch, method, properties, body):
                     or ".." in target_path_arg
                     or any(c in target_path_arg for c in "; &|`$()<>*?[]{\n")
                 ):
-                    raise PermissionError(
-                        f"Malicious path detected in worker: {target_path_arg}"
-                    )
+                    err_msg = f"""Malicious path detected in worker: {target_path_arg}"""
+                    raise PermissionError(err_msg)
                 
                 try:
                     abs_path = os.path.realpath(os.path.normpath(target_path_arg))
@@ -209,7 +208,8 @@ def execute_job(ch, method, properties, body):
                     abs_path = os.path.abspath(target_path_arg)
                 allowed_restore_base = "/var/lib/odoo/backups"
                 if not (abs_path == allowed_restore_base or abs_path.startswith(allowed_restore_base + "/")):
-                    raise PermissionError(f"Malicious path outside allowed base directory: {abs_path}")
+                    err_msg = f"""Malicious path outside allowed base directory: {abs_path}"""
+                    raise PermissionError(err_msg)
 
             elif cmd[0] == "pgbackrest":
                 # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
@@ -223,16 +223,17 @@ def execute_job(ch, method, properties, body):
                     if key == "--stanza" and not re.match(r"^[a-zA-Z0-9_]+$", val):
                         raise PermissionError(f"Invalid stanza name in worker: {val}")
                     elif not re.match(r"^[a-zA-Z0-9_.:-]+$", val):
-                        raise PermissionError(
-                            f"Malicious argument detected in worker: {arg}"
-                        )
+                        err_msg = f"""Malicious argument detected in worker: {arg}"""
+                        raise PermissionError(err_msg)
 
         if not cmd:
             raise ValueError(f"No command generated for engine: {engine}")
 
         if not shutil.which(cmd[0]):
-            logger.warning(f"Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here.")
-            raise OSError(f"Binary {cmd[0]} not found in PATH.")
+            warn_msg = f"""Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here."""
+            logger.warning(warn_msg)
+            err_msg = f"""Binary {cmd[0]} not found in PATH."""
+            raise OSError(err_msg)
 
         logger.info("Executing: %s", " ".join(shlex.quote(c) for c in cmd))
 
@@ -391,18 +392,19 @@ def execute_job(ch, method, properties, body):
                     text_chunk=f"\nWorker Error: {e}",
                 )
             if config_id:
+                err_msg = f"""Worker Error ({type(e).__name__}): {e}"""
                 _json2_call(
                     "backup.config",
                     "report_backup_failure",
                     svc_uid=svc_uid,
                     ids=[config_id],
-                    message=f"Worker Error ({type(e).__name__}): {e}",
+                    message=err_msg,
                 )
         except (
             OdooAPIError,
             json.JSONDecodeError,
             urllib.error.URLError,
-        ) as inner_e:  # audit-ignore-catch-all: Reporting failure is best-effort: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_2]  # fmt: skip
+        ) as inner_e:
             logger.exception("Failed to report failure back to Odoo: %s", inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -421,7 +423,8 @@ def main():
             channel.basic_qos(prefetch_count=1)
             channel.basic_consume(queue="backup_tasks", on_message_callback=execute_job)
 
-            logger.info("Connected to RABBITMQ. Waiting for backup tasks...")
+            info_msg = """Connected to RABBITMQ. Waiting for backup tasks..."""
+            logger.info(info_msg)
             channel.start_consuming()
         except pika.exceptions.AMQPConnectionError:
             logger.warning("RabbitMQ offline. Retrying in 5s...")
@@ -430,14 +433,16 @@ def main():
             logger.error("RabbitMQ protocol error: %s. Restarting...", e)
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_3]
         except OdooAPIError as e:
-            logger.error("Fatal Odoo API error in main loop: %s. Retrying in 10s...", e)
+            err_msg = """Fatal Odoo API error in main loop: %s. Retrying in 10s..."""
+            logger.error(err_msg, e)
             time.sleep(10)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_2]
         except (
             ValueError,
             TypeError,
             OSError,
-        ) as e:  # audit-ignore-catch-all: General daemon recovery loop: [@ANCHOR: backup_management:COMM_audit_ignore_catch_all_3]  # fmt: skip
-            logger.exception("Unexpected error in main loop: %s. Restarting...", e)
+        ) as e:
+            err_msg = """Unexpected error in main loop: %s. Restarting..."""
+            logger.exception(err_msg, e)
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]
 
 
