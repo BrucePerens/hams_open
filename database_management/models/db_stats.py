@@ -19,6 +19,7 @@ class DatabaseTableStat(models.Model):
     # for the entire database instance, which may be shared by multiple Odoo companies.
     _name = "database.table.stat"
     _description = "Database Table Statistics (Bloat & Vacuum)"
+    # Verified by [@ANCHOR: COMM_test_dba_view]
     name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "dead_percent desc"
@@ -403,6 +404,7 @@ class DatabaseReplicationStat(models.Model):
     # This model tracks PostgreSQL replication lag and status for the entire cluster.
     _name = "database.replication.stat"
     _description = "Database Replication Statistics"
+    # Verified by [@ANCHOR: COMM_test_dba_cron]
     name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
 
@@ -453,6 +455,7 @@ class DatabaseIndexAdvisor(models.Model):
     # sizes that might benefit from additional indexing.
     _name = "database.index.advisor"
     _description = "Index Recommendation Advisor"
+    # Verified by [@ANCHOR: COMM_test_dba_cron]
     name = fields.Char(string="Name", default=lambda self: self._description)
     _auto = False
     _order = "seq_scan desc"

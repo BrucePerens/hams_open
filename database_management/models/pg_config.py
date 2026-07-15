@@ -6,13 +6,12 @@ from odoo import models, fields, _
 from odoo.exceptions import UserError
 from psycopg2 import sql
 import odoo.tools.sql
-import contextlib
 
 
 class DatabasePgSetting(models.Model):
-    # [@ANCHOR: db_settings_audit]
+    # [@ANCHOR: COMM_db_settings_audit]
 
-    # Tests [@ANCHOR: db_settings_audit]
+    # Verified by [@ANCHOR: COMM_test_pg_config_views]
     # This model is logically global as it tracks the overall PostgreSQL configuration
     # settings for the database cluster.
     _name = "database.pg.setting"

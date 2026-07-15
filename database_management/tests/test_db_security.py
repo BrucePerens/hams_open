@@ -67,8 +67,10 @@ class TestDbSecurity(HamsTransactionCase):
             self.env["database.pg.setting"].with_user(self.admin).search([], limit=1)
         )
 
-    def test_01_multi_persona_isolation(self):
+    def test_01_security(self):
         # Tests [@ANCHOR: COMM_db_security_prefetch]
+        # Tests [@ANCHOR: COMM_db_doc_injection]
+        self.assertIn("database.table.stat", self.env)
         """
         BDD: Given ADR-0050 Proxy Ownership IDOR (Multi-Persona Mandate)
         When standard personas attempt to interact with the database APM tools

@@ -23,6 +23,7 @@
         "views/pg_config_views.xml",
         "views/menu_views.xml",
     ],
+    # [@ANCHOR: COMM_db_doc_injection]
     "knowledge_docs": [
         {
             "name": "Database Management Guide",

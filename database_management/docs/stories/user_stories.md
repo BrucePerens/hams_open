@@ -3,7 +3,7 @@
 ## Performance Monitoring
 ### Monitor Table and Index Health
 **As a** Database Administrator
-**I want** to see real-time statistics on table bloat and index usage `[@ANCHOR: COMM_db_index_stats]` and replication status `[@ANCHOR: COMM_COMM_db_replication_stats]`
+**I want** to see real-time statistics on table bloat and index usage `[@ANCHOR: COMM_db_index_stats]` and replication status `[@ANCHOR: COMM_db_replication_stats]`
 **So that** I can identify tables that need vacuuming and indexes that are unused or oversized.
 
 ### Track Slow Queries

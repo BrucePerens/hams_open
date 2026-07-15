@@ -4,7 +4,7 @@
 import { registry } from "@web/core/registry";
 
 // Used elsewhere: o_tour_cancel_btn, o_tour_close_btn
-registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verified by [@ANCHOR: test_db_bloat_tour]
+registry.category("web_tour.tours").add("db_management_bloat_tour", { // # Verified by [@ANCHOR: COMM_test_db_bloat_tour]
     url: "/odoo?debug=1",
     steps: () => [
         {

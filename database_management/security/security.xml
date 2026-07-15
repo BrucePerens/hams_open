@@ -13,6 +13,7 @@
         </record>
 
         <record id="base.group_system" model="res.groups">
+            <field name="name">Settings</field>
             <field name="implied_ids" eval="[(4, ref('database_management.group_database_management_manager'))]"/>
         </record>
     </data>
