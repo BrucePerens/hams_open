@@ -3,5 +3,4 @@ from odoo.tests.common import tagged
 
 @tagged('post_install', '-at_install')
 class TestCMLeak(HamsTransactionCase):
-    async def test_leak(self):
-        pass
+    pass
