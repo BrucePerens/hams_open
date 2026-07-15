@@ -57,7 +57,9 @@ class TestRealCacheManager(RealTransactionCase):
         pubsub.subscribe("odoo_cache_invalidation_bus")
 
         message_received = False
-        partner = self.env.user.partner_id
+        # Create a temporary partner instead of mutating admin to prevent DB pollution
+        partner = self.env["res.partner"].create({"name": "Temp Test Partner"})
+        self.env.cr.commit()
         start_time = time.time()
 
         while time.time() - start_time < 60.0:
@@ -82,7 +84,7 @@ class TestRealCacheManager(RealTransactionCase):
                 if data.get("model") == "res.users":
                     message_received = True
                     break
-            time.sleep(0.5)   # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
+            time.sleep(0.5)  # audit-ignore-sleep   # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
 
         pubsub.close()
         r.close()
