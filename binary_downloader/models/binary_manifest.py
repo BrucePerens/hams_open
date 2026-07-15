@@ -14,6 +14,7 @@ class BinaryManifest(models.Model):
     _inherit = ["binary_downloader.mixin"]
     _name = "binary.manifest"
     _description = "Binary Download Manifest"
+    # # Verified by [@ANCHOR: COMM_test_binary_manifest_views]
 
     name = fields.Char(
         string="Binary Name", required=True, help="Command name (e.g., kopia)"
