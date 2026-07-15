@@ -16,9 +16,10 @@ class UserWebsitesPublicDirectoryView(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW user_websites_public_directory_view AS (
+        with self.env.cr.savepoint():
+            self.env.cr.execute(
+                """
+                CREATE OR REPLACE VIEW user_websites_public_directory_view AS (
                 SELECT
                     u.id as id,
                     u.id as user_id,
@@ -50,9 +51,10 @@ class UserWebsitesContentRoutingView(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW user_websites_content_routing_view AS (
+        with self.env.cr.savepoint():
+            self.env.cr.execute(
+                """
+                CREATE OR REPLACE VIEW user_websites_content_routing_view AS (
                 SELECT
                     u.id as id,
                     'res.users' as res_model,
@@ -93,9 +95,10 @@ class UserWebsitesWeeklyDigestView(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE VIEW user_websites_weekly_digest_view AS (
+        with self.env.cr.savepoint():
+            self.env.cr.execute(
+                """
+                CREATE OR REPLACE VIEW user_websites_weekly_digest_view AS (
                 SELECT
                     row_number() OVER () as id,
                     'Weekly Digest SQL View'::varchar as name,
@@ -141,9 +144,10 @@ class UserWebsitesDbFunctions(models.AbstractModel):
     _description = "User Websites DB Functions"
 
     def init(self):
-        self.env.cr.execute(
-            """
-            CREATE OR REPLACE FUNCTION increment_strike_count(tbl_name text, rec_id integer)
+        with self.env.cr.savepoint():
+            self.env.cr.execute(
+                """
+                CREATE OR REPLACE FUNCTION increment_strike_count(tbl_name text, rec_id integer)
             RETURNS void AS $$
             BEGIN
                 IF tbl_name = 'res_users' THEN
