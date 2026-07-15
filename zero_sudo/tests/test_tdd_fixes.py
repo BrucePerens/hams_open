@@ -122,7 +122,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
     def test_security_log_immutability(self):
         # [@ANCHOR: zero_sudo:COMM_test_security_log_immutability]
         log = self.env["zero_sudo.security.log"].create({
-            "reason": "test_immutability"
+            "reason": "param_access_denied"
         })
         # Check system group
         system_user = self.env.ref("base.user_admin")

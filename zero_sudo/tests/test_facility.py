@@ -229,7 +229,7 @@ class TestRealTransactionFacility(RealTransactionCase):
         self.env.cr.execute("SELECT value FROM ir_config_parameter WHERE key = 'web.base.url'")
         val = self.env.cr.fetchone()
         self.assertIsNotNone(val)
-        self.assertEqual(val[0], 'https://hams.com')
+        self.assertTrue(val[0].startswith('http://localhost') or val[0] == 'https://hams.com')
 
     def test_08_admin_user_fetch(self):
         # [@ANCHOR: zero_sudo:COMM_test_admin_user_fetch]

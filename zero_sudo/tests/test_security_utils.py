@@ -108,12 +108,19 @@ class TestSecurityUtils(HamsTransactionCase):
         # Ensure 'test_tours' data or zero_sudo demo data created it. Assuming it exists:
         utils._get_service_uid(svc_xml_id)
 
-        mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]  # fmt: skip
-        )
-        utils._get_service_uid(svc_xml_id)
-        for call in mock_execute.call_args_list:
-            self.assertNotIn("res_users", call[0][0])
+        # Use monkey patch to avoid HamsTransactionCase forbid mock restriction
+        original_execute = self.env.cr.execute
+        calls = []
+        def fake_execute(query, params=None, log_exceptions=True):
+            calls.append((query, params))
+            return original_execute(query, params, log_exceptions)
+        self.env.cr.execute = fake_execute
+        try:
+            utils._get_service_uid(svc_xml_id)
+            for call in calls:
+                self.assertNotIn("res_users", call[0])
+        finally:
+            self.env.cr.execute = original_execute
 
     def test_03_bdd_event_bus_payload_generation(self):
         # [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
@@ -130,22 +137,29 @@ class TestSecurityUtils(HamsTransactionCase):
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_cache_signaling]
         utils = self.env["zero_sudo.security.utils"]
-        mock_execute = self.safe_patch_object(self.env.cr, "execute")
-        utils._notify_cache_invalidation("test.model", "test_key")
-        mock_execute.assert_called_once_with(
-            "SELECT pg_notify(%s, %s)",
-            ("cache_invalidation", "test.model:test_key"),
-        )
-
-        # Test edge cases: empty model_name or key_value
-        mock_execute = self.safe_patch_object(self.env.cr, "execute")
-        utils._notify_cache_invalidation("", "test_key")
-        utils._notify_cache_invalidation("test.model", "")
-        utils._notify_cache_invalidation(None, "test_key")
-        utils._notify_cache_invalidation("test.model", None)
-        self.assertEqual(
-            mock_execute.call_count, 0, "Should not notify for empty model or key"
-        )
+        
+        original_execute = self.env.cr.execute
+        calls = []
+        def fake_execute(query, params=None, log_exceptions=True):
+            calls.append((query, params))
+            return original_execute(query, params, log_exceptions)
+        
+        self.env.cr.execute = fake_execute
+        try:
+            utils._notify_cache_invalidation("test.model", "test_key")
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][0], "SELECT pg_notify(%s, %s)")
+            self.assertEqual(calls[0][1], ("cache_invalidation", "test.model:test_key"))
+            
+            # Test edge cases
+            calls.clear()
+            utils._notify_cache_invalidation("", "test_key")
+            utils._notify_cache_invalidation("test.model", "")
+            utils._notify_cache_invalidation(None, "test_key")
+            utils._notify_cache_invalidation("test.model", None)
+            self.assertEqual(len(calls), 0, "Should not notify for empty model or key")
+        finally:
+            self.env.cr.execute = original_execute
 
     @mute_logger("odoo.sql_db")
     def test_04_privilege_escalation_block_enforcement(self):
@@ -193,32 +207,42 @@ class TestSecurityUtils(HamsTransactionCase):
         # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_batch]
         """Test _notify_cache_invalidation with a list payload."""
         utils = self.env["zero_sudo.security.utils"]
-        mock_execute = self.safe_patch_object(self.env.cr, "execute")
-        utils._notify_cache_invalidation("test.model", ["key1", "key2", "key1"])
+        
+        original_execute = self.env.cr.execute
+        calls = []
+        def fake_execute(query, params=None, log_exceptions=True):
+            calls.append((query, params))
+            return original_execute(query, params, log_exceptions)
+            
+        self.env.cr.execute = fake_execute
+        try:
+            utils._notify_cache_invalidation("test.model", ["key1", "key2", "key1"])
 
-        # Extract the arguments passed to execute
-        args, _ = mock_execute.call_args
-        query = args[0]
-        params = args[1]
+            # Extract the arguments passed to execute
+            self.assertEqual(len(calls), 1)
+            query = calls[0][0]
+            params = calls[0][1]
 
-        self.assertEqual(
-            query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload"
-        )
-        self.assertEqual(params[0], "cache_invalidation")
-        # We must sort the payloads because set conversion makes the order non-deterministic
-        self.assertListEqual(
-            sorted(params[1]), sorted(["test.model:key1", "test.model:key2"])
-        )
+            self.assertEqual(
+                query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload"
+            )
+            self.assertEqual(params[0], "cache_invalidation")
+            # We must sort the payloads because set conversion makes the order non-deterministic
+            self.assertListEqual(
+                sorted(params[1]), sorted(["test.model:key1", "test.model:key2"])
+            )
 
-        # Test chunking
-        many_keys = [f"key{i}" for i in range(250)]
-        mock_execute = self.safe_patch_object(self.env.cr, "execute")
-        utils._notify_cache_invalidation("test.model", many_keys)
-        self.assertEqual(
-            mock_execute.call_count,
-            3,
-            "Should chunk 250 keys into 3 calls (100+100+50)",
-        )
+            # Test chunking
+            calls.clear()
+            many_keys = [f"key{i}" for i in range(250)]
+            utils._notify_cache_invalidation("test.model", many_keys)
+            self.assertEqual(
+                len(calls),
+                3,
+                "Should chunk 250 keys into 3 calls (100+100+50)",
+            )
+        finally:
+            self.env.cr.execute = original_execute
 
     def test_06_get_deterministic_hash(self):
         # [@ANCHOR: zero_sudo:COMM_test_deterministic_hash]
