@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 from odoo import models, fields, api, _
@@ -92,7 +93,6 @@ class BlogPost(models.Model):
                 "user_websites_group_id",
                 "blog_id",
                 "website_id",
-                "view_count",
                 "website_meta_title",
                 "website_meta_description",
                 "website_meta_keywords",
@@ -103,6 +103,8 @@ class BlogPost(models.Model):
                 for k in list(vals.keys()):
                     if k not in allowed:
                         del vals[k]
+                if vals.get("blog_id"):
+                    self.env["blog.blog"].browse(vals["blog_id"]).check_access("write")
         try:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
@@ -183,7 +185,6 @@ class BlogPost(models.Model):
                 "user_websites_group_id",
                 "blog_id",
                 "website_id",
-                "view_count",
                 "website_meta_title",
                 "website_meta_description",
                 "website_meta_keywords",
@@ -193,6 +194,8 @@ class BlogPost(models.Model):
             for k in list(vals.keys()):
                 if k not in allowed:
                     del vals[k]
+            if vals.get("blog_id"):
+                self.env["blog.blog"].browse(vals["blog_id"]).check_access("write")
 
         urls_to_invalidate = self._get_blog_urls()
 
@@ -313,7 +316,7 @@ class BlogPost(models.Model):
             post_ids = [int(pid) for pid in digest.post_ids_string.split(",") if pid]
             posts = self.env["blog.post"].with_user(svc_uid).browse(post_ids)
             post_links_html = "".join(
-                f"<li><a href='{base_url}{p.website_url}'>{p.name}</a></li>"
+                Markup("<li><a href='{}'>{}</a></li>").format(f"{base_url}{p.website_url}", p.name)
                 for p in posts
             )
 
@@ -331,7 +334,7 @@ class BlogPost(models.Model):
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "zero_sudo.mail_service_internal"
             )
-            template.with_user(mail_svc).with_context(**ctx).send_mail(digest.first_post_id, force_send=False, email_values=email_vals)   # # Verified by [@ANCHOR: COMM_test_weekly_digest_mail_template]  # fmt: skip
+            template.with_user(mail_svc).with_context(**ctx).send_mail(digest.first_post_id, force_send=False, email_values=email_vals)   # audit-ignore-mail: Tested by [@ANCHOR: COMM_test_weekly_digest_mail_template]  # fmt: skip
 
         if len(digests) == 50:
             self.env["ir.config_parameter"].with_user(svc_uid).set_param(

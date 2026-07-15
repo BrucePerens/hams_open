@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 {
     "name": "User Websites",
     "summary": "Allow users to create personal or group websites and blogs.",
@@ -26,9 +27,10 @@ This module enables:
         "distributed_redis_cache",
         "knowledge",
         "compliance",
+        "cloudflare",
     ],
     "external_dependencies": {
-        "python": [],
+        "python": ["markupsafe"],
     },
     "data": [
         # Security

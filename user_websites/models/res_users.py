@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 """
@@ -32,7 +33,9 @@ def _async_unpublish_content(db_name, user_ids):
         # ADR-0001: Execute operations under a dedicated service account instead of SUPERUSER_ID
         cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
         row = cr.fetchone()
-        svc_id = row[0] if row else 2
+        if not row:
+            raise ValueError("sys_provisioner missing")
+        svc_id = row[0]
         env = odoo.api.Environment(cr, svc_id, {})
         try:
             env_svc = env["zero_sudo.security.utils"]._get_service_env(
@@ -243,7 +246,7 @@ class ResUsers(models.Model):
         # in setUp() (which do not auto-commit) will be invisible to this raw SQL query.
         self.env.flush_all()
         self.env.cr.execute(
-            "SELECT id FROM res_users WHERE website_slug = %s LIMIT 1", (slug,)
+            "SELECT res_id FROM user_websites_content_routing_view WHERE website_slug = %s AND res_model = 'res.users' LIMIT 1", (slug,)
         )
         row = self.env.cr.fetchone()
         return row[0] if row else False
@@ -469,48 +472,53 @@ class ResUsers(models.Model):
         else:
 
             def generate_pages():
-                offset = 0
+                last_id = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
                         cr.execute(
                             "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
                         )
                         row = cr.fetchone()
-                        svc_id = row[0] if row else 2
+                        if not row:
+                            raise ValueError("sys_provisioner missing")
+                        svc_id = row[0]
                         env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env(
                             "user_websites.user_websites_service_account"
                         )
                         batch = env_svc["website.page"].search(
-                            [("owner_user_id", "=", user_id)], limit=1000, offset=offset
+                            [("owner_user_id", "=", user_id), ("id", ">", last_id)], limit=1000, order="id asc"
                         )
                         items = [
                             {"name": p.name, "url": p.url, "content": p.arch}
                             for p in batch
                         ]
+                        if batch:
+                            last_id = batch[-1].id
                     if not items:
                         break
                     for item in items:
                         yield item
                     if len(items) < 1000:
                         break
-                    offset += 1000
 
             def generate_blogs():
-                offset = 0
+                last_id = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
                         cr.execute(
                             "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
                         )
                         row = cr.fetchone()
-                        svc_id = row[0] if row else 2
+                        if not row:
+                            raise ValueError("sys_provisioner missing")
+                        svc_id = row[0]
                         env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env(
                             "user_websites.user_websites_service_account"
                         )
                         batch = env_svc["blog.post"].search(
-                            [("owner_user_id", "=", user_id)], limit=1000, offset=offset
+                            [("owner_user_id", "=", user_id), ("id", ">", last_id)], limit=1000, order="id asc"
                         )
                         items = [
                             {
@@ -520,31 +528,34 @@ class ResUsers(models.Model):
                             }
                             for b in batch
                         ]
+                        if batch:
+                            last_id = batch[-1].id
                     if not items:
                         break
                     for item in items:
                         yield item
                     if len(items) < 1000:
                         break
-                    offset += 1000
 
             def generate_reports():
-                offset = 0
+                last_id = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
                         cr.execute(
                             "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
                         )
                         row = cr.fetchone()
-                        svc_id = row[0] if row else 2
+                        if not row:
+                            raise ValueError("sys_provisioner missing")
+                        svc_id = row[0]
                         env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env(
                             "user_websites.user_websites_service_account"
                         )
                         batch = env_svc["content.violation.report"].search(
-                            [("reported_by_user_id", "=", user_id)],
+                            [("reported_by_user_id", "=", user_id), ("id", ">", last_id)],
                             limit=1000,
-                            offset=offset,
+                            order="id asc",
                         )
                         items = [
                             {
@@ -555,29 +566,32 @@ class ResUsers(models.Model):
                             }
                             for r in batch
                         ]
+                        if batch:
+                            last_id = batch[-1].id
                     if not items:
                         break
                     for item in items:
                         yield item
                     if len(items) < 1000:
                         break
-                    offset += 1000
 
             def generate_appeals():
-                offset = 0
+                last_id = 0
                 while True:
                     with Registry(db_name).cursor() as cr:
                         cr.execute(
                             "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
                         )
                         row = cr.fetchone()
-                        svc_id = row[0] if row else 2
+                        if not row:
+                            raise ValueError("sys_provisioner missing")
+                        svc_id = row[0]
                         env = odoo.api.Environment(cr, svc_id, {})
                         env_svc = env["zero_sudo.security.utils"]._get_service_env(
                             "user_websites.user_websites_service_account"
                         )
                         batch = env_svc["content.violation.appeal"].search(
-                            [("user_id", "=", user_id)], limit=1000, offset=offset
+                            [("user_id", "=", user_id), ("id", ">", last_id)], limit=1000, order="id asc"
                         )
                         items = [
                             {
@@ -587,13 +601,14 @@ class ResUsers(models.Model):
                             }
                             for a in batch
                         ]
+                        if batch:
+                            last_id = batch[-1].id
                     if not items:
                         break
                     for item in items:
                         yield item
                     if len(items) < 1000:
                         break
-                    offset += 1000
 
         mro = self.__class__.__mro__
         _ = mro.index(ResUsers) + 1
@@ -635,7 +650,7 @@ class ResUsers(models.Model):
         """
         self.ensure_one()
         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.gdpr_service_internal"
         )
 
         # [@ANCHOR: gdpr_sudo_erasure]
