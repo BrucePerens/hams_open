@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. AGPL-3.0.
 import json
+import pickle
 import logging
 import hashlib
 import datetime
@@ -75,11 +76,11 @@ def distributed_cache():
             
             # Use only context to avoid triggering N+1 queries from self.env.company
             allowed_company_ids = self.env.context.get("allowed_company_ids", [])
-            company_id = allowed_company_ids[0] if allowed_company_ids else 0
+            company_ids_str = ",".join(map(str, allowed_company_ids)) if allowed_company_ids else "0"
             
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}"
-            company_suffix = f":c{company_id}"
+            company_suffix = f":c{company_ids_str}"
 
             arg_hash = _get_hash(self, *args, **kwargs)
             cache_key = f"{dbname}:distributed_cache:{model_name}:{func.__name__}{website_suffix}{company_suffix}:{arg_hash}"
@@ -100,27 +101,27 @@ def distributed_cache():
                     if cached:
                         # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
                         _logger.debug("Redis cache hit: %s", cache_key)
-                        res = json.loads(cached)
+                        res = pickle.loads(bytes.fromhex(cached))
                         with LRU_LOCK:
                             _local_cache[cache_key] = res
                         return res
                 except redis.RedisError as e:
                     _logger.warning("Network partition detected. Bypassing Redis: %s", e)
                     use_redis = False
-                except json.JSONDecodeError as e:
-                    _logger.warning("Redis cache corrupted JSON payload: %s", e)
+                except (pickle.PickleError, ValueError) as e:
+                    _logger.warning("Redis cache corrupted pickle payload: %s", e)
                     use_redis = False
 
             result = func(self, *args, **kwargs)
 
             if use_redis:
                 try:
-                    serialized_result = json.dumps(result, default=tools.json_default)
+                    serialized_result = pickle.dumps(result).hex()
                     r = get_redis_connection(self.env)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                 except redis.RedisError as e:
                     _logger.warning("Network partition detected during cache write: %s", e)
-                except (TypeError, json.JSONDecodeError) as e:
+                except (TypeError, pickle.PickleError) as e:
                     _logger.warning("Redis cache write serialization failed: %s", e)
 
             # Always populate L1 local fallback cache

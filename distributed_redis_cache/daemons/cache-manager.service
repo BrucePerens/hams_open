@@ -1,3 +1,4 @@
+# Copyright © Bruce Perens K6BP. AGPL-3.0.
 [Unit]
 Description=Odoo Distributed Cache Manager (Redis Pub/Sub)
 After=network.target postgresql.service redis-server.service
@@ -15,13 +16,7 @@ PrivateDevices=true
 NoNewPrivileges=true
 
 # Database & Redis Configuration
-Environment="DB_HOST=localhost"
-Environment="DB_PORT=5432"
-Environment="DB_NAME=odoo"
-Environment="DB_USER=odoo"
-Environment="DB_PASS=odoo"
-Environment="REDIS_HOST=localhost"
-Environment="REDIS_PORT=6379"
+EnvironmentFile=-/opt/hams/etc/keys/cache_manager.env
 
 ExecStart=/usr/bin/env python3 cache_manager.py
 

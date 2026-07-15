@@ -9,6 +9,7 @@ from odoo.http import request
 from odoo.addons.distributed_redis_cache.redis_pool import (
     get_redis_connection,
 )
+from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, LRU_LOCK
 
 _logger = logging.getLogger(__name__)
 
@@ -29,8 +30,12 @@ class IrHttp(models.AbstractModel):
             try:
                 r = get_redis_connection(request.env)
                 latest = r.get("global_cache_invalidation_counter")
-                if latest and latest != getattr(cls, "_last_cache_counter", None):
-                    from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, LRU_LOCK
+                try:
+                    last_counter = cls._last_cache_counter
+                except AttributeError:
+                    last_counter = None
+                    
+                if latest and latest != last_counter:
                     with LRU_LOCK:
                         _local_cache.clear()
                     cls._last_cache_counter = latest

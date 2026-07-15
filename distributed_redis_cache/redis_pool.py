@@ -32,24 +32,36 @@ redis_pool = redis.ConnectionPool(
 _custom_pools = {}
 
 
+# Registry to cache DB configs to avoid repeated queries
+_db_configs = {}
+
 def get_redis_connection(env=None):
     """
     Returns a Redis client using settings from the environment if available,
     otherwise falling back to the centralized connection pool.
     """
     if env:
-        # Configuration is loaded via zero_sudo security utils to comply with security mandates
-        security_utils = env["zero_sudo.security.utils"].with_context(redis_bypass_cache=True)
-        host = security_utils._get_system_param(
-            "distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT
-        )
-        port_raw = security_utils._get_system_param(
-            "distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT)
-        )
-        port = int(port_raw)
-        password = security_utils._get_system_param(
-            "distributed_redis_cache.redis_pass", REDIS_PASS_DEFAULT
-        )
+        dbname = env.cr.dbname
+        with POOL_LOCK:
+            if dbname in _db_configs:
+                host, port, password = _db_configs[dbname]
+            else:
+                # Configuration is loaded via zero_sudo security utils to comply with security mandates
+                security_utils = env["zero_sudo.security.utils"].with_context(redis_bypass_cache=True)
+                host = security_utils._get_system_param(
+                    "distributed_redis_cache.redis_host", REDIS_HOST_DEFAULT
+                )
+                port_raw = security_utils._get_system_param(
+                    "distributed_redis_cache.redis_port", str(REDIS_PORT_DEFAULT)
+                )
+                try:
+                    port = int(port_raw)
+                except (ValueError, TypeError):
+                    port = REDIS_PORT_DEFAULT
+                password = security_utils._get_system_param(
+                    "distributed_redis_cache.redis_password", REDIS_PASS_DEFAULT
+                )
+                _db_configs[dbname] = (host, port, password)
 
         # Check if the environment config differs from the default pool
         if (

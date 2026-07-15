@@ -8,7 +8,9 @@ The Distributed Redis Cache module completely replaces Odoo's internal ORM cache
 
 Because this is a standalone Open Source module that spawns external Python daemons, you must ensure its system dependencies are satisfied before installing it in your database. The module will fail-fast at startup if these are missing.
 
-**Required Python Modules:** `redis`, `asyncpg`
+**External Dependencies:** `python-dotenv`
+
+**Required Python Modules:** `redis`, `asyncpg`, `python-dotenv`
 
 * **Debian/Ubuntu Installation:**
     ```bash

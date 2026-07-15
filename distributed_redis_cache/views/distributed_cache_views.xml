@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
     <data>
-        <!-- [@ANCHOR: distributed_cache_view] -->
         <record id="view_distributed_cache_config_form" model="ir.ui.view">
+            <!-- [@ANCHOR: COMM_distributed_cache_view] -->
             <field name="name">distributed.cache.config.form</field>
             <field name="model">distributed.cache.config</field>
             <field name="arch" type="xml">
                 <form string="Distributed Cache Manager">
-                    <sheet>
-                        <group>
-                            <field name="model_id" options="{'no_create': True}"/>
-                        </group>
-                        <footer>
-                            <button string="Invalidate Model Cache" type="object" name="action_invalidate_model_cache" class="btn btn-primary"/>
-                            <button string="Check Redis Status" type="object" name="check_redis_status" class="btn btn-secondary"/>
-                            <button string="Cancel" class="btn btn-secondary" special="cancel"/>
-                        </footer>
-                    </sheet>
+                    <group>
+                        <field name="model_id" options="{'no_create': True}"/>
+                    </group>
+                    <footer>
+                        <button string="Invalidate Model Cache" type="object" name="action_invalidate_model_cache" class="btn btn-primary"/>
+                        <button string="Check Redis Status" type="object" name="check_redis_status" class="btn btn-secondary"/>
+                        <button string="Cancel" class="btn btn-secondary" special="cancel"/>
+                    </footer>
                 </form>
             </field>
         </record>
@@ -28,6 +27,6 @@
             <field name="target">new</field>
         </record>
 
-        <menuitem id="menu_distributed_cache_root" name="Distributed Cache" sequence="100" action="action_distributed_cache_config" groups="distributed_redis_cache.group_distributed_cache_manager"/>
+        <menuitem id="menu_distributed_cache_root" name="Distributed Cache" sequence="100" parent="base.menu_custom" action="action_distributed_cache_config" groups="distributed_redis_cache.group_distributed_cache_manager"/>
     </data>
 </odoo>

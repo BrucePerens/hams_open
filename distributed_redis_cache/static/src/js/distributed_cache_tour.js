@@ -1,4 +1,6 @@
 /** @odoo-module **/
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// [@ANCHOR: COMM_distributed_cache_view]
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
@@ -40,7 +42,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             run: 'click',
         },
         {
-            trigger: '.o_form_sheet',
+            trigger: '.o_form_view',
             content: 'Click away to force DOM blur and commit text input',
             run: 'click',
         },

@@ -24,13 +24,17 @@ _logger = logging.getLogger(__name__)
 
 # Tests [@ANCHOR: check_redis_status_logic]
 
-# Tests [@ANCHOR: distributed_cache_view]
+# Tests [@ANCHOR: COMM_distributed_cache_view]
 
-# Tests [@ANCHOR: distributed_cache_settings_view]
+# Tests [@ANCHOR: COMM_distributed_cache_settings_view]
 
 
 @tagged("post_install", "-at_install")
 class TestDistributedCacheTour(HamsHttpCase):
+
+    def setUp(self):
+        super().setUp()
+        self.env.ref('base.user_admin').lang = 'en_US'
 
     def test_distributed_cache_admin_tour(self):
         """
@@ -92,7 +96,7 @@ class TestDistributedCacheTour(HamsHttpCase):
                 login="admin",
                 timeout=240,
             )
-        except Exception as e:  # audit-ignore-catch-all
+        except Exception as e:
             # [!] DIAGNOSTIC FOR AI: UI Tour 'distributed_cache_admin_tour' failed.
             _logger.error("Tour failed: %s", e)
             raise e

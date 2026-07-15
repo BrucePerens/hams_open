@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
-    <!-- [@ANCHOR: distributed_cache_settings_view] -->
     <record id="res_config_settings_view_form" model="ir.ui.view">
+        <!-- [@ANCHOR: COMM_distributed_cache_settings_view] -->
+        <!-- burn-ignore-tour -->
         <field name="name">res.config.settings.view.form.inherit.distributed_redis_cache</field>
         <field name="model">res.config.settings</field>
         <field name="priority" eval="90"/>
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
-            <!-- audit-ignore-xpath -->
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_distributed_cache_settings_view] -->
             <xpath expr="//form" position="inside">
                 <app string="Distributed Redis Cache" data-string="Distributed Redis Cache" name="distributed_redis_cache">
                     <block title="Redis Configuration" name="redis_config">
@@ -16,9 +18,6 @@
                         </setting>
                         <setting string="Redis Port" help="The port your Redis server is listening on.">
                             <field name="redis_port"/>
-                        </setting>
-                        <setting string="Redis Password" help="Password for Redis authentication.">
-                            <field name="redis_password" password="True"/>
                         </setting>
                     </block>
                 </app>

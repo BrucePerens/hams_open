@@ -80,9 +80,10 @@ class TestRealCacheManager(RealTransactionCase):
                 if data.get("model") == "res.users":
                     message_received = True
                     break
-            time.sleep(0.5)  # audit-ignore-sleep
+            time.sleep(0.5)  # audit-ignore-sleep: Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
 
         pubsub.close()
+        r.close()
         self.assertTrue(
             message_received,
             "[!] DIAGNOSTIC FOR AI: The standalone cache_manager.py daemon failed to relay the PG NOTIFY event to the Redis 'odoo_cache_invalidation_bus' channel. Verify that the daemon is correctly parsing DB_NAME and connected to Redis.",
