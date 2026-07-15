@@ -1,4 +1,5 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import datetime
@@ -86,7 +87,7 @@ class PagerIncident(models.Model):
         help="The Odoo model used for the ticket (e.g. hams_helpdesk.ticket or helpdesk.ticket).",
     )
 
-    _website_source_index = models.Index("(website_id, source)")
+    # Removed invalid models.Index
 
     def write(self, vals):
         now = fields.Datetime.now()
@@ -115,12 +116,15 @@ class PagerIncident(models.Model):
         # [@ANCHOR: test_pager_escalation]
         fifteen_mins_ago = fields.Datetime.now() - datetime.timedelta(minutes=15)
         # Security: search() on Pager Duty records must be performed by a service account
-        # to ensure minimum privilege. We use the mail service internal user to execute
-        # message_post and search.
+        # to ensure minimum privilege. We use the pager service internal user to execute
+        # search and write, and the mail service to execute message_post.
+        pd_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "pager_duty.user_pager_service_internal"
+        )
         mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
             "zero_sudo.mail_service_internal"
         )
-        IncidentModel = self.env["pager.incident"].with_user(mail_svc)
+        IncidentModel = self.env["pager.incident"].with_user(pd_svc)
 
         incidents = IncidentModel.search(
             [
@@ -226,17 +230,19 @@ class PagerIncident(models.Model):
         return incident.id
 
     @api.model
-    def auto_resolve_incidents(self, source):
+    def auto_resolve_incidents(self, source, website_id=None):
         # [@ANCHOR: auto_resolve_incidents]
+        website_id = website_id or self.env.context.get("website_id")
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_service_internal"
         )
         IncidentModel = self.env["pager.incident"].with_user(svc_uid)
 
-        open_incidents = IncidentModel.search(
-            [("source", "=", source), ("status", "in", ["open", "acknowledged"])],
-            limit=1000,
-        )
+        domain = [("source", "=", source), ("status", "in", ["open", "acknowledged"])]
+        if website_id:
+            domain.append(("website_id", "=", website_id))
+
+        open_incidents = IncidentModel.search(domain, limit=1000)
 
         if open_incidents:
             open_incidents.write({"status": "resolved"})

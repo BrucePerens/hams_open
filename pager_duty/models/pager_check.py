@@ -1,4 +1,5 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 import uuid
@@ -195,14 +196,20 @@ class PagerCheck(models.Model):
         )
         return check.id if check else False
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super(PagerCheck, self).create(vals_list)
+        notify_model_invalidation(self.env, self._name)
+        return records
+
     def write(self, vals):
-        res = super(PagerCheck, self.with_context(mail_notrack=True)).write(vals)
+        res = super(PagerCheck, self).write(vals)
         notify_model_invalidation(self.env, self._name)
         return res
 
     def unlink(self):
         notify_model_invalidation(self.env, self._name)
-        return super(PagerCheck, self.with_context(mail_notrack=True)).unlink()
+        return super(PagerCheck, self).unlink()
 
     @api.model
     def _valid_field_parameter(self, field, name):

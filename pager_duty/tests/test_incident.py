@@ -168,6 +168,36 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertTrue(len(data["active"]) > 0)
         self.assertEqual(data["active"][0]["source"], "Dashboard Board Test")
 
+    def test_08_auto_resolve_multi_tenant(self):
+        """Tests that auto-resolve respects website isolation when context is provided."""
+        website1 = self.env["website"].create({"name": "Site 1"})
+        website2 = self.env["website"].create({"name": "Site 2"})
+        
+        inc1 = self.incident_model.create({"source": "test_src", "severity": "low", "description": "d", "website_id": website1.id})
+        inc2 = self.incident_model.create({"source": "test_src", "severity": "low", "description": "d", "website_id": website2.id})
+        
+        self.incident_model.auto_resolve_incidents("test_src", website_id=website1.id)
+        
+        self.assertEqual(inc1.status, "resolved", "Incident 1 should be resolved")
+        self.assertEqual(inc2.status, "open", "Incident 2 should remain open because it belongs to a different website")
+
+    def test_09_escalation_security(self):
+        """Tests that escalation uses proper service accounts."""
+        incident = self.incident_model.create(
+            {"source": "esc_sec_test", "severity": "high", "description": "desc"}
+        )
+        self.env.cr.execute(
+            "UPDATE pager_incident SET create_date = %s WHERE id = %s",
+            (fields.Datetime.now() - datetime.timedelta(minutes=20), incident.id),
+        )
+        
+        self.env.ref("pager_duty.cron_escalate_incidents")._trigger()
+        # This should execute successfully without throwing an AccessError due to missing pd_svc vs mail_svc permissions.
+        self.incident_model.action_escalate_unacknowledged()
+        
+        incident.invalidate_recordset(["is_escalated"])
+        self.assertTrue(incident.is_escalated)
+
 
 @tagged("integration", "post_install", "-at_install")
 class TestPagerIncidentIntegration(HamsTransactionCase):
