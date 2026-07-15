@@ -4,7 +4,7 @@ After=network.target rabbitmq-server.service
 
 [Service]
 Type=simple
-User=odoo
+User=backup_worker
 # Removing group specification
 WorkingDirectory=/opt/odoo/daemons/backup_worker
 EnvironmentFile=/etc/hams_daemons.env
