@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 import urllib.error
 import odoo.tests
@@ -51,8 +52,8 @@ class TestAppealsAndViews(RealTransactionCase):
 
     def tearDown(self):
         # Pre-fetch outside the loop to avoid N+1 DB LOCK
-        visitors = self.env["website.visitor"].search([])
-        tracks = self.env["website.track"].search([])
+        visitors = self.env["website.visitor"].search([], limit=10000)
+        tracks = self.env["website.track"].search([], limit=10000)
 
         # Explicit resilient cleanup to prevent website_visitor/website_track pollution
         for attempt in range(5):
@@ -120,7 +121,7 @@ class TestAppealsAndViews(RealTransactionCase):
         self.env.cr.commit()
 
         appeal = self.env["content.violation.appeal"].search(
-            [("user_id", "=", self.user_public.id)]
+            [("user_id", "=", self.user_public.id)], limit=1
         )
         self.assertTrue(appeal, "Appeal record should be created.")
         self.assertEqual(appeal.state, "new")
