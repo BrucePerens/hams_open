@@ -31,6 +31,8 @@
     </p>
     <ol>
         <li><strong>Version Management:</strong> Under <strong>Settings -> Technical -> Binary Versions</strong>, you can define multiple specific releases for a Software Manifest (e.g., Kopia 0.12.1, 0.13.0).</li>
+        <li><strong>Central Pool UI:</strong> From the Version record, click <strong>Download to Pool</strong> to retrieve the selected binary version and store it in the central pool.</li>
+        <li><strong>Station Notification:</strong> Use the <strong>Alert Stations via PagerDuty</strong> button to trigger automated alerts to stations when a new version becomes available.</li>
         <li><strong>Tenant Links:</strong> Under <strong>Settings -> Technical -> Tenant Executables</strong>, you can link a specific <strong>Website</strong> to a <strong>Software</strong> and select an <strong>Active Version</strong>.</li>
         <li><strong>Automatic Symlinks:</strong> The system automatically creates a secure "shortcut" (symlink) in a website-specific directory (<code>tenant_bins/site_ID/</code>). This allows your website-specific scripts to always find the correct version of the tool.</li>
     </ol>

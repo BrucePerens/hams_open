@@ -82,6 +82,66 @@ Triggers manual installation via the UI.
 * **Logic:**
     1. Checks if the binary is already available and valid.
     2. If not, downloads, verifies checksum, and extracts/installs if necessary to `/var/lib/odoo/hams_bin/`.
+
+#### `unlink()`
+`[@ANCHOR: COMM_binary_unlink]`
+
+Overrides the standard unlink method to safely remove binary files when a manifest is deleted.
+
+### `binary.tenant.link` model
+**Import Path:** `odoo.addons.binary_downloader.models.tenant_link`
+
+Manages the assignment of specific binary versions to different tenants (websites).
+
+#### `apply_symlink()`
+`[@ANCHOR: COMM_tenant_link_apply]`
+
+Creates a secure symbolic link in a website-specific directory pointing to the assigned binary version.
+
+#### `action_upgrade_to_latest()`
+`[@ANCHOR: COMM_tenant_link_upgrade]`
+
+Automatically upgrades the tenant's assigned binary to the newest available version in the central pool.
+
+### `binary.version` model
+**Import Path:** `odoo.addons.binary_downloader.models.binary_version`
+
+Maintains a central pool of binary versions for assignment to tenants.
+
+#### `_get_central_path()`
+`[@ANCHOR: COMM_binary_version_path]`
+
+Returns the absolute path to the stored binary version in the central pool.
+
+#### `action_download_to_pool()`
+`[@ANCHOR: COMM_binary_version_download]`
+
+Retrieves the selected binary version from the remote source and stores it in the central pool.
+
+#### `action_notify_tenants()`
+`[@ANCHOR: COMM_binary_version_notify]`
+
+Triggers PagerDuty alerts to notify stations and tenants when a new binary version becomes available.
+
+### `binary_downloader.mixin`
+**Import Path:** `odoo.addons.binary_downloader.models.binary_utils`
+
+A utility mixin providing common file operations.
+
+#### `_download_and_extract()`
+`[@ANCHOR: COMM_binary_utils_download]`
+
+Safely downloads and extracts binaries from raw URLs, tarballs, or ZIP archives.
+
+#### `_get_target_filename()`
+`[@ANCHOR: COMM_binary_utils_filename]`
+
+Generates a secure, version-aware filename for the downloaded binary.
+
+#### `_unlink_binary_file()`
+`[@ANCHOR: COMM_binary_utils_unlink]`
+
+Safely removes a binary file from the filesystem.
 </api>
 
 <usage>
