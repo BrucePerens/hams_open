@@ -1,4 +1,9 @@
-# Journey: Securing Configuration Parameters `[@ANCHOR: COMM_journey_securing_configuration]`
+<!--
+Copyright (c) Bruce Perens K6BP.
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+# Journey: Securing Configuration Parameters `[@ANCHOR: zero_sudo:COMM_journey_securing_configuration]`
 
 This journey describes how a new configuration parameter is safely integrated into the Zero-Sudo architecture.
 
@@ -6,13 +11,13 @@ This journey describes how a new configuration parameter is safely integrated in
 A module needs to store a setting, for example, `my_module.api_endpoint`, and needs to access it in a context where `.sudo()` is not allowed.
 
 ## 2. Whitelisting
-The developer must modify `zero_sudo/models/security_utils.py` to add `my_module.api_endpoint` to the list returned by the `_get_param_whitelist` method. This automatically whitelists it for both `_get_system_param` and `_set_system_param` functions `[@ANCHOR: COMM_get_system_param]`, `[@ANCHOR: COMM_set_system_param]`.
+The developer must inherit `zero_sudo.security.utils` and override `_get_param_whitelist` to include `my_module.api_endpoint`. This automatically whitelists it for both `_get_system_param` and `_set_system_param` functions `[@ANCHOR: zero_sudo:COMM_get_system_param]`, `[@ANCHOR: zero_sudo:COMM_set_system_param]`.
 
 ## 3. Secure Access
 Now, anywhere in the codebase, the parameter can be retrieved or set safely:
 ```python
 endpoint = self.env['zero_sudo.security.utils']._get_system_param('my_module.api_endpoint')
-self.env['zero_sudo.security.utils']._set_system_param('my_module.api_endpoint', '[https://new-api.example.com](https://new-api.example.com)')
+self.env['zero_sudo.security.utils']._set_system_param('my_module.api_endpoint', 'https://new-api.example.com')
 ```
 
 ## 4. Protection against Exfiltration

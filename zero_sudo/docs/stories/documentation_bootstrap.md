@@ -1,3 +1,8 @@
+<!--
+Copyright (c) Bruce Perens K6BP.
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
 # Story: Centralized Documentation Bootstrap
 
 This story describes how documentation is centrally installed across the platform.

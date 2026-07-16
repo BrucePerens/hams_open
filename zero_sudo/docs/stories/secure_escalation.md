@@ -1,4 +1,9 @@
-# Story: Secure Privilege Escalation `[@ANCHOR: COMM_story_secure_escalation]`
+<!--
+Copyright (c) Bruce Perens K6BP.
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+# Story: Secure Privilege Escalation `[@ANCHOR: zero_sudo:COMM_story_secure_escalation]`
 
 This story describes how developers securely escalate privileges without using the dangerous `.sudo()` command.
 
@@ -7,24 +12,15 @@ In the Zero-Sudo architecture, direct use of `.sudo()` is prohibited. Instead, b
 
 ## The Process
 1. **Developer Identification**: The developer identifies a need for elevated privileges (e.g., creating a record that the current user shouldn't have access to).
-2. **Service Account Retrieval**: The developer uses the `_get_service_uid` function `[@ANCHOR: COMM_get_service_uid]` to get the ID of a pre-defined service account.
+2. **Service Account Retrieval**: The developer uses the `_get_service_uid` function `[@ANCHOR: zero_sudo:COMM_get_service_uid]` to get the ID of a pre-defined service account.
 3. **Impersonation**: The developer uses `.with_user(svc_uid)` to execute the specific operation as the service account.
 
 ## Security Enforcement
 The `_get_service_uid` function ensures:
-- The account exists and is resolved via raw SQL `[@ANCHOR: COMM_get_service_uid_sql_resolve]`.
-Escalation paths are strictly controlled.
-
-
-- The account is active and verified as a service account `[@ANCHOR: COMM_get_service_uid_sql_verify]`.
-Escalation paths are strictly controlled.
-
-
-- The account is explicitly flagged as a service account `[@ANCHOR: COMM_is_service_account_field]`.
-Escalation paths are strictly controlled.
-
-
-- The account DOES NOT have global administrative privileges (like `base.group_system`) `[@ANCHOR: COMM_privilege_escalation_block_sql]`.
+- The account exists and is resolved via raw SQL `[@ANCHOR: zero_sudo:COMM_get_service_uid_sql_resolve]`.
+- The account is active and verified as a service account `[@ANCHOR: zero_sudo:COMM_get_service_uid_sql_verify]`.
+- The account is explicitly flagged as a service account `[@ANCHOR: zero_sudo:COMM_is_service_account_field]`.
+- The account DOES NOT have global administrative privileges (like `base.group_system`) `[@ANCHOR: zero_sudo:COMM_privilege_escalation_block_sql]`.
 
 ## Example
 ```python
