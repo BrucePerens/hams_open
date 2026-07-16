@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import odoo.tests
 from odoo.tests import tagged
 import logging
@@ -176,7 +177,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         Risk: Because the Proxy Ownership service account executes the write,
         Malice might try to inject executable QWeb logic into their `arch`
         to steal database information during rendering.
-        Action: Malice writes `<t t-esc="request.env['res.users']..."/>` into their page.
+        Action: Malice writes `<t t-out="request.env['res.users']..."/>` into their page.
         Expected: Odoo's safe-eval or the HTTP controller MUST NOT render the stolen data.
         """
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -187,7 +188,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         arch_string = f"""<t name="Home" t-name="user_websites.home_{self.malice.website_slug}">
             <t t-call="website.layout">
                 <div id="stolen_data">
-                    <t t-esc="request.env['res.users'].sudo().search([('id', '=', 1)]).email"/>
+                    <t t-out="request.env['res.users'].sudo().search([('id', '=', 1)]).email"/>
                 </div>
             </t>
         </t>"""
@@ -325,9 +326,9 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
 
         # Make the raw RPC request simulating a frontend dataset call
         with self.assertRaises(
-            Exception,
+            AccessError,
             msg="RPC call MUST fail proxy ownership validation and raise an exception.",
         ):
             self.make_jsonrpc_request(
-                "/web/dataset/call_kw/blog.post/create", payload  # burn-ignore-route
-            )  # burn-ignore-route
+                "/web/dataset/call_kw/blog.post/create", payload
+            )  # burn-ignore-route  # fmt: skip
