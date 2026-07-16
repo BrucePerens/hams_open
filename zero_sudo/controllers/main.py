@@ -3,6 +3,7 @@
 #
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import http
 from odoo.http import request
@@ -37,7 +38,7 @@ class ZeroSudoHome(Home):
             # ---
             # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
             # ---
-            request.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
+            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
                 "SELECT is_service_account FROM res_users WHERE id = %s",
                 (request.session.uid,),
             )
@@ -62,5 +63,5 @@ class ZeroSudoHome(Home):
                 # Use query parameter to show error on login page after redirect
                 return request.redirect(
                     "/web/login?error=access_denied_service"
-                )  # burn-ignore-route: # Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]
+                )  # burn-ignore-route: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
         return response

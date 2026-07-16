@@ -3,6 +3,7 @@
     Part of Odoo. See LICENSE file for full copyright and licensing details.
     This file is part of hams_open, an open source module.
     License: AGPL-3.0
+    SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <odoo>
     <data noupdate="0">
@@ -72,8 +73,10 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
-env.cr.execute(sql_get_uid)
-env.cr.execute(sql_set_kv)
+with env.cr.savepoint():
+    env.cr.execute(sql_get_uid)
+with env.cr.savepoint():
+    env.cr.execute(sql_set_kv)
             </field>
         </record>
 
