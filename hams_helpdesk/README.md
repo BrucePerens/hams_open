@@ -1,6 +1,7 @@
 # Hams Helpdesk
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Copyright © Bruce Perens K6BP.*
+SPDX-License-Identifier: AGPL-3.0-or-later
 
 Zero-Sudo compliant, lightweight helpdesk management designed for deep SRE integration.
 
@@ -110,6 +111,10 @@ This repository uses a specialized test environment with the following character
 - **Test Runner Flags**: You must use the `--already-provisioned` flag with `tools/test.py` if the environment is already bootstrapped.
 - **Python Execution**: Use `/usr/bin/python3` to ensure access to system-installed Odoo dependencies.
 - **Linter Overrides**: Use a custom ignore file (`-c <file>`) to bypass fragile tours in other modules if they block testing of this module.
+
+## External Dependencies
+
+None.
 
 ## Security & Multi-tenant Isolation
 Hams Helpdesk implements strict isolation:
