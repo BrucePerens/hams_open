@@ -1,6 +1,6 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import AccessError
