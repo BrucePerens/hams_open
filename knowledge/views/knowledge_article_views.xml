@@ -8,7 +8,7 @@
     <record id="view_knowledge_article_list" model="ir.ui.view">
         <!-- [@ANCHOR: story_manual_backend_views] [@ANCHOR: journey_admin_managing] -->
 
-        <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_backend_views_rendering] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_backend_views_rendering] -->
         <!-- burn-ignore-tour -->
         <field name="name">knowledge.article.list</field>
         <field name="model">knowledge.article</field>
@@ -27,7 +27,7 @@
     <record id="view_knowledge_article_form" model="ir.ui.view">
         <!-- [@ANCHOR: story_manual_backend_views] [@ANCHOR: journey_admin_managing] -->
 
-        <!-- audit-ignore-view: Verified by [@ANCHOR: test_manual_backend_views_rendering] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_backend_views_rendering] -->
         <!-- burn-ignore-tour -->
         <field name="name">knowledge.article.form</field>
         <field name="model">knowledge.article</field>
