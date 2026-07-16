@@ -24,6 +24,8 @@ Upon installation, it:
               "security/ir.model.access.csv",
               "data/legal_pages_data.xml",
               "views/website_templates.xml",
+              "views/compliance_templates.xml",
+              "data/compliance_data.xml",
              ],
     "knowledge_docs": [{"name": "Site Owner's Guide to Regulatory Compliance",
                         "path": "data/documentation.html",
