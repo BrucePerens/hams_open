@@ -6,7 +6,10 @@
     """,
     "version": "1.0",
     "category": "Hidden",
-    "depends": ["base"],
+    "depends": ["base", "zero_sudo"],
+    "data": [
+        "data/documentation.html",
+    ],
     "external_dependencies": {
         "python": ["pika"],
     },
