@@ -14,6 +14,7 @@ from . import purge_queue
 from . import purge_wizard
 from . import res_config_settings
 from . import tunnel
+from . import tunnel_route
 from . import tunnel_wizard
 from . import turnstile
 from . import waf

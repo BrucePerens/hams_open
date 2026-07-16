@@ -266,6 +266,23 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
     return False, "API Error"
 
 
+def update_cfd_tunnel_configuration(account_id, token, tunnel_id, payload):
+    if not token or not account_id or not tunnel_id:
+        return False, "Missing credentials or tunnel ID"
+
+    endpoint = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+    response = _make_request(
+        "PUT",
+        endpoint,
+        token,
+        "Cloudflare Update Tunnel Configuration API failed",
+        json=payload,
+        timeout=15,
+    )
+    if response and response.status_code == 200:
+        return True, "Configuration updated successfully."
+    return False, "API Error"
+
 def purge_everything(token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_purge_everything_logic]
     if not token or not zone_id:

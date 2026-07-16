@@ -20,6 +20,52 @@ class CloudflareTunnel(models.Model):
         default=lambda self: self.env["website"].get_current_website().id,
         readonly=True,
     )
+    route_ids = fields.One2many(
+        "cloudflare.tunnel.route", "tunnel_id", string="Routing Table"
+    )
+
+    def action_push_configuration(self):
+        # We need update_cfd_tunnel_configuration from cloudflare_api
+        from ..utils.cloudflare_api import update_cfd_tunnel_configuration
+        for tunnel in self:
+            token, _zone = tunnel.website_id._get_cloudflare_credentials()
+            account_id = tunnel.website_id.cloudflare_account_id
+
+            if not token or not account_id:
+                raise UserError(
+                    _("Missing Cloudflare API Token or Account ID for the website.")
+                )
+
+            ingress = []
+            for route in tunnel.route_ids:
+                rule = {"service": route.service_url}
+                if route.hostname:
+                    rule["hostname"] = route.hostname
+                if route.path:
+                    rule["path"] = route.path
+                ingress.append(rule)
+            
+            # Catch-all required by Cloudflare
+            ingress.append({"service": "http://localhost:8069"})
+
+            payload = {"config": {"ingress": ingress}}
+            success, msg = update_cfd_tunnel_configuration(
+                account_id, token, tunnel.cf_tunnel_id, payload
+            )
+            if not success:
+                raise UserError(_("Failed to push configuration: %s") % msg)
+            
+            # Simple notification since mail.thread isn't used
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Success"),
+                    "message": _("Successfully pushed configuration to Cloudflare."),
+                    "type": "success",
+                    "sticky": False,
+                },
+            }
 
     def action_delete_tunnel(self):
         # [@ANCHOR: COMM_cf_delete_tunnel]
