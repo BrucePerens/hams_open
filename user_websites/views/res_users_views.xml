@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
     <record id="view_users_form_user_websites" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_users] -->
         <field name="name">res.users.form.user.websites</field>
         <field name="model">res.users</field>
         <field name="inherit_id" ref="base.view_users_form"/>
         <field name="arch" type="xml">
             <!-- Verified by [@ANCHOR: test_dropzone_users] -->
-
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_users] -->
             <xpath expr="//notebook" position="inside"> 
                 <page string="User Websites" name="user_websites_settings">
                     <div id="user_websites_dropzone_users">
