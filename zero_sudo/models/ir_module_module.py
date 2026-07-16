@@ -5,10 +5,11 @@
 # License: AGPL-3.0
 
 from odoo import models, api, tools
-from odoo.modules.module import get_manifest
+from odoo.modules.module import get_manifest, get_module_path
 from odoo.exceptions import AccessError
 import hashlib
 import logging
+import os
 
 _logger = logging.getLogger(__name__)
 
@@ -46,14 +47,14 @@ class Module(models.Model):
         clean_ctx.pop("prefetch_fields", None)
         clean_ctx["mail_notrack"] = True
 
-        if article_model_name not in self.env:
+        try:
+            Article = (
+                self.env[article_model_name]
+                .with_user(svc_uid)
+                .with_context(**clean_ctx)
+            )
+        except KeyError:
             return
-
-        Article = (
-            self.env[article_model_name]
-            .with_user(svc_uid)
-            .with_context(**clean_ctx)
-        )
 
         # Context for reading the core ERP framework table
         try:
@@ -114,7 +115,11 @@ class Module(models.Model):
     @api.model
     def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, article_by_name=None):
         path = doc_info.get("path")
-        if not path or ".." in path:
+        if not path or ".." in path.split(os.path.sep):
+            return
+            
+        base_dir = os.path.realpath(get_module_path(module_name))
+        if not os.path.realpath(os.path.join(base_dir, path)).startswith(base_dir):
             return
 
         try:
