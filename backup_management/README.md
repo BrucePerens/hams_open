@@ -34,6 +34,27 @@ Ensures structural space recovery processes comply with multi-website tenant dat
 
 * **Interactive Dashboard Telemetry:** `[@ANCHOR: backup_management:COMM_backup_board_data]`
 
+## Models
+
+- `backup.config`: Stores the configuration for Kopia or pgBackRest, including retention policies, targets, bucket info, and storage type.
+- `backup.job`: Represents an asynchronous background task (e.g., snapshot, restore, sync). Tracks state (pending, processing, done, failed) and streams output logs from the worker.
+- `backup.snapshot`: Represents a completed backup snapshot. Holds metadata such as size, time, and dynamically computes the restore command.
+- `backup.restore.wizard`: Transient model to guide the user (Admins only) through restoring a specific snapshot.
+- `utils.py`: Provides utility methods like path validation (`validate_backup_path`) and RabbitMQ publishing (`publish_to_rabbitmq`).
+
+## Daemon Architecture (`daemon/main.py`)
+
+The Backup Daemon is an independent worker running `main.py` that listens to the `backup_tasks` RabbitMQ queue.
+- **Flow:** Odoo posts a JSON payload to RabbitMQ. The daemon consumes the payload and executes the requested binary (Kopia, pgBackRest, etc.) securely outside of Odoo.
+- **Communication:** It connects back to Odoo via the JSON-2 API (e.g., `/json/2/backup.job/write`) using a dedicated internal service account (`backup_service_internal`) to stream log buffers, update statuses, and report failures.
+- **Security:** The daemon rigidly restricts allowed commands and targets. It enforces bounds-checking, blocks malicious parameters, and ensures path isolation before making subprocess calls.
+
+## Developer & AI Guide
+
+- **Interacting with Backups:** Never run backup binaries via `subprocess` from within Odoo models. All operations must route through RabbitMQ.
+- **Triggering Jobs:** Use internal methods like `_publish_to_worker` within `backup.config` to dispatch tasks asynchronously.
+- **Security Protocols:** All backend RPC calls must use service accounts (via `zero_sudo.security.utils`) to prevent unauthorized escalation. Ensure `validate_backup_path` is called on any user-provided path to prevent directory traversal and symlink attacks.
+
 ## User Guide
 
 ### Configuring a Backup

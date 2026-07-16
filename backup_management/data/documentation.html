@@ -35,8 +35,17 @@
 <h4 id="UX_MONITOR_DASHBOARD" data-trace="[@ANCHOR: backup_management:UX_MONITOR_DASHBOARD]">2. Monitor via Dashboard</h4>
         <p>The <strong>Backup Dashboard</strong> shows you at a glance if your backups are up to date. Records highlighted in red indicate that no backup has been successful in the last 26 hours. The dashboard also displays the status of the most recent backup or sync job, providing real-time visibility into background operations.</p>
 
+        <!-- [@ANCHOR: backup_management:UX_MANUAL_EXECUTION] -->
+<h4 id="UX_MANUAL_EXECUTION" data-trace="[@ANCHOR: backup_management:UX_MANUAL_EXECUTION]">3. Manual Execution</h4>
+        <p>You can manually interact with backups in several ways:</p>
+        <ul>
+            <li><strong>Trigger Backup:</strong> From the configuration form or the Backup Dashboard, click the "Trigger Backup" action to immediately queue a new backup snapshot.</li>
+            <li><strong>Sync Snapshots:</strong> If snapshots were created outside of Odoo, click "Sync Snapshots" to update the local database with remote metadata.</li>
+            <li><strong>Test Connection:</strong> Use the "Test Connection" action on a configuration to verify connectivity with Kopia or pgBackRest.</li>
+        </ul>
+
         <!-- [@ANCHOR: backup_management:UX_PERFORM_RESTORE] -->
-<h4 id="UX_PERFORM_RESTORE" data-trace="[@ANCHOR: backup_management:UX_PERFORM_RESTORE]">3. Performing a Restore</h4>
+<h4 id="UX_PERFORM_RESTORE" data-trace="[@ANCHOR: backup_management:UX_PERFORM_RESTORE]">4. Performing a Restore</h4>
         <p>In the event of data loss, navigate to <strong>Backups > Snapshots</strong>. Select a known good snapshot and click the <strong>Restore</strong> button. You will be prompted for a target directory where the files should be placed.</p>
 
         <div class="alert alert-warning">
