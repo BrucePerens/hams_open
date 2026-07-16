@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import logging
@@ -13,28 +14,25 @@ class TestPerformanceORM(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
-        self.test_users = []
-        for i in range(15):
-            u = self.env["res.users"].create(
-                {
-                    "name": f"Perf User {i}",
-                    "login": f"perfuser{i}",
-                    "website_slug": f"perfuser{i}",
-                    "group_ids": [
-                        (
-                            6,
-                            0,
-                            [
-                                self.env.ref("base.group_portal").id,
-                                self.env.ref(
-                                    "user_websites.group_user_websites_user"
-                                ).id,
-                            ],
-                        )
-                    ],
-                }
-            )
-            self.test_users.append(u)
+        users_data = [
+            {
+                "name": f"Perf User {i}",
+                "login": f"perfuser{i}",
+                "website_slug": f"perfuser{i}",
+                "group_ids": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_portal").id,
+                            self.env.ref("user_websites.group_user_websites_user").id,
+                        ],
+                    )
+                ],
+            }
+            for i in range(15)
+        ]
+        self.test_users = self.env["res.users"].create(users_data)
         self.env.flush_all()
 
     def test_01_site_creation_query_scaling(self):
@@ -99,28 +97,25 @@ class TestPerformanceRouting(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
-        self.test_users = []
-        for i in range(15):
-            u = self.env["res.users"].create(
-                {
-                    "name": f"Route User {i}",
-                    "login": f"routeuser{i}",
-                    "website_slug": f"routeuser{i}",
-                    "group_ids": [
-                        (
-                            6,
-                            0,
-                            [
-                                self.env.ref("base.group_portal").id,
-                                self.env.ref(
-                                    "user_websites.group_user_websites_user"
-                                ).id,
-                            ],
-                        )
-                    ],
-                }
-            )
-            self.test_users.append(u)
+        users_data = [
+            {
+                "name": f"Route User {i}",
+                "login": f"routeuser{i}",
+                "website_slug": f"routeuser{i}",
+                "group_ids": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_portal").id,
+                            self.env.ref("user_websites.group_user_websites_user").id,
+                        ],
+                    )
+                ],
+            }
+            for i in range(15)
+        ]
+        self.test_users = self.env["res.users"].create(users_data)
 
     def test_02_acl_overhead_loop_elimination(self):
         # [@ANCHOR: test_acl_overhead_loop_elimination]
