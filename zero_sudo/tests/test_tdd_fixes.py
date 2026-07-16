@@ -12,7 +12,7 @@ from odoo import _
 import os
 import sys
 from odoo.tests.common import tagged
-from odoo.tools.misc import file_path
+from odoo.tools import file_open
 
 @tagged("post_install", "-at_install")
 class TestZeroSudoFixes(common.HamsTransactionCase):
@@ -20,11 +20,13 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         regular = self.env["res.users"].create({
             "name": "Regular User",
             "login": "regular_user_test@example.com",
+            "lang": "en_US",
         })
         service = self.env["res.users"].create({
             "name": "Service Account",
             "login": "service_account_test@example.com",
             "is_service_account": True,
+            "lang": "en_US",
         })
         
         users = regular | service
@@ -70,6 +72,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             "name": "Service Account IrHttp",
             "login": "service_account_irhttp@example.com",
             "is_service_account": True,
+            "lang": "en_US",
         })
         self.assertTrue(self.env["ir.http"]._is_service_account_cached(user.id))
         
@@ -77,6 +80,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             "name": "Regular IrHttp",
             "login": "regular_irhttp@example.com",
             "is_service_account": False,
+            "lang": "en_US",
         })
         self.assertFalse(self.env["ir.http"]._is_service_account_cached(user2.id))
 
@@ -86,6 +90,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             "name": "Filtered User",
             "login": "filtered_user@example.com",
             "is_service_account": True,
+            "lang": "en_US",
         })
         user.write({"password": "new_password"})
         self.assertNotEqual(user.password, "new_password")
@@ -139,26 +144,21 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         log_sudo = log.with_user(system_user)
         with self.assertRaises(AccessError):
             log_sudo.write({"reason": "changed"})
-            self.env.flush_all()
         with self.assertRaises(AccessError):
             log_sudo.unlink()
-            self.env.flush_all()
             
         # Check facility service group
         facility_user = self.env.ref("zero_sudo.odoo_facility_service_internal")
         log_facility = log.with_user(facility_user)
         with self.assertRaises(AccessError):
             log_facility.write({"reason": "changed_facility"})
-            self.env.flush_all()
         with self.assertRaises(AccessError):
             log_facility.unlink()
-            self.env.flush_all()
 
     def test_documentation_wrappers(self):
         # [@ANCHOR: zero_sudo:COMM_test_documentation_wrappers]
         
-        path = file_path("zero_sudo/data/testing_documentation.html")
-        with open(path, "r", encoding="utf-8") as f:
+        with file_open("zero_sudo/data/testing_documentation.html", "r", encoding="utf-8") as f:
             content = f.read().strip()
         self.assertTrue(content.startswith('<div class="o_knowledge_content">'))
         self.assertTrue(content.endswith('</div>'))

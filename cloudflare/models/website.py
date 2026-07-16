@@ -52,7 +52,7 @@ class WebsiteCloudflare(models.Model):
         # In multi-tenant systems, environment variables are shared and break isolation.
         # We enforce fetching from the daemon key registry.
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_tunnel")
-        key_record = self.env["daemon_key_registry.key"].with_user(svc_uid).search([("name", "=", "cloudflare_encryption_key")], limit=1)
+        key_record = self.env["daemon.key.registry"].with_user(svc_uid).search([("name", "=", "cloudflare_encryption_key")], limit=1)
         key = key_record.value if key_record else None
         if not key:
             return None
