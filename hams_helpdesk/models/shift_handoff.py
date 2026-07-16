@@ -41,8 +41,7 @@ class ShiftHandoffWizard(models.TransientModel):
         body += markupsafe.Markup("<b>Accepted By:</b> {}<br/>").format(self.new_user_id.name)
         body += markupsafe.Markup("<b>Operator Briefing:</b><br/><i>{}</i>").format(self.handoff_notes or "")
 
-        facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
-        ticket.with_env(facility_env).message_post(
+        ticket.message_post(
             body=body,
             subject=_("Shift Handoff: %s") % ticket.name,
             partner_ids=[self.new_user_id.partner_id.id],
