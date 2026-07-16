@@ -4,7 +4,7 @@
      License: AGPL-3.0 -->
 <odoo>
     <record id="view_noisy_table_list" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views] --> <!-- burn-ignore-tour -->
         <field name="name">zero_sudo.noisy_table.list</field>
         <field name="model">zero_sudo.noisy_table</field>
         <field name="arch" type="xml">
@@ -16,7 +16,7 @@
     </record>
 
     <record id="view_noisy_table_form" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views] --> <!-- burn-ignore-tour -->
         <field name="name">zero_sudo.noisy_table.form</field>
         <field name="model">zero_sudo.noisy_table</field>
         <field name="arch" type="xml">
@@ -51,7 +51,7 @@
     <!-- [@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT] -->
     <menuitem id="menu_noisy_table"
               name="Noisy Tables"
-              parent="base.menu_administration"
+              parent="menu_zero_sudo_root"
               action="action_noisy_table"
               sequence="100"/>
 </odoo>
