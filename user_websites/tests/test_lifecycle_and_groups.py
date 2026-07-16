@@ -1,6 +1,6 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import odoo
 import time
 from odoo.tests import tagged
@@ -96,7 +96,8 @@ class TestLifecycleAndGroups(RealTransactionCase):
             [
                 ("url", "=", f"/{self.test_group.website_slug}/home"),
                 ("user_websites_group_id", "=", self.test_group.id),
-            ]
+            ],
+            limit=1
         )
         self.assertTrue(group_home, "Group homepage should exist after creation")
 
@@ -116,7 +117,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
-            [("url", "=", f"/{self.test_group.website_slug}/home")]
+            [("url", "=", f"/{self.test_group.website_slug}/home")], limit=1
         )
         self.assertFalse(
             group_home, "Non-member should not be able to create group homepage"
@@ -151,7 +152,6 @@ class TestLifecycleAndGroups(RealTransactionCase):
         self.assertTrue(post.is_published, "Post should be published initially")
 
         self.logout()
-        self.authenticate("admin", "admin")
 
         self.env.cr.commit()
         self.user_a.with_context(test_mode=True).active = False
@@ -251,7 +251,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
-            [("url", "=", f"/{self.test_group.website_slug}/home")]
+            [("url", "=", f"/{self.test_group.website_slug}/home")], limit=1
         )
         self.assertFalse(
             group_home, "Public Guest should not be able to create group homepage"
