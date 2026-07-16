@@ -17,6 +17,12 @@ The Service Worker automatically looks for requests matching these patterns:
 
 As long as you place your Javascript, CSS, and UI icons inside your module's standard `static/` directory, they will be cached automatically.
 
+## 📱 Progressive Web App (PWA) Capabilities
+
+The module turns the website into an installable Progressive Web App (PWA):
+- **`/manifest.json`**: Dynamically generates the PWA manifest using the theme and background colors configured in the Website Settings.
+- **`/offline`**: A dedicated fallback route that is served by the Service Worker when the client loses internet connectivity, providing a graceful offline experience instead of a browser error.
+
 ## 🏢 Multi-Tenant & Multi-Website Support
 
 The caching system is fully aware of Odoo's multi-website architecture. Each website can have its own independent caching configuration:
