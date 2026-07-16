@@ -18,16 +18,11 @@ class TestHelpdeskPersonasUITours(HamsHttpCase):
                 "email": "crm_tour@example.com",
                 "lang": "en_US",
                 "group_ids": [
-                    (
-                        6,
-                        0,
-                        [
-                            self.env.ref("base.group_portal").id,
-                        ],
-                    )
+                    (6, 0, [self.env.ref("base.group_portal").id])
                 ],
             }
         )
+        self.crm_user.partner_id.write({'callsign': 'K1CRM'})
         self.club_user = self.env["res.users"].create(
             {
                 "name": "Club Rep User",
@@ -36,17 +31,11 @@ class TestHelpdeskPersonasUITours(HamsHttpCase):
                 "email": "club_tour@example.com",
                 "lang": "en_US",
                 "group_ids": [
-                    (
-                        6,
-                        0,
-                        [
-                            self.env.ref("base.group_portal").id,
-                        ],
-                    )
+                    (6, 0, [self.env.ref("base.group_portal").id])
                 ],
             }
         )
-
+        self.club_user.partner_id.write({'callsign': 'K1CLB'})
     def test_01_crm_user_tour(self):
         self.start_tour(
             "/my/tickets?debug=1", "helpdesk_portal_tour", login="crm_user_tour"
