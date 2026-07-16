@@ -11,3 +11,19 @@ Ticket creation is an intelligent process that automatically routes incidents to
 5.  **Pre-Shift Awareness**: Upcoming shift operators are CC'd on tickets created shortly before their shift.
 
 *Verified by [@ANCHOR: hams_helpdesk:COMM_test_01_ticket_creation_and_routing]*
+
+## Detailed Feature Index
+The ticket creation process utilizes the standard ticket form.
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_form]**
+
+The operator view lists all created tickets.
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_list]**
+
+The portal user can list their tickets.
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_list]**
+
+The portal provides detailed views for individual tickets.
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_detail]**
+
+Customers can submit a new ticket directly from the portal.
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_new]**
