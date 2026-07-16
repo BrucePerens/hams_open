@@ -54,6 +54,7 @@
     <ul>
         <li>Go to <strong>Database Health > Slow Queries (APM)</strong>.</li>
         <li>Queries are sorted by <strong>Total Time</strong>. This helps you identify which parts of the application are causing the most load, even if individual executions are fast.</li>
+        <li><strong>Installation Note:</strong> If queries do not appear, you may need to install the <code>pg_stat_statements</code> extension. Ensure it is included in your <code>postgresql.conf</code> <code>shared_preload_libraries</code>, and then use the provided installation button to enable it on the database.</li>
         <li><strong>Reset Statistics:</strong> If you have resolved performance issues and want to start fresh, use the <strong>Reset Statistics</strong> button in the header.</li>
         <li><strong>Explain Plan:</strong> Click the <strong>Explain</strong> (search icon) next to any query to generate a detailed <code>EXPLAIN (ANALYZE, BUFFERS)</code> plan. This reveals exactly how PostgreSQL is executing the query and where the bottlenecks are.</li>
     </ul>
@@ -63,13 +64,6 @@
     <!-- [@ANCHOR: COMM_db_active_sessions] [@ANCHOR: COMM_db_terminate_backend] -->
     <h2 id="active_sessions_kill" data-trace="COMM_db_active_sessions, COMM_db_terminate_backend">4. Active Sessions &amp; Kill Switch</h2>
     <p>Sometimes a single "runaway" query or a deadlocked session can freeze parts of the system.</p>
-
-    <h3>Replication Monitoring:</h3>
-    <p>For systems with standby nodes, monitoring replication lag is critical to ensure data consistency and high availability.</p>
-    <ul>
-        <li>Navigate to <strong>Database Health > Replication Monitoring</strong>.</li>
-        <li>The view shows connected standby nodes, their state, and <strong>Replay Lag</strong>.</li>
-    </ul>
     <ul>
         <li>Go to <strong>Database Health > Active Sessions</strong>.</li>
         <li>Review the <strong>Duration</strong> and the <strong>Active Query</strong> text.</li>
@@ -79,8 +73,18 @@
 </section>
 
 <section>
+    <!-- [@ANCHOR: COMM_db_replication_stats] -->
+    <h2 id="replication_monitoring" data-trace="COMM_db_replication_stats">5. Replication Monitoring</h2>
+    <p>For systems with standby nodes, monitoring replication lag is critical to ensure data consistency and high availability.</p>
+    <ul>
+        <li>Navigate to <strong>Database Health > Replication Monitoring</strong>.</li>
+        <li>The view shows connected standby nodes, their state, and <strong>Replay Lag</strong>.</li>
+    </ul>
+</section>
+
+<section>
     <!-- [@ANCHOR: COMM_pg_optimize_wizard] [@ANCHOR: COMM_db_settings_audit] [@ANCHOR: COMM_test_pg_config_views] -->
-    <h2 id="performance_optimization_wizard" data-trace="COMM_pg_optimize_wizard, COMM_db_settings_audit, COMM_test_pg_config_views">5. Performance Optimization Wizard</h2>
+    <h2 id="performance_optimization_wizard" data-trace="COMM_pg_optimize_wizard, COMM_db_settings_audit, COMM_test_pg_config_views">6. Performance Optimization Wizard</h2>
     <p>Configuring PostgreSQL for Odoo can be complex. Our wizard automates this using industry-standard DBA formulas.</p>
     <ol>
         <li>Go to <strong>Configuration & Tuning > Optimization Wizard</strong>.</li>
@@ -93,7 +97,7 @@
 
 <section>
     <!-- [@ANCHOR: COMM_pg_ha_wizard] -->
-    <h2 id="ha_orchestrator" data-trace="COMM_pg_ha_wizard">6. High Availability (HA) Orchestrator</h2>
+    <h2 id="ha_orchestrator" data-trace="COMM_pg_ha_wizard">7. High Availability (HA) Orchestrator</h2>
     <p>For production environments requiring high availability, this tool generates configuration templates for <strong>Patroni</strong>, <strong>etcd</strong>, and <strong>PgBouncer</strong>.</p>
     <ol>
         <li>Go to <strong>Configuration & Tuning > High Availability Orchestrator</strong>.</li>
