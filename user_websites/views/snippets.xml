@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
 
     <template id="user_websites_snippet_category" inherit_id="website.snippets" name="User Websites Snippets">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_snippets] -->
         <!-- Verified by [@ANCHOR: test_dropzone_snippets] -->
-
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_snippets] -->
         <xpath expr="/*" position="inside"> 
             <div id="user_websites_dropzone_snippets">
                 <!-- [@ANCHOR: dropzone_snippets] -->
