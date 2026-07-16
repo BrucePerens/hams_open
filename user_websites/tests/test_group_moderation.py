@@ -1,6 +1,6 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 import time
@@ -47,8 +47,7 @@ class TestGroupModeration(RealTransactionCase):
         # Suspend the group
         self.group.action_suspend_group_websites()
         self.env.cr.commit()
-        # audit-ignore-sleep: Give background thread time to unpublish
-        time.sleep(1.0)
+        time.sleep(1.0)  # audit-ignore-sleep: Give background thread time to unpublish
 
         # Verify suspension
         self.assertTrue(self.group.is_suspended_from_websites)
