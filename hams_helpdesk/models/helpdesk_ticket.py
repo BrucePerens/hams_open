@@ -168,7 +168,7 @@ class HelpdeskTicket(models.Model):
             facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
             if ticket_service.user_id:
                 # Email Notification
-                ticket_service.with_env(facility_env).message_post(
+                ticket_service.message_post(
                     body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id,
                     partner_ids=[ticket_service.user_id.partner_id.id],
                     subject=_("Ticket Assigned: %s") % ticket_service.name,
@@ -196,8 +196,8 @@ class HelpdeskTicket(models.Model):
                     pid for pid in upcoming_partner_ids if pid != current_assignee_pid
                 ]
                 if cc_pids:
-                    ticket_service.with_env(facility_env).message_subscribe(partner_ids=cc_pids)
-                    ticket_service.with_env(facility_env).message_post(
+                    ticket_service.message_subscribe(partner_ids=cc_pids)
+                    ticket_service.message_post(
                         body=_(
                             "Upcoming shift awareness: A new ticket was created near your shift start."
                         ),
@@ -208,7 +208,7 @@ class HelpdeskTicket(models.Model):
 
             # Ensure customer is subscribed
             if ticket_service.partner_id:
-                ticket_service.with_env(facility_env).message_subscribe(
+                ticket_service.message_subscribe(
                     partner_ids=[ticket_service.partner_id.id]
                 )
 
@@ -277,5 +277,4 @@ class HelpdeskTicket(models.Model):
             utils = self.env["zero_sudo.security.utils"]
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
-            facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
-            self.with_env(facility_env).message_post(body=_("Ticket closed by customer."))
+            self.with_env(hd_env).message_post(body=_("Ticket closed by customer."))
