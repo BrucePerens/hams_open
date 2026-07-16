@@ -2,7 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of hams_open, an open source module.
-# License: AGPL-3.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import hashlib
 import os
@@ -74,11 +74,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_service_env(self, xml_id, context=None):
         """
         Returns a new Environment running strictly under the context of the specified
-        service account. Automatically disables tracking per ADR-0001
-        to prevent ORM cascade Access Errors.
+        service account.
         """
         uid = self._get_service_uid(xml_id)
-        env = self.with_user(uid).with_context(mail_notrack=True).env
+        env = self.with_user(uid).env
         if context:
             env = env(context=dict(env.context, **context))
         return env

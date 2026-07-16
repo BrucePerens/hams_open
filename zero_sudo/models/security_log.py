@@ -2,7 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of hams_open, an open source module.
-# License: AGPL-3.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import models, fields, api
 import datetime
@@ -40,13 +40,6 @@ class SecurityLog(models.Model):
     )
 
     create_date = fields.Datetime(index=True)
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        clean_ctx = dict(self.env.context)
-        clean_ctx.pop("mail_notrack", None)
-        clean_ctx.pop("prefetch_fields", None)
-        return super(SecurityLog, self.with_context(**clean_ctx)).create(vals_list)
 
     @api.model
     def autovacuum(self):
