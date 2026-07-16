@@ -1,6 +1,7 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+from cryptography.fernet import Fernet
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -33,6 +34,19 @@ class TestPurgeEverything(RealTransactionCase):
                 "cloudflare_zone_id": "zone_b",
             }
         )
+        
+        fernet_key = Fernet.generate_key()
+        mock_fernet = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_fernet")
+        mock_fernet.return_value = Fernet(fernet_key)
+        
+        self.website_a.write({
+            "cloudflare_api_token": "token_a",
+            "cloudflare_zone_id": "zone_a",
+        })
+        self.website_b.write({
+            "cloudflare_api_token": "token_b",
+            "cloudflare_zone_id": "zone_b",
+        })
 
     def test_purge_everything_logic(self):
         # [@ANCHOR: COMM_test_purge_everything_logic]
