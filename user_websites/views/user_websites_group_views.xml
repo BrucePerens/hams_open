@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
     <menuitem id="menu_user_websites_root"
               name="User Websites"
@@ -7,8 +8,8 @@
 
     <!-- Verified by [@ANCHOR: test_tour_backend_views] -->
 
-    <!-- audit-ignore-view -->
         <record id="view_user_websites_group_list" model="ir.ui.view"> 
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_backend_views] -->
         <field name="name">user.websites.group.list</field>
         <field name="model">user.websites.group</field>
         <field name="arch" type="xml">
@@ -20,8 +21,8 @@
         </field>
     </record>
 
-    <!-- audit-ignore-view -->
         <record id="view_user_websites_group_form" model="ir.ui.view"> 
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_tour_backend_views] -->
         <field name="name">user.websites.group.form</field>
         <field name="model">user.websites.group</field>
         <field name="arch" type="xml">
@@ -30,19 +31,19 @@
                     <button name="action_suspend_group_websites"
                             type="object"
                             string="Suspend Group Websites"
-                            invisible="not id or is_suspended_from_websites == True"
+                            invisible="not id or is_suspended_from_websites"
                             groups="user_websites.group_user_websites_administrator"
                             class="btn-danger"
                             confirm="Are you sure you want to suspend this group and unpublish all their content?"/>
                     <button name="action_pardon_group_websites"
                             type="object"
                             string="Pardon Group"
-                            invisible="not id or is_suspended_from_websites == False"
+                            invisible="not id or not is_suspended_from_websites"
                             groups="user_websites.group_user_websites_administrator"
                             class="btn-success"/>
                 </header>
                 <sheet>
-                    <widget name="web_ribbon" title="Suspended" bg_color="text-bg-danger" invisible="is_suspended_from_websites == False"/>
+                    <widget name="web_ribbon" title="Suspended" bg_color="text-bg-danger" invisible="not is_suspended_from_websites"/>
                     <div class="oe_title">
                         <label for="name" class="oe_edit_only"/>
                         <h1><field name="name" placeholder="e.g. Chess Club"/></h1>
