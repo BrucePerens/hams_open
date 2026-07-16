@@ -113,5 +113,6 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
                 "message": _("Zone settings updated successfully."),
                 "type": "success",
                 "sticky": False,
+                "next": {"type": "ir.actions.act_window_close"},
             },
         }
