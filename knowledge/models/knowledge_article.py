@@ -1,4 +1,4 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
@@ -107,17 +107,46 @@ class KnowledgeArticle(models.Model):
     @api.depends("parent_id")
     def _compute_breadcrumb_article_ids(self):
         # [@ANCHOR: manual_compute_breadcrumbs]
+        valid_ids = tuple(i for i in self.ids if isinstance(i, int))
+        ancestor_map = {article.id: [] for article in self}
+        
+        if valid_ids:
+            query = """
+                WITH RECURSIVE ancestors AS (
+                    SELECT id as base_id, parent_id, 1 as depth
+                    FROM knowledge_article
+                    WHERE id IN %s AND parent_id IS NOT NULL
+                    
+                    UNION ALL
+                    
+                    SELECT a.base_id, k.parent_id, a.depth + 1
+                    FROM knowledge_article k
+                    JOIN ancestors a ON k.id = a.parent_id
+                    WHERE a.parent_id IS NOT NULL AND a.depth < 50
+                )
+                SELECT base_id, parent_id
+                FROM ancestors
+                WHERE parent_id IS NOT NULL
+                ORDER BY base_id, depth DESC
+            """
+            self.env.cr.execute(query, (valid_ids,))
+            for base_id, parent_id in self.env.cr.fetchall():
+                ancestor_map[base_id].append(parent_id)
+
         for article in self:
-            breadcrumbs = []
-            current = article.parent_id
-            visited = set()
-            while current and current.id not in visited:
-                breadcrumbs.append(current.id)
-                visited.add(current.id)
-                current = current.parent_id
-            
-            breadcrumbs.reverse()
-            article.breadcrumb_article_ids = [(6, 0, breadcrumbs)]
+            if isinstance(article.id, int):
+                article.breadcrumb_article_ids = [(6, 0, ancestor_map[article.id])]
+            else:
+                # Fallback to ORM for unsaved records (NewId)
+                breadcrumbs = []
+                current = article.parent_id
+                visited = set()
+                while current and current.id not in visited:
+                    breadcrumbs.append(current.id)
+                    visited.add(current.id)
+                    current = current.parent_id
+                breadcrumbs.reverse()
+                article.breadcrumb_article_ids = [(6, 0, breadcrumbs)]
 
     @api.depends("body")
     def _compute_body_snippet(self):

@@ -1,4 +1,4 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 from odoo import http
@@ -9,6 +9,7 @@ import werkzeug.exceptions
 import logging
 import re
 import markdown
+import lxml.html
 from werkzeug.urls import url_parse
 from markupsafe import Markup
 from odoo.tools import lru
@@ -48,11 +49,11 @@ class ManualLibraryController(http.Controller):
         is_md = any(re.search(sig, text_content) for sig in markdown_signatures)
 
         # Avoid compiling if it contains complex native Odoo UI snippets (tables, deep divs)
-        has_complex_html = bool(
-            re.search(
-                r"<(div|table|section|article|img)[^>]*>", html_body, re.IGNORECASE
-            )
-        )
+        try:
+            tree = lxml.html.fromstring(html_body)
+            has_complex_html = bool(tree.xpath("//div | //table | //section | //article | //img"))
+        except Exception:
+            has_complex_html = False
 
         if is_md and not has_complex_html:
             try:
@@ -76,14 +77,18 @@ class ManualLibraryController(http.Controller):
         # [@ANCHOR: manual_sidebar_search_optimization]
         # Performance: Reducing 3 RPC/DB round-trips to 1 by using a combined domain.
         user_id = request.env.user.id
+        try:
+            website_id = request.website.id
+        except AttributeError:
+            website_id = False
+
         base_domain = [
             ("parent_id", "=", False),
-            ("website_id", "in", (False, request.website.id)),
+            ("website_id", "in", (False, website_id)),
         ]
-        
         is_internal = request.env.user.has_group("base.group_user")
         if not is_internal:
-            base_domain.append(("is_published", "=", True))
+            base_domain += ["|", ("is_published", "=", True), ("member_ids", "in", user_id)]
 
         # Combined domain to fetch all relevant root articles in one go
         combined_domain = base_domain + [
@@ -102,7 +107,9 @@ class ManualLibraryController(http.Controller):
             lambda a: a.internal_permission in ("read", "write")
         )
         shared_articles = all_roots.filtered(
-            lambda a: a.internal_permission == "none" and user_id in a.member_ids.ids
+            lambda a: a.internal_permission == "none" 
+            and a.member_ids 
+            and (user_id in a.member_ids.ids or a.create_uid.id == user_id)
         )
         private_articles = all_roots.filtered(
             lambda a: a.internal_permission == "none"
@@ -171,10 +178,10 @@ class ManualLibraryController(http.Controller):
         except AccessError:
             raise werkzeug.exceptions.NotFound()
 
-        # Enforce explicitly that non-internal users cannot view unpublished articles
         is_internal = request.env.user.has_group("base.group_user")
         if not is_internal and not user_article.is_published:
-            raise werkzeug.exceptions.NotFound()
+            if request.env.user.id not in user_article.member_ids.ids:
+                raise werkzeug.exceptions.NotFound()
 
         # 6. Canonical Redirect for SEO: ensure the slug matches current name
         if article_slug and article.website_url != request.httprequest.path:
@@ -213,11 +220,14 @@ class ManualLibraryController(http.Controller):
             domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
 
         # Explicitly filter by website_id in case record rules are not enough for frontend context
-        domain += [("website_id", "in", (False, request.website.id))]
-        
+        try:
+            website_id = request.website.id
+        except AttributeError:
+            website_id = False
+        domain += [("website_id", "in", (False, website_id))]
         is_internal = request.env.user.has_group("base.group_user")
         if not is_internal:
-            domain += [("is_published", "=", True)]
+            domain += ["|", ("is_published", "=", True), ("member_ids", "in", request.env.user.ids)]
 
         # Removed .sudo() to allow native Record Rules to filter visibility by user persona
         articles = request.env["knowledge.article"].search(domain, limit=1000)
@@ -243,13 +253,17 @@ class ManualLibraryController(http.Controller):
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
+        try:
+            website_id = request.website.id
+        except AttributeError:
+            website_id = False
         domain = [
             ("name", "=ilike", normalized_name),
-            ("website_id", "in", (False, request.website.id)),
+            ("website_id", "in", (False, website_id)),
         ]
         is_internal = request.env.user.has_group("base.group_user")
         if not is_internal:
-            domain.append(("is_published", "=", True))
+            domain += ["|", ("is_published", "=", True), ("member_ids", "in", request.env.user.ids)]
         
         article = request.env["knowledge.article"].search(domain, limit=1)
         if article:
