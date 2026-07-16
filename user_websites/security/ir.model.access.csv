@@ -14,6 +14,7 @@ access_blog_post_user,blog.post user,website_blog.model_blog_post,user_websites.
 access_blog_blog_user,blog.blog user,website_blog.model_blog_blog,user_websites.group_user_websites_user,1,1,1,1
 access_user_websites_group_admin,user.websites.group admin,model_user_websites_group,user_websites.group_user_websites_administrator,1,1,1,1
 access_user_websites_group_user,user.websites.group user,model_user_websites_group,base.group_portal,1,0,0,0
+access_user_websites_group_internal,user.websites.group internal,model_user_websites_group,base.group_user,1,0,0,0
 access_user_websites_group_public,user.websites.group public,model_user_websites_group,base.group_public,1,0,0,0
 access_website_page_svc,website.page svc,website.model_website_page,user_websites.group_user_websites_service_account,1,1,1,1
 access_blog_post_svc,blog.post svc,website_blog.model_blog_post,user_websites.group_user_websites_service_account,1,1,1,1
