@@ -9,6 +9,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 @tagged("post_install", "-at_install")
 class TestPagerControllers(HamsHttpCase):
     def test_01_ping_endpoint(self):
+        # Tests [@ANCHOR: pd_log_api_i18n]
         response = self.url_open("/api/v1/pager/ping")
         self.assertEqual(
             response.status_code, 200, "Ping endpoint failed to return 200 OK."

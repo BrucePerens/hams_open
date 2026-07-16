@@ -147,3 +147,96 @@ class TestPagerSecurity(HamsTransactionCase):
         self.assertTrue(article, "Pager Duty documentation article should exist.")
         self.assertIn("Pager Duty", article.body)
         self.assertIn("Generalized Monitoring", article.body)
+
+    def test_04_multi_tenant_isolation(self):
+        """
+        Verify that multi-tenancy rules isolate records by company_id.
+        """
+        company_a = self.env.company
+        company_b = self.env["res.company"].create({"name": "Company B"})
+
+        # Admin user is in Company A
+        self.admin.write({"company_ids": [(6, 0, [company_a.id])], "company_id": company_a.id})
+
+        # Create Admin B in Company B
+        admin_b = self.env["res.users"].create(
+            {
+                "name": "Admin B",
+                "login": "admin_b",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id, self.env.ref("pager_duty.group_pager_admin").id, self.env.ref("base.group_multi_company").id])],
+                "company_ids": [(6, 0, [company_b.id])],
+                "company_id": company_b.id,
+            }
+        )
+
+        # Create records in Company A
+        check_a = self.env["pager.check"].with_user(self.admin).create({"name": "Check A", "company_id": company_a.id, "check_type": "heartbeat"})
+        inc_a = self.env["pager.incident"].with_user(self.admin).create({"source": "A", "company_id": company_a.id})
+        
+        # Create records in Company B
+        check_b = self.env["pager.check"].with_user(admin_b).create({"name": "Check B", "company_id": company_b.id, "check_type": "heartbeat"})
+        inc_b = self.env["pager.incident"].with_user(admin_b).create({"source": "B", "company_id": company_b.id})
+
+        # Admin A should only see Company A's records
+        checks_a_sees = self.env["pager.check"].with_user(self.admin).search([])
+        self.assertIn(check_a, checks_a_sees)
+        self.assertNotIn(check_b, checks_a_sees)
+
+        incs_a_sees = self.env["pager.incident"].with_user(self.admin).search([])
+        self.assertIn(inc_a, incs_a_sees)
+        self.assertNotIn(inc_b, incs_a_sees)
+
+        # Admin B should only see Company B's records
+        checks_b_sees = self.env["pager.check"].with_user(admin_b).search([])
+        self.assertIn(check_b, checks_b_sees)
+        self.assertNotIn(check_a, checks_b_sees)
+
+        incs_b_sees = self.env["pager.incident"].with_user(admin_b).search([])
+        self.assertIn(inc_b, incs_b_sees)
+        self.assertNotIn(inc_a, incs_b_sees)
+
+    def test_05_multi_website_isolation(self):
+        """
+        Verify that multi-tenancy rules isolate records by website_id.
+        """
+        website_a = self.env["website"].create({"name": "Website A"})
+        website_b = self.env["website"].create({"name": "Website B"})
+
+        # Admin user is assigned to Website A
+        self.admin.write({"website_id": website_a.id})
+
+        # Create Admin B in Website B
+        admin_b = self.env["res.users"].create(
+            {
+                "name": "Admin B Website B",
+                "login": "admin_b_web_b",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id, self.env.ref("pager_duty.group_pager_admin").id])],
+                "website_id": website_b.id,
+            }
+        )
+
+        # Create records in Website A
+        check_a = self.env["pager.check"].with_user(self.admin).create({"name": "Check Web A", "website_id": website_a.id, "check_type": "heartbeat"})
+        inc_a = self.env["pager.incident"].with_user(self.admin).create({"source": "Web A", "website_id": website_a.id})
+        
+        # Create records in Website B
+        check_b = self.env["pager.check"].with_user(admin_b).create({"name": "Check Web B", "website_id": website_b.id, "check_type": "heartbeat"})
+        inc_b = self.env["pager.incident"].with_user(admin_b).create({"source": "Web B", "website_id": website_b.id})
+
+        # Admin A should only see Website A's records
+        checks_a_sees = self.env["pager.check"].with_user(self.admin).search([])
+        self.assertIn(check_a, checks_a_sees)
+        self.assertNotIn(check_b, checks_a_sees)
+
+        incs_a_sees = self.env["pager.incident"].with_user(self.admin).search([])
+        self.assertIn(inc_a, incs_a_sees)
+        self.assertNotIn(inc_b, incs_a_sees)
+
+        # Admin B should only see Website B's records
+        checks_b_sees = self.env["pager.check"].with_user(admin_b).search([])
+        self.assertIn(check_b, checks_b_sees)
+        self.assertNotIn(check_a, checks_b_sees)
+
+        incs_b_sees = self.env["pager.incident"].with_user(admin_b).search([])
+        self.assertIn(inc_b, incs_b_sees)
+        self.assertNotIn(inc_a, incs_b_sees)

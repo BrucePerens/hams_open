@@ -8,7 +8,8 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name"/>
-                <field name="website_id" groups="base.group_no_one"/>
+                <field name="website_id" groups="website.group_multi_website"/>
+                <field name="company_id" groups="base.group_multi_company"/>
                 <field name="source"/>
                 <field name="severity"/>
                 <field name="status"/>
@@ -29,6 +30,8 @@
                 <field name="source"/>
                 <field name="severity"/>
                 <field name="status"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="website_id" groups="website.group_multi_website"/>
                 <field name="acknowledged_by_id"/>
                 <field name="mtta"/>
                 <field name="mttr"/>

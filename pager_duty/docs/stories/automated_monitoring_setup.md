@@ -13,7 +13,9 @@ Bob opens the Odoo backend and navigates to the Monitoring Checks view [@ANCHOR:
 
 1.  **Creation:** He creates a new `pager.check` record of type "HTTP". He enters the URL of the order service's health endpoint.
 2.  **Configuration:** Bob sets the interval to 60 seconds and assigns the "Odoo XML-RPC Handshake" as the parent check to ensure he doesn't get flooded with order service alerts if the entire network goes down.
-3.  **Synchronization:** Bob clicks the "JSON Configuration Tools" wizard [@ANCHOR: generalized_pager_config]. He reviews the generated JSON and clicks "Export to JSON". This pushes the new configuration to the daemon's persistent storage.
+3.  **Helpdesk Integration:** Bob enables the Helpdesk integration so that if a check fails, a support ticket is automatically created in his department's queue [@ANCHOR: pd_helpdesk_adapter].
+
+4.  **Synchronization:** Bob clicks the "JSON Configuration Tools" wizard [@ANCHOR: generalized_pager_config]. He reviews the generated JSON and clicks "Export to JSON". This pushes the new configuration to the daemon's persistent storage.
 
 4.  **Verification:** The `generalized_monitor.py` daemon reloads the configuration on its next tick. Bob watches the NOC Board [@ANCHOR: pager_board_data] and sees the new "Order Processing" check appear in the green "Healthy" state.
 

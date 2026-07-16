@@ -31,6 +31,7 @@ class PagerCheck(models.Model):
 
     name = fields.Char(string="Check Name / Source", required=True)
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
+    company_id = fields.Many2one("res.company", string="Company", required=True, default=lambda self: self.env.company)
     status = fields.Selection(
         [
             ("passing", "Passing"),
@@ -498,8 +499,11 @@ class PagerCheck(models.Model):
         json_content = json.dumps(json_dict, indent=2)
         path = self._get_config_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(json_content)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json_content)
+        except OSError as e:
+            _logger.warning("Failed to write daemon configuration to %s: %s", path, e)
 
         return {
             "type": "ir.actions.client",

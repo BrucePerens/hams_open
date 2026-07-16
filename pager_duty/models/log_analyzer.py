@@ -19,6 +19,7 @@ class PagerLogPattern(models.Model):
         string="Pattern Name", required=True, help="e.g. Kernel Filesystem Corruption"
     )
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
+    company_id = fields.Many2one("res.company", string="Company", required=True, default=lambda self: self.env.company)
     regex = fields.Char(
         string="Regular Expression", required=True, help="e.g. (ext4|xfs|btrfs).*error"
     )
@@ -52,6 +53,7 @@ class PagerLogFile(models.Model):
         string="Absolute Path", required=True, help="e.g. /var/log/syslog"
     )
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
+    company_id = fields.Many2one("res.company", string="Company", required=True, default=lambda self: self.env.company)
     active = fields.Boolean(default=True)
 
     _path_uniq = models.Constraint("UNIQUE(filepath, website_id)", "The file path must be unique per website!")
@@ -62,6 +64,7 @@ class PagerLogSearchJob(models.TransientModel):
 
     name = fields.Char(string="Name", default="Log Search Job")
     uuid = fields.Char(string="UUID", required=True, index=True)
+    company_id = fields.Many2one("res.company", string="Company", required=True, default=lambda self: self.env.company)
     state = fields.Selection([("pending", "Pending"), ("done", "Done"), ("error", "Error")], default="pending")
     result_payload = fields.Text(string="Result JSON")
 

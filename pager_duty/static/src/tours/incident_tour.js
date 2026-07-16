@@ -39,7 +39,7 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: "click",
         },
         {
-            trigger: '.o_select_menu_item:contains("High")',
+            trigger: '.o_select_menu_item[data-value*="high"]',
             content: "Select High severity",
             run: "click",
         },

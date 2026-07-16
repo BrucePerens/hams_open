@@ -26,6 +26,9 @@ class PagerIncident(models.Model):
     website_id = fields.Many2one(
         "website", string="Website", ondelete="cascade", index=True
     )
+    company_id = fields.Many2one(
+        "res.company", string="Company", required=True, default=lambda self: self.env.company
+    )
     # Added index=True to prevent sequential scans during daemon polling
     source = fields.Char(string="Source", required=True, index=True, tracking=True)
     severity = fields.Selection(
@@ -280,5 +283,6 @@ class PagerIncident(models.Model):
             if current_website:
                 website_id = current_website.id
         
-        self.env.cr.execute("SELECT pager_get_board_data(%s)", [website_id])
+        company_id = self.env.company.id
+        self.env.cr.execute("SELECT pager_get_board_data(%s, %s)", [website_id, company_id])
         return self.env.cr.fetchone()[0]

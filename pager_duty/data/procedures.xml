@@ -10,7 +10,7 @@
             <field name="state">code</field>
             <field name="code">
 sql = """
-CREATE OR REPLACE FUNCTION pager_get_board_data(p_website_id INTEGER) RETURNS JSONB AS $$
+CREATE OR REPLACE FUNCTION pager_get_board_data(p_website_id INTEGER, p_company_id INTEGER) RETURNS JSONB AS $$
 DECLARE
     v_active JSONB;
     v_resolved JSONB;
@@ -26,6 +26,7 @@ BEGIN
       AND e.start &lt;= NOW()
       AND e.stop &gt;= NOW()
       AND (e.website_id = p_website_id OR (e.website_id IS NULL AND p_website_id IS NULL))
+      AND (u.company_id = p_company_id OR (u.company_id IS NULL AND p_company_id IS NULL))
     LIMIT 1;
 
     -- Get active incidents (capped at 50)
@@ -35,6 +36,7 @@ BEGIN
         FROM pager_incident i
         WHERE status IN ('open', 'acknowledged')
           AND (website_id = p_website_id OR (website_id IS NULL AND p_website_id IS NULL))
+          AND (company_id = p_company_id OR (company_id IS NULL AND p_company_id IS NULL))
         ORDER BY create_date DESC
         LIMIT 50
     ) t;
@@ -45,6 +47,7 @@ BEGIN
         FROM pager_incident
         WHERE status = 'resolved'
           AND (website_id = p_website_id OR (website_id IS NULL AND p_website_id IS NULL))
+          AND (company_id = p_company_id OR (company_id IS NULL AND p_company_id IS NULL))
         ORDER BY time_resolved DESC
         LIMIT 10
     ) t;
@@ -54,6 +57,7 @@ BEGIN
         SELECT status, count(*) as count
         FROM pager_check
         WHERE (website_id = p_website_id OR (website_id IS NULL AND p_website_id IS NULL))
+          AND (company_id = p_company_id OR (company_id IS NULL AND p_company_id IS NULL))
         GROUP BY status
     ) t;
 

@@ -2,7 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 #
 # This file is part of hams_open, an open source module.
-# License: AGPL-3.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import psutil
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache
@@ -652,7 +652,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
                 # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
-        process = daemon_utils.start_daemon_process(script_path, args, env_vars)
+        process = daemon_utils._start_daemon_process(script_path, args, env_vars)
         self.__class__._active_daemons.append(process)
 
         if health_url:

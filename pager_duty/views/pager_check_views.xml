@@ -39,7 +39,8 @@
                         <group>
                             <field name="check_type"/>
                             <field name="target" invisible="check_type == 'heartbeat'"/>
-                            <field name="website_id" groups="base.group_no_one"/>
+                            <field name="website_id" groups="website.group_multi_website"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
                             <field name="active"/>
                         </group>
                         <group>

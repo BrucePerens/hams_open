@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hams_s3</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='integration']" position="after">
+                <block title="Cloud Storage" name="hams_cloud_storage">
+                    <setting id="hams_s3_setting" title="S3 Storage" help="Configure S3 Storage Backend">
+                    <field name="hams_s3_oca_installed" invisible="1"/>
+                    <field name="hams_s3_use_s3"/>
+                    
+                    <div class="content-group" invisible="not hams_s3_use_s3 or not hams_s3_oca_installed">
+                        <div class="row mt16">
+                            <label for="hams_s3_aws_host" class="col-lg-3 o_light_label"/>
+                            <field name="hams_s3_aws_host"/>
+                        </div>
+                        <div class="row mt16">
+                            <label for="hams_s3_aws_access_key_id" class="col-lg-3 o_light_label"/>
+                            <field name="hams_s3_aws_access_key_id"/>
+                        </div>
+                        <div class="row mt16">
+                            <label for="hams_s3_aws_secret_access_key" class="col-lg-3 o_light_label"/>
+                            <field name="hams_s3_aws_secret_access_key" password="True"/>
+                        </div>
+                        <div class="row mt16">
+                            <label for="hams_s3_aws_bucket" class="col-lg-3 o_light_label"/>
+                            <field name="hams_s3_aws_bucket"/>
+                        </div>
+                        <div class="row mt16">
+                            <label for="hams_s3_aws_region" class="col-lg-3 o_light_label"/>
+                            <field name="hams_s3_aws_region"/>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt16" role="alert" invisible="hams_s3_oca_installed">
+                        <strong>Missing Dependencies:</strong> The OCA storage_backend modules are not installed.<br/>
+                        To install them, please run the setup script: <code>python3 hams_s3/scripts/install_oca_storage.py</code><br/>
+                        Then, restart your Odoo server and update the apps list.
+                    </div>
+                </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

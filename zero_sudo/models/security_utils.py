@@ -78,8 +78,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         uid = self._get_service_uid(xml_id)
         env = self.with_user(uid).env
+        ctx = dict(env.context)
+        ctx["mail_notrack"] = True
         if context:
-            env = env(context=dict(env.context, **context))
+            ctx.update(context)
+        env = env(context=ctx)
         return env
 
     @api.model

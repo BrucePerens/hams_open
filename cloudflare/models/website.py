@@ -2,7 +2,6 @@
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields, api
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
-import os
 import logging
 from cryptography.fernet import Fernet
 
@@ -49,7 +48,12 @@ class WebsiteCloudflare(models.Model):
     )
 
     def _get_fernet(self):
-        key = os.environ.get("HAMS_CRYPTO_KEY")
+        # The key MUST be retrieved securely.
+        # In multi-tenant systems, environment variables are shared and break isolation.
+        # We enforce fetching from the daemon key registry.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_tunnel")
+        key_record = self.env["daemon_key_registry.key"].with_user(svc_uid).search([("name", "=", "cloudflare_encryption_key")], limit=1)
+        key = key_record.value if key_record else None
         if not key:
             return None
         return Fernet(key.encode("utf-8"))

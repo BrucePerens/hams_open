@@ -8,7 +8,8 @@
         <field name="arch" type="xml">
             <list string="Log Regex Patterns" editable="bottom">
                 <field name="name"/>
-                <field name="website_id" groups="base.group_no_one"/>
+                <field name="website_id" groups="website.group_multi_website"/>
+                <field name="company_id" groups="base.group_multi_company"/>
                 <field name="regex"/>
                 <field name="severity"/>
                 <field name="active" widget="boolean_toggle"/>
@@ -24,7 +25,8 @@
         <field name="arch" type="xml">
             <list string="Monitored Log Files" editable="bottom">
                 <field name="filepath"/>
-                <field name="website_id" groups="base.group_no_one"/>
+                <field name="website_id" groups="website.group_multi_website"/>
+                <field name="company_id" groups="base.group_multi_company"/>
                 <field name="active" widget="boolean_toggle"/>
             </list>
         </field>

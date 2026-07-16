@@ -2,7 +2,8 @@
 # Copyright © HAMS project. AGPL-3.0.
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from ..utils.cloudflare_api import delete_cfd_tunnel, list_cfd_tunnels
+from ..utils.cloudflare_api import delete_cfd_tunnel, list_cfd_tunnels, get_cfd_tunnel_token
+from ..utils.cloudflare_daemon import start_tunnel_daemon
 
 
 class CloudflareTunnel(models.Model):
@@ -115,3 +116,21 @@ class CloudflareTunnel(models.Model):
 
         if tunnels_to_create:
             self.env["cloudflare.tunnel"].create(tunnels_to_create)
+
+    @api.model
+    def action_ensure_tunnel_running(self):
+        # Find the primary tunnel for the current website
+        # In a single-server setup, we just pick the first tunnel available.
+        tunnel = self.env["cloudflare.tunnel"].search([], limit=1)
+        if not tunnel:
+            return
+
+        token, _zone = tunnel.website_id._get_cloudflare_credentials()
+        account_id = tunnel.website_id.cloudflare_account_id
+
+        if not token or not account_id:
+            return
+
+        success, tunnel_token = get_cfd_tunnel_token(account_id, token, tunnel.cf_tunnel_id)
+        if success and tunnel_token:
+            start_tunnel_daemon(tunnel_token)

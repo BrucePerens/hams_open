@@ -61,10 +61,6 @@ class PagerLogAPI(http.Controller):
             _logger.error("JSON Decode Failure during log search: %s", e)
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             return {"error": _("Protocol Error: Failed to parse response.")}
-        except Exception as e:  # audit-ignore-catch-all # Verified by [@ANCHOR: pd_log_api_i18n]
-            _logger.error("Unexpected Failure during log search: %s", e)
-            # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
-            return {"error": _("An unexpected error occurred.")}
 
     @http.route("/api/v1/pager/logs/search_poll", type="jsonrpc", auth="user")
     def search_logs_poll(self, job_id):

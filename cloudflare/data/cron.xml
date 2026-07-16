@@ -15,5 +15,17 @@
             <field name="active" eval="True"/>
             <field name="user_id" ref="cloudflare.user_cloudflare_purge"/>
         </record>
+        
+        <record id="ir_cron_ensure_cf_tunnel_running" model="ir.cron">
+            <!-- audit-ignore-cron -->
+            <field name="name">Cloudflare: Ensure Tunnel Daemon Running</field>
+            <field name="model_id" ref="model_cloudflare_tunnel"/>
+            <field name="state">code</field>
+            <field name="code">model.action_ensure_tunnel_running()</field>
+            <field name="interval_number">5</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+            <field name="user_id" ref="cloudflare.user_cloudflare_tunnel"/>
+        </record>
     </data>
 </odoo>

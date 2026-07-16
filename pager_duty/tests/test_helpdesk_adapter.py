@@ -34,7 +34,7 @@ class TestHelpdeskAdapter(HamsTransactionCase):
 
     def test_01_adapter_creates_ticket_and_event(self):
         """Verify the adapter successfully creates a ticket and a calendar event when an incident fires."""
-        # Tests [@ANCHOR: COMM_pd_helpdesk_adapter]
+        # Tests [@ANCHOR: pd_helpdesk_adapter]
         # Ensure the parameter is set to a valid model
         self.env["ir.config_parameter"].set_param(
             "pager_duty.helpdesk_model", "hams_helpdesk.ticket"

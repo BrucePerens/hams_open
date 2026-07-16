@@ -10,7 +10,7 @@ class IrHttp(models.AbstractModel):
     @api.model
     @distributed_cache()
     def _is_service_account_cached(self, uid):
-        self.env.cr.execute(
+        self.env.cr.execute( # Tested by [@ANCHOR: zero_sudo:COMM_test_is_service_account_cached]
             "SELECT is_service_account FROM res_users WHERE id = %s",
             (uid,)
         )

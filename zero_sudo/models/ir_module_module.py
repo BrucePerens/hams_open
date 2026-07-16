@@ -53,8 +53,10 @@ class Module(models.Model):
                 .with_user(svc_uid)
                 .with_context(**clean_ctx)
             )
-        except KeyError:
-            return
+        except KeyError as e:
+            if e.args and e.args[0] == article_model_name:
+                return
+            raise
 
         # Context for reading the core ERP framework table
         try:
