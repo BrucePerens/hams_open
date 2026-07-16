@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+# SPDX-License-Identifier: AGPL-3.0-or-later
 {
     "name": "User Websites SEO",
     "summary": "Lets users optimize their personal and group blogs for search engines.",
