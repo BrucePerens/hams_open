@@ -13,12 +13,10 @@ class TestZeroSudoViews(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
-        self.env.user.lang = "en_US"
+        self.env.ref('base.user_admin').lang = "en_US"
 
     def test_01_res_users_views(self):
         # [@ANCHOR: zero_sudo:COMM_test_res_users_views]
-        # ---
-        # # Verified by [@ANCHOR: zero_sudo:COMM_test_res_users_views]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_test_res_users_views]
         """
@@ -26,12 +24,11 @@ class TestZeroSudoViews(HamsHttpCase):
         """
         # Execute get_view to satisfy the AST linter for xpath injections
         self.env["res.users"].get_view(view_type="form")
+        self.env["res.users"].get_view(view_type="list")
         self.env["res.users"].get_view(view_type="search")
 
     def test_02_zero_sudo_tour(self):
         # [@ANCHOR: zero_sudo:COMM_test_zero_sudo_tour]
-        # ---
-        # # Verified by [@ANCHOR: zero_sudo:COMM_test_zero_sudo_tour]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
         # ---
@@ -45,8 +42,6 @@ class TestZeroSudoViews(HamsHttpCase):
     def test_03_noisy_table_views(self):
         # [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
         # ---
-        # # Verified by [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
-        # ---
         # Tests [@ANCHOR: zero_sudo:COMM_test_noisy_table_views]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT]
@@ -58,8 +53,6 @@ class TestZeroSudoViews(HamsHttpCase):
 
     def test_04_security_log_views(self):
         # [@ANCHOR: zero_sudo:COMM_test_security_log_views]
-        # ---
-        # # Verified by [@ANCHOR: zero_sudo:COMM_test_security_log_views]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_test_security_log_views]
         """Verify that the security.log views compile and render correctly."""
