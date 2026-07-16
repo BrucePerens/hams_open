@@ -14,7 +14,7 @@
     "category": "Security",
     "version": "1.0",
     "license": "AGPL-3",
-    "depends": ["base", "web", "mail", "distributed_redis_cache"],
+    "depends": ["base", "web", "mail"],
     "external_dependencies": {
         "python": ["psycopg2", "requests"]
     },
