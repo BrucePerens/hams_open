@@ -58,7 +58,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             
         self.safe_patch("subprocess.Popen", mock_popen)
         
-        daemon_utils.start_daemon_process("/dev/null")
+        daemon_utils._start_daemon_process("/dev/null")
         pythonpath = captured_env.get("PYTHONPATH", "")
         if sys.path[0]:
             self.assertIn(sys.path[0], pythonpath)
@@ -116,8 +116,18 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             
         self.safe_patch("urllib.request.urlopen", mock_urlopen)
         host = os.environ.get("DAEMON_HOST", "odoo")
-        res = daemon_utils.poll_health_check(f"http://{host}:8080/health", timeout=1, interval=0.1)
+        res = daemon_utils._poll_health_check(f"http://{host}:8080/health", timeout=1, interval=0.1)
         self.assertTrue(res)
+
+    def test_daemon_utils_rpc_security(self):
+        # [@ANCHOR: zero_sudo:COMM_test_daemon_utils_rpc_security]
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+        with self.assertRaises(AttributeError, msg="start_daemon_process must be private to prevent RCE via RPC"):
+            daemon_utils.start_daemon_process("/dev/null")
+        with self.assertRaises(AttributeError, msg="stop_daemon_process must be private"):
+            daemon_utils.stop_daemon_process(None)
+        with self.assertRaises(AttributeError, msg="poll_health_check must be private to prevent SSRF via RPC"):
+            daemon_utils.poll_health_check("http://localhost")
 
     def test_security_log_immutability(self):
         # [@ANCHOR: zero_sudo:COMM_test_security_log_immutability]

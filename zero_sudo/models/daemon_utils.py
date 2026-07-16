@@ -23,11 +23,12 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
-    def start_daemon_process(self, script_path, args=None, env_vars=None):
+    # Verified by [@ANCHOR: zero_sudo:COMM_test_daemon_utils_rpc_security]
+    def _start_daemon_process(self, script_path, args=None, env_vars=None):
         """Starts a python daemon script as a subprocess."""
         python_exec = sys.executable or "/usr/bin/python3"
         cmd = [python_exec, script_path] + (args or [])
-        env = os.environ.copy()  # burn-ignore-env: # Tested by [@ANCHOR: zero_sudo:COMM_test_daemon_utils_sys_paths]
+        env = os.environ.copy()
 
         sys_paths = os.pathsep.join(sys.path)
         if "PYTHONPATH" in env:
@@ -48,7 +49,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         return process
 
     @api.model
-    def stop_daemon_process(self, process):
+    def _stop_daemon_process(self, process):
         """Safely terminates a daemon process."""
         if process and process.poll() is None:
             _logger.info("Stopping daemon PID %s", process.pid)
@@ -62,7 +63,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                 os.killpg(os.getpgid(process.pid), signal.SIGKILL)
 
     @api.model
-    def poll_health_check(self, url, timeout=30, interval=1):
+    def _poll_health_check(self, url, timeout=30, interval=1):
         """Polls a URL until it returns 200 OK or times out."""
         _logger.info("Polling health check %s for up to %s seconds", url, timeout)
         start_time = time.time()
