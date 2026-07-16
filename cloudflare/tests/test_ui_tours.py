@@ -48,11 +48,8 @@ class TestCloudflareUITours(HamsHttpCase):
     def test_03_purge_wizard_tour(self):
         # Tests [@ANCHOR: COMM_cf_purge_wizard_tour]
         """Executes the JS tour for the Manual Cache Purge Wizard."""
-        # Seed credentials so the wizard doesn't crash
-        website = self.env["website"].get_current_website()
-        website.write(
-            {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
-        )
+        mock_creds = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_cloudflare_credentials")
+        mock_creds.return_value = ("fake_token", "fake_zone")
 
         mock_purge = self.safe_patch(
             "odoo.addons.cloudflare.models.purge_wizard.purge_everything"
@@ -65,21 +62,19 @@ class TestCloudflareUITours(HamsHttpCase):
     def test_04_zone_settings_tour(self):
         # Tests [@ANCHOR: COMM_cf_zone_settings_tour]
         """Executes the JS tour for the Zone Settings Wizard."""
-        # Seed credentials so the wizard doesn't crash/timeout on API calls
-        website = self.env["website"].get_current_website()
-        website.write(
-            {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
-        )
+        mock_creds = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_cloudflare_credentials")
+        mock_creds.return_value = ("fake_token", "fake_zone")
 
         # Mock the API calls in the wizard's default_get and action_apply_settings
-        self.safe_patch(
-            "odoo.addons.cloudflare.models.zone_settings_wizard.get_zone_settings",
-            return_value=[],
+        mock_get = self.safe_patch(
+            "odoo.addons.cloudflare.models.zone_settings_wizard.get_zone_settings"
         )
-        self.safe_patch(
-            "odoo.addons.cloudflare.models.zone_settings_wizard.update_zone_setting",
-            return_value=(True, "Success"),
+        mock_get.return_value = []
+        
+        mock_update = self.safe_patch(
+            "odoo.addons.cloudflare.models.zone_settings_wizard.update_zone_setting"
         )
+        mock_update.return_value = (True, "Success")
 
         self.authenticate(self.admin.login, self.admin.login)
         self.start_tour(
