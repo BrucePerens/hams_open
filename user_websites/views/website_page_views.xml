@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
-    <!-- audit-ignore-view -->
         <record id="view_user_websites_page_list" model="ir.ui.view"> 
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <field name="name">user.websites.page.list</field>
         <field name="model">website.page</field>
         <field name="priority">999</field>
