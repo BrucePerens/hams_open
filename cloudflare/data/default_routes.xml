@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0. -->
+<odoo noupdate="1">
+    <!-- Note: tunnel_id is required, so a global default route record might fail if no tunnel exists.
+         We will just rely on the user adding it via the admin screen for now to avoid breaking installations.
+    -->
+</odoo>
