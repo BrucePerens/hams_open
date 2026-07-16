@@ -5,6 +5,8 @@ from odoo import api, fields, models
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
+    # [@ANCHOR: COMM_hams_s3_config]
+    # # Verified by [@ANCHOR: COMM_COMM_hams_s3_config]
     hams_s3_use_s3 = fields.Boolean(
         string="Use Amazon S3 Storage",
         config_parameter="hams_s3.use_s3_storage",
