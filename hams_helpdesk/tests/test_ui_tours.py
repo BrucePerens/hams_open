@@ -28,6 +28,7 @@ class TestHelpdeskTours(HamsHttpCase):
                 ],
             }
         )
+        self.manager_user.partner_id.write({'callsign': 'K1MGR'})
         self.portal_user = self.env["res.users"].create(
             {
                 "name": "Portal Customer",
@@ -38,6 +39,7 @@ class TestHelpdeskTours(HamsHttpCase):
                 "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
             }
         )
+        self.portal_user.partner_id.write({'callsign': 'K1AAA'})
 
     def test_helpdesk_portal_tour(self):
         """Test portal ticket submission and closure via JS tour."""
@@ -144,8 +146,8 @@ class TestHelpdeskTours(HamsHttpCase):
         self.portal_user.partner_id.callsign = False
         self.authenticate("portal_cust_tour", "password")
         
-        with self.assertRaises(werkzeug.exceptions.BadRequest):
-            self.url_open("/my/tickets/new")
+        res = self.url_open("/my/tickets/new")
+        self.assertEqual(res.status_code, 400)
 
     def test_portal_ticket_company_and_ctx(self):
         """Test context cascading and company ID"""
