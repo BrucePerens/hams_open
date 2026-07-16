@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
+from cryptography.fernet import Fernet
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
@@ -26,10 +27,21 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
             {
                 "name": "Website B",
                 "domain": "https://website-b.com",
-                "cloudflare_api_token": "token_b",
-                "cloudflare_zone_id": "zone_b",
             }
         )
+        
+        fernet_key = Fernet.generate_key()
+        mock_fernet = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_fernet")
+        mock_fernet.return_value = Fernet(fernet_key)
+        
+        self.website_a.write({
+            "cloudflare_api_token": "token_a",
+            "cloudflare_zone_id": "zone_a",
+        })
+        self.website_b.write({
+            "cloudflare_api_token": "token_b",
+            "cloudflare_zone_id": "zone_b",
+        })
 
     def tearDown(self):
         # Clean up Odoo core's automatic implied_ids when multiple websites exist
