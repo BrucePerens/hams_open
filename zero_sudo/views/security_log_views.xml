@@ -4,7 +4,7 @@
      License: AGPL-3.0 -->
 <odoo>
     <record id="view_zero_sudo_security_log_list" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_security_log_views] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_security_log_views] --> <!-- burn-ignore-tour -->
         <field name="name">zero_sudo.security.log.list</field>
         <field name="model">zero_sudo.security.log</field>
         <field name="arch" type="xml">
@@ -20,7 +20,7 @@
     </record>
 
     <record id="view_zero_sudo_security_log_form" model="ir.ui.view">
-        <!-- burn-ignore-tour: Tested by [@ANCHOR: zero_sudo:COMM_test_security_log_views] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_security_log_views] --> <!-- burn-ignore-tour -->
         <field name="name">zero_sudo.security.log.form</field>
         <field name="model">zero_sudo.security.log</field>
         <field name="arch" type="xml">
