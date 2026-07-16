@@ -53,12 +53,13 @@ class TestHelpdeskCore(HamsTransactionCase):
 
         manager = self.manager_user
 
-        self.safe_patch_object(
-            type(self.env["calendar.event"]),
-            "get_current_on_duty_admin",
-            lambda self: manager,
-            create=True,
-        )
+        if 'is_pager_duty' in self.env["calendar.event"]._fields:
+            self.safe_patch_object(
+                type(self.env["calendar.event"]),
+                "get_current_on_duty_admin",
+                lambda self: manager,
+                create=True,
+            )
         self.safe_patch_object(
             type(self.env["bus.bus"]), "_sendone", lambda *a, **kw: None, create=True
         )
