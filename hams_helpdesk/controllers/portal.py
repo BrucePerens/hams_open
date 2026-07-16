@@ -1,4 +1,5 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import http
 from odoo.http import request
@@ -14,12 +15,19 @@ class HelpdeskPortal(CustomerPortal):
             utils = request.env["zero_sudo.security.utils"]
             svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
             domain = [("partner_id", "=", request.env.user.partner_id.id)]
-            if request.website:
-                domain += [("website_id", "in", [False, request.website.id])]
+            try:
+                req_website = request.website
+            except (AttributeError,):
+                req_website = False
+
+            company_id = req_website.company_id.id if req_website else request.env.company.id
+            if req_website:
+                domain += [("website_id", "in", [False, req_website.id])]
+            
             values["ticket_count"] = (
                 request.env["hams_helpdesk.ticket"]
                 .with_user(svc_uid)
-                .with_company(request.website.company_id.id if request.website else request.env.company.id)
+                .with_company(company_id)
                 .search_count(domain)
             )
         return values
@@ -31,15 +39,21 @@ class HelpdeskPortal(CustomerPortal):
         website=True,
     )
     def portal_my_tickets(self, page=1, **kw):
-        # # Tested by [@ANCHOR: COMM_test_06_multi_website_awareness_logic]
+        # Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
         values = self._prepare_portal_layout_values()
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
-        Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if request.website else request.env.company.id)
+        try:
+            req_website = request.website
+        except (AttributeError,):
+            req_website = False
+            
+        company_id = req_website.company_id.id if req_website else request.env.company.id
+        Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(company_id)
 
         domain = [("partner_id", "=", request.env.user.partner_id.id)]
-        if request.website:
-            domain += [("website_id", "in", [False, request.website.id])]
+        if req_website:
+            domain += [("website_id", "in", [False, req_website.id])]
 
         ticket_count = Ticket.search_count(domain)
         pager = portal_pager(url="/my/tickets", total=ticket_count, page=page, step=20)
@@ -61,8 +75,14 @@ class HelpdeskPortal(CustomerPortal):
     def portal_ticket_detail(self, ticket_id, **kw):
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
+        try:
+            req_website = request.website
+        except (AttributeError,):
+            req_website = False
+            
+        company_id = req_website.company_id.id if req_website else request.env.company.id
         ticket_sudo = (
-            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if request.website else request.env.company.id).browse(ticket_id)
+            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(company_id).browse(ticket_id)
         )
 
         if (
@@ -72,9 +92,9 @@ class HelpdeskPortal(CustomerPortal):
             return request.redirect("/my")
 
         if (
-            request.website
+            req_website
             and ticket_sudo.website_id
-            and ticket_sudo.website_id != request.website
+            and ticket_sudo.website_id != req_website
         ):
             return request.redirect("/my")
 
@@ -95,8 +115,14 @@ class HelpdeskPortal(CustomerPortal):
     def portal_ticket_close(self, ticket_id, **kw):
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
+        try:
+            req_website = request.website
+        except (AttributeError,):
+            req_website = False
+            
+        company_id = req_website.company_id.id if req_website else request.env.company.id
         ticket_sudo = (
-            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(request.website.company_id.id if request.website else request.env.company.id).browse(ticket_id)
+            request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(company_id).browse(ticket_id)
         )
 
         if (
@@ -133,25 +159,30 @@ class HelpdeskPortal(CustomerPortal):
         csrf=True,
     )
     def portal_ticket_submit(self, name=None, description=None, callsign=None, **kw):
-        # # Verified by [@ANCHOR: hams_helpdesk:test_helpdesk_portal_tour]
+        # Verified by [@ANCHOR: helpdesk_portal_tour]
         if not name:
             return request.redirect("/my/tickets/new")
 
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
 
+        try:
+            req_website = request.website
+        except (AttributeError,):
+            req_website = False
+
         company_id = (
-            request.website.company_id.id
-            if request.website
+            req_website.company_id.id
+            if req_website
             else request.env.company.id
         )
 
         vals = {
             "name": name,
             "description": description,
-            "callsign": callsign,
+            "callsign": callsign or request.env.user.partner_id.callsign,
             "partner_id": request.env.user.partner_id.id,
-            "website_id": request.website.id if request.website else False,
+            "website_id": req_website.id if req_website else False,
             "company_id": company_id,
         }
         clean_ctx = dict(request.env.context)
