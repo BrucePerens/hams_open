@@ -13,6 +13,7 @@
         "portal",
         "zero_sudo",
         "website",
+        "ham_callbook",
     ],
     "data": [
         "security/helpdesk_security.xml",
