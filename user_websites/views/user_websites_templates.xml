@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
 
     <template id="user_navbar" name="User Websites Navbar">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <nav t-if="resolved_slug" class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar">
             <div class="container">
                 <a class="navbar-brand" t-attf-href="/#{resolved_slug}/home">
@@ -39,12 +40,12 @@
 
     <template id="layout_inherit_user_navbar" inherit_id="website.layout" name="User Navbar Global">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <xpath expr="//head" position="inside">
             <!-- [@ANCHOR: xpath_rendering_navbar_head] -->
 
             <!-- Verified by [@ANCHOR: test_xpath_rendering_navbar_head] -->
-            <!-- audit-ignore-xpath -->
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar_head] -->
             <t t-set="profile_user" t-value="profile_user or (main_object.owner_user_id if main_object and 'owner_user_id' in main_object else False)"/>
             <t t-set="profile_group" t-value="profile_group or (main_object.user_websites_group_id if main_object and 'user_websites_group_id' in main_object else False)"/>
             <t t-set="resolved_slug" t-value="resolved_slug or (profile_user.website_slug if profile_user else (profile_group.website_slug if profile_group else False))"/>
@@ -60,7 +61,7 @@
             <!-- [@ANCHOR: xpath_rendering_navbar] -->
 
             <!-- Verified by [@ANCHOR: test_xpath_rendering_navbar] -->
-            <!-- audit-ignore-xpath -->
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar] -->
             <div id="user_websites_dropzone_navbar">
                 <!-- [@ANCHOR: dropzone_navbar] -->
 
@@ -74,12 +75,12 @@
 
     <template id="portal_my_home_appeal" inherit_id="portal.portal_my_home" name="Portal My Home Appeal">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <xpath expr="//div[hasclass('o_portal_my_home')]" position="before">
             <!-- [@ANCHOR: xpath_rendering_appeal] -->
 
             <!-- Verified by [@ANCHOR: test_xpath_rendering_appeal] -->
-            <!-- audit-ignore-xpath -->
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_appeal] -->
             <div id="user_websites_dropzone_templates">
                 <!-- [@ANCHOR: dropzone_templates] -->
 
@@ -104,7 +105,7 @@
                                     <label for="reason" class="form-label fw-bold">Submit an Appeal (One-time only):</label>
                                     <textarea class="form-control" name="reason" id="reason" rows="3" required="required" placeholder="Please explain why your suspension should be lifted..."></textarea>
                                 </div>
-                                <button type="submit" class="btn btn-danger">Submit Appeal</button>
+                                <button type="submit" class="btn btn-danger o_tour_submit_appeal_btn">Submit Appeal</button>
                             </form>
                         </t>
                     </div>
@@ -130,7 +131,7 @@
                                     <label t-attf-for="reason_#{group.id}" class="form-label fw-bold">Submit an Appeal for this Group (One-time only):</label>
                                     <textarea class="form-control" name="reason" t-attf-id="reason_#{group.id}" rows="3" required="required" placeholder="Please explain why the group's suspension should be lifted..."></textarea>
                                 </div>
-                                <button type="submit" class="btn btn-danger">Submit Appeal</button>
+                                <button type="submit" class="btn btn-danger o_tour_submit_group_appeal_btn">Submit Appeal</button>
                             </form>
                         </t>
                     </div>
@@ -142,7 +143,7 @@
             <!-- [@ANCHOR: xpath_rendering_portal_docs] -->
 
             <!-- Verified by [@ANCHOR: test_xpath_rendering_portal_docs] -->
-            <!-- audit-ignore-xpath -->
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_portal_docs] -->
             <div class="o_portal_doc_spinner col-12 col-md-6 col-lg-4 mb-4">
                 <a href="/my/privacy" class="text-decoration-none d-flex flex-column h-100 p-3 border rounded shadow-sm bg-white">
                     <div class="d-flex align-items-center mb-2">
@@ -173,7 +174,7 @@
                                 <p class="text-muted">Get a copy of your personal website pages and blog posts in a machine-readable JSON format for data portability purposes.</p>
                                 <form action="/my/privacy/export" method="post">
                                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                    <button type="submit" class="btn btn-outline-primary"><i class="fa fa-download" aria-hidden="true"/> Export Data to JSON</button>
+                                    <button type="submit" class="btn btn-outline-primary o_tour_export_data_btn"><i class="fa fa-download" aria-hidden="true"/> Export Data to JSON</button>
                                 </form>
                             </div>
                         </div>
@@ -196,7 +197,7 @@
 
     <template id="template_default_home" name="User Website Home Master Layout">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div id="user_websites_dropzone_home_header">
                 <!-- [@ANCHOR: dropzone_home_header] -->
@@ -216,7 +217,7 @@
 
     <template id="blog_index" name="User Blog Index">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div id="user_websites_dropzone_blog_header"></div>
             <div class="container mt-5">
@@ -231,7 +232,7 @@
                             <div class="card-body">
                                 <h3 class="card-title fw-bold" t-out="post.name"/>
                                 <p class="text-muted" t-if="post.subtitle" t-out="post.subtitle"/>
-                                <a t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}" class="btn btn-outline-primary mt-2">Read Post</a>
+                                <a t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}" class="btn btn-outline-primary mt-2 o_tour_read_post_btn">Read Post</a>
                             </div>
                         </div>
                     </t>
@@ -246,7 +247,7 @@
 
     <template id="community_directory" name="Community Directory">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div class="container mt-5">
                 <div class="row">
@@ -271,10 +272,10 @@
                                         </span>
                                     </p>
                                     <div class="d-grid gap-2">
-                                        <a t-attf-href="/#{entry.website_slug}/home" class="btn btn-primary py-2 fw-bold">
+                                        <a t-attf-href="/#{entry.website_slug}/home" class="btn btn-primary py-2 fw-bold o_tour_visit_home_btn">
                                             <i class="fa fa-home me-2" aria-hidden="true"/> Visit Home
                                         </a>
-                                        <a t-attf-href="/#{entry.website_slug}/blog" class="btn btn-outline-secondary py-2 fw-bold">
+                                        <a t-attf-href="/#{entry.website_slug}/blog" class="btn btn-outline-secondary py-2 fw-bold o_tour_view_blog_btn">
                                             <i class="fa fa-pencil me-2" aria-hidden="true"/> View Blog
                                         </a>
                                     </div>
@@ -332,7 +333,7 @@
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-danger">Submit Report</button>
+                            <button type="submit" class="btn btn-danger o_tour_submit_report_btn">Submit Report</button>
                         </div>
                     </form>
                 </div>
@@ -342,9 +343,9 @@
 
     <template id="report_violation_snippet" name="Report Violation Button">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <div class="text-center user-websites-report-container d-inline">
-            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reportViolationModal" t-att-data-url="request.httprequest.url">
+            <button type="button" class="btn btn-outline-danger btn-sm o_tour_report_violation_btn" data-bs-toggle="modal" data-bs-target="#reportViolationModal" t-att-data-url="request.httprequest.url">
                 <i class="fa fa-flag" aria-hidden="true"/> Report Violation
             </button>
         </div>
@@ -352,7 +353,7 @@
 
     <template id="unsubscribe_success" name="Unsubscription Success">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div class="container mt-5 pt-5 text-center">
                 <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
@@ -363,7 +364,7 @@
                             We successfully removed you from the mailing list for <strong t-out="record_name"/>.
                             You will no longer receive weekly digests for this site.
                         </p>
-                        <a href="/" class="btn btn-primary mt-4">Return to Homepage</a>
+                        <a href="/" class="btn btn-primary mt-4 o_tour_return_home_btn">Return to Homepage</a>
                     </div>
                 </div>
             </div>
@@ -372,7 +373,7 @@
 
     <template id="documentation_page" name="User Websites Documentation">
     <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <!-- audit-ignore-view -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div class="container mt-5 mb-5 shadow-sm p-5 bg-white rounded">
                 <div class="row">
