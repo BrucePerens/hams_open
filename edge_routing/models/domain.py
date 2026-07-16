@@ -5,6 +5,7 @@
 # License: AGPL-3.0
 
 from odoo import models, fields, api, exceptions, _
+from odoo.tools import config
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
@@ -68,21 +69,22 @@ class EdgeRoutingDomain(models.Model):
                 all_domains.extend(batch.mapped("name"))
                 last_id = batch[-1].id
 
-            try:
-                dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
-                last_id = 0
-                while True:
-                    dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
-                    if not dns_batch:
-                        break
-                    all_domains.extend(dns_batch.mapped("name"))
-                    last_id = dns_batch[-1].id
-            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
-                _logger.warning("Hard dependency ham.dns.zone failed: %s", e)
+            if "ham.dns.zone" in env_svc:
+                try:
+                    dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
+                    last_id = 0
+                    while True:
+                        dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
+                        if not dns_batch:
+                            break
+                        all_domains.extend(dns_batch.mapped("name"))
+                        last_id = dns_batch[-1].id
+                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                    _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
 
             unique_domains = list(set(all_domains))
             # Send to the API
-            host = os.environ.get("ODOO_HOST", "odoo")
+            host = config.get('odoo_host') or 'odoo'
             response = requests.post(
                 f"http://{host}:8069/api/v1/pager_duty/update_domains",
                 json={
