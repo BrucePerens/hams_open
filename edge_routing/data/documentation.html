@@ -1,0 +1,13 @@
+<div>
+    <h1>Edge Routing Management</h1>
+    
+    <h2>User & Administrator Configuration</h2>
+    <ul>
+        <li><strong>Custom Domain Mapping:</strong> Administrators can map user vanity slugs to custom external domains. This allows users to host their profiles or user websites under their own root domain instead of a subpath.</li>
+        <li><strong>Vanity URL Management:</strong> End-users can claim unique vanity slugs for their profiles, preventing collisions with system reserved routes.</li>
+        <li><strong>Virtual Slug Fallback:</strong> If a vanity slug is not set or removed, the routing engine automatically falls back to resolving profiles via the operator's Callsign (login ID).</li>
+    </ul>
+    
+    <h2>Integration Details</h2>
+    <p>All custom domains and routes mapped within the UI are asynchronously synchronized to the external PagerDuty routing layer to ensure high availability and global load balancing.</p>
+</div>
