@@ -7,12 +7,16 @@ This module acts as the command center for your Cloudflare CDN and Web Applicati
 ## 🌟 What It Does
 
 * **Multi-Website Support:** Seamlessly manage multiple domains/zones from a single Odoo instance. Credentials and settings are isolated per website.
+* **DNS & Routing:** Manage DNS records natively. Supports native multi-tenant Custom Hostname SSL provisioning, allowing tenants to bring their own domains and automatically securing them via Cloudflare (`CloudflareRoutingDomain`).
 * **Automated Static Caching & Purging:** It forces Cloudflare to aggressively cache static assets (like images, CSS, and JS) for a full year. If any static file is modified, the module detects it during boot and automatically triggers a global purge across all configured zones.
 * **Intelligent Content Invalidation:** Automatically enqueues purges for specific URLs when website pages, blog posts, or products are edited.
+* **Advanced Caching & Rate Limiting:** Configure Cloudflare Cache Rules and Rate Limits directly from Odoo to optimize traffic and protect against abuse.
 * **WAF Management:** Build, backup, and deploy Cloudflare Firewall rules directly from the Odoo backend.
 * **Honeypot IP Banning:** Instantly ban malicious IPs at the network edge when they trigger honeypot traps.
-* **Zero Trust Tunnels:** Provision and manage `cloudflared` tunnels directly from Odoo.
+* **Zero Trust & Access:** Provision and manage `cloudflared` tunnels and Zero Trust Policies directly from Odoo to secure internal resources.
 * **Turnstile Integration:** Backend validator for Cloudflare's invisible Turnstile CAPTCHA.
+* **Analytics Dashboard:** Centralized client action dashboard to view traffic, security, and performance analytics.
+* **Configuration Backups:** Automated pre-Odoo configuration backup workflows to snapshot your Cloudflare settings before applying changes.
 * **Zone Settings Control:** Adjust security levels, development mode, and cache TTL per website.
 
 ## 🚀 Odoo 19 & Zero-Trust Ready
@@ -35,6 +39,14 @@ This module is fully optimized for Odoo 19 and adheres to a strict Zero-Sudo arc
 Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPTCHA verification to offload processing to Cloudflare's edge.
 
 ## 2. API Interfaces
+* **DNS & Hostnames:** Management of `cloudflare.dns.record` and `CloudflareRoutingDomain` for automated SSL provisioning.
+
+* **Traffic Control:** Management of `cloudflare.rate.limit` and `cloudflare.cache.rule`.
+
+* **Zero Trust Policies:** Management of `cloudflare.zero.trust.policy` models.
+
+* **Configuration Backups:** Management of `cloudflare.config.backup` for pre-Odoo state snapshots.
+
 * **WAF IP Banning:** `env['cloudflare.waf'].ban_ip(...)` dynamically injects firewall rules `[@ANCHOR: cf_execute_ban]`. Supports multiple websites.
 
 * **WAF Management:** Pull `[@ANCHOR: cf_action_pull_waf_rules]` and push `[@ANCHOR: cf_action_push_waf_rules]` firewall rules.
