@@ -1,8 +1,9 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import odoo.tests
 from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import logging
 import urllib.error
 import uuid
@@ -11,7 +12,7 @@ _logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
-class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
+class TestAdvancedEdgeCases(HamsHttpCase):
     def setUp(self):
         super(TestAdvancedEdgeCases, self).setUp()
 
@@ -93,7 +94,7 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
         """
         # Ensure the user has absolutely no posts
         posts = self.env["blog.post"].search(
-            [("owner_user_id", "=", self.user_empty.id)]
+            [("owner_user_id", "=", self.user_empty.id)], limit=1
         )
         self.assertEqual(len(posts), 0)
 
@@ -139,8 +140,10 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
         Ensure that when a site is created, it is bound to the current website
         and does not bleed into other websites in a multi-website environment.
         """
-        admin_uid = self.env.ref("base.user_admin").id
-        Website = self.env["website"].with_user(admin_uid)
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        Website = self.env["website"].with_user(svc_uid)
         website_a = Website.get_current_website()
 
         # Simulate a secondary website environment
@@ -156,7 +159,7 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
         )
 
         created_page = self.env["website.page"].search(
-            [("url", "=", f"/{self.user_empty.website_slug}/home")]
+            [("url", "=", f"/{self.user_empty.website_slug}/home")], limit=1
         )
 
         self.assertEqual(
@@ -172,7 +175,7 @@ class TestAdvancedEdgeCases(odoo.tests.common.HttpCase):
         that violates ACLs or crashes when request.website is absent.
         """
         # Create a new environment without an HTTP request context
-        env_no_request = self.env(context={})
+        env_no_request = self.env.with_context(website_id=False)
 
         try:
             page = (
