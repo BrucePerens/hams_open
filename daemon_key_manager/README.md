@@ -34,14 +34,16 @@ The module follows a strict "minimum privilege" policy. It uses a dedicated serv
 * **Directory Isolation:** Parent directories are created with `0700` to prevent other users on the system from traversing into the key storage area.
 * **Path Validation:** All paths MUST start with `/opt/hams/etc/keys/`. The module strictly blocks directory traversal (`..`) and symlink attacks by resolving the `os.path.realpath` of the requested path before performing any file operations [@ANCHOR: COMM_security_constraints_path].
 
-* **System Directory Protection:** Writing to sensitive system directories (like `/etc`, `/root`, `/boot`, `/home`, `/usr`, `/bin`, `/lib`, `/var/log`) is explicitly forbidden regardless of the prefix check [@ANCHOR: COMM_write_secure_env_file_logic].
+To further protect the integrity of the host system, additional safety mechanisms are enforced across the platform.
+
+* **System Directory Protection:** Writing to sensitive system directories is explicitly forbidden regardless of the prefix check [@ANCHOR: COMM_write_secure_env_file_logic].
 
 ### Automated Key Rotation
 Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: COMM_cron_rotation_trigger].
 
-* **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue with the next daemon [@ANCHOR: COMM_cron_rotation_logic].
-* **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed in case of transient server issues.
-* **Self-Healing Daemons:** Daemons utilizing these keys MUST be designed to catch `AccessError` responses from Odoo, re-read their assigned `.env` file from the disk, and retry the request. This ensures continuous operation across key rotations [@ANCHOR: COMM_daemon_self_healing].
+* **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue.
+* **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed.
+* **Self-Healing Daemons:** Daemons utilizing these keys MUST be designed to catch `AccessError` responses from Odoo, re-read their assigned `.env` file from the disk, and retry the request.
 
 ---
 
@@ -53,28 +55,38 @@ In containerized/orchestrated environments:
 * **Odoo Container:** Mount the volume as **Read/Write**.
 * **Daemon Containers:** Mount the volume as **Read-Only**.
 
-### 2. Core API Methods
+### 2. Core API Methods (Public)
 
-#### `register_daemon(daemon_name, user_xml_id, env_file_path)` [@ANCHOR: COMM_register_daemon_api]
+#### `register_daemon(daemon_name, user_xml_id, env_file_path)`
 * **`daemon_name`**: A unique string identifier for the external service.
-* **`user_xml_id`**: The XML ID of the service account record (e.g., `pager_duty.user_pager_service_internal`). This account must have `is_service_account` set to `True`.
-* **`env_file_path`**: The absolute path where the `.env` file should be written. It must reside within `/opt/hams/etc/keys/`.
-* **Behavior**: This method is idempotent. If a daemon with the same name exists, its service account and path are updated. It immediately triggers the generation of the first API key and writes the file. It also ensures the registry is associated with the service account's company [@ANCHOR: COMM_register_daemon_logic] [@ANCHOR: COMM_register_daemon_idempotency].
+* **`user_xml_id`**: The XML ID of the service account record (e.g., `pager_duty.user_pager_service_internal`). Must have `is_service_account = True`.
+* **`env_file_path`**: Absolute path where the `.env` file should be written. Must reside within `/opt/hams/etc/keys/`.
+* **Behavior**: Idempotent. Immediately triggers key generation and writes the file. Associates registry with the service account's company.
 
-#### `action_rotate_key()` [@ANCHOR: COMM_action_rotate_key_api]
-* **Use Case**: Manually rotate the key for a specific daemon. This is the preferred method for rotating individual credentials if they are suspected of being compromised.
-* **Behavior**: Revokes the existing key and generates a new one synchronously.
-* **Security**: Only accessible to members of the `Daemon Key Management / Manager` group.
+#### `action_rotate_key()`
+* **Use Case**: Manually rotate the key for a specific daemon via UI or code.
+* **Behavior**: Revokes existing key and generates a new one synchronously.
+* **Security**: Only accessible to members of `Daemon Key Management / Manager`.
 
-#### `action_force_provision_all()` [@ANCHOR: COMM_action_force_provision_all_api]
-* **Use Case**: Used during system bootstrapping (e.g., via systemd or Kubernetes init containers) to ensure all keys are present on disk before daemons start. Also used for emergency rotation of all keys.
+#### `action_force_provision_all()`
+* **Use Case**: Used during system bootstrapping (e.g., via systemd or Kubernetes init containers) or emergency rotations.
 * **Shell Invocation**:
   ```bash
   odoo-bin shell -d hams --no-http -e "env['daemon.key.registry'].action_force_provision_all(); env.cr.commit()"
   ```
-* **Security**: Only accessible to users in the `Daemon Key Management / Manager` group. Internally, it elevates to the service account to perform the privileged key generation [@ANCHOR: COMM_force_provision_logic].
 
-### 3. File Format (.env) [@ANCHOR: COMM_write_secure_env_file_logic]
+### 3. Core Internal Methods (For Developers & AIs)
+
+#### `_rotate_key_and_write_file(pre_fetched_keys=None)`
+* **Behavior**: The underlying mechanism that revokes old keys via `res.users.apikeys`, generates a new 90-day key, and calls `_write_secure_env_file`. Handles validation of `__system__` restrictions.
+
+#### `_write_secure_env_file(path, login, key)`
+* **Behavior**: Safely writes the `.env` file. Enforces `0600` on the file and `0700` on parent directories. Prevents path traversal.
+
+#### `_cron_rotate_all_keys()`
+* **Behavior**: Triggered by cron. Uses a batch limit of 10 and triggers itself recursively to avoid transaction timeouts. Commits successful writes immediately and rolls back individual failures.
+
+### 4. File Format (.env)
 ```env
 # Auto-generated by daemon.key.registry
 ODOO_RPC_LOGIN=service_account_login
@@ -95,15 +107,14 @@ ODOO_RPC_KEY=12345abcd...
 ---
 
 ## 🧪 Verification
-* **register_daemon_api**: Verified by [@ANCHOR: COMM_test_register_daemon_api]
+* **register_daemon_api**: The registration flow ensures that all daemon keys are properly provisioned for correct environments, verified by [@ANCHOR: COMM_test_register_daemon_api].
 
-* **force_provision_all**: Verified by [@ANCHOR: COMM_test_force_provisioning]
+* **force_provision_all**: Bootstrapping functionality is thoroughly tested to guarantee rapid restoration in an emergency, verified by [@ANCHOR: COMM_test_force_provisioning].
 
-* **security_constraints**: Verified by [@ANCHOR: COMM_test_security_constraints]
+* **security_constraints**: To prevent malicious behavior, strict sandboxing and directory path validation are verified by [@ANCHOR: COMM_test_security_constraints].
 
-* **ui_tour**: Verified by [@ANCHOR: COMM_test_daemon_key_manager_tour]
+* **ui_tour**: Interactive interface flows inside Odoo for key management are comprehensively verified by [@ANCHOR: COMM_test_daemon_key_manager_tour].
 
-* **unauthorized_access**: Verified by [@ANCHOR: COMM_test_unauthorized_access]
+* **unauthorized_access**: Zero-sudo barriers blocking non-system service accounts from escalating permissions are verified by [@ANCHOR: COMM_test_unauthorized_access].
 
-* **key_ownership**: Verified by [@ANCHOR: COMM_test_key_ownership]
-
+* **key_ownership**: Finally, proper multi-tenant key isolation is checked and verified by [@ANCHOR: COMM_test_key_ownership].
