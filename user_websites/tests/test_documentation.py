@@ -1,6 +1,6 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 import urllib.error
 from odoo.tests import tagged
@@ -88,7 +88,7 @@ class TestDocumentation(RealTransactionCase):
         self.env.cr.commit()
 
         article = self.env["knowledge.article"].search(
-            [("name", "=", "User Websites Documentation")]
+            [("name", "=", "User Websites Documentation")], limit=1
         )
 
         # The knowledge.article model natively implements website_url

@@ -1,6 +1,6 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests.common import tagged
 
@@ -12,7 +12,10 @@ class TestDomainsApi(HamsHttpCase):
     def setUpClass(cls):
         super().setUpClass()
         # Ensure there is a domain in edge.routing.domain
-        cls.env["edge.routing.domain"].with_user(cls.env.ref("base.user_admin")).create(
+        svc_uid = cls.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        cls.env["edge.routing.domain"].with_user(svc_uid).create(
             {
                 "name": "testdomain1.com",
                 "target_slug": "test-slug-1",
