@@ -1,10 +1,10 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
-
 # -*- coding: utf-8 -*-
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.tools import mute_logger
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 @tagged("post_install", "-at_install")
@@ -186,12 +186,10 @@ class TestAuditEdgeCases(RealTransactionCase):
         self.env["res.users"].get_record_by_slug("cacheuser")
 
         # 2. Verify 0 queries on hit
-        mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute
-        )
-        self.env["res.users"].get_record_by_slug("cacheuser")
-        for call in mock_execute.call_args_list:
-            self.assertNotIn("res_users", call[0][0])
+        with patch.object(self.env.cr, 'execute', wraps=self.env.cr.execute) as mock_execute:
+            self.env["res.users"].get_record_by_slug("cacheuser")
+            for call in mock_execute.call_args_list:
+                self.assertNotIn("res_users", call[0][0])
 
         # 3. Mutate the slug to trigger cache invalidation hook
         user.write({"website_slug": "newslug"})
@@ -225,12 +223,10 @@ class TestAuditEdgeCases(RealTransactionCase):
         self.env["user.websites.group"].get_record_by_slug("cachegroup")
 
         # 2. Verify 0 queries on hit
-        mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute
-        )
-        self.env["user.websites.group"].get_record_by_slug("cachegroup")
-        for call in mock_execute.call_args_list:
-            self.assertNotIn("user_websites_group", call[0][0])
+        with patch.object(self.env.cr, 'execute', wraps=self.env.cr.execute) as mock_execute:
+            self.env["user.websites.group"].get_record_by_slug("cachegroup")
+            for call in mock_execute.call_args_list:
+                self.assertNotIn("user_websites_group", call[0][0])
 
         # 3. Trigger Invalidation
         group.write({"website_slug": "newcachegroup"})
@@ -349,4 +345,4 @@ class TestAuditEdgeCases(RealTransactionCase):
             raise_if_not_found=False,
         )
         if template:
-            template.send_mail(self.env.company.id, force_send=False)  # audit-ignore-mail: # Tested by [@ANCHOR: test_cron_pending_reports]
+            template.send_mail(self.env.company.id, force_send=False)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]
