@@ -135,6 +135,26 @@ Generates a macro that polls and explicitly waits for a specific DOM element to 
 A direct execution function (used within a tour's `run` step) that safely injects text into the currently active input element and explicitly dispatches the `input`, `change`, and `keyup` events required to reliably awaken Odoo's frontend framework (e.g., Many2one debouncers).
 </tour_utils>
 
+## 5. Additional Models and Utilities
+
+### `zero_sudo.daemon.utils`
+Provides centralized, private utilities for managing background daemon processes tightly coupled with Odoo.
+* `_start_daemon_process(script_path, args, env_vars)`: Safely forks a background process detached from the web request lifecycle.
+* `_stop_daemon_process(process)`: Safely terminates a running daemon.
+* `_poll_health_check(url, timeout, interval)`: Polls an HTTP endpoint to verify daemon health before proceeding with tests.
+
+### `zero_sudo.kv`
+A high-performance Key-Value store table optimized for lock-free reads and atomic writes via PostgreSQL procedures. Used extensively by the core for tracking document hashes and caching configuration lookups.
+* Developers interact with this model via `_get_kv()` and `_set_kv()` in `zero_sudo.security.utils`.
+
+### `zero_sudo.noisy_table`
+A registry model (`zero_sudo_noisy_table`) used to declare tables that undergo high-frequency or technically necessary data mutations (e.g. `ir.module.category`). Tables registered here are exempt from the strict end-of-test Database Leak Prevention checks.
+
+### `zero_sudo.security.log`
+The centralized audit log model (`zero_sudo_security_log`). Records all access denial events, tripped security wires, parameter tampering attempts, and cache invalidation commands. 
+* Includes a built-in `autovacuum()` cron job to prune logs older than 90 days.
+* Immutable design ensures even `base.group_system` users cannot delete or modify log records via the UI or ORM.
+
 ---
 
 ## 6. External Dependencies

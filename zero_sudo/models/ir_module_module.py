@@ -47,16 +47,14 @@ class Module(models.Model):
         clean_ctx.pop("prefetch_fields", None)
         clean_ctx["mail_notrack"] = True
 
-        try:
-            Article = (
-                self.env[article_model_name]
-                .with_user(svc_uid)
-                .with_context(**clean_ctx)
-            )
-        except KeyError as e:
-            if e.args and e.args[0] == article_model_name:
-                return
-            raise
+        if article_model_name not in self.env:
+            return
+
+        Article = (
+            self.env[article_model_name]
+            .with_user(svc_uid)
+            .with_context(**clean_ctx)
+        )
 
         # Context for reading the core ERP framework table
         try:

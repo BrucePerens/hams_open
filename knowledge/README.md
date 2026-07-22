@@ -81,6 +81,25 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, a
 *   **Reading Time Calculation:** Automatic estimation of reading time based on word count `[@ANCHOR: manual_compute_reading_time]`.
 *   **Author Attribution:** Automatically identifies and displays the article author based on the last editor.
 *   **Optimized Sidebar Search:** Combined ORM domain to fetch all root articles in a single database round-trip `[@ANCHOR: manual_sidebar_search_optimization]`.
+
+## 4. Detailed Method Reference
+
+**`models/knowledge_article.py`**
+*   `_compute_author_id()`: Determines the author based on `write_uid` or `create_uid`.
+*   `_compute_breadcrumb_article_ids()`: Uses a recursive CTE to compute the path from root to current node.
+*   `_compute_body_snippet()`: Converts the HTML body to plaintext and truncates it for use in list views and search previews.
+*   `_compute_reading_time()`: Estimates reading time based on a 200 words-per-minute average.
+*   `_check_hierarchy()`: Constrains the `parent_id` to prevent circular references by calling `_has_cycle()`.
+*   `copy(default=None)`: Overrides the built-in copy method to append "(copy)" to the duplicated article's name.
+*   `_compute_website_url()`: Generates an SEO-friendly URL slug using the article ID and a sanitized title.
+
+**`controllers/main.py`**
+*   `_compile_markdown(html_body, article_id, write_date)`: Heuristically detects markdown signatures in the text. If found, compiles it to HTML. Results are cached in an LRU cache.
+*   `_get_sidebar_articles()`: Fetches root articles for the sidebar, optimized to run in a single combined domain query.
+*   `manual_article_view(article_slug, **kwargs)`: Primary frontend controller. Enforces read access, performs canonical redirects, compiles markdown, and renders the view.
+*   `manual_search(search, **kwargs)`: Controller for full-text search across accessible articles.
+*   `manual_article_by_name(name, **kwargs)`: Convenience route (`/manual/by_name/<string:name>`) to find an article by exact name and redirect to it.
+*   `manual_feedback(article_id, is_helpful, website_feedback_honeypot, **kwargs)`: Handles helpful/unhelpful votes. Implements honeypots, session-based rate limiting, and zero-sudo atomic increments.
 </features>
 
 <security>

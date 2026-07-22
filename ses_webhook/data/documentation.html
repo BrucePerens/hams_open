@@ -1,0 +1,34 @@
+<section id="ses-webhook">
+    <h2>SES Webhook Functionality</h2>
+    <p>This module provides an interface to configure incoming email routing from Amazon SES via SNS webhooks.</p>
+
+    <h3>UI Functionality</h3>
+    
+    <h4>1. SES Webhook Domains</h4>
+    <p><strong>Path:</strong> SES Webhooks &gt; Domains</p>
+    <ul>
+        <li><strong>List View:</strong> Displays configured domains, their associated company, and the Webhook URL.</li>
+        <li><strong>Form View:</strong> Allows administrators to register a new domain and map it to a tenant company.
+            <ul>
+                <li><strong>Secret Token:</strong> Automatically generated and used to authenticate requests.</li>
+                <li><strong>Webhook URL:</strong> The URL to provide to Amazon SNS. It can be easily copied to the clipboard.</li>
+                <li><strong>AWS Configuration Instructions:</strong> A dedicated tab providing step-by-step guidance on setting up the Amazon SNS Topic and Amazon SES Receipt Rule.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h4>2. SES Webhook Logs</h4>
+    <p><strong>Path:</strong> SES Webhooks &gt; Logs</p>
+    <ul>
+        <li><strong>List View:</strong> Shows a color-coded log of all received webhooks. Green for success, red for failed, and gray for ignored.</li>
+        <li><strong>Form View:</strong> Displays detailed information about a specific webhook request, including:
+            <ul>
+                <li>Message ID, Date, Payload Type, and Status.</li>
+                <li><strong>Raw Payload:</strong> The original JSON payload received from SNS.</li>
+                <li><strong>Error Message:</strong> Displayed if the webhook failed to process.</li>
+            </ul>
+        </li>
+    </ul>
+    
+    <p>Logs older than 30 days are automatically deleted by a scheduled action to preserve database space.</p>
+</section>

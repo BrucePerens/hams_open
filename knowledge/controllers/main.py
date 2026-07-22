@@ -52,7 +52,7 @@ class ManualLibraryController(http.Controller):
         try:
             tree = lxml.html.fromstring(html_body)
             has_complex_html = bool(tree.xpath("//div | //table | //section | //article | //img"))
-        except Exception:
+        except (TypeError, ValueError, lxml.etree.ParserError, lxml.etree.XMLSyntaxError): # audit-ignore-catch-all
             has_complex_html = False
 
         if is_md and not has_complex_html:
@@ -77,10 +77,7 @@ class ManualLibraryController(http.Controller):
         # [@ANCHOR: manual_sidebar_search_optimization]
         # Performance: Reducing 3 RPC/DB round-trips to 1 by using a combined domain.
         user_id = request.env.user.id
-        try:
-            website_id = request.website.id
-        except AttributeError:
-            website_id = False
+        website_id = request.website.id if request.website else False
 
         base_domain = [
             ("parent_id", "=", False),
@@ -220,10 +217,7 @@ class ManualLibraryController(http.Controller):
             domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
 
         # Explicitly filter by website_id in case record rules are not enough for frontend context
-        try:
-            website_id = request.website.id
-        except AttributeError:
-            website_id = False
+        website_id = request.website.id if request.website else False
         domain += [("website_id", "in", (False, website_id))]
         is_internal = request.env.user.has_group("base.group_user")
         if not is_internal:
@@ -253,10 +247,7 @@ class ManualLibraryController(http.Controller):
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
-        try:
-            website_id = request.website.id
-        except AttributeError:
-            website_id = False
+        website_id = request.website.id if request.website else False
         domain = [
             ("name", "=ilike", normalized_name),
             ("website_id", "in", (False, website_id)),

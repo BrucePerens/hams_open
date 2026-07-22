@@ -132,7 +132,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         with self.assertRaises(AttributeError, msg="stop_daemon_process must be private"):
             daemon_utils.stop_daemon_process(None)
         with self.assertRaises(AttributeError, msg="poll_health_check must be private to prevent SSRF via RPC"):
-            daemon_utils.poll_health_check("http://localhost")
+            daemon_utils.poll_health_check("http://odoo")
 
     def test_security_log_immutability(self):
         # [@ANCHOR: zero_sudo:COMM_test_security_log_immutability]
@@ -144,16 +144,20 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         log_sudo = log.with_user(system_user)
         with self.assertRaises(AccessError):
             log_sudo.write({"reason": "changed"})
+            self.env.flush_all()
         with self.assertRaises(AccessError):
             log_sudo.unlink()
+            self.env.flush_all()
             
         # Check facility service group
         facility_user = self.env.ref("zero_sudo.odoo_facility_service_internal")
         log_facility = log.with_user(facility_user)
         with self.assertRaises(AccessError):
             log_facility.write({"reason": "changed_facility"})
+            self.env.flush_all()
         with self.assertRaises(AccessError):
             log_facility.unlink()
+            self.env.flush_all()
 
     def test_documentation_wrappers(self):
         # [@ANCHOR: zero_sudo:COMM_test_documentation_wrappers]

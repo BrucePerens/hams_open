@@ -6,6 +6,7 @@ import logging
 from odoo.tests import tagged
 from odoo import _
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
 _logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class TestDistributedCacheTour(HamsHttpCase):
         self.env.ref('base.user_admin').lang = 'en_US'
 
     def test_distributed_cache_admin_tour(self):
-        # Tests [@ANCHOR: redis_cache_interceptor]
+        # Tests [@ANCHOR: COMM_redis_cache_interceptor]
         """
         Executes the UI tour for the Distributed Redis Cache Manager.
         - Standard Mode: Mocks the backend RPCs to simulate success without network calls.
@@ -109,8 +110,6 @@ class TestDistributedCacheTour(HamsHttpCase):
 
     # Tests [@ANCHOR: COMM_redis_cache_interceptor]
     def test_redis_cache_interceptor(self):
-        from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
-        
         class Env(dict):
             def __init__(self):
                 self.cr = type("cr", (), {"dbname": "test"})()

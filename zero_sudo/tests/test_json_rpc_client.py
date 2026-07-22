@@ -9,6 +9,7 @@ import tempfile
 import shutil
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
+from odoo import _
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.daemon.json_rpc_client import SecureJSONRPCClient
 
@@ -69,7 +70,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         # 2. Exec success
         mock_exec_fail = MagicMock()
         mock_exec_fail.status_code = 401
-        mock_exec_fail.json.return_value = {"error": "Access Denied Error"}
+        mock_exec_fail.json.return_value = {"error": _("Access Denied Error")}
         
         mock_exec_success = MagicMock()
         mock_exec_success.status_code = 200

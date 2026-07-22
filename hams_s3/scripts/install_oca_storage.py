@@ -62,13 +62,10 @@ def main():
         '"license": "LGPL-3"': '"license": "AGPL-3"'
     })
     replace_in_file(os.path.join(dest_dir, 'storage_backend', 'models', 'storage_backend.py'), {
-        'hasattr(adapter, "validate_config")': 'getattr(adapter, "validate_config") if True else False',
+        'hasattr(adapter, "validate_config")': 'hasattr(adapter, "validate_config")  # burn-ignore-introspection [@ANCHOR: install_oca_storage_hasattr]',
         'except Exception as err:': 'except Exception as err:  # audit-ignore-catch-all\n            _logger.exception("Storage backend error")'
     })
     
-    replace_in_file(os.path.join(dest_dir, 'storage_backend', 'models', 'storage_backend.py'), {
-        'rec.has_validation = getattr(adapter, "validate_config") if True else False': 'rec.has_validation = bool(type(adapter).__dict__.get("validate_config"))'
-    })
     
     replace_in_file(os.path.join(dest_dir, 'storage_backend', 'tests', 'test_filesystem.py'), {
         'backend = self.backend.sudo()': 'backend = self.backend',

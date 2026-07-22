@@ -209,3 +209,75 @@ For detailed narratives and end-to-end workflows, refer to the following:
 
 * **High-Speed Simulation Tests:** The full operational load of the module is end-to-end verified via the High-Speed Simulation Environment `[@ANCHOR: simulation_environment]`.
 </crons_and_subscriptions>
+
+---
+
+<function_reference>
+## 6. Comprehensive Function Reference
+
+This section ensures all module functions and their developer usage are thoroughly documented:
+
+### `res.users` (`models/res_users.py`, `models/res_users_moderation.py`)
+*   **`_async_unpublish_content(db_name, user_ids)`**: Background task to unpublish pages/posts for suspended users.
+*   **`_register_hook()`**: System hook used to bootstrap documentation via `knowledge` app.
+*   **`_check_reserved_slugs()`**: ORM constraint ensuring `website_slug` doesn't conflict with system routes.
+*   **`_is_admin()`**: Utility returning True if the user belongs to the `base.group_system` or `user_websites.group_user_websites_admin`.
+*   **`_get_page_limit()`**: Returns the configured global page limit.
+*   **`_get_gdpr_streamed_keys()`**, **`_get_gdpr_export_data()`**, **`_execute_gdpr_erasure()`**: Privacy compliance methods for exporting and purging PII.
+*   **`_compute_suspended_group_ids()`**: Computes related suspended groups for UI filtering.
+*   **`action_suspend_user_websites()`** / **`action_pardon_user_websites()`**: State transitions for moderation.
+
+### `user.websites.group` (`models/user_websites_groups.py`)
+*   **`_async_unpublish_group_content(db_name, group_ids)`**: Background task to unpublish suspended group content.
+*   **`_check_reserved_slugs()`**: Ensures group slugs don't overlap with system routes.
+*   **`action_suspend_group_websites()`** / **`action_pardon_group_websites()`**: Moderation state transitions for groups.
+
+### `website.page` (`models/website_page.py`)
+*   **`_serve_page()`**: Override to handle custom layout routing for user websites.
+*   **`_invalidate_cloudflare_cache()`**: Purges Cloudflare edge caches upon page modification.
+*   **`_sanitize_user_arch(arch_content)`**: XSS/SSTI sanitizer for user-submitted QWeb/HTML.
+*   **`_trigger_malicious_arch_violation(vals, records=None)`**: Automatically reports users and issues strikes upon payload detection.
+*   **`_flush_redis_view_counters()`**: Cron method flushing Redis counts to Postgres.
+*   Standard ORM Overrides: **`create()`**, **`check_access()`**, **`write()`**, **`unlink()`** are heavily overridden to enforce `owner_user_id` proxies and quota limits.
+
+### `blog.post` (`models/blog_post.py`)
+*   **`_invalidate_cloudflare_cache()`**: Purges Cloudflare edge caches upon post modification.
+*   **`_get_blog_urls()`**: Resolves slug paths for posts.
+*   **`send_weekly_digest()`**: Compiles and dispatches the weekly digest email to subscribers.
+*   Standard ORM Overrides: **`create()`**, **`check_access()`**, **`write()`**, **`unlink()`** enforce proxy ownership similar to `website.page`.
+
+### `blog.blog` (`models/blog_blog.py`)
+*   Standard ORM Overrides: **`create()`**, **`check_access()`**, **`write()`**, **`unlink()`** explicitly block non-admins from mutating the singleton community blog.
+
+### `user_websites.owned.mixin` (`models/user_websites_owned_mixin.py`)
+*   **`_check_proxy_ownership_create(vals_list)`** / **`_check_proxy_ownership_write(vals)`**: Core assertions ensuring the operating user legally owns the modified proxy record.
+
+### Moderation Models (`models/content_violation_report.py`, `models/content_violation_appeal.py`)
+*   **`_cron_notify_pending_reports()`**: Triggers admin digest emails for pending reports.
+*   **`action_mark_under_review()`**, **`action_dismiss()`**, **`action_take_action_and_strike()`**: Admin workflow actions for violation reports.
+*   **`_check_appeal_target()`**: Validates appeals point to a valid suspension.
+*   **`action_approve()`**, **`action_reject()`**: Admin workflow actions for appeals.
+
+### Configuration (`models/res_config_settings.py`)
+*   **`get_values()`**, **`set_values()`**: Exposes `user_websites_page_limit` and admin groups to the global settings panel.
+
+### SQL Views (`models/sql_views.py`)
+*   **`init()`**: Executes the `CREATE OR REPLACE VIEW` statements for materialized analytics views.
+
+### Controllers (`controllers/main.py`, `controllers/user_websites_api.py`)
+*   **`UserWebsitesMain`**:
+    *   `report_violation()`: POST handler for violation flags.
+    *   `user_blog_index()`, `user_home_fallback()`: Resolvers for `/<slug>/blog` and `/<slug>/home`.
+    *   `create_site()`, `create_blog()`: JIT provisioners for missing infrastructure.
+    *   `documentation()`: Proxies Odoo knowledge articles.
+    *   `community_directory()`: Renders `/community`.
+    *   `privacy_dashboard()`, `privacy_export()`, `privacy_delete_content()`: GDPR endpoints.
+    *   `submit_appeal()`: Handler for moderation appeals.
+    *   `pending_reports()`: JSON RPC endpoint for admin toast notifications.
+    *   `subscribe()`, `unsubscribe()`: Handlers for weekly digest opt-in/opt-out.
+*   **`UserWebsitesAPI`**:
+    *   `api_domains()`: Secure resolver returning bound domain maps for ingestion by dependent routing proxies.
+
+### System Hooks (`hooks.py`)
+*   **`post_init_hook(env)`**: Triggered post-installation to execute initial setup routines (e.g., initializing the global community blog).
+</function_reference>

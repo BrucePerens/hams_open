@@ -9,7 +9,8 @@ class CloudflareTunnelRoute(models.Model):
     _order = "sequence, id"
 
     tunnel_id = fields.Many2one(
-        "cloudflare.tunnel", string="Tunnel", required=True, ondelete="cascade"
+        "cloudflare.tunnel", string="Tunnel", ondelete="cascade",
+        help="If empty, this acts as a Global Route Template applied to all tunnels."
     )
     sequence = fields.Integer(string="Sequence", default=10)
     hostname = fields.Char(

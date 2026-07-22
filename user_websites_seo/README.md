@@ -42,6 +42,8 @@ This module extends `user_websites` by adding SEO metadata to users and groups t
 We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a dedicated service account: `user_websites.user_websites_service_account`.
 
 *   **Model Mixin:** `user.websites.seo.metadata.mixin` centralizes the secure write logic.
+    *   **Developer Usage:** To use this mixin on a model, inherit from `user.websites.seo.metadata.mixin` and you **must** implement the `_check_seo_write_permission(self)` method to define who is authorized to edit SEO fields.
+    *   **Bypassing Logic:** Developers can pass `{"skip_seo_metadata_mixin": True}` in the context to bypass the mixin's specialized write behavior.
 *   **Self-Writable Fields:** SEO fields are whitelisted in `res.users` to allow users to edit their own profiles without elevated backend rights. `[@ANCHOR: COMM_res_users_self_writeable_fields]`
 
 ## 3. Implementation Details

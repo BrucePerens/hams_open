@@ -36,8 +36,11 @@ class CloudflareTunnel(models.Model):
                     _("Missing Cloudflare API Token or Account ID for the website.")
                 )
 
+            global_routes = self.env["cloudflare.tunnel.route"].search([("tunnel_id", "=", False)])
+            all_routes = tunnel.route_ids | global_routes
+
             ingress = []
-            for route in tunnel.route_ids:
+            for route in all_routes.sorted('sequence'):
                 rule = {"service": route.service_url}
                 if route.hostname:
                     rule["hostname"] = route.hostname

@@ -103,6 +103,7 @@ JSON-2 Access Denied.
 Attempting to reload rotated keys from env file.
 """.strip()
             _logger.warning(warn_msg)
+            # # Verified by [@ANCHOR: zero_sudo:COMM_test_call_self_healing]
             self._load_credentials()
             response = _do_request()
             try:

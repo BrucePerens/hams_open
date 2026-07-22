@@ -134,12 +134,6 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         except ValueError:
             self.fail("ValueError was not caught by audit-ignore-catch-all")
 
-    def test_redis_pool_env_variables(self):
-        # [@ANCHOR: COMM_test_redis_pool_env_variables]
-        """Test that burn-ignore-env correctly fetches REDIS_PASSWORD."""
-        import os
-        pwd = os.environ.get("REDIS_PASSWORD")
-        self.assertIsNone(pwd, "Dummy assertion to replace fake test.")
 
     def test_cache_manager_broadcast_invalid_json_type(self):
         """Test that broadcast_to_redis handles non-dict JSON gracefully."""
@@ -158,11 +152,8 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
             async def incr(self, key): pass
 
         cm.redis_client = FakeRedisClient()
-        try:
-            # Should not raise AttributeError when data is a list
-            asyncio.run(broadcast_to_redis('["model", "res.users"]'))
-        except AttributeError:
-            self.fail("broadcast_to_redis raised AttributeError for non-dict JSON")
+        # Should not raise AttributeError when data is a list
+        asyncio.run(broadcast_to_redis('["model", "res.users"]'))
 
     def test_cache_manager_broadcast_pipeline(self):
         """Test that broadcast_to_redis uses redis pipeline."""
@@ -199,10 +190,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
     def test_cache_manager_strong_reference(self):
         """Test that postgres_notify_handler stores task in _background_tasks."""
 
-        try:
-            _ = cm._background_tasks
-        except AttributeError:
-            pass # 
+        if not hasattr(cm, '_background_tasks'):  # burn-ignore-introspection [@ANCHOR: bg_tasks]
             cm._background_tasks = set()
 
         async def mock_broadcast(payload):
@@ -247,8 +235,6 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         async def _mock_sleep(delay):
             raise asyncio.CancelledError()
 
-        pass # from unittest.mock import patch
-        
         mock_asyncpg = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncpg')
         _ = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.redis.Redis')
         mock_sleep = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncio.sleep')
@@ -267,6 +253,5 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
             mock_asyncpg.connect = mock_connect
             
             # Since main is complex, a simpler test is to just parse the file and ensure `await conn.close()` exists before `db_conns.clear()` in the exception handler.
-            pass # import inspect
-            # source = inspect.getsource(main)
-            # self.assertRegex(source, r"await conn\.close\(\)[\s\S]*db_conns\.clear\(\)", "Resource leak: db_conns.clear() called without closing connections")
+            # Structural verification is done by direct
+            # source code inspection in test_b2_fixes.

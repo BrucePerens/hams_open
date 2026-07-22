@@ -7,7 +7,7 @@
                 Security Dashboard <a class="o_doc_link" href="/zero_sudo/documentation#COMM_UX_centralized_security_logs" target="_blank"><i class="fa fa-question-circle" role="img" aria-label="Help" title="Help"/></a>
                 <button class="btn btn-sm btn-outline-light ms-3 o_security_dashboard_pause" t-on-click="togglePause" t-att-aria-label="state.isPaused ? 'Resume updates' : 'Pause updates'" t-att-title="state.isPaused ? 'Resume updates' : 'Pause updates'">
                     <i t-attf-class="fa #{state.isPaused ? 'fa-play' : 'fa-pause'}" role="presentation"/>
-                    <span class="ms-1" t-esc="state.isPaused ? 'Resume' : 'Pause'"/>
+                    <span class="ms-1" t-out="state.isPaused ? 'Resume' : 'Pause'"/>
                 </button>
             </h1>
             <div class="table-responsive border bg-dark text-white shadow-sm rounded">

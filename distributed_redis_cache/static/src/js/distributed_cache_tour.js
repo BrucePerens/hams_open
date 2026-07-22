@@ -27,10 +27,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             content: "Check Redis Status",
             run: "click",
         },
-        {
-            trigger: '.o_notification',
-            content: "Wait for status notification to appear",
-        },
+        TourUtils.waitForElement('.o_notification', "Wait for status notification to appear"),
         {
             trigger: '.o_field_widget[name="model_id"] input',
             content: "Input model name using native simulator",
@@ -51,10 +48,7 @@ registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
             content: "Invalidate the cache",
             run: "click",
         },
-        {
-            trigger: '.o_notification',
-            content: "Wait for notification to appear",
-        },
+        TourUtils.waitForElement('.o_notification', "Wait for notification to appear"),
         TourUtils.waitForAbsence('.o_notification', 'Wait for notification to disappear'),
     ]
 });

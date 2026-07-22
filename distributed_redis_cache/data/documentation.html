@@ -13,6 +13,7 @@
 </style>
 </head>
 <body>
+<!-- [@ANCHOR: COMM_doc_inject_distributed_redis_cache] -->
 <h1>Distributed Redis Cache</h1>
 <p>The <b>Distributed Redis Cache</b> module is a performance tool designed for Odoo environments with multiple servers. It ensures that when data changes on one server, every other server in your cluster is updated instantly, preventing "stale data" errors.</p>
 
@@ -40,7 +41,7 @@
 <p>The <b>Distributed Cache Manager</b> is your central dashboard for ensuring synchronization across your Odoo cluster. Administrators can find these tools under the <b>Distributed Cache</b> menu in Odoo Settings.</p>
 
 <h4 id="check_redis_status_logic" data-trace="[@ANCHOR: COMM_distributed_redis_cache:check_redis_status_logic]">Checking System Health</h4>
-<p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server.</p>
+<p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server. <!-- [@ANCHOR: COMM_check_redis_status_logic] --></p>
 <ul>
     <li><b>Green Success:</b> Everything is working perfectly.</li>
     <li><b>Red Error:</b> The shared memory is unreachable. Don't worry—Odoo will automatically switch to "Fail-Open" mode and use standard local memory so your website stays online.</li>
@@ -74,7 +75,6 @@
 
 <div class="note">
     <strong>Developer Tip:</strong> Use the <code>@distributed_cache()</code> decorator on your custom model methods to automatically benefit from cluster-wide caching and multi-tenant isolation.
-
 </div>
 
 <h3>Troubleshooting</h3>
@@ -84,23 +84,6 @@
     <li><b>Check the Service:</b> Ensure the "Cache Manager" background service is active on your host.</li>
     <li><b>Be Patient:</b> While usually instant, network signals can sometimes take a fraction of a second to travel between servers.</li>
 </ul>
-
-<!-- Semantic Anchors for System Integration -->
-<!-- [@ANCHOR: COMM_distributed_cache_view] -->
-
-<!-- [@ANCHOR: COMM_distributed_cache_settings_view] -->
-
-<!-- [@ANCHOR: COMM_manual_cache_invalidation] -->
-
-<!-- [@ANCHOR: COMM_check_redis_status_logic] -->
-
-<!-- [@ANCHOR: COMM_distributed_cache_decorator] -->
-
-<!-- [@ANCHOR: COMM_notify_model_invalidation_logic] -->
-
-<!-- [@ANCHOR: COMM_doc_inject_distributed_redis_cache] -->
-
-<!-- [@ANCHOR: COMM_story_zero_sudo_cache_manager] -->
 
 </body>
 </html>

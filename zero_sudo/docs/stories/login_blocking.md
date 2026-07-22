@@ -12,9 +12,15 @@ Service accounts are intended for background daemons and internal processes. The
 
 ## The Process
 1. **Account Flagging**: An administrator or a module's data file flags a user record as a service account using the `is_service_account` field `[@ANCHOR: zero_sudo:COMM_is_service_account_field]`.
+
+This ensures that the user is officially recognized by the system as a background process rather than a human.
+
 2. **Password Generation**: Upon creation, the system automatically assigns the service account a cryptographically secure, 128-byte random password. This guarantees that interactive authentication via standard credentials is mathematically impossible `[@ANCHOR: zero_sudo:COMM_service_account_password_generation]`.
 3. **Login Attempt**: A user attempts to log into the web interface using the credentials of a service account.
 4. **Interception**: The `web_login` interceptor `[@ANCHOR: zero_sudo:COMM_web_login_interceptor]` catches the successful authentication.
+
+The interceptor runs before the session is fully established, preventing any unauthorized access to the backend.
+
 5. **Security Check**: The system performs a direct SQL check `[@ANCHOR: zero_sudo:COMM_web_login_interceptor_check]` to verify the `is_service_account` flag.
 6. **Session Destruction**: If the user is a service account, the system immediately destroys the session and redirects the user back to the login page with an error message.
 7. **Security Logging**: The system records the blocked attempt in a centralized audit log (`zero_sudo.security.log`) for review by administrators `[@ANCHOR: zero_sudo:COMM_zero_sudo_security_log_global]`.

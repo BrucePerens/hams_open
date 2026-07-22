@@ -8,7 +8,6 @@
     "category": "Hidden",
     "depends": ["base", "zero_sudo"],
     "data": [
-        "data/documentation.html",
     ],
     "external_dependencies": {
         "python": ["pika"],

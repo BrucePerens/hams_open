@@ -18,8 +18,17 @@ In the Zero-Sudo architecture, direct use of `.sudo()` is prohibited. Instead, b
 ## Security Enforcement
 The `_get_service_uid` function ensures:
 - The account exists and is resolved via raw SQL `[@ANCHOR: zero_sudo:COMM_get_service_uid_sql_resolve]`.
+
+This direct SQL resolution prevents ORM-based interception or caching issues.
+
 - The account is active and verified as a service account `[@ANCHOR: zero_sudo:COMM_get_service_uid_sql_verify]`.
+
+This guarantees that deactivated accounts cannot be maliciously revived for background tasks.
+
 - The account is explicitly flagged as a service account `[@ANCHOR: zero_sudo:COMM_is_service_account_field]`.
+
+Only officially designated service accounts are allowed to proceed.
+
 - The account DOES NOT have global administrative privileges (like `base.group_system`) `[@ANCHOR: zero_sudo:COMM_privilege_escalation_block_sql]`.
 
 ## Example

@@ -83,28 +83,57 @@ The module follows a **Command Query Responsibility Segregation (CQRS)** pattern
 
 ## 2. Developer API & Integration
 
-### On-Call Query API
-Other modules can query the currently active responder:
-```python
-on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
-# Returns res.users recordset or False
-```
-[@ANCHOR: test_pager_notification]
+This section documents all public functions, models, and controllers in the `pager_duty` module and how developers can utilize them.
 
-### Incident Reporting API
-External scripts or modules can report incidents programmatically:
-```python
-self.env["pager.incident"].report_incident({
-    "source": "Custom Script",
-    "severity": "high",
-    "description": "Critical failure detected"
-})
-```
-[@ANCHOR: report_incident_rate_limit]
+### `pager.check` (Models)
+The core model defining monitoring checks.
+*   `rpc_ensure_executable(self, cmd_name)`: Validates if a daemon command is allowed to execute based on strict security allow-lists. Developers should call this when adding new bash-level integrations.
+*   `check_heartbeat_rpc(self, hb_uuid, interval_sec)`: Registers a heartbeat from an external daemon to confirm it is actively polling.
+*   `action_pull_from_json(self)`: Syncs checks from `pager_config.json` into the database. Often mapped to a UI button.
+*   `action_push_to_json(self)`: Exports database checks to `pager_config.json` for daemon consumption.
+*   `action_autodiscover(self)`: Scans the system to automatically generate recommended monitoring checks for web services, databases, etc.
+*   `action_trigger_check(self)`: Manually forces an immediate execution of the monitoring check.
+*   `update_lets_encrypt_domains(self, domains)`: Automatically updates SSL monitoring based on discovered Let's Encrypt certificates.
 
-### Helpdesk Adapter
-The module automatically bridges incidents to Helpdesk tickets using an adapter pattern. It respects the `pager_duty.helpdesk_model` system parameter.
-[@ANCHOR: COMM_pd_helpdesk_adapter]
+### On-Call Scheduling (`calendar.event` extension)
+*   `get_current_on_duty_admin(self)`: Retrieves the `res.users` record of the currently active responder based on calendar shifts.
+    ```python
+    on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
+    ```
+    [@ANCHOR: test_pager_notification]
+
+### `pager.incident` (Models)
+Handles the lifecycle of monitoring alerts.
+*   `report_incident(self, vals)`: Programmatically reports a new incident. Automatically handles deduplication and rate-limiting.
+    ```python
+    self.env["pager.incident"].report_incident({
+        "source": "Custom Script",
+        "severity": "high",
+        "description": "Critical failure detected"
+    })
+    ```
+    [@ANCHOR: report_incident_rate_limit]
+*   `action_escalate_unacknowledged(self)`: Checks all unacknowledged incidents and escalates them to administrators if the 15-minute SLA is breached. Automatically invoked by cron.
+*   `auto_resolve_incidents(self, source, website_id=None)`: Resolves any active incidents matching the provided source. Call this when a system returns to a healthy state.
+*   `action_acknowledge(self)`: Acknowledges the current incident, halting its escalation timer.
+*   `get_board_data(self)`: Generates real-time, aggregated JSON metrics for the NOC Dashboard UI.
+
+### `pager.incident.ticket.adapter` (Models)
+*   `action_generate_helpdesk_ticket(self)`: Converts an existing Pager Duty incident into a Helpdesk ticket, assigning the active on-call responder. Used in UI buttons or automated flows.
+    [@ANCHOR: COMM_pd_helpdesk_adapter]
+
+### `pager.log.analyzer` (Models)
+*   `rpc_update_state(self, uuid, state, result_payload)`: Updates the async task status of a real-time log search query (called by `pager_log_analyzer.py`).
+
+### Controllers
+Provides HTTP endpoints for daemon-to-Odoo communication.
+*   `pager_board(**kw)`: Serves the NOC Dashboard HTML.
+*   `update_domains(domains=None, api_identity=None, **kwargs)`: Receives domain updates for automated SSL tracking.
+*   `search_logs(file_path, regex_query)`: Initiates a background log search task.
+*   `search_logs_poll(job_id)`: Long-polls for the result of an active log search task.
+*   `get_log_files()`: Retrieves a list of parseable log files from the server.
+*   `ping(**kw)`: Returns a simple 200 OK for basic Odoo connectivity checks.
+*   `heartbeat(hb_uuid, **kw)`: HTTP endpoint for daemons to transmit their heartbeats without XML-RPC.
 
 ---
 
