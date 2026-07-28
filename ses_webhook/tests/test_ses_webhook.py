@@ -3,6 +3,9 @@ import json
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from unittest.mock import patch
 
+from odoo.tests.common import tagged
+
+@tagged('post_install', '-at_install')
 class TestSesWebhook(HamsHttpCase):
 
     @classmethod
