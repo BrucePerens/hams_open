@@ -21,7 +21,7 @@ class HelpdeskTicket(models.Model):
         string="Callsign", tracking=True, help="Relevant amateur radio callsign."
     )
     ticket_type = fields.Selection(
-        [
+        selection=[
             ("general", "General Inquiry"),
         ],
         string="Ticket Type",
