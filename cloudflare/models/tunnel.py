@@ -48,6 +48,14 @@ class CloudflareTunnel(models.Model):
                     rule["path"] = route.path
                 ingress.append(rule)
             
+            # Add SSH route
+            from urllib.parse import urlparse
+            if tunnel.website_id.domain:
+                parsed = urlparse(tunnel.website_id.domain)
+                hostname = parsed.netloc or parsed.path
+                if hostname:
+                    ingress.append({"hostname": f"ssh.{hostname}", "service": "ssh://localhost:22"})
+
             # Catch-all required by Cloudflare
             ingress.append({"service": "http://localhost:8069"})
 
