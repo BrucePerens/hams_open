@@ -36,9 +36,14 @@ def _get_lib():
     _lib.StopTunnel.argtypes = []
     return _lib
 
+import threading
+
+_stop_event = threading.Event()
+
 def start_tunnel_daemon(token):
     """
     Starts the Cloudflare tunnel in a background thread using the CGO wrapper.
+    Restarts immediately if it crashes, unless explicitly stopped.
     """
     global _tunnel_future
     if _tunnel_future and not _tunnel_future.done():
@@ -46,14 +51,20 @@ def start_tunnel_daemon(token):
         return
 
     lib = _get_lib()
+    _stop_event.clear()
     _logger.info("Starting native Cloudflare tunnel daemon...")
 
     def run_tunnel():
-        try:
-            # We must encode the token as a null-terminated UTF-8 string for C.
-            lib.StartTunnel(token.encode('utf-8'))
-        except Exception as e:  # audit-ignore-catch-all
-            _logger.exception("Cloudflare tunnel daemon crashed: %s", e)
+        while not _stop_event.is_set():
+            try:
+                # We must encode the token as a null-terminated UTF-8 string for C.
+                lib.StartTunnel(token.encode('utf-8'))
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.exception("Cloudflare tunnel daemon crashed: %s", e)
+            
+            if not _stop_event.is_set():
+                _logger.warning("Cloudflare tunnel exited unexpectedly. Restarting immediately...")
+                _stop_event.wait(1) # Small pause to prevent tight looping on immediate failure
 
     _tunnel_future = _tunnel_executor.submit(run_tunnel)
 
@@ -63,6 +74,7 @@ def stop_tunnel_daemon():
     """
     if _lib:
         _logger.info("Stopping native Cloudflare tunnel daemon...")
+        _stop_event.set()
         _lib.StopTunnel()
 
 def start_tunnel_simulator(target_port):

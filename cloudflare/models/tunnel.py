@@ -182,4 +182,11 @@ class CloudflareTunnel(models.Model):
 
         success, tunnel_token = get_cfd_tunnel_token(account_id, token, tunnel.cf_tunnel_id)
         if success and tunnel_token:
+            if not self.env['ir.config_parameter'].sudo().get_param('cloudflare.tunnel.provisioned'):
+                try:
+                    tunnel.action_push_configuration()
+                    self.env['ir.config_parameter'].sudo().set_param('cloudflare.tunnel.provisioned', 'True')
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error("Failed to provision routes on initial tunnel start: %s", e)
             start_tunnel_daemon(tunnel_token)
