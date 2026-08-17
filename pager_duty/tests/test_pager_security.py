@@ -171,11 +171,11 @@ class TestPagerSecurity(HamsTransactionCase):
 
         # Create records in Company A
         check_a = self.env["pager.check"].with_user(self.admin).create({"name": "Check A", "company_id": company_a.id, "check_type": "heartbeat"})
-        inc_a = self.env["pager.incident"].with_user(self.admin).create({"source": "A", "company_id": company_a.id})
-        
+        inc_a = self.env["pager.incident"].with_user(self.admin).create({"source": "A", "severity": "low", "description": "A", "company_id": company_a.id})
+
         # Create records in Company B
         check_b = self.env["pager.check"].with_user(admin_b).create({"name": "Check B", "company_id": company_b.id, "check_type": "heartbeat"})
-        inc_b = self.env["pager.incident"].with_user(admin_b).create({"source": "B", "company_id": company_b.id})
+        inc_b = self.env["pager.incident"].with_user(admin_b).create({"source": "B", "severity": "low", "description": "B", "company_id": company_b.id})
 
         # Admin A should only see Company A's records
         checks_a_sees = self.env["pager.check"].with_user(self.admin).search([])
@@ -217,11 +217,11 @@ class TestPagerSecurity(HamsTransactionCase):
 
         # Create records in Website A
         check_a = self.env["pager.check"].with_user(self.admin).create({"name": "Check Web A", "website_id": website_a.id, "check_type": "heartbeat"})
-        inc_a = self.env["pager.incident"].with_user(self.admin).create({"source": "Web A", "website_id": website_a.id})
-        
+        inc_a = self.env["pager.incident"].with_user(self.admin).create({"source": "Web A", "severity": "low", "description": "Web A", "website_id": website_a.id})
+
         # Create records in Website B
         check_b = self.env["pager.check"].with_user(admin_b).create({"name": "Check Web B", "website_id": website_b.id, "check_type": "heartbeat"})
-        inc_b = self.env["pager.incident"].with_user(admin_b).create({"source": "Web B", "website_id": website_b.id})
+        inc_b = self.env["pager.incident"].with_user(admin_b).create({"source": "Web B", "severity": "low", "description": "Web B", "website_id": website_b.id})
 
         # Admin A should only see Website A's records
         checks_a_sees = self.env["pager.check"].with_user(self.admin).search([])

@@ -39,7 +39,11 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             run: "click",
         },
         {
-            trigger: '.o_select_menu_item[data-value*="high"]',
+            // The SelectMenu component (Odoo 19) never renders a
+            // data-value attribute on its option items -- only
+            // data-choice-index -- so a [data-value*=...] selector never
+            // matches. Match on the rendered label text instead.
+            trigger: '.o_select_menu_item:contains("High")',
             content: "Select High severity",
             run: "click",
         },

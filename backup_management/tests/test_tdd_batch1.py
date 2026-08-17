@@ -43,7 +43,7 @@ class TestTddBatch1(RealTransactionCase):
         self.scripts_dir = tempfile.mkdtemp()
         env_vars["BACKUP_WORKER_SCRIPTS_DIR"] = self.scripts_dir
         
-        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
+        self.daemon_proc = daemon_utils._start_daemon_process(daemon_script, env_vars=env_vars)
 
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
         creds = pika.PlainCredentials(

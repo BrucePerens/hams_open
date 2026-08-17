@@ -86,7 +86,7 @@ class TestTddFixes(RealTransactionCase):
                     if line.startswith("ODOO_RPC_KEY="):
                         env_vars["ODOO_SERVICE_PASSWORD"] = line.strip().split("=", 1)[1]
 
-        self.daemon_proc = daemon_utils.start_daemon_process(daemon_script, env_vars=env_vars)
+        self.daemon_proc = daemon_utils._start_daemon_process(daemon_script, env_vars=env_vars)
 
         rmq_host = os.environ.get("RABBITMQ_HOST", "rabbitmq")
         creds = pika.PlainCredentials(

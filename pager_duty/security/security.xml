@@ -16,17 +16,17 @@
             <field name="privilege_id" ref="privilege_pager_duty"/>
         </record>
 
-        <record id="pager_check_website_rule" model="ir.rule">
-            <field name="name">Pager Check Multi-Website</field>
+        <record id="pager_check_website_company_rule" model="ir.rule">
+            <!-- A single combined rule, not two separate website/company
+                 rules: multiple ir.rule records for the SAME group are
+                 OR'ed together in Odoo, not AND'ed, so splitting this into
+                 two rules let a record from ANY other company become
+                 visible merely by having no website_id set (and vice
+                 versa), a real multi-tenant isolation bypass caught by
+                 test_04_multi_tenant_isolation/test_05_multi_website_isolation. -->
+            <field name="name">Pager Check Multi-Website/Multi-Company</field>
             <field name="model_id" ref="model_pager_check"/>
-            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
-        </record>
-
-        <record id="pager_check_company_rule" model="ir.rule">
-            <field name="name">Pager Check Multi-Company</field>
-            <field name="model_id" ref="model_pager_check"/>
-            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="domain_force">['&amp;', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
         </record>
 
@@ -37,17 +37,12 @@
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
 
-        <record id="pager_incident_website_rule" model="ir.rule">
-            <field name="name">Pager Incident Multi-Website</field>
+        <record id="pager_incident_website_company_rule" model="ir.rule">
+            <!-- See pager_check_website_company_rule above: two separate
+                 same-group rules are OR'ed, not AND'ed, in Odoo. -->
+            <field name="name">Pager Incident Multi-Website/Multi-Company</field>
             <field name="model_id" ref="model_pager_incident"/>
-            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
-        </record>
-
-        <record id="pager_incident_company_rule" model="ir.rule">
-            <field name="name">Pager Incident Multi-Company</field>
-            <field name="model_id" ref="model_pager_incident"/>
-            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="domain_force">['&amp;', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
         </record>
 
@@ -58,17 +53,12 @@
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
 
-        <record id="pager_log_file_website_rule" model="ir.rule">
-            <field name="name">Pager Log File Multi-Website</field>
+        <record id="pager_log_file_website_company_rule" model="ir.rule">
+            <!-- See pager_check_website_company_rule above: two separate
+                 same-group rules are OR'ed, not AND'ed, in Odoo. -->
+            <field name="name">Pager Log File Multi-Website/Multi-Company</field>
             <field name="model_id" ref="model_pager_log_file"/>
-            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
-        </record>
-
-        <record id="pager_log_file_company_rule" model="ir.rule">
-            <field name="name">Pager Log File Multi-Company</field>
-            <field name="model_id" ref="model_pager_log_file"/>
-            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="domain_force">['&amp;', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
         </record>
 
@@ -79,17 +69,12 @@
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_service'))]"/>
         </record>
 
-        <record id="pager_log_pattern_website_rule" model="ir.rule">
-            <field name="name">Pager Log Pattern Multi-Website</field>
+        <record id="pager_log_pattern_website_company_rule" model="ir.rule">
+            <!-- See pager_check_website_company_rule above: two separate
+                 same-group rules are OR'ed, not AND'ed, in Odoo. -->
+            <field name="name">Pager Log Pattern Multi-Website/Multi-Company</field>
             <field name="model_id" ref="model_pager_log_pattern"/>
-            <field name="domain_force">['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
-            <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
-        </record>
-
-        <record id="pager_log_pattern_company_rule" model="ir.rule">
-            <field name="name">Pager Log Pattern Multi-Company</field>
-            <field name="model_id" ref="model_pager_log_pattern"/>
-            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="domain_force">['&amp;', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
         </record>
 

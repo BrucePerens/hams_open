@@ -202,7 +202,12 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "distributed_redis_cache.test_integration_active",
             "web.base.url",
             "ham_dns.base_domain",
-            "ham_dns.default_ip",
+            # The real stored key (see res_config_settings.py's
+            # pdns_default_ip field, config_parameter="ham_dns.default_a_record_ip")
+            # -- this used to say "ham_dns.default_ip", a key nothing
+            # actually reads or writes anywhere, so the real caller in
+            # models/res_users.py always got the AccessError/default instead.
+            "ham_dns.default_a_record_ip",
             "content_security_policy.report_uri",
             "backup_management.rmq_host",
             "backup_management.rmq_user",
@@ -225,6 +230,46 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "user_websites.global_website_page_limit",
             "content_security_policy.report_url",
             "user_websites.last_digest_id",
+            # An HTML disclaimer/preface field (res.config.settings'
+            # auxcomm_preface_text), not a secret. The stored key name
+            # predates ham_training/ham_training_auxcomm being split into
+            # two modules and was never renamed; the field's own
+            # config_parameter attribute still defines it this way, so
+            # this whitelists the real key rather than renaming it and
+            # risking already-configured values. Without this, the
+            # /auxcomm/preface page (and therefore /auxcomm/simulator for
+            # any user who hasn't already agreed) crashed outright.
+            "ham_training_training.preface_text",
+            # Core Odoo's own mail-alias setting (e.g. "catchall" in
+            # catchall@yourdomain.com), not a secret. Read by
+            # sk_processor_wizard.py to build a From address for the
+            # Silent Key lockout notification email.
+            "mail.catchall.alias",
+            # Two more core Odoo mail settings, same reasoning: plain
+            # addressing configuration, not secrets.
+            "mail.bounce.alias",
+            "mail.catchall.domain",
+            # Third-party map API credentials (APRS.fi, OpenWeatherMap,
+            # AISHub). Genuinely credentials, but read-whitelisting a
+            # specific, individually-vetted third-party credential through
+            # this controlled path is exactly what this whitelist is for --
+            # the same category as the already-whitelisted
+            # distributed_redis_cache/rabbitmq passwords above, not a new
+            # class of exposure. Used only as a global fallback default
+            # when a user hasn't configured their own override key.
+            "ham_map.aprs_credential",
+            "ham_map.openweathermap_credential",
+            "ham_map.aishub_credential",
+            # A filesystem path (not a secret) read by pager_check.py.
+            "pager_duty.config_dir",
+            # A shared HMAC secret used to authenticate inbound requests to
+            # /api/v1/pager_duty/domains (domain_api.py, via
+            # hmac.compare_digest) -- genuinely sensitive, but this
+            # controlled/audited read path is the correct place for it,
+            # same reasoning as the credentials above. Previously missing
+            # entirely, so every call to that endpoint failed closed with
+            # an AccessError before the HMAC check ever ran.
+            "pager_duty.domain_api_identity",
         ]
 
     @api.model

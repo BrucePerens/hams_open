@@ -24,3 +24,13 @@ class ResUsers(models.Model):
         Modules should override this to return user data for export.
         """
         return {}
+
+    def _get_gdpr_streamed_keys(self):
+        """
+        Base architectural contract for GDPR Export streaming.
+        Modules with large/unbounded per-user datasets (QSO logs, blog
+        posts, ...) should override this to return a dict of
+        {key: generator_function} pairs so the export endpoint can stream
+        each dataset instead of building it entirely in memory.
+        """
+        return {}

@@ -258,7 +258,12 @@ class PagerCheck(models.Model):
 
             path = ManifestModel.with_user(svc_uid).ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
-        except (ValueError, FileNotFoundError, PermissionError) as e:
+        except (ValueError, FileNotFoundError, PermissionError, UserError) as e:
+            # UserError is what binary_manifest.ensure_executable() actually
+            # raises when an allow-listed command has no manifest entry
+            # configured yet -- that's a routine "not set up" case for this
+            # RPC endpoint, not an unexpected error, and must be reported
+            # the same graceful way as the other failure branches here.
             _logger.warning("Executable provisioning failed for %s: %s", cmd_name, e)
             return {"status": "error", "message": str(e)}
         except (KeyError, ValueError) as e:  # audit-ignore-catch-all

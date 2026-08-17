@@ -14,7 +14,7 @@ class TestBatch2Fixes(HamsTransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env.user.groups_id |= cls.env.ref("backup_management.group_backup_admin")
+        cls.env.user.group_ids |= cls.env.ref("backup_management.group_backup_admin")
         cls.config1 = cls.env["backup.config"].create({
             "name": "Config 1",
             "engine": "kopia",

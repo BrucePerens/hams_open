@@ -27,7 +27,7 @@ class TestRealBackupWorker(RealTransactionCase):
     def test_real_backup_worker_rabbitmq(self):
         # Tests [@ANCHOR: backup_management:COMM_test_backup_worker_real]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        daemon_script = os.path.join(base_dir, "daemon", "backup_worker.py")
+        daemon_script = os.path.join(base_dir, "daemon", "main.py")
 
         daemon_utils = self.env["zero_sudo.daemon.utils"]
 
@@ -58,7 +58,7 @@ class TestRealBackupWorker(RealTransactionCase):
                             1
                         ]
 
-        self.daemon_proc = daemon_utils.start_daemon_process(
+        self.daemon_proc = daemon_utils._start_daemon_process(
             daemon_script, env_vars=env_vars
         )
 
