@@ -31,6 +31,22 @@
             <field name="name">Central Cache Invalidation Group</field>
             <field name="privilege_id" ref="privilege_zero_sudo"/>
         </record>
+
+        <!-- Referenced (as "zero_sudo.gdpr_service_internal") by
+             user_websites/models/res_users.py's _execute_gdpr_erasure()
+             override, but never actually defined anywhere, so every call to
+             erase a user's website pages/blog posts/blogs crashed with
+             "Service Account not found". zero_sudo is the correct shared
+             home for this (not a hams_com-only module like ham_base) since
+             hams_open modules like user_websites and compliance need it
+             and cannot depend the other direction. Each module that owns
+             erasable content grants this group access to its own models
+             (see user_websites/security/ir.model.access.csv), the same
+             distributed-grant pattern already used for group_mail_service. -->
+        <record id="group_gdpr_service" model="res.groups">
+            <field name="name">Central GDPR Erasure Service Group</field>
+            <field name="privilege_id" ref="privilege_zero_sudo"/>
+        </record>
     </data>
     <data>
         <record id="mail_service_internal" model="res.users">
@@ -41,7 +57,30 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_mail_service')])]"/>
+            <!-- base.group_user (plain "Internal User") is needed on top of
+                 the narrow group_mail_service ACLs above: several fields
+                 this account legitimately needs while actually sending
+                 mail, e.g. message_follower_ids and mail.template's
+                 report_template_ids resolution against ir.actions.report,
+                 are core Odoo fields/models gated behind base.group_user
+                 specifically, not just a model-level ir.model.access.csv
+                 row. Without it, routine send_mail()/message_post() calls
+                 through this account failed with AccessError. This grants
+                 the same baseline internal-employee read access any real
+                 Odoo user sending mail already has, not a new capability,
+                 just what the account's actual job already requires. -->
+            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_mail_service'), ref('base.group_user')])]"/>
+        </record>
+
+        <record id="gdpr_service_internal" model="res.users">
+            <field name="name">Central GDPR Erasure Service Account</field>
+            <field name="login">gdpr_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_gdpr_service')])]"/>
         </record>
 
         <record id="odoo_facility_service_internal" model="res.users">

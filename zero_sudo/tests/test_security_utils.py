@@ -75,6 +75,89 @@ class TestSecurityUtils(HamsTransactionCase):
         ):
             utils._get_system_param("some.unregistered.safe.param")
 
+    def test_16_get_system_param_returns_the_real_configured_value(self):
+        """
+        _get_system_param/_set_system_param's own whitelist check IS their
+        security boundary; the actual read/write must not be silently
+        degraded by ir_config_parameter.py's separate, narrower
+        _SERVICE_ALLOWED_KEYS gate underneath them. Most of
+        _get_param_read_whitelist()'s own keys (distributed_redis_cache.*,
+        backup_management.*, rabbitmq.*, most user_websites.*, etc.) are
+        NOT in that narrower gate, so routing the actual value fetch
+        through a service account there used to silently return the
+        caller's `default` instead of the real value -- every consumer
+        (e.g. redis_pool.py resolving the real Redis host) got a plausible
+        wrong answer instead of an error. Prove the round trip actually
+        carries the real value, not just that it doesn't crash.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+        # Not in ir_config_parameter.py's _SERVICE_ALLOWED_KEYS and doesn't
+        # start with "ham" -- exactly the class of key this bug hit.
+        key = "distributed_redis_cache.redis_host"
+        self.assertIn(key, utils._get_param_read_whitelist())
+        self.assertNotIn(key, utils._get_param_write_whitelist())
+
+        distinct_value = "redis-under-test.internal"
+        self.env["ir.config_parameter"].set_param(key, distinct_value)
+        self.env.registry.clear_cache()
+
+        got = utils._get_system_param(key)
+        self.assertEqual(
+            got,
+            distinct_value,
+            "_get_system_param MUST return the real configured value, not "
+            "silently fall back to a default because of an unrelated, "
+            "narrower access gate underneath it.",
+        )
+
+        # And the write side of the same round trip, for a key that's on
+        # the write whitelist too.
+        write_key = "caching.safe_quota_mb"
+        self.assertIn(write_key, utils._get_param_write_whitelist())
+        utils._set_system_param(write_key, "42")
+        self.env.registry.clear_cache()
+        self.assertEqual(self.env["ir.config_parameter"].get_param(write_key), "42")
+
+    def test_17_get_system_param_works_when_the_caller_is_itself_a_service_account(self):
+        """
+        Real regression: _get_system_param's internal read routes through
+        config_service_internal, which is ITSELF a service account -- so it
+        was subject to ir_config_parameter.py's own, separately maintained
+        _SERVICE_ALLOWED_KEYS gate, regardless of what the ORIGINAL caller
+        of _get_system_param was. That gate only recognized a handful of
+        keys, so a key _get_system_param's own whitelist had already
+        approved could still be rejected one layer down. Caught by
+        user_websites' weekly-digest cron, which calls _get_system_param
+        for "user_websites.global_website_page_limit" from within a
+        with_user(user_websites_service_account) context. Fixed by making
+        ir_config_parameter.py's gate honor this whitelist directly (see
+        ham_base/models/ir_config_parameter.py's _service_read_allowed_keys()),
+        rather than trying to bypass the gate with sudo()/SUPERUSER_ID,
+        which are forbidden on this platform.
+        """
+        key = "user_websites.global_website_page_limit"
+        utils = self.env["zero_sudo.security.utils"]
+        self.assertIn(key, utils._get_param_read_whitelist())
+
+        distinct_value = "17"
+        self.env["ir.config_parameter"].set_param(key, distinct_value)
+        self.env.registry.clear_cache()
+
+        some_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        self.assertTrue(
+            self.env["res.users"].browse(some_svc).is_service_account,
+            "test setup assumption: this must actually be a service account",
+        )
+        got = utils.with_user(some_svc)._get_system_param(key)
+        self.assertEqual(
+            got,
+            distinct_value,
+            "_get_system_param MUST succeed and return the real value even "
+            "when called from within an already-service-account context.",
+        )
+
     # Tests [@ANCHOR: zero_sudo:COMM_zero_sudo_doc_installer]
     def test_02_bdd_ormcache_query_counting_service_uid(self):
         # [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]

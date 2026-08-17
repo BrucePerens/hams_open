@@ -2,6 +2,10 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_content_violation_report_mail_svc,content.violation.report mail svc,model_content_violation_report,zero_sudo.group_mail_service,1,1,0,0
 access_content_violation_appeal_mail_svc,content.violation.appeal mail svc,model_content_violation_appeal,zero_sudo.group_mail_service,1,1,0,0
 access_blog_post_mail_svc,blog.post mail svc,website_blog.model_blog_post,zero_sudo.group_mail_service,1,0,0,0
+access_website_page_gdpr_svc,website.page gdpr svc,website.model_website_page,zero_sudo.group_gdpr_service,1,0,0,1
+access_blog_post_gdpr_svc,blog.post gdpr svc,website_blog.model_blog_post,zero_sudo.group_gdpr_service,1,0,0,1
+access_blog_blog_gdpr_svc,blog.blog gdpr svc,website_blog.model_blog_blog,zero_sudo.group_gdpr_service,1,0,0,1
+access_res_users_gdpr_svc,res.users user websites gdpr svc,base.model_res_users,zero_sudo.group_gdpr_service,1,1,0,0
 access_content_violation_report_admin,content.violation.report admin,model_content_violation_report,user_websites.group_user_websites_administrator,1,1,1,1
 access_content_violation_report_user,content.violation.report user,model_content_violation_report,base.group_portal,1,0,1,0
 access_content_violation_report_public,content.violation.report public,model_content_violation_report,base.group_public,0,0,1,0

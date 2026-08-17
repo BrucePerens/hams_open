@@ -87,17 +87,22 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         # Tests [@ANCHOR: ir_cron_send_weekly_digest]
         """
-        Verify that the weekly digest cron successfully parses the last_digest_key
+        Verify that the weekly digest cron successfully parses last_digest_id
         and resumes processing from the correct index.
         """
         # AST Verification Requirement (ADR-0059)
         self.env.ref("user_websites.ir_cron_send_weekly_digest")._trigger()
-        # Ensure a clean state for the system parameter
+        # Ensure a clean state for the system parameter. (This used to set
+        # "user_websites.last_digest_key", which is not a real key anywhere
+        # in the production code -- blog_post.py always reads/writes
+        # "last_digest_id" -- so this reset was silently a no-op and the
+        # test only worked because the very next lines immediately
+        # overwrite the real key anyway.)
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
         self.env["ir.config_parameter"].with_user(svc_uid).set_param(
-            "user_websites.last_digest_key", ""
+            "user_websites.last_digest_id", "0"
         )
 
         blog = self.env["blog.blog"].search([("name", "=", "Community Blog")], limit=1)

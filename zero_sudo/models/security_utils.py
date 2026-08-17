@@ -290,8 +290,22 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 % key
             )
 
+        # The whitelist + banned-substring check above IS this function's
+        # security boundary -- a key only reaches this point once it's
+        # already been vetted. The actual read still goes through the
+        # designated config_service_internal account (not sudo()/
+        # SUPERUSER_ID, which are forbidden on this platform), but
+        # config_service_internal is itself a service account, so it was
+        # ALSO subject to ir_config_parameter.py's own, separately
+        # maintained _SERVICE_ALLOWED_KEYS gate -- which only recognized a
+        # handful of these keys, so every other key whitelisted here (most
+        # of distributed_redis_cache.*, backup_management.*, rabbitmq.*,
+        # user_websites.*, etc.) was silently getting `default` back
+        # instead of the real configured value. Fixed at the source: that
+        # gate now also honors this whitelist directly (see
+        # ham_base/models/ir_config_parameter.py), so there's one
+        # authoritative list instead of two that can drift apart.
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
-
         return env_svc["ir.config_parameter"].get_param(key, default)
 
     @api.model
@@ -320,8 +334,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 % key
             )
 
+        # See the matching comment in _get_system_param() above.
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
-
         return env_svc["ir.config_parameter"].set_param(key, value)
 
     @api.model
