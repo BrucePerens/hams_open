@@ -81,6 +81,10 @@ class BackupRestoreWizard(models.TransientModel):
                 "cmd_args": cmd_args,
                 "snapshot_id": self.snapshot_id.snapshot_id,
                 "svc_uid": svc_uid,  # Pass svc_uid for worker to potentially use
+                # Needed so the daemon can set KOPIA_PASSWORD for a kopia
+                # restore -- previously never included, so every restore of
+                # a password-protected Kopia snapshot ran with no password.
+                "kopia_password": self.snapshot_id.config_id.kopia_password,
             }
         )
 

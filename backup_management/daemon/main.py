@@ -102,11 +102,14 @@ def execute_job(ch, method, properties, body):
             },
         )
 
-        config = payload.get("config", {})
-
-        env_vars = os.environ.copy()
-        if engine == "kopia" and config.get("kopia_password"):
-            env_vars["KOPIA_PASSWORD"] = config["kopia_password"]
+        # The producer (_publish_to_worker in backup_config.py) sends every
+        # field flat at the top level -- there's no nested "config" key and
+        # never has been, so `payload.get("config", {})` always evaluated to
+        # {}. That silently defeated KOPIA_PASSWORD, made retention settings
+        # always fall back to their hardcoded defaults regardless of admin
+        # config, and made sync_snapshots always take the pgbackrest branch.
+        # The payload already *is* the config; use it directly.
+        config = payload
 
         cmd = []
         if engine == "kopia":
@@ -137,7 +140,7 @@ def execute_job(ch, method, properties, body):
                     if line.strip():
                         cmd.append(f"--add-ignore={line.strip()}")
         elif engine == "sync_snapshots":
-            if config.get("engine") == "kopia":
+            if config.get("config_engine") == "kopia":
                 cmd = ["kopia", "snapshot", "list", "--json"]
             else:
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
@@ -219,6 +222,17 @@ def execute_job(ch, method, properties, body):
 
         if not cmd:
             raise ValueError(f"No command generated for engine: {engine}")
+
+        # Keyed off the actual command being run (cmd[0] == "kopia"), not the
+        # outer routing "engine" value -- that's what let every restore of a
+        # password-protected Kopia snapshot run with no password: restores
+        # use engine == "restore_cmd", which never matched the old
+        # `engine == "kopia"` check, even when cmd[0] genuinely was "kopia".
+        # This also correctly covers kopia_policy and sync_snapshots kopia
+        # invocations, which had the identical gap.
+        env_vars = os.environ.copy()
+        if cmd[0] == "kopia" and config.get("kopia_password"):
+            env_vars["KOPIA_PASSWORD"] = config["kopia_password"]
 
         if not shutil.which(cmd[0]):
             warn_msg = f"""Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here."""
@@ -311,7 +325,7 @@ def execute_job(ch, method, properties, body):
                         svc_uid=svc_uid,
                         ids=[config_id],
                         data=data,
-                        engine=config.get("engine"),
+                        engine=config.get("config_engine"),
                     )
                 except (json.JSONDecodeError, KeyError, ValueError) as e:
                     sync_err_msg = """Failed to parse sync data for engine %s: %s"""

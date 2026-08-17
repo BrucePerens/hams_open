@@ -238,6 +238,14 @@ class BackupConfig(models.Model):
                 "job_id": job.id,
                 "config_id": rec.id,
                 "engine": engine,
+                # rec.engine (kopia/pgbackrest) is this config's own storage
+                # engine; "engine" above is the *action* being requested
+                # (e.g. "sync_snapshots", "kopia_policy") and isn't the same
+                # thing -- kept under a distinct key so the daemon can tell
+                # them apart instead of a "sync_snapshots" job accidentally
+                # reading its own action name where it needs the storage
+                # engine.
+                "config_engine": rec.engine,
                 "target_path": rec.target_path,
                 "svc_uid": self.env.uid,
                 "website_id": rec.website_id.id,
@@ -248,6 +256,9 @@ class BackupConfig(models.Model):
                 "secret_key": rec.secret_key,
                 "kopia_password": rec.kopia_password,
                 "exclude_patterns": rec.exclude_patterns,
+                "keep_daily": rec.keep_daily,
+                "keep_weekly": rec.keep_weekly,
+                "keep_monthly": rec.keep_monthly,
             }
             if payload_extra:
                 payload_dict.update(payload_extra)
