@@ -10,6 +10,7 @@ import redis
 import hashlib
 import hmac
 from urllib.parse import urlparse
+from xml.sax.saxutils import escape as xml_escape
 
 from werkzeug.wrappers import Response
 
@@ -283,8 +284,17 @@ class UserWebsitesController(http.Controller):
                 raise request.not_found()
 
         entity_name = profile_user.name if profile_user else profile_group.name
+        # [!] SECURITY: entity_name is a user-controlled res.users/group name
+        # (arbitrary text, not restricted to XML-safe characters) that gets
+        # interpolated directly into a QWeb template's arch_base. Escape it
+        # before it enters the XML/attribute context here at the source,
+        # rather than relying solely on website_page.py's _sanitize_user_arch
+        # blocklist as the only defense -- that sanitizer never runs for
+        # this call path's service account and is a blocklist with known
+        # gaps in any case.
+        entity_name_safe = xml_escape(entity_name, {'"': "&quot;"})
 
-        arch_base = f"""<t name="{entity_name} Home" t-name="user_websites.home_{website_slug}">
+        arch_base = f"""<t name="{entity_name_safe} Home" t-name="user_websites.home_{website_slug}">
             <t t-call="user_websites.template_default_home">
                 <div id="wrap" class="oe_structure oe_empty"/>
             </t>

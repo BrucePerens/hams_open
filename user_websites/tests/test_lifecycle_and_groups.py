@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import odoo
 import time
+import xml.etree.ElementTree as ET
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 import logging
@@ -100,6 +101,58 @@ class TestLifecycleAndGroups(RealTransactionCase):
             limit=1
         )
         self.assertTrue(group_home, "Group homepage should exist after creation")
+
+    def test_02b_create_site_escapes_malicious_name(self):
+        # A user's display name is arbitrary text, not restricted to
+        # XML-safe characters, and create_site() interpolates it straight
+        # into the generated page's arch_base. A name containing quotes/
+        # angle brackets/ampersands must not break out of the generated
+        # XML attribute -- verified here by requiring the stored arch_base
+        # to still parse as well-formed XML and to carry the name back out
+        # unmangled (proving it was escaped, not stripped or rejected).
+        evil_user = self.env["res.users"].create(
+            {
+                "name": 'Mallory" t-esc="request.env.user.password" x="',
+                "login": "mallory_xml",
+                "password": "mallory_xml",
+                "email": "mallory@example.com",
+                "website_slug": "mallory-xml",
+                "group_ids": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_portal").id,
+                            self.env.ref("user_websites.group_user_websites_user").id,
+                        ],
+                    )
+                ],
+            }
+        )
+        self.env.cr.commit()
+
+        self.authenticate(evil_user.login, evil_user.login)
+        create_url = f"/{evil_user.website_slug}/create_site"
+        response = self.url_open(
+            create_url,
+            data={"csrf_token": odoo.http.Request.csrf_token(self)},
+            method="POST",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.env.cr.commit()
+
+        page = self.env["website.page"].search(
+            [("url", "=", f"/{evil_user.website_slug}/home")], limit=1
+        )
+        self.assertTrue(page, "Page should still be created for a malicious name")
+
+        root = ET.fromstring(page.arch_base)
+        self.assertEqual(
+            root.get("name"),
+            evil_user.name + " Home",
+            "Escaped name should round-trip back to the original text",
+        )
 
     def test_03_non_member_cannot_create_group_site(self):
         self.authenticate(self.user_a.login, self.user_a.login)
