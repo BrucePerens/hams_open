@@ -129,7 +129,6 @@ window._pendingRPCCount = 0;
 const originalFetch = window.fetch;
 
 window.fetch = async function(...args) {
-    const url = typeof args[0] === 'string' ? args[0] : (args[0] ? args[0].url : 'unknown');
     window._pendingRPCCount++;
     try {
         return await originalFetch.apply(this, args);

@@ -59,7 +59,7 @@ async function enforceLRUQuota(cache) {
             const index = store.index('timestamp');
             
             // Delete oldest 10 items as a batch to quickly free up space
-            let toDelete = 10; 
+            let toDelete = 10;
             const request = index.openCursor();
             request.onsuccess = (event) => {
                 const cursor = event.target.result;
@@ -72,6 +72,8 @@ async function enforceLRUQuota(cache) {
                     resolve();
                 }
             };
+            request.onerror = () => reject(request.error);
+            tx.onerror = () => reject(tx.error);
         });
     } catch (e) {
         console.error('[Caching SW] IDB quota enforcement error:', e);
@@ -165,7 +167,7 @@ self.addEventListener('fetch', (event) => {
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(request, responseToCache).then(() => {
                             if (!isBundle) {
-                                updateLRUMetadata(request.url).then(() => enforceLRUQuota(cache));
+                                updateLRUMetadata(request.url).then(() => enforceLRUQuota(cache)).catch(console.error);
                             }
                             // SURGICAL ODOO EVICTION:
                             // Odoo bundles follow /web/assets/<hash>/<bundle_name>.js

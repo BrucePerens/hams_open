@@ -24,7 +24,7 @@ registry.category("web_tour.tours").add("binary_install_tour", {
         },
         {
             trigger: 'div[name="url"] input',
-            run: function (helpers) {
+            run: function (_helpers) {
                 // Ensure focus for deterministicInput
                 document.querySelector('div[name="url"] input').focus();
             }
@@ -38,7 +38,7 @@ registry.category("web_tour.tours").add("binary_install_tour", {
         },
         {
             trigger: 'div[name="checksum"] input',
-            run: function (helpers) {
+            run: function (_helpers) {
                 document.querySelector('div[name="checksum"] input').focus();
             }
         },

@@ -17,7 +17,7 @@ registry.category("web_tour.tours").add("cf_zone_settings_tour", {
         {
             content: "Open Zone Settings Menu",
             trigger: 'a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]:not(:visible), a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]',
-            run: function (actions) {
+            run: function (_actions) {
                 const link = document.querySelector('a[data-menu-xmlid="cloudflare.menu_cf_zone_settings"]');
                 // Check if hidden (offsetHeight is 0)
                 if (link && link.offsetHeight === 0) {

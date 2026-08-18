@@ -1,6 +1,5 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // Tests [@ANCHOR: story_manual_search]
 

@@ -1,5 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 
 // Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]

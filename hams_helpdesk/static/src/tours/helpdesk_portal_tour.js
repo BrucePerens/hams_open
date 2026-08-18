@@ -2,7 +2,6 @@
 // [@ANCHOR: COMM_helpdesk_portal_tour]
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("helpdesk_portal_tour", {
     url: "/my/tickets?debug=1",

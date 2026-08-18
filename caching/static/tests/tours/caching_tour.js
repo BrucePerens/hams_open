@@ -1,7 +1,6 @@
 /** Copyright © HAMS project. AGPL-3.0. **/
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("caching_service_worker_check", {
     url: "/?debug=1",

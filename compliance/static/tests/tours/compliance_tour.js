@@ -3,7 +3,6 @@
 // Copyright © Bruce Perens K6BP.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { registry } from "@web/core/registry";
-import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // Tests [@ANCHOR: COMM_test_compliance_ui_tour]
 registry.category("web_tour.tours").add("compliance_tour", {

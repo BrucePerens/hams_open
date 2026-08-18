@@ -32,7 +32,7 @@ export class LogViewer extends Component {
             if (this.state.files.length > 0) {
                 this.state.selectedFile = this.state.files[0];
             }
-        } catch (e) {
+        } catch {
             this.state.error = "Failed to load configuration.";
         }
     }
@@ -98,7 +98,7 @@ export class LogViewer extends Component {
             } else {
                 this.state.error = "Invalid API response.";
             }
-        } catch (e) {
+        } catch {
             this.state.error = "IPC Request Failed.";
         } finally {
             this.state.loading = false;
