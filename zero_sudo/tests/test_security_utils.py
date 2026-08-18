@@ -641,3 +641,91 @@ class TestSecurityUtils(HamsTransactionCase):
         count_before = mock_clear_cache.call_count
         utils.with_user(test_user)._invalidate_model_cache("res.partner")
         self.assertEqual(mock_clear_cache.call_count, count_before + 1)
+
+    def test_18_resolve_dependency_cycle_declared_and_installed(self):
+        """
+        _resolve_dependency_cycle() is how a module handles depending on
+        another module it can't hard-depend on without closing a manifest
+        dependency cycle (see hams_shared/tools/check_dependency_cycles.py
+        and each such module's own 'depends_cycle' manifest key). The
+        relationship must be declared in the CALLING module's own
+        manifest -- resolved from the Python call stack, not a
+        caller-supplied string -- so this can't be used to silently probe
+        an arbitrary, undeclared module.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils), "_caller_module_name", return_value="fake_caller_module"
+        )
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.odoo_get_manifest",
+            return_value={"depends_cycle": ["zero_sudo"]},
+        )
+        # zero_sudo itself is necessarily installed -- this test is
+        # running as part of its own test suite.
+        self.assertTrue(utils._resolve_dependency_cycle("zero_sudo"))
+
+    def test_19_resolve_dependency_cycle_not_installed_degrades_gracefully(self):
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils), "_caller_module_name", return_value="fake_caller_module"
+        )
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.odoo_get_manifest",
+            return_value={"depends_cycle": ["definitely_not_a_real_module_xyz"]},
+        )
+        self.assertFalse(
+            utils._resolve_dependency_cycle("definitely_not_a_real_module_xyz"),
+            "A missing, declared soft dependency MUST return False, not "
+            "raise, when required=False (the default).",
+        )
+
+    def test_20_resolve_dependency_cycle_not_installed_and_required_raises(self):
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils), "_caller_module_name", return_value="fake_caller_module"
+        )
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.odoo_get_manifest",
+            return_value={"depends_cycle": ["definitely_not_a_real_module_xyz"]},
+        )
+        with self.assertRaises(
+            UserError,
+            msg="required=True MUST raise loudly rather than silently "
+            "letting the caller proceed without its dependency.",
+        ):
+            utils._resolve_dependency_cycle(
+                "definitely_not_a_real_module_xyz", required=True
+            )
+
+    def test_21_resolve_dependency_cycle_undeclared_is_rejected(self):
+        """
+        A module cannot use _resolve_dependency_cycle() to probe a module
+        it never declared in its own 'depends_cycle' -- that would let
+        the manifest silently drift out of sync with what the code
+        actually relies on.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils), "_caller_module_name", return_value="fake_caller_module"
+        )
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.odoo_get_manifest",
+            return_value={"depends_cycle": []},
+        )
+        with self.assertRaises(UserError):
+            utils._resolve_dependency_cycle("zero_sudo")
+
+    def test_22_resolve_dependency_cycle_unknown_caller_fails_fast(self):
+        """
+        If the calling module can't be identified at all, that's not a
+        "dependency missing, degrade gracefully" case -- it means the
+        'depends_cycle' declaration can't be verified, so this must fail
+        fast rather than silently letting an unverifiable caller through.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils), "_caller_module_name", return_value=None
+        )
+        with self.assertRaises(UserError):
+            utils._resolve_dependency_cycle("zero_sudo")

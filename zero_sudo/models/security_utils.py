@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import hashlib
+import inspect
 import os
 import shutil
 import logging
@@ -12,6 +13,7 @@ import logging
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
+from odoo.modules.module import get_manifest as odoo_get_manifest
 
 _logger = logging.getLogger(__name__)
 
@@ -108,6 +110,95 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
             % (cmd_name, pkg)
         )
+
+    @api.model
+    def _resolve_dependency_cycle(self, dependency_module, required=False):
+        """
+        Verifies `dependency_module` is actually installed, for a caller
+        whose own module cannot declare a real 'depends' entry on it --
+        that would close a dependency cycle (Odoo's module loader cannot
+        install a graph with one; see
+        hams_shared/tools/check_dependency_cycles.py). The relationship
+        must be pre-declared in the calling module's own __manifest__.py,
+        under a 'depends_cycle' list -- resolved here from the Python
+        call stack, not from a caller-supplied string, so this can't be
+        used to silently probe an arbitrary, undeclared module. That
+        keeps the manifest the one place this relationship is
+        documented, and lets check_dependency_cycles.py verify each
+        'depends_cycle' entry is honest (i.e. that hard-depending on it
+        really would create a cycle, not just that someone preferred to
+        skip declaring it).
+
+        :param dependency_module: the technical name of the module whose
+            installation state to check.
+        :param required: if True, raise UserError instead of returning
+            False when the dependency is absent -- for call sites where
+            proceeding without it would be worse than failing loudly.
+            Callers that can reasonably degrade (e.g. skip an optional
+            UI feature) should leave this False and check the return
+            value themselves, logging why they degraded.
+        :return: True if installed, False if not (and required=False).
+        :raises UserError: if the calling module can't be identified, or
+            if it didn't declare `dependency_module` in its own
+            'depends_cycle'. Both are the caller's own bug, not a
+            "dependency missing" case -- fail fast rather than silently
+            treat an unverifiable declaration as though it were fine.
+        """
+        calling_module = self._caller_module_name()
+        if not calling_module:
+            raise UserError(
+                _(
+                    "Could not determine the calling module for "
+                    "_resolve_dependency_cycle('%s'); refusing to proceed "
+                    "without verifying its 'depends_cycle' declaration."
+                )
+                % dependency_module
+            )
+        manifest = odoo_get_manifest(calling_module)
+        declared = manifest.get("depends_cycle") or []
+        if dependency_module not in declared:
+            raise UserError(
+                _(
+                    "%(caller)s must declare '%(dep)s' in its own "
+                    "__manifest__.py 'depends_cycle' list before "
+                    "resolving it as a soft dependency."
+                )
+                % {"caller": calling_module, "dep": dependency_module}
+            )
+
+        installed = dependency_module in self.env.registry._init_modules
+        if not installed and required:
+            raise UserError(
+                _(
+                    "This feature requires the '%s' module, which is not "
+                    "installed."
+                )
+                % dependency_module
+            )
+        return installed
+
+    def _caller_module_name(self):
+        """
+        The technical module name that owns the Python file of whichever
+        code called into _resolve_dependency_cycle (walks up the call
+        stack past this file itself, then up the directory tree from
+        that caller's file to the nearest __manifest__.py). Returns None
+        if it can't be determined (e.g. called from an interactive
+        shell) -- _resolve_dependency_cycle treats that as a failure
+        rather than skipping the manifest-declaration check.
+        """
+        this_file = os.path.abspath(__file__)
+        for frame_info in inspect.stack():
+            caller_file = os.path.abspath(frame_info.filename)
+            if caller_file == this_file:
+                continue
+            current = os.path.dirname(caller_file)
+            while current and current != os.path.dirname(current):
+                if os.path.isfile(os.path.join(current, "__manifest__.py")):
+                    return os.path.basename(current)
+                current = os.path.dirname(current)
+            break
+        return None
 
     @api.model
     def _invalidate_model_cache(self, model_name):
@@ -219,6 +310,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "rabbitmq.vhost",
             "caching.safe_quota_mb",
             "cloudflare.last_static_mtime",
+            # A plain boolean progress flag ("have we run initial route
+            # provisioning for this tunnel yet"), not a secret -- same
+            # category as cloudflare.last_static_mtime immediately above.
+            "cloudflare.tunnel.provisioned",
             "pager_duty.helpdesk_model",
             "user_websites.company_abuse_email",
             "user_websites.max_sites_per_user",

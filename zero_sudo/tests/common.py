@@ -555,7 +555,19 @@ class SafePatchMixin:
 
     def safe_patch_object(self, target, attribute, *args, **kwargs):
         if "Cursor" in type(target).__name__:
-            raise RuntimeError("Mocking database cursors is strictly forbidden as it corrupts the test teardown sequence.")
+            raise RuntimeError(
+                "Mocking database cursors is strictly forbidden as it corrupts "
+                "the test teardown sequence. Use "
+                "odoo.addons.zero_sudo.tests.real_transaction.RealTransactionCase "
+                "instead (MASTER_12 section 9, Anti-Mocking) -- it allows real "
+                "env.cr.commit() calls, so a real side effect (e.g. a pg_notify) "
+                "can be observed directly (a separate psycopg2 LISTEN connection, "
+                "or checking real committed state) instead of mocking anything. "
+                "If you only need to prove a helper method was called, patch that "
+                "narrower method with safe_patch()/safe_patch_object() instead of "
+                "the cursor. If you only need to prove a cache hit issued zero "
+                "queries, compare self.env.cr.sql_log_count before/after instead."
+            )
         if not args and "new" not in kwargs and "new_callable" not in kwargs:
             kwargs["new_callable"] = DiagnosticMock
         patcher = patch.object(target, attribute, *args, **kwargs)

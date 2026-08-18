@@ -6,7 +6,7 @@
     'description': 'A module to securely receive Amazon SNS webhooks containing SES incoming emails.',
     'author': 'HAMS',
     'category': 'Mail',
-    'depends': ['mail'],
+    'depends': ['mail', 'zero_sudo'],
     'data': [
         'security/ir.model.access.csv',
         'views/ses_webhook_views.xml',

@@ -149,3 +149,22 @@ class TestPrivacyGDPR(HamsHttpCase):
             self.user_privacy.privacy_show_in_directory,
             "User must be removed from the public directory.",
         )
+
+    def test_03_self_writeable_fields_idiom(self):
+        # Tests [@ANCHOR: test_user_websites_self_writeable_fields]
+        """
+        MASTER_10 Identity & Access Control, section 2: a
+        SELF_WRITEABLE_FIELDS override must be proven by an actual
+        non-admin self-write, not just a list-membership check. Verify a
+        standard portal user (not admin) can write their own
+        privacy_show_in_directory preference via Odoo's native self-write
+        bypass.
+        """
+        self.assertIn(
+            "privacy_show_in_directory",
+            self.env["res.users"].SELF_WRITEABLE_FIELDS,
+        )
+        self.user_privacy.with_user(self.user_privacy).write(
+            {"privacy_show_in_directory": False}
+        )
+        self.assertFalse(self.user_privacy.privacy_show_in_directory)

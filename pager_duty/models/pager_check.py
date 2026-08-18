@@ -243,20 +243,28 @@ class PagerCheck(models.Model):
         if not cmd_name or not isinstance(cmd_name, str) or "/" in cmd_name:
             return {"status": "error", "message": _("Invalid command name.")}
         try:
-            # We must use with_user for service accounts to ensure minimum privilege.
-            # We use the binary_downloader's dedicated service account if available.
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "binary_downloader.user_binary_downloader_service"
-            )
-            # Use self.env.get() for safer model access across optional dependencies
-            ManifestModel = self.env["binary.manifest"] if "binary.manifest" in self.env else None  # burn-ignore-env
-            if ManifestModel is None:
+            # binary_downloader depends on pager_duty, so pager_duty can't
+            # hard-depend back on it (see this module's 'depends_cycle'
+            # manifest entry) -- must confirm it's actually installed
+            # BEFORE resolving its service account. Resolving the account
+            # first (the old order) hit an uncaught Postgres exception
+            # from zero_sudo_get_service_uid() when binary_downloader
+            # wasn't installed, since that's not a Python ValueError/
+            # UserError/AccessError any of this method's except clauses
+            # catch -- it also aborts the current DB transaction.
+            if not self.env["zero_sudo.security.utils"]._resolve_dependency_cycle(
+                "binary_downloader"
+            ):
                 return {
                     "status": "error",
                     "message": _("binary_downloader module not installed."),
                 }
 
-            path = ManifestModel.with_user(svc_uid).ensure_executable(cmd_name)
+            # We must use with_user for service accounts to ensure minimum privilege.
+            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "binary_downloader.user_binary_downloader_service"
+            )
+            path = self.env["binary.manifest"].with_user(svc_uid).ensure_executable(cmd_name)  # burn-ignore-env
             return {"status": "ok", "path": path}
         except (ValueError, FileNotFoundError, PermissionError, UserError) as e:
             # UserError is what binary_manifest.ensure_executable() actually

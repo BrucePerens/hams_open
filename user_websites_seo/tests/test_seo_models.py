@@ -56,6 +56,14 @@ class TestSEOModels(RealTransactionCase):
         for f in seo_fields:
             self.assertIn(f, fields)
 
+        # The list alone proves nothing about whether Odoo's actual
+        # self-write bypass works for these fields -- prove a non-admin
+        # user can really write one of them on their own record.
+        self.regular_user1.with_user(self.regular_user1).write(
+            {"seo_name": "reg1-updated-seo-name"}
+        )
+        self.assertEqual(self.regular_user1.seo_name, "reg1-updated-seo-name")
+
     def test_check_access_rule_res_users(self):
         # Tests [@ANCHOR: COMM_res_users_seo_write_elevation]
 

@@ -131,6 +131,34 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(log), 1)
         self.assertEqual(log.status, 'ignored')
 
+    def test_09_webhook_url_computes_for_plain_internal_user(self):
+        """
+        _compute_webhook_url() used to read web.base.url via .sudo(),
+        forbidden on this platform. ir.config_parameter's only ACL grants
+        base.group_system, not base.group_user -- but this model's own ACL
+        (access_ses_webhook_domain_user) grants plain base.group_user
+        read-only access to ses.webhook.domain, so any such user viewing a
+        record needs this compute to still succeed. Fixed to read
+        web.base.url via zero_sudo's vetted _get_system_param() instead of
+        .sudo(). Prove it actually works for a non-admin viewer, not just
+        that .sudo() is gone from the source.
+        """
+        plain_user = self.env["res.users"].create({
+            "name": "Plain Internal Viewer",
+            "login": "ses_webhook_plain_viewer",
+            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+        self.assertFalse(plain_user.has_group("base.group_system"))
+
+        domain_as_plain_user = self.domain_a.with_user(plain_user)
+        self.assertTrue(
+            domain_as_plain_user.webhook_url,
+            "A plain internal user (base.group_user) MUST be able to "
+            "compute/read webhook_url on a record their own ACL grants "
+            "them read access to.",
+        )
+        self.assertIn(self.domain_a.secret_token, domain_as_plain_user.webhook_url)
+
     def test_08_domain_unique_constraints(self):
         """Verify that SQL constraints block duplicate domain names and tokens."""
         # Due to how Odoo tests wrap transactions, checking SQL constraints requires mute_logger and catching IntegrityError

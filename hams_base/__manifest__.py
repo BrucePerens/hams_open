@@ -7,7 +7,7 @@
     "category": "Base",
     "version": "1.0",
     "license": "AGPL-3",
-    "depends": ["base", "mail", "website", "compliance"],
+    "depends": ["base", "mail", "website", "compliance", "zero_sudo"],
     "data": [
         "views/email_policy_template.xml",
         "views/res_config_settings_views.xml",

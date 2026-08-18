@@ -23,6 +23,14 @@
         "website",
         "knowledge",
     ],
+    # Not a real Odoo manifest key -- see
+    # hams_shared/tools/check_dependency_cycles.py. pager_check.py's
+    # rpc_ensure_executable() optionally uses binary_downloader (to
+    # auto-provision monitoring tool binaries), but binary_downloader
+    # itself depends on pager_duty, so a real 'depends' entry here would
+    # close that loop. Resolved at runtime via
+    # zero_sudo.security.utils._resolve_dependency_cycle("binary_downloader").
+    "depends_cycle": ["binary_downloader"],
     "external_dependencies": {
         "python": ["psutil", "redis"],
     },

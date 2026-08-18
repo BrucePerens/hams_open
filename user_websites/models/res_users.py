@@ -157,6 +157,7 @@ class ResUsers(models.Model):
     @property
     def SELF_WRITEABLE_FIELDS(self):
         """ADR-0015: Self-Writeable Fields Idiom"""
+        # Verified by [@ANCHOR: test_user_websites_self_writeable_fields]
         return super().SELF_WRITEABLE_FIELDS + [
             "privacy_show_in_directory",
             "website_slug",

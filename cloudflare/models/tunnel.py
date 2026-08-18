@@ -190,10 +190,16 @@ class CloudflareTunnel(models.Model):
 
         success, tunnel_token = get_cfd_tunnel_token(account_id, token, tunnel.cf_tunnel_id)
         if success and tunnel_token:
-            if not self.env['ir.config_parameter'].sudo().get_param('cloudflare.tunnel.provisioned'):
+            # .sudo() is forbidden on this platform -- cloudflare.tunnel.provisioned
+            # is a plain progress flag (same category as the already-whitelisted
+            # cloudflare.last_static_mtime), so it goes through the same
+            # Zero-Sudo-vetted _get_system_param()/_set_system_param() helper
+            # config_manager.py already uses for that sibling flag.
+            utils = self.env["zero_sudo.security.utils"]
+            if not utils._get_system_param('cloudflare.tunnel.provisioned'):
                 try:
                     tunnel.action_push_configuration()
-                    self.env['ir.config_parameter'].sudo().set_param('cloudflare.tunnel.provisioned', 'True')
+                    utils._set_system_param('cloudflare.tunnel.provisioned', 'True')
                 except Exception as e:
                     import logging
                     logging.getLogger(__name__).error("Failed to provision routes on initial tunnel start: %s", e)
