@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import psutil
-from odoo.addons.distributed_redis_cache.redis_cache import _local_cache
+from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, invalidate_model_cache
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
 import contextlib
 import ctypes
@@ -604,6 +604,15 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         )
         cls._crypto_patcher.start()
         cls._crypto_patcher_res_users.start()
+        # zero_sudo.security.utils._get_crypto_secret() is a SEPARATE
+        # secret source (HAMS_CRYPTO_KEY env var / secret file /
+        # admin_passwd) from read_secret() above, and now fails closed
+        # (returns "") when none of those are configured, rather than
+        # silently using a hardcoded insecure fallback -- give it a real
+        # test secret too, or every caller that checks `if not
+        # db_secret:` (blog_post.py's weekly digest, etc.) silently skips
+        # its own feature in every test.
+        os.environ.setdefault("HAMS_CRYPTO_KEY", cls._hams_test_crypto_key)  # burn-ignore-env
         super().setUpClass()
         with cls.registry.cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
@@ -612,6 +621,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
             )
             # The context manager automatically commits if no exception is raised.
         cls.registry.clear_cache()
+        invalidate_model_cache(cls.env, "zero_sudo.security.utils")
 
     @classmethod
     def tearDownClass(cls):
@@ -733,6 +743,11 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         )
         cls._crypto_patcher.start()
         cls._crypto_patcher_res_users.start()
+        # See HamsTransactionCase.setUpClass() for why this is also
+        # needed: zero_sudo.security.utils._get_crypto_secret() is a
+        # separate secret source from read_secret() above, and now fails
+        # closed instead of using a hardcoded insecure fallback.
+        os.environ.setdefault("HAMS_CRYPTO_KEY", cls._hams_test_crypto_key)  # burn-ignore-env
 
         # 🚨 THE ANTI-HANG INJECTION 🚨
         original_start = threading.Thread.start
@@ -750,6 +765,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
             )
         cls.registry.clear_cache()
+        invalidate_model_cache(cls.env, "zero_sudo.security.utils")
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
         os.makedirs("/opt/hams/test/socat_certs", exist_ok=True)

@@ -24,6 +24,12 @@ _logger = logging.getLogger(__name__)
 _local_cache = LRU(8192)
 LRU_LOCK = threading.Lock()
 
+# _raw_crypto_secret() is called on every single cache sign/verify (it
+# isn't itself cached), so an unconfigured deployment would otherwise log
+# an ERROR line on every cache hit/miss -- loud, but not useful past the
+# first one. Log it once per process instead of drowning out real signal.
+_warned_missing_crypto_secret = False
+
 
 def _raw_crypto_secret():
     # Deliberately NOT env["zero_sudo.security.utils"]._get_crypto_secret():
@@ -50,11 +56,14 @@ def _raw_crypto_secret():
         # fix: never substitute a hardcoded, publicly-known literal here
         # -- that would make the HMAC key itself guessable, defeating
         # the whole point of signing cache payloads.
-        _logger.error(
-            "No cryptographic secret is configured for the Redis cache "
-            "HMAC key -- refusing to fall back to a hardcoded, "
-            "publicly-known secret."
-        )
+        global _warned_missing_crypto_secret
+        if not _warned_missing_crypto_secret:
+            _warned_missing_crypto_secret = True
+            _logger.error(
+                "No cryptographic secret is configured for the Redis "
+                "cache HMAC key -- refusing to fall back to a "
+                "hardcoded, publicly-known secret."
+            )
         secret = ""
     return secret
 
