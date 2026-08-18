@@ -272,14 +272,16 @@ class TestModeration(RealTransactionCase):
             }
         )
 
-        mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute
+        ReportModel = self.env["content.violation.report"]
+        mock_increment = self.safe_patch_object(
+            type(report), "_increment_strike_count",
+            wraps=ReportModel._increment_strike_count,
         )
         report.action_take_action_and_strike()
 
-        # Assert the DB function query was injected
-        lock_query = "SELECT increment_strike_count('res_users', %s)"
-        mock_execute.assert_any_call(lock_query, (self.bad_user.id,))
+        # Assert the atomic-lock stored procedure was invoked for the
+        # right table/record -- mocking the cursor itself is forbidden.
+        mock_increment.assert_any_call("res_users", self.bad_user.id)
 
         # 2. Test Group Member Lock
         group_report = self.env["content.violation.report"].create(
@@ -298,12 +300,10 @@ class TestModeration(RealTransactionCase):
             }
         )
 
-        mock_execute = self.safe_patch_object(
-            self.env.cr, "execute", wraps=self.env.cr.execute
-        )
+        # mock_increment (patched at the class level above) is still
+        # active and captures this second call too.
         group_report.action_take_action_and_strike()
 
-        lock_query_group = "SELECT increment_strike_count('user_websites_group', %s)"
-        mock_execute.assert_any_call(
-            lock_query_group, (group_report.content_group_id.id,)
+        mock_increment.assert_any_call(
+            "user_websites_group", group_report.content_group_id.id
         )

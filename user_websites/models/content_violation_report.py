@@ -89,6 +89,18 @@ class ContentViolationReport(models.Model):
                     )
                     template.with_user(mail_svc).with_company(company).with_context(pending_count=count).send_mail(company.id, force_send=False, email_values=email_vals)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]  # fmt: skip
 
+    def _increment_strike_count(self, table_name, rec_id):
+        """Atomically locks and increments a strike count via the
+        increment_strike_count() stored procedure (sql_views.py).
+
+        Pulled out as its own method (rather than an inline cr.execute
+        call) so tests can safely wrap/verify it without mocking the
+        database cursor itself, which is forbidden.
+        """
+        self.env.cr.execute(
+            "SELECT increment_strike_count(%s, %s)", (table_name, rec_id)
+        )
+
     # --- Moderation Action Methods ---
     def action_mark_under_review(self):
         self.write({"state": "under_review"})
@@ -112,10 +124,7 @@ class ContentViolationReport(models.Model):
                 owner = report.content_owner_id
 
                 # Use stored procedure to atomically lock and increment against the raw DB state
-                self.env.cr.execute(
-                    "SELECT increment_strike_count('res_users', %s)",
-                    (owner.id,),
-                )
+                self._increment_strike_count("res_users", owner.id)
                 notify_model_invalidation(self.env, "res.users")
                 owner.invalidate_recordset(["violation_strike_count"])
 
@@ -141,10 +150,7 @@ class ContentViolationReport(models.Model):
 
                 if group:
                     # Use stored procedure to atomically lock and increment
-                    self.env.cr.execute(
-                        "SELECT increment_strike_count('user_websites_group', %s)",
-                        (group.id,),
-                    )
+                    self._increment_strike_count("user_websites_group", group.id)
                     notify_model_invalidation(self.env, "user.websites.group")
                     group.invalidate_recordset(["violation_strike_count"])
 
