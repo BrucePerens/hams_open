@@ -46,7 +46,16 @@ def _raw_crypto_secret():
     if not secret:
         secret = tools.config.get("admin_passwd")
     if not secret or secret == "admin":
-        secret = "default_insecure_secret_fallback"
+        # Mirrors zero_sudo.security.utils._get_crypto_secret()'s own
+        # fix: never substitute a hardcoded, publicly-known literal here
+        # -- that would make the HMAC key itself guessable, defeating
+        # the whole point of signing cache payloads.
+        _logger.error(
+            "No cryptographic secret is configured for the Redis cache "
+            "HMAC key -- refusing to fall back to a hardcoded, "
+            "publicly-known secret."
+        )
+        secret = ""
     return secret
 
 

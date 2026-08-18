@@ -541,10 +541,24 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             secret = tools.config.get("admin_passwd")
 
         if not secret or secret == "admin":
-            _logger.warning(
-                "System running with insecure or "
-                "default cryptographic secret!"
+            # [!] SECURITY: this used to silently substitute the literal
+            # string "default_insecure_secret_fallback" here -- a value
+            # anyone reading this open-source repo already knows, making
+            # every LoTW-password Fernet encryption / HMAC signature it
+            # backed forgeable/decryptable by anyone on an unconfigured
+            # deployment, with no visible failure. Every real caller of
+            # _get_crypto_secret() (blog_post.py, user_websites'
+            # controllers/main.py) already checks `if not db_secret:` and
+            # fails closed -- honor that existing contract instead of
+            # inventing a fake secret, so an unconfigured deployment
+            # loudly refuses to encrypt/sign rather than doing so
+            # insecurely.
+            _logger.error(
+                "No cryptographic secret is configured (HAMS_CRYPTO_KEY, "
+                "/var/lib/odoo/hams_crypto.secret, or a non-default "
+                "admin_passwd) -- refusing to fall back to a hardcoded, "
+                "publicly-known secret."
             )
-            secret = "default_insecure_secret_fallback"
+            return ""
 
         return secret

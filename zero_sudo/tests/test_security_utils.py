@@ -398,6 +398,37 @@ class TestSecurityUtils(HamsTransactionCase):
             os.environ.clear()  # burn-ignore-env
             os.environ.update(original_env)  # burn-ignore-env
 
+    def test_09_get_crypto_secret_fails_closed_when_unconfigured(self):
+        """
+        [!] SECURITY: when none of env var / file / admin_passwd are
+        configured, this used to silently substitute the hardcoded
+        literal "default_insecure_secret_fallback" -- a value anyone
+        reading this open-source repo already knows, making every
+        Fernet-encrypted/HMAC-signed value it backed forgeable on an
+        unconfigured deployment with no visible failure. Every real
+        caller already checks `if not db_secret:` and fails closed, so
+        it must return a falsy value here instead of a fake secret.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+        invalidate_model_cache(utils.env, "zero_sudo.security.utils")
+        utils.env.registry.clear_cache()
+
+        original_env = os.environ.copy()  # burn-ignore-env
+        os.environ.clear()  # burn-ignore-env
+        try:
+            self.safe_patch("os.path.exists", return_value=False)
+            self.safe_patch_object(odoo.tools.config, "get", return_value=None)
+            secret = utils._get_crypto_secret()
+            self.assertFalse(
+                secret,
+                "An unconfigured deployment must get a falsy secret, not "
+                "a hardcoded fallback string.",
+            )
+            self.assertNotEqual(secret, "default_insecure_secret_fallback")
+        finally:
+            os.environ.clear()  # burn-ignore-env
+            os.environ.update(original_env)  # burn-ignore-env
+
     def test_10_get_service_env(self):
         """Verify _get_service_env correctly disables tracking and prefetching."""
         utils = self.env["zero_sudo.security.utils"]
