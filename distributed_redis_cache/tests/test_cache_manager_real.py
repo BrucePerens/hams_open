@@ -26,7 +26,7 @@ class TestRealCacheManager(RealTransactionCase):
     def tearDown(self):
         if self.daemon_proc:
             try:
-                self.env["zero_sudo.daemon.utils"].stop_daemon_process(self.daemon_proc)
+                self.env["zero_sudo.daemon.utils"]._stop_daemon_process(self.daemon_proc)
             except (ProcessLookupError, PermissionError) as e:
                 _logger.warning("Daemon termination failed: %s", repr(e))
         super().tearDown()
@@ -44,7 +44,7 @@ class TestRealCacheManager(RealTransactionCase):
             "REDIS_HOST": os.environ.get("REDIS_HOST", "redis"),
         }
 
-        self.daemon_proc = daemon_utils.start_daemon_process(
+        self.daemon_proc = daemon_utils._start_daemon_process(
             daemon_script, env_vars=env_vars
         )
 
