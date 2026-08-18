@@ -67,8 +67,16 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             def getheader(self, name, default=None):
                 return None
 
-        # Patch urllib.request.urlopen to return our mock response
-        self.safe_patch("urllib.request.urlopen", return_value=MockResponse(tar_bytes))
+        # _download_and_extract() calls urlopen() twice -- once for a
+        # HEAD request (`with urlopen(...): pass`, which closes the
+        # response on exit) and again for the real GET. A single shared
+        # return_value instance would come back already-closed for the
+        # second call ("ValueError: I/O operation on closed file"), so
+        # hand back a fresh MockResponse each time instead.
+        self.safe_patch(
+            "urllib.request.urlopen",
+            side_effect=lambda *args, **kwargs: MockResponse(tar_bytes),
+        )
 
         path = self.env["binary.manifest"].ensure_executable("kopia")
 

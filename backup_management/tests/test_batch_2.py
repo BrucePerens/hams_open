@@ -102,17 +102,27 @@ class TestBatch2Fixes(HamsTransactionCase):
             self.assertIsInstance(res, dict)
 
     def test_payload_publisher_variables(self):
-        with self.safe_patch("odoo.addons.backup_management.models.backup_config.publish_to_rabbitmq") as mock_pub:
-            self.config1.with_env(self.env).action_trigger_backup()
-            self.env.cr.postcommit.run()
-            
-            mock_pub.assert_called_once()
-            payload = json.loads(mock_pub.call_args[0][1])
-            self.assertIn("storage_type", payload)
-            self.assertIn("bucket_name", payload)
-            self.assertIn("endpoint_url", payload)
-            self.assertIn("access_key", payload)
-            self.assertIn("secret_key", payload)
-            self.assertIn("kopia_password", payload)
-            self.assertIn("exclude_patterns", payload)
+        # [!] safe_patch() already calls patcher.start() and registers
+        # patcher.stop() via addCleanup() -- it returns the installed
+        # mock directly, not a context manager. `with self.safe_patch(...)
+        # as mock_pub:` "worked" without error (MagicMock auto-supports
+        # __enter__/__exit__), but silently bound mock_pub to
+        # mock.__enter__.return_value -- an unrelated auto-generated
+        # child mock, not the actual mock installed on the module -- so
+        # this never actually asserted against the real call.
+        mock_pub = self.safe_patch(
+            "odoo.addons.backup_management.models.backup_config.publish_to_rabbitmq"
+        )
+        self.config1.with_env(self.env).action_trigger_backup()
+        self.env.cr.postcommit.run()
+
+        mock_pub.assert_called_once()
+        payload = json.loads(mock_pub.call_args[0][1])
+        self.assertIn("storage_type", payload)
+        self.assertIn("bucket_name", payload)
+        self.assertIn("endpoint_url", payload)
+        self.assertIn("access_key", payload)
+        self.assertIn("secret_key", payload)
+        self.assertIn("kopia_password", payload)
+        self.assertIn("exclude_patterns", payload)
 
