@@ -374,6 +374,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "web.base.url",
             "user_websites_seo.docs_installed",
             "cloudflare.last_static_mtime",
+            "cloudflare.tunnel.provisioned",
             "caching.safe_quota_mb",
             "user_websites.last_digest_id",
         ]

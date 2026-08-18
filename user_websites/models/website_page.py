@@ -170,10 +170,26 @@ class WebsitePage(models.Model):
                             elem.attrib[f"data-blocked-{attr}"] = val
                             was_modified = True
                         else:
-                            # Additional expression-level check for SSTI vectors
-                            # Blocks .sudo(), .with_user(), eval(), exec(), and dunder methods
+                            # Additional expression-level check for SSTI vectors.
+                            # [!] SECURITY: the original pattern only blocked
+                            # .sudo(/.with_user(/.with_env(/.env( when
+                            # immediately followed by a call paren, so bare
+                            # attribute/subscript access -- e.g.
+                            # t-esc="request.env['res.users'].search([])"
+                            # or "request.session.sid" -- bypassed it
+                            # entirely and reached full, un-sudoed ORM
+                            # access (and session-id theft) under whatever
+                            # account happens to VIEW the page, without
+                            # ever calling .sudo()/eval()/exec(). Block the
+                            # bare tokens that grant that access at all
+                            # (request/env/session), plus the ORM verbs
+                            # that mutate or execute raw SQL, not just the
+                            # privilege-escalation helper methods.
                             if re.search(
-                                r"\.(sudo|with_user|with_context|with_env|env)\s*\(|__|\b(eval|exec|getattr|setattr)\b",
+                                r"\.(sudo|with_user|with_context|with_env)\s*\(|"
+                                r"\b(request|env|session)\b|"
+                                r"__|"
+                                r"\b(eval|exec|getattr|setattr|write|unlink|create|execute|browse|search|read|import|open|cr)\b",
                                 val,
                             ):
                                 del elem.attrib[attr]

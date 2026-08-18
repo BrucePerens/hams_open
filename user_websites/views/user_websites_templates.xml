@@ -263,7 +263,7 @@
                             <div class="card h-100 shadow-sm border-0 hover-lift transition-all">
                                 <div class="card-body p-4 text-center">
                                     <div class="mb-4">
-                                        <img t-attf-src="/web/image/res.users/#{entry.user_id.id}/avatar_128?unique=#{entry.user_id.write_date and int(entry.user_id.write_date.timestamp()) or 0}" class="rounded-circle img-thumbnail shadow-sm p-1" style="width: 100px; height: 100px; object-fit: cover;" alt="User Avatar"/>
+                                        <img t-attf-src="/web/image/res.users/#{entry.user_id.id}/avatar_128?unique=#{entry.write_date and int(entry.write_date.timestamp()) or 0}" class="rounded-circle img-thumbnail shadow-sm p-1" style="width: 100px; height: 100px; object-fit: cover;" alt="User Avatar"/>
                                     </div>
                                     <h4 class="card-title fw-bold mb-2" t-out="entry.name"/>
                                     <p class="text-muted small mb-4">

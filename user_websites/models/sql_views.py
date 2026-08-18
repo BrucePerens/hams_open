@@ -13,6 +13,11 @@ class UserWebsitesPublicDirectoryView(models.Model):
     name = fields.Char(string="Name", readonly=True)
     website_slug = fields.Char(string="Slug", readonly=True)
     view_count = fields.Integer(string="Total Views", readonly=True)
+    # _auto=False models don't get the magic log-access fields for free
+    # the way regular models do -- must be declared explicitly to be
+    # queryable/readable, even though the SQL SELECT already aliases a
+    # column to this name.
+    write_date = fields.Datetime(string="Last Updated", readonly=True)
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
@@ -25,6 +30,7 @@ class UserWebsitesPublicDirectoryView(models.Model):
                     u.id as user_id,
                     p.name as name,
                     u.website_slug as website_slug,
+                    u.write_date as write_date,
                     COALESCE((SELECT SUM(view_count) FROM website_page WHERE owner_user_id = u.id), 0) +
                     COALESCE((SELECT SUM(view_count) FROM blog_post WHERE owner_user_id = u.id), 0) as view_count
                 FROM res_users u

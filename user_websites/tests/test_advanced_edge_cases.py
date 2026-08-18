@@ -146,8 +146,15 @@ class TestAdvancedEdgeCases(HamsHttpCase):
         Website = self.env["website"].with_user(svc_uid)
         website_a = Website.get_current_website()
 
-        # Simulate a secondary website environment
-        Website.create({"name": "Secondary Website", "domain": "odoo:8070"})
+        # Simulate a secondary website environment. This is test fixture
+        # setup, not production behavior under test, so it's created with
+        # the ordinary (privileged) test-runner user rather than svc_uid --
+        # the service account's ACL on website is deliberately read-only
+        # (access_website_svc), and it has no ACL on res.lang either, so
+        # a real Website.create() call under svc_uid would fail on the
+        # res.lang default_get lookup before even reaching that create
+        # permission check.
+        self.env["website"].create({"name": "Secondary Website", "domain": "odoo:8070"})
 
         self.authenticate(self.user_empty.login, self.user_empty.login)
 
@@ -174,8 +181,11 @@ class TestAdvancedEdgeCases(HamsHttpCase):
         This verifies that get_current_website() doesn't execute an unrestricted search
         that violates ACLs or crashes when request.website is absent.
         """
-        # Create a new environment without an HTTP request context
-        env_no_request = self.env.with_context(website_id=False)
+        # Create a new environment without an HTTP request context.
+        # odoo.api.Environment has no with_context() of its own (that's a
+        # recordset method) -- calling the environment directly with a new
+        # context dict is the equivalent at the environment level.
+        env_no_request = self.env(context=dict(self.env.context, website_id=False))
 
         try:
             page = (

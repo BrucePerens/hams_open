@@ -9,5 +9,6 @@ from . import test_purge_queue
 from . import test_request_context
 from . import test_ui_tours
 from . import test_tunnel_daemon
+from . import test_tunnel_provisioning_security
 from . import test_waf_management
 from . import tunnel_simulator

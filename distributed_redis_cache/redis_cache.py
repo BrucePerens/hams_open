@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
+import os
 import _pickle
+import hmac
 import logging
 import hashlib
 import datetime
 from functools import wraps
-from odoo import models
+from odoo import models, tools
 from odoo.addons.distributed_redis_cache.redis_pool import (
     redis,
     redis_pool,
@@ -21,6 +23,64 @@ _logger = logging.getLogger(__name__)
 # Limit to 8192 entries to prevent memory exhaustion during Redis outages.
 _local_cache = LRU(8192)
 LRU_LOCK = threading.Lock()
+
+
+def _raw_crypto_secret():
+    # Deliberately NOT env["zero_sudo.security.utils"]._get_crypto_secret():
+    # that method is itself @distributed_cache()-decorated, so calling it
+    # from inside this module's own read/write path would recurse back
+    # into _verify_and_unwrap_payload()/_sign_payload() on any L1 miss.
+    # This mirrors that method's same env var / file / admin_passwd
+    # fallback chain independently, without going through the cache layer
+    # (zero_sudo already depends on this module, so importing the other
+    # direction would also be circular).
+    secret = os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env
+    if not secret:
+        try:
+            secret_path = "/var/lib/odoo/hams_crypto.secret"
+            if os.path.exists(secret_path):
+                with open(secret_path, "r") as f:  # audit-ignore-path  # fmt: skip
+                    secret = f.read().strip()
+        except OSError as e:
+            _logger.warning("Failed to read crypto secret file: %s", e)
+    if not secret:
+        secret = tools.config.get("admin_passwd")
+    if not secret or secret == "admin":
+        secret = "default_insecure_secret_fallback"
+    return secret
+
+
+def _cache_hmac_key():
+    # [!] SECURITY: Redis holds arbitrary-code-execution risk via
+    # pickle.loads() -- anyone who can write to a key matching our
+    # deterministic cache_key pattern (e.g. a compromised/misconfigured
+    # Redis instance, or a network peer with Redis access but not the
+    # application's own secret) could otherwise plant a malicious pickle
+    # payload and get it deserialized by any worker that reads it back.
+    # HMAC-sign every payload with a secret only this application knows,
+    # and refuse to unpickle anything whose signature doesn't verify --
+    # an attacker without the secret cannot forge a payload that will
+    # ever reach _pickle.loads().
+    secret = _raw_crypto_secret()
+    return hashlib.sha256(f"{secret}:distributed_redis_cache_hmac".encode()).digest()
+
+
+def _sign_payload(payload_bytes):
+    key = _cache_hmac_key()
+    signature = hmac.new(key, payload_bytes, hashlib.sha256).hexdigest()
+    return f"{signature}:{payload_bytes.hex()}"
+
+
+def _verify_and_unwrap_payload(stored):
+    signature, _, hex_payload = stored.partition(":")
+    if not hex_payload:
+        raise ValueError("Malformed cache payload: missing HMAC signature.")
+    payload_bytes = bytes.fromhex(hex_payload)
+    key = _cache_hmac_key()
+    expected = hmac.new(key, payload_bytes, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise ValueError("Cache payload failed HMAC verification (tampered or forged).")
+    return payload_bytes
 
 
 def _get_hash(*args, **kwargs):
@@ -101,7 +161,8 @@ def distributed_cache():
                     if cached:
                         # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
                         _logger.debug("Redis cache hit: %s", cache_key)
-                        res = _pickle.loads(bytes.fromhex(cached))
+                        payload_bytes = _verify_and_unwrap_payload(cached)
+                        res = _pickle.loads(payload_bytes)
                         with LRU_LOCK:
                             _local_cache[cache_key] = res
                         return res
@@ -109,14 +170,16 @@ def distributed_cache():
                     _logger.warning("Network partition detected. Bypassing Redis: %s", e)
                     use_redis = False
                 except (_pickle.PickleError, ValueError) as e:
-                    _logger.warning("Redis cache corrupted pickle payload: %s", e)
+                    _logger.warning(
+                        "Redis cache payload rejected (corrupted or forged): %s", e
+                    )
                     use_redis = False
 
             result = func(self, *args, **kwargs)
 
             if use_redis:
                 try:
-                    serialized_result = _pickle.dumps(result).hex()
+                    serialized_result = _sign_payload(_pickle.dumps(result))
                     r = get_redis_connection(self.env)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                 except redis.RedisError as e:

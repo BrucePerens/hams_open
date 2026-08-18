@@ -47,14 +47,28 @@ class TestGroupModeration(RealTransactionCase):
         # Suspend the group
         self.group.action_suspend_group_websites()
         self.env.cr.commit()
-        time.sleep(1.0)  # audit-ignore-sleep: Give background thread time to unpublish
 
         # Verify suspension
         self.assertTrue(self.group.is_suspended_from_websites)
 
-        # Verify content is unpublished
-        self.group_page.invalidate_recordset(["is_published", "website_published"])
-        self.group_post.invalidate_recordset(["is_published"])
+        # action_suspend_group_websites() offloads the actual unpublish
+        # work to a real background thread (BACKGROUND_EXECUTOR) that
+        # opens its own Registry/cursor -- a fixed sleep is inherently
+        # racy against however long that takes under real system load
+        # (including, on a cold thread, building a fresh registry), so
+        # poll for the real committed state instead of guessing a
+        # duration.
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            self.group_page.invalidate_recordset(["is_published", "website_published"])
+            self.group_post.invalidate_recordset(["is_published"])
+            if (
+                not self.group_page.is_published
+                and not self.group_page.website_published
+                and not self.group_post.is_published
+            ):
+                break
+            time.sleep(0.25)  # audit-ignore-sleep
 
         self.assertFalse(self.group_page.is_published)
         self.assertFalse(self.group_page.website_published)

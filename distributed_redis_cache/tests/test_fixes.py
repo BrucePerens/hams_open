@@ -69,6 +69,66 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         except TypeError as e:
             self.fail(f"Serialization failed with TypeError: {e}")
 
+    def test_forged_pickle_payload_is_rejected_not_deserialized(self):
+        """
+        [!] SECURITY: cache values are HMAC-signed before being written to
+        Redis specifically so that a payload no attacker without our
+        crypto secret could have produced (e.g. planted directly in Redis
+        by a network peer with Redis access but not app access) is never
+        passed to _pickle.loads(). Prove a forged payload is rejected by
+        checking it never reaches the unsafe deserializer, and that the
+        decorator falls back to recomputing the real function instead of
+        raising or trusting the forged value.
+        """
+        model = DummyModel(ids=[1])
+
+        forged_marker = "PWNED_VIA_FORGED_PICKLE"
+        real_unpickle = rc._pickle.loads
+        forged_was_deserialized = []
+
+        def spy_loads(data, *args, **kwargs):
+            forged_was_deserialized.append(data)
+            return real_unpickle(data, *args, **kwargs)
+
+        self.safe_patch(
+            "odoo.addons.distributed_redis_cache.redis_cache._pickle.loads",
+            side_effect=spy_loads,
+        )
+
+        # An attacker who can write to Redis but doesn't know our crypto
+        # secret can still pickle a *valid* payload -- what they can't do
+        # is produce a signature that verifies. Simulate exactly that:
+        # correctly pickled bytes, wrong signature.
+        forged_pickle_hex = rc._pickle.dumps(forged_marker).hex()
+        forged_stored_value = f"deadbeef{'0' * 56}:{forged_pickle_hex}"
+
+        class FakeRedis:
+            def get(self, key):
+                return forged_stored_value
+
+            def setex(self, key, ttl, val):
+                pass
+
+        mock_get_conn = self.safe_patch(
+            "odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection"
+        )
+        mock_get_conn.return_value = FakeRedis()
+
+        result = model.cached_method("real_value")
+
+        self.assertEqual(
+            result,
+            "real_value",
+            "A forged cache payload must never be trusted -- the "
+            "decorator must fall back to recomputing the real function.",
+        )
+        self.assertFalse(
+            forged_was_deserialized,
+            "_pickle.loads() must never be called on a payload whose "
+            "HMAC signature didn't verify -- that's the whole point of "
+            "signing cache payloads.",
+        )
+
     def test_thread_safety_local_cache(self):
         """Test that local cache accesses use LRU_LOCK."""
         model = DummyModel(ids=[1])

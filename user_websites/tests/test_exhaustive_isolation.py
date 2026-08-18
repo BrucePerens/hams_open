@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import odoo.tests
 from odoo.tests import tagged
+from odoo.tests.common import JsonRpcException
 import logging
 import urllib.error
 from odoo.exceptions import AccessError
@@ -324,11 +325,20 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
             "kwargs": {},
         }
 
-        # Make the raw RPC request simulating a frontend dataset call
+        # Make the raw RPC request simulating a frontend dataset call.
+        # make_jsonrpc_request() doesn't propagate the server-side
+        # exception type -- it wraps whatever error name the JSON-RPC
+        # response reports in a JsonRpcException, so assert on that
+        # wrapper and check it names AccessError specifically.
         with self.assertRaises(
-            AccessError,
+            JsonRpcException,
             msg="RPC call MUST fail proxy ownership validation and raise an exception.",
-        ):
+        ) as cm:
             self.make_jsonrpc_request(
                 "/web/dataset/call_kw/blog.post/create", payload
             )  # burn-ignore-route  # fmt: skip
+        self.assertIn(
+            "AccessError",
+            str(cm.exception),
+            "RPC call must fail specifically with AccessError, not some other error.",
+        )

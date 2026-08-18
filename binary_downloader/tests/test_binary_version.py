@@ -90,10 +90,29 @@ class TestBinaryVersion(HamsTransactionCase):
             }
         )
         path = version._get_central_path()
-        msg_deterministic = "[!] DIAGNOSTIC FOR AI: Path must be deterministic and include name, version and checksum prefix."
-        self.assertIn(
-            "kopia_1.2_aaaaaaaaaaaa",
+        msg_deterministic = (
+            "[!] DIAGNOSTIC FOR AI: Path must be deterministic and derived "
+            "from the manifest name and checksum (the same scheme "
+            "binary.manifest itself uses via _get_target_filename(), so "
+            "byte-identical content across versions dedupes onto the same "
+            "on-disk file instead of embedding a raw version_number that "
+            "would defeat that dedup)."
+        )
+        self.assertTrue(
+            os.path.basename(path).startswith("kopia_"),
+            msg_deterministic,
+        )
+        self.assertEqual(
             path,
+            version._get_central_path(),
+            msg_deterministic,
+        )
+        expected_filename = self.env["binary_downloader.mixin"]._get_target_filename(
+            version.manifest_id.name, version.checksum
+        )
+        self.assertEqual(
+            os.path.basename(path),
+            expected_filename,
             msg_deterministic,
         )
 

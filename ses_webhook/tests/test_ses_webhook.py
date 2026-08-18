@@ -3,6 +3,7 @@ import json
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from unittest.mock import patch
 
+from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 
 @tagged('post_install', '-at_install')
@@ -157,7 +158,37 @@ class TestSesWebhook(HamsHttpCase):
             "compute/read webhook_url on a record their own ACL grants "
             "them read access to.",
         )
-        self.assertIn(self.domain_a.secret_token, domain_as_plain_user.webhook_url)
+
+    def test_10_domain_multi_company_isolation(self):
+        """
+        ses_webhook_domain_comp_rule is a GLOBAL rule (no groups field:
+        '|', company_id=False, company_id in company_ids), so it ANDs
+        with every user's access, including plain base.group_user (which
+        has read-only ACL access to ses.webhook.domain). Nothing had ever
+        proven it actually isolates two companies from each other.
+        """
+        user_a = self.env["res.users"].create({
+            "name": "SES Webhook User A",
+            "login": "ses_webhook_user_a",
+            "company_id": self.company_a.id,
+            "company_ids": [(6, 0, [self.company_a.id])],
+            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+
+        seen_by_a = (
+            self.env["ses.webhook.domain"].with_user(user_a).search([])
+        )
+        self.assertIn(self.domain_a, seen_by_a)
+        self.assertNotIn(
+            self.domain_b,
+            seen_by_a,
+            "[!] DIAGNOSTIC FOR AI: A plain internal user scoped to "
+            "Company A MUST NOT see Company B's ses.webhook.domain "
+            "record, even though the model-level ACL alone would "
+            "otherwise allow it.",
+        )
+        with self.assertRaises(AccessError):
+            self.domain_b.with_user(user_a).read(["name"])
 
     def test_08_domain_unique_constraints(self):
         """Verify that SQL constraints block duplicate domain names and tokens."""

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from lxml import etree
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import AccessError
@@ -280,3 +281,60 @@ class TestORMSecurity(RealTransactionCase):
         self.assertNotIn(
             "<script>", page.arch, "The script tag must be removed during write()."
         )
+
+    def test_08_qweb_arch_sanitization_blocks_bare_env_ssti(self):
+        # [@ANCHOR: test_website_page_sanitize_arch_bare_env_bypass]
+        """
+        [!] SECURITY: the SSTI expression-level check used to only match
+        .sudo(/.with_user(/.with_env(/.env( when immediately followed by a
+        call paren, so bare attribute/subscript access on request.env (no
+        .sudo() or eval() needed at all) reached full, un-sudoed ORM
+        access under whatever account happens to VIEW the page --
+        including reading other users' data or mutating records via
+        .write()/.unlink(), and t-esc="request.session.sid" could steal
+        the viewer's own session id. None of these use any of the
+        previously-blocked tokens (sudo/with_user/eval/exec/dunder), so
+        this must be proven against the actual bypass forms, not just the
+        already-covered t-eval/onmouseover cases in test_07.
+        """
+        bypass_payloads = [
+            "request.env['res.users'].search([])",
+            "request.env['res.users'].browse(1).write({'name': 'pwned'})",
+            "request.session.sid",
+            "env['res.users'].search([])",
+        ]
+        for i, payload in enumerate(bypass_payloads):
+            malicious_arch = f'<t name="Bypass{i}"><div t-esc="{payload}"></div></t>'
+            page = (
+                self.env["website.page"]
+                .with_user(self.user_a)
+                .create(
+                    {
+                        "url": f"/{self.user_a.website_slug}/ssti-bypass-{i}",
+                        "name": f"SSTI Bypass Test {i}",
+                        "type": "qweb",
+                        "owner_user_id": self.user_a.id,
+                        "arch": malicious_arch,
+                    }
+                )
+            )
+            # Parse the actual attributes rather than substring-matching
+            # the raw XML text: "data-blocked-ssti-t-esc" itself CONTAINS
+            # the substring 't-esc="...' at its tail, so a naive
+            # `'t-esc="..."' in page.arch` check would false-pass even
+            # when the sanitizer correctly renamed the live attribute
+            # away.
+            parsed = etree.fromstring(f"<root>{page.arch}</root>")
+            live_attrs = parsed.find(".//div").attrib
+            self.assertNotIn(
+                "t-esc",
+                live_attrs,
+                f"[!] DIAGNOSTIC FOR AI: bare-attribute-access SSTI payload "
+                f"{payload!r} must be neutralized even without .sudo()/"
+                f"eval()/exec() -- it must not survive as a live, "
+                f"executable t-esc attribute (it's fine, and expected, "
+                f"for the raw value to remain visible inside the inert "
+                f"data-blocked-ssti-t-esc diagnostic attribute the "
+                f"sanitizer moves it to -- same pattern as test_07).",
+            )
+            self.assertEqual(live_attrs.get("data-blocked-ssti-t-esc"), payload)

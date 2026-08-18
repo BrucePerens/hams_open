@@ -2,3 +2,4 @@
 
 # -*- coding: utf-8 -*-
 from . import test_key_registry
+from . import test_multi_company

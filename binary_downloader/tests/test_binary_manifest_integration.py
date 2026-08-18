@@ -56,7 +56,10 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         )
 
         # Update test_bin to the variant name and clean it
-        self.test_bin = os.path.join(self.bin_dir, manifest._get_target_filename())
+        self.test_bin = os.path.join(
+            self.bin_dir,
+            manifest._get_target_filename(manifest.name, manifest.checksum),
+        )
         if os.path.exists(self.test_bin):
             os.remove(self.test_bin)
 
@@ -136,29 +139,39 @@ class TestBinaryManifestReal(RealTransactionCase):
 
     def test_pager_integration_batching(self):
         # [!] DIAGNOSTIC FOR AI: Testing that PagerDuty notification batches iteratively.
+        # binary.version and binary.tenant.link only grant CRUD to
+        # binary_downloader.group_binary_downloader_manager (and read-only
+        # to base.group_portal) -- unlike binary.manifest, there is no
+        # base.group_system ACL row, so even the admin test user can't
+        # create these directly and this must go through the manager
+        # service account, matching how the module is actually used.
+        manager_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "binary_downloader.user_binary_downloader_service"
+        )
+
         website = self.env["website"].search([], limit=1)
         if not website:
             website = self.env["website"].create({"name": "Test Tenant"})
-            
+
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
         mock_response = MagicMock()
         mock_response.read.side_effect = [b"data", b""]
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response
-        
-        
-        manifest = self.env["binary.manifest"].create({
+
+
+        manifest = self.env["binary.manifest"].with_user(manager_svc).create({
             "name": "pager_test",
             "url": "https://example.com/pager",
             "checksum": "fake",
         })
-        version1 = self.env["binary.version"].create({
+        version1 = self.env["binary.version"].with_user(manager_svc).create({
             "manifest_id": manifest.id,
             "version_number": "1.0",
             "url": "https://example.com/1.0",
             "checksum": "fake1",
         })
-        version2 = self.env["binary.version"].create({
+        version2 = self.env["binary.version"].with_user(manager_svc).create({
             "manifest_id": manifest.id,
             "version_number": "2.0",
             "url": "https://example.com/2.0",
@@ -177,7 +190,7 @@ class TestBinaryManifestReal(RealTransactionCase):
         ]
             
         self.safe_patch_object(type(self.env["binary.version"]), "action_download_to_pool")
-        self.env["binary.tenant.link"].create(links)
+        self.env["binary.tenant.link"].with_user(manager_svc).create(links)
         
         original_search = self.env["binary.tenant.link"].__class__.search
         call_limits = []

@@ -104,7 +104,6 @@ class TestBatch2Fixes(HamsTransactionCase):
     def test_payload_publisher_variables(self):
         with self.safe_patch("odoo.addons.backup_management.models.backup_config.publish_to_rabbitmq") as mock_pub:
             self.config1.with_env(self.env).action_trigger_backup()
-            print("Postcommit funcs:", self.env.cr.postcommit._funcs)
             self.env.cr.postcommit.run()
             
             mock_pub.assert_called_once()

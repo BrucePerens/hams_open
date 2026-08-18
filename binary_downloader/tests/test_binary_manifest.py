@@ -53,9 +53,15 @@ class TestBinaryManifest(HamsTransactionCase):
             "binary_downloader.user_binary_downloader_service"
         )
 
-        # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process
+        # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process.
+        # binary.manifest._check_url_scheme() requires https:// -- ODOO_URL is
+        # deliberately http:// for the local test webserver (tools/test.py
+        # always sets it that way), and urlopen() is mocked in every test
+        # below anyway, so the URL's scheme here is just a label that must
+        # satisfy that constraint, not a real endpoint being dereferenced.
         base_url = os.environ.get("ODOO_URL", "https://localhost:8069")  # burn-ignore-env
-        url = f"{base_url}/test/dummy_bin"
+        netloc = base_url.split("://", 1)[-1]
+        url = f"https://{netloc}/test/dummy_bin"
         chksum = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 
         self.manifest = self.env["binary.manifest"].create(
@@ -77,7 +83,11 @@ class TestBinaryManifest(HamsTransactionCase):
 
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         target_bin = os.path.join(
-            data_dir, "hams_bin", self.manifest._get_target_filename()
+            data_dir,
+            "hams_bin",
+            self.manifest._get_target_filename(
+                self.manifest.name, self.manifest.checksum
+            ),
         )
         if not os.path.exists(os.path.dirname(target_bin)):
             os.makedirs(os.path.dirname(target_bin))
@@ -168,7 +178,11 @@ class TestBinaryManifest(HamsTransactionCase):
         # Tests [@ANCHOR: binary_compute_installed]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         target_bin = os.path.join(
-            data_dir, "hams_bin", self.manifest._get_target_filename()
+            data_dir,
+            "hams_bin",
+            self.manifest._get_target_filename(
+                self.manifest.name, self.manifest.checksum
+            ),
         )
         if not os.path.exists(os.path.dirname(target_bin)):
             os.makedirs(os.path.dirname(target_bin))
@@ -310,6 +324,7 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_member.issym.return_value = False
 
         mock_tar.getmembers.return_value = [mock_member]
+        mock_tar.__iter__.return_value = iter([mock_member])
 
         # Mock tar.extractfile to return a stream of bytes
         mock_tar.extractfile.return_value = io.BytesIO(b"extracted-data")
@@ -319,9 +334,9 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertTrue(os.path.exists(path))
         self.assertEqual(
             os.path.basename(path),
-            self.env["binary.manifest"]
-            .search([("name", "=", "slippy")], limit=1)
-            ._get_target_filename(),
+            self.env["binary.manifest"].search([("name", "=", "slippy")], limit=1)._get_target_filename(
+                self.env["binary.manifest"].search([("name", "=", "slippy")], limit=1).name, self.env["binary.manifest"].search([("name", "=", "slippy")], limit=1).checksum
+            ),
         )
 
     def test_13_symlink_prevention(self):
@@ -357,6 +372,7 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_member.issym.return_value = True
 
         mock_tar.getmembers.return_value = [mock_member]
+        mock_tar.__iter__.return_value = iter([mock_member])
 
         with self.assertRaisesRegex(
             UserError, "Security Alert: Links are not allowed in the archive."
@@ -480,9 +496,9 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertTrue(os.path.exists(path))
         self.assertEqual(
             os.path.basename(path),
-            self.env["binary.manifest"]
-            .search([("name", "=", "zip_slip")], limit=1)
-            ._get_target_filename(),
+            self.env["binary.manifest"].search([("name", "=", "zip_slip")], limit=1)._get_target_filename(
+                self.env["binary.manifest"].search([("name", "=", "zip_slip")], limit=1).name, self.env["binary.manifest"].search([("name", "=", "zip_slip")], limit=1).checksum
+            ),
         )
 
     def test_17_zip_regular_file_allowed(self):
@@ -555,13 +571,26 @@ class TestBinaryManifest(HamsTransactionCase):
 
     def test_19_unlink_privilege_escalation(self):
         # [!] DIAGNOSTIC FOR AI: Testing prevention of privilege escalation in unlink.
+        # A manifest's unlink() must not delete the on-disk binary file if
+        # another manifest/version record still references the same
+        # checksum, even when the unlinking user only has visibility into
+        # their own company's records. Only base.group_system and
+        # binary_downloader.group_binary_downloader_manager hold any CRUD
+        # ACL on binary.manifest (base.group_user has none), so user_b
+        # needs the manager group to legitimately create/unlink here --
+        # the field is `group_ids`, not the pre-17 `groups_id` (that typo
+        # made the res.users.create() call above raise ValueError:
+        # Invalid field 'groups_id', so this test never got past setup).
         company_b = self.env["res.company"].create({"name": "Company B"})
         user_b = self.env["res.users"].create({
             "name": "User B",
             "login": "user_b",
             "company_id": company_b.id,
             "company_ids": [(4, company_b.id)],
-            "groups_id": [(6, 0, [self.env.ref("base.group_user").id])],
+            "group_ids": [(6, 0, [
+                self.env.ref("base.group_user").id,
+                self.env.ref("binary_downloader.group_binary_downloader_manager").id,
+            ])],
         })
 
         chksum = "escalation_test_hash"
@@ -580,7 +609,15 @@ class TestBinaryManifest(HamsTransactionCase):
         })
 
         mock_unlink_file = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._unlink_binary_file")
-        
+        # Odoo's unlink() scans every class member for hasattr(func,
+        # '_ondelete') to auto-discover @api.ondelete hooks -- a MagicMock
+        # satisfies that hasattr() check for ANY attribute name, so
+        # without this it gets mistaken for a real ondelete hook and
+        # spuriously invoked as records._unlink_binary_file(self) by
+        # Odoo's own internal machinery, unrelated to the real call this
+        # test is actually checking for.
+        del mock_unlink_file._ondelete
+
         company_b_manifest.with_user(user_b).unlink()
 
         mock_unlink_file.assert_not_called()

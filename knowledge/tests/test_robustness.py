@@ -195,3 +195,42 @@ class TestManualRobustness(HamsHttpCase):
         # Cannot see internal
         response = self.url_open(internal_article.website_url)
         self.assertEqual(response.status_code, 404)
+
+    def test_08_markdown_compiler_sanitizes_script_tags(self):
+        """
+        [!] SECURITY: _compile_markdown() extracts plain text from the
+        stored (already-sanitized) HTML body via html2plaintext(), which
+        unescapes entities back to literal characters, then re-compiles
+        that text with python-markdown -- which passes inline HTML in its
+        source straight through to its output. A user typing ordinary,
+        visible text that merely *looks* like "<script>...</script>" (no
+        raw-HTML-injection tooling needed, just typing in the WYSIWYG
+        editor) must not produce a live script tag once the compiled
+        output is rendered unescaped via Markup().
+        """
+        malicious_article = self.env["knowledge.article"].create(
+            {
+                "name": "Malicious Markdown Article",
+                # "# Heading" satisfies the markdown-signature heuristic
+                # so the compiler actually runs; the escaped script tag is
+                # stored as inert text by Odoo's own HTML sanitizer, then
+                # comes back out as literal "<script>" text via
+                # html2plaintext() before being handed to python-markdown.
+                "body": (
+                    "<p># Heading</p>"
+                    "<p>&lt;script&gt;window.xss_pwned=1;&lt;/script&gt;</p>"
+                ),
+                "is_published": True,
+                "active": True,
+            }
+        )
+
+        self.authenticate(None, None)
+        response = self.url_open(malicious_article.website_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(
+            b"<script>window.xss_pwned",
+            response.content,
+            "The markdown compiler must sanitize its output -- a live "
+            "<script> tag must never reach the rendered page.",
+        )

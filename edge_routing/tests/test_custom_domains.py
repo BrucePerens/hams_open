@@ -17,6 +17,18 @@ class TestCustomDomains(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.domain_model = self.env["edge.routing.domain"]
+        # cloudflare _inherit's edge.routing.domain and auto-provisions a
+        # real Cloudflare custom hostname on create(), requiring a
+        # matching website.domain record to exist -- unrelated to what
+        # this file tests (domain CRUD/slug resolution), so neutralize it
+        # rather than fabricating website fixtures the actual feature
+        # under test doesn't need. Guarded so this file still works if
+        # cloudflare (not an edge_routing dependency) isn't installed.
+        domain_cls = type(self.env["edge.routing.domain"])
+        if hasattr(domain_cls, "_create_cloudflare_custom_hostname_batch"):
+            self.safe_patch_object(
+                domain_cls, "_create_cloudflare_custom_hostname_batch"
+            )
 
     def test_01_domain_crud_and_resolution(self):
         domain = self.domain_model.create(

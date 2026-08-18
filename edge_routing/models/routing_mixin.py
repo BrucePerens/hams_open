@@ -50,6 +50,12 @@ class EdgeRoutingMixin(models.AbstractModel):
                 models.append(model_name)
         return models
 
+    def _check_slug_collision(self, slug, existing_slugs):
+        """Extracted as its own method so slug-exhaustion tests can force a
+        permanent collision by mocking this instead of the DB-backed
+        existing_slugs set itself."""
+        return slug in existing_slugs
+
     def _generate_unique_slug(self, base_string, record_id=False, forbidden_slugs=None):
         """
         Generates a URL-safe, globally unique slug. Cross-references reserved routes
@@ -106,7 +112,7 @@ class EdgeRoutingMixin(models.AbstractModel):
                     % max_retries
                 )
 
-            if slug not in existing_slugs:
+            if not self._check_slug_collision(slug, existing_slugs):
                 lock_hash = self.env[
                     "zero_sudo.security.utils"
                 ]._get_deterministic_hash(slug)

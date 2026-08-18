@@ -48,11 +48,24 @@ def _async_unpublish_group_content(db_name, group_ids):
                     company_groups.setdefault(g.company_id.id, []).append(g.id)
 
             def _unpublish_for_company(company_id, comp_group_ids):
-                company_env = env_svc.with_company(company_id)
+                # env_svc is an Environment, not a recordset -- it has no
+                # with_company() of its own (that's a recordset method).
+                # Switch the active company the same way with_company()
+                # does under the hood: put company_id first in
+                # allowed_company_ids.
+                allowed_company_ids = list(env_svc.context.get("allowed_company_ids") or [])
+                if company_id in allowed_company_ids:
+                    allowed_company_ids.remove(company_id)
+                allowed_company_ids.insert(0, company_id)
+                company_env = env_svc(
+                    context=dict(env_svc.context, allowed_company_ids=allowed_company_ids)
+                )
                 while True:
                     pages = company_env["website.page"].search(
                         [
                             ("user_websites_group_id", "in", comp_group_ids),
+                            "|",
+                            ("is_published", "=", True),
                             ("website_published", "=", True),
                         ],
                         limit=5000,
@@ -60,7 +73,7 @@ def _async_unpublish_group_content(db_name, group_ids):
                     if not pages:
                         break
                     pages.with_context(mail_notrack=True).write(
-                        {"website_published": False}
+                        {"is_published": False, "website_published": False}
                     )
                     env.cr.commit()
                     if len(pages) < 5000:
@@ -94,6 +107,15 @@ def _async_unpublish_group_content(db_name, group_ids):
             env.cr.rollback()
     except psycopg2.Error as e:  # audit-ignore-catch-all
         _logger.error("Async unpublish group content failed: %s", e)
+    except Exception:
+        # This runs in a background thread submitted via
+        # BACKGROUND_EXECUTOR.submit() -- its Future is never awaited, so
+        # any exception here would otherwise vanish silently instead of
+        # ever reaching a caller. A non-psycopg2.Error bug here (e.g. a
+        # bad env_svc.with_company() call once tried, since env_svc is an
+        # Environment, not a recordset) previously meant this whole
+        # feature failed 100% of the time with zero visibility.
+        _logger.exception("Async unpublish group content crashed unexpectedly")
     finally:
         cr.close()
 

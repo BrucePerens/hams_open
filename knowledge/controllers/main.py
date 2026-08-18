@@ -4,7 +4,7 @@
 from odoo import http
 from odoo.http import request
 from odoo.exceptions import AccessError, UserError
-from odoo.tools import html2plaintext
+from odoo.tools import html2plaintext, html_sanitize
 import werkzeug.exceptions
 import logging
 import re
@@ -60,7 +60,18 @@ class ManualLibraryController(http.Controller):
                 md_html = markdown.markdown(
                     text_content, extensions=["fenced_code", "tables", "nl2br", "toc"]
                 )
-                res = Markup(md_html)
+                # [!] SECURITY: python-markdown passes inline HTML in its
+                # source straight through to its output unless told
+                # otherwise -- text_content came from html2plaintext(),
+                # which unescapes entities back to literal characters, so
+                # a user typing visible text that merely *looks* like
+                # "<script>alert(1)</script>" (no raw-HTML-injection
+                # tooling required, just normal typing in the WYSIWYG
+                # editor) would compile straight into a live <script> tag
+                # once wrapped in Markup(). Sanitize the compiled output
+                # the same way Odoo sanitizes every other HTML field
+                # before trusting it as safe to render unescaped.
+                res = Markup(html_sanitize(md_html))
                 if cache_key:
                     _md_cache[cache_key] = res
                 return res

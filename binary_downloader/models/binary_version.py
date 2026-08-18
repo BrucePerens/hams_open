@@ -118,6 +118,7 @@ class BinaryVersion(models.Model):
             self.archive_type,
             self.extract_member
         )
+        return True
 
     def action_notify_tenants(self):
         self.ensure_one()

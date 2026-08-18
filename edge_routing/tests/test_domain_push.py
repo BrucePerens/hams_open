@@ -11,6 +11,22 @@ from odoo.tests.common import tagged
 @tagged("post_install", "-at_install")
 class TestDomainPush(HamsTransactionCase):
 
+    def setUp(self):
+        super().setUp()
+        # cloudflare _inherit's edge.routing.domain and auto-provisions a
+        # real Cloudflare custom hostname on create(), requiring a
+        # matching website.domain record to exist -- unrelated to what
+        # this file tests (pager_duty push logic/batching), so neutralize
+        # it rather than fabricating 1000+ website fixtures the actual
+        # feature under test doesn't need. Guarded so this file still
+        # works if cloudflare (not an edge_routing dependency) isn't
+        # installed.
+        domain_cls = type(self.env["edge.routing.domain"])
+        if hasattr(domain_cls, "_create_cloudflare_custom_hostname_batch"):
+            self.safe_patch_object(
+                domain_cls, "_create_cloudflare_custom_hostname_batch"
+            )
+
     def test_domain_push_logic(self):
         """Test the logic that gathers domains and pushes them."""
         # Instead of dealing with postcommit complexities in tests,
