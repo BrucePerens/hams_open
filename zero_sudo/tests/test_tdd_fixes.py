@@ -162,7 +162,9 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
     def test_documentation_wrappers(self):
         # [@ANCHOR: zero_sudo:COMM_test_documentation_wrappers]
         
-        with file_open("zero_sudo/data/testing_documentation.html", "r", encoding="utf-8") as f:
+        # file_open() forces utf-8 internally for text mode already and
+        # doesn't accept an encoding= kwarg of its own.
+        with file_open("zero_sudo/data/testing_documentation.html", "r") as f:
             content = f.read().strip()
         self.assertTrue(content.startswith('<div class="o_knowledge_content">'))
         self.assertTrue(content.endswith('</div>'))
