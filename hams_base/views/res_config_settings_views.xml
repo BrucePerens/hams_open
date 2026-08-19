@@ -14,7 +14,7 @@
                             <field name="compliance_org_name"/>
                         </setting>
                         <setting help="The physical mailing address displayed in the universal email footer.">
-                            <field name="compliance_mailing_address"/>
+                            <field name="compliance_mailing_address" widget="text"/>
                         </setting>
                     </block>
 

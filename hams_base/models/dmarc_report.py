@@ -6,6 +6,7 @@ import zipfile
 import gzip
 import io
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
 
@@ -125,8 +126,11 @@ class DmarcReport(models.Model):
             "org_name": org_name,
             "email": email,
             "report_id": report_id,
-            "date_range_begin": fields.Datetime.from_timestamp(begin) if begin else False,
-            "date_range_end": fields.Datetime.from_timestamp(end) if end else False,
+            # fields.Datetime has no from_timestamp() -- Odoo stores naive
+            # UTC datetimes, so convert via the standard library and drop
+            # the tzinfo rather than pass an aware datetime straight through.
+            "date_range_begin": datetime.fromtimestamp(begin, tz=timezone.utc).replace(tzinfo=None) if begin else False,
+            "date_range_end": datetime.fromtimestamp(end, tz=timezone.utc).replace(tzinfo=None) if end else False,
             "domain": domain,
             "adkim": policy_published.findtext("adkim"),
             "aspf": policy_published.findtext("aspf"),
