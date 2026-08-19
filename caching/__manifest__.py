@@ -20,6 +20,7 @@
         ],
         "web.assets_tests": [
             "caching/static/tests/tours/caching_tour.js",
+            "caching/static/tests/tours/sw_behavior_tour.js",
         ],
     },
     "installable": True,

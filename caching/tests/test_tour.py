@@ -14,3 +14,9 @@ class TestCachingTour(HamsHttpCase):
     def test_caching_service_worker_tour(self):
         """Verify Service Worker registration via tour."""
         self.start_tour("/?debug=1", "caching_service_worker_check", login="admin")
+
+    def test_caching_sw_behavior_tour(self):
+        """Verify the SW actually intercepts fetch and populates Cache
+        Storage, not just that it registers. See
+        docs/proposals/SERVICE_WORKER_TESTING.md."""
+        self.start_tour("/?debug=1", "caching_sw_behavior_check", login="admin")

@@ -150,5 +150,31 @@ export const TourUtils = {
             code: 'Key' + text.slice(-1).toUpperCase()
         });
         el.dispatchEvent(keyUpEvent);
+    },
+
+    /**
+     * Not a step factory like the macros above -- call this directly from
+     * inside a tour step's `run: async function() {...}` body:
+     * `await TourUtils.assertSettles(somePromise(), 2000, "enforceLRUQuota")`.
+     *
+     * A Promise that's supposed to reject on error but has a missing
+     * onerror/onabort handler somewhere in an IndexedDB request chain just
+     * hangs forever instead -- and a hung tour step times out with a
+     * generic "trigger not found" message, giving no hint that IndexedDB
+     * was the cause (see caching/static/src/sw/sw.js's enforceLRUQuota()
+     * and ham_shack/static/src/sw/shack_sw.js's flushOfflineLogs(), both
+     * of which had exactly this bug). Wrapping the promise under test in
+     * this turns that silent, generic timeout into an immediate, specific
+     * failure naming which operation didn't settle.
+     */
+    assertSettles: function (promise, timeoutMs, label) {
+        label = label || "operation";
+        let timeoutId;
+        const timeout = new Promise((_resolve, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(new Error(`[assertSettles] "${label}" did not settle within ${timeoutMs}ms -- likely a missing onerror/onabort handler leaving a Promise permanently unsettled.`));
+            }, timeoutMs);
+        });
+        return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
     }
 };
