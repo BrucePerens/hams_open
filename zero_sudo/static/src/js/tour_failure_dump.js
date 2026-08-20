@@ -77,7 +77,17 @@ window.addEventListener('error', (event) => {
     }
 
     const trace = event.error ? event.error.stack : 'No stacktrace available';
-    triggerInstantAbort("Uncaught Window Error", event.message + "\n" + trace);
+    // event.error.stack is empty for a parse-time SyntaxError (there's no
+    // call stack yet at parse time) -- event.filename/lineno/colno are
+    // populated by the browser for same-origin scripts regardless, and
+    // are the only way to actually locate a parse-time failure. Previously
+    // discarded here, which is why "Unexpected identifier 'Unexpected'"
+    // showed up with no way to tell which of dozens of bundled files it
+    // came from.
+    const location = event.filename
+        ? `\nLocation: ${event.filename}:${event.lineno}:${event.colno}`
+        : '';
+    triggerInstantAbort("Uncaught Window Error", event.message + location + "\n" + trace);
 });
 
 // Catch asynchronous crashes and broken promises (RPC failures, async tour step crashes)
