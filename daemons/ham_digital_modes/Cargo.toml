@@ -6,3 +6,6 @@ description = "Amateur radio digital mode encode/decode: PSK31, WSPR, FT8"
 license = "LGPL-3.0-or-later"
 
 [dependencies]
+
+[build-dependencies]
+cc = "1.0"

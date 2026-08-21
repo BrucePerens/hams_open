@@ -8,3 +8,4 @@
 
 pub mod psk31;
 pub mod wspr;
+pub mod ft8;
