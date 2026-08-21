@@ -79,22 +79,30 @@ def _cache_hmac_key():
     # and refuse to unpickle anything whose signature doesn't verify --
     # an attacker without the secret cannot forge a payload that will
     # ever reach _pickle.loads().
+    #
+    # Returns None when no real secret is configured. Every unconfigured
+    # deployment would otherwise derive the exact same key from the
+    # empty string, which is exactly as guessable as the hardcoded
+    # literal _raw_crypto_secret()'s own docstring says it refuses to
+    # fall back to -- anyone who reads this open-source file already
+    # knows it. Callers MUST treat None as "do not touch Redis for this
+    # payload", not sign or verify with it.
     secret = _raw_crypto_secret()
+    if not secret:
+        return None
     return hashlib.sha256(f"{secret}:distributed_redis_cache_hmac".encode()).digest()
 
 
-def _sign_payload(payload_bytes):
-    key = _cache_hmac_key()
+def _sign_payload(key, payload_bytes):
     signature = hmac.new(key, payload_bytes, hashlib.sha256).hexdigest()
     return f"{signature}:{payload_bytes.hex()}"
 
 
-def _verify_and_unwrap_payload(stored):
+def _verify_and_unwrap_payload(key, stored):
     signature, _, hex_payload = stored.partition(":")
     if not hex_payload:
         raise ValueError("Malformed cache payload: missing HMAC signature.")
     payload_bytes = bytes.fromhex(hex_payload)
-    key = _cache_hmac_key()
     expected = hmac.new(key, payload_bytes, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):
         raise ValueError("Cache payload failed HMAC verification (tampered or forged).")
@@ -168,7 +176,15 @@ def distributed_cache():
                 if cache_key in _local_cache:
                     return _local_cache[cache_key]
 
-            use_redis = bool(redis and redis_pool)
+            # [!] SECURITY: hmac_key is None on any deployment with no
+            # configured crypto secret. Redis is skipped entirely in that
+            # case (falling back to the L1 local cache below) rather than
+            # signing/verifying with a key every reader of this file
+            # could derive themselves -- see _cache_hmac_key()'s own
+            # docstring. This degrades to per-process caching, not to an
+            # insecure Redis cache.
+            hmac_key = _cache_hmac_key()
+            use_redis = bool(redis and redis_pool) and hmac_key is not None
 
             # Ensure Redis is running in testing environments to maintain production parity.
 
@@ -179,7 +195,7 @@ def distributed_cache():
                     if cached:
                         # [!] DIAGNOSTIC FOR AI: Redis cache hit for %s
                         _logger.debug("Redis cache hit: %s", cache_key)
-                        payload_bytes = _verify_and_unwrap_payload(cached)
+                        payload_bytes = _verify_and_unwrap_payload(hmac_key, cached)
                         res = _pickle.loads(payload_bytes)
                         with LRU_LOCK:
                             _local_cache[cache_key] = res
@@ -197,7 +213,7 @@ def distributed_cache():
 
             if use_redis:
                 try:
-                    serialized_result = _sign_payload(_pickle.dumps(result))
+                    serialized_result = _sign_payload(hmac_key, _pickle.dumps(result))
                     r = get_redis_connection(self.env)
                     r.setex(cache_key, 86400, serialized_result)  # 24h TTL
                 except redis.RedisError as e:
