@@ -1,0 +1,8 @@
+[package]
+name = "ham_digital_modes"
+version = "0.1.0"
+edition = "2021"
+description = "Amateur radio digital mode encode/decode: PSK31, WSPR, FT8"
+license = "LGPL-3.0-or-later"
+
+[dependencies]
