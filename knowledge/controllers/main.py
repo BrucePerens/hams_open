@@ -234,7 +234,6 @@ class ManualLibraryController(http.Controller):
         if not is_internal:
             domain += ["|", ("is_published", "=", True), ("member_ids", "in", request.env.user.ids)]
 
-        # Removed .sudo() to allow native Record Rules to filter visibility by user persona
         articles = request.env["knowledge.article"].search(domain, limit=1000)
 
         # Fetch and group root articles for the sidebar navigation
