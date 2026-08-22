@@ -46,12 +46,20 @@ class ResConfigSettings(models.TransientModel):
     # Declaring it a hard __manifest__.py dependency would break that
     # bootstrap flow entirely.
     #
-    # The .sudo() calls on the same lines are a SEPARATE, NOT YET fixed
-    # question (flagged for review, not fixed blind -- see
-    # night_shift_todo.md): storage_backend isn't installed anywhere in
-    # this sandbox, so swapping .sudo() for a service-account with_user()
-    # can't actually be exercised or verified here -- that's a real risk,
-    # not a mechanical fix.
+    # DRAFT, UNVERIFIED: the .sudo() calls that used to be here were
+    # replaced with the service account registered in
+    # security/hams_s3_security.xml / hooks.py (same pattern
+    # distributed_redis_cache uses). This has NOT been exercised against a
+    # real storage_backend install -- that addon isn't present anywhere in
+    # this sandbox, so whether s3_manager_service_internal's group actually
+    # has the read/write/create access storage_backend's own security rules
+    # require on storage.backend is unverified. Review and test against a
+    # real storage_backend install before relying on this.
+    def _get_s3_service_env(self):
+        return self.env["zero_sudo.security.utils"]._get_service_env(
+            "hams_s3.s3_manager_service_internal"
+        )
+
     @api.depends('hams_s3_use_s3')
     def _compute_hams_s3_oca_installed(self):
         for rec in self:
@@ -61,7 +69,8 @@ class ResConfigSettings(models.TransientModel):
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
         if 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
-            backend = self.env['storage.backend'].sudo().search(
+            env_svc = self._get_s3_service_env()
+            backend = env_svc['storage.backend'].search(
                 [('backend_type', '=', 'amazon_s3')], limit=1
             )
             if backend:
@@ -77,7 +86,8 @@ class ResConfigSettings(models.TransientModel):
     def set_values(self):
         super(ResConfigSettings, self).set_values()
         if self.hams_s3_use_s3 and 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
-            backend = self.env['storage.backend'].sudo().search(
+            env_svc = self._get_s3_service_env()
+            backend = env_svc['storage.backend'].search(
                 [('backend_type', '=', 'amazon_s3')], limit=1
             )
             vals = {
@@ -92,4 +102,4 @@ class ResConfigSettings(models.TransientModel):
             if backend:
                 backend.write(vals)
             else:
-                self.env['storage.backend'].sudo().create(vals)
+                env_svc['storage.backend'].create(vals)

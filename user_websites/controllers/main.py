@@ -90,7 +90,7 @@ class UserWebsitesController(http.Controller):
             _logger.warning("Report creation failed: %s", e)
             return request.redirect("/?error=creation_failed")
 
-        return request.redirect("/?success=violation_reported")
+        return request.redirect("/?report_submitted=1")
 
     @http.route(
         ["/<string:website_slug>/blog", "/<string:website_slug>/blog/page/<int:page>"],
@@ -500,7 +500,7 @@ class UserWebsitesController(http.Controller):
             _logger.warning("Appeal creation failed: %s", e)
             return request.redirect("/my/home?error=appeal_failed")
 
-        return request.redirect("/my/home?success=appeal_submitted")
+        return request.redirect("/my/home?appeal_submitted=1")
 
     @http.route(
         "/api/v1/user_websites/pending_reports",

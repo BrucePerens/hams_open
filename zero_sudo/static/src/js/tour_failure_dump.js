@@ -144,8 +144,45 @@ window.fetch = async function(...args) {
         return await originalFetch.apply(this, args);
     } catch (e) {
         if (e && e.name === 'TypeError' && e.message && e.message.toLowerCase().includes('fetch')) {
-            // Suppress fetch errors during teardowns
-            return new Response('{}', {status: 200});
+            // Suppress fetch errors to the Odoo backend itself (this
+            // page's own origin) during teardown -- git history shows
+            // this existed to stop a real problem: before it, ANY fetch
+            // failure hard-aborted the whole test via triggerInstantAbort
+            // ("The backend server crashed or dropped the connection
+            // during RPC to: " + url), including harmless backend-socket
+            // noise as the Odoo test server itself gets torn down between
+            // tests. But scoping that suppression to "any fetch failure
+            // from any origin" (rather than to the backend specifically)
+            // is exactly why it went wrong: a genuinely cross-origin
+            // fetch failure -- like a tour deliberately checking that an
+            // unrelated local service (e.g. the local relay daemon on a
+            // different port) is NOT reachable -- got silently rewritten
+            // into a fake HTTP 200 too, so the tour observed "reachable"
+            // no matter what actually happened. Confirmed via a real
+            // diagnostic during a real test run, not assumed -- see
+            // night_shift_todo.md's writeup of the offline-page relay
+            // probe this broke. Narrowed to same-origin only, which
+            // preserves the original backend-RPC-teardown behavior
+            // exactly (this bug only ever affected other origins) and
+            // checked directly against every hardcoded-origin fetch()
+            // call in both repos before landing this, not guessed at.
+            let requestUrl = "";
+            try {
+                requestUrl = typeof args[0] === "string" ? args[0] : (args[0] && args[0].url) || "";
+            } catch {
+                // requestUrl stays "" -- an unresolvable URL below.
+            }
+            let isSameOrigin = false;
+            try {
+                isSameOrigin = new URL(requestUrl, document.location.href).origin === document.location.origin;
+            } catch {
+                // isSameOrigin stays false -- treat an unparseable URL as
+                // cross-origin (the safer default: propagate the real
+                // error rather than risk masking one).
+            }
+            if (isSameOrigin) {
+                return new Response('{}', {status: 200});
+            }
         }
         throw e;
     } finally {

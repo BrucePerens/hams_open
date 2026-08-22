@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!--
+    DRAFT, UNVERIFIED: written to replace res_config_settings.py's 3 .sudo()
+    calls with a real service account, mirroring
+    distributed_redis_cache/security/distributed_redis_cache_security.xml's
+    established pattern exactly (group_cache_manager_service /
+    cache_manager_service_internal). NOT tested end to end: OCA's
+    storage_backend addon (whose storage.backend model this account needs to
+    read/write) is not installed anywhere in this sandbox, so this account's
+    actual ACLs against that model have never been exercised against a real
+    install. Review before relying on this, in particular confirm this
+    account's group actually has read/write/create access under
+    storage_backend's own security rules once that addon is installed;
+    nothing here can verify that from this sandbox.
+-->
+<odoo>
+    <data noupdate="1">
+        <record model="ir.module.category" id="module_category_hams_s3">
+            <field name="name">Hams S3</field>
+            <field name="description">Access rights for the S3 storage backend configuration.</field>
+            <field name="sequence">60</field>
+        </record>
+
+        <record model="res.groups.privilege" id="privilege_hams_s3">
+            <field name="name">S3 Storage Management</field>
+            <field name="category_id" ref="module_category_hams_s3"/>
+        </record>
+
+        <record id="group_s3_manager_service" model="res.groups">
+            <field name="name">Service Account: S3 Storage Manager</field>
+        </record>
+    </data>
+    <data>
+        <record id="s3_manager_service_internal" model="res.users">
+            <field name="name">S3 Storage Manager</field>
+            <field name="login">s3_manager_sys</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('hams_s3.group_s3_manager_service')])]"/>
+        </record>
+    </data>
+</odoo>
