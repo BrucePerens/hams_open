@@ -36,26 +36,31 @@ class ResConfigSettings(models.TransientModel):
         ('other', 'Other'),
     ], string="AWS Region")
 
-    # NOT YET fixed (flagged for review, not fixed blind -- see
-    # night_shift_todo.md): 'model' in self.env / .sudo() below are both
-    # banned by this platform's rules, but storage.backend comes from
-    # OCA's storage_backend addon, which hams_s3 deliberately does NOT
-    # hard-depend on -- see scripts/install_oca_storage.py, whose whole
-    # purpose is to let an admin install that addon *after* hams_s3 is
-    # already running. Declaring it a hard __manifest__.py dependency
-    # would break that bootstrap flow entirely. storage_backend isn't
-    # installed anywhere in this sandbox, so none of this can actually be
-    # exercised or verified here -- swapping the detection/ACL mechanism
-    # without being able to test it is a real risk, not a mechanical fix.
+    # The 'model' in self.env presence checks below are a deliberate,
+    # reviewed exception (# burn-ignore-optional-oca-dep, see
+    # check_burn_list.py's whitelist entry for the full rationale):
+    # storage.backend comes from OCA's storage_backend addon, which
+    # hams_s3 deliberately does NOT hard-depend on -- see
+    # scripts/install_oca_storage.py, whose whole purpose is to let an
+    # admin install that addon *after* hams_s3 is already running.
+    # Declaring it a hard __manifest__.py dependency would break that
+    # bootstrap flow entirely.
+    #
+    # The .sudo() calls on the same lines are a SEPARATE, NOT YET fixed
+    # question (flagged for review, not fixed blind -- see
+    # night_shift_todo.md): storage_backend isn't installed anywhere in
+    # this sandbox, so swapping .sudo() for a service-account with_user()
+    # can't actually be exercised or verified here -- that's a real risk,
+    # not a mechanical fix.
     @api.depends('hams_s3_use_s3')
     def _compute_hams_s3_oca_installed(self):
         for rec in self:
-            rec.hams_s3_oca_installed = 'storage.backend' in self.env
+            rec.hams_s3_oca_installed = 'storage.backend' in self.env  # burn-ignore-optional-oca-dep
 
     @api.model
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
-        if 'storage.backend' in self.env:
+        if 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
             backend = self.env['storage.backend'].sudo().search(
                 [('backend_type', '=', 'amazon_s3')], limit=1
             )
@@ -71,7 +76,7 @@ class ResConfigSettings(models.TransientModel):
 
     def set_values(self):
         super(ResConfigSettings, self).set_values()
-        if self.hams_s3_use_s3 and 'storage.backend' in self.env:
+        if self.hams_s3_use_s3 and 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
             backend = self.env['storage.backend'].sudo().search(
                 [('backend_type', '=', 'amazon_s3')], limit=1
             )
