@@ -102,8 +102,7 @@ class SesWebhookController(http.Controller):
         # Must return 200 to AWS regardless of what fails inside (a
         # non-2xx response makes SNS retry indefinitely) -- any failure
         # is logged to ses.webhook.log with status='failed' instead.
-        # Tested by [@ANCHOR: ses_webhook_process_catch_all]
-        except Exception as e:  # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: ses_webhook_process_catch_all]  # fmt: skip
             _logger.error("Failed to process SNS Webhook: %s", str(e))
             log_vals.update({'status': 'failed', 'error_message': str(e)})
             

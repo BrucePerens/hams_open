@@ -217,8 +217,7 @@ class CloudflareTunnel(models.Model):
                 # A Cloudflare API failure while pushing routes must not
                 # prevent the tunnel daemon itself from starting -- SSH/
                 # basic connectivity should stay up while provisioning
-                # retries on the next call. Tested by
-                # [@ANCHOR: cloudflare_tunnel_push_config_catch_all]
-                except Exception as e:  # audit-ignore-catch-all
+                # retries on the next call.
+                except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: cloudflare_tunnel_push_config_catch_all]  # fmt: skip
                     _logger.error("Failed to provision routes on initial tunnel start: %s", e)
             start_tunnel_daemon(tunnel_token)

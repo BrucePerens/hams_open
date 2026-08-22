@@ -22,16 +22,15 @@
     </record>
 
     <record id="view_cloudflare_tunnel_form" model="ir.ui.view">
-        <!-- audit-ignore-view: action_push_configuration makes a real
-             external Cloudflare API call, so a browser tour would need
-             the same mocking a model-level test already needs anyway;
-             covered instead by
+        <!-- action_push_configuration makes a real external Cloudflare
+             API call, so a browser tour would need the same mocking a
+             model-level test already needs anyway; covered instead by
              test_tunnel_provisioning_security.py::
              test_push_configuration_merges_global_and_tunnel_routes,
              which exercises this exact form's button/method end to end
              (route merging, sequencing, SSH + catch-all routes) with the
-             real external call mocked. Tested by
-             [@ANCHOR: COMM_cf_tunnel_views_render] -->
+             real external call mocked. -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_cf_tunnel_views_render] -->
         <field name="name">cloudflare.tunnel.form</field>
         <field name="model">cloudflare.tunnel</field>
         <field name="arch" type="xml">
@@ -77,13 +76,13 @@
     </record>
 
     <record id="view_cloudflare_tunnel_route_list" model="ir.ui.view">
-        <!-- audit-ignore-view: a plain editable list of the same
-             cloudflare.tunnel.route model view_cloudflare_tunnel_form's
-             embedded route list already renders and is already
-             render-proof tested; the "Global Ingress Routes" menu is
-             the same model/fields filtered to tunnel_id=False, not new
-             client-side rendering logic. Tested by
-             [@ANCHOR: COMM_cf_tunnel_views_render] -->
+        <!-- A plain editable list of the same cloudflare.tunnel.route
+             model view_cloudflare_tunnel_form's embedded route list
+             already renders and is already render-proof tested; the
+             "Global Ingress Routes" menu is the same model/fields
+             filtered to tunnel_id=False, not new client-side rendering
+             logic. -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_cf_tunnel_views_render] -->
         <field name="name">cloudflare.tunnel.route.list</field>
         <field name="model">cloudflare.tunnel.route</field>
         <field name="arch" type="xml">

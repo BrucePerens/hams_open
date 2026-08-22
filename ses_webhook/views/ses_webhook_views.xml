@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- View for Webhook Domains -->
-    <!-- audit-ignore-view: plain admin config list/form, no client-side
-         logic to exercise beyond standard field rendering; render-proof
-         only. Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
+    <!-- Plain admin config list, no client-side logic to exercise beyond
+         standard field rendering; render-proof only. -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
     <record id="view_ses_webhook_domain_list" model="ir.ui.view">
         <field name="name">ses.webhook.domain.list</field>
         <field name="model">ses.webhook.domain</field>
@@ -16,9 +16,9 @@
         </field>
     </record>
 
-    <!-- audit-ignore-view: plain admin config form, no client-side logic
-         to exercise beyond standard field rendering; render-proof only.
-         Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
+    <!-- Plain admin config form, no client-side logic to exercise beyond
+         standard field rendering; render-proof only. -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
     <record id="view_ses_webhook_domain_form" model="ir.ui.view">
         <field name="name">ses.webhook.domain.form</field>
         <field name="model">ses.webhook.domain</field>
@@ -70,9 +70,9 @@
     </record>
 
     <!-- Views for Webhook Logs -->
-    <!-- audit-ignore-view: plain read-only admin log list, no client-side
-         logic to exercise beyond standard field rendering; render-proof
-         only. Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
+    <!-- Plain read-only admin log list, no client-side logic to exercise
+         beyond standard field rendering; render-proof only. -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
     <record id="view_ses_webhook_log_list" model="ir.ui.view">
         <field name="name">ses.webhook.log.list</field>
         <field name="model">ses.webhook.log</field>
@@ -87,9 +87,9 @@
         </field>
     </record>
 
-    <!-- audit-ignore-view: plain read-only admin log form, no client-side
-         logic to exercise beyond standard field rendering; render-proof
-         only. Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
+    <!-- Plain read-only admin log form, no client-side logic to exercise
+         beyond standard field rendering; render-proof only. -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
     <record id="view_ses_webhook_log_form" model="ir.ui.view">
         <field name="name">ses.webhook.log.form</field>
         <field name="model">ses.webhook.log</field>

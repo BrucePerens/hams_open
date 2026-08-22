@@ -44,7 +44,7 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         )
 
     def test_push_configuration_failure_does_not_block_daemon_start(self):
-        # Tests [@ANCHOR: cloudflare_tunnel_push_config_catch_all]
+        # Tests [@ANCHOR: COMM_cloudflare_tunnel_push_config_catch_all]
         """
         action_ensure_tunnel_running() wraps action_push_configuration() in
         a broad 'except Exception' -- a Cloudflare API failure while

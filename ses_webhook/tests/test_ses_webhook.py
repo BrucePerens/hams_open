@@ -230,7 +230,7 @@ class TestSesWebhook(HamsHttpCase):
         self.assertIn('name="raw_payload"', v4["arch"])
 
     def test_12_processing_failure_still_returns_200_and_logs(self):
-        # Tests [@ANCHOR: ses_webhook_process_catch_all]
+        # Tests [@ANCHOR: COMM_ses_webhook_process_catch_all]
         """
         receive_sns_webhook()'s broad except Exception must still return
         200 to AWS (a non-2xx response makes SNS retry indefinitely) even
