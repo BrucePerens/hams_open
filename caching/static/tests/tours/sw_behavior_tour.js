@@ -86,7 +86,7 @@ registry.category("web_tour.tours").add("caching_sw_behavior_check", {
                 while (!cached && Date.now() < deadline) {
                     cached = await cache.match(assetScript);
                     if (!cached) {
-                        await new Promise((r) => setTimeout(r, 100));
+                        await new Promise((resolve) => setTimeout(resolve, 100));
                     }
                 }
                 if (!cached) {
@@ -175,7 +175,7 @@ registry.category("web_tour.tours").add("caching_sw_behavior_check", {
                     realCached = await cache.match(bundleUrl.pathname);
                     staleGone = !(await cache.match(staleUrl));
                     if (!staleGone || !realCached) {
-                        await new Promise((r) => setTimeout(r, 100));
+                        await new Promise((resolve) => setTimeout(resolve, 100));
                     }
                 }
                 if (!realCached) {
@@ -357,7 +357,7 @@ registry.category("web_tour.tours").add("caching_sw_lru_eviction_check", {
                     const remaining = await Promise.all(entryUrls.map((u) => cache.match(u)));
                     allGone = remaining.every((r) => !r);
                     if (!allGone) {
-                        await new Promise((r) => setTimeout(r, 150));
+                        await new Promise((resolve) => setTimeout(resolve, 150));
                     }
                 }
                 if (!allGone) {

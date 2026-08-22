@@ -86,6 +86,7 @@ export class AdminViolationToast extends Interaction {
                     });
                     sessionStorage.setItem('admin_violation_toast_shown', 'true');
                 }
+                return;
             }).catch(() => {
                 // Silently ignore network errors to prevent UI disruption
             });

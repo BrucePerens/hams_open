@@ -63,7 +63,7 @@ export class PagerBoard extends Component {
         if (this.state.isPaused) return;
         for (const { type } of notifications) {
             if (type === "update_board") {
-                this.fetchData();
+                this.fetchData().catch((err) => console.error("[PagerBoard] fetchData failed:", err));
             }
         }
     }

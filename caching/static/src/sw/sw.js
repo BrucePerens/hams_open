@@ -101,10 +101,9 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
-        }).then(() => self.clients.claim()).then(() => {
-            self.clients.matchAll().then(clients => {
-                clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
-            });
+        }).then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((clients) => {
+            clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
+            return;
         })
     );
 });
@@ -139,63 +138,70 @@ self.addEventListener('fetch', (event) => {
 
     // We only intercept requests that match our static asset patterns.
     if (CACHE_URL_REGEX.test(url.pathname)) {
-        event.respondWith(
-            caches.match(request).then((cachedResponse) => {
-                if (cachedResponse) {
-                    const isBundle = url.pathname.startsWith('/web/assets/');
-                    if (!isBundle) updateLRUMetadata(request.url);
-                    return cachedResponse;
+        event.respondWith((async () => {
+            const cachedResponse = await caches.match(request);
+            if (cachedResponse) {
+                const isBundle = url.pathname.startsWith('/web/assets/');
+                if (!isBundle) void updateLRUMetadata(request.url);
+                return cachedResponse;
+            }
+
+            const networkResponse = await fetch(request);
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+                return networkResponse;
+            }
+
+            // SIZE LIMIT SAFETY VALVE
+            // Odoo bundles are exempt from the dynamic module quota,
+            // as they fit within the 10MB system reservation.
+            const isBundle = url.pathname.startsWith('/web/assets/');
+            const contentLength = networkResponse.headers.get('Content-Length');
+            const parsedLength = contentLength ? parseInt(contentLength, 10) : NaN;
+
+            if (!isBundle && (!isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE_BYTES)) {
+                console.warn(`[Caching SW] Skipping cache for large file: ${request.url}`);
+                return networkResponse;
+            }
+
+            const responseToCache = networkResponse.clone();
+            // Deliberately not awaited: caching the response must not delay
+            // returning networkResponse to the page. Errors are logged, not
+            // propagated -- a cache-write failure shouldn't fail the fetch.
+            void (async () => {
+                let cache;
+                try {
+                    cache = await caches.open(CACHE_NAME);
+                } catch (err) {
+                    console.error(`[Caching SW] Failed to open cache ${CACHE_NAME}:`, err);
+                    return;
                 }
-                return fetch(request).then((networkResponse) => {
-                    if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-                        return networkResponse;
+                try {
+                    await cache.put(request, responseToCache);
+                    if (!isBundle) {
+                        updateLRUMetadata(request.url).then(() => enforceLRUQuota(cache)).catch(console.error);
                     }
-
-                    // SIZE LIMIT SAFETY VALVE
-                    // Odoo bundles are exempt from the dynamic module quota,
-                    // as they fit within the 10MB system reservation.
-                    const isBundle = url.pathname.startsWith('/web/assets/');
-                    const contentLength = networkResponse.headers.get('Content-Length');
-                    const parsedLength = contentLength ? parseInt(contentLength, 10) : NaN;
-                    
-                    if (!isBundle && (!isNaN(parsedLength) && parsedLength > MAX_FILE_SIZE_BYTES)) {
-                        console.warn(`[Caching SW] Skipping cache for large file: ${request.url}`);
-                        return networkResponse;
-                    }
-
-                    const responseToCache = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseToCache).then(() => {
-                            if (!isBundle) {
-                                updateLRUMetadata(request.url).then(() => enforceLRUQuota(cache)).catch(console.error);
+                    // SURGICAL ODOO EVICTION:
+                    // Odoo bundles follow /web/assets/<hash>/<bundle_name>.js
+                    // If we cache a new hash, instantly delete the old hash for the same bundle to prevent gigabytes of cache bloat.
+                    const match = url.pathname.match(/\/web\/assets\/[^/]+\/(.+)/);
+                    if (match) {
+                        const bundleFile = match[1];
+                        const keys = await cache.keys();
+                        keys.forEach(key => {
+                            const keyUrl = new URL(key.url);
+                            const keyMatch = keyUrl.pathname.match(/\/web\/assets\/[^/]+\/(.+)/);
+                            if (keyMatch && keyMatch[1] === bundleFile && keyUrl.pathname !== url.pathname) {
+                                void cache.delete(key);
+                                console.log(`[Caching SW] Evicted stale Odoo bundle: ${keyUrl.pathname}`);
                             }
-                            // SURGICAL ODOO EVICTION:
-                            // Odoo bundles follow /web/assets/<hash>/<bundle_name>.js
-                            // If we cache a new hash, instantly delete the old hash for the same bundle to prevent gigabytes of cache bloat.
-                            const match = url.pathname.match(/\/web\/assets\/[^\/]+\/(.+)/);
-                            if (match) {
-                                const bundleFile = match[1];
-                                cache.keys().then(keys => {
-                                    keys.forEach(key => {
-                                        const keyUrl = new URL(key.url);
-                                        const keyMatch = keyUrl.pathname.match(/\/web\/assets\/[^\/]+\/(.+)/);
-                                        if (keyMatch && keyMatch[1] === bundleFile && keyUrl.pathname !== url.pathname) {
-                                            cache.delete(key);
-                                            console.log(`[Caching SW] Evicted stale Odoo bundle: ${keyUrl.pathname}`);
-                                        }
-                                    });
-                                });
-                            }
-                        }).catch(err => {
-                            console.error(`[Caching SW] Failed to cache ${request.url}:`, err);
                         });
-                    }).catch(err => {
-                        console.error(`[Caching SW] Failed to open cache ${CACHE_NAME}:`, err);
-                    });
+                    }
+                } catch (err) {
+                    console.error(`[Caching SW] Failed to cache ${request.url}:`, err);
+                }
+            })();
 
-                    return networkResponse;
-                });
-            })
-        );
+            return networkResponse;
+        })());
     }
 });

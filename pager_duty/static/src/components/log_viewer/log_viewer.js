@@ -39,7 +39,7 @@ export class LogViewer extends Component {
 
     onKeyup(ev) {
         if (ev.key === "Enter") {
-            this.executeSearch();
+            void this.executeSearch();
         }
     }
 
