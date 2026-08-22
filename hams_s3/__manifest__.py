@@ -6,7 +6,7 @@
     'summary': 'Configure S3 Storage Backend directly from General Settings',
     'description': 'Configure S3 Storage Backend directly from General Settings',
     'author': 'Hams',
-    'depends': ['base_setup'],
+    'depends': ['base_setup', 'zero_sudo'],
     'data': [
         'views/res_config_settings_views.xml',
     ],

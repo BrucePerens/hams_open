@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import os
+import re
 import subprocess
 import shutil
 
-def run(cmd):
-    print(f"Running: {cmd}")
-    subprocess.run(cmd, shell=True, check=True)
+def run(cmd_list):
+    print(f"Running: {' '.join(cmd_list)}")
+    subprocess.run(cmd_list, check=True)
 
 def replace_in_file(filepath, replacements):
     if not os.path.exists(filepath):
@@ -36,7 +37,7 @@ def main():
     }
     
     for name, url in repos.items():
-        run(f"git clone --depth 1 --branch 18.0 {url} {tmp_dir}/{name}")
+        run(["git", "clone", "--depth", "1", "--branch", "18.0", url, os.path.join(tmp_dir, name)])
         
     modules = {
         "storage": ["storage_backend", "storage_backend_s3"],
@@ -72,7 +73,6 @@ def main():
         'backend = self.backend.with_user(1)': 'backend = self.backend'
     })
     
-    import re
     def replace_regex(filepath, pattern, replacement):
         with open(filepath, 'r') as f:
             content = f.read()
@@ -99,7 +99,7 @@ def main():
         'print(_load_aws_regions())  # pylint: disable=print-used': 'import logging; logging.getLogger(__name__).info(_load_aws_regions())'
     })
     replace_in_file(os.path.join(dest_dir, 'storage_backend_s3', 'components', 's3_adapter.py'), {
-        'try:\n    import boto3\n    from botocore.exceptions import ClientError\nexcept ImportError:\n    boto3 = None': 'import boto3\nfrom botocore.exceptions import ClientError'
+        'try:\n    import boto3\n    from botocore.exceptions import ClientError\nexcept ImportError:\n    boto3 = None': 'import boto3\nfrom botocore.exceptions import ClientError'  # burn-ignore-vendor-patch-text
     })
     path_s3 = os.path.join(dest_dir, 'storage_backend_s3', 'views', 'backend_storage_view.xml')
     replace_regex(path_s3, r'<record\s+id="([^"]+)"\s+model="ir\.ui\.view">', r'<record id="\1" model="ir.ui.view">\n        <field name="name">\1</field>\n        <!-- audit-ignore-view -->')

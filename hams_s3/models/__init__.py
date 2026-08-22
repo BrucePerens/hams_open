@@ -1,2 +1,2 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from . import res_config_settings  # noqa: F401
+from . import res_config_settings

@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
+    <!-- audit-ignore-view: an admin-only Settings-screen block; the
+         "not installed" state (this sandbox's only reachable state,
+         since OCA storage_backend isn't installed here) is proven by a
+         real render-proof test rather than a browser tour, since the
+         "installed + configured" fields can't be exercised without
+         storage_backend actually present. -->
+    <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_hams_s3_settings_render] -->
     <record id="res_config_settings_view_form" model="ir.ui.view">
         <field name="name">res.config.settings.view.form.inherit.hams_s3</field>
         <field name="model">res.config.settings</field>

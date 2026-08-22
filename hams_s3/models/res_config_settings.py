@@ -36,6 +36,17 @@ class ResConfigSettings(models.TransientModel):
         ('other', 'Other'),
     ], string="AWS Region")
 
+    # NOT YET fixed (flagged for review, not fixed blind -- see
+    # night_shift_todo.md): 'model' in self.env / .sudo() below are both
+    # banned by this platform's rules, but storage.backend comes from
+    # OCA's storage_backend addon, which hams_s3 deliberately does NOT
+    # hard-depend on -- see scripts/install_oca_storage.py, whose whole
+    # purpose is to let an admin install that addon *after* hams_s3 is
+    # already running. Declaring it a hard __manifest__.py dependency
+    # would break that bootstrap flow entirely. storage_backend isn't
+    # installed anywhere in this sandbox, so none of this can actually be
+    # exercised or verified here -- swapping the detection/ACL mechanism
+    # without being able to test it is a real risk, not a mechanical fix.
     @api.depends('hams_s3_use_s3')
     def _compute_hams_s3_oca_installed(self):
         for rec in self:

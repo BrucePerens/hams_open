@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from odoo.tests.common import TransactionCase
+from lxml import etree
+
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
 
 @tagged('post_install', '-at_install')
-class TestHamsS3ConfigSettings(TransactionCase):
+class TestHamsS3ConfigSettings(HamsTransactionCase):
 
     def setUp(self):
         super().setUp()
@@ -18,6 +20,7 @@ class TestHamsS3ConfigSettings(TransactionCase):
         # we check if it's available. If not, we skip or mock.
         if 'storage.backend' not in self.env:
             return
+        self.StorageBackend = self.env['storage.backend']
 
         # Create settings
         settings = self.ConfigSettings.create({
@@ -49,3 +52,18 @@ class TestHamsS3ConfigSettings(TransactionCase):
         self.assertEqual(res.get('hams_s3_aws_secret_access_key'), 'TEST_SECRET')
         self.assertEqual(res.get('hams_s3_aws_bucket'), 'test-bucket')
         self.assertEqual(res.get('hams_s3_aws_region'), 'us-east-1')
+
+    def test_settings_view_renders(self):
+        # Tests [@ANCHOR: COMM_hams_s3_settings_render]
+        """Proves res_config_settings_view_form's xpath injection
+        compiles cleanly against the real base_setup settings view --
+        see the view's own audit-ignore-view comment for why this is a
+        render-proof rather than a browser tour (the "installed +
+        configured" fields can't be exercised without OCA
+        storage_backend actually installed)."""
+        view = self.env.ref("hams_s3.res_config_settings_view_form")
+        arch_node = view._get_combined_arch()
+        arch = etree.tostring(arch_node, encoding="unicode")
+        self.env["res.config.settings"].get_view(view_id=view.id)
+        self.assertIn("hams_cloud_storage", arch)
+        self.assertIn("hams_s3_use_s3", arch)
