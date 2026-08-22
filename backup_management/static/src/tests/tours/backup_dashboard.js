@@ -55,10 +55,21 @@ registry.category("web_tour.tours").add("backup_dashboard_tour", {
             // The SelectMenu component (Odoo 19) never renders a
             // data-value attribute on its option items -- only
             // data-choice-index -- so a [data-value=...] selector never
-            // matches. Match on the rendered label text instead.
-            trigger: '.o_select_menu_item:contains("Kopia")',
+            // matches. Odoo 19 native tour triggers use querySelectorAll,
+            // which has no ':contains()' equivalent (jQuery-only, crashes
+            // instantly) -- match on the rendered label text via a custom
+            // run() instead.
+            trigger: '.o_select_menu_item',
             content: "Select Kopia engine value",
-            run: 'click',
+            run: function () {
+                const item = Array.from(document.querySelectorAll(".o_select_menu_item")).find(
+                    (el) => el.textContent.includes("Kopia")
+                );
+                if (!item) {
+                    throw new Error('Could not find a .o_select_menu_item containing "Kopia".');
+                }
+                item.click();
+            },
         },
         {
             trigger: 'div[name="target_path"] input, input[id="target_path"]',

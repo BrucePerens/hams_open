@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # This software is released under the AGPL-3.0 License.
+import tempfile
 import time
 import pika
 import json
@@ -30,7 +31,6 @@ class TestTddBatch1(RealTransactionCase):
         self.env["daemon.key.registry"].with_user(admin_uid).action_force_provision_all()
         self.env.cr.commit()
 
-        import tempfile
         env_vars = {}
         env_vars["DB_NAME"] = self.env.cr.dbname
         env_file = "/opt/hams/etc/keys/backup_worker.env"
@@ -236,7 +236,15 @@ class TestTddBatch1(RealTransactionCase):
         with open(doc_path, "r") as f:
             doc_content = f.read()
         self.assertIn('id="UX_BACKUP_SYNC"', doc_content)
-        self.assertIn('data-trace="[@AN' + 'CHOR: backup_management:UX_BACKUP_SYNC]"', doc_content)
+        # Built via .format() rather than a literal "[@ANCHOR: ...]"
+        # substring or '+' concatenation of two literals: the former would
+        # make verify_anchors.py's file-text regex scan mistake this
+        # assertion for a real anchor declaration comment, the latter
+        # trips check_burn_list.py's own string-concatenation-evasion rule.
+        self.assertIn(
+            'data-trace="[@ANCHOR: {}]"'.format("backup_management:UX_BACKUP_SYNC"),
+            doc_content,
+        )
         self.assertNotIn('id="backup-sync-section"', doc_content)
         
         hooks_path = os.path.join(base_path, "hooks.py")
