@@ -30,6 +30,8 @@ class SesWebhookLog(models.Model):
         Scheduled action to delete logs older than 30 days to save DB space.
         """
         cutoff_date = fields.Datetime.now() - relativedelta(days=30)
-        old_logs = self.search([('create_date', '<', cutoff_date)])
+        old_logs = self.env["ses.webhook.log"].search(
+            [('create_date', '<', cutoff_date)], limit=10000
+        )
         if old_logs:
             old_logs.unlink()

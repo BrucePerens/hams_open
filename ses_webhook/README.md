@@ -6,7 +6,7 @@ A module to securely receive Amazon SNS webhooks containing SES incoming emails.
 ## Developer Guide
 
 ### Key Components
-- **`SesWebhookController` (`controllers/main.py`)**: Defines a public HTTP endpoint at `POST /mail/webhook/sns`. It receives incoming Amazon SNS webhooks.
+- **`SesWebhookController` (`controllers/webhook_api.py`)**: Defines a public HTTP endpoint at `POST /mail/webhook/sns`. It receives incoming Amazon SNS webhooks.
   - **Authentication**: It authenticates requests via a URL query parameter `token`.
   - **Subscription Confirmation**: Automatically confirms SNS subscription requests by visiting the `SubscribeURL`.
   - **Notification Processing**: Parses SES notifications. If a valid `content` field containing a raw email is found, it encodes the email in UTF-8 and feeds it into the standard Odoo mail thread message_process method for the matched company.

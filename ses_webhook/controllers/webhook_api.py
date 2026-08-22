@@ -24,6 +24,19 @@ class SesWebhookController(http.Controller):
             return request.make_response("Forbidden", status=403)
 
         # 1. Validate Secret Token against configured domains
+        # NOT YET replaced with a service account (banned .sudo() left in
+        # place deliberately -- flagged for review, not fixed blind):
+        # this lookup runs BEFORE the requesting company is known (the
+        # token is what determines it), so it must see every tenant's
+        # ses.webhook.domain record regardless of company. Both existing
+        # ir.rule records here (ses_webhook_domain_comp_rule,
+        # ses_webhook_log_comp_rule) are deliberately GLOBAL (no groups
+        # field) -- test_10_domain_multi_company_isolation already proves
+        # that matters for plain internal users. A service account's own
+        # company_ids scoping would need to span every tenant company for
+        # this cross-tenant lookup to keep working, which is a real
+        # privilege-boundary design decision, not a mechanical .sudo()
+        # swap -- see night_shift_todo.md.
         domain = request.env['ses.webhook.domain'].sudo().search([('secret_token', '=', token)], limit=1)
         if not domain:
             _logger.warning("SES Webhook denied: Invalid token.")
@@ -67,7 +80,15 @@ class SesWebhookController(http.Controller):
                     log_vals.update({'status': 'ignored', 'error_message': 'No content field found.'})
                 else:
                     email_bytes = raw_email.encode('utf-8')
-                    # Route to the specific tenant company
+                    # Route to the specific tenant company.
+                    # NOT YET replaced with a service account (flagged for
+                    # review, not fixed blind): message_process() routes
+                    # through mail.alias configuration and can create
+                    # records on WHATEVER model the matched alias points
+                    # at -- the correct ACL scope depends on which models
+                    # this installation's mail aliases actually target,
+                    # which isn't something to guess from this file
+                    # alone. See night_shift_todo.md.
                     request.env['mail.thread'].with_company(domain.company_id).sudo().message_process(None, email_bytes)
                     _logger.info("Successfully processed incoming email from SNS Webhook for domain %s.", domain.name)
                     log_vals.update({'status': 'success'})
@@ -78,11 +99,22 @@ class SesWebhookController(http.Controller):
             else:
                 log_vals.update({'status': 'ignored', 'error_message': 'Unknown payload type'})
                 
-        except Exception as e:
+        # Must return 200 to AWS regardless of what fails inside (a
+        # non-2xx response makes SNS retry indefinitely) -- any failure
+        # is logged to ses.webhook.log with status='failed' instead.
+        # Tested by [@ANCHOR: ses_webhook_process_catch_all]
+        except Exception as e:  # audit-ignore-catch-all
             _logger.error("Failed to process SNS Webhook: %s", str(e))
             log_vals.update({'status': 'failed', 'error_message': str(e)})
             
         finally:
+            # NOT YET replaced with a service account (flagged for
+            # review, not fixed blind): log_vals['company_id'] is a
+            # related field computed from domain_id.company_id, which can
+            # be ANY tenant company -- the same cross-tenant
+            # company_ids-scoping question as the domain lookup above
+            # applies to writing this record too, under the same global
+            # ir.rule. See night_shift_todo.md.
             request.env['ses.webhook.log'].sudo().create(log_vals)
 
         return request.make_response("OK", status=200)

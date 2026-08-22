@@ -1,2 +1,2 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from . import main
+from . import webhook_api

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
-from unittest.mock import patch
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
+from odoo.tools import mute_logger
 
 @tagged('post_install', '-at_install')
 class TestSesWebhook(HamsHttpCase):
@@ -53,16 +53,16 @@ class TestSesWebhook(HamsHttpCase):
             "MessageId": "msg-sub-1",
             "SubscribeURL": "http://mock-aws.com/confirm"
         }
-        with patch('urllib.request.urlopen') as mock_urlopen:
-            mock_urlopen.return_value = True
-            response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
-            self.assertEqual(response.status_code, 200)
-            mock_urlopen.assert_called_once_with("http://mock-aws.com/confirm")
-            
-            log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sub-1')])
-            self.assertEqual(len(log), 1)
-            self.assertEqual(log.status, 'success')
-            self.assertEqual(log.domain_id, self.domain_a)
+        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        mock_urlopen.return_value = True
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+        mock_urlopen.assert_called_once_with("http://mock-aws.com/confirm")
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sub-1')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'success')
+        self.assertEqual(log.domain_id, self.domain_a)
 
     def test_04_webhook_notification_processed_company_a(self):
         """Verify Notification extracts content and passes to mail.thread in Company A context."""
@@ -70,22 +70,22 @@ class TestSesWebhook(HamsHttpCase):
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-notif-a", "Message": json.dumps(ses_message)}
         
-        with patch('odoo.addons.mail.models.mail_thread.MailThread.message_process') as mock_process:
-            mock_process.return_value = True
-            response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
-            self.assertEqual(response.status_code, 200)
-            
-            mock_process.assert_called_once()
-            args, kwargs = mock_process.call_args
-            self.assertEqual(args[1], raw_email)
-            
-            # Since message_process was called on a recordset with `with_company`, we check the env of the mocked call
-            # But we can just verify the log is assigned correctly
-            log = self.env['ses.webhook.log'].search([('name', '=', 'msg-notif-a')])
-            self.assertEqual(len(log), 1)
-            self.assertEqual(log.status, 'success')
-            self.assertEqual(log.domain_id, self.domain_a)
-            self.assertEqual(log.company_id, self.company_a)
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+
+        mock_process.assert_called_once()
+        args, kwargs = mock_process.call_args
+        self.assertEqual(args[1], raw_email)
+
+        # Since message_process was called on a recordset with `with_company`, we check the env of the mocked call
+        # But we can just verify the log is assigned correctly
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-notif-a')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'success')
+        self.assertEqual(log.domain_id, self.domain_a)
+        self.assertEqual(log.company_id, self.company_a)
 
     def test_05_webhook_notification_processed_company_b(self):
         """Verify Notification extracts content and passes to mail.thread in Company B context."""
@@ -93,20 +93,20 @@ class TestSesWebhook(HamsHttpCase):
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-notif-b", "Message": json.dumps(ses_message)}
         
-        with patch('odoo.addons.mail.models.mail_thread.MailThread.message_process') as mock_process:
-            mock_process.return_value = True
-            response = self.url_open(f'/mail/webhook/sns?token={self.domain_b.secret_token}', data=json.dumps(payload).encode('utf-8'))
-            self.assertEqual(response.status_code, 200)
-            
-            mock_process.assert_called_once()
-            args, kwargs = mock_process.call_args
-            self.assertEqual(args[1], raw_email)
-            
-            log = self.env['ses.webhook.log'].search([('name', '=', 'msg-notif-b')])
-            self.assertEqual(len(log), 1)
-            self.assertEqual(log.status, 'success')
-            self.assertEqual(log.domain_id, self.domain_b)
-            self.assertEqual(log.company_id, self.company_b)
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_b.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+
+        mock_process.assert_called_once()
+        args, kwargs = mock_process.call_args
+        self.assertEqual(args[1], raw_email)
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-notif-b')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'success')
+        self.assertEqual(log.domain_id, self.domain_b)
+        self.assertEqual(log.company_id, self.company_b)
 
     def test_06_webhook_notification_no_content(self):
         """Verify Notification without 'content' logs an error and ignores it."""
@@ -193,15 +193,14 @@ class TestSesWebhook(HamsHttpCase):
     def test_08_domain_unique_constraints(self):
         """Verify that SQL constraints block duplicate domain names and tokens."""
         # Due to how Odoo tests wrap transactions, checking SQL constraints requires mute_logger and catching IntegrityError
-        from odoo.tools import mute_logger
-        
         with mute_logger('odoo.sql_db'), self.assertRaises(Exception):
             with self.env.cr.savepoint():
                 self.env['ses.webhook.domain'].create({
                     'name': 'test-a.com', # Duplicate name
                     'company_id': self.company_b.id
                 })
-                
+                self.env.flush_all()
+
         with mute_logger('odoo.sql_db'), self.assertRaises(Exception):
             with self.env.cr.savepoint():
                 self.env['ses.webhook.domain'].create({
@@ -209,3 +208,55 @@ class TestSesWebhook(HamsHttpCase):
                     'secret_token': 'mock_secret_a', # Duplicate token
                     'company_id': self.company_b.id
                 })
+                self.env.flush_all()
+
+    def test_11_views_rendering(self):
+        # Tests [@ANCHOR: COMM_ses_webhook_views_render]
+        """Proves all 4 ses_webhook backend views compile cleanly
+        against their real models -- see ses_webhook_views.xml's
+        audit-ignore-view comments for why these skip a browser tour
+        (plain admin config list/forms, no client-side logic to
+        exercise beyond standard field rendering)."""
+        v1 = self.env["ses.webhook.domain"].get_view(view_type="list")
+        self.assertIn('name="webhook_url"', v1["arch"])
+
+        v2 = self.env["ses.webhook.domain"].get_view(view_type="form")
+        self.assertIn('name="secret_token"', v2["arch"])
+
+        v3 = self.env["ses.webhook.log"].get_view(view_type="list")
+        self.assertIn('name="payload_type"', v3["arch"])
+
+        v4 = self.env["ses.webhook.log"].get_view(view_type="form")
+        self.assertIn('name="raw_payload"', v4["arch"])
+
+    def test_12_processing_failure_still_returns_200_and_logs(self):
+        # Tests [@ANCHOR: ses_webhook_process_catch_all]
+        """
+        receive_sns_webhook()'s broad except Exception must still return
+        200 to AWS (a non-2xx response makes SNS retry indefinitely) even
+        when processing genuinely fails, and must record the real failure
+        in ses.webhook.log rather than swallowing it silently. Force a
+        real failure (message_process raising) and prove both halves.
+        """
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Test Failure\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-forced-failure", "Message": json.dumps(ses_message)}
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.side_effect = RuntimeError("simulated processing failure")
+
+        response = self.url_open(
+            f'/mail/webhook/sns?token={self.domain_a.secret_token}',
+            data=json.dumps(payload).encode('utf-8'),
+        )
+        self.assertEqual(
+            response.status_code,
+            200,
+            "A processing failure must still return 200 to AWS, or SNS "
+            "will retry indefinitely.",
+        )
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-forced-failure')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'failed')
+        self.assertIn('simulated processing failure', log.error_message)
