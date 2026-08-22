@@ -90,8 +90,6 @@ class PagerIncident(models.Model):
         help="The Odoo model used for the ticket (e.g. hams_helpdesk.ticket or helpdesk.ticket).",
     )
 
-    # Removed invalid models.Index
-
     def write(self, vals):
         now = fields.Datetime.now()
         if vals.get("status") == "acknowledged":

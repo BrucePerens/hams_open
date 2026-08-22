@@ -1,4 +1,3 @@
-// #FAILED_VALIDATION
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
@@ -42,10 +41,21 @@ registry.category("web_tour.tours").add("pager_duty_incident_tour", {
             // The SelectMenu component (Odoo 19) never renders a
             // data-value attribute on its option items -- only
             // data-choice-index -- so a [data-value*=...] selector never
-            // matches. Match on the rendered label text instead.
-            trigger: '.o_select_menu_item:contains("High")',
+            // matches. Odoo 19 native tour triggers use querySelectorAll,
+            // which has no ':contains()' equivalent (jQuery-only, crashes
+            // instantly) -- match on the rendered label text via a custom
+            // run() instead.
+            trigger: '.o_select_menu_item',
             content: "Select High severity",
-            run: "click",
+            run: function () {
+                const item = Array.from(document.querySelectorAll(".o_select_menu_item")).find(
+                    (el) => el.textContent.includes("High")
+                );
+                if (!item) {
+                    throw new Error('Could not find a .o_select_menu_item containing "High".');
+                }
+                item.click();
+            },
         },
         {
             trigger: '[name="description"] textarea',
