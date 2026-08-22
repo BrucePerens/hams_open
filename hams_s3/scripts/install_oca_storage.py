@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import shutil
+import sys
 
 def run(cmd_list):
     print(f"Running: {' '.join(cmd_list)}")
@@ -21,7 +22,10 @@ def replace_in_file(filepath, replacements):
         f.write(content)
 
 def main():
-    dest_dir = "/home/bruce/workspace/tmp"
+    if len(sys.argv) < 2:
+        print("Usage: install_oca_storage.py <dest_dir>")
+        sys.exit(1)
+    dest_dir = sys.argv[1]
     tmp_dir = "/tmp/oca_install"
     
     if os.path.exists(tmp_dir):
