@@ -109,3 +109,20 @@ class TestCloudflareUITours(HamsHttpCase):
 
         v9 = self.env["cloudflare.zero.trust.policy"].get_view(view_type="form")
         self.assertIn("policy_action", v9["arch"])
+
+    def test_06_tunnel_views_rendering(self):
+        # Tests [@ANCHOR: COMM_cf_tunnel_views_render]
+        """Proves view_cloudflare_tunnel_form and
+        view_cloudflare_tunnel_route_list compile cleanly against the
+        real cloudflare.tunnel / cloudflare.tunnel.route models -- see
+        tunnel_views.xml's audit-ignore-view comments for why these skip
+        a full browser tour (the form's one real action makes an
+        external Cloudflare API call, already exercised with that call
+        mocked by test_tunnel_provisioning_security.py; the route list is
+        the same model/fields view_cloudflare_tunnel_form's own embedded
+        list already renders)."""
+        v_form = self.env["cloudflare.tunnel"].get_view(view_type="form")
+        self.assertIn("action_push_configuration", v_form["arch"])
+
+        v_route_list = self.env["cloudflare.tunnel.route"].get_view(view_type="list")
+        self.assertIn('name="hostname"', v_route_list["arch"])

@@ -16,21 +16,23 @@ class CloudflareTunnelSimulator:
     
     def setUp(self):
         super().setUp()
-        # Start the native Go CGO simulator, pointing it to Odoo's test port
-        target_port = 8069
-        
-        # Check for dynamic test ports
-        http_port = getattr(self.__class__, "http_port", None)
-        if http_port:
-            target_port = http_port()
-        elif getattr(odoo.tools.config, "get", lambda x: None)("http_port"):
-            target_port = odoo.tools.config["http_port"]
-        elif getattr(odoo.tools.config, "get", lambda x: None)("xmlrpc_port"):
-            target_port = odoo.tools.config["xmlrpc_port"]
-            
+        # Start the native Go CGO simulator, pointing it to Odoo's test
+        # port. self.http_port() is a real, guaranteed classmethod on
+        # Odoo's own HttpCase (this mixin is only ever combined with an
+        # HttpCase-derived test class, since it needs a real running
+        # server to point the simulator at) -- matches the same,
+        # established, simpler fallback chain zero_sudo/tests/common.py
+        # already uses (cls.http_port() or odoo.tools.config["xmlrpc_port"]),
+        # rather than the 3-argument getattr() probing this used to do,
+        # which masked the fact that http_port() is never actually optional.
+        target_port = self.http_port() or odoo.tools.config.get("xmlrpc_port") or 8069
+
         self.simulator_port = start_tunnel_simulator(target_port)
-        # Obscure the IP address to pass the linter since this is a local test proxy
-        self.simulator_url = "https://%s.%s.%s.%s:%s" % (127, 0, 0, 1, self.simulator_port)
+        # A real, honest local test-proxy loopback address --
+        # burn-ignore-self-hosted-server: this simulator is a Go CGO
+        # process spawned by start_tunnel_simulator() moments earlier in
+        # the same process tree, not a different container's service.
+        self.simulator_url = "https://127.0.0.1:%s" % self.simulator_port  # burn-ignore-self-hosted-server
 
     def tearDown(self):
         super().tearDown()

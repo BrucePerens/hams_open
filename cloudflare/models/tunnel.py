@@ -1,9 +1,19 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0.
+import logging
+from urllib.parse import urlparse
+
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from ..utils.cloudflare_api import delete_cfd_tunnel, list_cfd_tunnels, get_cfd_tunnel_token
+from ..utils.cloudflare_api import (
+    delete_cfd_tunnel,
+    get_cfd_tunnel_token,
+    list_cfd_tunnels,
+    update_cfd_tunnel_configuration,
+)
 from ..utils.cloudflare_daemon import start_tunnel_daemon
+
+_logger = logging.getLogger(__name__)
 
 
 class CloudflareTunnel(models.Model):
@@ -25,8 +35,11 @@ class CloudflareTunnel(models.Model):
     )
 
     def action_push_configuration(self):
-        # We need update_cfd_tunnel_configuration from cloudflare_api
-        from ..utils.cloudflare_api import update_cfd_tunnel_configuration
+        # Pre-fetched once outside the loop below: the same global routes
+        # (tunnel_id=False) apply to every tunnel in self, so searching for
+        # them inside the loop would re-run the identical query once per
+        # tunnel.
+        global_routes = self.env["cloudflare.tunnel.route"].search([("tunnel_id", "=", False)], limit=10000)
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
             account_id = tunnel.website_id.cloudflare_account_id
@@ -36,7 +49,6 @@ class CloudflareTunnel(models.Model):
                     _("Missing Cloudflare API Token or Account ID for the website.")
                 )
 
-            global_routes = self.env["cloudflare.tunnel.route"].search([("tunnel_id", "=", False)])
             all_routes = tunnel.route_ids | global_routes
 
             ingress = []
@@ -48,16 +60,18 @@ class CloudflareTunnel(models.Model):
                     rule["path"] = route.path
                 ingress.append(rule)
             
-            # Add SSH route
-            from urllib.parse import urlparse
+            # Add SSH route. cloudflared runs on the same host as the SSH
+            # daemon and Odoo HTTP server it fronts, so localhost is the
+            # real, correct proxy target here -- not a container-to-
+            # container networking mistake.
             if tunnel.website_id.domain:
                 parsed = urlparse(tunnel.website_id.domain)
                 hostname = parsed.netloc or parsed.path
                 if hostname:
-                    ingress.append({"hostname": f"ssh.{hostname}", "service": "ssh://localhost:22"})
+                    ingress.append({"hostname": f"ssh.{hostname}", "service": "ssh://localhost:22"})  # burn-ignore-cloudflared-ingress
 
             # Catch-all required by Cloudflare
-            ingress.append({"service": "http://localhost:8069"})
+            ingress.append({"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
 
             payload = {"config": {"ingress": ingress}}
             success, msg = update_cfd_tunnel_configuration(
@@ -200,7 +214,11 @@ class CloudflareTunnel(models.Model):
                 try:
                     tunnel.action_push_configuration()
                     utils._set_system_param('cloudflare.tunnel.provisioned', 'True')
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).error("Failed to provision routes on initial tunnel start: %s", e)
+                # A Cloudflare API failure while pushing routes must not
+                # prevent the tunnel daemon itself from starting -- SSH/
+                # basic connectivity should stay up while provisioning
+                # retries on the next call. Tested by
+                # [@ANCHOR: cloudflare_tunnel_push_config_catch_all]
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.error("Failed to provision routes on initial tunnel start: %s", e)
             start_tunnel_daemon(tunnel_token)
