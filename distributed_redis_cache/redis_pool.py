@@ -33,7 +33,7 @@ _custom_pools = {}
 
 
 # Registry to cache DB configs to avoid repeated queries
-_db_configs = {}
+_db_configs: dict[str, tuple[str, int, str | None]] = {}
 
 def get_redis_connection(env=None):
     """
