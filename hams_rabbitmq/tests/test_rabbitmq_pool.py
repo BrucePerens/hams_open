@@ -4,7 +4,6 @@ import json
 import time
 import uuid
 
-import pika
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 

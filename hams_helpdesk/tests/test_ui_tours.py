@@ -1,7 +1,6 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 import re
-import werkzeug
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 

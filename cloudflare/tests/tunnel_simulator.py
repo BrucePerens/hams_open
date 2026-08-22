@@ -2,9 +2,6 @@
 
 # -*- coding: utf-8 -*-
 from odoo.addons.cloudflare.utils.cloudflare_daemon import start_tunnel_simulator, stop_tunnel_simulator
-import ssl
-import urllib.request
-import json
 import logging
 import odoo
 

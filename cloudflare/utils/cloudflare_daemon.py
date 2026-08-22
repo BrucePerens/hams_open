@@ -1,6 +1,7 @@
 import ctypes
 import os
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 _logger = logging.getLogger(__name__)
@@ -35,8 +36,6 @@ def _get_lib():
     _lib.StopLocalSimulator.argtypes = []
     _lib.StopTunnel.argtypes = []
     return _lib
-
-import threading
 
 _stop_event = threading.Event()
 

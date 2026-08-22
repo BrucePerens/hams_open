@@ -12,7 +12,6 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 )
 import logging
 import requests
-import os
 
 _logger = logging.getLogger(__name__)
 

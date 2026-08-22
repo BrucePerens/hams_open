@@ -4,7 +4,6 @@
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from .tunnel_simulator import CloudflareTunnelSimulator
-import asyncio
 
 
 @tagged("post_install", "-at_install", "test_tunnel_daemon")
