@@ -69,10 +69,18 @@ class TestSettingsAndCache(RealTransactionCase):
         mock_req.website = website
         self.safe_patch("odoo.addons.caching.controllers.main.request", mock_req)
 
+        # get_global_static_info() is itself @distributed_cache()'d (Redis-backed,
+        # keyed on (quota_mb, override_svc_uid)) -- every case below calls it with
+        # the same quota_mb=35, so without bypassing that cache, only Case 1 would
+        # ever actually compute; Cases 2 and 3 would silently return Case 1's
+        # stale cached result instead of exercising their own get_fs_stats() mock.
+        # redis_bypass_cache is the same context key the decorator itself checks.
+        caching_mixin = self.env["caching.mixin"].with_context(redis_bypass_cache=True)
+
         # Case 1: No files
         self.safe_patch("odoo.addons.caching.models.caching_mixin.CachingMixin.get_fs_stats", return_value=(1000.0, []))
         website.caching_safe_quota_mb = 35
-        mtime, max_size = self.env["caching.mixin"].get_global_static_info(35)
+        mtime, max_size = caching_mixin.get_global_static_info(35)
         self.assertEqual(
             max_size,
             str(10 * 1024 * 1024),
@@ -82,7 +90,7 @@ class TestSettingsAndCache(RealTransactionCase):
         # Case 2: Files fit within quota
         # Total size: 15MB. Quota: 35MB.
         self.safe_patch("odoo.addons.caching.models.caching_mixin.CachingMixin.get_fs_stats", return_value=(1000.0, [10 * 1024 * 1024, 5 * 1024 * 1024]))
-        mtime, max_size = self.env["caching.mixin"].get_global_static_info(35)
+        mtime, max_size = caching_mixin.get_global_static_info(35)
         self.assertEqual(
             max_size,
             str(10 * 1024 * 1024 + 1024),
@@ -92,7 +100,7 @@ class TestSettingsAndCache(RealTransactionCase):
         # Case 3: Files exceed quota
         # Total size: 40MB. Quota: 35MB.
         self.safe_patch("odoo.addons.caching.models.caching_mixin.CachingMixin.get_fs_stats", return_value=(1000.0, [30 * 1024 * 1024, 10 * 1024 * 1024]))
-        mtime, max_size = self.env["caching.mixin"].get_global_static_info(35)
+        mtime, max_size = caching_mixin.get_global_static_info(35)
         self.assertEqual(
             max_size,
             str(30 * 1024 * 1024 - 1),
@@ -102,7 +110,7 @@ class TestSettingsAndCache(RealTransactionCase):
         # Case 4: Quota is less than reservation (e.g. 5MB)
         # Reservation is 10MB.
         website.caching_safe_quota_mb = 5
-        mtime, max_size = self.env["caching.mixin"].get_global_static_info(5)
+        mtime, max_size = caching_mixin.get_global_static_info(5)
         self.assertEqual(
             max_size,
             str(0),
