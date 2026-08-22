@@ -23,9 +23,22 @@ class TestCustomDomains(HamsTransactionCase):
         # this file tests (domain CRUD/slug resolution), so neutralize it
         # rather than fabricating website fixtures the actual feature
         # under test doesn't need. Guarded so this file still works if
-        # cloudflare (not an edge_routing dependency) isn't installed.
-        domain_cls = type(self.env["edge.routing.domain"])
-        if hasattr(domain_cls, "_create_cloudflare_custom_hostname_batch"):
+        # cloudflare (not an edge_routing dependency) isn't installed --
+        # checked via ir.module.module rather than hasattr() probing the
+        # class, since hasattr() is banned for masking architectural type
+        # uncertainty (matches ham_base/tests/test_config_parameter_security.py's
+        # own established pattern for the identical "optional module
+        # installed in this combined test run" situation).
+        acl_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
+        )
+        cloudflare_installed = bool(
+            self.env["ir.module.module"]
+            .with_user(acl_svc_uid)
+            .search([("name", "=", "cloudflare"), ("state", "=", "installed")], limit=1)
+        )
+        if cloudflare_installed:
+            domain_cls = type(self.env["edge.routing.domain"])
             self.safe_patch_object(
                 domain_cls, "_create_cloudflare_custom_hostname_batch"
             )

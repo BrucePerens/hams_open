@@ -22,6 +22,15 @@
         </record>
     </data>
     <data noupdate="1">
+        <!-- audit-ignore-cron: push_all_to_pager_duty() can't be split
+             into per-batch _trigger() re-runs; it must build the FULL
+             current domain routing table before POSTing once, since a
+             partial push would send PagerDuty an actively wrong
+             (incomplete) domain list, not a safe partial update. It
+             already paginates its own internal domain queries in
+             bounded 1000-row batches rather than loading everything in
+             one query, and _invalidate_cache() already debounces
+             repeated triggers via this same cron's own _trigger(). -->
         <record id="ir_cron_push_pager_duty" model="ir.cron">
             <field name="name">Edge Routing: Sync domains to PagerDuty</field>
             <field name="model_id" ref="model_edge_routing_domain"/>
