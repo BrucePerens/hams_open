@@ -16,6 +16,13 @@ _logger = logging.getLogger(__name__)
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 
+    # Explicit class-level default so cls._last_cache_counter is never
+    # missing (avoiding both a banned catch-all AttributeError and a
+    # banned 3-argument getattr() to probe for it) -- it's genuinely
+    # unset until the first successful Redis poll below writes a real
+    # counter value onto the class.
+    _last_cache_counter = None
+
     @classmethod
     def _authenticate(cls, endpoint):
         # [@ANCHOR: COMM_redis_cache_interceptor]
@@ -30,10 +37,7 @@ class IrHttp(models.AbstractModel):
             try:
                 r = get_redis_connection(request.env)
                 latest = r.get("global_cache_invalidation_counter")
-                try:
-                    last_counter = cls._last_cache_counter
-                except AttributeError:
-                    last_counter = None
+                last_counter = cls._last_cache_counter
 
                 if latest and latest != last_counter:
                     with LRU_LOCK:
