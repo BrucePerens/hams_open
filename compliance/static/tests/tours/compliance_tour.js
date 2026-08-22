@@ -9,19 +9,21 @@ registry.category("web_tour.tours").add("compliance_tour", {
     url: "/en_US/privacy?debug=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
-        // Handle Cookie Bar if it appears
+        // Remove the website cookies bar before it can auto-show -- it's
+        // itself a Bootstrap .modal injected into website.layout, and
+        // Odoo's tour engine picks the LAST visible .modal in DOM order
+        // for its "is this click below a modal" safety check
+        // (web_tour/static/src/js/tour_automatic/tour_step_automatic.js),
+        // so once it appears it can out-rank an unrelated open modal
+        // elsewhere on the page. This tour doesn't open any modal of its
+        // own, but removing the bar here is still correct: nothing here
+        // depends on it, and leaving it in place is a standing risk for
+        // whatever gets added to this tour next.
         {
             trigger: 'body',
-            content: 'Check for Cookie Bar',
+            content: 'Remove the website cookies bar before it can auto-show',
             run: function() {
-                const cookieBarBtn = document.querySelector('.js_close_cookie_bar, #website_cookies_bar .btn-primary');
-                if (cookieBarBtn) {
-                    cookieBarBtn.click();
-                }
-                const cookieBar = document.querySelector('#website_cookies_bar');
-                if (cookieBar) {
-                    cookieBar.remove(); // Force remove to bypass animation
-                }
+                document.querySelector('#website_cookies_bar')?.remove();
             }
         },
         {
