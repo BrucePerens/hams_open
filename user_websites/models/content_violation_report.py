@@ -64,12 +64,22 @@ class ContentViolationReport(models.Model):
         # Verified by [@ANCHOR: test_cron_pending_reports]
 
         # Verified by [@ANCHOR: COMM_test_cron_pending_reports]
-        companies = self.env["res.company"].search([])
+        companies = self.env["res.company"].search([], limit=10000)
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        # NOT converted to a single grouped _read_group() call outside
+        # this loop (the general fix for this rule): the service
+        # account's own company_ids is scoped to base.main_company only
+        # (see data/user_websites_data.xml), so .with_company(company)
+        # per iteration is what actually lets each company's records
+        # become visible at all under this module's ir.rule -- a single
+        # ungrouped call wouldn't see the other companies' reports
+        # without also widening the service account's own company
+        # membership, which is a real privilege-scoping decision, not a
+        # mechanical query rewrite. Flagged for review, not fixed blind.
         for company in companies:
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_websites_service_account"
-            )
-            count = self.with_user(svc_uid).with_company(company).search_count([("state", "=", "new")])
+            count = self.with_user(svc_uid).with_company(company).search_count([("state", "=", "new")])  # burn-ignore-company-scoped-loop
 
             if count > 0:
                 template = self.env.ref(

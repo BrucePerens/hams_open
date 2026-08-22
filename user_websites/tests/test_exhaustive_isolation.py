@@ -334,9 +334,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
             JsonRpcException,
             msg="RPC call MUST fail proxy ownership validation and raise an exception.",
         ) as cm:
-            self.make_jsonrpc_request(
-                "/web/dataset/call_kw/blog.post/create", payload
-            )  # burn-ignore-route  # fmt: skip
+            self.make_jsonrpc_request("/web/dataset/call_kw/blog.post/create", payload)  # burn-ignore-route  # fmt: skip
         self.assertIn(
             "AccessError",
             str(cm.exception),

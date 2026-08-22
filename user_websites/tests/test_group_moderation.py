@@ -60,6 +60,20 @@ class TestGroupModeration(RealTransactionCase):
         # duration.
         deadline = time.time() + 30.0
         while time.time() < deadline:
+            # This transaction (RealTransactionCase) runs under PostgreSQL
+            # REPEATABLE READ -- invalidate_recordset() only clears Odoo's
+            # own Python-side field cache, it does NOT advance the
+            # underlying PG snapshot, so without a real commit() here this
+            # loop would poll the exact same frozen-at-first-commit
+            # snapshot 120 times and could never observe the background
+            # thread's write no matter how long it waited. A plain
+            # commit() (no pending writes of our own at this point) ends
+            # the current snapshot and starts a fresh one able to see
+            # other connections' committed changes. Root-caused via a
+            # real background-thread write independently proven to
+            # succeed (found True after write, confirmed by a direct
+            # commit) while this exact loop still timed out every time.
+            self.env.cr.commit()
             self.group_page.invalidate_recordset(["is_published", "website_published"])
             self.group_post.invalidate_recordset(["is_published"])
             if (

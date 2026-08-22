@@ -4,7 +4,10 @@
 from odoo.tools import mute_logger
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-from unittest.mock import MagicMock, patch
+from odoo.addons.user_websites.models.user_websites_groups import (
+    _async_unpublish_group_content,
+)
+from unittest.mock import MagicMock
 
 
 @tagged("post_install", "-at_install")
@@ -190,11 +193,23 @@ class TestAuditEdgeCases(RealTransactionCase):
         # 1. Prime the cache
         self.env["res.users"].get_record_by_slug("cacheuser")
 
-        # 2. Verify 0 queries on hit
-        with patch.object(self.env.cr, 'execute', wraps=self.env.cr.execute) as mock_execute:
+        # 2. Verify 0 queries on hit. Plain monkeypatch rather than
+        # patch.object(), since safe_patch_object() itself refuses to
+        # mock a Cursor (matches the established pattern already used in
+        # zero_sudo/tests/test_security_utils.py for the identical
+        # "spy on cr.execute without disabling it" need).
+        original_execute = self.env.cr.execute
+        calls = []
+        def fake_execute(query, params=None, log_exceptions=True):
+            calls.append((query, params))
+            return original_execute(query, params, log_exceptions)
+        self.env.cr.execute = fake_execute
+        try:
             self.env["res.users"].get_record_by_slug("cacheuser")
-            for call in mock_execute.call_args_list:
-                self.assertNotIn("res_users", call[0][0])
+            for query, params in calls:
+                self.assertNotIn("res_users", query)
+        finally:
+            self.env.cr.execute = original_execute
 
         # 3. Mutate the slug to trigger cache invalidation hook
         user.write({"website_slug": "newslug"})
@@ -227,11 +242,20 @@ class TestAuditEdgeCases(RealTransactionCase):
         # 1. Prime the cache
         self.env["user.websites.group"].get_record_by_slug("cachegroup")
 
-        # 2. Verify 0 queries on hit
-        with patch.object(self.env.cr, 'execute', wraps=self.env.cr.execute) as mock_execute:
+        # 2. Verify 0 queries on hit. Plain monkeypatch, same reasoning
+        # as test_04's identical pattern above.
+        original_execute = self.env.cr.execute
+        calls = []
+        def fake_execute(query, params=None, log_exceptions=True):
+            calls.append((query, params))
+            return original_execute(query, params, log_exceptions)
+        self.env.cr.execute = fake_execute
+        try:
             self.env["user.websites.group"].get_record_by_slug("cachegroup")
-            for call in mock_execute.call_args_list:
-                self.assertNotIn("user_websites_group", call[0][0])
+            for query, params in calls:
+                self.assertNotIn("user_websites_group", query)
+        finally:
+            self.env.cr.execute = original_execute
 
         # 3. Trigger Invalidation
         group.write({"website_slug": "newcachegroup"})
@@ -351,3 +375,53 @@ class TestAuditEdgeCases(RealTransactionCase):
         )
         if template:
             template.send_mail(self.env.company.id, force_send=False)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]
+
+    def test_async_unpublish_survives_non_psycopg2_exception(self):
+        # Tests [@ANCHOR: COMM_user_websites_async_unpublish_catch_all]
+        """
+        _async_unpublish_group_content() runs in a background thread
+        whose Future is never awaited -- a non-psycopg2.Error exception
+        (e.g. a real bug in env_svc handling, which happened once
+        historically per the function's own comment) must not vanish
+        silently; it must be logged and the function must return
+        normally rather than propagate. Force a real non-psycopg2
+        exception and prove both halves.
+        """
+        group = self.env["user.websites.group"].create({"name": "Async Unpublish Test Group"})
+
+        mock_get_service_env = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env"
+        )
+        mock_get_service_env.side_effect = TypeError("simulated non-psycopg2 bug")
+
+        with self.assertLogs("odoo.addons.user_websites.models.user_websites_groups", level="ERROR") as log_ctx:
+            # Must not raise -- the whole point of the catch-all.
+            _async_unpublish_group_content(self.env.cr.dbname, [group.id])
+
+        self.assertTrue(
+            any("crashed unexpectedly" in msg for msg in log_ctx.output),
+            "A non-psycopg2 exception in the background unpublish task "
+            "must be logged, not swallowed silently.",
+        )
+
+    def test_async_unpublish_survives_registry_acquisition_failure(self):
+        # Tests [@ANCHOR: COMM_user_websites_async_unpublish_registry_failure]
+        """
+        Registry(db_name) and registry.cursor() used to sit outside this
+        function's own try/except entirely -- a failure acquiring either
+        one crashed the background thread with ZERO log output at all,
+        indistinguishable from the function never having been scheduled
+        (found while investigating test_group_moderation.py::
+        test_01_group_suspension's real timeout). Force a real failure
+        with an invalid database name and prove it's logged, not silent.
+        """
+        with self.assertLogs("odoo.addons.user_websites.models.user_websites_groups", level="ERROR") as log_ctx:
+            # Must not raise -- a nonexistent database name is a real,
+            # unforced failure at Registry(db_name) itself.
+            _async_unpublish_group_content("definitely_not_a_real_database_xyz", [1])
+
+        self.assertTrue(
+            any("failed to acquire a registry/cursor" in msg for msg in log_ctx.output),
+            "A registry/cursor acquisition failure in the background "
+            "unpublish task must be logged, not swallowed silently.",
+        )

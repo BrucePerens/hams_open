@@ -22,8 +22,23 @@ _logger = logging.getLogger(__name__)
 
 def _async_unpublish_group_content(db_name, group_ids):
     """Unpublishes group content in the background to prevent transaction lock exhaustion."""
-    registry = Registry(db_name)
-    cr = registry.cursor()
+    # Registry(db_name) and registry.cursor() used to sit outside the try
+    # block below -- this function runs in a background thread submitted
+    # via BACKGROUND_EXECUTOR.submit() whose Future is never awaited, so
+    # a failure acquiring the registry/cursor itself crashed the thread
+    # with ZERO log output at all, indistinguishable from the function
+    # never having been scheduled. Found while investigating
+    # test_group_moderation.py::test_01_group_suspension's timeout (the
+    # real bug there turned out to be in the test's own poll loop, not
+    # here -- see that file's fix -- but this gap was real regardless:
+    # any actual registry/cursor acquisition failure would still vanish
+    # silently without it).
+    try:
+        registry = Registry(db_name)
+        cr = registry.cursor()
+    except Exception:  # audit-ignore-catch-all: Tested by [@ANCHOR: user_websites_async_unpublish_registry_failure]  # fmt: skip
+        _logger.exception("Async unpublish group content failed to acquire a registry/cursor")
+        return
     try:
         cr.execute(
             "SELECT res_id FROM ir_model_data WHERE module = %s AND name = %s",
@@ -107,7 +122,7 @@ def _async_unpublish_group_content(db_name, group_ids):
             env.cr.rollback()
     except psycopg2.Error as e:  # audit-ignore-catch-all
         _logger.error("Async unpublish group content failed: %s", e)
-    except Exception:
+    except Exception:  # audit-ignore-catch-all: Tested by [@ANCHOR: user_websites_async_unpublish_catch_all]  # fmt: skip
         # This runs in a background thread submitted via
         # BACKGROUND_EXECUTOR.submit() -- its Future is never awaited, so
         # any exception here would otherwise vanish silently instead of
