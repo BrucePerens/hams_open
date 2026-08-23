@@ -28,11 +28,52 @@ ENV_FILE = "/opt/hams/etc/keys/cache_manager.env"
 if os.path.exists(ENV_FILE):
     load_dotenv(ENV_FILE)
 
+# Separate, dedicated file for the restricted Postgres role
+# (scripts/provision_cache_manager_db_role.py) provisions -- deliberately
+# NOT written into ENV_FILE above, which daemon_key_manager's own
+# key_registry._write_secure_env_file() truncates and fully overwrites
+# (with only ODOO_RPC_LOGIN/ODOO_RPC_KEY) on every install/upgrade/key
+# rotation. Sharing that file would silently wipe DB_USER/DB_PASS back to
+# the "odoo" superuser-role fallback the next time either happens.
+DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager_db.env"
+if os.path.exists(DB_ENV_FILE):
+    # override=True: load_dotenv() defaults to leaving any already-exported
+    # OS environment variable alone. If a systemd unit or container already
+    # exports DB_USER/DB_PASS (e.g. a leftover/generic "odoo"/"odoo" from
+    # before this file existed), the provisioned restricted-role
+    # credentials below would otherwise be silently ignored -- the daemon
+    # would keep running unscoped with no indication anything was wrong,
+    # since the warning below only checks whether this file EXISTS, not
+    # whether its values actually took effect.
+    load_dotenv(DB_ENV_FILE, override=True)
+
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "odoo")
+# This daemon only ever LISTENs on one Postgres channel and runs a
+# constant-expression health check (`SELECT 1`) -- neither touches any
+# table, so it needs no read/write privilege at all, only CONNECT on
+# DB_NAME. Deliberately NOT hard-failing when DB_ENV_FILE is absent and
+# this falls back to the full-privilege "odoo" role, despite this
+# codebase's own fail-fast-over-silent-fallback rule: unlike a corrupted
+# or partial config that would silently produce WRONG behavior, this
+# fallback is functionally correct (the daemon still does exactly what
+# it's supposed to, just with more privilege than it needs) and is the
+# ONLY behavior every existing deployment/test run has ever had -- hard-
+# failing here would brick every install that hasn't been through the
+# brand-new scripts/provision_cache_manager_db_role.py yet, the exact
+# "auto-update-and-warn over hard-bricking" tradeoff this codebase makes
+# elsewhere for safety mechanisms. Log loudly instead, once, so the gap
+# is visible rather than silent.
 DB_USER = os.getenv("DB_USER", "odoo")
 DB_PASS = os.getenv("DB_PASS", "odoo")
+if not os.path.exists(DB_ENV_FILE):
+    logger.warning(
+        "%s not found -- connecting to Postgres as '%s' with no privilege "
+        "scoping. Run scripts/provision_cache_manager_db_role.py once for "
+        "this deployment to restrict this daemon to CONNECT-only access.",
+        DB_ENV_FILE, DB_USER,
+    )
 
 # Use PGHOST if provided (e.g. for pgsock in VM)
 if os.getenv("PGHOST"):
@@ -111,37 +152,38 @@ async def main():
     db_conns = []
     
     async def _reconnect():
+        # This daemon serves exactly one Odoo database -- both its own
+        # README ("Listens for ... NOTIFY events from the Odoo PostgreSQL
+        # database", singular) and docs/journeys/daemon_operations.md
+        # ("maintain a non-blocking LISTEN state on the database", also
+        # singular, driven by the DB_NAME config value) document a
+        # single-database daemon. It used to instead enumerate and hold a
+        # permanent LISTEN connection open on EVERY non-template database
+        # on the whole Postgres cluster -- a real, previously undiscovered
+        # bug, not intentional multi-tenant support: this codebase's own
+        # actual tenancy model (see ses_webhook's privilege-boundary work)
+        # is many res.company records inside ONE database, not one
+        # database per tenant. Confirmed as the real cause of
+        # test_real_cache_manager_redis's intermittent failure: this
+        # sandbox alone had accumulated 99 leftover test databases from
+        # unrelated `test.py -d <name>` runs, and one persistent
+        # connection per database very nearly exhausted Postgres's entire
+        # max_connections budget by itself.
         nonlocal db_conns
         for conn in db_conns:
             if not conn.is_closed():
                 await conn.close()
         db_conns.clear()
-        
-        sys_conn = await asyncpg.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database='postgres', timeout=10
-        )
-        query = """
-            SELECT datname FROM pg_database 
-            WHERE datistemplate = false 
-            AND datname != 'postgres';
-        """
-        records = await sys_conn.fetch(query)
-        dbs = [r['datname'] for r in records]
-        # Also include the default DB_NAME just in case it wasn't caught
-        if DB_NAME and DB_NAME not in dbs and DB_NAME != 'postgres':
-            dbs.append(DB_NAME)
-        await sys_conn.close()
-        
-        for db in dbs:
-            try:
-                conn = await asyncpg.connect(
-                    host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database=db, timeout=10
-                )
-                await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
-                db_conns.append(conn)
-                logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, db)
-            except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
-                logger.exception("Could not connect to database %s: %s", db, e)
+
+        try:
+            conn = await asyncpg.connect(
+                host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database=DB_NAME, timeout=10
+            )
+            await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
+            db_conns.append(conn)
+            logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, DB_NAME)
+        except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+            logger.exception("Could not connect to database %s: %s", DB_NAME, e)
 
     while True:
         try:
