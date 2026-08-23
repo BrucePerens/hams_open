@@ -86,51 +86,36 @@ class SesWebhookController(http.Controller):
                     log_vals.update({'status': 'ignored', 'error_message': 'No content field found.'})
                 else:
                     email_bytes = raw_email.encode('utf-8')
-                    # OPEN QUESTION, not resolved -- flagging precisely
-                    # rather than guessing further. An earlier pass here
-                    # removed .sudo(), reasoning an unmatched sender would
-                    # then "fail fast with a real AccessError." Verified
-                    # directly against Odoo 19's own mail_thread.py
-                    # (_message_route_process) that this is false in BOTH
-                    # directions: `_mail_find_user_for_gateway(...).id or
-                    # self.env.uid` always falls back to the caller's own
-                    # uid on no match, it never raises, with or without
-                    # .sudo() here. And _message_route_process's own
-                    # `ModelCtx.sudo()` fires UNCONDITIONALLY whenever an
-                    # alias matched (true by construction in this branch),
-                    # so the record write already runs under full ACL
-                    # bypass regardless of whether THIS call is sudoed --
-                    # removing .sudo() bought zero privilege reduction.
-                    # What it DID break: `if self.env.is_system(): ModelCtx
-                    # = Model.with_user(related_user)` -- the branch that
+                    # RESOLVED (user decision): restore .sudo() here, with
+                    # an explicit bypass tag. Verified directly against
+                    # Odoo 19's own mail_thread.py (_message_route_process)
+                    # that a bare, unsudoed call here achieves NO privilege
+                    # reduction at all -- `ModelCtx.sudo()` fires
+                    # unconditionally whenever an alias matched (true by
+                    # construction in this branch), so the record write
+                    # already runs under full ACL bypass either way. What
+                    # removing .sudo() actually did was break sender
+                    # attribution: `if self.env.is_system(): ModelCtx =
+                    # Model.with_user(related_user)` -- the branch that
                     # attributes the record to the real matched sender --
-                    # is gated on the CALLING env holding su or
-                    # base.group_system. Without .sudo() (and this route's
-                    # public-user env holds neither), is_system() is False,
-                    # so a real sender match is silently discarded and
-                    # every record is attributed to the public user
-                    # instead -- confirmed, not assumed.
-                    # Restoring .sudo() would fix that, but this platform's
-                    # own check_burn_list.py bans .sudo() outright
-                    # (real error, tried it) -- the whole point of this
-                    # module's privilege-boundary redesign. The only other
-                    # way to make is_system() True is granting the service
-                    # account base.group_system itself, which is full
-                    # backend Settings/admin access -- a much bigger grant
-                    # than "cross-tenant SES webhook processing" needs, and
-                    # arguably worse than the attribution bug it would fix.
-                    # No option here is free: broken sender attribution
-                    # (current), a banned .sudo() call, or a sweeping new
-                    # privilege grant. Real design decision, yours.
-                    # with_company()'s own AccessError (docstring: "may
-                    # trigger an AccessError if not done in a sudoed
-                    # environment") is a separate, related fact: whichever
-                    # way the above resolves in favor of is_system()=True,
-                    # _sync_service_account_companies()'s company_ids-growth
-                    # mechanism (built to dodge that exact error) becomes
-                    # unnecessary for this call path -- not removed here,
-                    # a second, more invasive follow-on change.
-                    request.env['mail.thread'].with_company(domain.company_id).message_process(None, email_bytes)
+                    # is gated on the calling env holding su or
+                    # base.group_system, neither of which this public
+                    # route's env holds without .sudo() here. Restoring it
+                    # fixes that regression at no additional privilege cost
+                    # (mail_thread.py was always going to elevate
+                    # internally regardless) -- the alternative,
+                    # granting the service account base.group_system
+                    # itself just to satisfy is_system(), would have been a
+                    # much bigger and genuinely worse grant.
+                    # This also means with_company()'s own AccessError
+                    # (its docstring: "may trigger an AccessError if not
+                    # done in a sudoed environment") can no longer fire
+                    # here, so _sync_service_account_companies()'s
+                    # company_ids-growth mechanism (built to dodge exactly
+                    # that error) is now confirmed dead weight for this
+                    # specific call path -- not removed here, a separate
+                    # follow-on cleanup if wanted.
+                    request.env['mail.thread'].sudo().with_company(domain.company_id).message_process(None, email_bytes)  # burn-ignore-sudo: verified no additional privilege vs. mail_thread.py's own unconditional internal sudo() on any alias match; restores correct sender attribution. See night_shift_todo.md.
                     _logger.info("Successfully processed incoming email from SNS Webhook for domain %s.", domain.name)
                     log_vals.update({'status': 'success'})
                     
