@@ -21,8 +21,12 @@
         </field>
     </record>
     <record id="view_pager_check_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_pager_view] -->
-        <!-- TODO: A JS UI Tour MUST be created for this form due to dynamic invisible state logic (ADR 0076). Once created, add the tour link anchor here. -->
+        <!-- [@ANCHOR: COMM_pager_check_dynamic_invisible_http] -->
+        <!-- Tested by pager_check_tour (static/src/tours/pager_check_tour.js,
+             test_ui_tours.py::test_pager_check_tour). This form has ~15
+             dynamic invisible= fields keyed off check_type, a real
+             ADR-0076 "Complex State Machine" requiring a real tour, not
+             audit-ignore-view. -->
         <field name="name">pager.check.form</field>
         <field name="model">pager.check</field>
         <field name="arch" type="xml">

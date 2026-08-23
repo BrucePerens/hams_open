@@ -62,6 +62,7 @@
         ],
         "web.assets_tests": [
             "pager_duty/static/src/tours/incident_tour.js",
+            "pager_duty/static/src/tours/pager_check_tour.js",
         ],
     },
 }
