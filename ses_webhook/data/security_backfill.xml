@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!--
+    Plain (non-noupdate) data file, re-executed on every module load,
+    install and upgrade, mirroring zero_sudo/data/postgres_procedures.xml's
+    own established pattern for exactly this problem.
+
+    ir.rule and res.groups records are required to live in noupdate="1"
+    (this repo's own check_burn_list.py, no exemption), so an XML change to
+    ses_webhook_security.xml's 'groups' field alone will NOT re-apply to a
+    database that already has ses_webhook_domain_comp_rule/
+    ses_webhook_log_comp_rule from before this fix. post_init_hook cannot
+    help either, it only fires on a fresh install
+    (odoo/modules/loading.py: `if update_operation == 'install'`), never on
+    an upgrade of an already-installed module. This backfill closes both
+    gaps: it force-applies the groups field onto the two existing rule
+    records if missing, and syncs the service account's company_ids to
+    cover every company that already has a configured ses.webhook.domain
+    record (new domains created after this point are picked up by
+    ses_webhook_domain.py's own create()/write() override instead).
+-->
+<odoo>
+    <data>
+        <record id="ses_webhook_security_backfill_action" model="ir.actions.server">
+            <field name="name">SES Webhook: Backfill Service Account Company Scope</field>
+            <field name="model_id" ref="base.model_ir_actions_server"/>
+            <field name="state">code</field>
+            <field name="code">
+svc = env["zero_sudo.security.utils"]
+svc_uid = svc._get_service_uid("ses_webhook.user_ses_webhook_service_internal")
+svc_user = env["res.users"].browse(svc_uid)
+
+group_user = env.ref("base.group_user")
+for xmlid in ("ses_webhook.ses_webhook_domain_comp_rule", "ses_webhook.ses_webhook_log_comp_rule"):
+    rule = env.ref(xmlid, raise_if_not_found=False)
+    if rule and group_user not in rule.groups:
+        rule.write({"groups": [(4, group_user.id)]})
+
+domains = env["ses.webhook.domain"].search([])
+missing = domains.mapped("company_id") - svc_user.company_ids
+if missing:
+    svc_user.write({"company_ids": [(4, c.id) for c in missing]})
+            </field>
+        </record>
+        <function model="ir.actions.server" name="run">
+            <value eval="[ref('ses_webhook_security_backfill_action')]"/>
+        </function>
+    </data>
+</odoo>

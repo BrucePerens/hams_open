@@ -29,3 +29,32 @@ class SesWebhookDomain(models.Model):
 
     _name_uniq = models.Constraint("UNIQUE(name)", "The domain name must be unique!")
     _token_uniq = models.Constraint("UNIQUE(secret_token)", "The secret token must be unique!")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._sync_service_account_companies()
+        return records
+
+    def write(self, vals):
+        res = super().write(vals)
+        if 'company_id' in vals:
+            self._sync_service_account_companies()
+        return res
+
+    def _sync_service_account_companies(self):
+        # webhook_api.py's service account (with_user(), in place of the
+        # .sudo() this used to need) must be a company_ids member of every
+        # tenant with a configured domain, or with_company(domain.company_id)
+        # raises AccessError inside message_process() for any company that
+        # isn't -- Environment.company/.companies validate allowed_company_ids
+        # against the acting user's own company_ids whenever the environment
+        # isn't sudoed (odoo/orm/environments.py). Keeps that membership
+        # growing with real tenant onboarding; never a hardcoded count.
+        svc_uid = self.env['zero_sudo.security.utils']._get_service_uid(
+            'ses_webhook.user_ses_webhook_service_internal'
+        )
+        svc_user = self.env['res.users'].browse(svc_uid)
+        missing = self.mapped('company_id') - svc_user.company_ids
+        if missing:
+            svc_user.write({'company_ids': [(4, c.id) for c in missing]})

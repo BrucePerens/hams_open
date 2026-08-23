@@ -8,8 +8,9 @@
     'category': 'Mail',
     'depends': ['mail', 'zero_sudo'],
     'data': [
-        'security/ir.model.access.csv',
         'security/ses_webhook_security.xml',
+        'security/ir.model.access.csv',
+        'data/security_backfill.xml',
         'views/ses_webhook_views.xml',
         'data/ir_cron.xml',
     ],
