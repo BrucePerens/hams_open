@@ -14,8 +14,23 @@ const MAX_STORAGE_BYTES = __MAX_STORAGE_BYTES__;
 const DB_NAME = 'LRUCacheDB';
 const STORE_NAME = 'LRUMetadata';
 
+// Test-only: forces the next openDB() call to reject instead of opening a
+// real database, for tour-driven coverage of the error paths that a real
+// IndexedDB failure exercises. Never set true outside a test -- there is
+// no production code path that sets this. The page and this Service
+// Worker run in separate global scopes with their own `indexedDB`, so
+// this can't be forced by monkeypatching `window.indexedDB.open` from a
+// tour step; it has to be a real flag inside the SW itself, toggled via
+// postMessage (see the 'message' listener below).
+// docs/proposals/SERVICE_WORKER_TESTING.md
+let __testForceIdbError = false;
+
 function openDB() {
     return new Promise((resolve, reject) => {
+        if (__testForceIdbError) {
+            reject(new Error('TEST_FORCED_IDB_ERROR'));
+            return;
+        }
         const request = indexedDB.open(DB_NAME, 1);
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
@@ -203,5 +218,43 @@ self.addEventListener('fetch', (event) => {
 
             return networkResponse;
         })());
+    }
+});
+
+// Test-only postMessage hooks -- see openDB()'s own comment on
+// __testForceIdbError above. `event.ports[0]` is the MessageChannel port
+// a tour step provides so it can await confirmation the flag actually
+// took effect (or, for TEST_CALL_OPEN_DB, the actual settlement) inside
+// this SW's own scope, rather than assuming the postMessage was
+// delivered and processed before the next test step runs.
+self.addEventListener('message', (event) => {
+    if (!event.data || !event.data.type) return;
+
+    if (event.data.type === 'TEST_FORCE_IDB_ERROR') {
+        __testForceIdbError = true;
+        if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ ok: true });
+        }
+        return;
+    }
+
+    if (event.data.type === 'TEST_CALL_OPEN_DB') {
+        // Calls openDB() directly and reports back whether it settled
+        // (resolved or rejected) and, if it rejected, the error message --
+        // this is the exact function that had the original hang bug
+        // (a cursor request with no onerror handler left its Promise
+        // permanently unsettled), so this is what proves the fix holds
+        // rather than just reading the code and trusting it. A tour step
+        // wraps this call in its own bounded timeout (TourUtils.assertSettles)
+        // so a regression back to "never settles" fails the test instead
+        // of hanging it.
+        const port = event.ports && event.ports[0];
+        openDB()
+            .then(() => {
+                if (port) port.postMessage({ settled: true, rejected: false });
+            })
+            .catch((err) => {
+                if (port) port.postMessage({ settled: true, rejected: true, message: String(err && err.message) });
+            });
     }
 });

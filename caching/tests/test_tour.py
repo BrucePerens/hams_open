@@ -24,6 +24,18 @@ class TestCachingTour(HamsHttpCase):
         docs/proposals/SERVICE_WORKER_TESTING.md."""
         self.start_tour("/?debug=1", "caching_sw_behavior_check", login="admin")
 
+    def test_caching_sw_idb_error_tour(self):
+        """Verify openDB() -- the exact function whose missing IndexedDB
+        onerror handler used to hang enforceLRUQuota()/updateLRUMetadata()
+        forever with no diagnostic -- now settles (rejects) instead of
+        hanging when IndexedDB genuinely fails. Forces this via a
+        test-only postMessage hook (TEST_FORCE_IDB_ERROR/TEST_CALL_OPEN_DB
+        in sw.js) rather than page-context monkeypatching, since the page
+        and the SW run in separate global scopes with their own
+        `indexedDB`. See docs/proposals/SERVICE_WORKER_TESTING.md's
+        "Still open" section, now closed by this test."""
+        self.start_tour("/?debug=1", "caching_sw_idb_error_check", login="admin")
+
     def test_caching_sw_lru_eviction_tour(self):
         """Verify enforceLRUQuota() actually evicts the oldest entries once
         MAX_STORAGE_BYTES is exceeded -- the exact code path a missing

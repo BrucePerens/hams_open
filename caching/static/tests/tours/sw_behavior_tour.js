@@ -376,3 +376,109 @@ registry.category("web_tour.tours").add("caching_sw_lru_eviction_check", {
         },
     ],
 });
+
+// docs/proposals/SERVICE_WORKER_TESTING.md's "Still open" item: forcing a
+// *synthetic* IndexedDB failure needs more than page-context
+// monkeypatching, since the page and the Service Worker run in separate
+// global scopes with their own `indexedDB` -- patching
+// `window.indexedDB.open` from a tour step has no effect on the SW's own
+// calls. sw.js's own 'message' listener (TEST_FORCE_IDB_ERROR/
+// TEST_CALL_OPEN_DB) is the real fix; this drives it through a real
+// registered SW to prove openDB() -- the exact function whose missing
+// onerror handler used to hang enforceLRUQuota()/updateLRUMetadata()
+// forever with no diagnostic -- now actually settles (rejects) instead.
+async function sendTestMessageToSW(registration, message) {
+    return new Promise((resolve, reject) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = (event) => resolve(event.data);
+        channel.port1.onmessageerror = (event) => reject(new Error(`postMessage channel error: ${event}`));
+        registration.active.postMessage(message, [channel.port2]);
+    });
+}
+
+registry.category("web_tour.tours").add("caching_sw_idb_error_check", {
+    url: "/?debug=1",
+    steps: () => [
+        {
+            content: "Wait for page to load",
+            trigger: "body",
+        },
+        {
+            content: "Wait for the Service Worker to be ready",
+            trigger: "body",
+            run: async function () {
+                if (!("serviceWorker" in navigator)) {
+                    throw new Error("Service Worker is not supported by this browser environment.");
+                }
+                const registration = await TourUtils.assertSettles(
+                    navigator.serviceWorker.ready,
+                    5000,
+                    "navigator.serviceWorker.ready"
+                );
+                window.__testSwRegistration = registration;
+                document.body.classList.add("sw-idb-test-ready");
+            },
+        },
+        {
+            content: "Confirm SW ready",
+            trigger: "body.sw-idb-test-ready",
+            run: function () {},
+        },
+        {
+            content: "Test: openDB() settles normally (resolves) before forcing an error",
+            trigger: "body",
+            run: async function () {
+                // Tests [@ANCHOR: sw_idb_open_db_normal]
+                const result = await TourUtils.assertSettles(
+                    sendTestMessageToSW(window.__testSwRegistration, { type: "TEST_CALL_OPEN_DB" }),
+                    5000,
+                    "openDB() (normal path)"
+                );
+                if (result.rejected) {
+                    throw new Error(`Expected openDB() to resolve normally before forcing an error, but it rejected: ${result.message}`);
+                }
+                document.body.classList.add("sw-idb-test-normal-passed");
+            },
+        },
+        {
+            content: "Confirm normal openDB() test passed",
+            trigger: "body.sw-idb-test-normal-passed",
+            run: function () {},
+        },
+        {
+            content: "Test: a forced IndexedDB failure makes openDB() reject, not hang",
+            trigger: "body",
+            run: async function () {
+                // Tests [@ANCHOR: sw_idb_open_db_forced_error]
+                await TourUtils.assertSettles(
+                    sendTestMessageToSW(window.__testSwRegistration, { type: "TEST_FORCE_IDB_ERROR" }),
+                    5000,
+                    "TEST_FORCE_IDB_ERROR"
+                );
+                // The real assertion: before the onerror-handler fix, this
+                // exact call pattern (an IndexedDB request failing) left
+                // its Promise permanently unsettled -- assertSettles'
+                // bounded timeout is what turns a regression back to that
+                // bug into a specific test failure instead of a silent
+                // hang.
+                const result = await TourUtils.assertSettles(
+                    sendTestMessageToSW(window.__testSwRegistration, { type: "TEST_CALL_OPEN_DB" }),
+                    5000,
+                    "openDB() (forced-error path)"
+                );
+                if (!result.rejected) {
+                    throw new Error("Expected openDB() to reject once TEST_FORCE_IDB_ERROR was set, but it resolved.");
+                }
+                if (!result.message || !result.message.includes("TEST_FORCED_IDB_ERROR")) {
+                    throw new Error(`Expected the TEST_FORCED_IDB_ERROR message, got: ${result.message}`);
+                }
+                document.body.classList.add("sw-idb-test-forced-error-passed");
+            },
+        },
+        {
+            content: "Confirm forced-error openDB() test passed",
+            trigger: "body.sw-idb-test-forced-error-passed",
+            run: function () {},
+        },
+    ],
+});
