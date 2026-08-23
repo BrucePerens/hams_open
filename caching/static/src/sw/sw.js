@@ -252,6 +252,7 @@ self.addEventListener('message', (event) => {
         openDB()
             .then(() => {
                 if (port) port.postMessage({ settled: true, rejected: false });
+                return;
             })
             .catch((err) => {
                 if (port) port.postMessage({ settled: true, rejected: true, message: String(err && err.message) });
