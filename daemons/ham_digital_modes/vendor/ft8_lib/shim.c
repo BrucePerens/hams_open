@@ -20,7 +20,9 @@
 #include <string.h>
 
 #include <ft8/decode.h>
+#include <ft8/encode.h>
 #include <ft8/message.h>
+#include <ft8/constants.h>
 #include <common/monitor.h>
 
 #define FT8_MIN_SCORE 10
@@ -186,4 +188,29 @@ int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LEN
         }
     }
     return out_count;
+}
+
+// Packs `text` into an FT8 77-bit payload (ftx_message_encode, real
+// message-type-guessing packer -- standard/nonstandard callsigns, free
+// text, etc., not reimplemented here) and generates its FT8_NN (79)
+// channel symbol/tone sequence (ft8_encode, real Costas sync + LDPC(174,
+// 91) encode). tones_out must have room for FT8_NN bytes, each a tone
+// index 0..7. Returns FT8_NN on success, -1 if `text` couldn't be packed
+// (see ftx_message_rc_t in message.h -- e.g. an invalid callsign).
+// Uses the same process-wide callsign hash table as decode (see
+// g_callsign_hashtable's own comment above) -- encode only ever *writes*
+// hashed-callsign entries for later decode-side lookup, never reads one,
+// so this has none of decode's cross-session-pollution concern.
+int ft8_encode_message(const char* text, uint8_t* tones_out) {
+    ftx_message_t msg;
+    ftx_callsign_hash_interface_t hash_if = {
+        .lookup_hash = global_hash_lookup,
+        .save_hash = global_hash_save,
+    };
+    ftx_message_rc_t rc = ftx_message_encode(&msg, &hash_if, text);
+    if (rc != FTX_MESSAGE_RC_OK) {
+        return -1;
+    }
+    ft8_encode(msg.payload, tones_out);
+    return FT8_NN;
 }

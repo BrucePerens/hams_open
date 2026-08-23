@@ -16,7 +16,7 @@
 //!      that SNR at all (a miss when the reference also misses isn't a
 //!      bug in this decoder).
 
-use ham_digital_modes::ft8::Ft8Decoder;
+use ham_digital_modes::ft8::{encode_message, Ft8Decoder};
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
@@ -201,6 +201,50 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
          If this starts failing, hams_local_relay needs a real 48k->12k resampler before FT8 \
          wiring, which this test previously found unnecessary."
     );
+
+    let _ = std::fs::remove_dir_all(&work_dir);
+}
+
+/// `encode_message()` wraps the vendored `ft8_lib`'s own real message
+/// packer and tone generator -- not a reimplementation -- so this
+/// checks it produces the exact same 79-symbol tone sequence as the
+/// real K1JT `ft8sim` reference tool for the identical message, scraped
+/// live from `ft8sim`'s own stdout rather than a copied literal (so a
+/// future ft8_lib/wsjtx version drift would be caught here instead of
+/// silently going stale). Message-packing and tone generation are the
+/// full extent of what `encode_message()` covers -- see ft8.rs's own
+/// module doc for why turning this tone sequence into an actual audio
+/// waveform (GFSK pulse shaping) is deliberately not implemented.
+#[test]
+fn encode_message_matches_the_real_ft8sim_reference_tone_sequence() {
+    if !binary_exists("ft8sim") {
+        eprintln!("skipping: wsjtx (ft8sim) not installed");
+        return;
+    }
+    let work_dir = std::env::temp_dir().join(format!("ft8_encode_ref_test_{}", std::process::id()));
+    std::fs::create_dir_all(&work_dir).unwrap();
+
+    let message = "K1ABC W9XYZ EN37";
+    let out = Command::new("ft8sim")
+        .args([message, "1500.0", "0.0", "0.1", "1.0", "1", "-10"])
+        .current_dir(&work_dir)
+        .output()
+        .expect("ft8sim must run");
+    assert!(out.status.success(), "ft8sim failed: {}", String::from_utf8_lossy(&out.stderr));
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut lines = stdout.lines();
+    let reference_tones = lines
+        .find(|l| l.trim() == "Channel symbols:")
+        .and_then(|_| lines.next())
+        .map(|l| l.trim().to_string())
+        .expect("ft8sim must print a 'Channel symbols:' line followed by the tone digit string");
+    assert_eq!(reference_tones.len(), 79, "sanity check: FT8_NN is 79 symbols");
+
+    let tones = encode_message(message).expect("a valid standard-format message must encode");
+    let ours: String = tones.iter().map(|t| char::from_digit(*t as u32, 10).unwrap()).collect();
+
+    assert_eq!(ours, reference_tones, "encode_message()'s tone sequence must match ft8sim's own reference output exactly");
 
     let _ = std::fs::remove_dir_all(&work_dir);
 }

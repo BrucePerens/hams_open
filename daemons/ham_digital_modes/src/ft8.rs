@@ -13,6 +13,21 @@
 //! audio into ft8_lib's internal waterfall; call `decode()` once per
 //! slot boundary (the caller's job to track, same as any FT8 client),
 //! then `reset()` before the next slot.
+//!
+//! `encode_message()` covers only message-packing (77-bit payload) and
+//! tone generation (the discrete 0..7 tone-index sequence a real FT8
+//! transmission consists of) -- both are the vendored `ft8_lib`'s own
+//! real code (`ftx_message_encode`/`ft8_encode`), not reimplemented
+//! here, and verified against `ft8sim`'s own printed tone sequence (see
+//! `tests/reference_decode.rs`). Turning a tone sequence into an actual
+//! transmittable audio waveform (continuous-phase GFSK synthesis with
+//! the correct Gaussian pulse shape) is deliberately NOT implemented --
+//! getting that pulse shaping wrong produces real out-of-band spectral
+//! splatter on an actual transmission, and this session had no primary
+//! source to verify the exact shaping constant against. Left for
+//! separate, verifiable follow-on work rather than shipped unverified
+//! into a path that (as of the previous commit) genuinely reaches a
+//! sound card.
 
 mod ffi;
 
@@ -99,6 +114,23 @@ impl Ft8Decoder {
             ffi::ft8_session_reset(self.session);
         }
     }
+}
+
+/// Packs `text` into an FT8 message and generates its real 79-symbol
+/// tone sequence (each element a tone index 0..7), via the vendored
+/// `ft8_lib`'s own `ftx_message_encode`/`ft8_encode` -- not
+/// reimplemented. Returns `None` if `text` can't be packed as a valid
+/// FT8 message (see `ftx_message_rc_t` in message.h -- e.g. an invalid
+/// callsign). Does not produce audio; see this module's own doc comment
+/// for why waveform synthesis is out of scope here.
+pub fn encode_message(text: &str) -> Option<[u8; ffi::FT8_NN]> {
+    let c_text = std::ffi::CString::new(text).ok()?;
+    let mut tones = [0u8; ffi::FT8_NN];
+    let result = unsafe { ffi::ft8_encode_message(c_text.as_ptr(), tones.as_mut_ptr()) };
+    if result != ffi::FT8_NN as i32 {
+        return None;
+    }
+    Some(tones)
 }
 
 impl Drop for Ft8Decoder {

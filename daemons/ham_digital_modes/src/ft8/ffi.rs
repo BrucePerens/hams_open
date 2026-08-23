@@ -5,9 +5,10 @@
 //! allocator returns. See ft8.rs for the safe wrapper.
 #![allow(non_camel_case_types)]
 
-use std::os::raw::{c_char, c_float, c_int};
+use std::os::raw::{c_char, c_float, c_int, c_uchar};
 
 pub const FTX_MAX_MESSAGE_LENGTH: usize = 35;
+pub const FT8_NN: usize = 79;
 
 #[repr(C)]
 pub struct Ft8Session {
@@ -26,4 +27,5 @@ extern "C" {
         out_snr: *mut c_int,
         max_messages: c_int,
     ) -> c_int;
+    pub fn ft8_encode_message(text: *const c_char, tones_out: *mut c_uchar) -> c_int;
 }
