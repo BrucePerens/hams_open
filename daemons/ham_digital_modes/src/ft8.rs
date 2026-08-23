@@ -181,6 +181,20 @@ fn gfsk_pulse(t_over_symbol_period: f64, symbol_period_s: f64) -> f64 {
 /// the first/last T/8 = 20ms so the signal doesn't key on/off with a
 /// hard edge.
 pub fn synthesize_waveform(tones: &[u8; ffi::FT8_NN], sample_rate: u32, base_freq_hz: f32) -> Vec<f32> {
+    synthesize_waveform_with_pulse(tones, sample_rate, base_freq_hz, gfsk_pulse)
+}
+
+/// `synthesize_waveform()`'s actual implementation, parameterized on the
+/// pulse-shape function -- factored out so a test can swap in an
+/// unfiltered rectangular pulse for a real spectral-purity comparison
+/// against the production `gfsk_pulse`, without duplicating the phase
+/// integration/ramp logic.
+fn synthesize_waveform_with_pulse(
+    tones: &[u8; ffi::FT8_NN],
+    sample_rate: u32,
+    base_freq_hz: f32,
+    pulse: impl Fn(f64, f64) -> f64,
+) -> Vec<f32> {
     let t_sym = FT8_SYMBOL_PERIOD_S;
     let n_symbols = ffi::FT8_NN;
     let total_duration_s = n_symbols as f64 * t_sym;
@@ -213,7 +227,7 @@ pub fn synthesize_waveform(tones: &[u8; ffi::FT8_NN], sample_rate: u32, base_fre
                 continue;
             }
             let b_n = tones[n as usize] as f64;
-            f_d += b_n * gfsk_pulse(t_over_period, t_sym);
+            f_d += b_n * pulse(t_over_period, t_sym);
         }
         f_d *= FT8_MODULATION_INDEX;
 
@@ -353,5 +367,82 @@ mod tests {
         let mid_window = &samples[mid_start..mid_start + sample_rate as usize / 10];
         let mid_peak = mid_window.iter().fold(0.0f32, |m, &s| m.max(s.abs()));
         assert!(mid_peak > 0.9, "steady-state envelope should reach near-unit amplitude, got peak {mid_peak}");
+    }
+
+    /// An unfiltered rectangular pulse (unit height over one symbol
+    /// period, normalized to unit area) -- the "no shaping at all"
+    /// baseline this test compares the real `gfsk_pulse` against. Not a
+    /// stand-in for FT4's BT=1.0 or any other real mode; just the
+    /// theoretical worst case for spectral confinement.
+    fn rectangular_pulse(t_over_symbol_period: f64, symbol_period_s: f64) -> f64 {
+        if t_over_symbol_period.abs() <= 0.5 {
+            1.0 / symbol_period_s
+        } else {
+            0.0
+        }
+    }
+
+    /// Power of `samples` at `freq_hz`, via a direct discrete-time
+    /// Fourier transform (Goertzel-equivalent single-bin DFT) -- exact
+    /// for an arbitrary probe frequency, unlike an FFT which would need
+    /// the probe frequency to land on a bin boundary, and needs no new
+    /// dependency for a handful of single-frequency probes.
+    fn power_at_freq(samples: &[f32], sample_rate: u32, freq_hz: f64) -> f64 {
+        let dt = 1.0 / sample_rate as f64;
+        let (mut re, mut im) = (0.0f64, 0.0f64);
+        for (i, &s) in samples.iter().enumerate() {
+            let angle = -2.0 * std::f64::consts::PI * freq_hz * (i as f64 * dt);
+            re += s as f64 * angle.cos();
+            im += s as f64 * angle.sin();
+        }
+        re * re + im * im
+    }
+
+    fn db(power: f64) -> f64 {
+        10.0 * power.max(1e-300).log10()
+    }
+
+    /// This is the test the spec-sourcing work was actually for: BT=2.0
+    /// Gaussian pulse shaping matters because it confines the transmitted
+    /// signal's spectrum, and the round-trip decode tests above can't
+    /// tell BT=2.0 apart from a wrong constant (or no filtering at all)
+    /// -- the decoder is tolerant of exactly the kind of spectral
+    /// splatter a wrong BT would cause. This test measures it directly:
+    /// synthesize the same message with the real `gfsk_pulse` and with
+    /// an unfiltered `rectangular_pulse`, and confirm the real pulse
+    /// suppresses energy beyond the 8-tone band meaningfully more than
+    /// the unfiltered baseline does, at several offsets past the band
+    /// edge. A future edit that silently widens FT8_BT toward a
+    /// rectangular pulse (or breaks the erf formula into something with
+    /// no real filtering effect) fails this, where the round-trip tests
+    /// would not.
+    #[test]
+    fn gfsk_pulse_shaping_suppresses_out_of_band_energy_more_than_an_unfiltered_pulse() {
+        let tones = encode_message("K1ABC W9XYZ EN37").unwrap();
+        let sample_rate = 12000u32;
+        let base_freq_hz = 1500.0f32;
+        let tone_spacing_hz = 1.0 / FT8_SYMBOL_PERIOD_S; // 6.25 Hz
+        let band_low = base_freq_hz as f64;
+        let band_high = base_freq_hz as f64 + 7.0 * tone_spacing_hz;
+        let in_band_probe = (band_low + band_high) / 2.0;
+
+        let gfsk = synthesize_waveform_with_pulse(&tones, sample_rate, base_freq_hz, gfsk_pulse);
+        let rect = synthesize_waveform_with_pulse(&tones, sample_rate, base_freq_hz, rectangular_pulse);
+
+        let gfsk_in_band_db = db(power_at_freq(&gfsk, sample_rate, in_band_probe));
+        let rect_in_band_db = db(power_at_freq(&rect, sample_rate, in_band_probe));
+
+        for offset_hz in [50.0, 100.0, 200.0] {
+            let probe = band_low - offset_hz;
+            let gfsk_suppression_db = gfsk_in_band_db - db(power_at_freq(&gfsk, sample_rate, probe));
+            let rect_suppression_db = rect_in_band_db - db(power_at_freq(&rect, sample_rate, probe));
+            assert!(
+                gfsk_suppression_db > rect_suppression_db + 10.0,
+                "at {offset_hz}Hz below the band edge, real GFSK shaping (BT={FT8_BT}) should suppress \
+                 out-of-band energy at least 10dB more than an unfiltered rectangular pulse -- that's the \
+                 entire reason FT8 uses Gaussian pulse shaping instead of raw FSK; got GFSK suppression \
+                 {gfsk_suppression_db:.1}dB vs rectangular {rect_suppression_db:.1}dB"
+            );
+        }
     }
 }
