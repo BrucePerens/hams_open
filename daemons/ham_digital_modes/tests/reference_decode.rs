@@ -142,3 +142,65 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
 
     let _ = std::fs::remove_dir_all(&work_dir);
 }
+
+/// `hams_local_relay`'s mic input runs at 48kHz (matching its Opus voice
+/// path), not FT8's conventional 12kHz. Rather than assume a resampler
+/// is needed and write one, this checks empirically whether
+/// `Ft8Decoder::new()` -- which takes `sample_rate` as a real parameter,
+/// not a hardcoded constant, and derives its FFT/block size from it (see
+/// `shim.c`'s `ft8_session_new`) -- decodes correctly when actually fed
+/// 48kHz audio directly. It does (verified once already, ad hoc, before
+/// this test existed): ft8_lib itself is rate-parameterized, so a
+/// hand-rolled 48k->12k decimator turned out to be unnecessary work, not
+/// a shortcut. This test is what keeps that true going forward instead
+/// of resting on a one-time manual check.
+#[test]
+fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
+    if !binary_exists("ft8sim") || !binary_exists("jt9") || !binary_exists("sox") {
+        eprintln!("skipping: wsjtx (ft8sim/jt9) or sox not installed");
+        return;
+    }
+    let work_dir = std::env::temp_dir().join(format!("ft8_ref_test_48k_{}", std::process::id()));
+    std::fs::create_dir_all(&work_dir).unwrap();
+
+    let message = "K1ABC W9XYZ EN37";
+    // ft8sim always emits 12000 Hz; -10dB is comfortably decodable
+    // (see the clean-signal test above) so a decode failure here points
+    // at the 48kHz path, not signal quality.
+    let out = Command::new("ft8sim")
+        .args([message, "1500.0", "0.0", "0.1", "1.0", "1", "-10"])
+        .current_dir(&work_dir)
+        .output()
+        .expect("ft8sim must run");
+    assert!(out.status.success(), "ft8sim failed: {}", String::from_utf8_lossy(&out.stderr));
+
+    let wav_12k = std::fs::read_dir(&work_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .find(|e| e.path().extension().map(|x| x == "wav").unwrap_or(false))
+        .map(|e| e.path())
+        .expect("ft8sim must produce a .wav file");
+
+    let wav_48k = work_dir.join("upsampled_48k.wav");
+    let sox_out = Command::new("sox")
+        .arg(&wav_12k)
+        .args(["-r", "48000"])
+        .arg(&wav_48k)
+        .output()
+        .expect("sox must run");
+    assert!(sox_out.status.success(), "sox resample failed: {}", String::from_utf8_lossy(&sox_out.stderr));
+
+    let samples_48k = read_wav_mono_i16(&wav_48k);
+    let mut decoder = Ft8Decoder::new(48000, 200.0, 3000.0).expect("decoder must initialize at 48000 Hz");
+    decoder.feed(&samples_48k);
+    let ours = decoder.decode();
+
+    assert!(
+        ours.iter().any(|(text, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
+        "Ft8Decoder::new(48000, ...) must decode real 48kHz-sampled audio directly -- got {ours:?}. \
+         If this starts failing, hams_local_relay needs a real 48k->12k resampler before FT8 \
+         wiring, which this test previously found unnecessary."
+    );
+
+    let _ = std::fs::remove_dir_all(&work_dir);
+}
