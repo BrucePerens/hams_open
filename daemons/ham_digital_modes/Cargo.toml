@@ -6,6 +6,13 @@ description = "Amateur radio digital mode encode/decode: PSK31, WSPR, FT8"
 license = "LGPL-3.0-or-later"
 
 [dependencies]
+# For erf() in ft8.rs's GFSK transmit waveform synthesis (see
+# docs/references/FT8_FT4_GFSK_WAVEFORM_SPEC.md) -- Rust's std never
+# stabilized erf, and this needs to be accurate (it directly shapes a
+# real transmitted signal's spectrum), not a hand-rolled approximation.
+# libm is a pure-Rust, MIT/Apache-2.0 port of the actual C math library
+# algorithms, not a crude approximation of its own.
+libm = "0.2"
 
 [build-dependencies]
 cc = "1.0"
