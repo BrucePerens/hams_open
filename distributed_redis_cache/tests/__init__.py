@@ -7,6 +7,7 @@ from . import test_cache_manager_real
 from . import test_cm_leak
 from . import test_fixes
 from . import test_b2_fixes
+from . import test_hooks
 
 __all__ = [
     "test_distributed_cache",
@@ -14,4 +15,5 @@ __all__ = [
     "test_cm_leak",
     "test_fixes",
     "test_b2_fixes",
+    "test_hooks",
 ]

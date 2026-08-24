@@ -19,8 +19,8 @@ class TestHamsS3Hooks(HamsTransactionCase):
     user_xml_id/env_file_path, and that the referenced service account xml
     id actually resolves -- has no dependency on storage_backend at all
     and was simply never tested. distributed_redis_cache/hooks.py's own
-    post_init_hook (this module's own explicitly-cited template) has the
-    same gap, unaddressed -- out of scope here, this covers only hams_s3's.
+    post_init_hook (this module's own explicitly-cited template) had the
+    same gap -- see distributed_redis_cache/tests/test_hooks.py.
     """
 
     def test_post_init_hook_registers_the_s3_manager_daemon(self):
