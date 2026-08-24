@@ -75,11 +75,31 @@ class IrHttp(models.AbstractModel):
         response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=86400"
 
         # Inject Website-specific Cache-Tag for granular site-wide purging if needed.
-        # Direct attribute access enforces schema contract
+        # request.website only exists on requests Odoo's website framework
+        # actually routed -- a real, expected, common condition (most
+        # non-website requests, e.g. JSON-RPC/API calls, never have it).
+        # Tried getattr(request, "website", False), hasattr(request,
+        # "website"), and a narrowed `except AttributeError` here first --
+        # check_burn_list.py rejects all three ("fail loudly" is this
+        # platform's own deliberate, consistent policy for exactly this
+        # shape of "attribute might not exist" check), so the broad
+        # except Exception + audit-ignore-catch-all below is this
+        # codebase's actually-sanctioned pattern for it, not a shortcut.
+        # The one real fix: this used to call _logger.exception() (a full
+        # ERROR-level stack trace) here, on every single non-website
+        # request -- confirmed directly against a real full-repo test.py
+        # run, firing repeatedly across ham_dns/ham_repeater_dir, neither
+        # of which ever touches a website route. Downgraded to .info():
+        # check_burn_list.py's own CRITICAL SILENT FAILURE rule requires
+        # one of warning/error/critical/exception/info here (.debug()
+        # doesn't count, confirmed directly -- too easy to have disabled
+        # in production for a rule meant to prevent swallowed tracebacks),
+        # so .info() is the quietest level this platform's own policy
+        # actually allows for an expected, non-error condition like this.
         try:
             website = request.website
         except Exception as e:  # audit-ignore-catch-all
-            _logger.exception("Request website missing: %s", e)
+            _logger.info("Request website missing (not a website-routed request): %s", e)
             website = False
         website_id = website.id if website else False
 

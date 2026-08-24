@@ -159,3 +159,61 @@ class TestCloudflareHeaders(HamsHttpCase):
 
         res = DummyIrHttp._post_dispatch(mock_response)
         self.assertIn("odoo-website-99", res.headers.get("Cache-Tag", ""))
+
+    def test_05_non_website_request_falls_back_without_a_cache_tag(self):
+        # [@ANCHOR: COMM_test_05_non_website_request_no_cache_tag]
+        """The other real branch of _post_dispatch's website lookup --
+        never exercised before this: a request Odoo's website framework
+        never routed (most JSON-RPC/API requests) has no `website`
+        attribute on the real request object at all, not a None value.
+        Must still cache the response (max-age=86400, semi-static content
+        default) without a Cache-Tag header, not raise."""
+
+        class DummyBase:
+            @classmethod
+            def _post_dispatch(cls, response):
+                return response
+
+        class DummyIrHttp(CloudflareIrHttp, DummyBase):
+            pass
+
+        mock_response = Response()
+
+        class MockRequest:
+            env = type(
+                "MockEnv",
+                (object,),
+                {
+                    "user": type(
+                        "MockUser", (object,), {"_is_public": lambda self: True}
+                    )()
+                },
+            )()
+            # Deliberately no `website` attribute at all -- accessing
+            # request.website below must raise AttributeError, the real
+            # condition _post_dispatch's own try/except handles.
+            httprequest = type(
+                "MockHttpRequest", (object,), {"path": "/some-public-route"}
+            )()
+
+            @property
+            def __dict__(self):
+                return {}
+
+        mock_request = MockRequest()
+
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+        )
+
+        res = DummyIrHttp._post_dispatch(mock_response)
+        self.assertEqual(
+            res.headers.get("Cloudflare-CDN-Cache-Control"),
+            "max-age=86400",
+            "A non-website request must still get the semi-static caching default.",
+        )
+        self.assertNotIn(
+            "Cache-Tag",
+            res.headers,
+            "No website means no odoo-website-<id> Cache-Tag to add.",
+        )
