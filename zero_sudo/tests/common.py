@@ -616,11 +616,13 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         super().setUpClass()
         with cls.registry.cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
-                "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
-                "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
+                "INSERT INTO ir_config_parameter (key, value) VALUES "
+                "('web.base.url', 'https://hams.com'), "
+                "('web.base.url.freeze', '1') "
+                "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value"
             )
             # The context manager automatically commits if no exception is raised.
-        cls.registry.clear_cache()
+        cls.registry.clear_cache('stable')
         invalidate_model_cache(cls.env, "zero_sudo.security.utils")
 
     @classmethod
@@ -761,10 +763,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
         with cls.registry.cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
-                "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
-                "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
+                "INSERT INTO ir_config_parameter (key, value) VALUES "
+                "('web.base.url', 'https://hams.com'), "
+                "('web.base.url.freeze', '1') "
+                "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value"
             )
-        cls.registry.clear_cache()
+        cls.registry.clear_cache('stable')
         invalidate_model_cache(cls.env, "zero_sudo.security.utils")
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨

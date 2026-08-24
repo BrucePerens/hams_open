@@ -33,9 +33,47 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         super().setUpClass()
         with cls.registry.cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
-                "INSERT INTO ir_config_parameter (key, value) VALUES ('web.base.url', 'https://hams.com') "
-                "ON CONFLICT (key) DO UPDATE SET value='https://hams.com'"
+                "INSERT INTO ir_config_parameter (key, value) VALUES "
+                "('web.base.url', 'https://hams.com'), "
+                "('web.base.url.freeze', '1') "
+                "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value"
             )
+            # The context manager automatically commits if no exception is
+            # raised.
+        # web.base.url.freeze prevents a real, documented Odoo mechanism
+        # (res_users.py's admin-login handler: on a successful
+        # base.group_system login carrying a base_location, it silently
+        # calls ICP.set_param('web.base.url', base_location) unless this
+        # freeze param is set) from letting some later admin-login test
+        # anywhere in the same registry's lifetime overwrite web.base.url
+        # out from under every other test. ir_config_parameter.py's
+        # _get_param() is @ormcache('key', cache='stable'), and
+        # Registry.clear_cache() with NO arguments defaults to
+        # cache_names=('default',) -- which per registry.py's own
+        # _CACHES_BY_KEY table does NOT include 'stable'. A bare
+        # clear_cache() (what this call used to be, and what common.py's two
+        # equivalent inserts still call) never invalidates the 'stable'
+        # bucket _get_param lives in, so the freeze row above could sit
+        # correctly in the DB while a stale cached lookup kept seeing it as
+        # unset. Passing 'stable' explicitly clears it (plus 'default'/
+        # 'templates.cached_values', which 'stable' depends on per that same
+        # table).
+        #
+        # NOTE: this does NOT fix test_facility.py's own
+        # test_07_common_setup_class_sql flake (confirmed directly this
+        # session, via a temporary set_param() call-tracing monkeypatch,
+        # since removed) -- neither of the two real set_param('web.base.url',
+        # ...) calls that happen anywhere in a `-u zero_sudo` run explain
+        # that failure; both happen chronologically AFTER test_07 already
+        # failed. self.env.cr there was seen holding
+        # 'http://localhost:<port>' -- exactly ir_config_parameter.py's own
+        # _default_parameters['web.base.url'] install-time default -- which
+        # points at a transaction-snapshot/cursor-timing issue specific to
+        # this class's own "real transaction hijacking" design (self.env.cr
+        # vs self.cr being genuinely different connections/snapshots), not
+        # at anything this freeze/cache fix governs. Left as a known,
+        # pre-existing, narrowly-scoped test bug -- not chased further here.
+        cls.registry.clear_cache('stable')
 
     def setUp(self):
         super().setUp()
