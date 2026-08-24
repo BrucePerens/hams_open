@@ -96,3 +96,29 @@ class TestRabbitMQPool(RealTransactionCase):
         setup_channel.queue_delete(queue_name)
 
         self.assertEqual(received, "plain-string-body")
+
+    def test_04_get_channel_recreates_a_closed_channel_on_an_open_connection(self):
+        """
+        _get_channel()'s elif branch (connection open, channel closed)
+        was never exercised -- only the initial "no connection yet" path
+        was. This is a real self-healing case: RabbitMQ (or a proxy)
+        closing an individual channel while the underlying connection
+        stays up is a normal, documented AMQP event (e.g. a channel-level
+        protocol error), and the pool's singleton pattern means a stale
+        closed channel would otherwise wedge every future publish() until
+        the whole process restarted.
+        """
+        pool = self.env["hams_rabbitmq.pool"]
+        first_channel = pool._get_channel()
+        self.assertTrue(first_channel.is_open)
+
+        first_channel.close()
+        self.assertTrue(first_channel.is_closed)
+
+        second_channel = pool._get_channel()
+        self.assertIsNotNone(second_channel)
+        self.assertTrue(second_channel.is_open, "a fresh channel must be created on the still-open connection")
+        self.assertIsNot(
+            second_channel, first_channel,
+            "must not hand back the same closed channel object",
+        )
