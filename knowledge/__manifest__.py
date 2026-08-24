@@ -118,6 +118,16 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
             "knowledge/static/tests/tours/manual_toc_tour.js",
             "knowledge/static/tests/tours/manual_basic_browsing_tour.js",
         ],
+        "web.assets_unit_tests": [
+            # manual_toc.js also has to be listed here, not just in
+            # web.assets_frontend above: /web/tests's own
+            # assets_unit_tests_setup bundle only ('include's)
+            # web.assets_backend, never web.assets_frontend -- same gap
+            # hams_com/ham_shack/__manifest__.py's own sdr_spectrum.js
+            # comment documents for the identical reason.
+            "knowledge/static/src/js/manual_toc.js",
+            "knowledge/static/tests/manual_toc.test.js",
+        ],
     },
     "installable": True,
     "application": True,

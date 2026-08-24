@@ -22,6 +22,16 @@
             "caching/static/tests/tours/caching_tour.js",
             "caching/static/tests/tours/sw_behavior_tour.js",
         ],
+        "web.assets_unit_tests": [
+            # toast.js also has to be listed here, not just in
+            # web.assets_frontend above: /web/tests's own
+            # assets_unit_tests_setup bundle only ('include's)
+            # web.assets_backend, never web.assets_frontend -- same gap
+            # hams_com/ham_shack/__manifest__.py's own sdr_spectrum.js
+            # comment documents for the identical reason.
+            "caching/static/src/js/toast.js",
+            "caching/static/tests/toast.test.js",
+        ],
     },
     "installable": True,
     "application": False,

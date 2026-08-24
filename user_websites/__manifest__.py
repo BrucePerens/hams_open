@@ -76,6 +76,18 @@ This module enables:
             "user_websites/static/tests/tours/toast_notifications_tour.js",
             "user_websites/static/tests/tours/violation_report_tour.js",
         ],
+        "web.assets_unit_tests": [
+            # Both source files also have to be listed here, not just in
+            # web.assets_frontend above: /web/tests's own
+            # assets_unit_tests_setup bundle only ('include's)
+            # web.assets_backend, never web.assets_frontend -- same gap
+            # hams_com/ham_shack/__manifest__.py's own sdr_spectrum.js
+            # comment documents for the identical reason.
+            "user_websites/static/src/js/violation_report.js",
+            "user_websites/static/tests/violation_report.test.js",
+            "user_websites/static/src/js/toast_notifications.js",
+            "user_websites/static/tests/toast_notifications.test.js",
+        ],
     },
     "demo": [],
     "installable": True,
