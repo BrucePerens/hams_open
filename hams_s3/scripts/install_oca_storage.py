@@ -21,6 +21,13 @@ def replace_in_file(filepath, replacements):
     with open(filepath, 'w') as f:
         f.write(content)
 
+def replace_regex(filepath, pattern, replacement):
+    with open(filepath, 'r') as f:
+        content = f.read()
+    content = re.sub(pattern, replacement, content)
+    with open(filepath, 'w') as f:
+        f.write(content)
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: install_oca_storage.py <dest_dir>")
@@ -77,13 +84,6 @@ def main():
         'backend = self.backend.with_user(1)': 'backend = self.backend'
     })
     
-    def replace_regex(filepath, pattern, replacement):
-        with open(filepath, 'r') as f:
-            content = f.read()
-        content = re.sub(pattern, replacement, content)
-        with open(filepath, 'w') as f:
-            f.write(content)
-
     for xml_file in ['backend_storage_view.xml', 'storage_backend_category_view.xml']:
         path = os.path.join(dest_dir, 'storage_backend', 'views', xml_file)
         replace_regex(path, r'<record\s+id="([^"]+)"\s+model="ir\.ui\.view">', r'<record id="\1" model="ir.ui.view">\n        <field name="name">\1</field>\n        <!-- audit-ignore-view -->')
