@@ -1188,7 +1188,27 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
                     // 4 & 5. Modal suppression (REMOVED)
                 }
+                true;
             """
+
+            # Real bug found and fixed this session: this snippet is a bare
+            # `if (...) { ... }` statement block, not an expression -- when
+            # concatenated ahead of an empty/default caller `ready` string
+            # (a legitimate request for "no extra ready check, just Odoo
+            # core's own document.readyState default"), the combined script
+            # had no trailing expression at all, so Runtime.evaluate's
+            # completion value was always undefined/falsy and _wait_ready()
+            # always timed out -- even when the page, and everything the
+            # caller actually cared about, was completely fine. Every prior
+            # caller in this codebase went through start_tour(), which
+            # always supplies its own non-empty tour-completion ready code
+            # as the trailing statement, so this exact path was never hit
+            # until the first direct browser_js() caller (ham_shack's hoot
+            # unit-test runner) used an empty ready string. The trailing
+            # `true;` above makes the watchdog block's own completion value
+            # true when nothing else follows it, while a caller-supplied
+            # ready check appended after it (see below) still correctly
+            # becomes the final, real completion value.
 
             # Intercept and augment the `ready` parameter before dispatching to Odoo core
             if "ready" in kwargs:
