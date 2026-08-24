@@ -11,4 +11,5 @@ from . import test_ui_tours
 from . import test_tunnel_daemon
 from . import test_tunnel_provisioning_security
 from . import test_waf_management
+from . import test_hooks
 from . import tunnel_simulator
