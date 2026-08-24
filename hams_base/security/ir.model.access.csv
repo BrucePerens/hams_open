@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_dmarc_report,dmarc_report,model_hams_base_dmarc_report,base.group_system,1,1,1,1
 access_dmarc_record,dmarc_record,model_hams_base_dmarc_record,base.group_system,1,1,1,1
+access_res_users_lockout_svc,res.users lockout svc,base.model_res_users,zero_sudo.group_account_lockout_service,1,1,0,0

@@ -95,6 +95,37 @@ class TestCompliancePagesHttp(HamsHttpCase):
         msg_text = "[!] DIAGNOSTIC FOR AI: Page /accessibility should contain boilerplate content. Check the rendering."
         self.assertTrue(bool(re.search(r"Policy|Terms", response.text)), msg_text)
 
+    def test_compliance_index_route_lists_only_active_documents(self):
+        """Verify the actual /compliance HTTP route, not just its template."""
+        # Tests [@ANCHOR: COMM_compliance_index_route]
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "compliance.user_compliance_service"
+        )
+        Document = self.env["compliance.document"].with_user(svc_uid)
+        active_doc = Document.create(
+            {"name": "Active Disclosure Doc XYZ", "url": "/active-doc-xyz"}
+        )
+        inactive_doc = Document.create(
+            {
+                "name": "Inactive Disclosure Doc XYZ",
+                "url": "/inactive-doc-xyz",
+                "active": False,
+            }
+        )
+        response = self.url_open("/compliance")
+        msg_status = f"[!] DIAGNOSTIC FOR AI: /compliance should be reachable (200 OK). Got {response.status_code}."
+        self.assertEqual(response.status_code, 200, msg_status)
+        self.assertIn(
+            active_doc.name,
+            response.text,
+            "[!] DIAGNOSTIC FOR AI: /compliance should list active compliance.document records.",
+        )
+        self.assertNotIn(
+            inactive_doc.name,
+            response.text,
+            "[!] DIAGNOSTIC FOR AI: /compliance should NOT list inactive (active=False) compliance.document records -- the controller's domain filters on active=True.",
+        )
+
     def test_pages_content(self):
         """Verify that legal pages contain the expected boilerplate content."""
         # [@ANCHOR: COMM_test_compliance_pages_content]

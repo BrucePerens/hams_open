@@ -47,6 +47,26 @@
             <field name="name">Central GDPR Erasure Service Group</field>
             <field name="privilege_id" ref="privilege_zero_sudo"/>
         </record>
+
+        <!-- Referenced by hams_base/controllers/unsubscribe.py's
+             unsubscribe_lockout() route: core Odoo's res.users.write()
+             unconditionally refuses `active=False` when the acting
+             env.uid is one of the ids being written (see
+             odoo/addons/base/models/res_users.py write(), "You cannot
+             deactivate the user you're currently logged in as."), so a
+             user can never deactivate their own live-session account
+             through their own uid, sudo() or not. This narrow,
+             single-purpose service account exists to perform exactly
+             that one write on the calling user's own behalf, with an
+             ACL grant scoped to res.users only (see
+             hams_base/security/ir.model.access.csv), not reusing
+             group_gdpr_service, which is a different module's
+             (user_websites) account for a different purpose and isn't
+             even installed alongside every module that might need this. -->
+        <record id="group_account_lockout_service" model="res.groups">
+            <field name="name">Central Account Lockout Service Group</field>
+            <field name="privilege_id" ref="privilege_zero_sudo"/>
+        </record>
     </data>
     <data>
         <record id="mail_service_internal" model="res.users">
@@ -114,6 +134,17 @@
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_cache_invalidator')])]"/>
+        </record>
+
+        <record id="user_lockout_service_internal" model="res.users">
+            <field name="name">Central Account Lockout Service Account</field>
+            <field name="login">user_lockout_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_account_lockout_service')])]"/>
         </record>
 
     </data>
