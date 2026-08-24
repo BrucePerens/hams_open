@@ -47,6 +47,25 @@ class TestSesWebhook(HamsHttpCase):
             'company_id': cls.company_c.id
         })
 
+        # SES_WEBHOOK_SENDER_REGISTRATION.md's registration gate: several
+        # tests below send a Notification "From:" a sender address and
+        # expect it to reach message_process() -- that now requires a real
+        # registered user matching that email (_mail_find_user_for_gateway),
+        # not just an arbitrary synthetic address. These two are the
+        # "already registered" senders those tests exercise.
+        cls.matched_user_a = cls.env['res.users'].create({
+            'name': 'Matched Sender A',
+            'login': 'matched_sender_a',
+            'email': 'a@test-a.com',
+            'group_ids': [(6, 0, [cls.env.ref('base.group_portal').id])],
+        })
+        cls.matched_user_b = cls.env['res.users'].create({
+            'name': 'Matched Sender B',
+            'login': 'matched_sender_b',
+            'email': 'b@test-b.com',
+            'group_ids': [(6, 0, [cls.env.ref('base.group_portal').id])],
+        })
+
     def test_01_webhook_unauthorized(self):
         """Verify that requests without the correct token are rejected with 403 Forbidden."""
         response = self.url_open('/mail/webhook/sns', data=b'{}', headers={'Content-Type': 'application/json'})
@@ -411,6 +430,18 @@ class TestSesWebhook(HamsHttpCase):
             "company_id": self.company_d.id,
         })
 
+        # The registration gate (SES_WEBHOOK_SENDER_REGISTRATION.md) now
+        # requires a real matched sender to reach message_process() at
+        # all -- register one here so this test still exercises what it's
+        # actually about (the with_company()/company_ids sync), not the
+        # gate itself (covered separately by test_19/test_20).
+        self.env["res.users"].create({
+            "name": "Matched Sender D",
+            "login": "matched_sender_d",
+            "email": "d@test-d-e2e.com",
+            "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+        })
+
         raw_email = b"From: d@test-d-e2e.com\nTo: c@d.com\nSubject: Test D\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode("utf-8")}
         payload = {"Type": "Notification", "MessageId": "msg-notif-d", "Message": json.dumps(ses_message)}
@@ -501,6 +532,9 @@ class TestSesWebhook(HamsHttpCase):
         v4 = self.env["ses.webhook.log"].get_view(view_type="form")
         self.assertIn('name="raw_payload"', v4["arch"])
 
+        v5 = self.env["ses.webhook.pending_submission"].get_view(view_type="list")
+        self.assertIn('name="sender_email"', v5["arch"])
+
     def test_12_processing_failure_still_returns_200_and_logs(self):
         # Tests [@ANCHOR: COMM_ses_webhook_process_catch_all]
         """
@@ -532,3 +566,143 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(log), 1)
         self.assertEqual(log.status, 'failed')
         self.assertIn('simulated processing failure', log.error_message)
+
+    def test_19_unmatched_sender_is_gated_not_processed(self):
+        """
+        SES_WEBHOOK_SENDER_REGISTRATION.md: an unmatched sender must never
+        reach message_process() -- a real, unregistered address, verified
+        end to end: message_process() is never called, a
+        ses.webhook.pending_submission is created with the right sender/
+        domain/token, a real mail.mail nudge is created and its send()
+        attempted (real SMTP is unreachable in this sandbox, so it ends in
+        state 'exception', not 'sent' -- that's the honest signal of "the
+        gate itself worked," not a mock standing in for delivery), and the
+        log records 'ignored', not 'success'.
+        """
+        raw_email = b"From: nobody-registered@test-a.com\nTo: c@d.com\nSubject: Unmatched\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-unmatched", "Message": json.dumps(ses_message)}
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+
+        response = self.url_open(
+            f'/mail/webhook/sns?token={self.domain_a.secret_token}',
+            data=json.dumps(payload).encode('utf-8'),
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_process.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-unmatched')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'ignored')
+        self.assertIn('nobody-registered@test-a.com', log.error_message)
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        submission = self.env['ses.webhook.pending_submission'].with_user(svc_uid).search(
+            [('sender_email', '=', 'nobody-registered@test-a.com')]
+        )
+        self.assertEqual(len(submission), 1)
+        self.assertEqual(submission.domain_id, self.domain_a)
+        self.assertEqual(submission.company_id, self.company_a)
+        self.assertFalse(submission.consumed)
+        self.assertTrue(submission.token)
+
+        mail = self.env['mail.mail'].search([('email_to', '=', 'nobody-registered@test-a.com')])
+        self.assertEqual(len(mail), 1)
+        self.assertIn('/web/signup', mail.body_html)
+        self.assertIn(mail.state, ('exception', 'outgoing', 'sent'))
+
+    def test_20_matched_sender_is_not_gated(self):
+        """
+        The registration gate must not interfere with a real, registered
+        sender -- message_process() still gets called, and no pending
+        submission is created for them. (test_04/05/12 already prove
+        message_process() runs end to end for a matched sender; this test
+        isolates the gate's own "no pending submission" side specifically.)
+        """
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Matched\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-matched", "Message": json.dumps(ses_message)}
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+
+        response = self.url_open(
+            f'/mail/webhook/sns?token={self.domain_a.secret_token}',
+            data=json.dumps(payload).encode('utf-8'),
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_process.assert_called_once()
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        submission = self.env['ses.webhook.pending_submission'].with_user(svc_uid).search(
+            [('sender_email', '=', 'a@test-a.com')]
+        )
+        self.assertFalse(submission)
+
+    def test_21_pending_submission_cron_truncates_old_rows_only(self):
+        """_cron_truncate_pending_submissions() must delete rows past the
+        7-day window and leave recent ones alone -- both directions, not
+        just "it doesn't crash."""
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        old = self.env['ses.webhook.pending_submission'].with_user(svc_uid).create({
+            'sender_email': 'old@test-a.com',
+            'raw_content': 'old',
+            'domain_id': self.domain_a.id,
+        })
+        recent = self.env['ses.webhook.pending_submission'].with_user(svc_uid).create({
+            'sender_email': 'recent@test-a.com',
+            'raw_content': 'recent',
+            'domain_id': self.domain_a.id,
+        })
+        self.env.cr.execute(
+            "UPDATE ses_webhook_pending_submission SET create_date = create_date - interval '8 days' WHERE id = %s",
+            (old.id,),
+        )
+
+        # Matches ir_cron.xml's own user_id (base.user_root) -- the real
+        # cron runs as root, not the service account, so this test does too.
+        self.env['ses.webhook.pending_submission'].with_user(
+            self.env.ref('base.user_root').id
+        )._cron_truncate_pending_submissions()
+
+        self.assertFalse(old.exists())
+        self.assertTrue(recent.exists())
+
+    def test_22_pending_submission_multi_company_isolation(self):
+        """Same multi-company ir.rule treatment as domains/logs -- prove
+        it holds for the new model too, not just assumed from the copied
+        XML shape."""
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        sub_a = self.env['ses.webhook.pending_submission'].with_user(svc_uid).create({
+            'sender_email': 'iso-a@test-a.com',
+            'raw_content': 'x',
+            'domain_id': self.domain_a.id,
+        })
+        sub_b = self.env['ses.webhook.pending_submission'].with_user(svc_uid).create({
+            'sender_email': 'iso-b@test-b.com',
+            'raw_content': 'x',
+            'domain_id': self.domain_b.id,
+        })
+
+        user_a = self.env["res.users"].create({
+            "name": "SES Webhook Pending User A",
+            "login": "ses_webhook_pending_user_a",
+            "company_id": self.company_a.id,
+            "company_ids": [(6, 0, [self.company_a.id])],
+            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+
+        seen_by_a = self.env['ses.webhook.pending_submission'].with_user(user_a).search([])
+        self.assertIn(sub_a, seen_by_a)
+        self.assertNotIn(sub_b, seen_by_a)
+        with self.assertRaises(AccessError):
+            sub_b.with_user(user_a).read(["sender_email"])

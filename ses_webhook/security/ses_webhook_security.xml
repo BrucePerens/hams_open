@@ -73,6 +73,22 @@
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="groups" eval="[(4, ref('group_ses_webhook_service'))]"/>
         </record>
+
+        <!-- Multi-Company Rule for Pending Submissions: same treatment as
+             the domain/log rules above. -->
+        <record id="ses_webhook_pending_submission_comp_rule" model="ir.rule">
+            <field name="name">SES Webhook Pending Submission Multi-Company</field>
+            <field name="model_id" ref="model_ses_webhook_pending_submission"/>
+            <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="ses_webhook_pending_submission_rule_svc" model="ir.rule">
+            <field name="name">SES Webhook Pending Submission Multi-Company Service</field>
+            <field name="model_id" ref="model_ses_webhook_pending_submission"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_ses_webhook_service'))]"/>
+        </record>
     </data>
     <data>
         <!-- company_id/company_ids start at base.main_company only.

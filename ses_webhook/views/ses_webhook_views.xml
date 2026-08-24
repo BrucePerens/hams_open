@@ -120,6 +120,22 @@
         </field>
     </record>
 
+    <!-- Plain read-only admin list, no client-side logic to exercise
+         beyond standard field rendering; render-proof only. -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_ses_webhook_views_render] -->
+    <record id="view_ses_webhook_pending_submission_list" model="ir.ui.view">
+        <field name="name">ses.webhook.pending_submission.list</field>
+        <field name="model">ses.webhook.pending_submission</field>
+        <field name="arch" type="xml">
+            <list string="SES Webhook Pending Submissions" decoration-muted="consumed">
+                <field name="create_date" string="Date"/>
+                <field name="domain_id"/>
+                <field name="sender_email"/>
+                <field name="consumed"/>
+            </list>
+        </field>
+    </record>
+
     <!-- Actions and Menus -->
     <record id="action_ses_webhook_domain" model="ir.actions.act_window">
         <field name="name">Webhook Domains</field>
@@ -133,7 +149,14 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <record id="action_ses_webhook_pending_submission" model="ir.actions.act_window">
+        <field name="name">Pending Submissions</field>
+        <field name="res_model">ses.webhook.pending_submission</field>
+        <field name="view_mode">list</field>
+    </record>
+
     <menuitem id="menu_ses_webhook_root" name="SES Webhooks" parent="base.menu_custom" sequence="100"/>
     <menuitem id="menu_ses_webhook_domains" name="Domains" parent="menu_ses_webhook_root" action="action_ses_webhook_domain" sequence="10"/>
     <menuitem id="menu_ses_webhook_logs" name="Logs" parent="menu_ses_webhook_root" action="action_ses_webhook_log" sequence="20"/>
+    <menuitem id="menu_ses_webhook_pending_submissions" name="Pending Submissions" parent="menu_ses_webhook_root" action="action_ses_webhook_pending_submission" sequence="30"/>
 </odoo>

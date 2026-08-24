@@ -5,3 +5,7 @@ access_ses_webhook_domain_svc,ses.webhook.domain.svc,model_ses_webhook_domain,se
 access_ses_webhook_log_system,ses.webhook.log.system,model_ses_webhook_log,base.group_system,1,1,1,1
 access_ses_webhook_log_user,ses.webhook.log.user,model_ses_webhook_log,base.group_user,1,0,0,0
 access_ses_webhook_log_svc,ses.webhook.log.svc,model_ses_webhook_log,ses_webhook.group_ses_webhook_service,1,0,1,0
+access_ses_webhook_pending_submission_system,ses.webhook.pending_submission.system,model_ses_webhook_pending_submission,base.group_system,1,1,1,1
+access_ses_webhook_pending_submission_user,ses.webhook.pending_submission.user,model_ses_webhook_pending_submission,base.group_user,1,0,0,0
+access_ses_webhook_pending_submission_svc,ses.webhook.pending_submission.svc,model_ses_webhook_pending_submission,ses_webhook.group_ses_webhook_service,1,0,1,0
+access_ses_webhook_mail_mail_svc,mail.mail.ses_webhook_svc,mail.model_mail_mail,ses_webhook.group_ses_webhook_service,1,1,1,0
