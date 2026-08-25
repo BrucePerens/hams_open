@@ -4,15 +4,44 @@ This module provides local hosting of external JavaScript and CSS libraries to s
 
 ## Hosted Libraries
 
+Each library's license below was verified against its own published `package.json` `license`
+field on npm/unpkg (not assumed from memory) -- see `LICENSING.md` at the top of this repo for
+the full picture of how this fits in with the rest of the codebase's licensing, and
+`THIRD_PARTY_LICENSES.md` in this same directory for the actual reproduced copyright notice and
+license text each library's own license requires, not just its SPDX identifier.
+
 ### Leaflet.js
 - **Version:** 1.9.4
+- **License:** BSD-2-Clause
 - **Purpose:** Interactive maps for radio amateur applications.
 - **Local Path:** `/external/static/src/node_modules/leaflet/`
 
 ### Transformers.js
-- **Version:** 2.16.1
+- **Version:** 2.16.1 (published as `@xenova/transformers`)
+- **License:** Apache-2.0
 - **Purpose:** Machine Learning (NLP) at the edge for speech-to-text and entity extraction.
 - **Local Path:** `/external/static/src/node_modules/transformers/transformers.js`
+
+### D3.js, d3-geo-projection, and topojson-client
+- **Version:** D3 v7.9.0, d3-geo-projection v4.0.0, topojson-client v3.1.0
+- **License:** ISC (all three)
+- **Purpose:** Geographic/map rendering support alongside Leaflet. `d3-geo-projection` supplies
+  map projections D3's own core package doesn't ship.
+- **Local Path:** `/external/static/src/node_modules/d3/d3.v7.min.js`,
+  `/external/static/src/node_modules/d3/d3-geo-projection.v4.min.js`,
+  `/external/static/src/node_modules/topojson/topojson-client.min.js`
+- **`d3-geo-projection` was vendored on disk with no README entry until this pass** -- same
+  "real file, nothing documenting it" gap shape as other findings tonight, just in documentation.
+- **Known gap:** unlike Leaflet and Transformers.js above, these three are **not** wired into
+  `fetch_assets.py` -- they were vendored by some other, undocumented process (each file's own
+  `/** @odoo-module **/` banner line isn't something `fetch_assets.py`'s plain download-and-hash
+  logic adds, so these didn't come from that script). There's no hash pin and no reproducible fetch
+  path for any of the three right now; a fresh `d3@7.9.0`/`topojson-client@3.1.0` download from
+  unpkg today does not byte-match what's currently vendored here (confirmed directly, not assumed --
+  the difference survives stripping the banner line and normalizing whitespace, so it's a real
+  content difference, not just formatting). One plausible source (Odoo core's own bundled JS
+  assets) was checked and ruled out -- see `THIRD_PARTY_LICENSES.md`'s provenance note. Still
+  unresolved; worth resolving before relying on this being a reproducible build.
 
 ### Noble crypto libraries (@noble/curves, @noble/hashes, @noble/ciphers)
 - **Version:** 2.3.0 (all three packages)

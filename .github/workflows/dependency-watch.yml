@@ -1,0 +1,33 @@
+name: Dependency Release Watch
+
+# Upstream releases don't happen on our push schedule, so this runs on a
+# timer instead of per-push/per-PR. A failed scheduled run shows up in the
+# Actions tab and GitHub emails repo watchers automatically -- no separate
+# issue-filing step needed for that signal to reach a human.
+on:
+  schedule:
+    - cron: '0 13 * * 1'  # Every Monday at 13:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-dependency-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Check tracked dependencies against upstream releases
+        # See hams_shared/tools/check_dependency_releases.py's own module
+        # docstring for what this covers (ardopcf, mercury, pat, hamlib,
+        # plus binary_manifest.json's kopia/etcd/cloudflared entries) and
+        # why it's separate from cargo-deny/pip-audit, which is hams_com's
+        # own build-relay.yml, not this repo. GITHUB_TOKEN raises the
+        # GitHub API rate limit; the manifest is small enough that
+        # unauthenticated calls would work too, but there's no reason not
+        # to use the token Actions already provides for free.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 hams_shared/tools/check_dependency_releases.py

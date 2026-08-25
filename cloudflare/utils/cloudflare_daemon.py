@@ -10,7 +10,7 @@ _logger = logging.getLogger(__name__)
 # In production, we'd distribute this binary or install it on the system.
 _SO_PATH = os.path.join(
     os.path.dirname(__file__),
-    '../../../daemons/cloudflared/libcloudflared.so'
+    '../../daemons/cloudflared/libcloudflared.so'
 )
 
 _lib = None
@@ -22,7 +22,7 @@ def _get_lib():
     if _lib is not None:
         return _lib
         
-    lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../daemons/cloudflared-ffi/libcloudflared.so")
+    lib_path = os.path.abspath(_SO_PATH)
     try:
         _lib = ctypes.CDLL(lib_path)
     except OSError as e:
