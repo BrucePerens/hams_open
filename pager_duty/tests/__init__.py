@@ -10,6 +10,7 @@ from . import test_incident
 from . import test_incident_edge_cases
 from . import test_journeys_stories
 from . import test_log_analyzer
+from . import test_pager_check_edge_cases
 from . import test_pager_security
 from . import test_schedule
 from . import test_schedule_edge_cases

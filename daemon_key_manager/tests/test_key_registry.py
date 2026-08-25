@@ -151,6 +151,39 @@ class TestKeyRegistry(RealTransactionCase):
         self.addCleanup(self._silent_remove, symlink_path)
         self.addCleanup(self._silent_rmdir, allowed_dir)
 
+    def test_env_file_path_rejects_literal_directory_traversal(self):
+        """_check_env_file_path's ".." check runs on the raw path, before
+        os.path.normpath/os.path.realpath -- a distinct, earlier branch
+        from the forbidden-prefix and symlink-attack cases test_security_
+        constraints already covers, and previously untested on its own.
+        """
+        with self.assertRaises(UserError) as cm:
+            self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+                {
+                    "name": "Traversal Attack",
+                    "user_id": self.service_user.id,
+                    "env_file_path": "/opt/hams/etc/keys/../../../etc/passwd",
+                }
+            )
+            self.env.flush_all()
+        self.assertIn("Directory traversal", str(cm.exception))
+
+        # Even a ".." that would normalize back to a path safely inside the
+        # allowed prefix is still rejected -- the check fires on the literal
+        # raw string, not the resolved one, confirmed by the distinct error
+        # message it raises (proving this branch, not the prefix-mismatch
+        # branch, is what caught it).
+        with self.assertRaises(UserError) as cm:
+            self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+                {
+                    "name": "Traversal Within Prefix",
+                    "user_id": self.service_user.id,
+                    "env_file_path": "/opt/hams/etc/keys/subdir/../test_daemon.env",
+                }
+            )
+            self.env.flush_all()
+        self.assertIn("Directory traversal", str(cm.exception))
+
     def _silent_remove(self, path):
         try:
             if os.path.exists(path):

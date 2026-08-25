@@ -7,7 +7,7 @@
 import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -99,3 +99,25 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         """
         self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))
         self.env.cr.fetchall() # Should not raise
+
+    def test_directly_setting_a_reserved_slug_is_rejected_on_write(self):
+        # _check_reserved_slugs had zero direct test coverage -- confirm
+        # a user can't hand-set website_slug to a reserved route name
+        # (auto-generation already avoids these via RESERVED_SLUGS
+        # seeding _generate_unique_slug's existing_slugs set, but nothing
+        # was proving the constraint itself actually fires on a direct
+        # write that bypasses generation).
+        user = self.User.create({
+            'name': 'Test User Reserved Slug',
+            'login': 'test_user_reserved_slug@example.com',
+        })
+        with self.assertRaises(ValidationError):
+            user.write({'website_slug': 'shack'})
+
+    def test_directly_setting_a_reserved_slug_is_rejected_on_create(self):
+        with self.assertRaises(ValidationError):
+            self.User.create({
+                'name': 'Test User Reserved Slug 2',
+                'login': 'test_user_reserved_slug_2@example.com',
+                'website_slug': 'arrl',
+            })

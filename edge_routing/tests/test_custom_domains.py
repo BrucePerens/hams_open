@@ -5,6 +5,7 @@
 # License: AGPL-3.0
 
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 
 
@@ -63,3 +64,35 @@ class TestCustomDomains(HamsTransactionCase):
         invalidate_model_cache(self.env, "edge.routing.domain")
         resolved_slug = self.domain_model.get_target_slug_by_domain("www.testclub.org")
         self.assertFalse(resolved_slug)
+
+    def test_02_domain_without_a_dot_is_rejected(self):
+        """_check_name's FQDN rule (domain.py) had zero test coverage --
+        a bare hostname with no dot must be rejected, not silently
+        accepted as a routable custom domain."""
+        with self.assertRaises(ValidationError):
+            self.domain_model.create({"name": "notadomain", "target_slug": "testclub2"})
+
+    def test_03_empty_domain_name_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self.domain_model.create({"name": "", "target_slug": "testclub3"})
+
+    def test_04_reserved_target_slug_is_rejected_on_create(self):
+        """_check_name's reserved-slug rule had zero test coverage -- a
+        custom domain must not be mappable onto a reserved route (e.g.
+        'shack'), which would let it shadow a real, built-in page."""
+        with self.assertRaises(ValidationError):
+            self.domain_model.create({"name": "www.hijack.org", "target_slug": "shack"})
+
+    def test_05_reserved_target_slug_is_rejected_on_write(self):
+        domain = self.domain_model.create(
+            {"name": "www.testclub4.org", "target_slug": "testclub4"}
+        )
+        with self.assertRaises(ValidationError):
+            domain.write({"target_slug": "arrl"})
+
+    def test_06_reserved_slug_check_is_case_insensitive(self):
+        """_check_name lowercases target_slug before comparing against
+        RESERVED_SLUGS -- confirm an upper/mixed-case reserved word is
+        still caught, not just the exact-case reserved string."""
+        with self.assertRaises(ValidationError):
+            self.domain_model.create({"name": "www.hijack2.org", "target_slug": "SHACK"})

@@ -106,6 +106,60 @@ class TestBackupSecurity(RealTransactionCase):
             if os.path.lexists(symlink_path):
                 os.remove(symlink_path)
 
+    def test_pgbackrest_stanza_name_validation(self):
+        # _check_security_paths's pgbackrest branch is a separate code path
+        # from validate_backup_path (kopia/local) exercised above -- it
+        # never calls validate_backup_path at all, just its own regex.
+        # test_restore_wizard_security below creates a pgbackrest config
+        # with a *valid* stanza name ("main") but nothing previously
+        # asserted the regex actually rejects an invalid one.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
+        )
+        # Empty string is deliberately not included here: it's rejected by
+        # a DB-level CHECK constraint (backup_config_target_path_not_empty)
+        # before the ORM's create() ever reaches this @api.constrains
+        # method, so asserting UserError against it would test the wrong
+        # layer (a bare psycopg2.errors.CheckViolation propagates instead).
+        malicious_stanza_names = [
+            "main; rm -rf /",
+            "main/../../etc",
+            "main`id`",
+            "main$(whoami)",
+            "main|ls",
+        ]
+        for stanza in malicious_stanza_names:
+            with self.subTest(stanza=stanza):
+                with self.assertRaises(
+                    UserError,
+                    msg=f"pgBackRest stanza name {stanza!r} should be rejected",
+                ):
+                    self.BackupConfig.with_user(svc_uid).create(
+                        {
+                            "name": "PG Stanza Test",
+                            "engine": "pgbackrest",
+                            "target_path": stanza,
+                        }
+                    )
+                    self.env.flush_all()
+
+    def test_pgbackrest_stanza_name_valid_accepted(self):
+        # Positive case: a real alphanumeric/underscore stanza name must
+        # not be rejected by the same constraint the test above proves
+        # rejects malicious ones -- otherwise a validation method that
+        # simply always raised would "pass" the negative tests too.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.odoo_facility_service_internal"
+        )
+        config_pg = self.BackupConfig.with_user(svc_uid).create(
+            {
+                "name": "PG Stanza Valid",
+                "engine": "pgbackrest",
+                "target_path": "main_stanza_2",
+            }
+        )
+        self.assertEqual(config_pg.target_path, "main_stanza_2")
+
     def test_field_security_groups(self):
         # Ensure sensitive fields are not accessible to non-admins
         # Note: In Odoo, 'groups' on fields are enforced at the view and RPC level.

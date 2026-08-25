@@ -229,3 +229,30 @@ class TestSDKExtensibility(RealTransactionCase):
                 }
             )
             self.env.flush_all()
+
+    def test_07_api_armor_public_user_must_have_owner(self):
+        # [@ANCHOR: test_api_armor_public_user_must_have_owner]
+
+        # Tests [@ANCHOR: mixin_proxy_ownership_create]
+        """Verify a public/anonymous user cannot create an orphaned, unowned record.
+
+        website.page's own ACL already denies base.group_public any create
+        right at all, so this path can't be reached through create() as a
+        real anonymous visitor -- but the mixin's own guard (the "not
+        owner_id and not group_id" branch, only reachable when
+        _is_public() is True, since any other authenticated user gets
+        auto-assigned ownership instead) is real defense-in-depth that had
+        never actually been exercised by a test. Calling the guard
+        directly proves it still works on its own, independent of ACL
+        configuration.
+        """
+        public_user = self.env.ref("base.public_user")
+        with self.assertRaises(
+            AccessError,
+            msg="A public user creating with no owner/group must be rejected.",
+        ):
+            self.env["website.page"].with_user(
+                public_user
+            )._check_proxy_ownership_create(
+                [{"url": "/orphan-public", "name": "Orphan Public Page", "type": "qweb"}]
+            )

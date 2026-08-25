@@ -137,6 +137,18 @@ class TestDatabaseManagement(HamsTransactionCase):
         v7 = self.env["pg.explain.wizard"].get_view(view_type="form")
         self.assertIn("query", v7["arch"])
 
+    def test_05_action_install_extension_happy_path(self):
+        # action_install_extension had zero real test coverage -- the only anchor comment
+        # referencing it (# Tested by [@ANCHOR: db_slow_queries]) turned out to point at
+        # test_06_query_stats_ops below, which tests action_reset_stats(), a different method
+        # entirely. pg_stat_statements is already relied upon by test_07_explain_query_security,
+        # so CREATE EXTENSION IF NOT EXISTS here is a real, idempotent no-op against this test
+        # environment's own Postgres, not something that needs mocking.
+        result = self.env["database.query.stat"].action_install_extension()
+        self.assertEqual(result["type"], "ir.actions.client")
+        self.assertEqual(result["tag"], "display_notification")
+        self.assertEqual(result["params"]["type"], "success")
+
     def test_06_query_stats_ops(self):
         # Tests [@ANCHOR: COMM_db_slow_queries]
         model = self.env["database.query.stat"]
