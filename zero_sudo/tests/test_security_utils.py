@@ -858,3 +858,92 @@ class TestSecurityUtils(HamsTransactionCase):
 
         self.assertEqual(deleted_ids, [partner_id])
         self.assertFalse(self.env["res.partner"].sudo().search([("id", "=", partner_id)]))
+
+    def test_25_anonymize_via_service_account_raises_when_visibility_is_restricted(self):
+        # Write-based sibling of test_23 -- same restricted-visibility shape, but
+        # for _anonymize_via_service_account's reassign-ownership path instead of
+        # a delete.
+        utils = self.env["zero_sudo.security.utils"]
+        group = self.env["res.groups"].create({"name": "Anonymize Test Group 25"})
+        self.env["ir.model.access"].create(
+            {
+                "name": "anonymize test 25 partner access",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "group_id": group.id,
+                "perm_read": True,
+                "perm_write": True,
+                "perm_create": True,
+                "perm_unlink": True,
+            }
+        )
+        self.env["ir.rule"].create(
+            {
+                "name": "Anonymize Test 25 Restrictive Rule",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "domain_force": "[('id', '=', 0)]",
+                "groups": [(6, 0, [group.id])],
+            }
+        )
+        self._make_erasure_test_service_account("anonymize_svc_25", group)
+        original_owner = self.env["res.users"].create(
+            {"name": "Original Owner 25", "login": "original_owner_25"}
+        )
+        partner = self.env["res.partner"].create(
+            {"name": "Anonymize Test Target 25", "user_id": original_owner.id}
+        )
+
+        with self.assertRaises(AccessError):
+            utils._anonymize_via_service_account(
+                "res.partner",
+                [("id", "=", partner.id)],
+                "user_id",
+                "test_module.anonymize_svc_25",
+            )
+
+        # Ownership must NOT have changed -- refusing to silently proceed with a
+        # partial/empty result is the whole point.
+        partner.invalidate_recordset()
+        self.assertEqual(partner.user_id.id, original_owner.id)
+
+    def test_26_anonymize_via_service_account_reassigns_when_visibility_matches(self):
+        utils = self.env["zero_sudo.security.utils"]
+        group = self.env["res.groups"].create({"name": "Anonymize Test Group 26"})
+        self.env["ir.model.access"].create(
+            {
+                "name": "anonymize test 26 partner access",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "group_id": group.id,
+                "perm_read": True,
+                "perm_write": True,
+                "perm_create": True,
+                "perm_unlink": True,
+            }
+        )
+        self.env["ir.rule"].create(
+            {
+                "name": "Anonymize Test 26 Unrestricted Rule",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "domain_force": "[(1, '=', 1)]",
+                "groups": [(6, 0, [group.id])],
+            }
+        )
+        self._make_erasure_test_service_account("anonymize_svc_26", group)
+        original_owner = self.env["res.users"].create(
+            {"name": "Original Owner 26", "login": "original_owner_26"}
+        )
+        partner = self.env["res.partner"].create(
+            {"name": "Anonymize Test Target 26", "user_id": original_owner.id}
+        )
+        partner_id = partner.id
+
+        reassigned_ids = utils._anonymize_via_service_account(
+            "res.partner",
+            [("id", "=", partner_id)],
+            "user_id",
+            "test_module.anonymize_svc_26",
+        )
+
+        self.assertEqual(reassigned_ids, [partner_id])
+        orphan_uid = utils._get_service_uid("zero_sudo.orphaned_record_owner")
+        partner.invalidate_recordset()
+        self.assertEqual(partner.user_id.id, orphan_uid)

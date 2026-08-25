@@ -182,10 +182,14 @@
                         <div class="card shadow-sm border-0 border-danger border border-1">
                             <div class="card-body">
                                 <h4 class="card-title fw-bold text-danger"><i class="fa fa-trash text-danger me-2" aria-hidden="true"/> Right to Erasure <a href="/user-websites/documentation#UX_GDPR_ERASURE" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h4>
-                                <p class="text-muted">Permanently delete all of your personal website pages and blog posts. This action also removes you from the public community directory. <strong>This cannot be undone.</strong></p>
-                                <form action="/my/privacy/delete_content" method="post" onsubmit="return confirm('Are you absolutely sure you want to permanently delete all your content? This cannot be undone.');">
+                                <div class="alert alert-warning d-flex align-items-start" role="alert">
+                                    <i class="fa fa-info-circle mt-1 me-2" aria-hidden="true"/>
+                                    <div>Download a copy of your data above <strong>before</strong> erasing anything below. Once this runs, there is no way to get your content back.</div>
+                                </div>
+                                <p class="text-muted">Permanently delete all of your personal content -- website pages, blog posts, and everything else tied to your account across this platform -- remove you from the public community directory, deactivate your account, and anonymize your remaining identifying information (name, login, and any license/callsign details on file). Amateur radio contacts and other on-air activity records are never deleted, since they were already public over the air; only your ownership of them is anonymized. <strong>This cannot be undone.</strong></p>
+                                <form action="/my/privacy/delete_content" method="post" onsubmit="return confirm('Are you absolutely sure? This permanently deletes your content, deactivates your account, and anonymizes your identity. This cannot be undone.');">
                                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                    <button type="submit" class="btn btn-danger o_tour_erasure_initiate"><i class="fa fa-warning" aria-hidden="true"/> Delete All My Content</button>
+                                    <button type="submit" class="btn btn-danger o_tour_erasure_initiate"><i class="fa fa-warning" aria-hidden="true"/> Erase My Account &amp; Content</button>
                                 </form>
                             </div>
                         </div>

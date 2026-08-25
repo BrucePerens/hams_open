@@ -4,6 +4,7 @@ import odoo
 import odoo.tests
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from urllib.parse import unquote
 import json
 
 
@@ -131,8 +132,22 @@ class TestPrivacyGDPR(HamsHttpCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        # Erasure now also deactivates the account (ham_onboarding's
+        # _execute_gdpr_erasure, folded into this same call chain), so the
+        # session is invalid by the time the browser follows the controller's
+        # redirect to /my/home?erased=1 -- it bounces once more to the login
+        # page with that original URL percent-encoded in ?redirect=. Decode
+        # before checking, rather than a literal "erased=1" substring match.
         self.assertIn(
-            b"erased=1", response.url.encode(), "Must safely redirect upon deletion."
+            "erased=1",
+            unquote(response.url),
+            "Must safely redirect upon deletion (directly, or via a login "
+            "bounce if the erasure also deactivated the session).",
+        )
+        self.user_privacy.invalidate_recordset(["active"])
+        self.assertFalse(
+            self.user_privacy.sudo().active,
+            "A fully-erased account must be deactivated, not just stripped of content.",
         )
 
         # Re-check the database to prove the records were unlinked

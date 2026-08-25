@@ -9,5 +9,23 @@
             <field name="alias_contact">everyone</field>
             <field name="alias_defaults">{'priority': '1'}</field>
         </record>
+
+        <!-- Route support@hams.com and info@hams.com to hams_helpdesk.ticket.
+             SES delivers both to the same S3 bucket/receipt rule; the polling
+             daemon calls message_process() per message, which resolves the
+             recipient against these aliases exactly as it does for the
+             mail.hams.com SMTP path. See docs/proposals/EMAIL_SEND_RECEIVE.md. -->
+        <record id="mail_alias_support_helpdesk" model="mail.alias">
+            <field name="alias_name">support</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
+        <record id="mail_alias_info_helpdesk" model="mail.alias">
+            <field name="alias_name">info</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
     </data>
 </odoo>

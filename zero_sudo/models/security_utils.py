@@ -148,6 +148,66 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return real.ids
 
     @api.model
+    def _anonymize_via_service_account(self, model_name, domain, owner_field, service_xml_id):
+        """
+        Reassigns `owner_field` to the shared "orphaned record owner" account
+        (zero_sudo.orphaned_record_owner) for every record matching `domain` on
+        `model_name`, acting as the named service account -- the write-based sibling
+        of `_erase_via_service_account` above, for public records (MASTER_02: QSOs,
+        contest scores, net-control history) that must survive GDPR erasure with
+        their ownership anonymized rather than the record deleted. Same
+        visibility-vs-ground-truth safety check as `_erase_via_service_account` (see
+        its docstring for the mechanism and why) -- a silent under-anonymization
+        (leaving some records still attributed to the erased user because the
+        service account couldn't see them) is exactly as bad as a silent
+        under-deletion.
+
+        Reassigning to a real, stable service-account record instead of clearing
+        `owner_field` to False/null avoids two problems at once: it works even when
+        `owner_field` is `required=True` (nulling it would fail validation, forcing
+        every such field to be weakened to optional just to support erasure), and it
+        means every view/report displaying these public records never needs
+        null-ownership handling -- there's always a real, presentable name to show.
+        """
+        svc_uid = self._get_service_uid(service_xml_id)
+        orphan_uid = self._get_service_uid("zero_sudo.orphaned_record_owner")
+        scoped = self.env[model_name].with_user(svc_uid).search(domain)
+        real = self.env[model_name].sudo().search(domain)
+        if set(scoped.ids) != set(real.ids):
+            missing = real - scoped
+            svc_login = self.env["res.users"].sudo().browse(svc_uid).login
+            raise AccessError(
+                _(
+                    "Service account '%(login)s' can only see %(scoped)d of "
+                    "%(real)d matching %(model)s record(s) for this anonymization "
+                    "(missing ids: %(missing)s). This usually means the "
+                    "account's own groups incidentally match an unrelated "
+                    "restrictive ir.rule on this model -- check every ir.rule "
+                    "scoped to any of its groups, not just ones written "
+                    "specifically for it."
+                )
+                % {
+                    "login": svc_login,
+                    "scoped": len(scoped),
+                    "real": len(real),
+                    "model": model_name,
+                    "missing": missing.ids,
+                }
+            )
+        if scoped:
+            # mail_auto_subscribe_no_notify: reassigning ownership to the shared
+            # orphan account is not a real "you've been assigned" event, and
+            # letting it through triggers mail.thread's auto-subscribe notify
+            # path (message_notify -> _mail_get_alias_domains -> mail.alias.domain),
+            # which most service accounts have no reason to be granted read access
+            # to. mail_notrack matches the same "this isn't a real change to show
+            # a human" reasoning for the chatter tracking message.
+            scoped.with_context(
+                mail_auto_subscribe_no_notify=True, mail_notrack=True
+            ).write({owner_field: orphan_uid})
+        return real.ids
+
+    @api.model
     def _ensure_executable(self, cmd_name, svc_xml_id=None, pkg_name=None):
         """
         Resolves an executable in the system PATH.

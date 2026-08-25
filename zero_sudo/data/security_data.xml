@@ -103,6 +103,25 @@
             <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_gdpr_service')])]"/>
         </record>
 
+        <record id="orphaned_record_owner" model="res.users">
+            <!-- Not an acting service account, never with_user()'d, never performs an
+                 operation as itself. Exists purely as a stable, presentable Many2one target
+                 for "public record, ownership anonymized" fields (ham.qso.owner_user_id,
+                 ham.contest.score.user_id, event.event.net_control_id, and similar) once a
+                 real user's GDPR erasure runs: reassigning ownership to this record avoids
+                 both weakening required=True fields to nullable and scattering
+                 null-ownership display handling across every view/report that shows these
+                 public RF/contest/net records; see MASTER_02. Holds no groups at all: it
+                 never authenticates or authorizes anything, so it needs no privileges. -->
+            <field name="name">Anonymized User (GDPR Erasure)</field>
+            <field name="login">orphaned_record_owner_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="odoo_facility_service_internal" model="res.users">
             <field name="name">Odoo Facility Service Account</field>
             <field name="login">odoo_facility_service_internal</field>
