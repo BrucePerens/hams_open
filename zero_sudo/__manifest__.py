@@ -23,6 +23,12 @@
             "zero_sudo/static/src/components/security_dashboard/security_dashboard.js",
             "zero_sudo/static/src/components/security_dashboard/security_dashboard.xml",
         ],
+        "web.assets_frontend": [
+            # Shared generic offline-queueing (IndexedDB) helper -- see the file's own header
+            # comment for why this lives here rather than in ham_shack (its original home) or
+            # ics_forms. Consumed via `import { OfflineStore } from "@zero_sudo/js/offline_store"`.
+            "zero_sudo/static/src/js/offline_store.js",
+        ],
         "web.assets_tests": [
             "zero_sudo/static/src/js/tour_utils.js",
             "zero_sudo/static/src/js/tour_failure_dump.js",
