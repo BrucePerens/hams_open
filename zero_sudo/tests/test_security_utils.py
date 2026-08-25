@@ -760,3 +760,101 @@ class TestSecurityUtils(HamsTransactionCase):
         )
         with self.assertRaises(UserError):
             utils._resolve_dependency_cycle("zero_sudo")
+
+    def _make_erasure_test_service_account(self, xml_name, group, extra_group=None):
+        groups = [(6, 0, [group.id] + ([extra_group.id] if extra_group else []))]
+        user = self.env["res.users"].create(
+            {
+                "name": f"Erasure Test Svc {xml_name}",
+                "login": f"erasure_test_svc_{xml_name}",
+                "is_service_account": True,
+                "active": True,
+                "group_ids": groups,
+            }
+        )
+        self.env["ir.model.data"].create(
+            {
+                "module": "test_module",
+                "name": xml_name,
+                "model": "res.users",
+                "res_id": user.id,
+            }
+        )
+        return user
+
+    def test_23_erase_via_service_account_raises_when_visibility_is_restricted(self):
+        # Reproduces the exact bug class found live in ham_relay_bridge: a
+        # service account has real ir.model.access.csv rights on the model,
+        # but its own group membership ALSO matches an unrelated, restrictive
+        # ir.rule -- so its own search() silently sees fewer records than
+        # actually exist, and a hand-rolled search()+unlink() would have
+        # silently done nothing. _erase_via_service_account must raise
+        # instead.
+        utils = self.env["zero_sudo.security.utils"]
+        group = self.env["res.groups"].create({"name": "Erasure Test Group 23"})
+        self.env["ir.model.access"].create(
+            {
+                "name": "erasure test 23 partner access",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "group_id": group.id,
+                "perm_read": True,
+                "perm_write": True,
+                "perm_create": True,
+                "perm_unlink": True,
+            }
+        )
+        # A restrictive rule that matches nothing real for this group --
+        # simulates the unrelated "your own records only" shape.
+        self.env["ir.rule"].create(
+            {
+                "name": "Erasure Test 23 Restrictive Rule",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "domain_force": "[('id', '=', 0)]",
+                "groups": [(6, 0, [group.id])],
+            }
+        )
+        svc = self._make_erasure_test_service_account("erasure_svc_23", group)
+        partner = self.env["res.partner"].create({"name": "Erasure Test Target 23"})
+
+        with self.assertRaises(AccessError):
+            utils._erase_via_service_account(
+                "res.partner", [("id", "=", partner.id)], "test_module.erasure_svc_23"
+            )
+
+        # And it must NOT have been deleted -- the whole point is refusing to
+        # silently proceed with a partial/empty result.
+        self.assertTrue(partner.exists())
+
+    def test_24_erase_via_service_account_deletes_when_visibility_matches(self):
+        utils = self.env["zero_sudo.security.utils"]
+        group = self.env["res.groups"].create({"name": "Erasure Test Group 24"})
+        self.env["ir.model.access"].create(
+            {
+                "name": "erasure test 24 partner access",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "group_id": group.id,
+                "perm_read": True,
+                "perm_write": True,
+                "perm_create": True,
+                "perm_unlink": True,
+            }
+        )
+        # An unrestricted rule for this group -- visibility matches ground truth.
+        self.env["ir.rule"].create(
+            {
+                "name": "Erasure Test 24 Unrestricted Rule",
+                "model_id": self.env["ir.model"]._get_id("res.partner"),
+                "domain_force": "[(1, '=', 1)]",
+                "groups": [(6, 0, [group.id])],
+            }
+        )
+        svc = self._make_erasure_test_service_account("erasure_svc_24", group)
+        partner = self.env["res.partner"].create({"name": "Erasure Test Target 24"})
+        partner_id = partner.id
+
+        deleted_ids = utils._erase_via_service_account(
+            "res.partner", [("id", "=", partner_id)], "test_module.erasure_svc_24"
+        )
+
+        self.assertEqual(deleted_ids, [partner_id])
+        self.assertFalse(self.env["res.partner"].sudo().search([("id", "=", partner_id)]))

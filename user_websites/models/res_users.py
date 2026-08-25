@@ -667,7 +667,7 @@ class ResUsers(models.Model):
                 break
             try:
                 with self.env.cr.savepoint():
-                    env_svc["website.page"].browse(pages.ids).unlink()
+                    env_svc["website.page"].browse(pages.ids).unlink()  # audit-ignore-gdpr-hand-rolled-unlink: batched/savepoint-protected for datasets that can run into the thousands, see check_gdpr_erasure_uses_service_utility.py
             except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update pages: %s", e
@@ -697,7 +697,7 @@ class ResUsers(models.Model):
                 break
             try:
                 with self.env.cr.savepoint():
-                    env_svc["blog.post"].browse(posts.ids).unlink()
+                    env_svc["blog.post"].browse(posts.ids).unlink()  # audit-ignore-gdpr-hand-rolled-unlink: batched/savepoint-protected for datasets that can run into the thousands, see check_gdpr_erasure_uses_service_utility.py
             except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update posts: %s", e
@@ -727,7 +727,7 @@ class ResUsers(models.Model):
                 break
             try:
                 with self.env.cr.savepoint():
-                    env_svc["blog.blog"].browse(blogs.ids).unlink()
+                    env_svc["blog.blog"].browse(blogs.ids).unlink()  # audit-ignore-gdpr-hand-rolled-unlink: batched/savepoint-protected for datasets that can run into the thousands, see check_gdpr_erasure_uses_service_utility.py
             except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update blogs: %s", e

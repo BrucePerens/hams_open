@@ -88,6 +88,66 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return env
 
     @api.model
+    def _erase_via_service_account(self, model_name, domain, service_xml_id):
+        """
+        Hard-deletes every record matching `domain` on `model_name`, acting as the
+        named service account -- but first verifies that account's own search()
+        visibility for this domain matches ground truth (a sudo() search, which
+        bypasses every ir.rule, used ONLY to compare counts -- the actual delete
+        below still goes through the service account's own real ACLs, per MASTER_02:
+        GDPR erasure must impersonate the service account, not sudo() around it).
+
+        Exists because a service account's group memberships can pick up an
+        UNRELATED, restrictive ir.rule scoped to one of its groups -- e.g. a GDPR
+        erasure account deliberately holding base.group_user for one documented,
+        unrelated reason can incidentally match some other module's "your own
+        records only" rule on base.group_user, and never see anyone else's data.
+        Found live in ham_relay_bridge: this silently made GDPR erasure of relay
+        nodes a permanent no-op, with zero errors anywhere, until a test happened
+        to check the actual outcome instead of just that the call didn't raise.
+
+        Raises AccessError instead of silently deleting a partial (or empty)
+        subset -- for GDPR erasure specifically, silently under-deleting is a
+        worse failure than a loud one.
+
+        Does NOT catch the sibling failure mode where the account CAN see the
+        records but the target model's own unlink() has an unrelated,
+        hand-rolled business-logic gate (e.g. website_forum's karma-based
+        can_unlink) -- that needs `.sudo()` chained onto the already-
+        impersonated recordset at the call site (env.is_admin() checks env.su,
+        which sudo() sets, without changing which account is doing the
+        deleting), not a visibility check. See ham_forum_extension's res_users.py
+        for that pattern.
+        """
+        svc_uid = self._get_service_uid(service_xml_id)
+        scoped = self.env[model_name].with_user(svc_uid).search(domain)
+        real = self.env[model_name].sudo().search(domain)
+        if set(scoped.ids) != set(real.ids):
+            missing = real - scoped
+            svc_login = self.env["res.users"].sudo().browse(svc_uid).login
+            raise AccessError(
+                _(
+                    "Service account '%(login)s' can only see %(scoped)d of "
+                    "%(real)d matching %(model)s record(s) for this erasure "
+                    "(missing ids: %(missing)s). This usually means the "
+                    "account's own groups incidentally match an unrelated "
+                    "restrictive ir.rule on this model -- check every ir.rule "
+                    "scoped to any of its groups, not just ones written "
+                    "specifically for it."
+                )
+                % {
+                    "login": svc_login,
+                    "scoped": len(scoped),
+                    "real": len(real),
+                    "model": model_name,
+                    "missing": missing.ids,
+                }
+            )
+        if scoped:
+            scoped.unlink()
+        return real.ids
+
+    @api.model
     def _ensure_executable(self, cmd_name, svc_xml_id=None, pkg_name=None):
         """
         Resolves an executable in the system PATH.
