@@ -336,7 +336,7 @@ class UserWebsitesGroup(models.Model):
     def action_suspend_group_websites(self):
         """Forcefully unpublishes all group content and flags them as suspended."""
         group_ids = self.ids
-        is_test = vars(self.env.registry).get("test_cr") is not None
+        is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
 
         if not is_test:
             db_name = self.env.cr.dbname

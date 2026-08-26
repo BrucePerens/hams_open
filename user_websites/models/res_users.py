@@ -270,7 +270,7 @@ class ResUsers(models.Model):
         # --- Content Lifecycle Policy ---
         if "active" in vals and not vals["active"]:
             users_to_archive = self.ids
-            is_test = vars(self.env.registry).get("test_cr") is not None
+            is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
             if not is_test:
                 db_name = self.env.cr.dbname
                 self.env.cr.postcommit.add(
@@ -404,7 +404,7 @@ class ResUsers(models.Model):
         user_id = self.id
         db_name = self.env.cr.dbname
 
-        is_test = vars(self.env.registry).get("test_cr") is not None
+        is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
 
         if is_test:
             env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
@@ -681,7 +681,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = vars(self.env.registry).get("test_cr") is not None
+            is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
             if not is_test:
                 self.env.cr.commit()
             if len(pages) < 5000:
@@ -711,7 +711,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = vars(self.env.registry).get("test_cr") is not None
+            is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
             if not is_test:
                 self.env.cr.commit()
             if len(posts) < 5000:
@@ -741,7 +741,7 @@ class ResUsers(models.Model):
                     continue
                 raise
 
-            is_test = vars(self.env.registry).get("test_cr") is not None
+            is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
             if not is_test:
                 self.env.cr.commit()
             if len(blogs) < 5000:

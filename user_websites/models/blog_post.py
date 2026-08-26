@@ -27,8 +27,7 @@ class BlogPost(models.Model):
         """Purge the global Cache-Tag at the edge."""
         # Enforce strict architectural schema. Do not mask missing dependencies.
         purge_queue = self.env["cloudflare.purge.queue"]
-        is_test = vars(self.env.registry).get("test_cr") is not None
-        if not purge_queue or is_test:
+        if not purge_queue:
             return
 
         # ADR 0078: Pre-fetch related fields to prevent N+1 queries in the loop
