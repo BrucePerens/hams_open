@@ -2,6 +2,7 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError
+import base64
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -278,3 +279,24 @@ class HelpdeskTicket(models.Model):
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
             self.with_env(hd_env).message_post(body=_("Ticket closed by customer."))
+
+    def ingest_inbound_email(self, raw_email_bytes):
+        """RPC entrypoint for the SES-to-S3-to-Odoo inbound mail daemon
+        (see docs/proposals/EMAIL_SEND_RECEIVE.md). Restricted to the
+        dedicated mail-ingest service account: a custom RPC method isn't
+        auto-gated by ir.model.access the way create/write/unlink are, so
+        this check is the real access boundary, not the CSV entry.
+
+        ``raw_email_bytes`` arrives as a base64 string, not raw bytes --
+        the daemon calls this over the JSON-2 API, whose transport is
+        text, and a raw MIME message is not guaranteed to be valid UTF-8
+        (attachments, non-ASCII bodies without a text-safe
+        Content-Transfer-Encoding).
+        """
+        # [@ANCHOR: COMM_helpdesk_mail_ingest]
+        if self.env.user.login != "mail_ingest_service_internal":
+            raise AccessError(
+                _("Only the mail-ingest service account may call this method.")
+            )
+        message_bytes = base64.b64decode(raw_email_bytes)
+        self.env["mail.thread"].sudo().with_company(self.env.company).message_process(None, message_bytes)  # burn-ignore-sudo: message_process() unconditionally sudo()s internally on any alias match (see mail_thread.py); identical, already user-verified reasoning as ses_webhook/controllers/webhook_api.py's matched-sender call.

@@ -9,3 +9,4 @@ access_website_helpdesk_user,website helpdesk user,website.model_website,group_h
 access_res_lang_helpdesk_user,res.lang helpdesk user,base.model_res_lang,group_helpdesk_user,1,0,0,0
 access_website_menu_helpdesk_user,website menu helpdesk user,website.model_website_menu,group_helpdesk_user,1,0,0,0
 access_res_partner_helpdesk_user,res.partner helpdesk user,base.model_res_partner,group_helpdesk_user,1,0,0,0
+access_hams_helpdesk_ticket_mail_ingest,hams_helpdesk.ticket mail ingest,model_hams_helpdesk_ticket,group_mail_ingest_service,1,0,0,0
