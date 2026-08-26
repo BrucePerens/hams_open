@@ -98,7 +98,7 @@ def _patched_handle_request_paused(self, *args, **kwargs):
 odoo.tests.common.ChromeBrowser._handle_request_paused = _patched_handle_request_paused
 
 # Patch _preexec to put chrome in its own process group
-_original_preexec = getattr(odoo.tests.common, "_preexec", None)  # burn-ignore-introspection [@ANCHOR: preexec_patch]
+_original_preexec = getattr(odoo.tests.common, "_preexec", None)  # burn-ignore-introspection
 
 
 def _patched_preexec(*args, **kwargs):
@@ -386,7 +386,7 @@ original_chrome_stop = ChromeBrowser.stop
 
 def _patched_chrome_stop(self, *args, **kwargs):
 
-    proc = getattr(self, "_process", None) or getattr(self, "chrome_process", None)  # burn-ignore-introspection [@ANCHOR: chrome_process_fetch]
+    proc = getattr(self, "_process", None) or getattr(self, "chrome_process", None)  # burn-ignore-introspection
     if proc:
         try:
             parent = psutil.Process(proc.pid)
@@ -398,7 +398,7 @@ def _patched_chrome_stop(self, *args, **kwargs):
         except psutil.NoSuchProcess as e:  # audit-ignore-catch-all
             _logger.warning("Ignored process exception: %s", e)
     original_chrome_stop(self)
-    if hasattr(self, "_receiver") and self._receiver.is_alive():  # burn-ignore-introspection [@ANCHOR: chrome_receiver_alive]
+    if hasattr(self, "_receiver") and self._receiver.is_alive():  # burn-ignore-introspection
         self._receiver.join(timeout=2.0)
 
 
@@ -577,7 +577,7 @@ class SafePatchMixin:
 
     @classmethod
     def get_callsign(cls, key="W1AW"):
-        if not hasattr(cls, "_callsign_map"):  # burn-ignore-introspection [@ANCHOR: callsign_map_init]
+        if not hasattr(cls, "_callsign_map"):  # burn-ignore-introspection
             cls._callsign_map = {}
         if key not in cls._callsign_map:
             cls._callsign_map[key] = generate_test_callsign()
@@ -855,7 +855,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 )
 
                 def cleanup_socat():
-                    if getattr(cls, "_socat_proc", None):  # burn-ignore-introspection [@ANCHOR: socat_proc_1]
+                    if getattr(cls, "_socat_proc", None):  # burn-ignore-introspection
                         try:
                             try:
                                 pgid = os.getpgid(cls._socat_proc.pid)
@@ -882,7 +882,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                             _logger.warning("Error terminating socat: %s", e)
                         finally:
                             cls._socat_proc = None
-                    log_fh = getattr(cls, "_socat_log_file", None)  # burn-ignore-introspection [@ANCHOR: socat_log_file_1]
+                    log_fh = getattr(cls, "_socat_log_file", None)  # burn-ignore-introspection
                     if log_fh and not log_fh.closed:
                         try:
                             log_fh.close()
@@ -951,7 +951,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         with open(lock_path, "w") as lockfile:
             fcntl.flock(lockfile, fcntl.LOCK_EX)
             try:
-                if getattr(cls, "_socat_proc", None):  # burn-ignore-introspection [@ANCHOR: socat_proc_2]
+                if getattr(cls, "_socat_proc", None):  # burn-ignore-introspection
                     try:
                         try:
                             pgid = os.getpgid(cls._socat_proc.pid)
@@ -981,7 +981,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         )
                     finally:
                         cls._socat_proc = None
-                log_fh = getattr(cls, "_socat_log_file", None)  # burn-ignore-introspection [@ANCHOR: socat_log_file_2]
+                log_fh = getattr(cls, "_socat_log_file", None)  # burn-ignore-introspection
                 if log_fh and not log_fh.closed:
                     try:
                         log_fh.close()
@@ -1086,7 +1086,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             ):
                 _logger.error("TRACING: HamsHttpCase.tearDown caught exception: %s", e)
         finally:
-            if hasattr(self, "opener") and self.opener:  # burn-ignore-introspection [@ANCHOR: opener_alive]
+            if hasattr(self, "opener") and self.opener:  # burn-ignore-introspection
                 try:
                     self.url_open(
                         "/odoo/health", headers={"Connection": "close"}, timeout=1
