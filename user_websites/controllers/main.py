@@ -453,6 +453,19 @@ class UserWebsitesController(http.Controller):
         ]
         return Response(generate(), headers=headers)
 
+    @http.route("/my/privacy/export.zip", type="http", auth="user", website=True)
+    def privacy_export_zip(self, **kwargs):
+        # # Tested by [@ANCHOR: user_websites:test_gdpr_export_zip_redirect]
+        # Mints a short-lived, single-use token (ham.gdpr.export.token) and
+        # redirects the browser to the standalone gdpr_csv_export daemon's
+        # own download endpoint -- per docs/proposals/GDPR_CSV_EXPORT.md, the
+        # actual CSV/zip streaming happens entirely in that daemon, not this
+        # Odoo worker, so a slow client's download never ties up the shared
+        # worker pool. This controller call itself is the only Odoo-worker
+        # time this export costs on the redirect path.
+        token = request.env["ham.gdpr.export.token"].create_for_current_user()
+        return request.redirect(f"/api/v1/gdpr_export/download?token={token}")
+
     @http.route(
         "/my/privacy/delete_content",
         type="http",

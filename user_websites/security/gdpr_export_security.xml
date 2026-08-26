@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later). -->
+<odoo>
+    <data noupdate="1">
+        <record id="group_gdpr_export_service" model="res.groups">
+            <field name="name">GDPR CSV Export Service</field>
+            <field name="comment">Internal system group for the gdpr_csv_export daemon. See docs/proposals/GDPR_CSV_EXPORT.md.</field>
+        </record>
+    </data>
+
+    <data noupdate="0">
+        <record id="user_gdpr_export_service" model="res.users">
+            <field name="name">GDPR CSV Export Service</field>
+            <field name="login">gdpr_export_service_internal</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="group_ids" eval="[(6, 0, [ref('group_gdpr_export_service')])]"/>
+        </record>
+    </data>
+</odoo>

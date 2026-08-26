@@ -60,3 +60,4 @@ access_content_routing_view_svc,content routing view svc,model_user_websites_con
 access_website_menu_svc,website.menu svc,website.model_website_menu,user_websites.group_user_websites_service_account,1,1,0,0
 access_edge_routing_domain_svc,edge.routing.domain svc,edge_routing.model_edge_routing_domain,user_websites.group_user_websites_service_account,1,0,0,0
 access_user_websites_group_edge_routing_svc,user.websites.group edge routing svc,model_user_websites_group,edge_routing.group_edge_routing_service_account,1,0,0,0
+access_ham_gdpr_export_token_service,ham.gdpr.export.token service,model_ham_gdpr_export_token,group_gdpr_export_service,1,1,1,0

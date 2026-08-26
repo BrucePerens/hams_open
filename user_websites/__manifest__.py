@@ -35,6 +35,7 @@ This module enables:
     "data": [
         # Security
         "security/user_websites_security.xml",
+        "security/gdpr_export_security.xml",
         "security/ir.model.access.csv",
         # Data
         "data/user_websites_data.xml",
