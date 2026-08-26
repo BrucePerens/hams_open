@@ -69,6 +69,45 @@ class TestExternalAssets(HamsHttpCase):
             "Transformers JS content should be valid.",
         )
 
+    # Tests [@ANCHOR: external:HTTP_REACHABLE_D3]
+    def test_02a_d3_assets_reachable(self):
+        """Verify D3, d3-geo-projection, and topojson-client are reachable via HTTP."""
+        d3_js_url = "/external/static/src/node_modules/d3/d3.v7.min.js"
+        d3_geo_projection_url = (
+            "/external/static/src/node_modules/d3/d3-geo-projection.v4.min.js"
+        )
+        topojson_client_url = (
+            "/external/static/src/node_modules/topojson/topojson-client.min.js"
+        )
+
+        d3_response = self.url_open(d3_js_url)
+        self.assertEqual(d3_response.status_code, 200, "D3 JS should be reachable.")
+        self.assertIn(b"d3js.org", d3_response.content, "D3 JS content should be valid.")
+
+        d3_geo_projection_response = self.url_open(d3_geo_projection_url)
+        self.assertEqual(
+            d3_geo_projection_response.status_code,
+            200,
+            "d3-geo-projection JS should be reachable.",
+        )
+        self.assertIn(
+            b"d3-geo-projection",
+            d3_geo_projection_response.content,
+            "d3-geo-projection JS content should be valid.",
+        )
+
+        topojson_client_response = self.url_open(topojson_client_url)
+        self.assertEqual(
+            topojson_client_response.status_code,
+            200,
+            "topojson-client JS should be reachable.",
+        )
+        self.assertIn(
+            b"topojson",
+            topojson_client_response.content,
+            "topojson-client JS content should be valid.",
+        )
+
     # Tests [@ANCHOR: external:HTTP_NO_HEAD]
     def test_03_no_head_request(self):
         """Verify fetch_assets does not use HEAD requests."""

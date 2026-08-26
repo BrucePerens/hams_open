@@ -56,12 +56,8 @@ Copyright 2013-2021 Mike Bostock, 2015 Ricky Reusser
 
 Same ISC permission/warranty text as D3.js above.
 
-**Not previously documented in `README.md`'s library list -- fixed as part of this pass.** This
-file (`static/src/node_modules/d3/d3-geo-projection.v4.min.js`) is real, currently-vendored code
-(used for projections D3's own core doesn't ship, e.g. for the map rendering alongside Leaflet)
-that existed on disk with no corresponding README entry until now -- the same "real thing on disk,
-nothing pointing at it" gap shape as tonight's other findings, just in documentation rather than
-code.
+Sourced via `fetch_assets.py`'s hash-pinned fetch (see the provenance note below for why this
+replaced an earlier, undocumented, non-reproducible vendoring of the same library).
 
 ## topojson-client 3.1.0 -- ISC
 
@@ -125,18 +121,27 @@ Apache-2.0 line as if it were the complete picture.
 
 ---
 
-## Provenance note: D3.js / d3-geo-projection / topojson-client
+## Provenance note: D3.js / d3-geo-projection / topojson-client (resolved)
 
-All three D3-family files above (but not Leaflet.js) carry a shared `/** @odoo-module **/` banner
-line as their first line, which is Odoo's own asset-pipeline marker for a file importable as an ES
-module in Odoo's frontend build -- `fetch_assets.py`'s plain download-and-hash logic for Leaflet
-and Transformers.js does not add this banner, so these three came from some other, still-
-undocumented vendoring process that does. One plausible source was checked and ruled out tonight:
-Odoo core itself ships `topojson`-format *data* files (continent/country boundaries) under
-`odoo/addons/spreadsheet/static/topojson/`, for its Spreadsheet dashboard geo-chart feature, and
-that feature's chart library (`odoo/addons/spreadsheet/static/lib/chartjs-chart-geo/
-chartjs-chart-geo.js`) was checked directly for a bundled copy of D3/topojson-client source --
-it contains at most one incidental substring match, not a real embedded copy, so this is not where
-these three files came from. The actual source of the shared `/** @odoo-module **/`-tagged builds,
-and why they don't byte-match a fresh `unpkg` download of the same published versions, remains
-unresolved.
+All three D3-family files previously carried a shared `/** @odoo-module **/` banner line as their
+first line -- Odoo's own asset-pipeline marker for a file importable as an ES module in Odoo's
+frontend build -- which `fetch_assets.py`'s plain download-and-hash logic for Leaflet and
+Transformers.js never added, so these three had come from some other, undocumented vendoring
+process. One plausible source was checked and ruled out: Odoo core itself ships `topojson`-format
+*data* files (continent/country boundaries) under `odoo/addons/spreadsheet/static/topojson/`, for
+its Spreadsheet dashboard geo-chart feature, and that feature's chart library
+(`odoo/addons/spreadsheet/static/lib/chartjs-chart-geo/chartjs-chart-geo.js`) was checked directly
+for a bundled copy of D3/topojson-client source -- it contains at most one incidental substring
+match, not a real embedded copy, so this was not where these three files came from.
+
+**Resolved:** a search of this codebase found no manifest, XML asset bundle, or JS `import`
+referencing any of the three files anywhere outside their own vendored directory -- they were dead,
+unwired vendored code, never actually loaded by the running application, which is why the spurious
+`/** @odoo-module **/` banner (and the non-standard `require(...)`-based fallback branch it implies
+Odoo's real ES-module loader would need, which Odoo's own `module_loader.js` does not define) never
+caused a runtime failure. Replaced with a fresh, hash-pinned fetch of the same published versions'
+plain global-UMD `dist/` builds from unpkg (no `/** @odoo-module **/` banner, matching Leaflet's own
+vendored form), now wired into `fetch_assets.py` identically to Leaflet and Transformers.js above.
+`d3-geo-projection`'s browser-global UMD branch extends the same global `d3` object `d3.v7.min.js`
+establishes, rather than depending on Odoo's module system at all -- the standard way D3 plugins are
+loaded outside a bundler.
