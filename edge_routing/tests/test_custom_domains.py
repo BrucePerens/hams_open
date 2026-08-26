@@ -71,10 +71,12 @@ class TestCustomDomains(HamsTransactionCase):
         accepted as a routable custom domain."""
         with self.assertRaises(ValidationError):
             self.domain_model.create({"name": "notadomain", "target_slug": "testclub2"})
+            self.env.flush_all()
 
     def test_03_empty_domain_name_is_rejected(self):
         with self.assertRaises(ValidationError):
             self.domain_model.create({"name": "", "target_slug": "testclub3"})
+            self.env.flush_all()
 
     def test_04_reserved_target_slug_is_rejected_on_create(self):
         """_check_name's reserved-slug rule had zero test coverage -- a
@@ -82,6 +84,7 @@ class TestCustomDomains(HamsTransactionCase):
         'shack'), which would let it shadow a real, built-in page."""
         with self.assertRaises(ValidationError):
             self.domain_model.create({"name": "www.hijack.org", "target_slug": "shack"})
+            self.env.flush_all()
 
     def test_05_reserved_target_slug_is_rejected_on_write(self):
         domain = self.domain_model.create(
@@ -89,6 +92,7 @@ class TestCustomDomains(HamsTransactionCase):
         )
         with self.assertRaises(ValidationError):
             domain.write({"target_slug": "arrl"})
+            self.env.flush_all()
 
     def test_06_reserved_slug_check_is_case_insensitive(self):
         """_check_name lowercases target_slug before comparing against
@@ -96,3 +100,4 @@ class TestCustomDomains(HamsTransactionCase):
         still caught, not just the exact-case reserved string."""
         with self.assertRaises(ValidationError):
             self.domain_model.create({"name": "www.hijack2.org", "target_slug": "SHACK"})
+            self.env.flush_all()

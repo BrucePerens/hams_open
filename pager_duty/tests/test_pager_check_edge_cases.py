@@ -25,6 +25,7 @@ class TestPagerCheckEdgeCases(HamsTransactionCase):
         )
         with self.assertRaises(ValidationError):
             check.write({"parent_check_id": check.id})
+            self.env.flush_all()
 
     def test_02_two_check_cycle_is_rejected(self):
         check_a = self.env["pager.check"].create(
@@ -39,6 +40,7 @@ class TestPagerCheckEdgeCases(HamsTransactionCase):
         )
         with self.assertRaises(ValidationError):
             check_a.write({"parent_check_id": check_b.id})
+            self.env.flush_all()
 
     def test_03_valid_non_cyclic_parent_chain_is_accepted(self):
         """Positive case -- the constraint must not reject a real, valid

@@ -113,6 +113,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         })
         with self.assertRaises(ValidationError):
             user.write({'website_slug': 'shack'})
+            self.env.flush_all()
 
     def test_directly_setting_a_reserved_slug_is_rejected_on_create(self):
         with self.assertRaises(ValidationError):
@@ -121,3 +122,4 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
                 'login': 'test_user_reserved_slug_2@example.com',
                 'website_slug': 'arrl',
             })
+            self.env.flush_all()
