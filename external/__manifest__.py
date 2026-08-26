@@ -15,8 +15,8 @@
     # "Local hosting of external libraries for isolated networks" -- the
     # vendored files stay unminified and are reached via Odoo's ordinary
     # generic static-file route (/external/static/src/node_modules/...,
-    # see [@ANCHOR: external:HTTP_REACHABLE_LEAFLET] and
-    # [@ANCHOR: external:HTTP_REACHABLE_TRANSFORMERS] in tests/test_assets.py),
+    # see [@ANCHOR: external:HTTP_REACHABLE_LEAFLET] and [@ANCHOR: external:HTTP_REACHABLE_TRANSFORMERS]
+    # in tests/test_assets.py),
     # never via t-call-assets. transformers.js in particular contains
     # nested ES6 template literals; declaring either file under an
     # "assets" bundle key would make Odoo re-minify it with rjsmin, whose

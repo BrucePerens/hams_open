@@ -3,13 +3,19 @@
 <odoo>
     <template id="layout_inherit_report_violation" inherit_id="website.layout" name="Report Violation Global"> 
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_xpath_rendering_layout] -->
+        <!-- This template injects two independent features covered by the
+             same test method (test_06_layout_templates): the report-violation
+             dropzone below, and the xpath render pattern immediately after. -->
         <!-- Verified by [@ANCHOR: test_dropzone_layout] -->
 
         <!-- Verified by [@ANCHOR: test_xpath_rendering_layout] -->
 
         <!-- [@ANCHOR: xpath_rendering_layout] -->
+        <!-- The audit-ignore-xpath bypass below is specific to this xpath
+             injection, distinct from the template-level audit-ignore-view
+             bypass declared above. -->
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_layout] -->
-        <xpath expr="//footer" position="after"> 
+        <xpath expr="//footer" position="after">
             <div id="user_websites_dropzone_layout">
                 <!-- [@ANCHOR: dropzone_layout] -->
             </div>

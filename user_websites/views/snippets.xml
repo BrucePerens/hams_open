@@ -4,9 +4,11 @@
 
     <template id="user_websites_snippet_category" inherit_id="website.snippets" name="User Websites Snippets">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_snippets] -->
-        <!-- Verified by [@ANCHOR: test_dropzone_snippets] -->
+        <!-- Bypass above covers the template's overall rendering; the
+             xpath injection immediately below carries its own separate
+             audit-ignore-xpath bypass, since it's a distinct render risk. -->
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_snippets] -->
-        <xpath expr="/*" position="inside"> 
+        <xpath expr="/*" position="inside">
             <div id="user_websites_dropzone_snippets">
                 <!-- [@ANCHOR: dropzone_snippets] -->
             </div>

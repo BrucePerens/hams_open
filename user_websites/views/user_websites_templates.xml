@@ -3,7 +3,6 @@
 <odoo>
 
     <template id="user_navbar" name="User Websites Navbar">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <nav t-if="resolved_slug" class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar">
             <div class="container">
@@ -39,12 +38,10 @@
     </template>
 
     <template id="layout_inherit_user_navbar" inherit_id="website.layout" name="User Navbar Global">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <xpath expr="//head" position="inside">
             <!-- [@ANCHOR: xpath_rendering_navbar_head] -->
 
-            <!-- Verified by [@ANCHOR: test_xpath_rendering_navbar_head] -->
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar_head] -->
             <t t-set="profile_user" t-value="profile_user or (main_object.owner_user_id if main_object and 'owner_user_id' in main_object else False)"/>
             <t t-set="profile_group" t-value="profile_group or (main_object.user_websites_group_id if main_object and 'user_websites_group_id' in main_object else False)"/>
@@ -60,7 +57,6 @@
         <xpath expr="//header" position="after">
             <!-- [@ANCHOR: xpath_rendering_navbar] -->
 
-            <!-- Verified by [@ANCHOR: test_xpath_rendering_navbar] -->
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar] -->
             <div id="user_websites_dropzone_navbar">
                 <!-- [@ANCHOR: dropzone_navbar] -->
@@ -74,12 +70,10 @@
     </template>
 
     <template id="portal_my_home_appeal" inherit_id="portal.portal_my_home" name="Portal My Home Appeal">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <xpath expr="//div[hasclass('o_portal_my_home')]" position="before">
             <!-- [@ANCHOR: xpath_rendering_appeal] -->
 
-            <!-- Verified by [@ANCHOR: test_xpath_rendering_appeal] -->
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_appeal] -->
             <div id="user_websites_dropzone_templates">
                 <!-- [@ANCHOR: dropzone_templates] -->
@@ -142,7 +136,6 @@
         <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
             <!-- [@ANCHOR: xpath_rendering_portal_docs] -->
 
-            <!-- Verified by [@ANCHOR: test_xpath_rendering_portal_docs] -->
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_portal_docs] -->
             <div class="o_portal_doc_spinner col-12 col-md-6 col-lg-4 mb-4">
                 <a href="/my/privacy" class="text-decoration-none d-flex flex-column h-100 p-3 border rounded shadow-sm bg-white">
@@ -200,7 +193,6 @@
     </template>
 
     <template id="template_default_home" name="User Website Home Master Layout">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div id="user_websites_dropzone_home_header">
@@ -220,7 +212,6 @@
     </template>
 
     <template id="blog_index" name="User Blog Index">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div id="user_websites_dropzone_blog_header"></div>
@@ -250,7 +241,6 @@
     </template>
 
     <template id="community_directory" name="Community Directory">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div class="container mt-5">
@@ -346,7 +336,6 @@
     </template>
 
     <template id="report_violation_snippet" name="Report Violation Button">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <div class="text-center user-websites-report-container d-inline">
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reportViolationModal" t-att-data-url="request.httprequest.url">
@@ -356,7 +345,6 @@
     </template>
 
     <template id="unsubscribe_success" name="Unsubscription Success">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div class="container mt-5 pt-5 text-center">
@@ -376,7 +364,6 @@
     </template>
 
     <template id="documentation_page" name="User Websites Documentation">
-    <!-- Verified by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
             <div class="container mt-5 mb-5 shadow-sm p-5 bg-white rounded">

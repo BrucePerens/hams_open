@@ -7,9 +7,8 @@
         <field name="model">res.users</field>
         <field name="inherit_id" ref="base.view_users_form"/>
         <field name="arch" type="xml">
-            <!-- Verified by [@ANCHOR: test_dropzone_users] -->
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_dropzone_users] -->
-            <xpath expr="//notebook" position="inside"> 
+            <xpath expr="//notebook" position="inside">
                 <page string="User Websites" name="user_websites_settings">
                     <div id="user_websites_dropzone_users">
                         <!-- [@ANCHOR: dropzone_users] -->
