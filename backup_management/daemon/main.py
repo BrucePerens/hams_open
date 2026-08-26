@@ -3,6 +3,7 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import os
+import sys
 import json
 import time
 import shutil
@@ -26,8 +27,26 @@ ODOO_USER = "backup_service_internal"
 ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
-RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
-RABBITMQ_PASS = os.environ.get("RABBITMQ_PASS", "guest")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+# Matches the RMQ_USER/RMQ_PASS keys infrastructure.py's rabbitmq.env
+# actually provisions -- the previous RABBITMQ_USER/RABBITMQ_PASS names
+# never matched, so a real deployment's credentials were never read at
+# all and this daemon always silently connected as guest/guest.
+RMQ_USER = os.environ.get("RMQ_USER")
+RMQ_PASS = os.environ.get("RMQ_PASS")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+
+
+def _require_rabbitmq_credentials():
+    # This daemon executes backup and restore commands with real filesystem
+    # access -- it must never silently connect to RabbitMQ as the
+    # well-known "guest"/"guest" default. Fail loudly instead, the same
+    # way distributed_redis_cache's HMAC secret check refuses to fall
+    # back to a hardcoded, publicly-known secret.
+    if not RMQ_USER or not RMQ_PASS:
+        raise RuntimeError(
+            "RMQ_USER and RMQ_PASS must both be set -- refusing to "
+            "fall back to the well-known 'guest'/'guest' default "
+            "credentials."
+        )
 
 
 class OdooAPIError(Exception):
@@ -146,7 +165,7 @@ def execute_job(ch, method, properties, body):
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
         elif engine == "restore_drill":
             script_path = payload.get("script")
-            allowed_base = os.environ.get("BACKUP_WORKER_SCRIPTS_DIR", "/opt/odoo/daemons/backup_worker/scripts")
+            allowed_base = os.environ.get("BACKUP_WORKER_SCRIPTS_DIR", "/opt/hams/daemons/backup_worker/scripts")
             try:
                 abs_script_path = os.path.realpath(os.path.normpath(script_path)) if script_path else ""
             except OSError:
@@ -415,9 +434,10 @@ def execute_job(ch, method, properties, body):
 
 
 def main():
+    _require_rabbitmq_credentials()
     while True:
         try:
-            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+            credentials = pika.PlainCredentials(RMQ_USER, RMQ_PASS)
             parameters = pika.ConnectionParameters(
                 host=RABBITMQ_HOST, credentials=credentials
             )
@@ -453,4 +473,19 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--start-test" in sys.argv:
+        try:
+            _require_rabbitmq_credentials()
+            credentials = pika.PlainCredentials(RMQ_USER, RMQ_PASS)
+            parameters = pika.ConnectionParameters(
+                host=RABBITMQ_HOST, credentials=credentials
+            )
+            conn = pika.BlockingConnection(parameters)
+            conn.close()
+            logger.info("Smoketest passed. Exiting successfully.")
+            sys.exit(0)
+        except (RuntimeError, pika.exceptions.AMQPError, OSError) as e:
+            logger.error("Smoketest failed: %s", e)
+            sys.exit(1)
+
     main()

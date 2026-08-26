@@ -49,6 +49,12 @@ class TestRealBackupWorker(RealTransactionCase):
         # Fetch the auto-generated API key for the backup service daemon from its secure vault
         env_vars = {}
         env_vars["DB_NAME"] = self.env.cr.dbname
+        # The daemon now refuses to start without explicit RabbitMQ
+        # credentials (no silent guest/guest fallback) -- this local test
+        # RabbitMQ genuinely runs with the default guest account, matching
+        # what this test's own direct connection below already assumes.
+        env_vars["RMQ_USER"] = os.environ.get("RMQ_USER", "guest")
+        env_vars["RMQ_PASS"] = os.environ.get("RMQ_PASS", "guest")  # burn-ignore-env
         env_file = "/opt/hams/etc/keys/backup_worker.env"
         if os.path.exists(env_file):
             with open(env_file, "r") as f:
