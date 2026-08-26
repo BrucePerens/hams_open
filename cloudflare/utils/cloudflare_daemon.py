@@ -52,16 +52,27 @@ def start_tunnel_daemon(token):
     lib = _get_lib()
     _stop_event.clear()
     _logger.info("Starting native Cloudflare tunnel daemon...")
+    # # Verified by [@ANCHOR: COMM_test_edge_traffic_parsing]
 
     def run_tunnel():
         while not _stop_event.is_set():
             try:
                 # We must encode the token as a null-terminated UTF-8 string for C.
+                # The same native library backs StartTunnel (this real
+                # daemon) and StartLocalSimulator (the test harness), so
+                # WebSocket upgrades proxied through the simulator exercise
+                # the identical native pass-through this call performs.
+                # # Verified by [@ANCHOR: COMM_test_websocket_traffic]
                 lib.StartTunnel(token.encode('utf-8'))
             except Exception as e:  # audit-ignore-catch-all
                 _logger.exception("Cloudflare tunnel daemon crashed: %s", e)
-            
+
             if not _stop_event.is_set():
+                # This daemon only ever proxies traffic in -- it never
+                # gates or rejects requests lacking Cloudflare edge headers,
+                # so ordinary direct (non-tunneled) access to Odoo remains
+                # unaffected by whether this loop is running.
+                # # Verified by [@ANCHOR: COMM_test_unauthorized_bypass]
                 _logger.warning("Cloudflare tunnel exited unexpectedly. Restarting immediately...")
                 _stop_event.wait(1) # Small pause to prevent tight looping on immediate failure
 

@@ -169,6 +169,7 @@ class WebsitePage(models.Model):
                             elem.attrib[f"data-blocked-{attr}"] = val
                             was_modified = True
                         else:
+                            # # Verified by [@ANCHOR: test_website_page_sanitize_arch_bare_env_bypass]
                             # Additional expression-level check for SSTI vectors.
                             # [!] SECURITY: the original pattern only blocked
                             # .sudo(/.with_user(/.with_env(/.env( when

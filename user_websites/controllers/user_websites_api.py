@@ -19,6 +19,7 @@ class UserWebsitesApi(http.Controller):
         csrf=False,
     )
     def api_domains(self, **kwargs):
+        # # Verified by [@ANCHOR: COMM_test_domains_api_returns_all_domains]
         """
         Returns a list of all domains for Let's Encrypt certificate maintenance.
         This includes both user custom domains (edge.routing.domain) and,

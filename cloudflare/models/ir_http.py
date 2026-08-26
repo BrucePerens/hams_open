@@ -99,6 +99,7 @@ class IrHttp(models.AbstractModel):
         try:
             website = request.website
         except Exception as e:  # audit-ignore-catch-all
+            # # Verified by [@ANCHOR: COMM_test_05_non_website_request_no_cache_tag]
             _logger.info("Request website missing (not a website-routed request): %s", e)
             website = False
         website_id = website.id if website else False

@@ -105,6 +105,7 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
             if is_admin:
                 continue
 
+            # # Verified by [@ANCHOR: test_api_armor_public_user_must_have_owner]
             if not owner_id and not group_id:
                 raise AccessError(
                     _(
