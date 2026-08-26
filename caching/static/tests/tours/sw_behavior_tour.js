@@ -105,7 +105,7 @@ registry.category("web_tour.tours").add("caching_sw_behavior_check", {
             trigger: "body",
             run: async function () {
                 // Tests the "SURGICAL ODOO EVICTION" branch inside
-                // [@ANCHOR: COMM_caching_sw_fetch_interceptor]: caching a
+                // see [@ANCHOR: COMM_caching_sw_fetch_interceptor]: caching a
                 // fresh /web/assets/<hash>/<file> response deletes any
                 // other cached entry for the same trailing <file> under a
                 // different hash.
