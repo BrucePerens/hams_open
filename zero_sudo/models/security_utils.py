@@ -321,6 +321,52 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return None
 
     @api.model
+    def _is_test_mode(self):
+        """
+        Whether env.cr.commit() would be unsafe or meaningless right
+        now: either forbidden outright (plain TransactionCase --
+        including this codebase's own HamsTransactionCase, which is
+        what most of this codebase's tests use -- patches an ordinary
+        cursor's `.commit` to a `forbidden` function that raises), or a
+        harmless no-op that never reaches the real database (HttpCase's
+        TestCursor.commit() only closes the current savepoint and clears
+        hooks -- see odoo/tests/test_cursor.py -- it never issues a real
+        SQL COMMIT). Either way, code that would otherwise commit
+        directly, or hand off to a background thread that opens its own
+        separate DB connection, needs to know that this transaction's
+        uncommitted data would be invisible or inconsistent to anyone
+        else looking at the database right now.
+
+        Replaces an older idiom, flagged as dead code by
+        hams_shared/tools/check_registry_test_cr_usage.py, that read a
+        registry attribute which has never actually existed in this
+        installed Odoo version -- that check always evaluated to False,
+        silently skipping its own guard.
+
+        Confirmed empirically, not assumed, across two wrong first
+        attempts: checking only `type(self.env.cr).__name__ ==
+        "TestCursor"` covers HttpCase but silently returns False for
+        plain TransactionCase (which never uses TestCursor at all);
+        checking `odoo.modules.module.current_test or
+        tools.config['test_enable']` is process-wide, not per-cursor, so
+        it would also incorrectly return True inside zero_sudo's own
+        RealTransactionCase tests (see
+        zero_sudo/tests/real_transaction.py), which deliberately swap in
+        a real, unpatched cursor via `db_connect(...).cursor()`
+        specifically so their test bodies can exercise genuine
+        commit/rollback behavior. The check below is scoped to that
+        cursor's own actual behavior, so it correctly returns False
+        there -- callers proceed exactly as they would outside a test,
+        which is the point of that harness.
+
+        :return: True if committing this cursor right now would either
+            raise or silently do nothing real; False otherwise
+            (including inside a RealTransactionCase test).
+        """
+        cr = self.env.cr
+        return type(cr).__name__ == "TestCursor" or cr.commit.__name__ == "forbidden"
+
+    @api.model
     def _invalidate_model_cache(self, model_name):
         """
         Securely invalidates the entire cache for a specific model.

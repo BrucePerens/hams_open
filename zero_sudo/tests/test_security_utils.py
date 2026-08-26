@@ -905,6 +905,20 @@ class TestSecurityUtils(HamsTransactionCase):
         partner.invalidate_recordset()
         self.assertEqual(partner.user_id.id, original_owner.id)
 
+    def test_27_is_test_mode_true_inside_a_transaction_case(self):
+        """
+        This test (HamsTransactionCase, i.e. plain TransactionCase) runs
+        against an ordinary cursor whose `.commit` Odoo's own test
+        framework patches to raise -- not Odoo's TestCursor, which only
+        HttpCase-style tests use -- so _is_test_mode() must still report
+        True here. This is the real signal that replaced an older idiom
+        this codebase's own check_registry_test_cr_usage.py flags as
+        dead code across the codebase.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+        self.assertTrue(utils._is_test_mode())
+        self.assertEqual(self.env.cr.commit.__name__, "forbidden")
+
     def test_26_anonymize_via_service_account_reassigns_when_visibility_matches(self):
         utils = self.env["zero_sudo.security.utils"]
         group = self.env["res.groups"].create({"name": "Anonymize Test Group 26"})
