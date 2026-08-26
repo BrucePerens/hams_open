@@ -33,6 +33,12 @@ class TestDaemonKeyRegistryMultiCompany(HamsTransactionCase):
         self.company_a = self.env["res.company"].create({"name": "Company A"})
         self.company_b = self.env["res.company"].create({"name": "Company B"})
 
+        # Neither fixture holds base.group_user -- per this codebase's own
+        # DOMAIN SANDBOX rule that's reserved for odoo_facility_service_internal
+        # only, and it would also be unfaithful to production reality here:
+        # daemon_key_manager's own real service account
+        # (user_daemon_key_manager_service, security.xml) holds only
+        # group_daemon_key_manager, nothing else.
         manager_group = self.env.ref("daemon_key_manager.group_daemon_key_manager")
         self.manager_user = self.env["res.users"].create(
             {
@@ -40,18 +46,19 @@ class TestDaemonKeyRegistryMultiCompany(HamsTransactionCase):
                 "login": "daemon_key_manager_user",
                 "company_id": self.company_a.id,
                 "company_ids": [(6, 0, [self.company_a.id])],
-                "group_ids": [
-                    (6, 0, [self.env.ref("base.group_user").id, manager_group.id])
-                ],
+                "group_ids": [(6, 0, [manager_group.id])],
             }
         )
+        # No groups at all -- proves group_daemon_key_manager is genuinely
+        # required (per the class docstring above), not just that this
+        # particular baseline happens to lack it.
         self.plain_user = self.env["res.users"].create(
             {
                 "name": "Plain Internal User",
                 "login": "daemon_key_plain_user",
                 "company_id": self.company_a.id,
                 "company_ids": [(6, 0, [self.company_a.id])],
-                "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+                "group_ids": [(6, 0, [])],
             }
         )
 

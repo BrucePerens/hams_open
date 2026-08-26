@@ -21,13 +21,21 @@ class TestKnowledgeArticleMultiCompany(HamsTransactionCase):
         self.company_a = self.env["res.company"].create({"name": "Knowledge Co A"})
         self.company_b = self.env["res.company"].create({"name": "Knowledge Co B"})
 
+        # knowledge_article_internal_read_rule (security/*.xml) is scoped to
+        # BOTH base.group_portal and base.group_user, and
+        # access_knowledge_article_user grants base.group_portal the same
+        # model-level read access_knowledge_article_internal grants
+        # base.group_user -- so base.group_portal exercises the exact same
+        # internal_read_rule this test means to prove, without needing
+        # base.group_user, which this codebase's own DOMAIN SANDBOX rule
+        # reserves for odoo_facility_service_internal only.
         self.user_a = self.env["res.users"].create(
             {
                 "name": "Knowledge User A",
                 "login": "knowledge_user_a",
                 "company_id": self.company_a.id,
                 "company_ids": [(6, 0, [self.company_a.id])],
-                "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
             }
         )
 

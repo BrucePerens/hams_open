@@ -576,11 +576,13 @@ class TestBinaryManifest(HamsTransactionCase):
         # checksum, even when the unlinking user only has visibility into
         # their own company's records. Only base.group_system and
         # binary_downloader.group_binary_downloader_manager hold any CRUD
-        # ACL on binary.manifest (base.group_user has none), so user_b
-        # needs the manager group to legitimately create/unlink here --
-        # the field is `group_ids`, not the pre-17 `groups_id` (that typo
-        # made the res.users.create() call above raise ValueError:
-        # Invalid field 'groups_id', so this test never got past setup).
+        # ACL on binary.manifest -- base.group_user has none, and per this
+        # codebase's own DOMAIN SANDBOX rule it's reserved for
+        # odoo_facility_service_internal only -- so user_b needs just the
+        # manager group to legitimately create/unlink here -- the field is
+        # `group_ids`, not the pre-17 `groups_id` (that typo made the
+        # res.users.create() call above raise ValueError: Invalid field
+        # 'groups_id', so this test never got past setup).
         company_b = self.env["res.company"].create({"name": "Company B"})
         user_b = self.env["res.users"].create({
             "name": "User B",
@@ -588,7 +590,6 @@ class TestBinaryManifest(HamsTransactionCase):
             "company_id": company_b.id,
             "company_ids": [(4, company_b.id)],
             "group_ids": [(6, 0, [
-                self.env.ref("base.group_user").id,
                 self.env.ref("binary_downloader.group_binary_downloader_manager").id,
             ])],
         })
