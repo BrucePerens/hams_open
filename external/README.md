@@ -43,8 +43,25 @@ license text each library's own license requires, not just its SPDX identifier.
   `require("d3-array")` calls replaced with nonexistent `importModule(...)` calls and its AMD branch
   disabled -- a targeted, deliberate-looking fix (only the one file with real external `require()`
   calls got this treatment) for what a fresh-download replacement reproduces as a real
-  "d3-array module dependency" failure at test time, though the exact Odoo asset-pipeline stage that
-  triggers it wasn't conclusively isolated. `fetch_assets.py` now has a real, hash-pinned,
+  "d3-array module dependency" failure at test time.
+  **Confirmed 2026-08-26, from Odoo's own `js_transpiler.py` source, not a hypothesis:**
+  `convert_relative_require()`'s `RELATIVE_REQUIRE_RE` regex scans the *entire content* of every
+  `@odoo-module`-tagged file for any `require("literal")` call -- relative or not -- and
+  unconditionally registers each match as a real Odoo asset-bundle dependency
+  (`dependencies.add(module_path)`), regardless of whether that call is reachable code. The UMD
+  wrapper's CommonJS-detection branch (`"object"==typeof exports&&"undefined"!=typeof module?
+  r(exports, require("d3-geo"), require("d3-array")):...`) never actually executes in a real
+  browser (`typeof module` is never `"object"` there) -- but the transpiler's dependency scan runs
+  at the text level, before/independent of any runtime branch logic, so it doesn't matter that the
+  code is dead: it still sees the literal `require("d3-geo")`/`require("d3-array")` tokens and
+  declares them as real dependencies this module needs Odoo's own registry to resolve. Since
+  `d3-geo`/`d3-array` were never separately vendored as their own Odoo modules (only the bundled
+  `d3.v7.min.js` exists), that declared-but-unresolvable dependency is exactly what produces the
+  observed "d3-array module dependency" failure. Renaming the calls to `importModule(...)` (a name
+  the regex doesn't match) removes them from the transpiler's dependency scan entirely -- the calls
+  stay genuinely dead code either way, since the CommonJS branch still never executes; the rename
+  only stops Odoo's text-level dependency scanner from falsely believing this module needs `d3-geo`/
+  `d3-array` resolved. `fetch_assets.py` now has a real, hash-pinned,
   documented fetch+transform for all three (see below) -- but the *live* vendored files were
   deliberately left untouched rather than swapped for freshly-generated output, since they're
   proven-working in production and the earlier swap-without-full-verification is exactly what broke
