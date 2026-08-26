@@ -57,16 +57,19 @@ class HamGdprExportToken(models.Model):
         privilege surface, not a general grant. Every other GDPR export data
         access this feature makes still goes through the existing
         _get_gdpr_export_data()/_get_gdpr_streamed_keys() contract, unchanged."""
+        # # Verified by [@ANCHOR: test_gdpr_export_token_unknown_rejected]
         record = self.sudo().search(
             [("token", "=", token), ("consumed", "=", False)], limit=1
         )
         if not record:
             raise AccessError("Invalid or already-used export token.")
+        # # Verified by [@ANCHOR: test_gdpr_export_token_expiry]
         cutoff = fields.Datetime.now() - timedelta(minutes=TOKEN_EXPIRY_MINUTES)
         if record.create_date < cutoff:
             raise AccessError("Export token has expired.")
         # Consume first, fetch after: a failure while building the export
         # payload below must not leave a still-valid, replayable token behind.
+        # # Verified by [@ANCHOR: test_gdpr_export_token_single_use]
         record.write({"consumed": True})
         return record.user_id
 
@@ -89,6 +92,7 @@ class HamGdprExportToken(models.Model):
         implementation did NOT resolve -- see GDPR_CSV_EXPORT.md's own
         updated Open Questions for why, and what re-architecting the
         generators to support real batched RPC pulls would take."""
+        # # Verified by [@ANCHOR: test_gdpr_consume_and_export_payload]
         user = self._consume(token)
         data = user.sudo()._get_gdpr_export_data()
         streamed = user.sudo()._get_gdpr_streamed_keys()

@@ -250,7 +250,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
     def test_cache_manager_strong_reference(self):
         """Test that postgres_notify_handler stores task in _background_tasks."""
 
-        if not hasattr(cm, '_background_tasks'):  # burn-ignore-introspection [@ANCHOR: bg_tasks]
+        if not hasattr(cm, '_background_tasks'):  # burn-ignore-introspection
             cm._background_tasks = set()
 
         async def mock_broadcast(payload):

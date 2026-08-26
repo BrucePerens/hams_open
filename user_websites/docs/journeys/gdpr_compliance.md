@@ -10,6 +10,7 @@ This journey describes how a user manages their data footprint on the platform.
 
 4. **Streaming**: To handle potentially large amounts of content, the system streams the JSON response to the user's browser ([@ANCHOR: UX_GDPR_EXPORT]). Verified by `[@ANCHOR: test_gdpr_export_api]`.
 5. **Receipt**: The user receives a comprehensive JSON file containing their site data.
+6. **Bulk CSV/Zip Export**: `/my/privacy/export.zip` mints a short-lived, single-use `ham.gdpr.export.token` ([@ANCHOR: gdpr_export_token]) scoped to exactly one user and one narrow time window, then redirects the browser to the export daemon's own download endpoint. The daemon hands the token back to Odoo's `consume_and_export` RPC entrypoint, which validates and consumes it before materializing the export payload, so the daemon itself never needs standing database credentials.
 
 ## Path: Account Deletion (Right to Erasure)
 

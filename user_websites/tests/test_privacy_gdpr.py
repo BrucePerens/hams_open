@@ -111,6 +111,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         """/my/privacy/export.zip mints a token and redirects to the daemon's
         own download endpoint, per docs/proposals/GDPR_CSV_EXPORT.md -- this
         controller itself never streams the zip, it only hands off."""
+        # Tests [@ANCHOR: gdpr_export_token]
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
         response = self.url_open(
             "/my/privacy/export.zip", allow_redirects=False
