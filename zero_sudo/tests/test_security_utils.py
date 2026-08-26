@@ -813,7 +813,7 @@ class TestSecurityUtils(HamsTransactionCase):
                 "groups": [(6, 0, [group.id])],
             }
         )
-        svc = self._make_erasure_test_service_account("erasure_svc_23", group)
+        self._make_erasure_test_service_account("erasure_svc_23", group)
         partner = self.env["res.partner"].create({"name": "Erasure Test Target 23"})
 
         with self.assertRaises(AccessError):
@@ -848,7 +848,7 @@ class TestSecurityUtils(HamsTransactionCase):
                 "groups": [(6, 0, [group.id])],
             }
         )
-        svc = self._make_erasure_test_service_account("erasure_svc_24", group)
+        self._make_erasure_test_service_account("erasure_svc_24", group)
         partner = self.env["res.partner"].create({"name": "Erasure Test Target 24"})
         partner_id = partner.id
 
@@ -857,7 +857,7 @@ class TestSecurityUtils(HamsTransactionCase):
         )
 
         self.assertEqual(deleted_ids, [partner_id])
-        self.assertFalse(self.env["res.partner"].sudo().search([("id", "=", partner_id)]))
+        self.assertFalse(self.env["res.partner"].search([("id", "=", partner_id)]))
 
     def test_25_anonymize_via_service_account_raises_when_visibility_is_restricted(self):
         # Write-based sibling of test_23 -- same restricted-visibility shape, but

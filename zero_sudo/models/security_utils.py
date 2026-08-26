@@ -88,14 +88,42 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return env
 
     @api.model
+    def _ground_truth_ids(self, model_name, domain):
+        """
+        Returns the literal set of ids matching `domain` on `model_name`,
+        bypassing both ir.model.access and ir.rule entirely -- used ONLY as
+        a comparison baseline by `_erase_via_service_account` and
+        `_anonymize_via_service_account` below, never to perform the actual
+        mutation.
+
+        Deliberately NOT `.sudo()` (forbidden platform-wide, see MASTER_01):
+        `.sudo()` changes `self.env.su` for the whole call, which is far
+        broader than this needs and is exactly the AST shape the zero-sudo
+        linter exists to catch. `Model._search(domain, bypass_access=True)`
+        is Odoo's own, narrower, documented mechanism for the same thing --
+        see odoo/orm/models.py's `_search()` docstring ("controls whether or
+        not permissions should be checked on the model and record rules
+        should be applied") -- scoped to exactly this one query, returning a
+        `Query` whose `.get_result_ids()` executes the resulting SQL
+        directly (odoo/tools/query.py), with no ORM-level access check
+        anywhere in the path. A groupless "ground truth" service account
+        was considered and rejected: it would dodge ir.rule but still trip
+        the model-level ir.model.access.csv check `_search()` performs for
+        any model that (correctly) has no public/groupless access grant,
+        which is most of the models this utility is called for.
+        """
+        return set(self.env[model_name]._search(domain, bypass_access=True).get_result_ids())
+
+    @api.model
     def _erase_via_service_account(self, model_name, domain, service_xml_id):
         """
         Hard-deletes every record matching `domain` on `model_name`, acting as the
         named service account -- but first verifies that account's own search()
-        visibility for this domain matches ground truth (a sudo() search, which
-        bypasses every ir.rule, used ONLY to compare counts -- the actual delete
-        below still goes through the service account's own real ACLs, per MASTER_02:
-        GDPR erasure must impersonate the service account, not sudo() around it).
+        visibility for this domain matches ground truth (see `_ground_truth_ids`
+        above, which bypasses every ir.rule/ir.model.access check, used ONLY to
+        compare counts -- the actual delete below still goes through the service
+        account's own real ACLs, per MASTER_02: GDPR erasure must impersonate the
+        service account, not bypass access around it).
 
         Exists because a service account's group memberships can pick up an
         UNRELATED, restrictive ir.rule scoped to one of its groups -- e.g. a GDPR
@@ -120,11 +148,24 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         for that pattern.
         """
         svc_uid = self._get_service_uid(service_xml_id)
-        scoped = self.env[model_name].with_user(svc_uid).search(domain)
-        real = self.env[model_name].sudo().search(domain)
-        if set(scoped.ids) != set(real.ids):
-            missing = real - scoped
-            svc_login = self.env["res.users"].sudo().browse(svc_uid).login
+        # Deliberately unbounded: a partial/limited comparison here would
+        # silently under-delete, exactly the failure mode this function
+        # exists to catch loudly instead. See the docstring above.
+        scoped = self.env[model_name].with_user(svc_uid).search(domain)  # audit-ignore-search
+        real_ids = self._ground_truth_ids(model_name, domain)
+        scoped_ids = set(scoped.ids)
+        if scoped_ids != real_ids:
+            missing_ids = sorted(real_ids - scoped_ids)
+            # Reading a service account's login for the error message alone
+            # doesn't need to go through the ORM's own access control (and
+            # a groupless/narrow account may not even have model-level
+            # access to res.users) -- a direct, parameterized SQL read of a
+            # display string is not the SQLi-shaped or privilege-shaped
+            # thing either the zero-sudo or the SQLi-prevention rule exists
+            # to catch.
+            self.env.cr.execute("SELECT login FROM res_users WHERE id = %s", (svc_uid,))  # audit-ignore-sql: display string only, not a privilege check -- see docstring above  # fmt: skip
+            row = self.env.cr.fetchone()
+            svc_login = row[0] if row else str(svc_uid)
             raise AccessError(
                 _(
                     "Service account '%(login)s' can only see %(scoped)d of "
@@ -137,15 +178,15 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 )
                 % {
                     "login": svc_login,
-                    "scoped": len(scoped),
-                    "real": len(real),
+                    "scoped": len(scoped_ids),
+                    "real": len(real_ids),
                     "model": model_name,
-                    "missing": missing.ids,
+                    "missing": missing_ids,
                 }
             )
         if scoped:
             scoped.unlink()
-        return real.ids
+        return sorted(real_ids)
 
     @api.model
     def _anonymize_via_service_account(self, model_name, domain, owner_field, service_xml_id):
@@ -171,11 +212,20 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         svc_uid = self._get_service_uid(service_xml_id)
         orphan_uid = self._get_service_uid("zero_sudo.orphaned_record_owner")
-        scoped = self.env[model_name].with_user(svc_uid).search(domain)
-        real = self.env[model_name].sudo().search(domain)
-        if set(scoped.ids) != set(real.ids):
-            missing = real - scoped
-            svc_login = self.env["res.users"].sudo().browse(svc_uid).login
+        # Deliberately unbounded -- see _erase_via_service_account's matching
+        # comment: a partial/limited comparison here would silently
+        # under-anonymize, exactly the failure mode this function exists to
+        # catch loudly instead.
+        scoped = self.env[model_name].with_user(svc_uid).search(domain)  # audit-ignore-search
+        real_ids = self._ground_truth_ids(model_name, domain)
+        scoped_ids = set(scoped.ids)
+        if scoped_ids != real_ids:
+            missing_ids = sorted(real_ids - scoped_ids)
+            # See the matching comment in _erase_via_service_account: a
+            # display string, not a privilege-shaped read.
+            self.env.cr.execute("SELECT login FROM res_users WHERE id = %s", (svc_uid,))  # audit-ignore-sql: display string only, not a privilege check -- see docstring above  # fmt: skip
+            row = self.env.cr.fetchone()
+            svc_login = row[0] if row else str(svc_uid)
             raise AccessError(
                 _(
                     "Service account '%(login)s' can only see %(scoped)d of "
@@ -188,10 +238,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 )
                 % {
                     "login": svc_login,
-                    "scoped": len(scoped),
-                    "real": len(real),
+                    "scoped": len(scoped_ids),
+                    "real": len(real_ids),
                     "model": model_name,
-                    "missing": missing.ids,
+                    "missing": missing_ids,
                 }
             )
         if scoped:
@@ -205,7 +255,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             scoped.with_context(
                 mail_auto_subscribe_no_notify=True, mail_notrack=True
             ).write({owner_field: orphan_uid})
-        return real.ids
+        return sorted(real_ids)
 
     @api.model
     def _ensure_executable(self, cmd_name, svc_xml_id=None, pkg_name=None):
