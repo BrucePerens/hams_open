@@ -78,6 +78,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
 
         mock_session.post.side_effect = [mock_exec_fail, mock_exec_success]
 
+        # Tests [@ANCHOR: COMM_json_rpc_self_healing_retry]
         client = SecureJSONRPCClient(self.env_path, self.base_url, self.db_name)
 
         # Simulate key rotation in the env file

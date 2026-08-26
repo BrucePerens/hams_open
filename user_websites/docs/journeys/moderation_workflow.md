@@ -22,6 +22,8 @@ This journey describes the workflow for maintaining community standards through 
     - If the user exceeds the strike threshold, their `is_suspended_from_websites` flag is set to True.
     - All their content is immediately unpublished ([@ANCHOR: action_take_action_and_strike]). Verified by `[@ANCHOR: test_moderation_suspension]`.
 
+    - When an entire `user.websites.group` is suspended rather than a single user, unpublishing its content runs in a background thread (`_async_unpublish_group_content`) instead of inline, to avoid holding a transaction lock open for however long a large group's content takes to unpublish. Because that thread's `Future` is never awaited, two failure modes are guarded explicitly rather than allowed to vanish silently: a failure acquiring the registry/cursor itself ([@ANCHOR: COMM_user_websites_async_unpublish_registry_failure]), and any other unexpected, non-database exception raised while unpublishing ([@ANCHOR: COMM_user_websites_async_unpublish_catch_all]) -- both are logged at ERROR level and the thread returns cleanly instead of crashing with no trace.
+
 ## Path: User Appeal
 
 1. **Observation**: The suspended user logs in and finds they can no longer access their site or creation tools.

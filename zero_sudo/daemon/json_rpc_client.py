@@ -98,6 +98,7 @@ Failed to decode JSON response: {e}
         err_obj = result.get("error") if isinstance(result, dict) else None
         is_access_err = err_obj and "AccessError" in str(err_obj)
         if response.status_code in (401, 403) or is_access_err:
+            # [@ANCHOR: COMM_json_rpc_self_healing_retry]
             warn_msg = """
 JSON-2 Access Denied. 
 Attempting to reload rotated keys from env file.

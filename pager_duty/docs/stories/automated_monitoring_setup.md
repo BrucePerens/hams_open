@@ -11,7 +11,7 @@ The system was recently installed, and Bob noticed that the documentation was au
 
 Bob opens the Odoo backend and navigates to the Monitoring Checks view [@ANCHOR: test_pager_view].
 
-1.  **Creation:** He creates a new `pager.check` record of type "HTTP". He enters the URL of the order service's health endpoint.
+1.  **Creation:** He creates a new `pager.check` record of type "HTTP". He enters the URL of the order service's health endpoint. Because he picked "HTTP(S) Endpoint" rather than "Heartbeat (Push Monitor)", the form reveals the `target` URL field for him to fill in [@ANCHOR: COMM_pager_check_dynamic_invisible_http]; had he instead picked "Heartbeat (Push Monitor)", `target` would disappear and a "Heartbeat Info" notebook page would appear in its place, since a heartbeat check is pinged by the remote service rather than polled at a URL [@ANCHOR: COMM_pager_check_dynamic_invisible_heartbeat].
 2.  **Configuration:** Bob sets the interval to 60 seconds and assigns the "Odoo XML-RPC Handshake" as the parent check to ensure he doesn't get flooded with order service alerts if the entire network goes down.
 3.  **Helpdesk Integration:** Bob enables the Helpdesk integration so that if a check fails, a support ticket is automatically created in his department's queue [@ANCHOR: pd_helpdesk_adapter].
 

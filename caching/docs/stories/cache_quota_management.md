@@ -17,3 +17,6 @@ The `caching` module implements a dynamic safety valve.
 
 ## Impact
 This ensures that the most critical, lightweight UI assets (JS/CSS) are always cached, while heavy media files that would risk the entire cache's stability are safely ignored by the Service Worker, allowing standard browser caching or CDNs to handle them.
+
+## Client-Side LRU Bookkeeping
+Enforcing the quota client-side (`enforceLRUQuota`, triggered whenever `navigator.storage.estimate()` reports usage past `MAX_STORAGE_BYTES`) requires knowing which cached URL was least recently used, so the Service Worker keeps its own `LRUMetadata` IndexedDB store (one row per cached URL, with a `timestamp` index) alongside the Cache Storage entries themselves. Opening that database (`openDB()`) is expected to settle normally on every real browser ([@ANCHOR: sw_idb_open_db_normal]); a real IndexedDB open failure (private-browsing quota exhaustion, corrupted database, etc.) must make `openDB()` reject cleanly rather than hang the Service Worker forever ([@ANCHOR: sw_idb_open_db_forced_error]).

@@ -12,3 +12,8 @@ so that I can minimize the attack surface of my infrastructure.
 4. I can sync existing tunnels `[@ANCHOR: COMM_cf_sync_tunnels]` or delete them `[@ANCHOR: COMM_cf_delete_tunnel]` directly from the Odoo interface.
 
 **Status:** Verified by `[@ANCHOR: COMM_test_cf_tunnel_setup]`, `[@ANCHOR: COMM_test_cf_sync_tunnels]`, and `[@ANCHOR: COMM_test_cf_delete_tunnel]`.
+
+## Scenario: Reviewing and Pushing Tunnel Routes
+5. I open the tunnel record's own form and route list views to review its ingress rules `[@ANCHOR: COMM_cf_tunnel_views_render]`.
+
+6. When the daemon starts the tunnel, Odoo pushes the merged ingress configuration to Cloudflare: this tunnel's own routes plus any global route templates, sorted by sequence, with the SSH route and a mandatory catch-all rule always appended last `[@ANCHOR: COMM_cloudflare_tunnel_push_config_catch_all]`. If that push fails (a Cloudflare API error), the daemon still starts -- basic connectivity stays up while route provisioning retries later, rather than the whole tunnel refusing to start over a routing hiccup.
