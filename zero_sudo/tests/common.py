@@ -1191,6 +1191,74 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     });
 
                     // 4 & 5. Modal suppression (REMOVED)
+
+                    // Reusable diagnostic: dump every .modal element
+                    // currently in the document -- id, classes, computed
+                    // display, parent tag/id, child count, and a truncated
+                    // outerHTML -- via console.error (console.log is NOT
+                    // forwarded to the Python-side log by this harness,
+                    // confirmed directly; console.error/warn are). Written
+                    // once here, shared by every tour/test that goes
+                    // through browser_js, instead of each test hand-rolling
+                    // its own inline version. See
+                    // hams_com/docs/proposals/EVENT_ISSUE_TOUR_MODAL_FLAKE.md
+                    // for the investigation this was built for -- call it
+                    // from any tour step's run() as
+                    // window.__hamsDumpModals('some-label') to see exactly
+                    // what .modal elements exist at that point in a run.
+                    window.__hamsDumpModals = function (label) {
+                        const all = document.querySelectorAll('.modal');
+                        console.error(`[MODAL-DUMP ${label}] ${all.length} .modal element(s) present:`);
+                        all.forEach((el, i) => {
+                            const style = window.getComputedStyle(el);
+                            const parent = el.parentElement;
+                            console.error(
+                                `[MODAL-DUMP ${label}] #${i}: id=${el.id || '(none)'} classes="${el.className}" ` +
+                                `display=${style.display} parent=${parent ? parent.tagName + (parent.id ? '#' + parent.id : '') : '(none)'} ` +
+                                `childCount=${el.children.length}\\n` +
+                                `outerHTML(first 500 chars): ${el.outerHTML.slice(0, 500)}`
+                            );
+                        });
+                    };
+
+                    // Auto-fire the dump above the moment web_tour logs its
+                    // "below a modal" failure, for every tour, not just the
+                    // one that motivated building this. This exact symptom
+                    // has now hit this codebase twice with two completely
+                    // different root causes (see
+                    // EVENT_ISSUE_TOUR_MODAL_FLAKE.md) -- worth turning a
+                    // future third occurrence into "check the log, it's
+                    // already there" instead of another multi-hour
+                    // investigation. Hooked at console.error rather than
+                    // any Odoo-internal class/module (tried and abandoned:
+                    // web_tour's real hoot.queryFirst call can't be
+                    // monkey-patched at all, it's a read-only ES module
+                    // namespace binding -- see the doc above) because
+                    // console.error is a stable, universal browser API,
+                    // and "not allowed to do action on an element that's
+                    // below a modal" is web_tour's own long-standing,
+                    // stable failure message, not an obscure internal
+                    // implementation detail likely to shift under an Odoo
+                    // version bump. A re-entrancy guard stops the dump's
+                    // own console.error calls from recursively
+                    // re-triggering themselves.
+                    const origConsoleError = console.error.bind(console);
+                    let hamsDumpingModals = false;
+                    console.error = function (...args) {
+                        if (
+                            !hamsDumpingModals &&
+                            typeof args[0] === 'string' &&
+                            args[0].includes("not allowed to do action on an element that's below a modal")
+                        ) {
+                            hamsDumpingModals = true;
+                            try {
+                                window.__hamsDumpModals('auto-on-modal-block-failure');
+                            } finally {
+                                hamsDumpingModals = false;
+                            }
+                        }
+                        return origConsoleError(...args);
+                    };
                 }
                 true;
             """
