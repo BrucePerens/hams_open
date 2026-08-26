@@ -18,6 +18,12 @@ class IrHttp(models.AbstractModel):
         Generalized to dynamically check Odoo's public user state without requiring
         strict app dependencies.
         """
+        # # Verified by [@ANCHOR: COMM_test_unauthorized_bypass]
+        # This module only ever adds CDN caching directives to a response;
+        # nothing here gates or rejects a request for lacking Cloudflare
+        # edge headers, so ordinary direct (non-tunneled) access continues
+        # to work identically whether or not the request passed through
+        # the tunnel.
         res = super()._post_dispatch(response)
 
         # Fail loudly if headers are missing, enforcing framework contract
