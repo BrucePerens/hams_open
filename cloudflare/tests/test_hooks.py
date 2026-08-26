@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © HAMS project. AGPL-3.0.
+# Copyright © HAMS project. AGPL-3.0-or-later.
 
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged

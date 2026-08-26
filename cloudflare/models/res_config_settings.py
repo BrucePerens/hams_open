@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © HAMS project. AGPL-3.0.
+# Copyright © HAMS project. AGPL-3.0-or-later.
 import time
 from odoo import models, fields, _
 from odoo.exceptions import UserError

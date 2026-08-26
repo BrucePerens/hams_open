@@ -1,5 +1,5 @@
 /** @odoo-module **/
-/** Copyright © HAMS project. AGPL-3.0. **/
+/** Copyright © HAMS project. AGPL-3.0-or-later. **/
 import { registry } from "@web/core/registry";
 
 // [@ANCHOR: test_tour_cf_waf_rule]

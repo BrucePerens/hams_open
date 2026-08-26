@@ -1,4 +1,4 @@
-# Copyright © HAMS project. AGPL-3.0.
+# Copyright © HAMS project. AGPL-3.0-or-later.
 {
     "name": "Caching PWA",
     "version": "1.0",

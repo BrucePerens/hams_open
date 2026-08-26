@@ -1,5 +1,5 @@
 /** @odoo-module **/
-/* Copyright © HAMS project. AGPL-3.0. */
+/* Copyright © HAMS project. AGPL-3.0-or-later. */
 
 // Shared, generic IndexedDB-backed offline queue. Originally lived in ham_shack (as the QSO
 // logger's own offline_store.js) with a hardcoded 'HamShackOfflineDB'/'offline_logs' db/store

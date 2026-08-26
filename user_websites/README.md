@@ -1,6 +1,6 @@
 # User Websites (`user_websites`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).*
 
 Welcome to User Websites! This Odoo 19 module allows you to build and manage your own personal or group websites and blogs directly within Odoo. Whether you're a beginner or an expert, you'll find everything you need to create a professional online presence.
 
@@ -52,7 +52,7 @@ We used a few neat tricks to make this secure and fast:
 # Technical Documentation
 
 <system_role>
-*Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).*
 
 **Context:** Technical documentation strictly for LLMs and Integrators. Use this to build dependent modules without needing the source code.
 </system_role>

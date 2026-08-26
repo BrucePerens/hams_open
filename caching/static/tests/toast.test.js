@@ -1,5 +1,5 @@
 /** @odoo-module **/
-/** Copyright © HAMS project. AGPL-3.0. **/
+/** Copyright © HAMS project. AGPL-3.0-or-later. **/
 
 // SWToast is almost entirely template/service-worker-event wiring; close()
 // is its one piece of independently-testable state logic. reload() is not

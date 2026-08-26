@@ -2,7 +2,7 @@
 
 Welcome to a comprehensive suite of open-source modules designed for **Odoo 19 Community**. This repository provides tools for scaling horizontally, defending against automated attacks, and building decentralized user communities, all while maintaining rigorous security and developer ergonomics.
 
-**License:** mostly AGPL-3.0-or-later, but not uniformly -- see [`LICENSING.md`](LICENSING.md) for the real breakdown (a few directories are GPL-3.0-or-later or LGPL-3.0-or-later, one is AGPL-3.0-only, and some files carry no header yet) before assuming a license for any specific file.
+**License:** mostly AGPL-3.0-or-later, but not uniformly -- see [`LICENSING.md`](LICENSING.md) for the real breakdown (a few directories are GPL-3.0-or-later or LGPL-3.0-or-later, one is AGPL-3.0-or-later, and some files carry no header yet) before assuming a license for any specific file.
 
 ---
 

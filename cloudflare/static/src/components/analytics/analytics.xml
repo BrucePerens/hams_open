@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Copyright © HAMS project. AGPL-3.0. -->
+<!-- Copyright © HAMS project. AGPL-3.0-or-later. -->
 <templates xml:space="preserve">
     <t t-name="cloudflare.AnalyticsDashboard" owl="1">
         <div class="o_cloudflare_analytics_dashboard p-4 bg-dark text-light" aria-label="Cloudflare Analytics Dashboard">

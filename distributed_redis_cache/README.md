@@ -1,6 +1,6 @@
 # Distributed Redis Cache (`distributed_redis_cache`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).*
 
 The Distributed Redis Cache module completely replaces Odoo's internal ORM cache with a high-performance, distributed Redis backend. This enables true horizontal scaling for Odoo Community by enforcing phase coherence across multiple WSGI workers and completely separate physical web servers.
 

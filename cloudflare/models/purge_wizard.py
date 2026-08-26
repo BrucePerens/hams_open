@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © HAMS project. AGPL-3.0.
+# Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_urls, purge_tags

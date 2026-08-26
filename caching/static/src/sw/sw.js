@@ -1,4 +1,4 @@
-/** Copyright © HAMS project. AGPL-3.0. **/
+/** Copyright © HAMS project. AGPL-3.0-or-later. **/
 /** @odoo-module **/
 
 const CACHE_NAME = '__CACHE_NAME__';

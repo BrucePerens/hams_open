@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Part of Odoo. See LICENSE file for full copyright and licensing details.
      This file is part of hams_open, an open source module.
-     License: AGPL-3.0 -->
+     License: AGPL-3.0-or-later -->
 <odoo>
     <record id="view_users_form_zero_sudo" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: zero_sudo:COMM_test_res_users_views] --> <!-- burn-ignore-tour -->

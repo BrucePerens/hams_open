@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright © HAMS project. AGPL-3.0. -->
+<!-- Copyright © HAMS project. AGPL-3.0-or-later. -->
 <odoo>
     <record id="res_config_settings_view_form_inherit_cloudflare" model="ir.ui.view">
         <field name="name">res.config.settings.view.form.inherit.cloudflare</field>

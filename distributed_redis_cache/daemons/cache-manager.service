@@ -1,4 +1,4 @@
-# Copyright © Bruce Perens K6BP. AGPL-3.0.
+# Copyright © Bruce Perens K6BP. AGPL-3.0-or-later.
 [Unit]
 Description=Odoo Distributed Cache Manager (Redis Pub/Sub)
 After=network.target postgresql.service redis-server.service

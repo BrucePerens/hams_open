@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!-- Copyright (c) 2026 Bruce Perens K6BP -->
 <odoo>
     <data noupdate="1">
@@ -169,7 +169,7 @@
                             </ul>
 
                             <h3 class="mt-4">4. Open Source Licensing</h3>
-                            <p>The software powering this community platform is licensed under the <strong>GNU Affero General Public License v3.0 (AGPL-3.0)</strong>. Contributions, codebase modifications, and technical structures are subject to the terms of this open-source license.</p>
+                            <p>The software powering this community platform is licensed under the <strong>GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)</strong>. Contributions, codebase modifications, and technical structures are subject to the terms of this open-source license.</p>
 
                             <h3 class="mt-4">5. Limitation of Liability</h3>
                             <p>This service is provided "as is" without warranty of any kind. We are not responsible for the user-generated content hosted on personal or group pages, nor are we liable for data loss or service interruptions.</p>

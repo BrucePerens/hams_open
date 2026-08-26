@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © HAMS project. AGPL-3.0.
+# Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, fields, api
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 import logging

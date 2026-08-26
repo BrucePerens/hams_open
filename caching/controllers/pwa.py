@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright © HAMS project. AGPL-3.0.
+# Copyright © HAMS project. AGPL-3.0-or-later.
 import json
 from odoo import http
 from odoo.http import request

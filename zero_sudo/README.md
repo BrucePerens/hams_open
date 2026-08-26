@@ -1,6 +1,6 @@
 # Zero-Sudo Security Core [@ANCHOR: zero_sudo_main] (`zero_sudo`)
 
-*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).*
+*Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).*
 
 This module is the foundational security layer for our Odoo ecosystem. It enforces a strict **Zero-Sudo Architecture** (ADR-0002) to prevent privilege escalation vulnerabilities and physically isolates background service accounts from interactive web sessions (ADR-0005).
 
