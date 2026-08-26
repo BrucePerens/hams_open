@@ -100,40 +100,6 @@ def main():
     transformers_hash = "24cd9918f7fc3e3a7dc559625da217b564098e137a15e8e878f2457ab6968f4c"
     download_file(transformers_url, transformers_dest, transformers_hash)
 
-    # D3.js 7.9.0 / d3-geo-projection 4.0.0 / topojson-client 3.1.0 -- geographic/map
-    # rendering support alongside Leaflet. Plain global-UMD builds from unpkg, loaded
-    # via script tag in this order (d3 must load before d3-geo-projection, which
-    # extends the same global `d3` object; topojson-client is independent). See
-    # docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md for why these were
-    # previously vendored by an undocumented, non-reproducible process and replaced
-    # here with a fresh, hash-pinned fetch matching Leaflet's own pattern above.
-    d3_dir = os.path.join(lib_dir, "d3")
-    d3_hash = "f2094bbf6141b359722c4fe454eb6c4b0f0e42cc10cc7af921fc158fceb86539"
-    download_file(
-        "https://unpkg.com/d3@7.9.0/dist/d3.min.js",
-        os.path.join(d3_dir, "d3.v7.min.js"),
-        d3_hash,
-    )
-
-    d3_geo_projection_hash = (
-        "83136941bcf6f37fb8a9e43318601dfacf02901dc604dec13b815a2cd89c813b"
-    )
-    download_file(
-        "https://unpkg.com/d3-geo-projection@4.0.0/dist/d3-geo-projection.min.js",
-        os.path.join(d3_dir, "d3-geo-projection.v4.min.js"),
-        d3_geo_projection_hash,
-    )
-
-    topojson_dir = os.path.join(lib_dir, "topojson")
-    topojson_client_hash = (
-        "25cd02ae486cc5063e0215a4e4cfb15de83700c87ac48bac4d57dc6aaf3ebb89"
-    )
-    download_file(
-        "https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js",
-        os.path.join(topojson_dir, "topojson-client.min.js"),
-        topojson_client_hash,
-    )
-
     _logger.info("\n✅ All external assets downloaded successfully.")
 
 

@@ -30,17 +30,18 @@ license text each library's own license requires, not just its SPDX identifier.
 - **Local Path:** `/external/static/src/node_modules/d3/d3.v7.min.js`,
   `/external/static/src/node_modules/d3/d3-geo-projection.v4.min.js`,
   `/external/static/src/node_modules/topojson/topojson-client.min.js`
-- **Resolved:** these three were originally vendored by some undocumented process (each file
-  carried a spurious `/** @odoo-module **/` banner line that isn't something `fetch_assets.py`'s
-  plain download-and-hash logic adds, and doesn't appear on Leaflet or Transformers.js above --
-  confirmed nothing in this codebase actually loads or references any of the three files, so the
-  banner was never exercised at runtime). Replaced with a fresh, hash-pinned fetch of the same
-  plain global-UMD builds `fetch_assets.py` already uses for Leaflet, from unpkg's own `dist/`
-  paths, now wired into `fetch_assets.py` the same way. `d3-geo-projection` and `topojson-client`
-  attach to the page's global `d3`/`topojson` objects when loaded via a plain `<script>` tag in
-  that order (`d3.v7.min.js` first, since `d3-geo-projection.v4.min.js` extends the same global
-  `d3` object) -- the standard D3-plugin loading pattern, matching how these libraries are
-  documented to be used outside a bundler.
+- **`d3-geo-projection` was vendored on disk with no README entry until this pass** -- same
+  "real file, nothing documenting it" gap shape as other findings tonight, just in documentation.
+- **Known gap:** unlike Leaflet and Transformers.js above, these three are **not** wired into
+  `fetch_assets.py` -- they were vendored by some other, undocumented process (each file's own
+  `/** @odoo-module **/` banner line isn't something `fetch_assets.py`'s plain download-and-hash
+  logic adds, so these didn't come from that script). There's no hash pin and no reproducible fetch
+  path for any of the three right now; a fresh `d3@7.9.0`/`topojson-client@3.1.0` download from
+  unpkg today does not byte-match what's currently vendored here (confirmed directly, not assumed --
+  the difference survives stripping the banner line and normalizing whitespace, so it's a real
+  content difference, not just formatting). One plausible source (Odoo core's own bundled JS
+  assets) was checked and ruled out -- see `THIRD_PARTY_LICENSES.md`'s provenance note. Still
+  unresolved; worth resolving before relying on this being a reproducible build.
 
 ### Noble crypto libraries (@noble/curves, @noble/hashes, @noble/ciphers)
 - **Version:** 2.3.0 (all three packages)

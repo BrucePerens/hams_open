@@ -70,9 +70,10 @@ verified against each project's own published `package.json` `license` field, no
 | topojson-client | 3.1.0 | ISC |
 | `@noble/curves`, `@noble/hashes`, `@noble/ciphers` | 2.3.0 | MIT |
 
-See `external/README.md` for full detail per library. D3.js, d3-geo-projection, and
-topojson-client were previously vendored by an undocumented, non-reproducible process; now wired
-into `fetch_assets.py` with a hash-pinned fetch matching the other libraries above.
+See `external/README.md` for full detail per library, including a real, open gap found while
+verifying this: D3.js and topojson-client aren't wired into `fetch_assets.py` like the others are,
+and the currently-vendored files don't byte-match a fresh download of the same published version
+-- not yet resolved.
 
 ## Unlabeled files
 
