@@ -5,7 +5,9 @@ import odoo.tests
 from odoo import fields
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
 from urllib.parse import unquote
+from datetime import timedelta
 import json
 
 
@@ -127,8 +129,13 @@ class TestPrivacyGDPR(HamsHttpCase):
 
         # The token this route minted must actually exist, be tied to this
         # user, and be unconsumed -- verified at the ORM level, not just
-        # that the redirect URL has *a* token-shaped string in it.
-        record = self.env["ham.gdpr.export.token"].sudo().search(
+        # that the redirect URL has *a* token-shaped string in it. Read as
+        # the real gdpr_export_service_internal account (the only identity
+        # with read access to this model), not a blanket sudo().
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
+        record = self.env["ham.gdpr.export.token"].with_user(svc_uid).search(
             [("token", "=", token)], limit=1
         )
         self.assertTrue(record, "The minted token must exist as a real ham.gdpr.export.token row.")
@@ -142,7 +149,13 @@ class TestPrivacyGDPR(HamsHttpCase):
         env_as_user = self.env(user=self.user_privacy)
         token = env_as_user["ham.gdpr.export.token"].create_for_current_user()
 
-        Token = self.env["ham.gdpr.export.token"].sudo()
+        # Consumed the same way the real daemon does: as the
+        # gdpr_export_service_internal service account, not a blanket
+        # sudo() -- exercises the real access boundary, per MASTER_01.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
+        Token = self.env["ham.gdpr.export.token"].with_user(svc_uid)
         user = Token._consume(token)
         self.assertEqual(user, self.user_privacy)
 
@@ -151,18 +164,21 @@ class TestPrivacyGDPR(HamsHttpCase):
 
     def test_01c_export_token_rejects_unknown_token(self):
         # [@ANCHOR: test_gdpr_export_token_unknown_rejected]
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
         with self.assertRaises(odoo.exceptions.AccessError):
-            self.env["ham.gdpr.export.token"].sudo()._consume("not-a-real-token")
+            self.env["ham.gdpr.export.token"].with_user(svc_uid)._consume("not-a-real-token")
 
     def test_01d_export_token_rejects_expired_token(self):
         # [@ANCHOR: test_gdpr_export_token_expiry]
         """A token older than TOKEN_EXPIRY_MINUTES must be refused even
         though it was never consumed -- the narrow expiry window is a real
         security property, not just a single-use guarantee."""
-        from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
-        from datetime import timedelta
-
-        Token = self.env["ham.gdpr.export.token"].sudo()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
+        Token = self.env["ham.gdpr.export.token"].with_user(svc_uid)
         record = Token.create({"user_id": self.user_privacy.id, "token": "an-old-token"})
         # create_date is an Odoo-managed magic column that a plain write()
         # silently ignores -- backdating it for real needs a direct SQL
@@ -187,8 +203,9 @@ class TestPrivacyGDPR(HamsHttpCase):
         Called the same way the real daemon calls it over RPC: as the
         gdpr_export_service_internal service account, not as the exporting
         user's own session and not via a blanket .sudo() -- consume_and_export
-        is the one place internal sudo() use is deliberately scoped, per its
-        own docstring, and this test exercises that real boundary."""
+        is the one place that briefly assumes the more-privileged
+        zero_sudo.gdpr_service_internal account (per its own docstring), and
+        this test exercises that real boundary end to end."""
         env_as_user = self.env(user=self.user_privacy)
         token = env_as_user["ham.gdpr.export.token"].create_for_current_user()
 
@@ -212,7 +229,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         self.assertEqual(len(payload["streamed"]["pages"]), 1)
         self.assertEqual(payload["streamed"]["pages"][0]["name"], "My Private Home")
 
-        record = self.env["ham.gdpr.export.token"].sudo().search([("token", "=", token)], limit=1)
+        record = self.env["ham.gdpr.export.token"].with_user(svc_uid).search([("token", "=", token)], limit=1)
         self.assertTrue(record.consumed, "consume_and_export must consume the token as a side effect.")
 
     def test_02_right_to_erasure(self):
@@ -256,7 +273,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         )
         self.user_privacy.invalidate_recordset(["active"])
         self.assertFalse(
-            self.user_privacy.sudo().active,
+            self.user_privacy.active,
             "A fully-erased account must be deactivated, not just stripped of content.",
         )
 
