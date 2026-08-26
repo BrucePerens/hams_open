@@ -80,9 +80,28 @@ class SesWebhookController(http.Controller):
             elif payload_type == 'Notification':
                 ses_message_str = payload.get('Message', '{}')
                 ses_message = json.loads(ses_message_str)
-                
+
+                # SES event notifications (bounce/complaint/delivery -- see
+                # docs/proposals/EMAIL_SEND_RECEIVE.md's "Bounce and
+                # complaint handling" section) arrive on this same SNS
+                # topic shape as inbound mail, distinguished by
+                # 'notificationType' instead of a 'content' field. Must be
+                # checked first: a Bounce/Complaint payload has no
+                # 'content' at all, so falling through to the raw-email
+                # branch below would just silently log it as "no content
+                # field found" and lose the suppression signal entirely.
+                notification_type = ses_message.get('notificationType')
+                if notification_type in ('Bounce', 'Complaint'):
+                    suppressed = self._handle_ses_event_notification(notification_type, ses_message)
+                    _logger.info(
+                        "SES %s notification for domain %s: suppressed %d address(es).",
+                        notification_type, domain.name, len(suppressed),
+                    )
+                    log_vals.update({'status': 'success'})
+                    return request.make_response("OK", status=200)
+
                 raw_email = ses_message.get('content')
-                
+
                 if not raw_email:
                     _logger.warning("SES Webhook received Notification with no 'content' field for domain %s.", domain.name)
                     log_vals.update({'status': 'ignored', 'error_message': 'No content field found.'})
@@ -203,3 +222,43 @@ class SesWebhookController(http.Controller):
             request.env['ses.webhook.log'].with_user(svc_uid).create(log_vals)
 
         return request.make_response("OK", status=200)
+
+    def _handle_ses_event_notification(self, notification_type, ses_message):
+        """Suppresses future sends to addresses SES reports as bounced/complained, using
+        Odoo's own mail.blacklist -- the same suppression list message_process() and every
+        outbound send already consult, so no new send-time check is needed anywhere else.
+
+        A spam complaint is always suppressed immediately, regardless of count: a single
+        complaint is a real signal a recipient doesn't want this mail, and repeat complaints
+        are exactly what AWS SES account-level reputation monitoring escalates on.
+
+        For bounces, only 'Permanent' bounceType is suppressed -- SES's own documented
+        distinction: Permanent means the address is invalid/doesn't exist and will never
+        succeed, Transient means a temporary condition (mailbox full, temporary block) that
+        may well succeed on a later retry, so blacklisting on every transient bounce would
+        wrongly and permanently silence a recipient who's still reachable.
+        """
+        svc_uid = request.env['zero_sudo.security.utils']._get_service_uid(
+            'ses_webhook.user_ses_webhook_service_internal'
+        )
+        blacklist = request.env['mail.blacklist'].with_user(svc_uid)
+        suppressed = []
+
+        if notification_type == 'Complaint':
+            complaint = ses_message.get('complaint', {})
+            for recipient in complaint.get('complainedRecipients', []):
+                addr = recipient.get('emailAddress')
+                if addr:
+                    blacklist._add(addr, message="Suppressed: SES spam complaint (feedbackId %s)." % complaint.get('feedbackId', 'unknown'))
+                    suppressed.append(addr)
+
+        elif notification_type == 'Bounce':
+            bounce = ses_message.get('bounce', {})
+            if bounce.get('bounceType') == 'Permanent':
+                for recipient in bounce.get('bouncedRecipients', []):
+                    addr = recipient.get('emailAddress')
+                    if addr:
+                        blacklist._add(addr, message="Suppressed: SES permanent (hard) bounce -- %s" % recipient.get('diagnosticCode', 'no diagnostic code'))
+                        suppressed.append(addr)
+
+        return suppressed

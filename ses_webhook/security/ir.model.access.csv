@@ -9,3 +9,4 @@ access_ses_webhook_pending_submission_system,ses.webhook.pending_submission.syst
 access_ses_webhook_pending_submission_user,ses.webhook.pending_submission.user,model_ses_webhook_pending_submission,base.group_user,1,0,0,0
 access_ses_webhook_pending_submission_svc,ses.webhook.pending_submission.svc,model_ses_webhook_pending_submission,ses_webhook.group_ses_webhook_service,1,0,1,0
 access_ses_webhook_mail_mail_svc,mail.mail.ses_webhook_svc,mail.model_mail_mail,ses_webhook.group_ses_webhook_service,1,1,1,0
+access_ses_webhook_mail_blacklist_svc,mail.blacklist.ses_webhook_svc,mail.model_mail_blacklist,ses_webhook.group_ses_webhook_service,1,1,1,0

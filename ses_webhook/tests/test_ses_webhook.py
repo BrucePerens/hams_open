@@ -168,6 +168,59 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(log), 1)
         self.assertEqual(log.status, 'ignored')
 
+    def test_23_webhook_complaint_blacklists_immediately(self):
+        """A spam complaint suppresses the complained recipient outright, regardless of count --
+        the real gap this AWS SES production-access review surfaced: complaints don't arrive as
+        a bounce DSN email, they need their own SNS notificationType handler."""
+        ses_message = {
+            "notificationType": "Complaint",
+            "complaint": {
+                "complainedRecipients": [{"emailAddress": "complainer@example.com"}],
+                "feedbackId": "feedback-1",
+            },
+            "mail": {"messageId": "mail-1"},
+        }
+        payload = {"Type": "Notification", "MessageId": "msg-complaint-1", "Message": json.dumps(ses_message)}
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+
+        blacklisted = self.env['mail.blacklist'].sudo().search([('email', '=', 'complainer@example.com')])
+        self.assertEqual(len(blacklisted), 1)
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-complaint-1')])
+        self.assertEqual(log.status, 'success')
+
+    def test_24_webhook_bounce_permanent_blacklists_transient_does_not(self):
+        """A Permanent (hard) bounce suppresses the address; a Transient (soft) bounce must not --
+        blacklisting on every transient bounce would wrongly, permanently silence a recipient
+        who may well still be reachable on a later attempt."""
+        permanent_message = {
+            "notificationType": "Bounce",
+            "bounce": {
+                "bounceType": "Permanent",
+                "bouncedRecipients": [{"emailAddress": "harddown@example.com", "diagnosticCode": "550 5.1.1 no such user"}],
+                "feedbackId": "feedback-2",
+            },
+        }
+        payload = {"Type": "Notification", "MessageId": "msg-bounce-permanent", "Message": json.dumps(permanent_message)}
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.env['mail.blacklist'].sudo().search([('email', '=', 'harddown@example.com')])), 1)
+
+        transient_message = {
+            "notificationType": "Bounce",
+            "bounce": {
+                "bounceType": "Transient",
+                "bouncedRecipients": [{"emailAddress": "mailboxfull@example.com", "diagnosticCode": "452 4.2.2 mailbox full"}],
+                "feedbackId": "feedback-3",
+            },
+        }
+        payload = {"Type": "Notification", "MessageId": "msg-bounce-transient", "Message": json.dumps(transient_message)}
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.env['mail.blacklist'].sudo().search([('email', '=', 'mailboxfull@example.com')])), 0)
+
     def test_09_webhook_url_computes_for_plain_internal_user(self):
         """
         _compute_webhook_url() used to read web.base.url via .sudo(),
