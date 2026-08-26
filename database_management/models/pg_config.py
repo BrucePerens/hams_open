@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 import re
+import secrets
 import ipaddress
 from odoo import models, fields, _
 from odoo.exceptions import UserError
@@ -143,7 +144,7 @@ class PgHaWizard(models.TransientModel):
     replication_pass = fields.Char(
         string="Replication Password",
         required=True,
-        default="SecureRepPass123!",
+        default=lambda self: secrets.token_urlsafe(24),
     )
     superuser_user = fields.Char(
         string="Superuser Name", required=True, default="postgres"

@@ -159,6 +159,24 @@ class TestPgConfig(HamsTransactionCase):
         with self.assertRaisesRegex(UserError, msg_pass):
             wizard2.action_generate()
 
+    def test_02a_ha_wizard_password_not_predictable(self):
+        # Tests [@ANCHOR: COMM_pg_ha_wizard]
+        # The replication password must never default to a fixed, predictable
+        # value -- each wizard instance gets its own randomly generated secret.
+        wizard1 = (
+            self.env["pg.ha.wizard"]
+            .with_user(self.admin)
+            .create({"primary_ip": "10.0.0.1", "secondary_ip": "10.0.0.2"})
+        )
+        wizard2 = (
+            self.env["pg.ha.wizard"]
+            .with_user(self.admin)
+            .create({"primary_ip": "10.0.0.1", "secondary_ip": "10.0.0.2"})
+        )
+        self.assertNotEqual(wizard1.replication_pass, "SecureRepPass123!")
+        self.assertGreaterEqual(len(wizard1.replication_pass), 16)
+        self.assertNotEqual(wizard1.replication_pass, wizard2.replication_pass)
+
     def test_02b_ha_wizard_missing_binaries(self):
         mock_which = self.safe_patch("shutil.which")
         wizard = (
