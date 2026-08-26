@@ -185,7 +185,7 @@ class TestSesWebhook(HamsHttpCase):
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
 
-        blacklisted = self.env['mail.blacklist'].sudo().search([('email', '=', 'complainer@example.com')])
+        blacklisted = self.env['mail.blacklist'].search([('email', '=', 'complainer@example.com')])
         self.assertEqual(len(blacklisted), 1)
 
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-complaint-1')])
@@ -206,7 +206,7 @@ class TestSesWebhook(HamsHttpCase):
         payload = {"Type": "Notification", "MessageId": "msg-bounce-permanent", "Message": json.dumps(permanent_message)}
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(self.env['mail.blacklist'].sudo().search([('email', '=', 'harddown@example.com')])), 1)
+        self.assertEqual(len(self.env['mail.blacklist'].search([('email', '=', 'harddown@example.com')])), 1)
 
         transient_message = {
             "notificationType": "Bounce",
@@ -219,7 +219,7 @@ class TestSesWebhook(HamsHttpCase):
         payload = {"Type": "Notification", "MessageId": "msg-bounce-transient", "Message": json.dumps(transient_message)}
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(self.env['mail.blacklist'].sudo().search([('email', '=', 'mailboxfull@example.com')])), 0)
+        self.assertEqual(len(self.env['mail.blacklist'].search([('email', '=', 'mailboxfull@example.com')])), 0)
 
     def test_09_webhook_url_computes_for_plain_internal_user(self):
         """
