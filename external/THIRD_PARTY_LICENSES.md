@@ -137,6 +137,12 @@ Odoo core itself ships `topojson`-format *data* files (continent/country boundar
 that feature's chart library (`odoo/addons/spreadsheet/static/lib/chartjs-chart-geo/
 chartjs-chart-geo.js`) was checked directly for a bundled copy of D3/topojson-client source --
 it contains at most one incidental substring match, not a real embedded copy, so this is not where
-these three files came from. The actual source of the shared `/** @odoo-module **/`-tagged builds,
-and why they don't byte-match a fresh `unpkg` download of the same published versions, remains
-unresolved.
+these three files came from. **Resolved 2026-08-26**: the precise byte-level provenance is now
+documented in `docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md`'s "Resolved:
+D3.js/topojson-client provenance" section -- in short, all three are the stated versions' real
+unpkg `dist/` builds with the banner prepended; `d3-geo-projection.v4.min.js` additionally has its
+UMD wrapper's `require("d3-geo")`/`require("d3-array")` calls replaced with nonexistent
+`importModule(...)` calls (a targeted fix for a real "d3-array module dependency" test failure a
+naive fresh-fetch replacement reproduces, per that section). `fetch_assets.py` now has a
+documented, hash-pinned reproduction of this transform, though it's deliberately not wired into
+automatic execution -- see that function's own docstring.

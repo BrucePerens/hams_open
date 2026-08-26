@@ -30,18 +30,26 @@ license text each library's own license requires, not just its SPDX identifier.
 - **Local Path:** `/external/static/src/node_modules/d3/d3.v7.min.js`,
   `/external/static/src/node_modules/d3/d3-geo-projection.v4.min.js`,
   `/external/static/src/node_modules/topojson/topojson-client.min.js`
-- **`d3-geo-projection` was vendored on disk with no README entry until this pass** -- same
-  "real file, nothing documenting it" gap shape as other findings tonight, just in documentation.
-- **Known gap:** unlike Leaflet and Transformers.js above, these three are **not** wired into
-  `fetch_assets.py` -- they were vendored by some other, undocumented process (each file's own
-  `/** @odoo-module **/` banner line isn't something `fetch_assets.py`'s plain download-and-hash
-  logic adds, so these didn't come from that script). There's no hash pin and no reproducible fetch
-  path for any of the three right now; a fresh `d3@7.9.0`/`topojson-client@3.1.0` download from
-  unpkg today does not byte-match what's currently vendored here (confirmed directly, not assumed --
-  the difference survives stripping the banner line and normalizing whitespace, so it's a real
-  content difference, not just formatting). One plausible source (Odoo core's own bundled JS
-  assets) was checked and ruled out -- see `THIRD_PARTY_LICENSES.md`'s provenance note. Still
-  unresolved; worth resolving before relying on this being a reproducible build.
+- **`d3-geo-projection` was vendored on disk with no README entry until an earlier pass** -- same
+  "real file, nothing documenting it" gap shape as other findings that night, just in documentation.
+- **Resolved (2026-08-26):** the byte-level provenance gap is now understood precisely -- see
+  `docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md`'s "Resolved: D3.js/topojson-client
+  provenance" section for the full account, including why an earlier attempt to just replace these
+  files with a naive fresh unpkg fetch broke 12 tests and was reverted. In short:
+  `topojson-client.min.js` is byte-identical to a fresh unpkg download once the
+  `/** @odoo-module **/` banner is stripped; `d3.v7.min.js` and `d3-geo-projection.v4.min.js` carry
+  the same banner plus internal line-reflowing versus a fresh download (same tokens, different line
+  breaks); `d3-geo-projection.v4.min.js` additionally has its UMD wrapper's `require("d3-geo")`/
+  `require("d3-array")` calls replaced with nonexistent `importModule(...)` calls and its AMD branch
+  disabled -- a targeted, deliberate-looking fix (only the one file with real external `require()`
+  calls got this treatment) for what a fresh-download replacement reproduces as a real
+  "d3-array module dependency" failure at test time, though the exact Odoo asset-pipeline stage that
+  triggers it wasn't conclusively isolated. `fetch_assets.py` now has a real, hash-pinned,
+  documented fetch+transform for all three (see below) -- but the *live* vendored files were
+  deliberately left untouched rather than swapped for freshly-generated output, since they're
+  proven-working in production and the earlier swap-without-full-verification is exactly what broke
+  things. Anyone regenerating these should run the full test suite, not just the map-specific tests,
+  before replacing the live files.
 
 ### Noble crypto libraries (@noble/curves, @noble/hashes, @noble/ciphers)
 - **Version:** 2.3.0 (all three packages)

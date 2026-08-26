@@ -67,6 +67,125 @@ def download_file(url, dest_path, expected_hash):
             raise
 
 
+def download_and_transform_file(url, dest_path, transform_fn, expected_hash):
+    """Like download_file, but applies transform_fn(bytes) -> bytes to the raw
+    download before hash-verifying and writing. Used for the D3-family assets
+    below, which need a small, documented post-processing step (see
+    docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md's "Resolved:
+    D3.js/topojson-client provenance" section) rather than being usable
+    as-downloaded.
+    """
+    if hash_file(dest_path) == expected_hash:
+        _logger.info("Skipping %s (Already exists and matches hash)", dest_path)
+        return
+
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    _logger.info("Downloading (transformed) %s\n -> %s", url, dest_path)
+
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"})
+
+    with urllib.request.urlopen(req, timeout=10) as response:
+        raw = response.read()
+
+    content = transform_fn(raw)
+    content_hash = hashlib.sha256(content).hexdigest()
+    if content_hash != expected_hash:
+        raise ValueError(
+            f"Hash mismatch (after transform) for {url}: expected {expected_hash}, got {content_hash}"
+        )
+
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(dest_path))
+    try:
+        with os.fdopen(tmp_fd, "wb") as out_file:
+            out_file.write(content)
+        os.chmod(tmp_path, 0o644)
+        shutil.move(tmp_path, dest_path)
+    except OSError as e:
+        _logger.error("Failed to write %s: %s", dest_path, e)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
+def _odoo_module_banner_transform(raw):
+    """Prepends the /** @odoo-module **/ banner line every vendored D3-family
+    file carries as its first line. Confirmed this pass to be the ONLY
+    transform topojson-client.min.js needs -- with this applied, a fresh
+    unpkg download is byte-identical to the currently-vendored file.
+    """
+    return b"/** @odoo-module **/\n" + raw
+
+
+def _d3_geo_projection_transform(raw):
+    """Banner, plus the one substantive transform d3-geo-projection.v4.min.js
+    carries that d3.v7.min.js and topojson-client.min.js don't need: its UMD
+    wrapper's CommonJS branch calls require("d3-geo")/require("d3-array")
+    (the only one of the three vendored files with real external require()
+    calls, since it's a plugin depending on separate D3 submodules rather
+    than a self-contained bundle) -- replaced here with nonexistent
+    importModule(...) calls, and its AMD branch disabled, matching the
+    currently-vendored file's own pattern. Best-evidenced hypothesis for why
+    (not fully confirmed): this neuters the require() calls so Odoo's asset
+    pipeline can't try to resolve them as real modules -- the earlier,
+    reverted "just replace with a clean fetch" attempt reproduced a real
+    "d3-array module dependency" test failure without this substitution.
+    """
+    raw = raw.replace(
+        b'require("d3-geo"), require("d3-array")',
+        b'importModule("d3-geo"), importModule("d3-array")',
+    )
+    raw = raw.replace(
+        b'"function"==typeof define&&define.amd?define(["exports","d3-geo","d3-array"],r)',
+        b'false?_define(["exports","d3-geo","d3-array"],r)',
+    )
+    return b"/** @odoo-module **/\n" + raw
+
+
+def fetch_d3_family_assets_INTENTIONALLY_NOT_CALLED_FROM_MAIN(lib_dir):
+    """Reproduces the D3.js / d3-geo-projection / topojson-client vendoring,
+    documented in docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md.
+
+    Deliberately NOT wired into main() / called automatically. The pinned
+    hashes below are for THIS function's own deterministic transform output,
+    verified byte-identical to the currently-vendored file for
+    topojson-client.min.js only -- d3.v7.min.js and d3-geo-projection.v4.min.js
+    carry additional internal line-reflow versus a fresh download that this
+    transform does not reproduce, so running this against a checkout that
+    already has those two files would currently try to overwrite them with a
+    functionally-equivalent but differently-formatted variant. An earlier,
+    reverted attempt tonight (hams_open dcdd040b, hams_com 35a55d8c) swapped
+    D3-family files for a fresh, undocumented-provenance download without
+    running the full test suite first, and broke 12 tests. Do not call this
+    automatically for the same reason -- run it deliberately, then run the
+    FULL test suite (not just map-specific tests) before ever replacing the
+    live files with its output.
+    """
+    d3_dir = os.path.join(lib_dir, "d3")
+    topojson_dir = os.path.join(lib_dir, "topojson")
+
+    download_and_transform_file(
+        "https://unpkg.com/d3@7.9.0/dist/d3.min.js",
+        os.path.join(d3_dir, "d3.v7.min.js"),
+        _odoo_module_banner_transform,
+        "7963446662adc7ea772ad924910fb0d84c8dc8cda4fed6fc89caebb92e475eea",
+    )
+    download_and_transform_file(
+        "https://unpkg.com/d3-geo-projection@4.0.0/dist/d3-geo-projection.min.js",
+        os.path.join(d3_dir, "d3-geo-projection.v4.min.js"),
+        _d3_geo_projection_transform,
+        "27531b0dba6c4334774c0545e304a26ec8391903fd33022c48aec1f0e8be355e",
+    )
+    # topojson-client.min.js needs only the banner transform, and this hash
+    # DOES exactly match the currently-vendored file -- safe to run on its
+    # own even before the other two are re-verified.
+    download_and_transform_file(
+        "https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js",
+        os.path.join(topojson_dir, "topojson-client.min.js"),
+        _odoo_module_banner_transform,
+        "c9ba8407348fd3ac3ae9a2c8926d9335824b641b0e2acbb6fd7a87112c0997ea",
+    )
+
+
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     # Use node_modules to ensure linter (check_burn_list) skips these files
