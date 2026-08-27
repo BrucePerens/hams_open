@@ -9,7 +9,7 @@
         <record id="ir_cron_truncate_ses_webhook_logs" model="ir.cron">
             <field name="name">SES Webhook: Truncate Old Logs</field>
             <field name="model_id" ref="model_ses_webhook_log"/>
-            <field name="user_id" ref="base.user_root"/>
+            <field name="user_id" ref="user_ses_webhook_service_internal"/>
             <field name="state">code</field>
             <field name="code">model._cron_truncate_logs()</field>
             <field name="interval_number">1</field>
@@ -24,7 +24,7 @@
         <record id="ir_cron_truncate_ses_webhook_pending_submissions" model="ir.cron">
             <field name="name">SES Webhook: Truncate Old Pending Submissions</field>
             <field name="model_id" ref="model_ses_webhook_pending_submission"/>
-            <field name="user_id" ref="base.user_root"/>
+            <field name="user_id" ref="user_ses_webhook_service_internal"/>
             <field name="state">code</field>
             <field name="code">model._cron_truncate_pending_submissions()</field>
             <field name="interval_number">1</field>
