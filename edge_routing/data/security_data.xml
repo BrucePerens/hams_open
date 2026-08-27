@@ -34,7 +34,7 @@
         <record id="ir_cron_push_pager_duty" model="ir.cron">
             <field name="name">Edge Routing: Sync domains to PagerDuty</field>
             <field name="model_id" ref="model_edge_routing_domain"/>
-            <field name="user_id" ref="base.user_root"/>
+            <field name="user_id" ref="edge_routing.edge_routing_service_account"/>
             <field name="state">code</field>
             <field name="code">model.push_all_to_pager_duty()</field> 
             <field name="interval_number">1</field>
