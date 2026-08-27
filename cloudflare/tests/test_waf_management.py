@@ -1,9 +1,14 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import re
+
 from odoo.tests.common import tagged
+from odoo.addons.web.controllers.database import Database
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError
+
+from ..models.config_manager import DEFAULT_WAF_RULES
 
 
 @tagged("post_install", "-at_install")
@@ -182,3 +187,53 @@ class TestWafManagement(HamsTransactionCase):
         self.assertTrue(ban_record)
         self.assertEqual(ban_record.state, "failed")
         self.assertIn("Missing Cloudflare credentials", ban_record.notes)
+
+    def test_06_database_manager_waf_rule_covers_every_real_route(self):
+        # Regression test for a real gap found via the 2026-08-26 usability-audit run: the
+        # "Protect Database Manager" rule's expression once only matched /odoo/database/manager
+        # and /odoo/database/selector, which are not routes this installed Odoo version actually
+        # serves -- the real routes (introspected below directly from the installed
+        # odoo.addons.web.controllers.database.Database controller, not hardcoded, so an Odoo
+        # upgrade that moves these routes makes this test fail loudly rather than silently
+        # stop protecting anything) are all under /web/database/, including /web/database/drop
+        # and /web/database/restore. This does a simple substring simulation of the wirefilter
+        # expression (eq "<path>" or contains "<substring>"), not a full wirefilter parser --
+        # sufficient to catch the exact class of regression this guards against.
+        rule = next(
+            r for r in DEFAULT_WAF_RULES if r["name"] == "Protect Database Manager"
+        )
+        self.assertEqual(
+            rule["action"],
+            "block",
+            "[!] DIAGNOSTIC FOR AI: the database-manager WAF rule must block, not challenge or log.",
+        )
+        expression = rule["expression"]
+
+        eq_paths = re.findall(r'uri\.path eq "([^"]+)"', expression)
+        contains_substrings = re.findall(r'uri\.path contains "([^"]+)"', expression)
+
+        real_routes = []
+        for method_name in (
+            "selector",
+            "manager",
+            "create",
+            "duplicate",
+            "drop",
+            "backup",
+            "restore",
+            "change_password",
+            "list",
+        ):
+            real_routes.extend(
+                getattr(Database, method_name).original_routing["routes"]
+            )
+        self.assertTrue(real_routes, "[!] DIAGNOSTIC FOR AI: introspection found no routes at all.")
+
+        for path in real_routes:
+            covered = path in eq_paths or any(sub in path for sub in contains_substrings)
+            self.assertTrue(
+                covered,
+                f"[!] DIAGNOSTIC FOR AI: real Odoo database-manager route {path!r} is not "
+                f"matched by the WAF rule expression {expression!r} -- this route would be "
+                "reachable unauthenticated in production.",
+            )

@@ -24,8 +24,15 @@ DEFAULT_WAF_RULES = [
         "sequence": 20,
         "name": "Protect Database Manager",
         "action": "block",
-        "expression": '(http.request.uri.path eq "/odoo/database/manager") or (http.request.uri.path eq "/odoo/database/selector")',
-        "description": "SECURITY: Prevents public access to the Odoo database manager interface.",
+        "expression": '(http.request.uri.path contains "/web/database/") or (http.request.uri.path eq "/odoo/database/manager") or (http.request.uri.path eq "/odoo/database/selector")',
+        "description": "SECURITY: Prevents public access to the Odoo database manager interface. "
+        "The real routes on this Odoo version (odoo/addons/web/controllers/database.py) are all "
+        "under /web/database/ -- manager, selector, create, duplicate, drop, backup, restore, "
+        "change_password, list -- not /odoo/database/*, which doesn't exist as a route in this "
+        "version and was blocking nothing. Found via the 2026-08-26 usability-audit run reaching "
+        "the live /web/database/manager screen unauthenticated (USABILITY_AUDIT_SIMULATED_HAM.md's "
+        "2026-08-27 triage). Keeping the /odoo/database/* entries too in case a future Odoo "
+        "upgrade reintroduces routes there.",
     },
     {
         "sequence": 30,
