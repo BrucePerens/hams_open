@@ -60,10 +60,10 @@ describe("manual_toc", () => {
         const links = container.querySelectorAll("a.nav-link");
         expect(links.length).toBe(3);
         expect(links[0].textContent).toBe("Getting Started");
-        expect(links[0].className).toContain("fw-bold"); // h2 -> bold, ps-0
+        expect(links[0].className).toInclude("fw-bold"); // h2 -> bold, ps-0
         expect(links[1].textContent).toBe("Prerequisites");
         expect(links[1].getAttribute("href")).toBe("#already-has-id"); // pre-existing id preserved
-        expect(links[1].className).toContain("ps-3"); // h3 -> indented, not bold
+        expect(links[1].className).toInclude("ps-3"); // h3 -> indented, not bold
         expect(links[2].getAttribute("href")).toBe("#toc-heading-2"); // no id -> generated from its index
     });
 
@@ -75,7 +75,7 @@ describe("manual_toc", () => {
 
         instance.start();
 
-        expect(container.textContent).not.toContain("Stale content");
+        expect(container.textContent).not.toInclude("Stale content");
         expect(container.querySelectorAll("a.nav-link").length).toBe(1);
     });
 });
