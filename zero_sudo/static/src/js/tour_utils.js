@@ -19,6 +19,60 @@ export const TourUtils = {
         ];
     },
 
+    dismissCookiesBar: function () {
+        return {
+            content: "[MACRO] Remove the website cookies bar before it can auto-show and out-rank a real modal in Odoo's tour engine's \"last visible modal\" check",
+            trigger: 'body',
+            run: function () {
+                // #website_cookies_bar (website/views/website_templates.xml)
+                // auto-shows ~500ms after page load and is itself a
+                // Bootstrap .modal, injected into website.layout. web_tour's
+                // own elementIsInModal safety check (tour_step_automatic.js)
+                // picks the LAST visible .modal in DOM order and refuses any
+                // click/wait outside that one -- so once the cookies bar
+                // appears, every other tour step fails with "It is not
+                // allowed to do action on an element that's below a modal",
+                // even on a page with no modal of its own (see
+                // docs/proposals/EVENT_ISSUE_TOUR_MODAL_FLAKE.md for the
+                // original diagnosis and ADR 0081 rule 10 for the general
+                // writeup). Extracted here after it was independently
+                // rediscovered on ham_propagation's and ham_testing's own
+                // tours, which had no cookies-bar handling at all.
+                document.querySelector('#website_cookies_bar')?.remove();
+
+                // The above alone is NOT sufficient: #website_cookies_bar's
+                // *actual* Bootstrap modal is a nested, id-less
+                // `.modal.o_cookies_discrete` child that something in its
+                // own init (Bootstrap's Modal, or Odoo's Popup/CookiesBar
+                // interaction wrapping it) reparents out to a direct child
+                // of <body>, independent of its wrapper, timed non-
+                // deterministically relative to this step. Once reparented,
+                // removing the (now-vacated) wrapper does nothing for it.
+                // Scoped narrowly to this one, specifically-identified
+                // element -- NOT "every visible modal" -- matching this
+                // exact concern from the same investigation: an earlier,
+                // broader "hide every visible modal on any mutation"
+                // approach was tried elsewhere in this codebase and
+                // reverted for being too aggressive (it would hide
+                // legitimate modals mid-tour). This one only ever matches
+                // the cookies bar's own reparented node.
+                new MutationObserver((mutations) => {
+                    for (const m of mutations) {
+                        for (const node of m.addedNodes) {
+                            if (
+                                node.nodeType === 1 &&
+                                node.classList?.contains('modal') &&
+                                node.classList?.contains('o_cookies_discrete')
+                            ) {
+                                node.remove();
+                            }
+                        }
+                    }
+                }).observe(document.body, { childList: true });
+            },
+        };
+    },
+
     bypassDialogs: function () {
         return {
             content: "[MACRO] Bypass native blocking dialogs",
