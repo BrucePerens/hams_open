@@ -1167,6 +1167,33 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     window._jules_watchdog_suppressed = true;
                     console.log("🛠️ Injecting Jules Watchdog Suppressions...");
 
+                    // 0. Force navigator.onLine true for the duration of every test.
+                    // This sandbox's own test.py runs the WHOLE test process inside an
+                    // isolated network namespace (loopback only, no default route --
+                    // see hams_shared/tools/test.py's own "Isolating network namespace
+                    // for test daemons" step) so headless Chrome's real
+                    // NetworkChangeNotifier correctly, but unhelpfully, reports no
+                    // network interface up -- navigator.onLine reads false even though
+                    // the test server on 127.0.0.1 is perfectly reachable via loopback.
+                    // Confirmed directly, not assumed: ics_forms' own save flow
+                    // (ics_editor.js) gates its real RPC on `if (!navigator.onLine)`
+                    // and silently diverted to its offline-queue fallback in every real
+                    // browser test run in this sandbox, never once reaching the server
+                    // -- root-caused via a temporary [ICS_SAVE_DEBUG] console.error
+                    // dump showing `onLine: false` with otherwise-correct form data.
+                    // A real deployed browser has a real network interface and reads
+                    // this correctly; only this sandbox's own namespace isolation needs
+                    // the override, so this belongs in the shared test harness, not in
+                    // any application code.
+                    try {
+                        Object.defineProperty(window.navigator, "onLine", {
+                            configurable: true,
+                            get: () => true,
+                        });
+                    } catch (e) {
+                        console.error("[!] DIAGNOSTIC FOR AI: Failed to force navigator.onLine true:", e);
+                    }
+
                     // 1. Suppress Fetch Abort Errors during teardown (REMOVED)
 
                     // 2. Suppress Synchronous Framework Crashes (InteractionService)
