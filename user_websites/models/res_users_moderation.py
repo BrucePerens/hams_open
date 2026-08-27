@@ -36,7 +36,7 @@ class ResUsersModeration(models.Model):
             limit=1000,
         )
 
-        mapping = {u.id: [] for u in self}
+        mapping: dict[int, list[int]] = {u.id: [] for u in self}
         for g in groups:
             for m in g.member_ids:
                 if m.id in mapping:
