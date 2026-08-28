@@ -81,3 +81,22 @@ class TestDomainPush(HamsTransactionCase):
         _, kwargs = mock_post.call_args
         posted_domains = kwargs.get('json', {}).get('params', {}).get('domains', [])
         self.assertEqual(len(posted_domains), total_domains)
+
+    def test_cron_actually_runs_through_the_real_scheduler_path(self):
+        # Tests [@ANCHOR: edge_routing_push_pager_duty_cron_runs]
+        # test_push_all_to_pager_duty_batching above calls
+        # push_all_to_pager_duty() directly, bypassing the real execution
+        # path ir.cron actually uses: ir.actions.server.run(), which calls
+        # _can_execute_action_on_records() first and requires WRITE access
+        # to the cron's declared model_id (edge.routing.domain) before
+        # running anything. ir.model.access.csv deliberately keeps this
+        # service account read-only on that model (push_all_to_pager_duty()
+        # only ever reads domain rows to push externally, never writes them
+        # back) -- found live: the cron 500'd/failed with "Forbidden server
+        # action" on every scheduled run until group_ids was set on the
+        # action itself, authorizing it without broadening the model's
+        # actual write ACL.
+        mock_post = self.safe_patch('odoo.addons.edge_routing.models.domain.requests.post')
+        cron = self.env.ref("edge_routing.ir_cron_push_pager_duty")
+        cron.ir_actions_server_id.with_user(cron.user_id.id).run()
+        mock_post.assert_called_once()

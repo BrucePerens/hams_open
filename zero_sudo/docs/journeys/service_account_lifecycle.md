@@ -36,3 +36,13 @@ self.with_user(svc_uid).do_something_important()
 
 ## 5. Audit Trail
 Any records created or modified will show "My Daemon Service" as the creator/modifier, providing a clear audit trail of which service account performed the action.
+
+## 6. Scheduling a Cron Job for a Service Account
+A service account with only narrow, deliberately-scoped access (e.g. read/create but not write, to
+preserve tamper-resistance on an audit-style model) can still need to run a scheduled `ir.cron` job
+against that same model. Odoo core's own `ir.actions.server._can_execute_action_on_records()` requires
+**write** access to the cron's declared `model_id` before it will run the action at all -- a separate,
+additional gate beyond `ir.model.access.csv`, checked regardless of what the action's own code actually
+does. Setting `group_ids` on the `ir.cron` record (delegated from its underlying `ir.actions.server`)
+authorizes the specific group for that specific action, satisfying this gate without broadening the
+model's real ACL. `[@ANCHOR: zero_sudo:COMM_security_log_autovacuum_cron_runs]`

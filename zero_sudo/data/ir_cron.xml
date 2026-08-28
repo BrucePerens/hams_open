@@ -16,7 +16,19 @@
             <field name="interval_number">1</field>
             <field name="interval_type">days</field>
             <field name="user_id" ref="zero_sudo.odoo_facility_service_internal"/>
-
+            <!-- Odoo core's ir.actions.server._can_execute_action_on_records()
+                 requires write access to the target model before it will run
+                 ANY server action against it, even one whose own code (the
+                 autovacuum() method above) only ever does a raw SQL DELETE,
+                 bypassing the ORM's access checks entirely. Setting group_ids
+                 here authorizes this specific action for this specific group
+                 instead, which skips that generic model-write check (see
+                 ir_actions.py's own group_ids branch): the correct fix,
+                 since granting the facility service broad WRITE access to
+                 zero_sudo.security.log via ir.model.access.csv instead would
+                 let it edit existing audit-log rows through the ORM, not just
+                 purge old ones through this one controlled method. -->
+            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_odoo_facility_service')])]"/>
         </record>
     </data>
 </odoo>

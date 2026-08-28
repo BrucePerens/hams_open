@@ -107,6 +107,24 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         service_user = self.env.ref("zero_sudo.odoo_facility_service_internal")
         self.assertEqual(cron.user_id, service_user, "Cron must run as zero_sudo.odoo_facility_service_internal")
 
+    def test_security_log_autovacuum_cron_actually_runs_as_its_service_user(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_security_log_autovacuum_cron_runs]
+        # test_security_log_autovacuum above calls autovacuum() directly as
+        # this test's own (effectively superuser) env, and only checks
+        # cron.user_id -- it never actually runs the cron's underlying
+        # ir.actions.server through the real execution path the scheduler
+        # uses. That path calls _can_execute_action_on_records(), which
+        # requires WRITE access to the cron's declared model_id (zero_sudo.
+        # security.log) before it will run the action at all -- a real,
+        # reproducible failure found live: ir.model.access.csv deliberately
+        # keeps this model read/create-only for the facility service (an
+        # audit log shouldn't be ORM-writable, even by its own cleanup job),
+        # so the cron 500'd/failed with "Forbidden server action" on every
+        # scheduled run until group_ids was set on the action itself to
+        # authorize it without broadening the model's actual ACL.
+        cron = self.env.ref("zero_sudo.ir_cron_security_log_autovacuum")
+        cron.ir_actions_server_id.with_user(cron.user_id.id).run()
+
     def test_poll_health_check(self):
         # [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
