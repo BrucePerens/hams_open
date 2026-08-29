@@ -139,14 +139,23 @@ class TestHelpdeskTours(HamsHttpCase):
             "[!] DIAGNOSTIC FOR AI: Backend ticket form failed to render (Expected 200).",
         )
 
-    def test_portal_ticket_new_callsign_validation(self):
-        """Test portal ticket submission fails when callsign is empty."""
-        
+    def test_portal_ticket_new_renders_without_callsign(self):
+        # Found live 2026-08-29 as a Prospective Ham/SWL persona (a real
+        # signup option for users studying for their license, i.e. by
+        # definition without a callsign yet): /my/tickets/new used to raise
+        # a raw 400 for any user without a callsign, with no way back. The
+        # form template's own callsign field is labeled "Your callsign (if
+        # applicable)", and both portal_ticket_submit() and
+        # helpdesk_ticket.create() already handle a missing callsign
+        # gracefully -- the 400 was inconsistent with the rest of this same
+        # flow, not an intentional requirement. This was
+        # test_portal_ticket_new_callsign_validation, asserting the old
+        # (wrong) 400 behavior; now asserts the fixed one.
         self.portal_user.partner_id.callsign = False
         self.authenticate("portal_cust_tour", "password")
-        
+
         res = self.url_open("/my/tickets/new")
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 200)
 
     def test_portal_ticket_company_and_ctx(self):
         """Test context cascading and company ID"""

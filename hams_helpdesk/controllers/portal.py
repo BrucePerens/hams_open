@@ -4,7 +4,6 @@
 from odoo import http
 from odoo.http import request
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
-import werkzeug
 
 
 class HelpdeskPortal(CustomerPortal):
@@ -136,12 +135,18 @@ class HelpdeskPortal(CustomerPortal):
 
     @http.route(["/my/tickets/new"], type="http", auth="user", website=True)
     def portal_ticket_new(self, **kw):
-        partner = request.env.user.partner_id
-
-        # Exact Schema validation. Fail loudly if callsign isn't present
-        callsign = partner.callsign
-        if not callsign:
-            raise werkzeug.exceptions.BadRequest("Callsign is required.")
+        # Found live 2026-08-29 as a Prospective Ham/SWL persona (a real,
+        # site-offered signup option specifically for users studying for
+        # their license, i.e. by definition without a callsign yet): this
+        # used to raise a raw 400 Bad Request ("Callsign is required.")
+        # for any user without one, with no way back. That contradicted
+        # the rest of this same flow -- the form template's own callsign
+        # field is labeled "Your callsign (if applicable)", and
+        # portal_ticket_submit()/helpdesk_ticket.create() both already
+        # handle a missing callsign gracefully (fall back to empty, no
+        # required=True on the model field). Nothing downstream needed
+        # this check; just stopped enforcing it.
+        callsign = request.env.user.partner_id.callsign
         return request.render(
             "hams_helpdesk.portal_ticket_new",
             {
