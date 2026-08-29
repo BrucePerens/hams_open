@@ -23,6 +23,16 @@
                 <t t-set="title">Helpdesk Tickets</t>
                 <t t-set="url" t-value="'/my/tickets'"/>
                 <t t-set="placeholder_count" t-value="'ticket_count'"/>
+                <!-- Found live 2026-08-29 as a Prospective Ham persona looking for support:
+                     portal.portal_docs_entry hides a counter-gated card (class d-none) until
+                     request.session['portal_counters'] already has a nonzero count for
+                     placeholder_count, which the JS-driven /my/counters call only ever
+                     populates AFTER a page load, and only once ticket_count is nonzero. A
+                     user with zero tickets could never see this card to create their first
+                     one; checked portal_templates.xml's own "Addresses"/"Connection &
+                     Security" cards, which always show regardless of count via config_card,
+                     the standard Odoo escape hatch for exactly this case. -->
+                <t t-set="config_card" t-value="True"/>
             </t>
         </xpath>
     </template>

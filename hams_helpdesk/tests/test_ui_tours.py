@@ -179,6 +179,36 @@ class TestHelpdeskTours(HamsHttpCase):
         # Should redirect to ticket detail
         self.assertEqual(res.status_code, 200)
 
+    def test_tickets_card_visible_on_my_account_with_zero_tickets(self):
+        # Found live 2026-08-29 as a Prospective Ham persona looking for
+        # support: portal.portal_docs_entry hides a counter-gated card
+        # until the session's cached portal_counters already has a nonzero
+        # count -- populated only by a JS call made after the page loads,
+        # and only once ticket_count is nonzero. A user with zero tickets
+        # could never see the card that would let them create their first
+        # one. Fixed by setting config_card=True on the card, matching the
+        # base portal's own "Addresses"/"Connection & Security" cards.
+        self.authenticate("portal_cust_tour", "password")
+        self.assertEqual(
+            self.env["hams_helpdesk.ticket"].search_count(
+                [("partner_id", "=", self.portal_user.partner_id.id)]
+            ),
+            0,
+        )
+        res = self.url_open("/my")
+        self.assertEqual(res.status_code, 200)
+        cards = res.text.split('<div class="o_portal_index_card')
+        matching_cards = [c for c in cards if "Helpdesk Tickets" in c]
+        self.assertEqual(
+            len(matching_cards), 1, "Helpdesk Tickets card not found (once) on /my"
+        )
+        card_class = matching_cards[0].split(">", 1)[0]
+        self.assertNotIn(
+            "d-none",
+            card_class,
+            "Helpdesk Tickets card is hidden (d-none) even with zero tickets",
+        )
+
     # Tests [@ANCHOR: COMM_helpdesk_operator_tour]
 #     def test_helpdesk_operator_tour(self):
         pass
