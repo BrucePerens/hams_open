@@ -72,4 +72,5 @@
     "installable": True,
     "application": True,
     "license": "AGPL-3",
+    "post_init_hook": "post_init_hook",
 }
