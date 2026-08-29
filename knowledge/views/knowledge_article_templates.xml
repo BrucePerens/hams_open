@@ -227,4 +227,20 @@
             </div>
         </t>
     </template>
+
+    <!-- Found live 2026-08-29 across three separate hams_com usability-audit
+         personas (screen_reader_user, satellite_and_propagation,
+         newcomer_technician): /knowledge/home is a real, working manual
+         index listing every published article, but nothing on the site
+         links to it, and the site's own search never indexes article
+         content either, so a real newcomer with no prior context has no
+         way to discover it exists. This does not fix the search gap
+         (a bigger indexing change), but gives every visitor a starting
+         point regardless of search. -->
+    <record id="menu_knowledge_home" model="website.menu">
+        <field name="name">Help</field>
+        <field name="url">/knowledge/home</field>
+        <field name="parent_id" ref="website.main_menu"/>
+        <field name="sequence" type="int">90</field>
+    </record>
 </odoo>
