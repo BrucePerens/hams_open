@@ -177,3 +177,41 @@ class TestManualControllers(HamsHttpCase):
 
         # Tests [@ANCHOR: journey_user_browsing]
         self.url_open("/manual")
+
+    def test_07_knowledge_home_alias_exact_match_redirects_straight_to_the_article(self):
+        # Found live 2026-08-28: roughly a dozen "Help" links across other modules were
+        # written assuming Odoo's real Knowledge module's /knowledge/home?search=...
+        # URL shape, but this module -- a deliberate from-scratch work-alike, not a
+        # wrapper around Odoo's real one -- never implemented that route at all, so
+        # every one of those links 404'd. /knowledge/home is the alias added to fix
+        # that without rewriting every call site.
+        self.authenticate(None, None)
+        response = self.url_open(
+            "/knowledge/home?search=Public+Root+API", allow_redirects=False
+        )
+        self.assertEqual(
+            response.status_code,
+            303,
+            "An exact name match should redirect straight to the article, "
+            "zero extra clicks, the same way /manual/by_name/<name> already does.",
+        )
+        self.assertIn(self.root_public.website_url, response.headers.get("Location", ""))
+
+    def test_08_knowledge_home_alias_falls_back_to_search_results_on_no_exact_match(self):
+        # A caller's search string doesn't always exactly match the real article
+        # name (found live: "Ham Events" vs the real "Ham Events & Nets Manual") --
+        # must not 404 in that case, just show the same substring-search results
+        # page /manual/search already renders.
+        self.authenticate(None, None)
+        response = self.url_open("/knowledge/home?search=Public")
+        self.assertEqual(
+            response.status_code,
+            200,
+            "An imprecise search string must fall through to search results, not 404.",
+        )
+        self.assertIn(b"Public Root API", response.content)
+
+    def test_09_knowledge_home_alias_with_no_search_term_shows_the_manual_home(self):
+        self.authenticate(None, None)
+        response = self.url_open("/knowledge/home")
+        self.assertEqual(response.status_code, 200)

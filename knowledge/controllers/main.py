@@ -254,6 +254,49 @@ class ManualLibraryController(http.Controller):
             },
         )
 
+    @http.route(["/knowledge/home"], type="http", auth="public", website=True)
+    def knowledge_home_alias(self, search="", **kwargs):
+        """
+        Alias for Odoo-Knowledge-module URL familiarity (/knowledge/home?search=...),
+        added 2026-08-28 at Bruce's direction: found live that "Help" links across
+        roughly a dozen modules were written assuming this URL shape (presumably
+        matching muscle memory from Odoo's own real, proprietary Knowledge module),
+        but this module -- a deliberate from-scratch work-alike, not a wrapper around
+        Odoo's real one -- only ever implemented /manual/search and
+        /manual/by_name/<name>, so every one of those links 404'd. Rather than
+        rewrite every call site (this module's own knowledge_docs manifest name
+        doesn't always match the search string a caller happened to write -- e.g.
+        "Ham Events" vs the real "Ham Events & Nets Manual" -- found while fixing
+        four of these by hand before Bruce redirected to this approach), alias the
+        URL Odoo users already expect onto manual_article_by_name's own exact-match
+        lookup by calling it directly (not reimplementing its domain query here --
+        an earlier draft of this alias duplicated that logic inline, which Bruce
+        flagged as a real DRY risk: the two copies could silently drift apart the
+        next time one gets edited), so a caller's #anchor fragment still lands on
+        the right heading with zero extra clicks. Falls through to the broader
+        ilike-substring search-results page (manual_search) only when
+        manual_article_by_name itself finds no exact match -- e.g. because the
+        caller's search string was imprecise (this module's own knowledge_docs
+        manifest name doesn't always match the search string a caller happened to
+        write -- e.g. "Ham Events" vs the real "Ham Events & Nets Manual", found
+        while fixing four of these links by hand before Bruce redirected to this
+        approach) -- which still finds the right article (ilike is substring, not
+        exact), just one click further away instead of a 404.
+
+        Deliberately a direct method call, not an HTTP redirect to /manual/search
+        or /manual/by_name/<name>: a redirect to by_name would still 404 on every
+        imprecise search string (the exact problem this alias exists to absorb),
+        and a redirect straight to manual_search would always show a results page
+        even for the common exact-match case, losing the zero-extra-click jump a
+        caller's #anchor fragment is counting on.
+        """
+        if search:
+            try:
+                return self.manual_article_by_name(search, **kwargs)
+            except werkzeug.exceptions.NotFound:
+                pass
+        return self.manual_search(search=search, **kwargs)
+
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
