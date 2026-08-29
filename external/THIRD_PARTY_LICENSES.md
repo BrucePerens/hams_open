@@ -109,19 +109,72 @@ is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND
 implied. See the License for the specific language governing permissions and limitations under the
 License.
 
-**Known gap, found while writing this file, not previously documented:** the vendored
-`transformers.js` is a ~1.7MB webpack bundle, and grepping it directly for `Copyright` strings
-turns up `Copyright (c) Microsoft Corporation. All rights reserved.` repeated throughout -- almost
-certainly from `onnxruntime-web` (MIT-licensed, the ONNX runtime Transformers.js bundles for
-in-browser model inference), not from Xenova's own code. This means the single Apache-2.0 line
-above is necessarily incomplete: a webpack bundle this size likely rolls in several third-party
-packages' own licenses (onnxruntime-web's MIT terms at minimum), and none of those nested packages'
-own attribution requirements have been individually verified or reproduced here. A real fix would
-mean either building Transformers.js from source with a license-aggregation tool (e.g.
-`license-checker` or webpack's own `LicenseWebpackPlugin`) to enumerate every bundled package, or
-obtaining an official third-party-notices file from the upstream Transformers.js project if one
-ships with a release. Not done tonight -- flagged here rather than presenting the single
-Apache-2.0 line as if it were the complete picture.
+**Nested bundled packages, resolved 2026-08-29 (previously an open gap).** The single Apache-2.0
+line above covers Xenova's own code but not everything the ~1.7MB webpack bundle actually contains.
+Rather than the full `license-checker`/`LicenseWebpackPlugin` rebuild-from-source this gap
+originally called for (still not done -- no build toolchain for this vendored copy exists in this
+repo), the bundle's own webpack module-boundary comments (`/*! <package-name> */`, immediately
+preceding each `__webpack_require__` call) were read directly to identify exactly which named
+packages are genuinely bundled with real code, as opposed to referenced-but-stubbed for a
+browser build. Six candidates surfaced this way (`@huggingface/jinja`, `onnxruntime-common`,
+`onnxruntime-node`, `onnxruntime-web`, plus Node built-ins `fs`/`path`/`url`/`stream/web`, and
+`sharp`); confirmed by their resolved module paths that `onnxruntime-node`, `sharp`, and the four
+Node built-ins each resolve to a bare `"?xxxx"` placeholder id (webpack's marker for an external,
+Node-only dependency it could not bundle for a browser target), so none of those six actually ship
+real code in this file -- only `@huggingface/jinja`, `onnxruntime-common`, and `onnxruntime-web`
+resolve to real bundled module paths (`./node_modules/@huggingface/jinja/dist/index.js`,
+`./node_modules/onnxruntime-common/dist/lib/index.js`,
+`./node_modules/onnxruntime-web/dist/ort-web.min.js`) and need attribution here:
+
+### `@huggingface/jinja` -- MIT
+
+Copyright (c) 2023 Hugging Face
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### `onnxruntime-common` and `onnxruntime-web` -- MIT
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+(Copyright holder and license confirmed directly against each project's own upstream LICENSE file,
+not assumed from the bundle's embedded `Copyright (c) Microsoft Corporation. All rights reserved.`
+string alone; the huggingface.js monorepo's own top-level `LICENSE` file is `@huggingface/jinja`'s
+actual license source, since that package ships no separate one of its own.)
+
+**Real remaining gap, narrower than before:** this identifies every *named* package the bundle's
+own webpack comments expose, but a module-boundary comment can only name what webpack's build
+process chose to preserve -- it is not a substitute for a real dependency-tree audit of
+`onnxruntime-web`'s own transitive dependencies (a full rebuild-from-source with
+`license-checker`/`LicenseWebpackPlugin` remains the only way to be certain none of those add a
+further nested package). Flagged narrower rather than closed outright.
 
 ---
 
