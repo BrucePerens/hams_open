@@ -20,6 +20,7 @@ class KnowledgeArticle(models.Model):
         "mail.activity.mixin",
         "website.published.mixin",
         "website.multi.mixin",
+        "website.searchable.mixin",
     ]
     _order = "sequence, id"
 
@@ -210,3 +211,42 @@ class KnowledgeArticle(models.Model):
                 article.website_url = f"/manual/{article.id}-{safe_name}"
             else:
                 article.website_url = ""
+
+    # --- Website Search ---
+    def _search_get_detail(self, website, order, options):
+        # Found live 2026-08-29: three separate hams_com usability-audit
+        # personas independently confirmed the site's own search never
+        # covers knowledge articles at all, only products/blog/pages,
+        # so a genuinely public, published manual article was completely
+        # unfindable by anyone who didn't already know its exact URL.
+        # This registers knowledge.article with website's own search
+        # dispatch, matching the same pattern website_blog uses for
+        # blog.post (see _search_get_detail there for the base shape).
+        with_description = options["displayDescription"]
+        domain = [
+            [("is_published", "=", True)],
+            website.website_domain(),
+        ]
+        search_fields = ["name"]
+        fetch_fields = ["name", "website_url"]
+        mapping = {
+            "name": {"name": "name", "type": "text", "match": True},
+            "website_url": {"name": "website_url", "type": "text", "truncate": False},
+        }
+        if with_description:
+            search_fields.append("body")
+            fetch_fields.append("body")
+            mapping["description"] = {
+                "name": "body",
+                "type": "text",
+                "html": True,
+                "match": True,
+            }
+        return {
+            "model": "knowledge.article",
+            "base_domain": domain,
+            "search_fields": search_fields,
+            "fetch_fields": fetch_fields,
+            "mapping": mapping,
+            "icon": "fa-book",
+        }
