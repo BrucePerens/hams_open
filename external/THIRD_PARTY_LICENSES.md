@@ -169,12 +169,70 @@ not assumed from the bundle's embedded `Copyright (c) Microsoft Corporation. All
 string alone; the huggingface.js monorepo's own top-level `LICENSE` file is `@huggingface/jinja`'s
 actual license source, since that package ships no separate one of its own.)
 
-**Real remaining gap, narrower than before:** this identifies every *named* package the bundle's
-own webpack comments expose, but a module-boundary comment can only name what webpack's build
-process chose to preserve -- it is not a substitute for a real dependency-tree audit of
-`onnxruntime-web`'s own transitive dependencies (a full rebuild-from-source with
-`license-checker`/`LicenseWebpackPlugin` remains the only way to be certain none of those add a
-further nested package). Flagged narrower rather than closed outright.
+**Second pass, same evening: `onnxruntime-web`'s own transitive dependencies.** The gap above was
+about the bundle's *named* packages; `onnxruntime-web`'s real bundled file is
+`./node_modules/onnxruntime-web/dist/ort-web.min.js`, a pre-minified vendor file webpack rolled in
+whole -- packages nested *inside* that file were already flattened before webpack's own
+module-boundary comments could ever name them, so the pass above couldn't have found them. Checked
+directly: `onnxruntime-web`'s real, published `package.json` (confirmed via its GitHub repo) lists
+`flatbuffers`, `long`, `protobufjs`, `guid-typescript`, and `platform` as dependencies. Grepping the
+actual bundled code for each package's own distinctive signatures (not just its name, which
+minification can rename away) found real, functional evidence of two:
+`r.Long=r.global.dcodeIO&&r.global.dcodeIO.Long||r.global.Long||r.inquire("long")` is
+`protobufjs`'s own well-known Long-implementation compatibility shim (`dcodeIO` is that library's
+author's npm/GitHub handle), and `r.flatbuffers.ByteBuffer`/`InferenceSession.getRootAsInferenceSession`
+match `flatbuffers`'s generated-code API exactly, used here to parse the ORT model format. No
+license/copyright banner text survived minification for either (unlike `onnxruntime-common`'s own
+module, which kept its comment), so both are attributed here from each project's own real upstream
+`LICENSE`, verified directly, not read out of the bundle:
+
+### `protobufjs` -- BSD-3-Clause
+
+Copyright (c) 2016, Daniel Wirtz. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted
+provided that the following conditions are met: (1) Redistributions of source code must retain the
+above copyright notice, this list of conditions and the following disclaimer. (2) Redistributions
+in binary form must reproduce the above copyright notice, this list of conditions and the following
+disclaimer in the documentation and/or other materials provided with the distribution. (3) Neither
+the name of its author, nor the names of its contributors may be used to endorse or promote
+products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+`protobufjs`'s own `long` dependency (surfaced by the same code path above) is Daniel Wirtz's
+separate `long.js` package, also BSD-3-Clause under the same copyright -- not reproduced as a
+second entry since it is the exact same author, license, and terms.
+
+### `flatbuffers` -- Apache-2.0
+
+Copyright 2014 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+in compliance with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License
+is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions and limitations under the
+License.
+
+**Remaining gap, real but now much narrower.** `guid-typescript` and `platform` are both declared
+`onnxruntime-web` dependencies but produced zero string evidence (by name or by known API
+signature) anywhere in this bundle -- plausibly because they're used only by `onnxruntime-web`'s
+Node-specific code paths, which this browser build tree-shakes out (`onnxruntime-node` itself is
+confirmed elsewhere in this file to be an externalized stub, not real bundled code, for the same
+reason). Not attributed here since no evidence of inclusion was found, but not confirmed absent
+either -- a full rebuild-from-source with `license-checker`/`LicenseWebpackPlugin` remains the only
+way to be fully certain nothing else is nested in.
 
 ---
 
