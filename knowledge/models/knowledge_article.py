@@ -223,8 +223,22 @@ class KnowledgeArticle(models.Model):
         # dispatch, matching the same pattern website_blog uses for
         # blog.post (see _search_get_detail there for the base shape).
         with_description = options["displayDescription"]
+        # Matches the visibility rule controllers/main.py's own listing
+        # endpoints already use: internal staff (base.group_user) see
+        # everything regardless of publish state; everyone else only sees
+        # published articles, or ones they're specifically a member of.
+        # Found live 2026-08-29 reviewing this same-night fix: the first
+        # version of this domain checked is_published only, so a logged-in
+        # member searching for their own member-only article would get
+        # zero results here even though the same article is directly
+        # visible to them everywhere else on the site.
+        user_id = self.env.user.id
+        if self.env.user.has_group("base.group_user"):
+            visibility_domain = []
+        else:
+            visibility_domain = ["|", ("is_published", "=", True), ("member_ids", "in", user_id)]
         domain = [
-            [("is_published", "=", True)],
+            visibility_domain,
             website.website_domain(),
         ]
         search_fields = ["name"]
