@@ -31,12 +31,12 @@ class TestSlugifyProperties(BaseCase):
     @_SETTINGS
     @given(_TEXT)
     def test_output_is_always_url_safe(self, s):
+        # A per-character check built from isascii()/isalnum()/isdigit()
+        # is easy to get subtly wrong (e.g. str.isdigit() is also True for
+        # non-ASCII digits like "٥") -- assert the actual invariant
+        # directly against the character class slugify() promises.
         result = slugify(s)
-        for ch in result:
-            self.assertTrue(
-                ch == "-" or ch.isascii() and ch.isalnum() and ch.islower() or ch.isdigit(),
-                f"unsafe character {ch!r} in slug for input {s!r}: {result!r}",
-            )
+        self.assertRegex(result, r"^[a-z0-9-]*$")
 
     @_SETTINGS
     @given(_TEXT)
