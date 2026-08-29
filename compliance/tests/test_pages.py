@@ -28,6 +28,19 @@ class TestCompliancePages(HamsTransactionCase):
             msg = f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in \'website.page\'. Check compliance/data/legal_pages_data.xml for missing records."
             self.assertIn(url, found_urls, msg)
 
+        # Found live 2026-08-29 via a usability audit persona: legal_pages_data.xml
+        # created these website.page records without a "name" field. Odoo's own
+        # generic site search (website/controllers/main.py's autocomplete, when
+        # search_type='all') sorts combined results with `r.get('name', '')`,
+        # which crashes with a TypeError ('<' not supported between 'bool' and
+        # 'str') the moment any record in the mix has name=False rather than a
+        # missing key -- exactly what an unset Char field on a real record looks
+        # like. A page missing here doesn't just render blank, it can crash
+        # site search for every visitor.
+        for page in pages:
+            msg = f"[!] DIAGNOSTIC FOR AI: website.page for {page.url} has no name set. This crashes Odoo's generic site search (TypeError sorting bool vs str) the moment it's a search result. Set a name in compliance/data/legal_pages_data.xml."
+            self.assertTrue(page.name, msg)
+
         # Non-Destructive Mandate check:
         # Only check our own pages if they are NOT shadowed by custom ones.
         for page in pages:
@@ -94,6 +107,21 @@ class TestCompliancePagesHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 200, msg_status)
         msg_text = "[!] DIAGNOSTIC FOR AI: Page /accessibility should contain boilerplate content. Check the rendering."
         self.assertTrue(bool(re.search(r"Policy|Terms", response.text)), msg_text)
+
+    def test_generic_site_search_does_not_crash_on_legal_pages(self):
+        # Found live 2026-08-29: /website/search?search=forum&order=name+asc
+        # (Odoo's generic site search, search_type='all') threw an unhandled
+        # 500 -- TypeError: '<' not supported between instances of 'bool' and
+        # 'str' -- in odoo/addons/website/controllers/main.py's autocomplete,
+        # sorting combined results by `r.get('name', '')`. Root cause: the
+        # /privacy, /cookie-policy, /terms, and /accessibility website.page
+        # records had no `name` set, so they sorted as name=False against
+        # every other result's string name. Reproduces the exact request path
+        # that crashed, using search terms that should surface these pages.
+        for term in ("privacy", "terms", "cookie", "accessibility"):
+            response = self.url_open(f"/website/search?search={term}&order=name+asc")
+            msg = f"[!] DIAGNOSTIC FOR AI: Generic site search for '{term}' returned {response.status_code}, expected 200. A website.page (or any other searchable record) with an unset name field crashes this route's sort."
+            self.assertEqual(response.status_code, 200, msg)
 
     def test_compliance_index_route_lists_only_active_documents(self):
         """Verify the actual /compliance HTTP route, not just its template."""

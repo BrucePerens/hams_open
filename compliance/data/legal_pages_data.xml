@@ -72,6 +72,7 @@
         </template>
 
         <record id="compliance_page_privacy_policy" model="website.page">
+            <field name="name">Privacy Policy</field>
             <field name="url">/privacy</field>
             <field name="is_published">True</field>
             <field name="view_id" ref="compliance.compliance_privacy_policy_template"/>
@@ -127,6 +128,7 @@
         </template>
 
         <record id="compliance_page_cookie_policy" model="website.page">
+            <field name="name">Cookie Policy</field>
             <field name="url">/cookie-policy</field>
             <field name="is_published">True</field>
             <field name="view_id" ref="compliance.compliance_cookie_policy_template"/>
@@ -182,6 +184,7 @@
         </template>
 
         <record id="compliance_page_terms_of_service" model="website.page">
+            <field name="name">Terms of Service</field>
             <field name="url">/terms</field>
             <field name="is_published">True</field>
             <field name="view_id" ref="compliance.compliance_terms_of_service_template"/>
@@ -220,6 +223,7 @@
         </template>
 
         <record id="compliance_page_accessibility_statement" model="website.page">
+            <field name="name">Accessibility Statement</field>
             <field name="url">/accessibility</field>
             <field name="is_published">True</field>
             <field name="view_id" ref="compliance.compliance_accessibility_statement_template"/>
