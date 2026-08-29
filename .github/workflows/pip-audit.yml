@@ -1,0 +1,54 @@
+name: Python Dependency Audit
+
+on:
+  push:
+    paths:
+      - 'requirements.txt'
+      - '.github/workflows/pip-audit.yml'
+  pull_request:
+    paths:
+      - 'requirements.txt'
+      - '.github/workflows/pip-audit.yml'
+  schedule:
+    # A pinned requirements.txt doesn't change just because a new advisory
+    # was published against something already pinned -- the push/PR
+    # triggers above only catch a *new* pin introducing a *known-at-the-time*
+    # vulnerability. Weekly, matching this repo's own dependency-watch.yml
+    # cadence, so an advisory disclosed after the fact still gets caught.
+    - cron: '0 13 * * 1'
+  workflow_dispatch: {}
+
+# docs/proposals/CODE_REVIEW_PROCESS.md, "Formal verification tooling":
+# pip-audit is named as the direct Python parallel to cargo-audit/cargo-deny
+# on the Rust side, "should run in CI the same way" -- but nothing ever
+# actually ran it in CI. check_pip_audit.py (hams_shared/tools/) implements
+# the check and is wired into run_linters.py, but no workflow in either
+# hams_open or hams_com invokes run_linters.py.
+#
+# Deliberately NOT reusing hams_shared/tools/check_pip_audit.py directly
+# even though it lives natively in this repo (no symlink to resolve): its
+# own sibling-repo detection would need hams_com checked out alongside this
+# repo to also cover hams_com's own requirements.txt files, which would
+# need a cross-repo checkout (a second private repo under the same owner
+# needs a PAT/deploy-key secret beyond the default repo-scoped
+# GITHUB_TOKEN -- Bruce's call, not a code change). A direct pip-audit
+# invocation against this repo's own single root requirements.txt needs
+# neither and closes what CI was actually missing for this repo.
+# hams_com's own two requirements.txt files got the equivalent workflow
+# there instead (hams_com/.github/workflows/pip-audit.yml) -- same
+# pattern, same reasoning, opposite side of the symlink.
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install pip-audit
+        run: python3 -m pip install --user pip-audit
+
+      - name: Audit requirements.txt
+        run: python3 -m pip_audit -r requirements.txt --progress-spinner off
