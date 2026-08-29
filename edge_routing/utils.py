@@ -55,6 +55,10 @@ def slugify(s, max_length=None):
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("utf-8")
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = s.strip("-")
-    if max_length:
+    if max_length is not None:
+        # `if max_length:` would silently skip truncation for
+        # max_length=0 (falsy), treating "truncate to nothing" as "don't
+        # truncate at all" -- a caller building a slug length budget
+        # dynamically could pass 0 and get the full untruncated slug back.
         s = s[:max_length].rstrip("-")
     return s
