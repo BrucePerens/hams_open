@@ -294,7 +294,9 @@ class ManualLibraryController(http.Controller):
             try:
                 return self.manual_article_by_name(search, **kwargs)
             except werkzeug.exceptions.NotFound:
-                pass
+                _logger.debug(
+                    "No exact article match for %r; falling through to search", search
+                )
         return self.manual_search(search=search, **kwargs)
 
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
