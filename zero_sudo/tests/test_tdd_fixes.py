@@ -48,6 +48,48 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         # This should not raise an exception
         self.env["ir.module.module"]._bootstrap_knowledge_docs()
 
+    def test_bootstrap_knowledge_docs_default_unpublished(self):
+        # Regression test: module-authored knowledge_docs (architecture notes,
+        # security internals, runbooks, developer/story/journey guides) must
+        # default to is_published=False. A prior bug forced every ingested doc
+        # to is_published=True unconditionally, leaking internal engineering
+        # documentation (e.g. "Zero-Sudo Security Core") into the public
+        # website's anonymous help sidebar. See night_shift_todo.md.
+        Module = self.env["ir.module.module"]
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+
+        doc_info = {
+            "name": "Test Internal Doc Regression",
+            "path": "data/documentation.html",
+        }
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        article = Article.search([("name", "=", "Test Internal Doc Regression")], limit=1)
+        self.assertTrue(article, "Doc should have been created")
+        self.assertFalse(
+            article.is_published,
+            "Module-authored docs must default to unpublished (internal-only) "
+            "unless the manifest entry explicitly sets \"public\": True",
+        )
+
+    def test_bootstrap_knowledge_docs_explicit_public_opt_in(self):
+        Module = self.env["ir.module.module"]
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+
+        doc_info = {
+            "name": "Test Public Doc Regression",
+            "path": "data/documentation.html",
+            "public": True,
+        }
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        article = Article.search([("name", "=", "Test Public Doc Regression")], limit=1)
+        self.assertTrue(article, "Doc should have been created")
+        self.assertTrue(
+            article.is_published,
+            "A knowledge_docs entry with \"public\": True should be published",
+        )
+
     def test_daemon_utils_sys_paths(self):
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         

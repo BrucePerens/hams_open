@@ -126,4 +126,9 @@ class TestManualFeatures(HamsHttpCase):
             article.exists(), "User Guide article should have been installed."
         )
         self.assertIn("Welcome to Manuals", article.body)
-        self.assertTrue(article.is_published)
+        # Module-authored knowledge_docs default to unpublished (internal-only):
+        # this guide describes backend authoring workflow ("Go to the Manuals
+        # app in your Odoo dashboard") aimed at staff, not public site visitors,
+        # and its manifest entry does not opt in with "public": True. See the
+        # zero_sudo internal-doc-exposure fix, night_shift_todo.md.
+        self.assertFalse(article.is_published)

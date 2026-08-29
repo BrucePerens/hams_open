@@ -137,6 +137,12 @@ class Module(models.Model):
         name = doc_info.get("name", f"{module_name} Documentation")
         icon = doc_info.get("icon", "📄")
         category = doc_info.get("category", "workspace")
+        # Module-authored docs (architecture notes, security internals, runbooks,
+        # developer/story/journey guides) are internal engineering documentation by
+        # default. A module must explicitly opt in with "public": True in its
+        # knowledge_docs manifest entry for a doc to appear in the public/anonymous
+        # website help sidebar -- see night_shift_todo.md, internal-doc-exposure fix.
+        is_public = bool(doc_info.get("public", False))
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
         existing_hash = existing_hashes.get(hash_key) if existing_hashes is not None else utils._get_kv(hash_key)
@@ -149,7 +155,7 @@ class Module(models.Model):
             "body": doc_body,
         }
 
-        vals["is_published"] = True
+        vals["is_published"] = is_public
         vals["category"] = category
         vals["internal_permission"] = "read"
         vals["icon"] = icon
