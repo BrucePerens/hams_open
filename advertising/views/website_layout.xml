@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0-or-later. -->
+<!--
+Built 2026-08-29, not yet approved: see docs/proposals/ADVERTISING.md for the
+open product/legal questions this doesn't resolve (revenue share, category
+blocklist, notice/opt-out). Renders nothing at all until an administrator sets
+BOTH website.google_adsense_client_id and website.google_adsense_footer_slot_id
+in Website > Configuration > Settings: there is no default "on" state, and
+this template must not be treated as launched just because it's installed.
+
+Consent gating: this template establishes its own independent Google Consent
+Mode default+update wiring (ad_storage/ad_user_data/ad_personalization denied
+until the cookies bar's optionalCookiesAccepted event fires), mirroring core
+website's own google_analytics_key handling in
+odoo/addons/website/views/website_templates.xml exactly: confirmed by
+reading that template directly, not assumed. This is deliberate, not
+redundant with GA's own consent wiring: GA's tracking_code_config script only
+exists when website.google_analytics_key is itself configured, and AdSense
+must stay consent-gated regardless of whether GA happens to also be
+configured on the same site.
+-->
+<odoo>
+    <template id="layout_inherit_adsense" inherit_id="website.layout" name="AdSense Footer Placement">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_xpath_rendering_advertising] -->
+
+        <!-- The AdSense loader plus its own independent Consent Mode wiring, -->
+        <!-- covering both the "unconfigured" and "configured" cases below. -->
+        <!-- [@ANCHOR: xpath_rendering_advertising_head] -->
+
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_advertising] -->
+        <xpath expr="//head" position="inside">
+            <t t-if="website.google_adsense_client_id and not editable">
+                <script id="adsense_consent_config">
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag(){dataLayer.push(arguments);}
+                    gtag('consent', 'default', {
+                        'ad_storage': 'denied',
+                        'ad_user_data': 'denied',
+                        'ad_personalization': 'denied',
+                        'analytics_storage': 'denied',
+                    });
+                    function adsenseConsentsGranted() {
+                        gtag('consent', 'update', {
+                            'ad_storage': 'granted',
+                            'ad_user_data': 'granted',
+                            'ad_personalization': 'granted',
+                        });
+                    }
+                    <t t-if="website._allConsentsGranted()">
+                        adsenseConsentsGranted();
+                    </t>
+                    <t t-else="">
+                        document.addEventListener(
+                            "optionalCookiesAccepted",
+                            adsenseConsentsGranted,
+                            {once: true}
+                        );
+                    </t>
+                </script>
+                <script
+                    id="adsense_loader"
+                    async="async"
+                    crossorigin="anonymous"
+                    t-attf-src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ website.google_adsense_client_id }}"
+                />
+            </t>
+        </xpath>
+
+        <!-- The single footer banner placement, gated on both config fields -->
+        <!-- being set AND the path not starting with /shack. -->
+        <!-- [@ANCHOR: xpath_rendering_advertising_footer] -->
+
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_advertising] -->
+        <xpath expr="//footer" position="after">
+            <t t-if="website.google_adsense_client_id and website.google_adsense_footer_slot_id and not editable
+                      and not request.httprequest.path.startswith('/shack')">
+                <!--
+                    Single footer banner, matching this proposal's own
+                    "least intrusive starting point" recommendation and
+                    user_websites' existing layout_inherit_report_violation
+                    precedent for placement style (//footer, position=after).
+                    /shack is explicitly excluded: it's a real-time operating
+                    console, not a content/reference page, per the proposal's
+                    own placement-density guidance.
+                -->
+                <div class="container mt-3 mb-3 text-center" id="advertising_footer_slot">
+                    <ins class="adsbygoogle"
+                         style="display:block"
+                         t-att-data-ad-client="website.google_adsense_client_id"
+                         t-att-data-ad-slot="website.google_adsense_footer_slot_id"
+                         data-ad-format="auto"
+                         data-full-width-responsive="true"/>
+                    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+                </div>
+            </t>
+        </xpath>
+    </template>
+</odoo>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0-or-later. -->
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <!-- [@ANCHOR: xpath_rendering_advertising_settings] -->
+
+        <!-- Verified by [@ANCHOR: test_xpath_rendering_advertising_settings] -->
+
+        <!-- burn-ignore-tour -->
+        <field name="name">res.config.settings.view.form.inherit.advertising</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="website.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_advertising_settings] -->
+            <xpath expr="//block[@id='website_settings']" position="after">
+                <block title="Advertising" id="advertising_settings">
+                    <setting
+                        string="Google AdSense"
+                        help="Off by default -- set both fields to serve the single footer banner. Ad personalization is gated on the cookies bar's consent choice."
+                    >
+                        <div class="row mt16">
+                            <label class="col-lg-3 o_light_label" string="Publisher ID" for="google_adsense_client_id"/>
+                            <field name="google_adsense_client_id" placeholder="ca-pub-XXXXXXXXXXXXXXXX"/>
+                        </div>
+                        <div class="row mt16">
+                            <label class="col-lg-3 o_light_label" string="Footer Ad Slot ID" for="google_adsense_footer_slot_id"/>
+                            <field name="google_adsense_footer_slot_id" placeholder="XXXXXXXXXX"/>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>
