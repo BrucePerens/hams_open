@@ -1194,6 +1194,47 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         console.error("[!] DIAGNOSTIC FOR AI: Failed to force navigator.onLine true:", e);
                     }
 
+                    // 0b. Stub navigator.virtualKeyboard for the duration
+                    // of every hoot unit test. Root-caused via
+                    // HOOT_BROWSER_TEST_INFRA_BROKEN.md (hams_com): this
+                    // sandbox's headless Chromium 151 exposes the
+                    // VirtualKeyboard API's surface but every hoot suite --
+                    // including ones untouched by this change, confirmed
+                    // via a control run -- crashed at MODULE LOAD time.
+                    // dvu.js's own top-level bootstrap does:
+                    //   if (isVirtualKeyboardSupported())  // "virtualKeyboard" in navigator
+                    //       browser.navigator.virtualKeyboard.addEventListener(...)
+                    // First attempt shadowed the property with an
+                    // `undefined`-returning getter, matching the onLine
+                    // override just above -- wrong idiom for this case:
+                    // `"x" in navigator` tests property PRESENCE, not
+                    // value, so the getter didn't change
+                    // isVirtualKeyboardSupported()'s answer at all; it just
+                    // changed the crash from "Illegal invocation" (calling
+                    // addEventListener on a real-but-broken headless stub)
+                    // to "Cannot read properties of undefined" (calling it
+                    // on undefined) -- confirmed directly by re-running the
+                    // suite and reading the new error. The fix that
+                    // actually works: give it a real, harmless
+                    // addEventListener/removeEventListener pair instead of
+                    // trying to make the feature-detection see "absent".
+                    // Doesn't touch Odoo core's own dvu.js/browser.js files
+                    // (system package files outside this repo, not a safe
+                    // or durable place to patch). No hoot test in this
+                    // codebase exercises real VirtualKeyboard behavior, so
+                    // nothing here loses real coverage.
+                    try {
+                        Object.defineProperty(window.navigator, "virtualKeyboard", {
+                            configurable: true,
+                            get: () => ({
+                                addEventListener() {},
+                                removeEventListener() {},
+                            }),
+                        });
+                    } catch (e) {
+                        console.error("[!] DIAGNOSTIC FOR AI: Failed to stub navigator.virtualKeyboard:", e);
+                    }
+
                     // 1. Suppress Fetch Abort Errors during teardown (REMOVED)
 
                     // 2. Suppress Synchronous Framework Crashes (InteractionService)
