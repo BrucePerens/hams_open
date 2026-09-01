@@ -239,6 +239,66 @@ pub fn wspr_encode_audio(callsign: &str, grid4: &str, power_dbm: i32, base_hz: f
     Some(wspr_modulate(&symbols, base_hz, sample_rate))
 }
 
+/// Wraps mono 16-bit PCM samples in a standard 44-byte-header WAV file
+/// (RIFF/WAVE, uncompressed PCM, one "fmt " and one "data" chunk, no
+/// extension fields) -- the same minimal shape
+/// `digital_decoder.rs`'s own `read_wav_mono_i16()` test helper already
+/// expects (`data` chunk literally at byte offset 36).
+fn wrap_mono_i16_as_wav(samples: &[i16], sample_rate: u32) -> Vec<u8> {
+    let data_bytes = samples.len() * 2;
+    let byte_rate = sample_rate * 2; // mono, 16-bit: 1 channel * 2 bytes/sample
+    let mut out = Vec::with_capacity(44 + data_bytes);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data_bytes as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVE");
+    out.extend_from_slice(b"fmt ");
+    out.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+    out.extend_from_slice(&1u16.to_le_bytes()); // AudioFormat = 1 (PCM)
+    out.extend_from_slice(&1u16.to_le_bytes()); // NumChannels = 1 (mono)
+    out.extend_from_slice(&sample_rate.to_le_bytes());
+    out.extend_from_slice(&byte_rate.to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes()); // BlockAlign = channels * bytes/sample
+    out.extend_from_slice(&16u16.to_le_bytes()); // BitsPerSample
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(data_bytes as u32).to_le_bytes());
+    for &s in samples {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    out
+}
+
+/// Real, tested, verified-ground-truth `.wav` fixture generation for
+/// WSPR decode work -- resolves `WSPR_DECODE_IMPLEMENTATION_PLAN.md`
+/// step 5's "test against real, known WSPR audio captures ... confirm
+/// decoded messages match the known answer" the same way this
+/// codebase's own FT8 tests already do (`digital_decoder.rs`'s
+/// `ft8_decode_fires_at_a_real_utc_slot_boundary` calls `ft8sim`
+/// on demand rather than shipping a static binary fixture in git):
+/// generated fresh, in-process, from `wspr_encode_symbols()`/
+/// `wspr_modulate()`, which are themselves already verified bit-for-bit
+/// against the real K1JT/K9AN reference encoder (`wsprsim`, see this
+/// module's own `matches_the_real_k1jt_reference_encoder_end_to_end`
+/// test) -- not a new, independently-trusted encode path. `wsprsim`
+/// itself (confirmed directly: `wsprsim --help`, and `-o` writing a
+/// tested run) only ever writes a `.c2` complex-baseband file, never a
+/// `.wav`, so there is no way to get a WSJT-X-reference-tool-generated
+/// `.wav` directly the way `ft8sim` provides for FT8 -- this is a real,
+/// documented gap in WSJT-X's own tooling, not a shortcut taken here.
+///
+/// Deliberately clean (no injected noise, no channel simulation): this
+/// proves a future decoder's basic protocol correctness (sync
+/// detection, symbol timing, bit unpacking) against a known-exact
+/// signal -- it is NOT a substitute for real low-SNR robustness
+/// testing, which the decode implementation itself will still need
+/// (e.g. against `wsprsim -s <snr> -o *.c2`-generated captures, or real
+/// WSJT-X sample recordings) once that multi-day DSP project is
+/// actually underway. Returns `None` for the same out-of-scope
+/// messages `wspr_encode_audio()` already refuses.
+pub fn wspr_encode_wav_bytes(callsign: &str, grid4: &str, power_dbm: i32, base_hz: f64, sample_rate: u32) -> Option<Vec<u8>> {
+    let samples = wspr_encode_audio(callsign, grid4, power_dbm, base_hz, sample_rate)?;
+    Some(wrap_mono_i16_as_wav(&samples, sample_rate))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,6 +423,64 @@ mod tests {
         // position heuristic can't classify it as a standard callsign,
         // and it correctly refuses rather than silently mis-packing it.
         assert!(pack_call("PJ4/K1ABC").is_none());
+    }
+
+    /// Mirrors `digital_decoder.rs`'s own `read_wav_mono_i16()` test
+    /// helper exactly (same 44-byte-header, `data` chunk at offset 36
+    /// assumption) so this test proves compatibility with the real
+    /// consumer, not just with itself.
+    fn read_wav_mono_i16(bytes: &[u8]) -> Vec<i16> {
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(&bytes[36..40], b"data", "expected a standard 44-byte-header PCM WAV");
+        bytes[44..]
+            .chunks_exact(2)
+            .map(|c| i16::from_le_bytes([c[0], c[1]]))
+            .collect()
+    }
+
+    #[test]
+    fn wav_fixture_round_trips_to_the_exact_same_pcm_samples_modulate_produced() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let sample_rate = 12000u32;
+        let expected_samples = wspr_modulate(&symbols, 1500.0, sample_rate);
+
+        let wav_bytes = wspr_encode_wav_bytes("K6BP", "CM87", 30, 1500.0, sample_rate)
+            .expect("K6BP/CM87/30 is a valid Type 1 message");
+        let parsed_samples = read_wav_mono_i16(&wav_bytes);
+
+        assert_eq!(
+            parsed_samples, expected_samples,
+            "round-tripping through the WAV header must not alter a single PCM sample"
+        );
+    }
+
+    #[test]
+    fn wav_fixture_header_matches_the_documented_44_byte_mono_pcm_shape() {
+        let sample_rate = 12000u32;
+        let wav_bytes = wspr_encode_wav_bytes("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+
+        assert_eq!(&wav_bytes[0..4], b"RIFF");
+        assert_eq!(&wav_bytes[8..12], b"WAVE");
+        assert_eq!(&wav_bytes[12..16], b"fmt ");
+        assert_eq!(u16::from_le_bytes([wav_bytes[20], wav_bytes[21]]), 1, "AudioFormat must be 1 (PCM)");
+        assert_eq!(u16::from_le_bytes([wav_bytes[22], wav_bytes[23]]), 1, "NumChannels must be 1 (mono)");
+        assert_eq!(
+            u32::from_le_bytes([wav_bytes[24], wav_bytes[25], wav_bytes[26], wav_bytes[27]]),
+            sample_rate
+        );
+        assert_eq!(u16::from_le_bytes([wav_bytes[34], wav_bytes[35]]), 16, "BitsPerSample must be 16");
+        assert_eq!(&wav_bytes[36..40], b"data");
+
+        let declared_data_size = u32::from_le_bytes([wav_bytes[40], wav_bytes[41], wav_bytes[42], wav_bytes[43]]) as usize;
+        assert_eq!(declared_data_size, wav_bytes.len() - 44, "declared data chunk size must match the actual payload length");
+
+        let declared_riff_size = u32::from_le_bytes([wav_bytes[4], wav_bytes[5], wav_bytes[6], wav_bytes[7]]) as usize;
+        assert_eq!(declared_riff_size, wav_bytes.len() - 8, "declared RIFF chunk size must match (file length - 8)");
+    }
+
+    #[test]
+    fn wav_fixture_returns_none_for_the_same_out_of_scope_messages_as_the_underlying_encoder() {
+        assert!(wspr_encode_wav_bytes("PJ4/K1ABC", "EN50", 33, 1500.0, 12000).is_none());
     }
 
     #[test]
