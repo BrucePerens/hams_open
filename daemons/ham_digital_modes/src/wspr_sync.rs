@@ -135,6 +135,56 @@ fn samples_per_symbol(sample_rate: u32) -> usize {
     (sample_rate as f64 / WSPR_SYMBOL_RATE_HZ).round() as usize
 }
 
+/// The number of samples a full 162-symbol WSPR transmission occupies at
+/// `sample_rate` -- exactly the width `find_sync()`'s own search window
+/// needs starting at any candidate `start_sample`. Callers building
+/// `max_start_sample` for `find_sync()`/`sync_search_and_decode()`/
+/// `sync_search_and_decode_message()` MUST subtract this from their
+/// buffer length, not pass the buffer length (or length - 1) directly:
+/// `find_sync()` already probes every offset up to `max_start_sample`,
+/// so an overlong `max_start_sample` doesn't find anything more (no
+/// start offset beyond `buffer_len - required_window_samples()` can
+/// ever contain a full window, so `spectrum_matrix()` just returns
+/// `None` for those and the extra iterations are pure wasted search
+/// cost) -- for a real ~125s accumulation buffer at 12kHz this
+/// difference is roughly an order of magnitude more STFT work than the
+/// search actually needs, which is what made the first real end-to-end
+/// pipeline test (`wspr_decode_fires_at_a_real_utc_slot_boundary`) blow
+/// through its own timeout: the search was still grinding through
+/// offsets that could never contain a real window.
+pub fn required_window_samples(sample_rate: u32) -> usize {
+    WSPR_NUM_SYMBOLS * samples_per_symbol(sample_rate)
+}
+
+/// Decimates 48kHz mono audio down to WSPR's own native 12kHz sample
+/// rate (a plain 4-sample box average -- crude but real low-pass
+/// filtering, not a proper FIR decimator; upgrade to one if real
+/// captures ever show aliasing artifacts this coarse a filter can't
+/// reject). Real callers (`hams_local_relay`'s own digital-mode
+/// pipeline, which runs its mic input at 48kHz) should decimate before
+/// calling `find_sync()`/`sync_search_and_decode_message()`, not run
+/// the search at 48kHz directly: `find_sync()`'s own search cost scales
+/// with the FFT block size (`samples_per_symbol()`, itself proportional
+/// to `sample_rate`), so running at 48kHz would cost ~4.6x an identical
+/// search at 12kHz for the same time resolution -- the per-candidate
+/// time step is `samples_per_symbol()/8`, which scales with the sample
+/// rate the same way the FFT does, so decimating first is a pure win,
+/// not a resolution/cost tradeoff. Just as importantly, this module's
+/// own tests -- including `MIN_SYNC_SCORE`'s own measured calibration --
+/// all run at 12kHz; decimating first keeps production audio on the
+/// same, tested code path rather than an unmeasured 48kHz one. Any
+/// trailing samples that don't fill a complete group of 4 are dropped,
+/// not padded.
+pub fn decimate_4x_box_average(samples: &[i16]) -> Vec<i16> {
+    samples
+        .chunks_exact(4)
+        .map(|chunk| {
+            let sum: i32 = chunk.iter().map(|&s| s as i32).sum();
+            (sum / 4) as i16
+        })
+        .collect()
+}
+
 /// Computes `|FFT(block)|` for each of the 162 symbol-length blocks
 /// starting at `start_sample`, down-converting each block by
 /// `sub_bin_hz_offset` first (multiplying by a complex exponential
@@ -931,5 +981,77 @@ mod tests {
         let message = result.expect("a moderately noisy signal should still decode to a valid message");
 
         assert_eq!(message, ("K6BP".to_string(), "CM87".to_string(), 30));
+    }
+
+    /// The isolating test `decimate_4x_box_average()`'s own doc comment
+    /// calls for: separates "does the decimator work" from "does the
+    /// real-time pipeline's slot logic work" (a future
+    /// `hams_local_relay` change, tested there, not here) -- a real
+    /// WSPR fixture synthesized at 48kHz (this daemon's own real mic
+    /// rate), decimated to 12kHz, must still decode correctly through
+    /// this crate's already-tested 12kHz path.
+    #[test]
+    fn decimate_then_sync_search_and_decode_message_recovers_the_message_from_48khz_audio() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let sample_rate_48k = 48000u32;
+        let true_hz = 1501.1;
+        let audio_48k = wspr_modulate(&symbols, true_hz, sample_rate_48k);
+
+        // Pad in the 48kHz domain, in multiples of 4, so decimation
+        // lands on clean 12kHz-domain boundaries.
+        let pad_symbols_48k = 2 * samples_per_symbol(sample_rate_48k);
+        let mut padded_48k = vec![0i16; pad_symbols_48k];
+        padded_48k.extend_from_slice(&audio_48k);
+        padded_48k.extend_from_slice(&[0i16; 16]);
+
+        let decimated_12k = decimate_4x_box_average(&padded_48k);
+        let sample_rate_12k = 12000u32;
+        let spsym_12k = samples_per_symbol(sample_rate_12k);
+
+        let result = sync_search_and_decode_message(
+            &decimated_12k,
+            sample_rate_12k,
+            1490.0,
+            1505.0,
+            4 * spsym_12k,
+            MIN_SYNC_SCORE,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        )
+        .expect("a real, clean 48kHz-synthesized-then-decimated signal must be found");
+        let message = result.expect("a decimated clean signal should decode to a valid message");
+
+        assert_eq!(message, ("K6BP".to_string(), "CM87".to_string(), 30));
+    }
+
+    /// Diagnostic, not a correctness assertion: measures how much
+    /// `find_sync()`'s own search cost changes between a correct
+    /// `max_start_sample` (`buffer_len - required_window_samples()`) and
+    /// the bug `digital_decoder.rs`'s real pipeline wiring shipped with
+    /// (`buffer_len - 1`), on a buffer the size a real ~125s WSPR
+    /// accumulation window produces. Run manually with `--ignored
+    /// --nocapture` -- see this module's own doc comment on
+    /// `required_window_samples()` for why this matters.
+    #[test]
+    #[ignore]
+    fn diagnostic_max_start_sample_cost_comparison() {
+        let sample_rate = 12000u32;
+        let buffer_len = 125 * sample_rate as usize; // ~125s, matching a real accumulation window.
+        let samples = vec![0i16; buffer_len];
+        let correct_max_start = buffer_len.saturating_sub(required_window_samples(sample_rate));
+        let buggy_max_start = buffer_len.saturating_sub(1);
+
+        let t0 = std::time::Instant::now();
+        let _ = find_sync(&samples, sample_rate, 1400.0, 1600.0, correct_max_start, MIN_SYNC_SCORE);
+        let correct_elapsed = t0.elapsed();
+
+        let t1 = std::time::Instant::now();
+        let _ = find_sync(&samples, sample_rate, 1400.0, 1600.0, buggy_max_start, MIN_SYNC_SCORE);
+        let buggy_elapsed = t1.elapsed();
+
+        println!(
+            "correct max_start_sample={correct_max_start} took {correct_elapsed:?}; \
+             buggy max_start_sample={buggy_max_start} took {buggy_elapsed:?}"
+        );
     }
 }
