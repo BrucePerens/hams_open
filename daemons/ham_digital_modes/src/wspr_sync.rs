@@ -545,6 +545,63 @@ pub fn sync_search_and_decode(
     Some(decode_from_symbol_evidence(&evidence, max_cycles, min_acceptable_metric))
 }
 
+/// What `sync_search_and_decode_message()` returns for a failure --
+/// `ConfidenceGateError`'s own two variants, plus a real, distinct third
+/// outcome `ConfidenceGateError` alone can't represent: the decoder
+/// reached a confident (metric-accepted) bit pattern, but that bit
+/// pattern still doesn't unpack into a valid Type-1 message (`wspr.rs`'s
+/// own `unpack_wspr_message()` returned `None`) -- a real "confident in
+/// something that isn't a real encodable message" outcome, not the same
+/// as either a low-confidence reject or a search give-up.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WsprMessageError {
+    GaveUp { cycles: u64 },
+    LowConfidence { bits: u128, metric: f64 },
+    UnpackFailed { bits: u128 },
+}
+
+impl From<ConfidenceGateError> for WsprMessageError {
+    fn from(e: ConfidenceGateError) -> Self {
+        match e {
+            ConfidenceGateError::GaveUp { cycles } => WsprMessageError::GaveUp { cycles },
+            ConfidenceGateError::LowConfidence { bits, metric } => WsprMessageError::LowConfidence { bits, metric },
+        }
+    }
+}
+
+/// `sync_search_and_decode()` plus `wspr.rs`'s own `unpack_wspr_
+/// message()` -- the real end-to-end entry point this build order's
+/// step 4 exists for: raw audio in, a human-readable `(callsign, grid4,
+/// power_dbm)` out, or a real, distinguishable failure reason. The
+/// function a future `digital_decoder.rs` integration (step 5) should
+/// actually call.
+#[allow(clippy::too_many_arguments)] // Same reasoning as sync_search_and_decode()'s own allow -- see its doc comment.
+pub fn sync_search_and_decode_message(
+    samples: &[i16],
+    sample_rate: u32,
+    freq_lo_hz: f64,
+    freq_hi_hz: f64,
+    max_start_sample: usize,
+    min_sync_score: f64,
+    max_cycles: u64,
+    min_acceptable_metric: f64,
+) -> Option<Result<(String, String, i32), WsprMessageError>> {
+    let result = sync_search_and_decode(
+        samples,
+        sample_rate,
+        freq_lo_hz,
+        freq_hi_hz,
+        max_start_sample,
+        min_sync_score,
+        max_cycles,
+        min_acceptable_metric,
+    )?;
+    Some(match result {
+        Ok(bits) => crate::wspr::unpack_wspr_message(bits).ok_or(WsprMessageError::UnpackFailed { bits }),
+        Err(e) => Err(e.into()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -775,6 +832,34 @@ mod tests {
             "independent noise with no real transmission must not decode as if it were a confident, \
              correct message, got {decode_result:?} (ungated={ungated:?})"
         );
+
+        // Third, independent layer, at the real top-level entry point:
+        // even ungated end to end, sync_search_and_decode_message() must
+        // not surface a plausible-looking (callsign, grid, power)
+        // message for pure noise -- whichever of ConfidenceGateError's
+        // reasons or WsprMessageError::UnpackFailed actually catches it.
+        let message_result = sync_search_and_decode_message(
+            &independent_noise,
+            sample_rate,
+            1490.0,
+            1510.0,
+            5 * spsym,
+            f64::NEG_INFINITY,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        )
+        .expect("the raw search always returns its own best-scoring candidate when ungated");
+        // Measured, not assumed: for this exact noise realization, the
+        // decoder's own confidence gate (LowConfidence) is the layer
+        // that actually catches it, not unpack_wspr_message()'s power-
+        // range check -- both layers exist as independent, real
+        // defenses (see WsprMessageError::UnpackFailed's own doc
+        // comment for why the power check is real, not redundant), this
+        // particular case just didn't need the second one.
+        assert!(
+            message_result.is_err(),
+            "independent noise must not surface as a plausible-looking decoded message, got {message_result:?}"
+        );
     }
 
     /// End-to-end: real search + real evidence extraction + real
@@ -825,4 +910,26 @@ mod tests {
         assert_eq!(decoded_bits, expected);
     }
 
+    /// The real, full pipeline this build order's step 4 exists for:
+    /// raw (moderately noisy) audio in, the exact original human-
+    /// readable message out -- not just the raw bitset the two tests
+    /// above stop at.
+    #[test]
+    fn sync_search_and_decode_message_recovers_the_exact_original_text() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let sample_rate = 12000u32;
+        let true_hz = 1501.1;
+        let spsym = samples_per_symbol(sample_rate);
+        let clean = wspr_modulate(&symbols, true_hz, sample_rate);
+        let mut padded = vec![0i16; 2 * spsym];
+        padded.extend_from_slice(&clean);
+        padded.extend_from_slice(&[0i16; 4]);
+        let noisy = add_awgn(&padded, -20.0, 7);
+
+        let result = sync_search_and_decode_message(&noisy, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
+            .expect("a real, moderately noisy signal must still be found");
+        let message = result.expect("a moderately noisy signal should still decode to a valid message");
+
+        assert_eq!(message, ("K6BP".to_string(), "CM87".to_string(), 30));
+    }
 }
