@@ -12,3 +12,6 @@ class ResConfigSettings(models.TransientModel):
     google_adsense_footer_slot_id = fields.Char(
         related="website_id.google_adsense_footer_slot_id", readonly=False
     )
+    google_adsense_sidebar_slot_id = fields.Char(
+        related="website_id.google_adsense_sidebar_slot_id", readonly=False
+    )

@@ -66,22 +66,25 @@ configured on the same site.
             </t>
         </xpath>
 
-        <!-- The single footer banner placement, gated on both config fields -->
-        <!-- being set AND the path not starting with /shack. -->
+        <!-- The footer banner placement, gated on both config fields being -->
+        <!-- set. Per Bruce's own direct instruction, 2026-09-01 ("I think a -->
+        <!-- sidebar and footer per page would be a good start. Can we also -->
+        <!-- fit an ad in ham_shack?"), this renders on every page including -->
+        <!-- /shack; the earlier /shack exclusion (a real-time operating -->
+        <!-- console being a bad place for a slow-loading ad script) was a -->
+        <!-- deliberate caution this proposal itself flagged as open, and -->
+        <!-- Bruce has now overridden it directly, not something to -->
+        <!-- second-guess. -->
         <!-- [@ANCHOR: xpath_rendering_advertising_footer] -->
 
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_advertising] -->
         <xpath expr="//footer" position="after">
-            <t t-if="website.google_adsense_client_id and website.google_adsense_footer_slot_id and not editable
-                      and not request.httprequest.path.startswith('/shack')">
+            <t t-if="website.google_adsense_client_id and website.google_adsense_footer_slot_id and not editable">
                 <!--
                     Single footer banner, matching this proposal's own
                     "least intrusive starting point" recommendation and
                     user_websites' existing layout_inherit_report_violation
                     precedent for placement style (//footer, position=after).
-                    /shack is explicitly excluded: it's a real-time operating
-                    console, not a content/reference page, per the proposal's
-                    own placement-density guidance.
                 -->
                 <div class="container mt-3 mb-3 text-center" id="advertising_footer_slot">
                     <ins class="adsbygoogle"
@@ -90,6 +93,33 @@ configured on the same site.
                          t-att-data-ad-slot="website.google_adsense_footer_slot_id"
                          data-ad-format="auto"
                          data-full-width-responsive="true"/>
+                    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+                </div>
+            </t>
+
+            <!--
+                Fixed-position sidebar ("skyscraper") placement, per Bruce's
+                same 2026-09-01 instruction. Deliberately CSS-fixed rather
+                than injected into a page-specific sidebar region: website.
+                layout has no generic sidebar slot common to every page type
+                (some pages, like blog/forum, have their own; most, like
+                /shack, don't); a fixed-position unit works identically on
+                every page without needing per-page-type placement logic.
+                Hidden below the Bootstrap xl breakpoint (d-none d-xl-block)
+                so it never competes with content or controls on narrower
+                viewports, including /shack's own multi-column console
+                layout at typical laptop widths.
+            -->
+            <!-- [@ANCHOR: xpath_rendering_advertising_sidebar] -->
+
+            <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_advertising] -->
+            <t t-if="website.google_adsense_client_id and website.google_adsense_sidebar_slot_id and not editable">
+                <div class="d-none d-xl-block" id="advertising_sidebar_slot"
+                     style="position:fixed; right:8px; top:120px; width:160px; z-index:1020;">
+                    <ins class="adsbygoogle"
+                         style="display:inline-block;width:160px;height:600px"
+                         t-att-data-ad-client="website.google_adsense_client_id"
+                         t-att-data-ad-slot="website.google_adsense_sidebar_slot_id"/>
                     <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
                 </div>
             </t>

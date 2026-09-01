@@ -11,6 +11,7 @@ class TestAdvertisingLayout(HamsHttpCase):
         self.website = self.env["website"].get_current_website()
         self.website.google_adsense_client_id = False
         self.website.google_adsense_footer_slot_id = False
+        self.website.google_adsense_sidebar_slot_id = False
         # A real, self-contained /shack-prefixed page, created here rather
         # than relying on ham_shack's own real /shack route: ham_shack lives
         # in a separate repo (hams_com) this module has no dependency on, so
@@ -83,27 +84,48 @@ class TestAdvertisingLayout(HamsHttpCase):
         self.assertIn('data-ad-client="ca-pub-1234567890123456"', response.text)
         self.assertIn('data-ad-slot="9876543210"', response.text)
 
-    def test_04_shack_console_never_shows_the_footer_ad(self):
+    def test_04_shack_console_now_shows_the_footer_ad(self):
         # Tests [@ANCHOR: xpath_rendering_advertising_footer]
-        # /shack is a real-time operating console, explicitly excluded per
-        # this proposal's own placement-density guidance. Confirmed against
-        # the self-contained /shack page created in setUp AND, as a negative
-        # control, that the same fully-configured state still shows the ad
-        # on an ordinary page -- proving the exclusion is real and specific
-        # to the /shack prefix, not just "this template never renders."
+        # Bruce's own direct instruction, 2026-09-01: "I think a sidebar and
+        # footer per page would be a good start. Can we also fit an ad in
+        # ham_shack?" -- overrides this proposal's own earlier caution that
+        # /shack, a real-time operating console, should be excluded. Confirmed
+        # against the self-contained /shack page created in setUp AND, as a
+        # control, that an ordinary page shows the identical ad in the same
+        # configured state -- proving /shack is now treated the same as any
+        # other page, not a special case either way.
         self.website.google_adsense_client_id = "ca-pub-1234567890123456"
         self.website.google_adsense_footer_slot_id = "9876543210"
         shack_response = self.url_open("/shack")
         self.assertEqual(shack_response.status_code, 200)
-        self.assertNotIn(
+        self.assertIn(
             "advertising_footer_slot",
             shack_response.text,
-            "[!] DIAGNOSTIC FOR AI: /shack must never carry the footer ad slot, "
-            "even when fully configured -- it's a real-time console, not a "
-            "content/reference page.",
+            "[!] DIAGNOSTIC FOR AI: /shack must carry the footer ad slot the "
+            "same as any other page, per Bruce's 2026-09-01 instruction.",
         )
         home_response = self.url_open("/")
         self.assertIn("advertising_footer_slot", home_response.text)
+
+    def test_07_sidebar_slot_requires_both_fields_and_renders_on_shack_too(self):
+        # Tests [@ANCHOR: xpath_rendering_advertising_sidebar]
+        self.website.google_adsense_client_id = "ca-pub-1234567890123456"
+        response = self.url_open("/")
+        self.assertNotIn(
+            "advertising_sidebar_slot",
+            response.text,
+            "[!] DIAGNOSTIC FOR AI: the sidebar ad slot must NOT render until "
+            "BOTH the publisher ID and the sidebar slot ID are configured.",
+        )
+
+        self.website.google_adsense_sidebar_slot_id = "1122334455"
+        home_response = self.url_open("/")
+        self.assertIn("advertising_sidebar_slot", home_response.text)
+        self.assertIn('data-ad-client="ca-pub-1234567890123456"', home_response.text)
+        self.assertIn('data-ad-slot="1122334455"', home_response.text)
+
+        shack_response = self.url_open("/shack")
+        self.assertIn("advertising_sidebar_slot", shack_response.text)
 
     def test_05_consent_mode_default_denies_until_accepted(self):
         # Tests [@ANCHOR: xpath_rendering_advertising_head]

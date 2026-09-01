@@ -28,3 +28,17 @@ class Website(models.Model):
             "footer ad to render -- setting only one renders nothing."
         ),
     )
+
+    google_adsense_sidebar_slot_id = fields.Char(
+        string="AdSense Sidebar Ad Slot ID",
+        help=(
+            "The AdSense ad-unit slot ID for a fixed-position sidebar "
+            "placement, per Bruce's own 2026-09-01 direction ('a sidebar and "
+            "footer per page'). Renders as a fixed skyscraper unit on the "
+            "page's right edge on wide viewports only (hidden below the "
+            "Bootstrap xl breakpoint, so it never competes with content on "
+            "narrow screens). Both this and the Publisher ID above must be "
+            "set for the sidebar ad to render -- setting only one renders "
+            "nothing."
+        ),
+    )
