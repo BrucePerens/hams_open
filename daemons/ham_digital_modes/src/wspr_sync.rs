@@ -655,7 +655,7 @@ pub fn sync_search_and_decode_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wspr::{add_awgn, pack_call, pack_grid4_power, wspr_encode_symbols, wspr_modulate};
+    use crate::wspr::{add_awgn, pack_call, pack_grid4_power, wspr_encode_audio, wspr_encode_symbols, wspr_modulate};
     use crate::wspr_decode::WSPR_DECODABLE_INPUT_BITS;
 
     /// Independently reconstructs the first `WSPR_DECODABLE_INPUT_BITS`
@@ -1053,5 +1053,153 @@ mod tests {
             "correct max_start_sample={correct_max_start} took {correct_elapsed:?}; \
              buggy max_start_sample={buggy_max_start} took {buggy_elapsed:?}"
         );
+    }
+
+    /// Diagnostic: sizes step 6's own noise-ladder sweep (this file's
+    /// own end-to-end decoder vs. the real `wsprd` reference decoder's
+    /// already-recorded -30/-34.5dB boundary, `WSPR_DECODE_IMPLEMENTATION_
+    /// PLAN.md`'s own step 6 notes) by timing one full-band (1400-1600Hz,
+    /// the same band `digital_decoder.rs`'s real pipeline searches, not
+    /// a narrowed one) decode on a fixture padded with a realistic
+    /// amount of search room -- a bare 110.6s transmission has only one
+    /// valid start offset, which would make the sweep's own timing an
+    /// unrealistically optimistic stand-in for the live buffer.
+    #[test]
+    #[ignore]
+    fn diagnostic_full_band_decode_timing_with_realistic_padding() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let noisy = add_awgn(&clean, -25.0, 1);
+        let pad = 5 * sample_rate as usize; // ~5s each side, matching digital_decoder.rs's own real slot-boundary tail retention.
+        let mut padded = vec![0i16; pad];
+        padded.extend_from_slice(&noisy);
+        padded.extend(vec![0i16; pad]);
+
+        let max_start_sample = padded.len().saturating_sub(required_window_samples(sample_rate));
+        let t0 = std::time::Instant::now();
+        let result = sync_search_and_decode_message(
+            &padded,
+            sample_rate,
+            1400.0,
+            1600.0,
+            max_start_sample,
+            MIN_SYNC_SCORE,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        );
+        let elapsed = t0.elapsed();
+        println!(
+            "full-band decode on a {}-sample buffer (max_start_sample={max_start_sample}) took {elapsed:?}, result={result:?}",
+            padded.len()
+        );
+    }
+
+    /// Step 6 of `WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s own build order:
+    /// real verification, not just "it compiles" -- sweeps this crate's
+    /// own end-to-end decoder (`sync_search_and_decode_message()`, full
+    /// 1400-1600Hz band, realistic search-window padding, exactly the
+    /// path `digital_decoder.rs`'s live pipeline runs) across the same
+    /// AWGN noise ladder whose SNR levels already carry a recorded real
+    /// `wsprd` reference-decoder boundary (`WSPR_DECODE_IMPLEMENTATION_
+    /// PLAN.md`'s own table: decodes correctly through -32.5dB,
+    /// seed-dependent -33.0 to -34.0dB, fails at -34.5dB and below).
+    /// This is the comparison the doc's own "what this document
+    /// deliberately does not claim" section flags as open: whether the
+    /// independently-written sequential decoder + sync search silently
+    /// underperforms the battle-tested reference rather than failing
+    /// loudly. Three-way classification per fixture, not just
+    /// decode-or-not -- `wsprd`'s own recorded property is that it
+    /// "either decoded to the exact correct message or produced no
+    /// decode at all -- never a wrong message," and that is exactly
+    /// the property this decoder's own three independent gates
+    /// (`MIN_SYNC_SCORE`, the decoder's confidence gate,
+    /// `unpack_grid4_power()`'s range validation) exist to provide, so
+    /// a wrong-message result here is a hard test failure, not just a
+    /// data point -- while a no-decode at low SNR is an expected,
+    /// non-failing outcome given a real, honestly-scoped decoder isn't
+    /// guaranteed to match a reference implementation's every last
+    /// dB of sensitivity.
+    ///
+    /// Real, deliberate limit on what this closes (see this module's
+    /// own `WSPR_DECODE_IMPLEMENTATION_PLAN.md` step 6 notes): AWGN is
+    /// synthetic noise on an otherwise-clean signal, not a genuine
+    /// off-air capture -- this does not exercise real frequency drift,
+    /// non-Gaussian real-world noise, or the adjacent-transmission
+    /// false-sync risk this module's own doc comment carries forward
+    /// as still unaddressed. This closes the "does our own decoder's
+    /// accuracy hold up against the reference" half of step 6, not the
+    /// "does it work on real captures" half.
+    ///
+    /// ~10-11 minutes at `--release` (8 SNR levels x 5 seeds x ~16s
+    /// each, per `diagnostic_full_band_decode_timing_with_realistic_
+    /// padding`'s own measurement) -- run manually with `--ignored
+    /// --nocapture`.
+    #[test]
+    #[ignore]
+    fn own_decoder_noise_ladder_matches_the_recorded_wsprd_reference_boundary() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let pad = 5 * sample_rate as usize;
+
+        #[derive(Debug, PartialEq)]
+        enum Outcome {
+            Correct,
+            NoDecode,
+            WrongMessage(String, String, i32),
+        }
+
+        // Spans wsprd's own recorded boundary (decodes through -32.5,
+        // seed-dependent -33.0 to -34.0, fails at -34.5) plus one easy
+        // reference point and one point past the known failure floor.
+        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let seeds = [1u64, 2, 3, 4, 5];
+
+        let mut table = Vec::new();
+        let mut any_wrong = false;
+        for &snr_db in &snr_levels {
+            let mut correct = 0;
+            let mut no_decode = 0;
+            for &seed in &seeds {
+                let noisy = add_awgn(&clean, snr_db, seed);
+                let mut padded = vec![0i16; pad];
+                padded.extend_from_slice(&noisy);
+                padded.extend(vec![0i16; pad]);
+                let max_start_sample = padded.len().saturating_sub(required_window_samples(sample_rate));
+
+                let result = sync_search_and_decode_message(
+                    &padded,
+                    sample_rate,
+                    1400.0,
+                    1600.0,
+                    max_start_sample,
+                    MIN_SYNC_SCORE,
+                    2_000_000,
+                    crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                );
+                let outcome = match result {
+                    Some(Ok((callsign, grid, power))) if callsign == "K6BP" && grid == "CM87" && power == 30 => {
+                        Outcome::Correct
+                    }
+                    Some(Ok((callsign, grid, power))) => Outcome::WrongMessage(callsign, grid, power),
+                    Some(Err(_)) | None => Outcome::NoDecode,
+                };
+                match outcome {
+                    Outcome::Correct => correct += 1,
+                    Outcome::NoDecode => no_decode += 1,
+                    Outcome::WrongMessage(ref c, ref g, p) => {
+                        any_wrong = true;
+                        println!("WRONG MESSAGE at {snr_db}dB seed={seed}: got ({c}, {g}, {p}), expected (K6BP, CM87, 30)");
+                    }
+                }
+            }
+            table.push((snr_db, correct, no_decode, seeds.len() - correct - no_decode));
+        }
+
+        println!("SNR(dB) | correct | no-decode | wrong");
+        for (snr_db, correct, no_decode, wrong) in &table {
+            println!("{snr_db:>7} | {correct:>7} | {no_decode:>9} | {wrong:>5}");
+        }
+
+        assert!(!any_wrong, "own decoder must never produce a confident wrong message, same property wsprd's own recorded ladder has");
     }
 }
