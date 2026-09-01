@@ -4,6 +4,7 @@ access_pager_check,pager.check,model_pager_check,group_pager_admin,1,1,1,1
 access_pager_incident_svc,pager.incident svc,model_pager_incident,group_pager_service,1,1,1,0
 access_pager_check_svc,pager.check svc,model_pager_check,group_pager_service,1,1,1,0
 access_pager_incident_mail_svc,pager.incident mail svc,model_pager_incident,zero_sudo.group_mail_service,1,1,0,0
+access_pager_incident_mcp_svc,pager.incident mcp triage svc,model_pager_incident,group_pager_mcp_triage_service,1,0,0,0
 access_res_company_pager_admin,res.company pager admin,base.model_res_company,pager_duty.group_pager_admin,1,0,0,0
 access_mail_message_pager_admin,mail.message pager admin,mail.model_mail_message,pager_duty.group_pager_admin,1,1,1,0
 access_discuss_channel_pager_admin,discuss.channel pager admin,mail.model_discuss_channel,pager_duty.group_pager_admin,1,1,0,0

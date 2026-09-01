@@ -32,7 +32,10 @@
     # zero_sudo.security.utils._resolve_dependency_cycle("binary_downloader").
     "depends_cycle": ["binary_downloader"],
     "external_dependencies": {
-        "python": ["psutil", "redis"],
+        # "mcp" is for daemon/pager_mcp_server.py -- PAGER_DUTY_MCP_AI_TRIAGE.md's
+        # real build order slice 1, same library hams_shared/tools/mcp_watchdog.py
+        # already depends on for its own FastMCP server.
+        "python": ["psutil", "redis", "mcp"],
     },
     "data": [
         "security/security.xml",

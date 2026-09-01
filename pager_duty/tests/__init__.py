@@ -13,6 +13,7 @@ from . import test_log_analyzer
 from . import test_log_monitoring_seed_data
 from . import test_mail_ingest_incident
 from . import test_pager_check_edge_cases
+from . import test_pager_mcp_triage
 from . import test_pager_security
 from . import test_schedule
 from . import test_schedule_edge_cases

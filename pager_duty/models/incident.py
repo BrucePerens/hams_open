@@ -345,3 +345,104 @@ class PagerIncident(models.Model):
         company_id = self.env.company.id
         self.env.cr.execute("SELECT pager_get_board_data(%s, %s)", [website_id, company_id])
         return self.env.cr.fetchone()[0]
+
+    # [@ANCHOR: pager_mcp_triage_tools]
+    # PAGER_DUTY_MCP_AI_TRIAGE.md's "Real build order" slice 1: the three
+    # genuinely non-destructive tools (list_incidents/get_incident/
+    # add_incident_note) an AI triage MCP server can safely call, backed by
+    # a narrowly-scoped, read-only-on-pager.incident service account
+    # (group_pager_mcp_triage_service, see security.xml) rather than raw
+    # ORM access. Deliberately three plain, queryable/callable model
+    # methods, not baked into the MCP server module itself, so they're
+    # testable directly against the real service account's real ACL
+    # (see test_pager_mcp_triage.py) without needing a live MCP transport.
+    # set_incident_status (acknowledge/resolve) is deliberately NOT here --
+    # see PAGER_DUTY_MCP_AI_TRIAGE.md's own slice 1a for why that one needs
+    # its own explicit go/no-go before it's ever built.
+
+    @api.model
+    def mcp_list_incidents(self, status=None, severity=None, limit=50):
+        """Read-only summary list for the MCP triage server's list_incidents
+        tool. Callable directly under the narrowly-scoped
+        group_pager_mcp_triage_service account -- no elevation needed, this
+        is exactly what that account's own read-only ACL already covers."""
+        domain = []
+        if status:
+            domain.append(("status", "=", status))
+        if severity:
+            domain.append(("severity", "=", severity))
+        incidents = self.search(domain, order="create_date desc", limit=limit)
+        return [
+            {
+                "id": inc.id,
+                "name": inc.name,
+                "source": inc.source,
+                "severity": inc.severity,
+                "status": inc.status,
+                "occurrence_count": inc.occurrence_count,
+                "is_escalated": inc.is_escalated,
+                "create_date": inc.create_date.isoformat() if inc.create_date else None,
+                "last_occurred": inc.last_occurred.isoformat() if inc.last_occurred else None,
+            }
+            for inc in incidents
+        ]
+
+    def mcp_get_incident_detail(self):
+        """Full detail for the MCP triage server's get_incident tool --
+        source/severity/description/status plus a simplified chatter
+        history (prior messages/advice already posted, including by the AI
+        itself on a previous pass). Reads message_ids under the same
+        zero_sudo.mail_service_internal account report_incident()'s own
+        escalation/creation notices already post through, rather than
+        granting the calling MCP service account its own mail.message ACL
+        -- the caller only ever needs read access to THIS model, not to
+        mail.message generally."""
+        self.ensure_one()
+        mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.mail_service_internal"
+        )
+        # Sorted by id, not date: mail.message.date is second-resolution,
+        # so two messages posted within the same second (a real
+        # possibility for automated report_incident()/mcp_add_note()
+        # traffic, not just a test artifact) can tie -- id is strictly
+        # increasing on insert and gives a reliable chronological order
+        # regardless.
+        messages = self.with_user(mail_svc).message_ids.sorted(key=lambda m: m.id)
+        return {
+            "id": self.id,
+            "name": self.name,
+            "source": self.source,
+            "severity": self.severity,
+            "description": self.description,
+            "status": self.status,
+            "occurrence_count": self.occurrence_count,
+            "is_escalated": self.is_escalated,
+            "create_date": self.create_date.isoformat() if self.create_date else None,
+            "last_occurred": self.last_occurred.isoformat() if self.last_occurred else None,
+            "messages": [
+                {
+                    "author": m.author_id.name or m.email_from or "",
+                    "date": m.date.isoformat() if m.date else None,
+                    "body": m.body,
+                }
+                for m in messages
+                if m.message_type in ("comment", "notification")
+            ],
+        }
+
+    def mcp_add_note(self, text):
+        """Posts `text` to this incident's own chatter for the MCP triage
+        server's add_incident_note tool, tagged so it's visually
+        distinguishable as AI-authored -- same convention
+        action_escalate_unacknowledged's own "🚨 ESCALATION" prefix already
+        established for automated messages. Posts under
+        zero_sudo.mail_service_internal, the same elevated account every
+        other message_post() call on this model already uses -- the
+        calling MCP service account never needs write access to this
+        model or mail.message ACL of its own to post a note."""
+        self.ensure_one()
+        mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.mail_service_internal"
+        )
+        self.with_user(mail_svc).message_post(body=_("🤖 AI Triage: %s", text))
+        return True
