@@ -230,5 +230,65 @@ export const TourUtils = {
             }, timeoutMs);
         });
         return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+    },
+
+    /**
+     * Not a step factory -- call directly from a step's `run:` body:
+     * `const shack = TourUtils.findOwlComponent((c) => typeof c.processTranscript === "function");`
+     *
+     * The only way a tour can exercise UI whose real trigger is an
+     * external event a tour can't synthesize (e.g. the browser's own
+     * SpeechRecognition API delivering a result -- see
+     * HAM_SHACK_SPEECH_RECOGNITION.md) is to reach the live OWL component
+     * instance directly and call its handler method as if the event had
+     * fired. window.__OWL_DEVTOOLS__.apps is OWL's own registry of every
+     * live App in the page (owl.js exposes it unconditionally, not just in
+     * dev mode); each App's root ComponentNode links down through
+     * .children (a plain object keyed by an internal parentKey, not an
+     * array) to every mounted component's real instance via .component.
+     * Confirmed against this Odoo version's actual bundled owl.js source
+     * (web/static/lib/owl/owl.js) rather than assumed -- OWL's internals
+     * are undocumented/unstable API, and no precedent for this technique
+     * existed anywhere in this codebase before this helper. NOTE: this is
+     * a static-source-level confirmation only. As of 2026-09-01 this
+     * function has never successfully completed a live tour run end to
+     * end -- ham_shack's voice_command_help_tour.js, the one caller
+     * written so far, has been blocked every attempt by this test
+     * harness's own infrastructure (an OOM watchdog reading that appears
+     * unstable under `unshare -p` PID-namespace remapping -- see
+     * night_shift_todo.md), never by a failure inside this function
+     * itself or the tour's own steps. Whoever picks that up next should
+     * still treat the actual runtime behavior here as unverified until a
+     * tour using it is seen passing.
+     *
+     * Takes a predicate, not a class name: assets can be served minified
+     * (assetsbundle.py's is_debug_assets gate, independent of plain
+     * ?debug=1) and a minifier mangles top-level class *names* by default
+     * -- `constructor.name === "WebShack"` would silently stop matching
+     * under a minified bundle. Method names defined in a class body are
+     * ordinary object properties, which default minifier config does not
+     * mangle, so a predicate that duck-types on a real, distinctive method
+     * survives minification where a class-name check would not.
+     */
+    findOwlComponent: function (predicate) {
+        if (typeof window.__OWL_DEVTOOLS__ === "undefined") {
+            throw new Error("[MACRO] findOwlComponent: window.__OWL_DEVTOOLS__ is not present -- this OWL build may no longer expose it, or nothing has mounted yet.");
+        }
+        function walk(node) {
+            if (!node) return null;
+            if (node.component && predicate(node.component)) {
+                return node.component;
+            }
+            for (const key in node.children) {
+                const found = walk(node.children[key]);
+                if (found) return found;
+            }
+            return null;
+        }
+        for (const app of window.__OWL_DEVTOOLS__.apps) {
+            const found = walk(app.root);
+            if (found) return found;
+        }
+        return null;
     }
 };
