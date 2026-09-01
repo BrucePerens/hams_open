@@ -1425,4 +1425,88 @@ mod tests {
             }
         }
     }
+
+    /// Diagnostic: tests the combined, mechanistically-derived correction
+    /// against the full noise ladder. Two independent corrections, both
+    /// motivated by the pure-noise and scale-factor experiments above:
+    /// (1) `noise_stddev_corrected = sqrt(winvar + losevar)` -- summing
+    /// rather than averaging the two per-bin variances, since `symbol_
+    /// values[i] = v1[i] - v0[i]` is a difference of two ~independent
+    /// noisy bins (variance sums; the old `sqrt((winvar+losevar)/2)`
+    /// under-reports by exactly the sqrt(2) the scale-factor sweep found
+    /// helpful). (2) `amplitude_debiased = max(amplitude_raw - k *
+    /// noise_stddev_raw, floor)` -- subtracting the order-statistic bias
+    /// the pure-noise experiment measured directly (empirically amplitude/
+    /// noise_stddev ratio ~1.3-1.4 in pure noise; ~1.13 is the analytic
+    /// E[max-min] for two i.i.d. Gaussians in units of their own stddev,
+    /// same order of magnitude). Sweeps k over that range to find what the
+    /// ladder itself supports, rather than committing to a single
+    /// unverified value.
+    #[test]
+    #[ignore]
+    fn diagnostic_combined_correction_sweep_against_full_ladder() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let snr_levels = [-30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let seeds = [1u64, 2, 3, 4, 5];
+        let amplitude_debias_ks = [0.0, 1.0, 1.13, 1.3, 1.5];
+
+        println!("SNR(dB) | k | correct/5");
+        for &snr_db in &snr_levels {
+            for &k in &amplitude_debias_ks {
+                let mut correct = 0;
+                for &seed in &seeds {
+                    let noisy = add_awgn(&clean, snr_db, seed);
+                    let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
+
+                    // Re-derive winvar/losevar/amplitude/noise_stddev_raw
+                    // directly (evidence_to_symbol_values() itself is not
+                    // touched by this diagnostic) to compute the corrected
+                    // pair without modifying production code yet.
+                    let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
+                    let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
+                    let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
+                    for i in 0..WSPR_NUM_SYMBOLS {
+                        let v0 = evidence[i][0];
+                        let v1 = evidence[i][1];
+                        symbol_values[i] = v1 - v0;
+                        winners[i] = v0.max(v1);
+                        losers[i] = v0.min(v1);
+                    }
+                    let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| {
+                        xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                    };
+                    let variance = |xs: &[f64; WSPR_NUM_SYMBOLS], m: f64| {
+                        xs.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                    };
+                    let winmean = mean(&winners);
+                    let losemean = mean(&losers);
+                    let winvar = variance(&winners, winmean);
+                    let losevar = variance(&losers, losemean);
+
+                    let amplitude_raw = (winmean - losemean).max(1e-9);
+                    let noise_stddev_raw = ((winvar + losevar) / 2.0).sqrt().max(1e-9);
+                    let noise_stddev_corrected = (winvar + losevar).sqrt().max(1e-9);
+                    let amplitude_debiased = (amplitude_raw - k * noise_stddev_raw).max(1e-9);
+
+                    let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                    let result = sequential_decode_with_confidence_gate(
+                        &channel_bit_values,
+                        amplitude_debiased,
+                        noise_stddev_corrected,
+                        2_000_000,
+                        crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                    )
+                    .ok()
+                    .and_then(unpack_wspr_message);
+                    if let Some((callsign, grid, power)) = result {
+                        if callsign == "K6BP" && grid == "CM87" && power == 30 {
+                            correct += 1;
+                        }
+                    }
+                }
+                println!("{snr_db:>7} | {k:>4} | {correct}/5");
+            }
+        }
+    }
 }
