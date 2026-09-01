@@ -6,9 +6,9 @@
                 <!-- audit-ignore-xpath: Tested by [@ANCHOR: hams_base:mail_templates] -->
                 <div style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #888888; text-align: center;">
                     <p style="margin: 0; padding: 0;">
-                        <t t-out="env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_org_name') or 'HAMS Organization'"/>
+                        <t t-out="company.env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_org_name') or 'HAMS Organization'"/>
                         <br/>
-                        <t t-out="env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_mailing_address') or ''"/>
+                        <t t-out="company.env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_mailing_address') or ''"/>
                     </p>
                     <p style="margin: 5px 0 0 0; padding: 0;">
                         <a t-attf-href="/compliance/email-policy" style="color: #888888; text-decoration: underline;">How we use your email</a> | 
@@ -26,9 +26,9 @@
                 <!-- audit-ignore-xpath: Tested by [@ANCHOR: hams_base:mail_templates] -->
                 <div style="margin-top: 30px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #888888; text-align: center;">
                     <p style="margin: 0; padding: 0;">
-                        <t t-out="env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_org_name') or 'HAMS Organization'"/>
+                        <t t-out="company.env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_org_name') or 'HAMS Organization'"/>
                         <br/>
-                        <t t-out="env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_mailing_address') or ''"/>
+                        <t t-out="company.env['zero_sudo.security.utils']._get_system_param('hams_base.compliance_mailing_address') or ''"/>
                     </p>
                     <p style="margin: 5px 0 0 0; padding: 0;">
                         <a t-attf-href="/compliance/email-policy" style="color: #888888; text-decoration: underline;">How we use your email</a> | 

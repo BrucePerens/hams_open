@@ -16,15 +16,24 @@ class MailThread(models.AbstractModel):
         # We also want to intercept auto-mail-failure if it's hitting standard routes
         bounce_alias = self.env['zero_sudo.security.utils']._get_system_param('mail.bounce.alias') or 'auto-mail-failure'
         not_read_alias = 'not-read'
-        
+        postmaster_alias = 'postmaster'
+
         to_emails = message_dict.get('to', '').lower()
         subject = message_dict.get('subject', '').lower()
         body = message_dict.get('body', '').lower()
 
         is_bounce_route = bounce_alias in to_emails
         is_not_read_route = not_read_alias in to_emails
+        # postmaster@ is the RFC 5321-mandated admin contact address for this
+        # domain -- it genuinely receives the same DSN-bounce/vacation-reply
+        # noise the dedicated bounce alias does, so it gets the same
+        # filtering below. Unlike not-read@, anything else sent there is a
+        # real inquiry and must NOT be dropped: it falls through to
+        # super().message_route(), which resolves the "postmaster" mail.alias
+        # (pager_duty/data/mail_alias_data.xml) into a real incident.
+        is_postmaster_route = postmaster_alias in to_emails
 
-        if is_bounce_route or is_not_read_route:
+        if is_bounce_route or is_not_read_route or is_postmaster_route:
             # Check for unsubscribe intent
             if 'unsubscribe' in subject or 'unsubscribe' in body:
                 _logger.info("Recognized manual unsubscribe request from %s", message_dict.get('email_from'))
