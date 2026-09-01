@@ -60,6 +60,10 @@ class TestMailIngestIncident(HamsTransactionCase):
         ).format(subject.replace(" ", "-")).encode("utf-8")
 
     def test_info_email_creates_pager_incident_with_linked_helpdesk_ticket(self):
+        # Tests [@ANCHOR: pager_incident_message_new]
+        # A new-thread inbound email routes through message_process() ->
+        # message_route() -> message_new() -- the real code path this
+        # anchor documents, not a mock of it.
         raw = self._raw_email("info@hams.com", subject="General question about membership")
 
         incidents_before = self.env["pager.incident"].search_count([])

@@ -49,6 +49,7 @@ class TestPagerDutyHooks(HamsTransactionCase):
             type(self.env["daemon.key.registry"]).register_daemon = original_register
 
     def test_claims_info_alias_when_free(self):
+        # Tests [@ANCHOR: pager_duty_info_alias_claim]
         # info@hams.com now routes to pager_duty per Bruce's own direction
         # (moved off hams_helpdesk.ticket). The real module install already
         # ran this hook once; simulate a fresh claim by removing whatever it

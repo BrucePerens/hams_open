@@ -238,7 +238,7 @@ class PagerIncident(models.Model):
         postmaster@hams.com routing (docs/proposals/EMAIL_SEND_RECEIVE.md).
 
         Deliberately does NOT call report_incident(): that method's Redis
-        rate-limit and same-source dedup ([@ANCHOR: pd_redis_rate_limit])
+        rate-limit and same-source dedup (see [@ANCHOR: pd_redis_rate_limit])
         exist to collapse repeated automated signals reporting the same
         underlying problem (a monitor re-detecting the same outage every
         poll), not to gate genuinely distinct human email inquiries -- a

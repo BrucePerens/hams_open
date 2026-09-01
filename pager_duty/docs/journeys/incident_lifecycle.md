@@ -14,7 +14,8 @@ This journey tracks the technical state transitions of an incident from initial 
   `mail.thread.message_process()`; see `docs/proposals/EMAIL_SEND_RECEIVE.md`).
 - **Alias Resolution:** Odoo's own mailgateway resolves the recipient against the `info`/
   `postmaster` `mail.alias` records (`data/mail_alias_data.xml`, `hooks.py`'s `_claim_info_alias()`
-  for info@'s crm-collision-safe claim), both pointed at `pager.incident`.
+  [@ANCHOR: pager_duty_info_alias_claim] for info@'s crm-collision-safe claim), both pointed at
+  `pager.incident`.
 - **Record Creation:** Since the message doesn't match an existing thread, `message_new()`
   [@ANCHOR: pager_incident_message_new] creates the incident directly -- deliberately bypassing
   `report_incident()`'s rate-limit/dedup (designed for repeated automated signals, not distinct
