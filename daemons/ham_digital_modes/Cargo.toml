@@ -13,6 +13,16 @@ license = "LGPL-3.0-or-later"
 # libm is a pure-Rust, MIT/Apache-2.0 port of the actual C math library
 # algorithms, not a crude approximation of its own.
 libm = "0.2"
+# wspr_decode.rs's sync search: FT8's own decode takes the vendored-C
+# route (ft8.rs, vendor/ft8_lib, MIT-licensed) instead of a from-scratch
+# DSP reimplementation, but no equivalent permissively-licensed C WSPR
+# decoder exists to vendor the same way -- the real reference decoder
+# (`wsprd`, part of WSJT-X) is GPL, and the MIT-licensed reference this
+# session actually used (`weakmon`'s `wspr.py`) is pure Python, not a C
+# library that could be FFI'd in. rustfft is MIT/Apache-2.0, so it's
+# used directly for the STFT the sync search needs, rather than
+# hand-rolling a DFT.
+rustfft = "6"
 
 [build-dependencies]
 cc = "1.0"

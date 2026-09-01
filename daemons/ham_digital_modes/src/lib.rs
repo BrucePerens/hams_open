@@ -9,4 +9,5 @@
 pub mod psk31;
 pub mod wspr;
 pub mod wspr_decode;
+pub mod wspr_sync;
 pub mod ft8;

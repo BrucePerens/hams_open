@@ -33,7 +33,7 @@
 //! suffix callsigns) and Type 3 (hashed callsign + 6-character grid)
 //! are real, documented message types this doesn't attempt.
 
-const WSPR_SYMBOL_RATE_HZ: f64 = 12000.0 / 8192.0; // 1.4648... baud
+pub(crate) const WSPR_SYMBOL_RATE_HZ: f64 = 12000.0 / 8192.0; // 1.4648... baud
 const WSPR_TONE_SPACING_HZ: f64 = WSPR_SYMBOL_RATE_HZ;
 pub(crate) const WSPR_NUM_SYMBOLS: usize = 162;
 
