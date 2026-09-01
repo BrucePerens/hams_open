@@ -299,6 +299,91 @@ pub fn wspr_encode_wav_bytes(callsign: &str, grid4: &str, power_dbm: i32, base_h
     Some(wrap_mono_i16_as_wav(&samples, sample_rate))
 }
 
+/// A small, deterministic (seeded) PRNG -- splitmix64 -- used only to
+/// generate reproducible AWGN test fixtures below. Not cryptographic and
+/// not used anywhere outside test/fixture generation; deliberately
+/// self-contained rather than pulling in the `rand` crate for this one
+/// narrow, test-only need (this crate otherwise has zero runtime
+/// dependencies beyond `libm`).
+struct SplitMix64(u64);
+
+impl SplitMix64 {
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E3779B97F4A7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+        z ^ (z >> 31)
+    }
+
+    /// Uniform f64 in (0, 1] -- excludes 0 so Box-Muller's ln() below
+    /// never sees it (ln(0) is -inf, which would poison the result).
+    fn next_open01(&mut self) -> f64 {
+        let bits = self.next_u64() >> 11; // top 53 bits: full f64 mantissa precision
+        ((bits as f64) + 1.0) / ((1u64 << 53) as f64 + 1.0)
+    }
+
+    /// Standard normal (mean 0, stddev 1) via the Box-Muller transform.
+    fn next_gaussian(&mut self) -> f64 {
+        let u1 = self.next_open01();
+        let u2 = self.next_open01();
+        (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+    }
+}
+
+/// Adds white Gaussian noise to `samples` at the given target SNR (dB),
+/// measured as 10*log10(mean-square signal power / mean-square noise
+/// power) over this signal's own full sample-rate bandwidth -- NOT
+/// WSJT-X's own 2500 Hz-reference-bandwidth SNR convention. `wsprd`'s
+/// own printed SNR column uses that different convention and will
+/// therefore report a different, not-directly-comparable number for the
+/// same nominal `snr_db` passed in here; treat `wsprd`'s own output as
+/// the real, empirical ground truth for what a given fixture actually
+/// decodes as, not this function's input parameter (see
+/// `WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s own recorded noise-ladder
+/// results for the real correspondence). Deterministic given `seed` --
+/// two calls with the same seed produce byte-identical noise, so a
+/// fixture (and any regression that depends on it) is reproducible.
+pub fn add_awgn(samples: &[i16], snr_db: f64, seed: u64) -> Vec<i16> {
+    let signal_power: f64 =
+        samples.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / samples.len() as f64;
+    let noise_power = signal_power / 10f64.powf(snr_db / 10.0);
+    let noise_stddev = noise_power.sqrt();
+
+    let mut rng = SplitMix64(seed);
+    samples
+        .iter()
+        .map(|&s| {
+            let noisy = s as f64 + rng.next_gaussian() * noise_stddev;
+            noisy.round().clamp(i16::MIN as f64, i16::MAX as f64) as i16
+        })
+        .collect()
+}
+
+/// Same as `wspr_encode_wav_bytes()`, but with AWGN injected at `snr_db`
+/// (see `add_awgn()`'s own doc comment for the exact power-ratio
+/// definition and why it won't numerically match `wsprd`'s own printed
+/// SNR column). Exists specifically to build the noise ladder
+/// `WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s build order calls for: real,
+/// varied-SNR fixtures with recorded `wsprd` reference decodes, needed
+/// before either the Fano decoder's own soft-decision metric table or
+/// the sync search can be built or validated against anything real --
+/// `wspr_encode_wav_bytes()`'s own clean output alone proves nothing
+/// about low-SNR robustness, which is the actual hard part of WSPR decode.
+pub fn wspr_encode_wav_bytes_with_noise(
+    callsign: &str,
+    grid4: &str,
+    power_dbm: i32,
+    base_hz: f64,
+    sample_rate: u32,
+    snr_db: f64,
+    seed: u64,
+) -> Option<Vec<u8>> {
+    let clean = wspr_encode_audio(callsign, grid4, power_dbm, base_hz, sample_rate)?;
+    let noisy = add_awgn(&clean, snr_db, seed);
+    Some(wrap_mono_i16_as_wav(&noisy, sample_rate))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,6 +566,70 @@ mod tests {
     #[test]
     fn wav_fixture_returns_none_for_the_same_out_of_scope_messages_as_the_underlying_encoder() {
         assert!(wspr_encode_wav_bytes("PJ4/K1ABC", "EN50", 33, 1500.0, 12000).is_none());
+    }
+
+    #[test]
+    fn add_awgn_is_deterministic_given_the_same_seed() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let clean = wspr_modulate(&symbols, 1500.0, 12000);
+        let noisy1 = add_awgn(&clean, -20.0, 42);
+        let noisy2 = add_awgn(&clean, -20.0, 42);
+        assert_eq!(noisy1, noisy2, "same seed must produce byte-identical noise for a reproducible fixture");
+    }
+
+    #[test]
+    fn add_awgn_different_seeds_produce_different_noise() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let clean = wspr_modulate(&symbols, 1500.0, 12000);
+        let noisy_a = add_awgn(&clean, -20.0, 1);
+        let noisy_b = add_awgn(&clean, -20.0, 2);
+        assert_ne!(noisy_a, noisy_b, "different seeds must not coincidentally produce identical noise");
+    }
+
+    #[test]
+    fn add_awgn_actually_adds_more_measured_noise_as_the_target_snr_drops() {
+        // Guards against the easiest bug in this function to write and
+        // never notice: a sign or log-scale mistake in the dB->power
+        // conversion that makes "lower SNR" produce LESS noise instead of
+        // more. Measures real deviation from the clean signal at two very
+        // different SNR targets and asserts the direction, not an exact
+        // value (the exact noise realization is seed-dependent by design).
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let clean = wspr_modulate(&symbols, 1500.0, 12000);
+
+        let mean_abs_deviation = |noisy: &[i16]| -> f64 {
+            clean
+                .iter()
+                .zip(noisy.iter())
+                .map(|(&c, &n)| (c as f64 - n as f64).abs())
+                .sum::<f64>()
+                / clean.len() as f64
+        };
+
+        let quiet_noise = add_awgn(&clean, 40.0, 7); // high SNR -- barely any noise
+        let loud_noise = add_awgn(&clean, -30.0, 7); // low SNR -- dominated by noise
+
+        assert!(
+            mean_abs_deviation(&loud_noise) > mean_abs_deviation(&quiet_noise) * 10.0,
+            "a -30dB target must add dramatically more measured noise than a +40dB target"
+        );
+    }
+
+    #[test]
+    fn wav_fixture_with_noise_round_trips_and_returns_none_for_out_of_scope_messages() {
+        let sample_rate = 12000u32;
+        let wav_bytes = wspr_encode_wav_bytes_with_noise("K6BP", "CM87", 30, 1500.0, sample_rate, -20.0, 99)
+            .expect("K6BP/CM87/30 is a valid Type 1 message");
+        // Same 44-byte header shape as the clean variant -- only the PCM
+        // payload differs (noisy, not byte-identical to the clean
+        // encoder's own output), so the existing header-shape assertions
+        // already cover format correctness; just confirm it parses and
+        // has the right sample count.
+        assert_eq!(&wav_bytes[0..4], b"RIFF");
+        let declared_data_size = u32::from_le_bytes([wav_bytes[40], wav_bytes[41], wav_bytes[42], wav_bytes[43]]) as usize;
+        assert_eq!(declared_data_size, wav_bytes.len() - 44);
+
+        assert!(wspr_encode_wav_bytes_with_noise("PJ4/K1ABC", "EN50", 33, 1500.0, sample_rate, -20.0, 99).is_none());
     }
 
     #[test]
