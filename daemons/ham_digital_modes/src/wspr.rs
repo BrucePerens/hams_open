@@ -35,18 +35,18 @@
 
 const WSPR_SYMBOL_RATE_HZ: f64 = 12000.0 / 8192.0; // 1.4648... baud
 const WSPR_TONE_SPACING_HZ: f64 = WSPR_SYMBOL_RATE_HZ;
-const WSPR_NUM_SYMBOLS: usize = 162;
+pub(crate) const WSPR_NUM_SYMBOLS: usize = 162;
 
 // K=32, rate 1/2 convolutional code (the "Layland-Lushbaugh" polynomials
 // WSPR itself uses -- verified directly against fano.c's #ifdef LL block,
 // the variant WSJT-X actually builds with).
-const POLY1: u32 = 0xf2d0_5351;
-const POLY2: u32 = 0xe461_3c47;
+pub(crate) const POLY1: u32 = 0xf2d0_5351;
+pub(crate) const POLY2: u32 = 0xe461_3c47;
 
 // The fixed 162-symbol sync vector every WSPR receiver expects, exactly
 // as published (protocol constant, not implementation-specific).
 #[rustfmt::skip]
-const SYNC_VECTOR: [u8; 162] = [
+pub(crate) const SYNC_VECTOR: [u8; 162] = [
     1,1,0,0,0,0,0,0,1,0, 0,0,1,1,1,0,0,0,1,0,
     0,1,0,1,1,1,1,0,0,0, 0,0,0,0,1,0,0,1,0,1,
     0,0,0,0,0,0,1,0,1,1, 0,0,1,1,0,1,0,0,0,1,
@@ -84,7 +84,7 @@ fn grid_char_code(c: u8) -> Option<u8> {
 /// "K6BP", "W1AW", a 1-letter prefix) get an implicit leading space --
 /// both real, standard formats, not a simplification of one at the
 /// expense of the other.
-fn pack_call(callsign: &str) -> Option<u32> {
+pub(crate) fn pack_call(callsign: &str) -> Option<u32> {
     let callsign = callsign.to_ascii_uppercase();
     let bytes = callsign.as_bytes();
     if bytes.len() > 6 || bytes.is_empty() {
@@ -112,7 +112,7 @@ fn pack_call(callsign: &str) -> Option<u32> {
 
 /// Packs a 4-character grid locator and a power level in dBm into
 /// WSPR's 22-bit `m` field.
-fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
+pub(crate) fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
     let bytes = grid4.to_ascii_uppercase();
     let bytes = bytes.as_bytes();
     if bytes.len() != 4 {
@@ -134,7 +134,7 @@ fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
 /// documented independently of any one implementation; `u8::reverse_bits`
 /// is Rust's own standard-library primitive for it, not a
 /// reimplementation of any specific reference's bit-twiddling).
-fn interleave_permutation() -> [usize; WSPR_NUM_SYMBOLS] {
+pub(crate) fn interleave_permutation() -> [usize; WSPR_NUM_SYMBOLS] {
     let mut perm = [0usize; WSPR_NUM_SYMBOLS];
     let mut p = 0;
     for i in 0u32..256 {
@@ -148,7 +148,7 @@ fn interleave_permutation() -> [usize; WSPR_NUM_SYMBOLS] {
     perm
 }
 
-fn parity(x: u32) -> u8 {
+pub(crate) fn parity(x: u32) -> u8 {
     (x.count_ones() & 1) as u8
 }
 
@@ -156,7 +156,7 @@ fn parity(x: u32) -> u8 {
 /// (the 50 real payload bits plus 31 zero tail bits already packed in,
 /// matching WSPR's own fixed frame size), producing 176 output bits
 /// (2 per input bit): the first from POLY1, the second from POLY2.
-fn convolutional_encode(data: &[u8; 11]) -> [u8; 176] {
+pub(crate) fn convolutional_encode(data: &[u8; 11]) -> [u8; 176] {
     let mut out = [0u8; 176];
     let mut state: u32 = 0;
     let mut out_idx = 0;
