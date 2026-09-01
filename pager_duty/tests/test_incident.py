@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import itertools
 import os
 import redis
 import logging
@@ -224,6 +225,22 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         # dedup/search logic rather than being blocked at the Redis gate.
         mock_client.set.return_value = True
 
+        # Odoo Datetime fields are second-resolution, so two back-to-back
+        # real fields.Datetime.now() calls can genuinely tie -- an
+        # assertGreater below on the real clock would be flaky, and the
+        # weaker assertGreaterEqual this replaced would pass trivially
+        # even if last_occurred never advanced at all. A monotonically
+        # increasing fake clock (a fresh, strictly later value every call,
+        # regardless of how many times report_incident() itself calls
+        # fields.Datetime.now()) makes assertGreater both correct and
+        # deterministic.
+        fake_clock_base = fields.Datetime.now()
+        fake_clock_calls = itertools.count()
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.fields.Datetime.now",
+            side_effect=lambda: fake_clock_base + datetime.timedelta(seconds=next(fake_clock_calls)),
+        )
+
         first_id = self.incident_model.report_incident(vals)
         self.assertTrue(first_id, "First report should create a new incident.")
         incident = self.incident_model.browse(first_id)
@@ -236,7 +253,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertEqual(second_id, first_id, "A repeat for the same open source must reuse the existing incident, not create a duplicate.")
         incident.invalidate_recordset(["occurrence_count", "last_occurred"])
         self.assertEqual(incident.occurrence_count, 2, "occurrence_count must increment on a dedup match.")
-        self.assertGreaterEqual(incident.last_occurred, first_last_occurred, "last_occurred must advance on a repeat report.")
+        self.assertGreater(incident.last_occurred, first_last_occurred, "last_occurred must actually advance on a repeat report, not just tie.")
 
 
 @tagged("integration", "post_install", "-at_install")
