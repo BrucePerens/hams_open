@@ -655,7 +655,7 @@ pub fn sync_search_and_decode_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wspr::{add_awgn, pack_call, pack_grid4_power, wspr_encode_audio, wspr_encode_symbols, wspr_modulate};
+    use crate::wspr::{add_awgn, pack_call, pack_grid4_power, unpack_wspr_message, wspr_encode_audio, wspr_encode_symbols, wspr_modulate};
     use crate::wspr_decode::WSPR_DECODABLE_INPUT_BITS;
 
     /// Independently reconstructs the first `WSPR_DECODABLE_INPUT_BITS`
@@ -1201,5 +1201,228 @@ mod tests {
         }
 
         assert!(!any_wrong, "own decoder must never produce a confident wrong message, same property wsprd's own recorded ladder has");
+    }
+
+    /// Diagnostic: isolates candidate cause 1 (`find_sync()`'s own coarse
+    /// discrete search grid) from candidates 2/3 (amplitude/noise_stddev
+    /// calibration, decoder metric/budget tuning) for the ~2.5-4dB
+    /// sensitivity gap `own_decoder_noise_ladder_matches_the_recorded_
+    /// wsprd_reference_boundary` measured against the real `wsprd`
+    /// reference. Bypasses `find_sync()` entirely -- calls `extract_
+    /// symbol_evidence()` directly with the exact, hand-known `base_hz`/
+    /// `start_sample` the fixture was built at (no search, no discrete-grid
+    /// quantization error possible) -- then runs the same decode path
+    /// (`decode_from_symbol_evidence()`) the full pipeline uses. If this
+    /// sensitivity boundary is close to `wsprd`'s own (through -32.5dB, not
+    /// falling off at -30dB the way the full search does), the sync
+    /// search's own coarse grid is the dominant cause of the gap and
+    /// candidates 2/3 are not the story; if this ALSO falls off around
+    /// -30/-31.5dB, the gap is downstream of sync (calibration or decoder
+    /// tuning), and `find_sync()` itself is not the problem to fix first.
+    #[test]
+    #[ignore]
+    fn own_decoder_noise_ladder_with_exact_known_sync_isolates_the_sensitivity_gap_cause() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let true_base_hz = 1500.0;
+        let true_start_sample = 0usize; // no padding -- exact alignment is hand-known, not searched for.
+
+        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let seeds = [1u64, 2, 3, 4, 5];
+
+        let mut table = Vec::new();
+        let mut any_wrong = false;
+        for &snr_db in &snr_levels {
+            let mut correct = 0;
+            let mut no_decode = 0;
+            for &seed in &seeds {
+                let noisy = add_awgn(&clean, snr_db, seed);
+                let evidence = extract_symbol_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
+                    .expect("exact-known alignment on a fixture this long must always yield evidence");
+                let result = decode_from_symbol_evidence(&evidence, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
+                    .ok()
+                    .and_then(unpack_wspr_message);
+                match result {
+                    Some((callsign, grid, power)) if callsign == "K6BP" && grid == "CM87" && power == 30 => correct += 1,
+                    Some((callsign, grid, power)) => {
+                        any_wrong = true;
+                        println!("WRONG MESSAGE at {snr_db}dB seed={seed}: got ({callsign}, {grid}, {power}), expected (K6BP, CM87, 30)");
+                    }
+                    None => no_decode += 1,
+                }
+            }
+            table.push((snr_db, correct, no_decode, seeds.len() - correct - no_decode));
+        }
+
+        println!("exact-known-sync SNR(dB) | correct | no-decode | wrong");
+        for (snr_db, correct, no_decode, wrong) in &table {
+            println!("{snr_db:>7} | {correct:>7} | {no_decode:>9} | {wrong:>5}");
+        }
+
+        assert!(!any_wrong, "own decoder must never produce a confident wrong message even with exact known sync");
+    }
+
+    /// Diagnostic, not a correctness assertion: dumps the (amplitude,
+    /// noise_stddev) pair `evidence_to_symbol_values()` actually computes
+    /// at each rung of the noise ladder, exact known sync (no search
+    /// error), to compare against the noise_stddev/amplitude ratios
+    /// `wspr_decode.rs`'s own tests have ever validated the sequential
+    /// decoder against (0.5 and 0.9 at amplitude=1.0 -- i.e. ratios of
+    /// 0.5 and 0.9 -- plus a deliberately-hopeless 5.0). If the ladder's
+    /// own failing SNR levels produce a noise_stddev/amplitude ratio well
+    /// past 0.9, the decoder's own metric table/max_cycles budget was
+    /// simply never validated that deep -- real, unsurprising
+    /// under-tuning, not a mystery bug.
+    #[test]
+    #[ignore]
+    fn diagnostic_dump_calibrated_amplitude_and_noise_stddev_per_snr_rung() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -34.0, -34.5, -36.0];
+        println!("SNR(dB) | seed | amplitude | noise_stddev | ratio");
+        for &snr_db in &snr_levels {
+            for seed in 1u64..=3 {
+                let noisy = add_awgn(&clean, snr_db, seed);
+                let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
+                let (_symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+                println!(
+                    "{snr_db:>7} | {seed:>4} | {amplitude:>9.4} | {noise_stddev:>12.4} | {:>5.3}",
+                    noise_stddev / amplitude
+                );
+            }
+        }
+    }
+
+    /// Diagnostic: quantifies the order-statistics bias in `evidence_to_
+    /// symbol_values()`'s `amplitude` estimate. `winner = max(v0,v1)`,
+    /// `loser = min(v0,v1)` per symbol -- in *pure noise* (no real signal
+    /// separating v0/v1 at all) `max` minus `min` of two random draws is
+    /// still strictly positive on average, so `amplitude = mean(winner) -
+    /// mean(loser)` is a biased-upward estimate of the true signal
+    /// separation, not a clean noise-floor-crossing measurement. Feeds a
+    /// silence-only buffer (zero signal, `add_awgn`'s own noise generator
+    /// only) straight into `extract_symbol_evidence()`/`evidence_to_
+    /// symbol_values()` and reports the resulting amplitude directly --
+    /// any amplitude visibly above the `1e-9` floor confirms the bias
+    /// exists and roughly how large it is relative to the real signal
+    /// amplitudes the noise-ladder dump above measured (millions, at this
+    /// fixture's scale).
+    #[test]
+    #[ignore]
+    fn diagnostic_pure_noise_calibration_reveals_amplitude_bias() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        // -80dB is, for this fixture's amplitude, indistinguishable from
+        // "no real signal at all" -- add_awgn scales noise relative to the
+        // real signal's own RMS, so a deep enough negative SNR leaves only
+        // the noise process itself in the buffer.
+        println!("seed | amplitude (should be ~0 if unbiased) | noise_stddev");
+        for seed in 1u64..=5 {
+            let silence_plus_noise = add_awgn(&clean, -80.0, seed);
+            let evidence =
+                extract_symbol_evidence(&silence_plus_noise, sample_rate, 1500.0, 0).unwrap();
+            let (_symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+            println!("{seed:>4} | {amplitude:>12.4} | {noise_stddev:>12.4}");
+        }
+    }
+
+    /// Diagnostic: splits the exact-known-sync ladder's "no correct
+    /// decode" bucket into its three real, distinct failure modes instead
+    /// of lumping them as one "no-decode" count. `GaveUp` means the
+    /// sequential decoder exhausted `max_cycles` node expansions without
+    /// completing a search at all (a budget/search-efficiency problem);
+    /// `LowConfidence` means the search completed but the winning path's
+    /// own metric fell below `MIN_ACCEPTABLE_METRIC` (a metric-calibration
+    /// problem, and `MIN_ACCEPTABLE_METRIC` was itself only ever validated
+    /// at noise_stddev/amplitude ratio ~0.9, not the 0.48-0.71 range this
+    /// ladder's own failing rungs sit at); `UnpackFailed` means the
+    /// decoder returned a confident bit pattern but `unpack_wspr_message()`
+    /// rejected it (checksum/field-range failure -- a "confidently wrong
+    /// enough to fail unpacking" case, distinct from both). Which bucket
+    /// dominates points at a different candidate cause.
+    #[test]
+    #[ignore]
+    fn diagnostic_exact_known_sync_failure_mode_breakdown() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let snr_levels = [-30.0, -31.5, -32.5, -33.0, -34.0, -34.5, -36.0];
+        let seeds = [1u64, 2, 3, 4, 5];
+
+        println!("SNR(dB) | correct | gave_up | low_confidence | unpack_failed");
+        for &snr_db in &snr_levels {
+            let mut correct = 0;
+            let mut gave_up = 0;
+            let mut low_confidence = 0;
+            let mut unpack_failed = 0;
+            for &seed in &seeds {
+                let noisy = add_awgn(&clean, snr_db, seed);
+                let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
+                match decode_from_symbol_evidence(&evidence, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC) {
+                    Ok(bits) => match unpack_wspr_message(bits) {
+                        Some((callsign, grid, power))
+                            if callsign == "K6BP" && grid == "CM87" && power == 30 =>
+                        {
+                            correct += 1
+                        }
+                        Some(_) => unpack_failed += 1, // confidently wrong, but not garbage
+                        None => unpack_failed += 1,
+                    },
+                    Err(ConfidenceGateError::GaveUp { .. }) => gave_up += 1,
+                    Err(ConfidenceGateError::LowConfidence { .. }) => low_confidence += 1,
+                }
+            }
+            println!("{snr_db:>7} | {correct:>7} | {gave_up:>7} | {low_confidence:>15} | {unpack_failed:>13}");
+        }
+    }
+
+    /// Diagnostic: sweeps a multiplicative correction factor on
+    /// `noise_stddev` before handing it to the decoder, at the SNR rungs
+    /// right past the real failure boundary (-30 through -33dB), to see
+    /// whether a corrected channel estimate recovers decodes the
+    /// uncorrected calibration misses. This is the empirical test of the
+    /// order-statistics theory: `symbol_values[i] = v1[i] - v0[i]` is a
+    /// difference of two ~independent noisy bins (variance sums, so
+    /// stddev scales by sqrt(2) relative to a single bin), but `noise_
+    /// stddev = sqrt((winvar+losevar)/2)` *averages* the two per-bin
+    /// variances instead of summing them -- structurally under-reporting
+    /// the real symbol_values noise by roughly sqrt(2). A factor near
+    /// 1.41 winning here would confirm that specific mechanism (not just
+    /// "give the decoder a bigger noise_stddev generically helps").
+    #[test]
+    #[ignore]
+    fn diagnostic_noise_stddev_scale_factor_sweep_at_the_failure_boundary() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let snr_levels = [-30.0, -31.5, -32.5, -33.0];
+        let seeds = [1u64, 2, 3, 4, 5];
+        let noise_stddev_factors = [0.7, 1.0, 1.2, 1.41, 1.6, 2.0];
+
+        println!("SNR(dB) | noise_stddev_factor | correct/5");
+        for &snr_db in &snr_levels {
+            for &factor in &noise_stddev_factors {
+                let mut correct = 0;
+                for &seed in &seeds {
+                    let noisy = add_awgn(&clean, snr_db, seed);
+                    let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
+                    let (symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+                    let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                    let result = sequential_decode_with_confidence_gate(
+                        &channel_bit_values,
+                        amplitude,
+                        noise_stddev * factor,
+                        2_000_000,
+                        crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                    )
+                    .ok()
+                    .and_then(unpack_wspr_message);
+                    if let Some((callsign, grid, power)) = result {
+                        if callsign == "K6BP" && grid == "CM87" && power == 30 {
+                            correct += 1;
+                        }
+                    }
+                }
+                println!("{snr_db:>7} | {factor:>19} | {correct}/5");
+            }
+        }
     }
 }
