@@ -581,6 +581,15 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # entirely, so every call to that endpoint failed closed with
             # an AccessError before the HMAC check ever ran.
             "pager_duty.domain_api_identity",
+            # Plain display text (organization name / mailing address) shown
+            # in every outbound notification email's compliance footer
+            # (hams_base/views/mail_templates.xml) -- not a secret. Missing
+            # entirely before, so every notification email crashed the
+            # instant its own render context supplied `company` correctly
+            # (see the fixed `env` -> `company.env` bug this whitelist entry
+            # accompanies) instead of masking it with an unrelated KeyError.
+            "hams_base.compliance_org_name",
+            "hams_base.compliance_mailing_address",
         ]
 
     @api.model
