@@ -543,6 +543,89 @@ mod tests {
         assert!(gated_low_confidence > 0, "expected at least one LowConfidence rejection at this noise level ({counts})");
     }
 
+    /// Direct test of the gap `MIN_ACCEPTABLE_METRIC`'s own doc comment
+    /// and `diagnostic_exact_known_sync_failure_mode_breakdown` (in
+    /// `wspr_sync.rs`) both flag but never actually ran: the real
+    /// audio-domain WSPR sensitivity ladder's own failing SNR rungs
+    /// (-30dB and below) produce a calibrated noise_stddev/amplitude
+    /// ratio of 0.48-0.71 -- LOWER (i.e. theoretically easier) than the
+    /// 0.9 ratio `confidence_gate_meaningfully_reduces_the_wrong_decode_
+    /// rate` above already exercises successfully. This decoder's own
+    /// metric/gate had simply never been run at that specific ratio
+    /// range with a *perfectly known* channel model (exact amplitude and
+    /// noise_stddev, no real-audio estimation error at all) -- this
+    /// closes that gap.
+    ///
+    /// If the decoder decodes reliably here (as the monotonic-ratio
+    /// intuition predicts, since 0.48-0.71 is less noisy than the
+    /// already-working 0.9 case), that's real evidence AGAINST a
+    /// decoder-algorithm/metric-formula bug: it would mean
+    /// `sequential_decode`/`fano_bit_metric` are fine at this ratio, and
+    /// the real audio-domain failure must instead be a channel-model
+    /// mismatch -- the true per-symbol error statistics in real
+    /// (extracted-from-FFT) evidence aren't well described by the single
+    /// global (amplitude, noise_stddev) pair `evidence_to_symbol_values()`
+    /// reports, even though the pair's own *reported* ratio looks benign.
+    /// If it instead fails or is unreliable here too, that would be much
+    /// stronger evidence for a real decoder-side problem at this specific
+    /// ratio regime, worth chasing before assuming a channel-model
+    /// mismatch.
+    #[test]
+    #[ignore]
+    fn diagnostic_synthetic_decode_at_the_real_failing_ratio_range_with_perfectly_known_channel_params() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let expected = expected_decodable_bits("K6BP", "CM87", 30);
+        let amplitude = 1.0;
+        let ratios = [0.48, 0.55, 0.6, 0.65, 0.71];
+        let trials = 10;
+
+        println!("ratio | correct | gave_up | low_confidence | wrong");
+        let mut any_ratio_failed_to_mostly_decode = false;
+        for &ratio in &ratios {
+            let noise_stddev = amplitude * ratio;
+            let mut correct = 0;
+            let mut gave_up = 0;
+            let mut low_confidence = 0;
+            let mut wrong = 0;
+            for seed in 0..trials {
+                let symbol_values =
+                    symbol_values_from_real_transmission(&symbols, amplitude, noise_stddev, 20_000 + seed);
+                let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                match sequential_decode_with_confidence_gate(
+                    &channel_bit_values,
+                    amplitude,
+                    noise_stddev,
+                    2_000_000,
+                    MIN_ACCEPTABLE_METRIC,
+                ) {
+                    Ok(bits) if bits == expected => correct += 1,
+                    Ok(_) => wrong += 1,
+                    Err(ConfidenceGateError::GaveUp { .. }) => gave_up += 1,
+                    Err(ConfidenceGateError::LowConfidence { .. }) => low_confidence += 1,
+                }
+            }
+            println!("{ratio:>5.2} | {correct:>7} | {gave_up:>7} | {low_confidence:>15} | {wrong:>5}");
+            // A perfectly-modeled channel at a ratio easier than the
+            // already-working 0.9 case should decode correctly nearly
+            // every time -- this is a soft, printed-diagnosis assertion
+            // (not exact "all trials"), matching this codebase's own
+            // convention elsewhere of not over-asserting near a coding
+            // threshold, but a majority-fail result here would be a real,
+            // actionable finding, not noise.
+            if correct < trials / 2 {
+                any_ratio_failed_to_mostly_decode = true;
+            }
+        }
+        assert!(
+            !any_ratio_failed_to_mostly_decode,
+            "at least one ratio in the real failing range decoded correctly less than half the time \
+             with a PERFECTLY known channel model -- see printed table above. This points at a real \
+             decoder-side problem specific to this ratio range (not just a channel-model mismatch in \
+             real audio evidence), worth chasing before assuming the gap is purely a real-audio \
+             calibration issue."
+        );
+    }
+
     #[test]
     fn fano_bit_metric_favors_the_hypothesis_matching_the_received_sign() {
         // A basic sanity check on the metric's own direction, isolated
