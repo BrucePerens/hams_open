@@ -14,6 +14,7 @@ A sudden database lock contention causes the Odoo XML-RPC interface to stop resp
 
 3.  **On-Duty Lookup:** The system queries the `calendar.event` model to find out who is currently assigned to the "Pager Duty Shift" [@ANCHOR: test_pager_notification]. It finds Alice's record because her shift was marked with `is_pager_duty=True`.
 4.  **Alerting Alice:** An urgent message is posted to the incident chatter, and a notification is dispatched to Alice's mobile device via the mail service.
+5.  **Repeats Don't Spam a Second Ticket:** Ten minutes later, before Alice has acknowledged, the same monitor check fails again. `report_incident` finds her still-open incident for the same source and does not create a duplicate -- instead it increments the incident's own occurrence count and updates when it was last seen [@ANCHOR: pager_incident_occurrence_count], so Alice's incident list shows "3 occurrences" rather than three separate, un-actioned tickets for the same underlying outage.
 
 ## Resolution
 Alice wakes up to the alert. She logs into the NOC Dashboard [@ANCHOR: pager_board_data] and sees the "Critical" incident at the top of the list.

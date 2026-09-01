@@ -13,6 +13,7 @@
                 <field name="source"/>
                 <field name="severity"/>
                 <field name="status"/>
+                <field name="occurrence_count"/>
                 <field name="acknowledged_by_id" optional="show"/>
                 <field name="mtta"/>
                 <field name="mttr"/>

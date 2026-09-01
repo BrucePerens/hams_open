@@ -89,6 +89,26 @@ class PagerIncident(models.Model):
         string="Ticket Model",
         help="The Odoo model used for the ticket (e.g. hams_helpdesk.ticket or helpdesk.ticket).",
     )
+    # [@ANCHOR: pager_incident_occurrence_count]
+    # Added 2026-09-01 per ODOO_DB_LOG_CRASH_MONITORING.md's own "What's
+    # actually missing" #1: report_incident()'s dedup branch (see its own
+    # report_incident_rate_limit anchor comment) already finds an existing
+    # open/acknowledged incident for the same source and returns its id
+    # without creating a duplicate -- but nothing tracked how many times
+    # it had recurred. default=1 so every already-existing incident
+    # (before this field existed) reads as "happened once," the correct
+    # backward-compatible interpretation.
+    occurrence_count = fields.Integer(
+        string="Occurrences",
+        default=1,
+        tracking=True,
+        help="How many times this same source has reported while an incident for it was still open/acknowledged.",
+    )
+    last_occurred = fields.Datetime(
+        string="Last Occurred",
+        default=lambda self: fields.Datetime.now(),
+        help="When this source's own report_incident() call was last received, including repeats that did not create a new incident.",
+    )
 
     def write(self, vals):
         now = fields.Datetime.now()
@@ -202,6 +222,12 @@ class PagerIncident(models.Model):
 
         existing = IncidentModel.search(search_domain, limit=1)
         if existing:
+            existing.write(
+                {
+                    "occurrence_count": existing.occurrence_count + 1,
+                    "last_occurred": fields.Datetime.now(),
+                }
+            )
             return existing.id
 
         if vals.get("name", "New") == "New":

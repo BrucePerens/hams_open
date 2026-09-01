@@ -199,6 +199,45 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         incident.invalidate_recordset(["is_escalated"])
         self.assertTrue(incident.is_escalated)
 
+    def test_10_occurrence_count_increments_on_dedup_not_a_new_incident(self):
+        # Tests [@ANCHOR: pager_incident_occurrence_count]
+        # Real coverage for ODOO_DB_LOG_CRASH_MONITORING.md's own gap #1:
+        # a repeat report for the same still-open source must not create a
+        # duplicate incident (already true, see report_incident_rate_limit
+        # above) AND must now increment occurrence_count/update
+        # last_occurred on the SAME existing record, rather than silently
+        # doing nothing beyond returning its id.
+        vals = {
+            "source": "occurrence_test_daemon",
+            "severity": "high",
+            "description": "First occurrence",
+        }
+
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
+        )
+        mock_client = MagicMock()
+        mock_redis.Redis.return_value = mock_client
+        # Every rate-limit check passes (True = "the SET succeeded, not
+        # already rate-limited") so both calls below reach the real
+        # dedup/search logic rather than being blocked at the Redis gate.
+        mock_client.set.return_value = True
+
+        first_id = self.incident_model.report_incident(vals)
+        self.assertTrue(first_id, "First report should create a new incident.")
+        incident = self.incident_model.browse(first_id)
+        self.assertEqual(incident.occurrence_count, 1, "A brand-new incident starts at 1 occurrence.")
+        first_last_occurred = incident.last_occurred
+
+        second_id = self.incident_model.report_incident(
+            {**vals, "description": "Second occurrence, same source"}
+        )
+        self.assertEqual(second_id, first_id, "A repeat for the same open source must reuse the existing incident, not create a duplicate.")
+        incident.invalidate_recordset(["occurrence_count", "last_occurred"])
+        self.assertEqual(incident.occurrence_count, 2, "occurrence_count must increment on a dedup match.")
+        self.assertGreaterEqual(incident.last_occurred, first_last_occurred, "last_occurred must advance on a repeat report.")
+
 
 @tagged("integration", "post_install", "-at_install")
 class TestPagerIncidentIntegration(HamsTransactionCase):
