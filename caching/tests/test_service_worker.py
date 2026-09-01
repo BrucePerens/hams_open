@@ -52,3 +52,9 @@ class TestServiceWorker(HamsHttpCase):
             "This prevents the browser from using a stale Service Worker script.",
         )
 
+    def test_02_offline_fallback_page_renders(self):
+        # Tests [@ANCHOR: COMM_test_caching_pwa_offline_view]
+        response = self.url_open("/offline")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"You are offline", response.content)
+
