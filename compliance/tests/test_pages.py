@@ -123,6 +123,34 @@ class TestCompliancePagesHttp(HamsHttpCase):
             msg = f"[!] DIAGNOSTIC FOR AI: Generic site search for '{term}' returned {response.status_code}, expected 200. A website.page (or any other searchable record) with an unset name field crashes this route's sort."
             self.assertEqual(response.status_code, 200, msg)
 
+    def test_protects_hams_page_reachable_and_registered(self):
+        """
+        The new central "How Hams.com Protects Hams" page must resolve
+        publicly (no login required) and be registered in the shared
+        compliance.document registry so it surfaces via /compliance, the
+        same as Privacy/Terms/LoTW Trust/Transmitter Safety/etc. Also
+        checks it actually links to the two existing, real trust pages
+        rather than re-explaining them (this page is meant to be a central
+        index, not a duplicate).
+        """
+        # Tests [@ANCHOR: compliance:protects_hams_page]
+        response = self.url_open("/protects-hams")
+        msg_status = f"[!] DIAGNOSTIC FOR AI: Page /protects-hams should be reachable (200 OK). Got {response.status_code}."
+        self.assertEqual(response.status_code, 200, msg_status)
+        self.assertIn("How Hams.com Protects Hams", response.text)
+        self.assertIn('href="/lotw-trust"', response.text)
+        self.assertIn('href="/transmitter-safety"', response.text)
+        self.assertIn('href="/relay/source"', response.text)
+
+        public_uid = self.env.ref("base.public_user").id
+        registered_urls = (
+            self.env["compliance.document"]
+            .with_user(public_uid)
+            .search([])
+            .mapped("url")
+        )
+        self.assertIn("/protects-hams", registered_urls)
+
     def test_compliance_index_route_lists_only_active_documents(self):
         """Verify the actual /compliance HTTP route, not just its template."""
         # Tests [@ANCHOR: COMM_compliance_index_route]
