@@ -470,6 +470,32 @@ pub fn extract_symbol_evidence(
     base_hz: f64,
     start_sample: usize,
 ) -> Option<[[f64; 2]; WSPR_NUM_SYMBOLS]> {
+    let tone_mags = extract_all_four_tone_magnitudes(samples, sample_rate, base_hz, start_sample)?;
+
+    let mut evidence = [[0.0f64; 2]; WSPR_NUM_SYMBOLS];
+    for i in 0..WSPR_NUM_SYMBOLS {
+        let sync_bit = SYNC_VECTOR[i] as usize;
+        evidence[i][0] = tone_mags[i][sync_bit];
+        evidence[i][1] = tone_mags[i][2 + sync_bit];
+    }
+    Some(evidence)
+}
+
+/// Shared FFT step behind `extract_symbol_evidence()`, factored out so
+/// diagnostics can also read the two tone bins `extract_symbol_evidence()`
+/// itself discards (indices `1 - sync_bit`/`3 - sync_bit` at each symbol --
+/// per `wspr.rs`'s own `symbols[i] = 2 * interleaved[i] + SYNC_VECTOR[i]`
+/// encoding, these two bins can NEVER carry the real transmitted tone given
+/// the already-known sync bit, so they are a clean, always-pure-noise
+/// reference at each symbol position, uncontaminated by the winner/loser
+/// max/min selection bias `evidence_to_symbol_values()`'s own calibration
+/// has -- see `diagnostic_clean_noise_reference_from_impossible_tones`.
+fn extract_all_four_tone_magnitudes(
+    samples: &[i16],
+    sample_rate: u32,
+    base_hz: f64,
+    start_sample: usize,
+) -> Option<[[f64; 4]; WSPR_NUM_SYMBOLS]> {
     let bin_hz = WSPR_SYMBOL_RATE_HZ;
     let base_bin = (base_hz / bin_hz).round().max(0.0) as usize;
     let sub_bin_hz_offset = base_hz - (base_bin as f64) * bin_hz;
@@ -485,15 +511,7 @@ pub fn extract_symbol_evidence(
         sub_bin_hz_offset,
         start_sample,
     )?;
-    let tone_mags = tone_magnitudes_from_matrix(&mat, base_bin, base_bin);
-
-    let mut evidence = [[0.0f64; 2]; WSPR_NUM_SYMBOLS];
-    for i in 0..WSPR_NUM_SYMBOLS {
-        let sync_bit = SYNC_VECTOR[i] as usize;
-        evidence[i][0] = tone_mags[i][sync_bit];
-        evidence[i][1] = tone_mags[i][2 + sync_bit];
-    }
-    Some(evidence)
+    Some(tone_magnitudes_from_matrix(&mat, base_bin, base_bin))
 }
 
 /// Converts `extract_symbol_evidence()`'s real, positive tone-magnitude
@@ -1507,6 +1525,135 @@ mod tests {
                 }
                 println!("{snr_db:>7} | {k:>4} | {correct}/5");
             }
+        }
+    }
+
+    /// Diagnostic: the impossible-tone-pair noise reference. At each
+    /// symbol, tones at index `1 - sync_bit` and `3 - sync_bit` can never
+    /// be the real transmitted tone (given the already-known sync bit --
+    /// `wspr.rs`'s own `symbols[i] = 2*interleaved[i] + SYNC_VECTOR[i]`
+    /// means the transmitted tone is always `sync_bit` or `2+sync_bit`).
+    /// Their magnitudes are therefore a clean, always-pure-noise sample at
+    /// every symbol -- unlike the winner/loser split, which is contaminated
+    /// by the max/min order-statistic bias confirmed in earlier diagnostics.
+    /// First dumps how this clean reference compares to the old winner/
+    /// loser-derived noise_stddev, then re-runs the full ladder using the
+    /// clean reference in place of the old estimate (amplitude left as the
+    /// raw winner/loser separation, uncorrected) to see whether a cleaner
+    /// noise estimate alone -- no debiasing hack -- closes more of the gap
+    /// than the previous commit's empirical k-correction did.
+    #[test]
+    #[ignore]
+    fn diagnostic_clean_noise_reference_from_impossible_tones() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let seeds = [1u64, 2, 3, 4, 5];
+
+        println!("=== comparison at 3 seeds per rung ===");
+        println!("SNR(dB) | seed | noise_stddev_raw | noise_stddev_clean | ratio_clean/raw");
+        for &snr_db in &snr_levels {
+            for seed in 1u64..=3 {
+                let noisy = add_awgn(&clean, snr_db, seed);
+                let tone_mags =
+                    extract_all_four_tone_magnitudes(&noisy, sample_rate, 1500.0, 0).unwrap();
+
+                let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
+                let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
+                let mut clean_noise_samples = Vec::with_capacity(WSPR_NUM_SYMBOLS * 2);
+                for i in 0..WSPR_NUM_SYMBOLS {
+                    let sync_bit = SYNC_VECTOR[i] as usize;
+                    let v0 = tone_mags[i][sync_bit];
+                    let v1 = tone_mags[i][2 + sync_bit];
+                    winners[i] = v0.max(v1);
+                    losers[i] = v0.min(v1);
+                    clean_noise_samples.push(tone_mags[i][1 - sync_bit]);
+                    clean_noise_samples.push(tone_mags[i][3 - sync_bit]);
+                }
+                let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| {
+                    xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                };
+                let variance = |xs: &[f64; WSPR_NUM_SYMBOLS], m: f64| {
+                    xs.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                };
+                let winmean = mean(&winners);
+                let losemean = mean(&losers);
+                let winvar = variance(&winners, winmean);
+                let losevar = variance(&losers, losemean);
+                let noise_stddev_raw = ((winvar + losevar) / 2.0).sqrt().max(1e-9);
+
+                let n = clean_noise_samples.len() as f64;
+                let clean_mean = clean_noise_samples.iter().sum::<f64>() / n;
+                let clean_var = clean_noise_samples
+                    .iter()
+                    .map(|x| (x - clean_mean) * (x - clean_mean))
+                    .sum::<f64>()
+                    / n;
+                let noise_stddev_clean = clean_var.sqrt().max(1e-9);
+
+                println!(
+                    "{snr_db:>7} | {seed:>4} | {noise_stddev_raw:>16.4} | {noise_stddev_clean:>19.4} | {:>6.3}",
+                    noise_stddev_clean / noise_stddev_raw
+                );
+            }
+        }
+
+        println!("\n=== full ladder using clean noise reference, raw amplitude ===");
+        println!("SNR(dB) | correct/5");
+        for &snr_db in &snr_levels {
+            let mut correct = 0;
+            for &seed in &seeds {
+                let noisy = add_awgn(&clean, snr_db, seed);
+                let tone_mags =
+                    extract_all_four_tone_magnitudes(&noisy, sample_rate, 1500.0, 0).unwrap();
+
+                let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
+                let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
+                let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
+                let mut clean_noise_samples = Vec::with_capacity(WSPR_NUM_SYMBOLS * 2);
+                for i in 0..WSPR_NUM_SYMBOLS {
+                    let sync_bit = SYNC_VECTOR[i] as usize;
+                    let v0 = tone_mags[i][sync_bit];
+                    let v1 = tone_mags[i][2 + sync_bit];
+                    symbol_values[i] = v1 - v0;
+                    winners[i] = v0.max(v1);
+                    losers[i] = v0.min(v1);
+                    clean_noise_samples.push(tone_mags[i][1 - sync_bit]);
+                    clean_noise_samples.push(tone_mags[i][3 - sync_bit]);
+                }
+                let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| {
+                    xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                };
+                let winmean = mean(&winners);
+                let losemean = mean(&losers);
+                let amplitude_raw = (winmean - losemean).max(1e-9);
+
+                let n = clean_noise_samples.len() as f64;
+                let clean_mean = clean_noise_samples.iter().sum::<f64>() / n;
+                let clean_var = clean_noise_samples
+                    .iter()
+                    .map(|x| (x - clean_mean) * (x - clean_mean))
+                    .sum::<f64>()
+                    / n;
+                let noise_stddev_clean = clean_var.sqrt().max(1e-9);
+
+                let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                let result = sequential_decode_with_confidence_gate(
+                    &channel_bit_values,
+                    amplitude_raw,
+                    noise_stddev_clean,
+                    2_000_000,
+                    crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                )
+                .ok()
+                .and_then(unpack_wspr_message);
+                if let Some((callsign, grid, power)) = result {
+                    if callsign == "K6BP" && grid == "CM87" && power == 30 {
+                        correct += 1;
+                    }
+                }
+            }
+            println!("{snr_db:>7} | {correct}/5");
         }
     }
 }
