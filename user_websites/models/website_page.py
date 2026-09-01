@@ -299,6 +299,26 @@ class WebsitePage(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         # # Verified by [@ANCHOR: test_site_creation_performance_scaling]
+        # -1. Restore stock website.page's "name defaults to the linked
+        # view's own name" behavior. Stock website.page delegates `name`
+        # to `view_id.name` via `_inherits`; this model (and the
+        # ownership mixin it uses) redeclares `name` as a genuine local
+        # field, which silences Odoo's automatic _inherits routing for
+        # that one field specifically (see
+        # docs/proposals/COMPLIANCE_PAGE_NAME_LOST_WITH_USER_WEBSITES.md
+        # for the full, verified root-cause investigation). Without
+        # this, a caller that omits `name` and only supplies `view_id`
+        # -- exactly what stock's own delegation was designed to support
+        # -- gets this model's own unrelated default (`self._description`,
+        # i.e. literally "Page") instead of the linked view's real name.
+
+        # # Verified by [@ANCHOR: test_website_page_name_backfills_from_view_id]
+        for vals in vals_list:
+            if not vals.get("name") and vals.get("view_id"):
+                view = self.env["ir.ui.view"].browse(vals["view_id"])
+                if view.exists() and view.name:
+                    vals["name"] = view.name
+
         # 0. Sanitize arch to prevent Stored XSS
         if not (
             self.env.su

@@ -33,6 +33,34 @@ def post_init_hook(env):
                 (user_group.id, public_user_id),
             )
 
+    # Backfill `website_page.name` for rows created by a module whose own
+    # data files load earlier than user_websites in this install's module
+    # graph (e.g. `compliance`'s legal pages). During that earlier module's
+    # own data load, `website.page.name` is still stock Odoo's own
+    # `_inherits`-delegated field (this module's local `name` field, which
+    # shadows that delegation, hasn't been merged into the registry yet),
+    # so an explicit `name` given in that XML lands correctly on the linked
+    # `ir.ui.view.name` but never reaches this model's own local column --
+    # this hook runs after this module's own Python model (and its create()
+    # backfill above) are already active, so it can repair those rows using
+    # the same "copy from the linked view's name" rule, one time, for
+    # whatever already exists in the database at this point in the install.
+    # See docs/proposals/COMPLIANCE_PAGE_NAME_LOST_WITH_USER_WEBSITES.md for
+    # the full investigation this hook is based on.
+
+    # # Verified by [@ANCHOR: test_website_page_name_backfill_post_init_hook]
+    with env.cr.savepoint():
+        env.cr.execute(
+            """
+            UPDATE website_page wp
+            SET name = v.name
+            FROM ir_ui_view v
+            WHERE wp.view_id = v.id
+              AND (wp.name IS NULL OR wp.name = '')
+              AND v.name IS NOT NULL AND v.name != ''
+            """
+        )
+
     with env.cr.savepoint():
         env.cr.execute(
             "CREATE INDEX IF NOT EXISTS idx_website_page_published ON website_page (id) WHERE is_published = TRUE;"

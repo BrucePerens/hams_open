@@ -28,4 +28,5 @@ from . import test_tdd_fixes
 from . import test_ui_personas
 from . import test_ui_tours
 from . import test_user_websites_blog_post
+from . import test_website_page_name_delegation
 from . import test_xpath_rendering
