@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<odoo>
+    <data noupdate="1">
+        <!-- Route postmaster@hams.com to pager.incident. hams_base's own
+             mail.thread override (models/mail_thread.py) already recognizes
+             "postmaster" as a bounce/vacation/unsubscribe-noise-filtering
+             route the same way it does for the dedicated bounce alias and
+             not-read@: genuine DSN bounces and auto-replies never reach
+             this alias at all. Anything else sent to postmaster@ (the
+             RFC 5321-mandated admin contact address for this domain) does
+             reach it, and becomes a real incident via message_new()
+             (models/incident.py). See docs/proposals/EMAIL_SEND_RECEIVE.md.
+
+             info@ is NOT created here: same globally-unique alias_name
+             collision with stock crm's own default Sales Team alias that
+             hams_helpdesk used to work around; claimed defensively instead
+             in hooks.py's post_init_hook, which only claims "info" if
+             nothing else already has. -->
+        <record id="mail_alias_postmaster_pager" model="mail.alias">
+            <field name="alias_name">postmaster</field>
+            <field name="alias_model_id" ref="pager_duty.model_pager_incident"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'severity': 'medium', 'incident_source_prefix': 'postmaster-email'}</field>
+        </record>
+    </data>
+</odoo>

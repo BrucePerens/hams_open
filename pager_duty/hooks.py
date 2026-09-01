@@ -155,12 +155,43 @@ def _install_postgres_procedures(env):
         )
 
 
+def _claim_info_alias(env):
+    """Claim the "info" mail alias for pager.incident, but only if nothing
+    else already has. Same collision this codebase already worked around
+    for hams_helpdesk: stock Odoo's own crm module ships a built-in
+    (non-demo) "info" alias on its default Sales Team
+    (crm/data/crm_team_data.xml), and mail.alias.alias_name is globally
+    unique, so a plain data/mail_alias_data.xml <record> for "info" would
+    hard-crash this module's own install the instant crm is present.
+    info@hams.com now routes to pager_duty (not hams_helpdesk.ticket) per
+    Bruce's own direction -- hams_helpdesk no longer claims it.
+    """
+    # [@ANCHOR: pager_duty_info_alias_claim]
+    if env["mail.alias"].search_count([("alias_name", "=", "info")]):
+        _logger.warning(
+            "pager_duty: the 'info' mail alias already belongs to another "
+            "record (e.g. crm's default Sales Team); info@hams.com will NOT "
+            "route to pager.incident."
+        )
+        return
+    env["mail.alias"].create(
+        {
+            "alias_name": "info",
+            "alias_model_id": env.ref("pager_duty.model_pager_incident").id,
+            "alias_contact": "everyone",
+            "alias_defaults": "{'severity': 'low', 'incident_source_prefix': 'info-email'}",
+        }
+    )
+
+
 def post_init_hook(env):
     """
     Register daemon keys and trigger autodiscovery upon installation.
     """
     # [@ANCHOR: pager_duty_postgres_procedures]
     _install_postgres_procedures(env)
+
+    _claim_info_alias(env)
 
     # The _bootstrap_knowledge_docs function handles document installation;
     # do not create redundant post-init hooks.

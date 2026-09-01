@@ -11,17 +11,15 @@
         </record>
 
         <!-- Route support@hams.com to hams_helpdesk.ticket.
-             SES delivers both support@ and info@ to the same S3 bucket/receipt rule; the
-             polling daemon calls message_process() per message, which resolves the
-             recipient against these aliases exactly as it does for the
-             mail.hams.com SMTP path. See docs/proposals/EMAIL_SEND_RECEIVE.md.
+             SES delivers support@/info@/postmaster@ to the same S3 bucket/receipt
+             rule; the polling daemon calls message_process() per message, which
+             resolves the recipient against these aliases exactly as it does for
+             the mail.hams.com SMTP path. See docs/proposals/EMAIL_SEND_RECEIVE.md.
 
-             info@ is NOT created here: stock Odoo's own crm module ships a built-in
-             (non-demo) mail.alias also named "info" on its default Sales Team
-             (crm/data/crm_team_data.xml); alias_name is globally unique, so this
-             module's install would hard-crash the instant crm is ever installed
-             alongside it. Created defensively instead, in __init__.py's
-             post_init_hook, which only claims "info" if nothing has already. -->
+             info@ and postmaster@ are NOT created here: per Bruce's own direction,
+             both now route to pager_duty (pager.incident), not hams_helpdesk.ticket.
+             See pager_duty/hooks.py's info@ claim and
+             pager_duty/data/mail_alias_data.xml's postmaster@ record. -->
         <record id="mail_alias_support_helpdesk" model="mail.alias">
             <field name="alias_name">support</field>
             <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>

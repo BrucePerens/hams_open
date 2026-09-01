@@ -230,6 +230,41 @@ class PagerIncident(models.Model):
                 body=msg_body, partner_ids=partner_ids)   # fmt: skip
         return incident.id
 
+    def message_new(self, msg_dict, custom_values=None):
+        """Called by Odoo's own mailgateway (message_process -> message_route
+        -> here, via a mail.alias pointing at this model -- see
+        data/mail_alias_data.xml and hooks.py's info@ claim) when an inbound
+        email doesn't match an existing thread. Used for info@hams.com and
+        postmaster@hams.com routing (docs/proposals/EMAIL_SEND_RECEIVE.md).
+
+        Deliberately does NOT call report_incident(): that method's Redis
+        rate-limit and same-source dedup ([@ANCHOR: pd_redis_rate_limit])
+        exist to collapse repeated automated signals reporting the same
+        underlying problem (a monitor re-detecting the same outage every
+        poll), not to gate genuinely distinct human email inquiries -- a
+        constant "source" there would silently drop or merge unrelated
+        emails from different people. Odoo's own mailgateway already
+        threads replies to an existing incident natively (message_update(),
+        matched by Message-ID/References), so no separate dedup is needed
+        for this path.
+        """
+        # [@ANCHOR: pager_incident_message_new]
+        data = dict(custom_values or {})
+        sender = msg_dict.get("email_from") or "unknown sender"
+        source_prefix = data.pop("incident_source_prefix", "email")
+        data.setdefault("name", msg_dict.get("subject") or f"Email from {sender}")
+        # Per-sender, not a constant -- see docstring above.
+        data["source"] = f"{source_prefix}:{sender}"
+        data.setdefault("severity", "low")
+        data["description"] = (
+            msg_dict.get("body") or msg_dict.get("subject") or "(no content)"
+        )
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "pager_duty.user_pager_incident_creator"
+        )
+        return self.with_user(svc_uid).create(data)
+
     @api.model
     def auto_resolve_incidents(self, source, website_id=None):
         # [@ANCHOR: auto_resolve_incidents]

@@ -64,19 +64,12 @@ class TestMailIngest(HamsTransactionCase):
         )
         self.assertIn("Radio will not power on", tickets_after.name or "")
 
-    def test_02_service_account_ingests_info_email_into_ticket(self):
-        raw = self._raw_email("info@hams.com", subject="General question about membership")
-
-        tickets_before = self.env["hams_helpdesk.ticket"].search_count([])
-        self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
-            base64.b64encode(raw).decode("ascii")
-        )
-
-        self.assertEqual(
-            self.env["hams_helpdesk.ticket"].search_count([]),
-            tickets_before + 1,
-            "message_process() should have created exactly one new ticket via the info@ alias.",
-        )
+    # info@hams.com used to create a hams_helpdesk.ticket here; per Bruce's
+    # own direction it now routes to pager_duty (pager.incident) instead --
+    # see pager_duty/tests/test_hooks.py for the alias claim and
+    # pager_duty/tests/test_mail_ingest_incident.py for the end-to-end
+    # ingest test. hams_helpdesk doesn't depend on pager_duty, so it can't
+    # verify info@'s real routing target from here.
 
     def test_03_non_service_account_is_denied(self):
         """The real access boundary is the explicit login check inside

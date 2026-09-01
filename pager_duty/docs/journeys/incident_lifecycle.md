@@ -8,6 +8,24 @@ This journey tracks the technical state transitions of an incident from initial 
 - **Throttling:** The method checks Redis for a `pager_rate_limit:<source>` key [@ANCHOR: report_incident_rate_limit]. If found, the incident is suppressed to prevent alert storms.
 - **De-duplication:** If no rate limit exists, it searches for existing open or acknowledged incidents with the same `source`.
 
+## 1a. Detection via Inbound Email (info@/postmaster@hams.com)
+- **Trigger:** A real inbound email arrives at info@hams.com or postmaster@hams.com (SES -> S3 ->
+  the mail-ingest daemon -> `hams_helpdesk.ticket.ingest_inbound_email()` -> Odoo's own
+  `mail.thread.message_process()`; see `docs/proposals/EMAIL_SEND_RECEIVE.md`).
+- **Alias Resolution:** Odoo's own mailgateway resolves the recipient against the `info`/
+  `postmaster` `mail.alias` records (`data/mail_alias_data.xml`, `hooks.py`'s `_claim_info_alias()`
+  for info@'s crm-collision-safe claim), both pointed at `pager.incident`.
+- **Record Creation:** Since the message doesn't match an existing thread, `message_new()`
+  [@ANCHOR: pager_incident_message_new] creates the incident directly -- deliberately bypassing
+  `report_incident()`'s rate-limit/dedup (designed for repeated automated signals, not distinct
+  human inquiries). `source` is built per-sender (`{prefix}:{sender email}`), so each correspondent
+  gets their own incident thread; real replies thread onto it natively via Odoo's own
+  `message_update()`.
+- **Bounce Filtering:** Before any of the above runs, `hams_base`'s `mail.thread.message_route()`
+  override drops genuine DSN bounces, vacation auto-replies, and unsubscribe-intent messages sent to
+  postmaster@ (the same filtering the dedicated bounce alias already had) -- only a genuine inquiry
+  reaches the alias resolution step above.
+
 ## 2. Notification & Assignment
 - **Creation:** A new `pager.incident` record is created.
 - **Calendar Query:** The system calls `get_current_on_duty_admin()` [@ANCHOR: test_pager_notification].

@@ -37,6 +37,7 @@
     "data": [
         "security/security.xml",
         "data/cron.xml",
+        "data/mail_alias_data.xml",
         "security/ir.model.access.csv",
         "views/incident_views.xml",
         "views/schedule_views.xml",
