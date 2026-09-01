@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- ODOO_DB_LOG_CRASH_MONITORING.md: real, provisioned log paths,
+             confirmed directly against this dev box's own live files (not
+             guessed from the directory names alone); the active systemd
+             logfile target for Odoo, and PostgreSQL 17's active log
+             under its own default logging_collector directory. Global (no
+             website_id set) since these are server-level logs, not
+             per-website content. noupdate="1" since an admin may tune
+             these via the UI (log_analyzer_views.xml) after install; this
+             seed data must not silently overwrite those edits on a future
+             module upgrade. -->
+        <record id="pager_log_file_odoo" model="pager.log.file">
+            <field name="name">Odoo Server Log</field>
+            <field name="filepath">/var/log/odoo/odoo-server.log</field>
+        </record>
+        <record id="pager_log_file_postgresql" model="pager.log.file">
+            <field name="name">PostgreSQL Log</field>
+            <field name="filepath">/var/log/postgresql/postgresql-17-main.log</field>
+        </record>
+
+        <!-- Each regex below was checked against real lines pulled from
+             this dev box's own rotated logs (see
+             ODOO_DB_LOG_CRASH_MONITORING.md's "log-pattern seeding"
+             section for the exact samples). First-pass patterns; the
+             proposal's own text already flags these as needing real
+             production tuning, not a promise of zero false positives.
+             Deliberately does NOT include a blanket Odoo " ERROR "
+             pattern: real samples pulled here included routine,
+             already-handled user-input validation failures (a
+             ham_dns_record check-constraint violation) logged at ERROR
+             level; a blanket match on that level alone would page on
+             expected behavior, exactly the "noise vs. crash" problem this
+             proposal's own text warns about. The narrower odoo.sql_db
+             pattern below targets a real malformed-query bug class
+             instead of user-input validation. -->
+        <record id="pager_log_pattern_odoo_traceback" model="pager.log.pattern">
+            <field name="name">Odoo Python Traceback</field>
+            <field name="regex">Traceback \(most recent call last\)</field>
+            <field name="severity">high</field>
+        </record>
+        <record id="pager_log_pattern_odoo_critical" model="pager.log.pattern">
+            <field name="name">Odoo CRITICAL Log Level</field>
+            <field name="regex">\sCRITICAL\s</field>
+            <field name="severity">critical</field>
+        </record>
+        <record id="pager_log_pattern_odoo_sql_db_error" model="pager.log.pattern">
+            <field name="name">Odoo Database Query Error</field>
+            <field name="regex">odoo\.sql_db:\s+bad query</field>
+            <field name="severity">high</field>
+        </record>
+        <record id="pager_log_pattern_postgresql_panic" model="pager.log.pattern">
+            <field name="name">PostgreSQL PANIC</field>
+            <field name="regex">PANIC:\s+</field>
+            <field name="severity">critical</field>
+        </record>
+        <record id="pager_log_pattern_postgresql_fatal" model="pager.log.pattern">
+            <!-- "medium," not "high"/"critical": real FATAL samples pulled
+                 here were mostly benign (an admin-initiated connection
+                 termination, a mistyped/nonexistent database name) rather
+                 than a genuine server crash; see this proposal's own
+                 Open Question 4 on severity-mapping policy. Still worth
+                 tracking, per Bruce's "catch other bugs... make tickets"
+                 request, just not at a severity that dilutes real
+                 criticals. -->
+            <field name="name">PostgreSQL FATAL</field>
+            <field name="regex">FATAL:\s+</field>
+            <field name="severity">medium</field>
+        </record>
+    </data>
+</odoo>

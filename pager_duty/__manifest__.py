@@ -45,6 +45,7 @@
         "views/log_analyzer_views.xml",
         "views/board_templates.xml",
         "data/procedures.xml",
+        "data/pager_log_monitoring_data.xml",
     ],
     "knowledge_docs": [
         {
