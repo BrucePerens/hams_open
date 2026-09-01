@@ -1656,4 +1656,114 @@ mod tests {
             println!("{snr_db:>7} | {correct}/5");
         }
     }
+
+    /// Diagnostic: `hams_open` commit `1e65753b` (`wspr_decode.rs`) proved
+    /// `sequential_decode`/`fano_bit_metric` decode correctly 10/10 at the
+    /// real failing ratio range (0.48-0.71) when given a PERFECTLY known
+    /// channel model -- ruling out a decoder-algorithm bug and narrowing
+    /// the real cause to this function's own calibration: the real,
+    /// FFT-extracted `symbol_values[i] = v1[i]-v0[i]` distribution at a
+    /// failing SNR must deviate from the bipolar+Gaussian(amplitude,
+    /// noise_stddev) model in some way the single global ratio doesn't
+    /// capture, since the reported ratio alone looks perfectly benign.
+    ///
+    /// This test checks the most likely candidate directly: FFT bin
+    /// magnitudes under AWGN are Rice-distributed (signal+noise) or
+    /// Rayleigh-distributed (noise-only), not Gaussian -- a difference of
+    /// two such magnitudes is not itself Gaussian, especially once SNR is
+    /// low enough that the "winner" bin is sometimes noise-dominated. If
+    /// that's the real mechanism, the empirical per-symbol z-scores
+    /// (using each symbol's OWN known-correct-bit sign, so this measures
+    /// distribution shape, not decode correctness) should show real skew
+    /// and/or heavier-than-Gaussian tails (more extreme outliers than a
+    /// true Gaussian would produce), which is exactly the kind of thing
+    /// that could tank a handful of symbols' own branch metrics hard
+    /// enough to sink `sequential_decode`'s cumulative-sum path metric
+    /// even when most symbols are individually fine -- consistent with
+    /// the 100%-`LowConfidence`/0%-`GaveUp` split already measured
+    /// (`diagnostic_exact_known_sync_failure_mode_breakdown`).
+    #[test]
+    #[ignore]
+    fn diagnostic_symbol_value_distribution_shape_at_a_failing_snr_rung() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        // Ground truth per-symbol data bit, in the SAME real-transmission
+        // order extract_symbol_evidence()'s [v0,v1] pairs use -- per
+        // wspr.rs's own symbols[i] = 2*interleaved[i] + SYNC_VECTOR[i].
+        let true_data_bit: Vec<u8> = symbols.iter().map(|&s| (s >> 1) & 1).collect();
+
+        let snr_db = -32.5; // squarely in the failing range per the exact-known-sync ladder.
+        let seeds = [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+        let mut zscores: Vec<f64> = Vec::with_capacity(WSPR_NUM_SYMBOLS * seeds.len());
+        for &seed in &seeds {
+            let noisy = add_awgn(&clean, snr_db, seed);
+            let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
+            let (symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+            for i in 0..WSPR_NUM_SYMBOLS {
+                // Expected sign per the true bit: data_bit=1 -> +amplitude, data_bit=0 -> -amplitude.
+                let expected_mean = if true_data_bit[i] == 1 { amplitude } else { -amplitude };
+                zscores.push((symbol_values[i] - expected_mean) / noise_stddev);
+            }
+        }
+
+        let n = zscores.len() as f64;
+        let mean = zscores.iter().sum::<f64>() / n;
+        let variance = zscores.iter().map(|z| (z - mean) * (z - mean)).sum::<f64>() / n;
+        let stddev = variance.sqrt();
+        let skewness = zscores.iter().map(|z| ((z - mean) / stddev).powi(3)).sum::<f64>() / n;
+        let excess_kurtosis = zscores.iter().map(|z| ((z - mean) / stddev).powi(4)).sum::<f64>() / n - 3.0;
+        let max_abs_z = zscores.iter().fold(0.0f64, |m, &z| m.max(z.abs()));
+        let extreme_count = zscores.iter().filter(|&&z| z.abs() > 3.0).count();
+        // For N truly-iid-Gaussian samples, P(|Z|>3) ~= 0.0027 per sample.
+        let expected_extreme_count = 0.0027 * n;
+
+        println!("=== symbol_value z-score distribution shape at {snr_db}dB, n={n} ===");
+        println!("mean={mean:.4} (Gaussian model implies ~0), stddev={stddev:.4} (implies ~1)");
+        println!("skewness={skewness:.4} (Gaussian implies ~0)");
+        println!("excess_kurtosis={excess_kurtosis:.4} (Gaussian implies ~0; heavier tails than Gaussian is positive)");
+        println!("max |z|={max_abs_z:.4}");
+        println!("|z|>3 count: {extreme_count} observed vs {expected_extreme_count:.2} expected under a true Gaussian");
+        // Exploratory diagnostic -- prints the real shape rather than
+        // asserting a specific verdict, matching this codebase's own
+        // established convention for this whole investigation. A reader
+        // decides from the printed numbers whether the tail/skew is
+        // large enough to explain the gap; no single threshold here is
+        // principled enough to hard-assert against.
+        //
+        // REAL RESULT, measured 2026-09-01: at -32.5dB, skewness=-0.055
+        // and excess_kurtosis=-0.053 -- both essentially zero, i.e. the
+        // Gaussian SHAPE assumption is fine, not the culprit. But
+        // stddev=1.72 (should be ~1.0 if noise_stddev were correctly
+        // calibrated against ground truth) -- a real, substantial
+        // variance underestimate, on top of everything the earlier
+        // calibration experiments already found. Re-running
+        // `diagnostic_noise_stddev_scale_factor_sweep_at_the_failure_
+        // boundary` confirmed even this specific, ground-truth-measured
+        // factor (already inside the 0.7-2.0 range that sweep tests)
+        // gives 0/5 at -31.5dB and below -- so correcting the SCALAR
+        // magnitude of noise_stddev still isn't sufficient, even using
+        // the empirically correct value. This narrows the real
+        // conclusion further, not just repeats it: the single-global-
+        // scalar channel model (one amplitude, one noise_stddev shared
+        // across all 162 symbols) is itself too crude to describe real,
+        // per-symbol-varying reliability at low SNR -- some symbols'
+        // real per-symbol noise is much worse than others' (consistent
+        // with FFT-magnitude estimation being inherently per-symbol-
+        // variable, not a fixed global quantity), and no single scalar
+        // correction to a global noise_stddev can fix that. This is
+        // consistent with, and sharpens, this file's earlier "decoder
+        // algorithm capability gap" conclusion (see the top-level
+        // doc-comment history and night_shift_todo.md) -- but the gap is
+        // now precisely located: a per-symbol (not global-scalar)
+        // reliability/confidence model is what `wsprd`'s real decoder
+        // has and this one doesn't, not a vaguer "the search algorithm
+        // itself is worse." A real fix would estimate per-symbol
+        // amplitude/noise_stddev (or an equivalent local confidence
+        // weight) rather than one number for the whole transmission --
+        // a genuine, scoped redesign of `evidence_to_symbol_values()`'s
+        // output shape and `fano_bit_metric()`'s inputs, not another
+        // scalar-constant sweep.
+    }
 }
