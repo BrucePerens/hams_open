@@ -1738,7 +1738,19 @@ mod tests {
         // stddev=1.72 (should be ~1.0 if noise_stddev were correctly
         // calibrated against ground truth) -- a real, substantial
         // variance underestimate, on top of everything the earlier
-        // calibration experiments already found. Re-running
+        // calibration experiments already found. CAVEAT on that number:
+        // it's pooled across 10 seeds using each seed's OWN amplitude/
+        // noise_stddev estimate, and those per-run estimates themselves
+        // vary seed-to-seed (amplitude is a biased order statistic, per
+        // diagnostic_pure_noise_calibration_reveals_amplitude_bias) --
+        // so 1.72 is an upper bound on true per-symbol miscalibration,
+        // conflating it with real run-to-run estimation variance, not a
+        // clean isolated measurement of per-symbol noise alone. Doesn't
+        // change the conclusion below (the scale-factor sweep failure is
+        // independent of this pooling, and skew/kurtosis ~0 is robust to
+        // it) -- but don't treat "1.72" as more precise than it is; a
+        // per-seed breakdown would separate the two components if anyone
+        // needs the exact split, not yet run. Re-running
         // `diagnostic_noise_stddev_scale_factor_sweep_at_the_failure_
         // boundary` confirmed even this specific, ground-truth-measured
         // factor (already inside the 0.7-2.0 range that sweep tests)
