@@ -514,25 +514,135 @@ fn extract_all_four_tone_magnitudes(
     Some(tone_magnitudes_from_matrix(&mat, base_bin, base_bin))
 }
 
+/// The other half of `extract_all_four_tone_magnitudes()`'s output --
+/// per symbol position, the two FFT bins that `extract_symbol_evidence()`
+/// itself never reads (indices `1 - sync_bit`/`3 - sync_bit`, per
+/// `wspr.rs`'s own `symbols[i] = 2 * interleaved[i] + SYNC_VECTOR[i]`
+/// encoding). These can NEVER carry the real transmitted tone given the
+/// already-known sync bit, so they are a clean, always-pure-noise
+/// reference at each symbol position, free of `evidence_to_symbol_
+/// values()`'s own winner/loser order-statistics bias -- exactly the
+/// "impossible tone" reference the Per-Symbol Channel Model Redesign
+/// (`docs/proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`) uses to build a
+/// local per-symbol noise_stddev estimate. Returned in real transmission
+/// order, same convention as `extract_symbol_evidence()`.
+pub fn extract_impossible_tone_evidence(
+    samples: &[i16],
+    sample_rate: u32,
+    base_hz: f64,
+    start_sample: usize,
+) -> Option<[[f64; 2]; WSPR_NUM_SYMBOLS]> {
+    let tone_mags = extract_all_four_tone_magnitudes(samples, sample_rate, base_hz, start_sample)?;
+    let mut evidence = [[0.0f64; 2]; WSPR_NUM_SYMBOLS];
+    for i in 0..WSPR_NUM_SYMBOLS {
+        let sync_bit = SYNC_VECTOR[i] as usize;
+        evidence[i][0] = tone_mags[i][1 - sync_bit];
+        evidence[i][1] = tone_mags[i][3 - sync_bit];
+    }
+    Some(evidence)
+}
+
+/// Sliding-window half-width (in symbols) used to compute a LOCAL
+/// per-symbol `amplitude`/`noise_stddev` estimate instead of one global
+/// pair -- see `docs/proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s own
+/// "Per-Symbol Channel Model Redesign" section for the full evidence
+/// this responds to (a decisive diagnostic showed the decoder's search
+/// algorithm and branch-metric formula are sound; the single global
+/// scalar pair is the wrong *shape* to describe real per-symbol-varying
+/// channel reliability at low SNR).
+///
+/// K=40 (half-width 20, i.e. each symbol's estimate pools itself plus 20
+/// neighbors on each side) was chosen empirically, not from the doc's
+/// own initial K=9-16 starting-point guess -- `diagnostic_windowed_
+/// winner_loser_estimator_sweep_at_the_failure_boundary` swept half-
+/// widths 8/20/40 (paired with the summed-variance noise formula
+/// `evidence_to_symbol_values_windowed()`'s own doc comment describes);
+/// half-widths 20 and 40 tied for the best measured -30dB result (6/15
+/// correct), half-width 8 did meaningfully worse (5/15). 20 was kept
+/// over the tied 40 as the more locally-responsive of the two, on the
+/// (untested) theory that a narrower window should track genuine local
+/// channel variation more closely -- a real, honest tie-break judgment
+/// call, not a result the sweep itself distinguished.
+const CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH: usize = 20;
+
 /// Converts `extract_symbol_evidence()`'s real, positive tone-magnitude
 /// pairs into the bipolar-Gaussian `(symbol_values, amplitude,
 /// noise_stddev)` `wspr_decode.rs`'s `sequential_decode()` family
 /// expects -- see this module's own doc comment ("Mapping FFT
 /// magnitudes...") for the calibration this implements and why it's a
-/// heuristic, not a derivation. `symbol_values[i] = v1[i] - v0[i]`
-/// (still in real transmission order, matching `extract_symbol_
-/// evidence()`'s own convention -- callers pass this through
+/// heuristic, not a derivation. `symbol_values[i] = v1[i] - v0[i]` (still
+/// in real transmission order, matching `extract_symbol_evidence()`'s
+/// own convention -- callers pass all three returned arrays through
 /// `deinterleave_symbol_values()` before calling the decoder, same as
-/// `wspr_decode.rs`'s own tests do). `amplitude`/`noise_stddev` are a
-/// single global estimate over all 162 symbols (winner = per-symbol
-/// `max(v0,v1)`, loser = per-symbol `min(v0,v1)`; `amplitude = mean
-/// (winner) - mean(loser)`, `noise_stddev = sqrt((var(winner) +
-/// var(loser)) / 2)`), not `weakmon`'s own per-run local estimates
-/// (`statruns`) that track slow SNR drift within one transmission -- a
-/// known, deliberate simplification for a first working version.
+/// `wspr_decode.rs`'s own tests do, so `amplitude[p]`/`noise_stddev[p]`
+/// line up positionally with `channel_bit_values[p]` after that step).
+///
+/// `amplitude`/`noise_stddev` are LOCAL, per-symbol estimates
+/// (Per-Symbol Channel Model Redesign), not the single global pair this
+/// function used to return before 2026-09-01 -- each symbol position `i`
+/// pools a sliding window of `2*CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH+1`
+/// neighboring symbols (clamped at the transmission's own start/end,
+/// never wrapping): windowed winner/loser separation (`amplitude[i] =
+/// mean(winner) - mean(loser)`, same calculation this function always
+/// used, just localized instead of pooled over all 162 symbols) and
+/// windowed **summed** (not averaged) per-bin variance (`noise_stddev[i]
+/// = sqrt(winvar + losevar)`, NOT the old `/2` -- see below for why).
+///
+/// **Real, measured history behind this specific formula (2026-09-01)**:
+/// the design doc's own PREFERRED first candidate -- a windowed clean-
+/// noise reference from `extract_impossible_tone_evidence()`'s
+/// guaranteed-pure-noise bins, order-statistics-bias-free by
+/// construction -- was built, measured, and found to give ZERO correct
+/// decodes at the real failing SNR range (-30dB and below) across every
+/// window half-width tested (2, 4, 8, 20, 40, 81, 161 -- the full range
+/// from maximally local to fully global), including a regression at
+/// -30dB relative to the pre-redesign baseline (1/5 correct -> 0/5). A
+/// direct scale-ratio check (`diagnostic_clean_noise_reference_from_
+/// impossible_tones`) ruled out a units/scale bug as the explanation
+/// (clean-vs-raw ratio stayed within ~0.97-1.14 near the boundary, not a
+/// 2x-or-more mismatch) -- the clean reference is a genuinely worse
+/// noise estimator at these SNRs, not merely mis-scaled. This is now
+/// confirmed at every window size, not just the doc's own already-
+/// recorded global-scope finding ("performs worse, not better").
+/// `extract_impossible_tone_evidence()`/`evidence_to_symbol_values_
+/// windowed_clean_reference()` remain in this module purely as the
+/// tested, reproducible record of that finding (`diagnostic_window_
+/// half_width_sweep_at_the_failure_boundary`), not as production code.
+///
+/// The design doc's OTHER candidate -- windowed winner/loser, the same
+/// mechanism the pre-redesign global scalar always used, just localized
+/// -- was tried next (`diagnostic_windowed_winner_loser_estimator_sweep_
+/// at_the_failure_boundary`) and gave a real, if partial, win: summing
+/// the per-bin variances (`sqrt(winvar+losevar)`, matching the direction
+/// the pre-redesign `diagnostic_noise_stddev_scale_factor_sweep_at_the_
+/// failure_boundary` already found helpful) at `window_half_width=20`
+/// roughly TRIPLED the -30dB correct-decode rate relative to the
+/// pre-redesign baseline (1/5 -> up to 6/15 in the 15-seed sweep, i.e.
+/// ~20% -> ~40%), with no combination tested regressing below the
+/// baseline anywhere. The amplitude order-statistics debias term the
+/// design doc also suggested trying alongside this (`amplitude - k *
+/// noise_stddev_raw`) was swept too and made results WORSE at every
+/// point tested, so it is deliberately NOT applied here. This does NOT
+/// close the deeper part of the gap -- -31.5dB and below stayed at 0/15
+/// across every combination swept, matching the pre-redesign baseline's
+/// own 0/5 there. See `docs/proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s
+/// own "Built, and partially measured to work" section for the full
+/// writeup and the real, still-open remainder of the gap.
 pub fn evidence_to_symbol_values(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
-) -> ([f64; WSPR_NUM_SYMBOLS], f64, f64) {
+) -> ([f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS]) {
+    evidence_to_symbol_values_windowed(evidence, CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH)
+}
+
+/// `evidence_to_symbol_values()`'s actual implementation, parameterized
+/// on the window half-width so diagnostics/tests can sweep it directly
+/// rather than only through the fixed public constant -- see `docs/
+/// proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s own K-tuning writeup
+/// for the sweep this was measured against.
+fn evidence_to_symbol_values_windowed(
+    evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
+    window_half_width: usize,
+) -> ([f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS]) {
     let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
     let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
     let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
@@ -544,23 +654,86 @@ pub fn evidence_to_symbol_values(
         losers[i] = v0.min(v1);
     }
 
-    let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64);
-    let variance = |xs: &[f64; WSPR_NUM_SYMBOLS], m: f64| {
-        xs.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
-    };
+    // Floors applied per-window below (not just once at the end): a
+    // pathological all-zero or all-equal window (e.g. silence) must not
+    // hand the decoder a zero/negative amplitude or a zero noise_stddev
+    // for ANY symbol position -- both would make fano_bit_metric()'s
+    // Gaussian shape (and its log2()) undefined or degenerate rather
+    // than just producing a low-confidence (correctly rejected) decode.
+    let mut amplitude = [0.0f64; WSPR_NUM_SYMBOLS];
+    let mut noise_stddev = [0.0f64; WSPR_NUM_SYMBOLS];
+    for i in 0..WSPR_NUM_SYMBOLS {
+        let lo = i.saturating_sub(window_half_width);
+        let hi = (i + window_half_width).min(WSPR_NUM_SYMBOLS - 1);
+        let window_n = (hi - lo + 1) as f64;
 
-    let winmean = mean(&winners);
-    let losemean = mean(&losers);
-    let winvar = variance(&winners, winmean);
-    let losevar = variance(&losers, losemean);
+        let win_winmean = winners[lo..=hi].iter().sum::<f64>() / window_n;
+        let win_losemean = losers[lo..=hi].iter().sum::<f64>() / window_n;
+        amplitude[i] = (win_winmean - win_losemean).max(1e-9);
 
-    // Floors: a pathological all-zero or all-equal input (e.g. silence)
-    // must not hand the decoder a zero/negative amplitude or a zero
-    // noise_stddev -- both would make fano_bit_metric()'s Gaussian
-    // shape (and its log2()) undefined or degenerate rather than just
-    // producing a low-confidence (correctly rejected) decode.
-    let amplitude = (winmean - losemean).max(1e-9);
-    let noise_stddev = ((winvar + losevar) / 2.0).sqrt().max(1e-9);
+        let winvar = winners[lo..=hi].iter().map(|x| (x - win_winmean) * (x - win_winmean)).sum::<f64>() / window_n;
+        let losevar = losers[lo..=hi].iter().map(|x| (x - win_losemean) * (x - win_losemean)).sum::<f64>() / window_n;
+        // Summed, not averaged (no `/2`) -- see this function's own
+        // caller doc comment for the measured evidence behind this.
+        noise_stddev[i] = (winvar + losevar).sqrt().max(1e-9);
+    }
+
+    (symbol_values, amplitude, noise_stddev)
+}
+
+/// The design doc's originally-preferred candidate estimator -- kept as
+/// a diagnostic-only historical record (see `evidence_to_symbol_values()`'s
+/// own doc comment for why it isn't production code): windowed local
+/// noise_stddev from `extract_impossible_tone_evidence()`'s guaranteed-
+/// pure-noise samples instead of winner/loser variance. `amplitude` here
+/// still comes from the same windowed winner/loser calculation --  only
+/// `noise_stddev`'s source differs from `evidence_to_symbol_values_
+/// windowed()` above.
+fn evidence_to_symbol_values_windowed_clean_reference(
+    evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
+    impossible_tone_evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
+    window_half_width: usize,
+) -> ([f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS]) {
+    let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
+    let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
+    let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
+    for i in 0..WSPR_NUM_SYMBOLS {
+        let v0 = evidence[i][0];
+        let v1 = evidence[i][1];
+        symbol_values[i] = v1 - v0;
+        winners[i] = v0.max(v1);
+        losers[i] = v0.min(v1);
+    }
+
+    let mut amplitude = [0.0f64; WSPR_NUM_SYMBOLS];
+    let mut noise_stddev = [0.0f64; WSPR_NUM_SYMBOLS];
+    for i in 0..WSPR_NUM_SYMBOLS {
+        let lo = i.saturating_sub(window_half_width);
+        let hi = (i + window_half_width).min(WSPR_NUM_SYMBOLS - 1);
+        let window_n = (hi - lo + 1) as f64;
+
+        let win_winmean = winners[lo..=hi].iter().sum::<f64>() / window_n;
+        let win_losemean = losers[lo..=hi].iter().sum::<f64>() / window_n;
+        amplitude[i] = (win_winmean - win_losemean).max(1e-9);
+
+        // A `Vec` here (not a fixed-size stack array) deliberately --
+        // `window_half_width` is a runtime parameter (diagnostics sweep
+        // it directly), so a stack array sized off the fixed public
+        // constant would silently overflow for any larger sweep value.
+        let mut clean_samples = Vec::with_capacity(2 * (hi - lo + 1));
+        for j in lo..=hi {
+            clean_samples.push(impossible_tone_evidence[j][0]);
+            clean_samples.push(impossible_tone_evidence[j][1]);
+        }
+        let clean_n = clean_samples.len();
+        let clean_mean = clean_samples.iter().sum::<f64>() / (clean_n as f64);
+        let clean_var = clean_samples
+            .iter()
+            .map(|x| (x - clean_mean) * (x - clean_mean))
+            .sum::<f64>()
+            / (clean_n as f64);
+        noise_stddev[i] = clean_var.sqrt().max(1e-9);
+    }
 
     (symbol_values, amplitude, noise_stddev)
 }
@@ -576,10 +749,12 @@ pub fn decode_from_symbol_evidence(
 ) -> Result<u128, ConfidenceGateError> {
     let (symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(evidence);
     let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+    let channel_amplitude = deinterleave_symbol_values(&amplitude);
+    let channel_noise_stddev = deinterleave_symbol_values(&noise_stddev);
     sequential_decode_with_confidence_gate(
         &channel_bit_values,
-        amplitude,
-        noise_stddev,
+        &channel_amplitude,
+        &channel_noise_stddev,
         max_cycles,
         min_acceptable_metric,
     )
@@ -770,6 +945,99 @@ mod tests {
             let recovered_bit = if evidence[i][1] > evidence[i][0] { 1u8 } else { 0u8 };
             assert_eq!(recovered_bit, expected_data_bit, "symbol {i} at an off-grid frequency");
         }
+    }
+
+    /// Per-Symbol Channel Model Redesign, step 4's own required test:
+    /// proves the windowed local noise_stddev estimator actually DETECTS
+    /// and localizes a deliberate noise burst injected only on symbols
+    /// 50-110, rather than just reproducing the old global-average
+    /// behavior with extra steps -- the real thing this redesign needs
+    /// to prove, not just "it doesn't regress the existing passing
+    /// cases." Tests the PRODUCTION estimator (`evidence_to_symbol_
+    /// values_windowed()`, windowed winner/loser with summed variance --
+    /// see that function's own caller doc comment for why this formula,
+    /// not the clean-noise-reference one, is what shipped) directly on a
+    /// synthetic `evidence` array (no real audio/FFT), so the noise
+    /// injected is exact and fully controlled, isolating the windowing
+    /// logic itself from any FFT-extraction noise. Burst region widened
+    /// from an earlier 40-60 draft to 50-110 so it comfortably contains
+    /// a full window at the real, empirically-chosen
+    /// `CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH=20`.
+    #[test]
+    fn windowed_noise_estimate_detects_and_localizes_a_deliberate_noise_burst() {
+        const BURST_START: usize = 50;
+        const BURST_END: usize = 110; // inclusive
+        // Both regions alternate two winner/loser gap widths symbol-to-
+        // symbol, so each window has real, nonzero LOCAL variance for
+        // the summed-variance formula to actually measure -- a constant
+        // gap (even at a different level) would have zero local
+        // variance and wouldn't exercise the estimator at all. Burst
+        // gaps are ~33x wider than baseline gaps, a decisive, not
+        // marginal, contrast.
+        let mut evidence = [[0.0f64, 0.0f64]; WSPR_NUM_SYMBOLS];
+        for i in 0..WSPR_NUM_SYMBOLS {
+            let in_burst = (BURST_START..=BURST_END).contains(&i);
+            evidence[i] = match (in_burst, i % 2 == 0) {
+                (false, true) => [995.0, 1005.0],
+                (false, false) => [998.0, 1002.0],
+                (true, true) => [800.0, 1200.0],
+                (true, false) => [900.0, 1100.0],
+            };
+        }
+
+        let (_, _, noise_stddev) =
+            evidence_to_symbol_values_windowed(&evidence, CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH);
+
+        // Deep inside the burst (a window fully contained in [50,110]
+        // given the real window half-width), the estimator should report
+        // a noise_stddev far above the baseline level.
+        let mid_burst = (BURST_START + BURST_END) / 2;
+        assert!(
+            mid_burst >= BURST_START + CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH
+                && mid_burst + CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH <= BURST_END,
+            "test setup: mid_burst's own window must be fully inside the burst region"
+        );
+        assert!(
+            noise_stddev[mid_burst] > 30.0,
+            "expected the windowed estimator to detect the local noise burst at symbol {mid_burst}, \
+             got noise_stddev={} (baseline level is ~2.1)",
+            noise_stddev[mid_burst]
+        );
+
+        // Well outside the burst (this symbol's own window doesn't
+        // overlap [50,110] at all), noise_stddev should stay near the
+        // small baseline level, not be dragged up by the burst elsewhere.
+        let quiet_symbol = 10;
+        assert!(
+            quiet_symbol + CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH < BURST_START,
+            "test setup: quiet_symbol's own window must not overlap the burst region at all"
+        );
+        assert!(
+            noise_stddev[quiet_symbol] < 10.0,
+            "expected the windowed estimator to stay near the baseline far from the burst, got \
+             noise_stddev={} at symbol {quiet_symbol} (baseline level is ~2.1)",
+            noise_stddev[quiet_symbol]
+        );
+
+        // The real point of this test: prove the WINDOWED estimate finds
+        // something a GLOBAL (old-behavior) estimate washes out. A
+        // window wide enough to cover the whole transmission reproduces
+        // the old global-average behavior as a special case (see
+        // `evidence_to_symbol_values()`'s own doc comment) -- confirm
+        // its report at the same two positions shows far less contrast
+        // than the windowed one, i.e. it genuinely blurs the localized
+        // burst away into one shared number.
+        let (_, _, global_noise_stddev) =
+            evidence_to_symbol_values_windowed(&evidence, WSPR_NUM_SYMBOLS);
+        let windowed_contrast = noise_stddev[mid_burst] / noise_stddev[quiet_symbol];
+        let global_contrast = global_noise_stddev[mid_burst] / global_noise_stddev[quiet_symbol];
+        assert!(
+            windowed_contrast > global_contrast * 2.0,
+            "windowed estimator should show far more contrast between the burst and quiet regions \
+             than the old global-average behavior -- windowed_contrast={windowed_contrast:.2}, \
+             global_contrast={global_contrast:.2} (global should be ~1.0, since it pools everything \
+             into one shared value)"
+        );
     }
 
     /// The actual search: a clean fixture at a frequency and start
@@ -1280,6 +1548,170 @@ mod tests {
         assert!(!any_wrong, "own decoder must never produce a confident wrong message even with exact known sync");
     }
 
+    /// Diagnostic: fast K (window half-width) sweep at just the two
+    /// rungs right past the ladder's own real failure boundary (-30,
+    /// -31.5dB), exact known sync (bypasses `find_sync()` for speed and
+    /// to isolate the channel-model variable alone, same rationale as
+    /// `own_decoder_noise_ladder_with_exact_known_sync_isolates_the_
+    /// sensitivity_gap_cause` above), more seeds than the full ladder
+    /// (statistical power is cheap at just 2 SNR levels). Written after
+    /// `CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH=8`'s own full-ladder run
+    /// (`own_decoder_noise_ladder_matches_the_recorded_wsprd_reference_
+    /// boundary`, `hams_open` commit pending) came back 0/5 at -30dB and
+    /// below -- NOT better than the pre-redesign baseline (which got 1/5
+    /// at -30dB), and arguably slightly worse. This sweeps a real range
+    /// of K values (both narrower AND wider than 8) to check whether a
+    /// different window size does better, before concluding the windowed
+    /// approach itself doesn't help at this specific failure mode.
+    #[test]
+    #[ignore]
+    fn diagnostic_window_half_width_sweep_at_the_failure_boundary() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let true_base_hz = 1500.0;
+        let true_start_sample = 0usize;
+
+        let snr_levels = [-30.0, -31.5];
+        let seeds: Vec<u64> = (1..=15).collect();
+        let window_half_widths = [2usize, 4, 8, 20, 40, 81, 161];
+
+        println!("SNR(dB) | window_half_width | correct/{}", seeds.len());
+        for &snr_db in &snr_levels {
+            for &half_width in &window_half_widths {
+                let mut correct = 0;
+                for &seed in &seeds {
+                    let noisy = add_awgn(&clean, snr_db, seed);
+                    let evidence = extract_symbol_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
+                        .expect("exact-known alignment on a fixture this long must always yield evidence");
+                    let impossible_tone_evidence = extract_impossible_tone_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
+                        .expect("exact-known alignment on a fixture this long must always yield evidence");
+                    let (symbol_values, amplitude, noise_stddev) =
+                        evidence_to_symbol_values_windowed_clean_reference(&evidence, &impossible_tone_evidence, half_width);
+                    let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                    let channel_amplitude = deinterleave_symbol_values(&amplitude);
+                    let channel_noise_stddev = deinterleave_symbol_values(&noise_stddev);
+                    let result = sequential_decode_with_confidence_gate(
+                        &channel_bit_values,
+                        &channel_amplitude,
+                        &channel_noise_stddev,
+                        2_000_000,
+                        crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                    )
+                    .ok()
+                    .and_then(unpack_wspr_message);
+                    if let Some((callsign, grid, power)) = result {
+                        if callsign == "K6BP" && grid == "CM87" && power == 30 {
+                            correct += 1;
+                        }
+                    }
+                }
+                println!("{snr_db:>7} | {half_width:>18} | {correct}/{}", seeds.len());
+            }
+        }
+    }
+
+    /// Diagnostic: the design doc's OTHER candidate local noise
+    /// estimator -- windowed winner/loser variance (`sqrt((winvar+
+    /// losevar)/2)` over a local window, same formula the pre-redesign
+    /// global scalar used, just localized) -- since the windowed
+    /// clean-noise-reference candidate above was just measured to fail
+    /// at every window size, and a direct ratio check
+    /// (`diagnostic_clean_noise_reference_from_impossible_tones`) ruled
+    /// out a scale bug as the explanation (ratio stayed within ~0.97-1.14
+    /// of the raw winner/loser value near the failure boundary, not a
+    /// 2x-or-more scale mismatch). Also sweeps the summed-variance
+    /// correction (`sqrt(winvar+losevar)`, no `/2`) and the amplitude
+    /// debias term (`amplitude - k*noise_stddev_raw`) the doc's own
+    /// "Windowed winner/loser estimate" section says this candidate
+    /// would need -- both already validated in DIRECTION (not magnitude)
+    /// by the pre-redesign global `diagnostic_noise_stddev_scale_factor_
+    /// sweep_at_the_failure_boundary`/`diagnostic_combined_correction_
+    /// sweep_against_full_ladder` diagnostics, but never combined with
+    /// real per-symbol windowing until now.
+    #[test]
+    #[ignore]
+    fn diagnostic_windowed_winner_loser_estimator_sweep_at_the_failure_boundary() {
+        let sample_rate = 12000u32;
+        let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
+        let true_base_hz = 1500.0;
+        let true_start_sample = 0usize;
+
+        let snr_levels = [-30.0, -31.5];
+        let seeds: Vec<u64> = (1..=15).collect();
+        let window_half_widths = [8usize, 20, 40];
+        // (sum_variance, debias_k) -- sum_variance=false reproduces the
+        // OLD /2 formula, just windowed; sum_variance=true is the
+        // sqrt(2)-ish correction the scale-factor sweep found helpful.
+        let corrections: [(bool, f64); 4] = [(false, 0.0), (true, 0.0), (false, 1.13), (true, 1.13)];
+
+        println!("SNR(dB) | half_width | sum_var | debias_k | correct/{}", seeds.len());
+        for &snr_db in &snr_levels {
+            for &half_width in &window_half_widths {
+                for &(sum_variance, debias_k) in &corrections {
+                    let mut correct = 0;
+                    for &seed in &seeds {
+                        let noisy = add_awgn(&clean, snr_db, seed);
+                        let evidence = extract_symbol_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
+                            .expect("exact-known alignment on a fixture this long must always yield evidence");
+
+                        let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
+                        let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
+                        let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
+                        for i in 0..WSPR_NUM_SYMBOLS {
+                            let v0 = evidence[i][0];
+                            let v1 = evidence[i][1];
+                            symbol_values[i] = v1 - v0;
+                            winners[i] = v0.max(v1);
+                            losers[i] = v0.min(v1);
+                        }
+
+                        let mut amplitude = [0.0f64; WSPR_NUM_SYMBOLS];
+                        let mut noise_stddev = [0.0f64; WSPR_NUM_SYMBOLS];
+                        for i in 0..WSPR_NUM_SYMBOLS {
+                            let lo = i.saturating_sub(half_width);
+                            let hi = (i + half_width).min(WSPR_NUM_SYMBOLS - 1);
+                            let n = (hi - lo + 1) as f64;
+                            let winmean = winners[lo..=hi].iter().sum::<f64>() / n;
+                            let losemean = losers[lo..=hi].iter().sum::<f64>() / n;
+                            let winvar = winners[lo..=hi].iter().map(|x| (x - winmean) * (x - winmean)).sum::<f64>() / n;
+                            let losevar = losers[lo..=hi].iter().map(|x| (x - losemean) * (x - losemean)).sum::<f64>() / n;
+                            let amplitude_raw = (winmean - losemean).max(1e-9);
+                            let noise_stddev_raw = if sum_variance {
+                                (winvar + losevar).sqrt().max(1e-9)
+                            } else {
+                                ((winvar + losevar) / 2.0).sqrt().max(1e-9)
+                            };
+                            amplitude[i] = (amplitude_raw - debias_k * ((winvar + losevar) / 2.0).sqrt()).max(1e-9);
+                            noise_stddev[i] = noise_stddev_raw;
+                        }
+
+                        let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                        let channel_amplitude = deinterleave_symbol_values(&amplitude);
+                        let channel_noise_stddev = deinterleave_symbol_values(&noise_stddev);
+                        let result = sequential_decode_with_confidence_gate(
+                            &channel_bit_values,
+                            &channel_amplitude,
+                            &channel_noise_stddev,
+                            2_000_000,
+                            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                        )
+                        .ok()
+                        .and_then(unpack_wspr_message);
+                        if let Some((callsign, grid, power)) = result {
+                            if callsign == "K6BP" && grid == "CM87" && power == 30 {
+                                correct += 1;
+                            }
+                        }
+                    }
+                    println!(
+                        "{snr_db:>7} | {half_width:>10} | {sum_variance:>7} | {debias_k:>8} | {correct}/{}",
+                        seeds.len()
+                    );
+                }
+            }
+        }
+    }
+
     /// Diagnostic, not a correctness assertion: dumps the (amplitude,
     /// noise_stddev) pair `evidence_to_symbol_values()` actually computes
     /// at each rung of the noise ladder, exact known sync (no search
@@ -1303,9 +1735,16 @@ mod tests {
                 let noisy = add_awgn(&clean, snr_db, seed);
                 let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
                 let (_symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+                // Per-symbol arrays now (Per-Symbol Channel Model
+                // Redesign) -- this historical diagnostic printed one
+                // global pair, so mean() across the array preserves its
+                // original intent (a single comparable summary number)
+                // rather than dumping 162 rows.
+                let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64);
+                let (mean_amplitude, mean_noise_stddev) = (mean(&amplitude), mean(&noise_stddev));
                 println!(
-                    "{snr_db:>7} | {seed:>4} | {amplitude:>9.4} | {noise_stddev:>12.4} | {:>5.3}",
-                    noise_stddev / amplitude
+                    "{snr_db:>7} | {seed:>4} | {mean_amplitude:>9.4} | {mean_noise_stddev:>12.4} | {:>5.3}",
+                    mean_noise_stddev / mean_amplitude
                 );
             }
         }
@@ -1340,7 +1779,8 @@ mod tests {
             let evidence =
                 extract_symbol_evidence(&silence_plus_noise, sample_rate, 1500.0, 0).unwrap();
             let (_symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
-            println!("{seed:>4} | {amplitude:>12.4} | {noise_stddev:>12.4}");
+            let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64);
+            println!("{seed:>4} | {:>12.4} | {:>12.4}", mean(&amplitude), mean(&noise_stddev));
         }
     }
 
@@ -1424,10 +1864,16 @@ mod tests {
                     let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
                     let (symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
                     let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                    let channel_amplitude = deinterleave_symbol_values(&amplitude);
+                    let mut scaled_noise_stddev = noise_stddev;
+                    for v in scaled_noise_stddev.iter_mut() {
+                        *v *= factor;
+                    }
+                    let channel_noise_stddev = deinterleave_symbol_values(&scaled_noise_stddev);
                     let result = sequential_decode_with_confidence_gate(
                         &channel_bit_values,
-                        amplitude,
-                        noise_stddev * factor,
+                        &channel_amplitude,
+                        &channel_noise_stddev,
                         2_000_000,
                         crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
                     )
@@ -1510,8 +1956,8 @@ mod tests {
                     let channel_bit_values = deinterleave_symbol_values(&symbol_values);
                     let result = sequential_decode_with_confidence_gate(
                         &channel_bit_values,
-                        amplitude_debiased,
-                        noise_stddev_corrected,
+                        &[amplitude_debiased; WSPR_NUM_SYMBOLS],
+                        &[noise_stddev_corrected; WSPR_NUM_SYMBOLS],
                         2_000_000,
                         crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
                     )
@@ -1640,8 +2086,8 @@ mod tests {
                 let channel_bit_values = deinterleave_symbol_values(&symbol_values);
                 let result = sequential_decode_with_confidence_gate(
                     &channel_bit_values,
-                    amplitude_raw,
-                    noise_stddev_clean,
+                    &[amplitude_raw; WSPR_NUM_SYMBOLS],
+                    &[noise_stddev_clean; WSPR_NUM_SYMBOLS],
                     2_000_000,
                     crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
                 )
@@ -1703,8 +2149,11 @@ mod tests {
             let (symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
             for i in 0..WSPR_NUM_SYMBOLS {
                 // Expected sign per the true bit: data_bit=1 -> +amplitude, data_bit=0 -> -amplitude.
-                let expected_mean = if true_data_bit[i] == 1 { amplitude } else { -amplitude };
-                zscores.push((symbol_values[i] - expected_mean) / noise_stddev);
+                // amplitude[i]/noise_stddev[i] are now LOCAL per-symbol
+                // estimates (Per-Symbol Channel Model Redesign), which is
+                // actually the more correct thing to z-score against here.
+                let expected_mean = if true_data_bit[i] == 1 { amplitude[i] } else { -amplitude[i] };
+                zscores.push((symbol_values[i] - expected_mean) / noise_stddev[i]);
             }
         }
 

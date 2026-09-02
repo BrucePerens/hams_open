@@ -150,8 +150,14 @@ fn fano_bit_metric(r: f64, hyp_bit: bool, amplitude: f64, noise_stddev: f64) -> 
 /// -- i.e. already de-interleaved; see `deinterleave_symbol_values()`
 /// below for the step that gets real per-symbol observations into this
 /// order). `amplitude`/`noise_stddev` are the assumed Gaussian channel
-/// parameters the branch metric is computed against (see this module's
-/// own doc comment on why metric-table/channel-model accuracy matters).
+/// parameters the branch metric is computed against, one PER CHANNEL BIT
+/// POSITION rather than one shared scalar pair (Per-Symbol Channel Model
+/// Redesign, `docs/proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`) --
+/// indexed the same way `channel_bit_values` itself is, since each real
+/// transmitted WSPR symbol can have genuinely different local channel
+/// reliability (fading, adjacent-channel QRM) than its neighbors, and a
+/// single global pair can't represent that (see this module's own doc
+/// comment on why metric-table/channel-model accuracy matters).
 /// Returns the decoded bits (as a bitset, bit i = trellis depth i) and
 /// the winning path's own final cumulative metric on success, or
 /// `GaveUp` if `max_cycles` node expansions were exhausted without
@@ -164,8 +170,8 @@ fn fano_bit_metric(r: f64, hyp_bit: bool, amplitude: f64, noise_stddev: f64) -> 
 /// `sequential_decode_with_confidence_gate()` below, which already does).
 pub fn sequential_decode(
     channel_bit_values: &[f64; WSPR_NUM_SYMBOLS],
-    amplitude: f64,
-    noise_stddev: f64,
+    amplitude: &[f64; WSPR_NUM_SYMBOLS],
+    noise_stddev: &[f64; WSPR_NUM_SYMBOLS],
     max_cycles: u64,
 ) -> Result<(u128, f64), GaveUp> {
     let mut heap = BinaryHeap::new();
@@ -186,8 +192,13 @@ pub fn sequential_decode(
             let expected2 = parity(new_state & POLY2) == 1;
             let r1 = channel_bit_values[node.depth * 2];
             let r2 = channel_bit_values[node.depth * 2 + 1];
-            let branch_metric = fano_bit_metric(r1, expected1, amplitude, noise_stddev)
-                + fano_bit_metric(r2, expected2, amplitude, noise_stddev);
+            // Per-position channel parameters, not a shared scalar pair
+            // (Per-Symbol Channel Model Redesign) -- r1/r2 are two
+            // DIFFERENT physically-transmitted WSPR symbols, each with
+            // its own real local channel reliability, so each gets its
+            // own amplitude/noise_stddev at this same index.
+            let branch_metric = fano_bit_metric(r1, expected1, amplitude[node.depth * 2], noise_stddev[node.depth * 2])
+                + fano_bit_metric(r2, expected2, amplitude[node.depth * 2 + 1], noise_stddev[node.depth * 2 + 1]);
             let new_bits = if hyp_bit { node.bits | (1u128 << node.depth) } else { node.bits };
             heap.push(StackNode {
                 metric: node.metric + branch_metric,
@@ -286,8 +297,8 @@ pub enum ConfidenceGateError {
 /// information-theoretically-motivated default.
 pub fn sequential_decode_with_confidence_gate(
     channel_bit_values: &[f64; WSPR_NUM_SYMBOLS],
-    amplitude: f64,
-    noise_stddev: f64,
+    amplitude: &[f64; WSPR_NUM_SYMBOLS],
+    noise_stddev: &[f64; WSPR_NUM_SYMBOLS],
     max_cycles: u64,
     min_acceptable_metric: f64,
 ) -> Result<u128, ConfidenceGateError> {
@@ -389,6 +400,18 @@ mod tests {
         out
     }
 
+    /// Broadcasts a uniform scalar channel parameter to the per-position
+    /// array `sequential_decode`/`sequential_decode_with_confidence_gate`
+    /// now require (Per-Symbol Channel Model Redesign) -- the right
+    /// fixture for tests that deliberately model a channel with NO local
+    /// variation (uniform SNR across the whole transmission), as opposed
+    /// to `diagnostic_...windowed_local_noise_burst_is_detected_and_
+    /// down_weighted` below, which builds a genuinely non-uniform array
+    /// on purpose.
+    fn uniform(value: f64) -> [f64; WSPR_NUM_SYMBOLS] {
+        [value; WSPR_NUM_SYMBOLS]
+    }
+
     #[test]
     fn genie_test_zero_noise_recovers_the_exact_bits_in_very_few_cycles() {
         // The first diagnostic advisor() called for: at (near-)zero
@@ -407,7 +430,7 @@ mod tests {
         let symbol_values = symbol_values_from_real_transmission(&symbols, 1.0, 1e-6, 1);
         let channel_bit_values = deinterleave_symbol_values(&symbol_values);
 
-        let (decoded, _metric) = sequential_decode(&channel_bit_values, 1.0, 1e-6, 200)
+        let (decoded, _metric) = sequential_decode(&channel_bit_values, &uniform(1.0), &uniform(1e-6), 200)
             .unwrap_or_else(|e| panic!("genie test gave up after {} cycles -- should have decoded almost immediately", e.cycles));
         assert_eq!(decoded, expected, "decoded bits must exactly match the independently-computed expected data bits");
     }
@@ -429,7 +452,7 @@ mod tests {
         // successful decode's own internal counter, so re-run with a
         // tight bound scaled to the expected near-ideal cost instead.
         let tight_bound = (WSPR_DECODABLE_INPUT_BITS as u64) * 3;
-        let result = sequential_decode(&channel_bit_values, 1.0, 1e-6, tight_bound);
+        let result = sequential_decode(&channel_bit_values, &uniform(1.0), &uniform(1e-6), tight_bound);
         assert!(
             result.is_ok(),
             "expected near-ideal cycle count (<= {tight_bound}) at near-zero noise, got GaveUp -- metric or search logic likely wrong"
@@ -450,7 +473,7 @@ mod tests {
             let expected = expected_decodable_bits(callsign, grid4, power_dbm);
             let symbol_values = symbol_values_from_real_transmission(&symbols, 1.0, 1e-6, 3);
             let channel_bit_values = deinterleave_symbol_values(&symbol_values);
-            let (decoded, _metric) = sequential_decode(&channel_bit_values, 1.0, 1e-6, 1000)
+            let (decoded, _metric) = sequential_decode(&channel_bit_values, &uniform(1.0), &uniform(1e-6), 1000)
                 .unwrap_or_else(|e| panic!("{callsign}/{grid4}/{power_dbm}: gave up after {} cycles", e.cycles));
             assert_eq!(decoded, expected, "{callsign}/{grid4}/{power_dbm}: decoded bits mismatch");
         }
@@ -469,7 +492,7 @@ mod tests {
         // meaningfully noisy but not extreme channel.
         let symbol_values = symbol_values_from_real_transmission(&symbols, 1.0, 0.5, 4);
         let channel_bit_values = deinterleave_symbol_values(&symbol_values);
-        let (decoded, _metric) = sequential_decode(&channel_bit_values, 1.0, 0.5, 100_000)
+        let (decoded, _metric) = sequential_decode(&channel_bit_values, &uniform(1.0), &uniform(0.5), 100_000)
             .unwrap_or_else(|e| panic!("gave up after {} cycles at a moderate noise level", e.cycles));
         assert_eq!(decoded, expected);
     }
@@ -485,7 +508,7 @@ mod tests {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let symbol_values = symbol_values_from_real_transmission(&symbols, 1.0, 5.0, 5);
         let channel_bit_values = deinterleave_symbol_values(&symbol_values);
-        let result = sequential_decode(&channel_bit_values, 1.0, 5.0, 10);
+        let result = sequential_decode(&channel_bit_values, &uniform(1.0), &uniform(5.0), 10);
         assert!(matches!(result, Err(GaveUp { .. })), "expected an explicit GaveUp on a tiny cycle budget against heavy noise");
     }
 
@@ -520,12 +543,12 @@ mod tests {
             let symbol_values = symbol_values_from_real_transmission(&symbols, amplitude, noise_stddev, 10_000 + seed);
             let channel_bit_values = deinterleave_symbol_values(&symbol_values);
 
-            if let Ok((bits, _metric)) = sequential_decode(&channel_bit_values, amplitude, noise_stddev, 2_000_000) {
+            if let Ok((bits, _metric)) = sequential_decode(&channel_bit_values, &uniform(amplitude), &uniform(noise_stddev), 2_000_000) {
                 if bits != expected {
                     raw_wrong += 1;
                 }
             }
-            match sequential_decode_with_confidence_gate(&channel_bit_values, amplitude, noise_stddev, 2_000_000, MIN_ACCEPTABLE_METRIC) {
+            match sequential_decode_with_confidence_gate(&channel_bit_values, &uniform(amplitude), &uniform(noise_stddev), 2_000_000, MIN_ACCEPTABLE_METRIC) {
                 Ok(bits) if bits != expected => gated_wrong += 1,
                 Err(ConfidenceGateError::LowConfidence { .. }) => gated_low_confidence += 1,
                 _ => {}
@@ -593,8 +616,8 @@ mod tests {
                 let channel_bit_values = deinterleave_symbol_values(&symbol_values);
                 match sequential_decode_with_confidence_gate(
                     &channel_bit_values,
-                    amplitude,
-                    noise_stddev,
+                    &uniform(amplitude),
+                    &uniform(noise_stddev),
                     2_000_000,
                     MIN_ACCEPTABLE_METRIC,
                 ) {
