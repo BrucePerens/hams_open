@@ -116,7 +116,7 @@ fn decodes_a_real_off_air_capture_correctly_or_stays_silent_never_wrong() {
     );
 
     match result {
-        Some(Ok((callsign, grid, power))) => {
+        Some(Ok((callsign, grid, power, base_hz))) => {
             let is_known_real = KNOWN_REAL_MESSAGES
                 .iter()
                 .any(|&(c, g, p)| c == callsign && g == grid && p == power);
@@ -131,8 +131,8 @@ fn decodes_a_real_off_air_capture_correctly_or_stays_silent_never_wrong() {
             );
             let is_strongest = callsign == "NM7J" && grid == "DM26" && power == 30;
             eprintln!(
-                "real off-air capture: decoded {callsign} {grid} {power} (a real, known-correct \
-                 message from this capture{}).",
+                "real off-air capture: decoded {callsign} {grid} {power} at base_hz={base_hz:.1} \
+                 (a real, known-correct message from this capture{}).",
                 if is_strongest { ", the strongest of the 9" } else { "" }
             );
         }

@@ -769,9 +769,21 @@ pub fn decode_from_symbol_evidence(
 /// sync_score` -- both real "no signal found" outcomes, not
 /// distinguished from each other here. A real decode failure past that
 /// point (gave up, or a low-confidence reject) still returns
-/// `Some(Err(...))`, not `None` -- "no signal found in this audio" and
-/// "found a signal but couldn't decode it" are different, real outcomes
-/// a caller may want to distinguish.
+/// `Some((base_hz, Err(...)))`, not `None` -- "no signal found in this
+/// audio" and "found a signal but couldn't decode it" are different,
+/// real outcomes a caller may want to distinguish.
+///
+/// The returned `base_hz` is `find_sync()`'s own detected audio
+/// frequency of the signal within `[freq_lo_hz, freq_hi_hz]` -- surfaced
+/// (not just consumed internally to compute symbol evidence) because
+/// `AUTO_TUNE_AND_MODE_DETECTION.md`'s own "auto tune" needs exactly
+/// this: the caller already knows what dial frequency the rig sat at
+/// while these samples were captured, so `base_hz` minus WSPR's own
+/// conventional passband-center reference (1500Hz, the frequency every
+/// synthetic fixture in this file already encodes at) gives the real
+/// tuning correction needed to center a detected signal. Returned even
+/// on a decode failure (`Err`), since a caller may still want to know
+/// where a low-confidence signal was found.
 #[allow(clippy::too_many_arguments)] // Each parameter is an independent, real search/decode tuning knob -- see the doc comments on find_sync()/decode_from_symbol_evidence() for what each one means; bundling them into a struct would just move the same count, not reduce it.
 pub fn sync_search_and_decode(
     samples: &[i16],
@@ -782,10 +794,10 @@ pub fn sync_search_and_decode(
     min_sync_score: f64,
     max_cycles: u64,
     min_acceptable_metric: f64,
-) -> Option<Result<u128, ConfidenceGateError>> {
+) -> Option<(f64, Result<u128, ConfidenceGateError>)> {
     let sync = find_sync(samples, sample_rate, freq_lo_hz, freq_hi_hz, max_start_sample, min_sync_score)?;
     let evidence = extract_symbol_evidence(samples, sample_rate, sync.base_hz, sync.start_sample)?;
-    Some(decode_from_symbol_evidence(&evidence, max_cycles, min_acceptable_metric))
+    Some((sync.base_hz, decode_from_symbol_evidence(&evidence, max_cycles, min_acceptable_metric)))
 }
 
 /// What `sync_search_and_decode_message()` returns for a failure --
@@ -815,9 +827,12 @@ impl From<ConfidenceGateError> for WsprMessageError {
 /// `sync_search_and_decode()` plus `wspr.rs`'s own `unpack_wspr_
 /// message()` -- the real end-to-end entry point this build order's
 /// step 4 exists for: raw audio in, a human-readable `(callsign, grid4,
-/// power_dbm)` out, or a real, distinguishable failure reason. The
-/// function a future `digital_decoder.rs` integration (step 5) should
-/// actually call.
+/// power_dbm, base_hz)` out, or a real, distinguishable failure reason.
+/// The function a future `digital_decoder.rs` integration (step 5)
+/// should actually call. `base_hz` is `sync_search_and_decode()`'s own
+/// detected audio frequency -- see that function's doc comment for why
+/// it's surfaced (`AUTO_TUNE_AND_MODE_DETECTION.md`'s real tuning-
+/// correction use).
 #[allow(clippy::too_many_arguments)] // Same reasoning as sync_search_and_decode()'s own allow -- see its doc comment.
 pub fn sync_search_and_decode_message(
     samples: &[i16],
@@ -828,8 +843,8 @@ pub fn sync_search_and_decode_message(
     min_sync_score: f64,
     max_cycles: u64,
     min_acceptable_metric: f64,
-) -> Option<Result<(String, String, i32), WsprMessageError>> {
-    let result = sync_search_and_decode(
+) -> Option<Result<(String, String, i32, f64), WsprMessageError>> {
+    let (base_hz, result) = sync_search_and_decode(
         samples,
         sample_rate,
         freq_lo_hz,
@@ -840,7 +855,9 @@ pub fn sync_search_and_decode_message(
         min_acceptable_metric,
     )?;
     Some(match result {
-        Ok(bits) => crate::wspr::unpack_wspr_message(bits).ok_or(WsprMessageError::UnpackFailed { bits }),
+        Ok(bits) => crate::wspr::unpack_wspr_message(bits)
+            .map(|(callsign, grid, power_dbm)| (callsign, grid, power_dbm, base_hz))
+            .ok_or(WsprMessageError::UnpackFailed { bits }),
         Err(e) => Err(e.into()),
     })
 }
@@ -1213,12 +1230,17 @@ mod tests {
         padded.extend_from_slice(&audio);
         padded.extend_from_slice(&[0i16; 4]);
 
-        let result = sync_search_and_decode(&padded, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
+        let (base_hz, result) = sync_search_and_decode(&padded, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
             .expect("a real clean signal must be found");
         let decoded_bits = result.expect("a clean signal should decode with high confidence");
 
         let expected = expected_decodable_bits("K1ABC", "EM10", 23);
         assert_eq!(decoded_bits, expected);
+        // The detected base_hz must track the real injected frequency
+        // (true_hz above), not just decode correctly despite it --
+        // AUTO_TUNE_AND_MODE_DETECTION.md's own tuning-correction use
+        // needs this value to be accurate, not just present.
+        assert!((base_hz - true_hz).abs() < 1.0, "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}");
     }
 
     /// The same end-to-end path, but with real additive Gaussian noise
@@ -1238,12 +1260,13 @@ mod tests {
         padded.extend_from_slice(&[0i16; 4]);
         let noisy = add_awgn(&padded, -20.0, 7);
 
-        let result = sync_search_and_decode(&noisy, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
+        let (base_hz, result) = sync_search_and_decode(&noisy, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
             .expect("a real, moderately noisy signal must still be found");
         let decoded_bits = result.expect("a moderately noisy signal should still decode");
 
         let expected = expected_decodable_bits("K6BP", "CM87", 30);
         assert_eq!(decoded_bits, expected);
+        assert!((base_hz - true_hz).abs() < 1.0, "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}");
     }
 
     /// The real, full pipeline this build order's step 4 exists for:
@@ -1264,9 +1287,10 @@ mod tests {
 
         let result = sync_search_and_decode_message(&noisy, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
             .expect("a real, moderately noisy signal must still be found");
-        let message = result.expect("a moderately noisy signal should still decode to a valid message");
+        let (callsign, grid, power, base_hz) = result.expect("a moderately noisy signal should still decode to a valid message");
 
-        assert_eq!(message, ("K6BP".to_string(), "CM87".to_string(), 30));
+        assert_eq!((callsign, grid, power), ("K6BP".to_string(), "CM87".to_string(), 30));
+        assert!((base_hz - true_hz).abs() < 1.0, "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}");
     }
 
     /// The isolating test `decimate_4x_box_average()`'s own doc comment
@@ -1305,9 +1329,9 @@ mod tests {
             crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
         )
         .expect("a real, clean 48kHz-synthesized-then-decimated signal must be found");
-        let message = result.expect("a decimated clean signal should decode to a valid message");
+        let (callsign, grid, power, _base_hz) = result.expect("a decimated clean signal should decode to a valid message");
 
-        assert_eq!(message, ("K6BP".to_string(), "CM87".to_string(), 30));
+        assert_eq!((callsign, grid, power), ("K6BP".to_string(), "CM87".to_string(), 30));
     }
 
     /// Diagnostic, not a correctness assertion: measures how much
@@ -1463,10 +1487,10 @@ mod tests {
                     crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
                 );
                 let outcome = match result {
-                    Some(Ok((callsign, grid, power))) if callsign == "K6BP" && grid == "CM87" && power == 30 => {
+                    Some(Ok((callsign, grid, power, _base_hz))) if callsign == "K6BP" && grid == "CM87" && power == 30 => {
                         Outcome::Correct
                     }
-                    Some(Ok((callsign, grid, power))) => Outcome::WrongMessage(callsign, grid, power),
+                    Some(Ok((callsign, grid, power, _base_hz))) => Outcome::WrongMessage(callsign, grid, power),
                     Some(Err(_)) | None => Outcome::NoDecode,
                 };
                 match outcome {
