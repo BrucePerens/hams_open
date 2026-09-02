@@ -106,6 +106,109 @@ license text each library's own license requires, not just its SPDX identifier.
   Playwright run driving the real X25519/SHA-256/HKDF/ChaCha20-Poly1305 code paths through a full
   Noise_XX handshake, with network interception confirming zero requests leave localhost.
 
+### ft8js (WASM FT8 decode + encode)
+- **Version:** 0.0.3 upstream, but not vendored as the unmodified upstream build -- see below.
+- **License:** MIT (both `ft8js`'s own wrapper code and the underlying `ft8_lib` it compiles, per
+  each project's own `LICENSE`/`LICENSE-MIT` file, checked directly rather than assumed from the
+  SPDX tag alone).
+- **Purpose:** `SOFTWARE_ANALYSIS_PROPOSALS.md` item 1 -- real, client-side, in-browser FT8
+  decoding for `ham_shack`, so a browser-based shack has native decode capability, not only a
+  server-relayed one. `ham_shack`'s own `ft8_browser_decoder.js` only exposes decode (encode-side
+  TX already exists server-side, `hams_open`'s own native decoder handles the relay-connected
+  case) -- the encoder is vendored alongside the decoder anyway because it's the cleanest way to
+  get a real, correctly-encoded FT8 test signal for the in-browser hoot test below (encode a real
+  message, decode it back, in the actual headless-Chrome test browser) without committing a binary
+  WAV fixture.
+- **Local Path:** `/external/static/src/node_modules/ft8js/{decode.js,decode.wasm,encode.js,encode.wasm}`
+- **Not a straight vendor of the npm package -- rebuilt from source, and why:** the published npm
+  tarball's own `decode.js`/`decode.wasm` were compiled against an older `ft8_lib` commit whose
+  `ftx_message_decode()` signature has since changed upstream (a 4th `offsets` parameter was
+  added) -- the npm package's own bundled `src/decode.c` no longer compiles against a current
+  `ft8_lib` checkout unmodified. Rebuilt directly from `ft8js`'s own published `src/decode.c`
+  (one-line compatibility fix: pass `NULL` for the new `offsets` parameter, since this decoder
+  doesn't use per-field offset reporting) against a full, current `ft8_lib` checkout, using
+  `ft8js`'s own documented `emcc` build command from its `package.json` (`emscripten` 3.1.69,
+  installed via `apt-get install emscripten`). Verified as a faithful rebuild, not a divergent
+  fork: decoded identically to the npm package's own bundled build against the same real
+  `ft8sim`-generated test signals before any further changes were considered.
+- **A real algorithmic-improvement hypothesis was tested here and honestly falsified -- recorded
+  so a future session doesn't re-spend the time re-testing it.** `SOFTWARE_ANALYSIS_PROPOSALS.md`
+  records Bruce's direct instruction to study why the same author's `ft8ts` (a pure-TypeScript,
+  GPL-3.0 port of WSJT-X's own reference LDPC decoder) claims a real, benchmarked accuracy
+  advantage over `ft8_lib`/`ft8js` (17/N vs 8/N decoded messages on the author's own test set), and
+  reimplement whatever real improvement is found as original, MIT-licensed code -- not port or
+  copy `ft8ts`'s own GPL source. Reading both implementations side by side found one concrete,
+  well-understood structural difference: `ft8_lib`'s `ldpc.c` uses `fast_tanh`/`fast_atanh`, a
+  low-order rational (Padé-style) polynomial approximation in single-precision `float`, inside the
+  LDPC belief-propagation message-passing loop; `ft8ts`'s `decode174_91.ts` (a direct port of
+  WSJT-X's own `bpdecode174_91.f90`) uses JavaScript's native, exact `Math.tanh()`/`Math.log()`-based
+  `atanh` in double precision throughout. Belief propagation is iterative and multiplicative across
+  LDPC check-node edges (`kLDPC_iterations = 25`), so the reasoned hypothesis was that per-edge
+  approximation/precision error compounds over those iterations and disproportionately hurts
+  marginal, low-SNR decodes -- exactly the regime `ft8ts`'s benchmark claims an advantage in.
+  **Tested it directly rather than trusting the reasoning**: patched a local `ldpc.c` to use exact
+  `tanhf`/`atanhf` (real C99 libm functions, not copied from `ft8ts` or anywhere else -- this
+  satisfies the "reimplement, don't port" requirement independent of the outcome) in place of the
+  approximations, built both the patched and unpatched decoder to WASM, and ran both against 120
+  identical real `ft8sim`-generated signals (`"CQ K6BP CM87"`, 20 trials each at -16/-18/-20/-21/
+  -22/-23 dB) via a Node.js harness exercising the real WASM decode path. **Result: no improvement.**
+  Baseline: 15/20 at -16dB, 15/20 at -18dB, 0/20 at -20dB and below. Exact-tanh patch: 15/20 at
+  -16dB, 14/20 at -18dB (slightly *worse*, on byte-identical input), 0/20 at -20dB and below. The
+  tanh/atanh precision is therefore not the real explanation for `ft8ts`'s claimed advantage --
+  the actual cause remains genuinely unknown and is real, open, unscoped follow-on work (candidate
+  Costas-sync search width/threshold, time/frequency oversampling ratio, or LDPC early-termination
+  heuristic are the next places to look, not yet investigated). The shipped `decode.js`/`decode.wasm`
+  above are the **unpatched, faithfully-rebuilt baseline** -- the tanh patch was not shipped, since
+  it isn't a real improvement.
+- **Reproducible build** (patched-copy testing artifacts were not committed; this reproduces the
+  shipped, unpatched baseline):
+  ```bash
+  sudo apt-get install -y emscripten   # provides emcc 3.1.69
+  git clone https://github.com/kgoba/ft8_lib.git   # or use hams_open's own vendored copy at
+                                                     # daemons/ham_digital_modes/vendor/ft8_lib,
+                                                     # which omits common/audio.c and common/wave.c
+                                                     # (not needed by the native Rust FFI wrapper) --
+                                                     # ft8js's own decode.c needs those two files, so
+                                                     # a full upstream checkout is simpler here.
+  npm pack ft8js@0.0.3 && tar xzf ft8js-0.0.3.tgz
+  cp package/src/decode.c .
+  # One-line compatibility fix for the current ftx_message_decode() signature:
+  sed -i 's/ftx_message_decode(&message, &hash_if, text);/ftx_message_decode(\&message, \&hash_if, text, NULL);/' decode.c
+  emcc -s EXPORT_NAME="'___ft8jsDecodeModule___'" -Ift8_lib -sSTACK_SIZE=5MB \
+    decode.c ft8_lib/ft8/message.c ft8_lib/ft8/text.c ft8_lib/ft8/decode.c ft8_lib/ft8/encode.c \
+    ft8_lib/ft8/constants.c ft8_lib/ft8/crc.c ft8_lib/ft8/ldpc.c ft8_lib/common/audio.c \
+    ft8_lib/common/monitor.c ft8_lib/common/wave.c ft8_lib/fft/kiss_fft.c ft8_lib/fft/kiss_fftr.c \
+    -o external/static/src/node_modules/ft8js/decode.js \
+    -sEXPORTED_FUNCTIONS='["_init_decode", "_exec_decode", "_free", "_malloc"]' \
+    -sEXPORTED_RUNTIME_METHODS=cwrap -s ASYNCIFY=1 -s 'ASYNCIFY_IMPORTS=["_exec_decode"]' \
+    --no-entry -flto -s EXPORT_ES6=1 -s NO_FILESYSTEM=1 -s ALLOW_MEMORY_GROWTH=1 -s AUTO_NATIVE_LIBRARIES=0
+
+  # Encoder needs no compatibility patch -- its C API didn't change upstream.
+  cp package/src/encode.c .
+  emcc -s EXPORT_NAME="'___ft8jsEncodeModule___'" -Ift8_lib -sSTACK_SIZE=2MB \
+    encode.c ft8_lib/ft8/message.c ft8_lib/ft8/text.c ft8_lib/ft8/encode.c ft8_lib/ft8/constants.c ft8_lib/ft8/crc.c \
+    -o external/static/src/node_modules/ft8js/encode.js \
+    -sEXPORTED_FUNCTIONS='["_exec_encode", "_free", "_malloc"]' \
+    -sEXPORTED_RUNTIME_METHODS=cwrap -s ASYNCIFY=1 -s 'ASYNCIFY_IMPORTS=["_exec_encode"]' \
+    --no-entry -flto -s EXPORT_ES6=1 -s NO_FILESYSTEM=1 -s ALLOW_MEMORY_GROWTH=1 -s AUTO_NATIVE_LIBRARIES=0
+  ```
+  SHA-256 of the currently-vendored files:
+  ```
+  19b89dfb51c1ac56eda3c1844f34d6eb940bb3f9bba96dffe67411ed53dfc5ad  decode.js
+  c1d8bfca917246030085c8abf5e71ee707f12dc49129f23d32174a126a209346  decode.wasm
+  eaddfd9769986d006759fd6b1b155eb300b74e05ce904d878904b4d6c581f47c  encode.js
+  5e7bce8a4346e521411f5066c955c3a24d134b7447c321f5db586f20d4895fa8  encode.wasm
+  ```
+- **Verified** two ways: (1) a Node.js harness (not committed -- scratch verification tooling)
+  running the exact decode.wasm module against 120 real `ft8sim`-generated FT8 signals, decoding
+  correctly at -16/-18dB and cleanly failing (not crashing, not hallucinating a message) at -20dB
+  and below, plus a real encode-then-decode round trip through both WASM modules together
+  (`"CQ K6BP CM87"` in, byte-identical text out); (2)
+  `ham_shack/static/tests/ft8_browser_decode.test.js` -- a real hoot suite running that same
+  encode-then-decode round trip inside the actual headless-Chrome test browser via a genuine
+  `import()` of the vendored module (not a mock), proving the WASM-in-browser path specifically,
+  not just WASM-in-Node.js.
+
 ## Maintenance
 
 To update or refresh the local assets, the script `fetch_assets.py` can be executed. This script downloads the libraries directly into the module structure.

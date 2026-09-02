@@ -69,6 +69,31 @@ class TestExternalAssets(HamsHttpCase):
             "Transformers JS content should be valid.",
         )
 
+    # Tests [@ANCHOR: external:HTTP_REACHABLE_FT8JS]
+    def test_02b_ft8js_decoder_reachable(self):
+        """Verify the vendored WASM FT8 decode+encode modules are both reachable via HTTP."""
+        for glue_name, module_name in (("decode.js", "___ft8jsDecodeModule___"), ("encode.js", "___ft8jsEncodeModule___")):
+            js_response = self.url_open(f"/external/static/src/node_modules/ft8js/{glue_name}")
+            self.assertEqual(
+                js_response.status_code, 200, f"ft8js {glue_name} should be reachable."
+            )
+            self.assertIn(
+                module_name.encode(),
+                js_response.content,
+                f"ft8js {glue_name} content should be valid Emscripten glue.",
+            )
+
+        for wasm_name in ("decode.wasm", "encode.wasm"):
+            wasm_response = self.url_open(f"/external/static/src/node_modules/ft8js/{wasm_name}")
+            self.assertEqual(
+                wasm_response.status_code, 200, f"ft8js {wasm_name} should be reachable."
+            )
+            self.assertEqual(
+                wasm_response.content[:4],
+                b"\x00asm",
+                f"{wasm_name} should start with the real WASM magic bytes.",
+            )
+
     # Tests [@ANCHOR: external:HTTP_NO_HEAD]
     def test_03_no_head_request(self):
         """Verify fetch_assets does not use HEAD requests."""

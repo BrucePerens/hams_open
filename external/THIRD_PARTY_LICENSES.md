@@ -236,6 +236,64 @@ way to be fully certain nothing else is nested in.
 
 ---
 
+## ft8js 0.0.3 (wrapper) and ft8_lib (decoder core) -- both MIT
+
+### ft8js -- Copyright (c) e04
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+(Per `npm view ft8js license` and `ft8js`'s own `package.json` -- no separate top-level `LICENSE`
+file exists in the `ft8js` GitHub repo at the commit checked, so the standard MIT template above is
+reproduced with the SPDX-declared license and the package's own author attribution, the same as
+`npm`'s own registry treats it.)
+
+### ft8_lib -- Copyright (c) 2018 Kārlis Goba
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+(Reproduced verbatim from `ft8_lib`'s own `LICENSE-MIT`, already vendored at
+`daemons/ham_digital_modes/vendor/ft8_lib/LICENSE-MIT` in this same repo -- this is the identical
+upstream project the browser build compiles, just rebuilt for WASM rather than the native Rust FFI
+target that copy already serves.)
+
+---
+
 ## Provenance note: D3.js / d3-geo-projection / topojson-client
 
 All three D3-family files above (but not Leaflet.js) carry a shared `/** @odoo-module **/` banner
