@@ -48,7 +48,7 @@ fn read_wav_mono_i16(path: &Path) -> Vec<f32> {
         .collect()
 }
 
-fn generate_and_decode(message: &str, snr_db: i32, work_dir: &Path) -> (Vec<(String, i32)>, Option<String>) {
+fn generate_and_decode(message: &str, snr_db: i32, work_dir: &Path) -> (Vec<(String, i32, f32)>, Option<String>) {
     let out = Command::new("ft8sim")
         .args([message, "1500.0", "0.0", "0.1", "1.0", "1", &snr_db.to_string()])
         .current_dir(work_dir)
@@ -96,7 +96,7 @@ fn decodes_a_clean_high_snr_signal_matching_the_reference() {
     let (ours, reference) = generate_and_decode("K1ABC W9XYZ EN37", -10, &work_dir);
     assert!(reference.is_some(), "the reference decoder itself must decode a -10dB signal -- if it can't, this test's premise is broken, not this crate");
     assert!(
-        ours.iter().any(|(text, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
+        ours.iter().any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
         "must decode a clean/high-SNR (-10dB) signal the real reference decoder also decodes; got: {ours:?}, reference: {reference:?}"
     );
 
@@ -119,7 +119,7 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
     // operating range extends to roughly -20/-21 dB.
     for snr in [-5, -10, -15, -18, -20, -22] {
         let (ours, reference) = generate_and_decode(message, snr, &work_dir);
-        let ours_decoded = ours.iter().any(|(text, _)| text.contains("K1ABC") && text.contains("W9XYZ"));
+        let ours_decoded = ours.iter().any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ"));
         let reference_decoded = reference.is_some();
         results.push((snr, ours_decoded, reference_decoded));
 
@@ -196,7 +196,7 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
     let ours = decoder.decode();
 
     assert!(
-        ours.iter().any(|(text, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
+        ours.iter().any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
         "Ft8Decoder::new(48000, ...) must decode real 48kHz-sampled audio directly -- got {ours:?}. \
          If this starts failing, hams_local_relay needs a real 48k->12k resampler before FT8 \
          wiring, which this test previously found unnecessary."

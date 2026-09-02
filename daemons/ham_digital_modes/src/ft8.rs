@@ -86,19 +86,31 @@ impl Ft8Decoder {
     }
 
     /// Attempts to decode every candidate found in the waterfall
-    /// accumulated so far. Returns (message_text, snr_estimate) pairs.
+    /// accumulated so far. Returns (message_text, snr_estimate,
+    /// freq_hz) triples -- `freq_hz` is that candidate's own real
+    /// detected audio frequency within this decoder's analysis passband
+    /// (see `ft8_session_decode`'s own doc comment in shim.c for the
+    /// exact formula, traced from ft8_lib's own candidate-to-bin-index
+    /// mapping, not guessed). This is `AUTO_TUNE_AND_MODE_DETECTION.md`'s
+    /// real per-decode frequency for FT8, the same thing WSPR's own
+    /// `wspr_sync::find_sync()`/`base_hz` already provides -- not a new
+    /// measurement, ft8_lib's own candidate search already locates every
+    /// decode in frequency as part of its normal sync search; this just
+    /// surfaces that number through the FFI instead of discarding it.
     /// Does not clear the waterfall -- call `reset()` before the next
     /// slot's audio.
-    pub fn decode(&mut self) -> Vec<(String, i32)> {
+    pub fn decode(&mut self) -> Vec<(String, i32, f32)> {
         const MAX_MESSAGES: usize = 50;
         let mut out_messages = [[0 as std::os::raw::c_char; ffi::FTX_MAX_MESSAGE_LENGTH]; MAX_MESSAGES];
         let mut out_snr = [0i32; MAX_MESSAGES];
+        let mut out_freq_hz = [0f32; MAX_MESSAGES];
 
         let count = unsafe {
             ffi::ft8_session_decode(
                 self.session,
                 out_messages.as_mut_ptr(),
                 out_snr.as_mut_ptr(),
+                out_freq_hz.as_mut_ptr(),
                 MAX_MESSAGES as i32,
             )
         };
@@ -106,7 +118,7 @@ impl Ft8Decoder {
         (0..count as usize)
             .map(|i| {
                 let cstr = unsafe { std::ffi::CStr::from_ptr(out_messages[i].as_ptr()) };
-                (cstr.to_string_lossy().trim().to_string(), out_snr[i])
+                (cstr.to_string_lossy().trim().to_string(), out_snr[i], out_freq_hz[i])
             })
             .collect()
     }
@@ -311,7 +323,7 @@ mod tests {
         decoder.feed(&samples);
         let decoded = decoder.decode();
         assert!(
-            decoded.iter().any(|(text, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
+            decoded.iter().any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
             "expected to decode '{message}' back out of its own synthesized waveform, got {decoded:?}"
         );
     }
@@ -329,8 +341,62 @@ mod tests {
         decoder.feed(&samples);
         let decoded = decoder.decode();
         assert!(
-            decoded.iter().any(|(text, _)| text.contains("K6BP") && text.contains("CM87")),
+            decoded.iter().any(|(text, _, _)| text.contains("K6BP") && text.contains("CM87")),
             "expected to decode '{message}' back out of its own synthesized waveform at 48kHz, got {decoded:?}"
+        );
+    }
+
+    /// `AUTO_TUNE_AND_MODE_DETECTION.md`'s real per-decode frequency:
+    /// synthesize a known message at a known `base_freq_hz`, decode it,
+    /// and confirm `decode()`'s own reported `freq_hz` tracks the real
+    /// injected frequency -- the same real assertion `wspr_sync.rs`'s own
+    /// `sync_search_and_decode_recovers_the_exact_message_on_a_clean_
+    /// signal` test makes for `base_hz`, at FT8's own real tolerance
+    /// (WSPR's 1Hz tolerance doesn't transfer: FT8's candidate search
+    /// resolves frequency to one "fine bin",
+    /// `1/(symbol_period*freq_osr)` = 1/(0.160*2) = 3.125Hz at this
+    /// decoder's freq_osr=2, not WSPR's much finer per-symbol STFT).
+    #[test]
+    fn decode_reports_the_real_injected_frequency_at_12khz() {
+        let message = "K1ABC W9XYZ EN37";
+        let tones = encode_message(message).expect("a valid standard-format message must encode");
+        let base_freq_hz = 1500.0f32;
+
+        let samples = synthesize_waveform(&tones, 12000, base_freq_hz);
+        let mut decoder = Ft8Decoder::new(12000, 200.0, 3000.0).unwrap();
+        decoder.feed(&samples);
+        let decoded = decoder.decode();
+        let (_, _, freq_hz) = decoded
+            .iter()
+            .find(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ"))
+            .unwrap_or_else(|| panic!("expected to decode '{message}' back out of its own synthesized waveform, got {decoded:?}"));
+        assert!(
+            (freq_hz - base_freq_hz).abs() < 3.2,
+            "reported freq_hz {freq_hz} should be within one fine bin (~3.125Hz) of the real injected {base_freq_hz}"
+        );
+    }
+
+    /// Same real frequency-tracking proof at 48kHz (this daemon's real
+    /// operating rate, not FT8's conventional 12kHz), and at a different
+    /// base frequency than the 12kHz test above, so this isn't just
+    /// re-proving the same one number.
+    #[test]
+    fn decode_reports_the_real_injected_frequency_at_48khz() {
+        let message = "CQ K6BP CM87";
+        let tones = encode_message(message).expect("a valid standard-format message must encode");
+        let base_freq_hz = 2200.0f32;
+
+        let samples = synthesize_waveform(&tones, 48000, base_freq_hz);
+        let mut decoder = Ft8Decoder::new(48000, 200.0, 3000.0).unwrap();
+        decoder.feed(&samples);
+        let decoded = decoder.decode();
+        let (_, _, freq_hz) = decoded
+            .iter()
+            .find(|(text, _, _)| text.contains("K6BP") && text.contains("CM87"))
+            .unwrap_or_else(|| panic!("expected to decode '{message}' back out of its own synthesized waveform at 48kHz, got {decoded:?}"));
+        assert!(
+            (freq_hz - base_freq_hz).abs() < 3.2,
+            "reported freq_hz {freq_hz} should be within one fine bin (~3.125Hz) of the real injected {base_freq_hz}"
         );
     }
 

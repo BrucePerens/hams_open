@@ -25,6 +25,7 @@ extern "C" {
         s: *mut Ft8Session,
         out_messages: *mut [c_char; FTX_MAX_MESSAGE_LENGTH],
         out_snr: *mut c_int,
+        out_freq_hz: *mut c_float,
         max_messages: c_int,
     ) -> c_int;
     pub fn ft8_encode_message(text: *const c_char, tones_out: *mut c_uchar) -> c_int;

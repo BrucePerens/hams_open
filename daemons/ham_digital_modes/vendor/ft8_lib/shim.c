@@ -129,9 +129,23 @@ void ft8_session_reset(ft8_session_t* s) {
 // Attempts to decode every candidate currently in the accumulated
 // waterfall. Writes up to max_messages decoded, human-readable message
 // strings (each up to FTX_MAX_MESSAGE_LENGTH bytes, caller-allocated)
-// into out_messages, and their integer SNR estimates into out_snr.
+// into out_messages, their integer SNR estimates into out_snr, and each
+// decode's own detected audio frequency (Hz, within the analysis
+// passband) into out_freq_hz -- AUTO_TUNE_AND_MODE_DETECTION.md's real
+// per-decode frequency, the same real thing wspr_sync.rs's own
+// find_sync()/base_hz already surfaces for WSPR. Not a new measurement:
+// ftx_find_candidates() already locates every candidate in frequency
+// (ftx_candidate_t's own freq_offset/freq_sub fields, decode.h) as part
+// of its normal sync search -- this only surfaces a number the search
+// already computes internally, converted from the candidate's bin
+// indices to real Hz via the same formula monitor.c's own min_bin/
+// symbol_period computation implies (traced directly from monitor_init's
+// `min_bin = f_min * symbol_period` and decode.c's own
+// `offset = (offset * freq_osr) + freq_sub; offset = (offset * num_bins)
+// + freq_offset` candidate-to-bin-index mapping, not guessed):
+//   freq_hz = (min_bin + freq_offset + freq_sub/freq_osr) / symbol_period
 // Returns the number of messages actually decoded (may be 0).
-int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LENGTH], int* out_snr, int max_messages) {
+int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LENGTH], int* out_snr, float* out_freq_hz, int max_messages) {
     const ftx_waterfall_t* wf = &s->mon.wf;
     ftx_candidate_t candidate_list[FT8_MAX_CANDIDATES];
     int num_candidates = ftx_find_candidates(wf, FT8_MAX_CANDIDATES, candidate_list, FT8_MIN_SCORE);
@@ -184,6 +198,7 @@ int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LEN
             strncpy(out_messages[out_count], text, FTX_MAX_MESSAGE_LENGTH - 1);
             out_messages[out_count][FTX_MAX_MESSAGE_LENGTH - 1] = '\0';
             out_snr[out_count] = cand->score;
+            out_freq_hz[out_count] = ((float)(s->mon.min_bin + cand->freq_offset) + ((float)cand->freq_sub / (float)wf->freq_osr)) / s->mon.symbol_period;
             ++out_count;
         }
     }
