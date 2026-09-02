@@ -593,6 +593,25 @@ mod tests {
     /// stronger evidence for a real decoder-side problem at this specific
     /// ratio regime, worth chasing before assuming a channel-model
     /// mismatch.
+    ///
+    /// **CORRECTION, 2026-09-01: "0.48-0.71 covers the failing rungs
+    /// (-30dB and below)" is wrong for every rung deeper than -30dB.**
+    /// Checked directly against the CURRENT production
+    /// `evidence_to_symbol_values()` (the per-symbol windowed estimator,
+    /// which postdates this test) via `wspr_sync.rs`'s own
+    /// `diagnostic_dump_calibrated_amplitude_and_noise_stddev_per_snr_
+    /// rung`: the real measured ratio climbs steadily with depth, not
+    /// staying flat -- -30dB ~0.66, -31.5dB ~0.75, -32.5dB ~0.81,
+    /// -33dB ~0.83, -34dB ~0.87, -34.5dB ~0.89, -36dB ~0.92. This test's
+    /// own 10/10-correct result therefore only actually validates the
+    /// shallowest failing rung; it says nothing about -31.5dB and below,
+    /// despite the doc-comment claim above. See
+    /// `diagnostic_synthetic_decode_at_the_real_per_rung_ratios_with_
+    /// perfectly_known_channel_params` below, which re-runs this exact
+    /// methodology at the real per-rung ratios and finds the decoder's
+    /// own capability genuinely degrades once the true ratio passes
+    /// roughly 0.8 -- a real, previously-untested decoder-side ceiling,
+    /// not just a channel-model mismatch at every depth.
     #[test]
     #[ignore]
     fn diagnostic_synthetic_decode_at_the_real_failing_ratio_range_with_perfectly_known_channel_params() {
@@ -646,6 +665,98 @@ mod tests {
              decoder-side problem specific to this ratio range (not just a channel-model mismatch in \
              real audio evidence), worth chasing before assuming the gap is purely a real-audio \
              calibration issue."
+        );
+    }
+
+    /// Follow-on to the diagnostic above, 2026-09-01. That test's own doc
+    /// comment claims the ratio range 0.48-0.71 covers "the real audio-
+    /// domain WSPR sensitivity ladder's own failing SNR rungs (-30dB and
+    /// below)" -- checked directly against the CURRENT production
+    /// `evidence_to_symbol_values()` (the per-symbol windowed estimator,
+    /// not the old global scalar this claim predates) via
+    /// `wspr_sync.rs`'s own `diagnostic_dump_calibrated_amplitude_and_
+    /// noise_stddev_per_snr_rung`, and it's wrong for every rung deeper
+    /// than -30dB: the real, measured ratio climbs steadily and
+    /// MONOTONICALLY with depth, not staying flat in 0.48-0.71 --
+    /// -30dB ~0.65-0.68, -31.5dB ~0.74-0.77, -32.5dB ~0.80-0.83,
+    /// -33dB ~0.82-0.85, -34dB ~0.85-0.90, -34.5dB ~0.86-0.92,
+    /// -36dB ~0.88-0.99. The original diagnostic's 10/10-correct result
+    /// at ratios up to 0.71 only actually validates the shallowest
+    /// failing rung (-30dB) -- it was never run at the ratios the deeper
+    /// rungs (-31.5dB and below) actually produce, despite the doc
+    /// comment's claim that it covered them. This test closes that gap
+    /// for real: same perfectly-known-channel-model methodology, but at
+    /// the REAL measured ratios per rung, not an assumed flat range.
+    #[test]
+    #[ignore]
+    fn diagnostic_synthetic_decode_at_the_real_per_rung_ratios_with_perfectly_known_channel_params() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let expected = expected_decodable_bits("K6BP", "CM87", 30);
+        let amplitude = 1.0;
+        // (label, ratio) -- ratios are the real means measured directly
+        // against the current production estimator at each SNR rung
+        // (see this test's own doc comment for the per-seed source data).
+        let rungs: [(&str, f64); 7] = [
+            ("-30.0dB", 0.66),
+            ("-31.5dB", 0.75),
+            ("-32.5dB", 0.81),
+            ("-33.0dB", 0.83),
+            ("-34.0dB", 0.87),
+            ("-34.5dB", 0.89),
+            ("-36.0dB", 0.92),
+        ];
+        let trials = 10;
+
+        println!("rung | ratio | correct | gave_up | low_confidence | wrong");
+        let mut any_rung_failed_to_mostly_decode = false;
+        for &(label, ratio) in &rungs {
+            let noise_stddev = amplitude * ratio;
+            let mut correct = 0;
+            let mut gave_up = 0;
+            let mut low_confidence = 0;
+            let mut wrong = 0;
+            for seed in 0..trials {
+                let symbol_values =
+                    symbol_values_from_real_transmission(&symbols, amplitude, noise_stddev, 30_000 + seed);
+                let channel_bit_values = deinterleave_symbol_values(&symbol_values);
+                match sequential_decode_with_confidence_gate(
+                    &channel_bit_values,
+                    &uniform(amplitude),
+                    &uniform(noise_stddev),
+                    2_000_000,
+                    MIN_ACCEPTABLE_METRIC,
+                ) {
+                    Ok(bits) if bits == expected => correct += 1,
+                    Ok(_) => wrong += 1,
+                    Err(ConfidenceGateError::GaveUp { .. }) => gave_up += 1,
+                    Err(ConfidenceGateError::LowConfidence { .. }) => low_confidence += 1,
+                }
+            }
+            println!("{label:>7} | {ratio:>5.2} | {correct:>7} | {gave_up:>7} | {low_confidence:>15} | {wrong:>5}");
+            if correct < trials / 2 {
+                any_rung_failed_to_mostly_decode = true;
+            }
+        }
+        // Deliberately NOT asserting success here -- this is the real
+        // decisive measurement this whole investigation turns on, and
+        // forcing a pass/fail either way would defeat the point. Both
+        // outcomes are real, valuable findings:
+        //   - if every rung still decodes >=half the time even with a
+        //     PERFECT channel model, the per-symbol redesign's remaining
+        //     gap is a genuine real-audio estimation-accuracy problem
+        //     (the windowed estimator's own accuracy degrading at deep
+        //     noise), not a decoder/metric ceiling -- worth chasing a
+        //     better estimator, not a different search algorithm.
+        //   - if the deeper rungs fail even with a perfect channel model,
+        //     that's real, direct evidence of a decoder/metric-side
+        //     capability ceiling at high noise_stddev/amplitude ratios,
+        //     independent of channel-model accuracy -- exactly the
+        //     "genuinely different mechanism" hypothesis the design doc's
+        //     own still-open question named, now actually tested rather
+        //     than assumed either way.
+        eprintln!(
+            "any_rung_failed_to_mostly_decode = {any_rung_failed_to_mostly_decode} -- see printed table \
+             above for the real per-rung breakdown; this is diagnostic, not pass/fail."
         );
     }
 
