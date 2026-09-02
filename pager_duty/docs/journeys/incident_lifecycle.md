@@ -27,10 +27,31 @@ This journey tracks the technical state transitions of an incident from initial 
   postmaster@ (the same filtering the dedicated bounce alias already had) -- only a genuine inquiry
   reaches the alias resolution step above.
 
+## 1b. Trend Detection for Sub-Critical Occurrences
+- **Severity Gate:** `report_incident()` [@ANCHOR: pager_trend_severity_gate] only pages on-duty
+  immediately for `high`/`critical` severity (today's original behavior, unchanged). `low`/`medium`
+  occurrences [@ANCHOR: pager_trend_detection_params] -- exactly the ones a human on-call engineer
+  would otherwise deprioritize on manual triage -- are still recorded as a `pager.incident`
+  (visible on the NOC board, `occurrence_count`/`last_occurred` accumulate as usual) but do NOT
+  post a chatter notification or page anyone.
+- **Rolling Window:** Each dedup match [@ANCHOR: pager_trend_window_update] updates
+  `window_occurrence_count`/`window_start` on the existing incident -- a simple rolling-window
+  counter (5 occurrences within 60 minutes, by default) distinct from the lifetime
+  `occurrence_count`, so it measures a real burst rate rather than a cumulative total. The window
+  resets to 1 whenever an occurrence arrives after the previous window has lapsed.
+- **Trend Escalation:** [@ANCHOR: pager_trend_detection] Once a `low`/`medium` source's
+  `window_occurrence_count` crosses the threshold within the window, `_raise_trend_incident()`
+  [@ANCHOR: pager_raise_trend_incident] creates a real, separate, always-`high`-severity
+  `Trend: <source>` incident describing the burst (count, window bounds, link back to the original
+  incident) and pages on-duty for it -- turning an accumulating pattern that would otherwise stay
+  silent into a real, paging incident, distinct from any individual occurrence. `trend_raised` on
+  the original incident prevents raising a second trend incident for the same burst.
+
 ## 2. Notification & Assignment
 - **Creation:** A new `pager.incident` record is created.
 - **Calendar Query:** The system calls `get_current_on_duty_admin()` [@ANCHOR: test_pager_notification].
-- **Dispatch:** If an engineer is on-call (`is_pager_duty=True` on their `calendar.event`), they are added to the notification list.
+- **Dispatch:** If an engineer is on-call (`is_pager_duty=True` on their `calendar.event`) *and* the
+  incident's own severity isn't gated by 1b above, they are added to the notification list.
 - **Communication:** An internal message is posted to the incident chatter via the `mail_service_internal` service account.
 
 ## 3. Acknowledgement & Escalation

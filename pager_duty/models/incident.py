@@ -9,6 +9,22 @@ from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 
 _logger = logging.getLogger(__name__)
 
+# [@ANCHOR: pager_trend_detection_params]
+# PAGER_DUTY_MCP_AI_TRIAGE.md's own trend-detection design: the smallest
+# mechanism that satisfies "track trends on things you would otherwise
+# skip, raise a ticket when a trend indicates an incipient problem" --
+# not a full rate-statistics engine for a first slice. 5 occurrences of
+# the same source within a 60-minute rolling window is a deliberately
+# simple, easy-to-reason-about default; refine later if real operational
+# experience shows it's too sensitive or not sensitive enough.
+TREND_WINDOW_MINUTES = 60
+TREND_OCCURRENCE_THRESHOLD = 5
+# Severities that no longer page on_duty immediately -- these are exactly
+# the ones a human on-call engineer would otherwise deprioritize/skip on
+# manual triage. "high" (the field's own default) and "critical" keep
+# today's unchanged immediate-page behavior.
+TREND_TRACKED_SEVERITIES = ("low", "medium")
+
 
 class PagerIncident(models.Model):
     """
@@ -109,6 +125,42 @@ class PagerIncident(models.Model):
         default=lambda self: fields.Datetime.now(),
         help="When this source's own report_incident() call was last received, including repeats that did not create a new incident.",
     )
+    # [@ANCHOR: pager_trend_detection]
+    # Added 2026-09-01 per PAGER_DUTY_MCP_AI_TRIAGE.md's own trend-detection
+    # design ("Track trends on things you would otherwise skip. Raise a
+    # ticket when a trend indicates an incipient problem."). low/medium
+    # severity no longer pages on_duty immediately (see report_incident()
+    # below) -- these three fields are how a burst of otherwise-silent
+    # low/medium occurrences gets turned into a real, paging incident once
+    # it looks like an emerging problem, without needing a separate cron
+    # or polling loop: the check runs inline, at the same point occurrence
+    # data already updates.
+    window_start = fields.Datetime(
+        string="Trend Window Start",
+        default=lambda self: fields.Datetime.now(),
+        help="When the current rolling trend-detection window for this "
+        "source began. Reset to now() whenever an occurrence arrives more "
+        "than TREND_WINDOW_MINUTES after this timestamp, so window_"
+        "occurrence_count reflects a real burst rate, not a lifetime total "
+        "(occurrence_count already covers the lifetime total).",
+    )
+    window_occurrence_count = fields.Integer(
+        string="Occurrences In Current Window",
+        default=1,
+        help="How many times this source has occurred since window_start. "
+        "Distinct from occurrence_count (the incident's full lifetime "
+        "total) -- this resets whenever the rolling window lapses, so it "
+        "measures rate, not cumulative count.",
+    )
+    trend_raised = fields.Boolean(
+        string="Trend Escalation Raised",
+        default=False,
+        help="True once this source's own accumulating low/medium "
+        "occurrences crossed the trend threshold and a real, paging "
+        "'Trend:' incident was raised for it. Prevents raising a new trend "
+        "incident on every subsequent occurrence once one has already "
+        "fired for this burst.",
+    )
 
     def write(self, vals):
         now = fields.Datetime.now()
@@ -177,6 +229,79 @@ class PagerIncident(models.Model):
                 body=msg_body, partner_ids=partners.ids)   # fmt: skip
         incidents.write({"is_escalated": True})
 
+    def _notify_on_duty(self, incident, website_id, msg_body):
+        """
+        Posts a chatter notification to whoever is on-duty for website_id,
+        unless helpdesk integration is handling the page instead. Shared by
+        the immediate-incident path and the trend-escalation path below --
+        both need the exact same "who gets paged and how" logic.
+        """
+        on_duty_user = (
+            self.env["calendar.event"]
+            .with_context(website_id=website_id)
+            .get_current_on_duty_admin()
+        )
+
+        # Suppress native pager notifications if helpdesk integration is active
+        # to prevent duplicate alerting (Helpdesk will handle the page).
+        use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param(
+            "pager_duty.helpdesk_model"
+        )
+
+        if on_duty_user and not use_helpdesk:
+            mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "zero_sudo.mail_service_internal"
+            )
+            partner_ids = [on_duty_user.partner_id.id]
+            incident.with_user(mail_svc).message_post(
+                body=msg_body, partner_ids=partner_ids)   # fmt: skip
+
+    def _raise_trend_incident(self, source_incident, website_id):
+        """
+        [@ANCHOR: pager_raise_trend_incident]
+        source_incident's own low/medium occurrences just crossed
+        TREND_OCCURRENCE_THRESHOLD within TREND_WINDOW_MINUTES -- per
+        PAGER_DUTY_MCP_AI_TRIAGE.md's own design, that's exactly the case
+        that should stop being silently tracked and become a real, paging
+        incident, distinct from any individual occurrence. Creates
+        directly via IncidentModel.create() rather than recursing into
+        report_incident() -- a "Trend:"-prefixed source keeps this
+        immune to report_incident()'s own same-source dedup against
+        source_incident itself, and its severity is always "high" so it
+        always pages regardless of what severity the underlying pattern
+        was tracked at.
+        """
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "pager_duty.user_pager_incident_creator"
+        )
+        IncidentModel = self.env["pager.incident"].with_user(svc_uid)
+
+        trend_vals = {
+            "name": "INC-AUTO",
+            "source": f"Trend: {source_incident.source}",
+            "severity": "high",
+            "website_id": website_id,
+            "description": (
+                f"Trend detected: '{source_incident.source}' occurred "
+                f"{source_incident.window_occurrence_count} times between "
+                f"{source_incident.window_start} and "
+                f"{source_incident.last_occurred} (threshold: "
+                f"{TREND_OCCURRENCE_THRESHOLD} occurrences within "
+                f"{TREND_WINDOW_MINUTES} minutes). Individually these were "
+                f"tracked as '{source_incident.severity}' severity and did "
+                "not page on-duty; the accumulating rate now looks like an "
+                "incipient problem. See the original incident "
+                f"(#{source_incident.id}, '{source_incident.name}') for the "
+                "full occurrence history."
+            ),
+        }
+        trend_incident = IncidentModel.create(trend_vals)
+        source_incident.write({"trend_raised": True})
+        self._notify_on_duty(
+            trend_incident, website_id, _("New Incident Created (trend escalation)")
+        )
+        return trend_incident.id
+
     @api.model
     def report_incident(self, vals):
         """
@@ -222,38 +347,41 @@ class PagerIncident(models.Model):
 
         existing = IncidentModel.search(search_domain, limit=1)
         if existing:
-            existing.write(
-                {
-                    "occurrence_count": existing.occurrence_count + 1,
-                    "last_occurred": fields.Datetime.now(),
-                }
-            )
+            # [@ANCHOR: pager_trend_window_update]
+            now = fields.Datetime.now()
+            window_expired = not existing.window_start or (
+                now - existing.window_start
+            ).total_seconds() > TREND_WINDOW_MINUTES * 60
+            new_window_count = 1 if window_expired else existing.window_occurrence_count + 1
+            write_vals = {
+                "occurrence_count": existing.occurrence_count + 1,
+                "last_occurred": now,
+                "window_occurrence_count": new_window_count,
+            }
+            if window_expired:
+                write_vals["window_start"] = now
+            existing.write(write_vals)
+
+            if (
+                existing.severity in TREND_TRACKED_SEVERITIES
+                and not existing.trend_raised
+                and new_window_count >= TREND_OCCURRENCE_THRESHOLD
+            ):
+                self._raise_trend_incident(existing, website_id)
             return existing.id
 
         if vals.get("name", "New") == "New":
             vals["name"] = "INC-AUTO"
 
         incident = IncidentModel.create(vals)
-        on_duty_user = (
-            self.env["calendar.event"]
-            .with_context(website_id=website_id)
-            .get_current_on_duty_admin()
-        )
 
-        # Suppress native pager notifications if helpdesk integration is active
-        # to prevent duplicate alerting (Helpdesk will handle the page).
-        use_helpdesk = self.env["zero_sudo.security.utils"]._get_system_param(
-            "pager_duty.helpdesk_model"
-        )
-
-        if on_duty_user and not use_helpdesk:
-            mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "zero_sudo.mail_service_internal"
-            )
-            msg_body = _("New Incident Created")
-            partner_ids = [on_duty_user.partner_id.id]
-            incident.with_user(mail_svc).message_post(
-                body=msg_body, partner_ids=partner_ids)   # fmt: skip
+        # [@ANCHOR: pager_trend_severity_gate] low/medium severities are
+        # exactly the ones a human on-call engineer would otherwise
+        # deprioritize/skip -- these get tracked (occurrence_count/
+        # window_occurrence_count above) but do not page immediately.
+        # high/critical keep today's unchanged immediate-page behavior.
+        if vals.get("severity") not in TREND_TRACKED_SEVERITIES:
+            self._notify_on_duty(incident, website_id, _("New Incident Created"))
         return incident.id
 
     def message_new(self, msg_dict, custom_values=None):

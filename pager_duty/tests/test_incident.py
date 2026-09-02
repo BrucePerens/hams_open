@@ -9,6 +9,7 @@ import logging
 import datetime
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.pager_duty.models.incident import TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
 from odoo import fields, _
 
@@ -254,6 +255,126 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         incident.invalidate_recordset(["occurrence_count", "last_occurred"])
         self.assertEqual(incident.occurrence_count, 2, "occurrence_count must increment on a dedup match.")
         self.assertGreater(incident.last_occurred, first_last_occurred, "last_occurred must actually advance on a repeat report, not just tie.")
+
+    def test_11_low_severity_does_not_page_but_high_severity_still_does(self):
+        # Tests [@ANCHOR: pager_trend_severity_gate]
+        # Tests [@ANCHOR: pager_trend_detection_params]
+        # Tests [@ANCHOR: pager_trend_detection]
+        # PAGER_DUTY_MCP_AI_TRIAGE.md's own trend-detection design: low/
+        # medium severity incidents get tracked but must NOT page on_duty
+        # immediately (that's the whole point of deferring to a trend
+        # check instead) -- while high/critical must keep today's
+        # unchanged immediate-page behavior.
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
+        )
+        mock_client = MagicMock()
+        mock_redis.Redis.return_value = mock_client
+        mock_client.set.return_value = True
+
+        mock_notify = self.safe_patch_object(type(self.incident_model), "_notify_on_duty")
+
+        self.incident_model.report_incident(
+            {"source": "low_sev_test", "severity": "low", "description": "sub-critical, tracked only"}
+        )
+        mock_notify.assert_not_called()
+
+        self.incident_model.report_incident(
+            {"source": "high_sev_test", "severity": "high", "description": "must still page"}
+        )
+        mock_notify.assert_called_once()
+
+    def test_12_trend_window_resets_after_it_lapses(self):
+        # Tests [@ANCHOR: pager_trend_window_update]
+        # window_occurrence_count must reflect a real burst rate, not a
+        # lifetime total -- a repeat occurrence arriving AFTER the
+        # rolling window has lapsed must reset the window counter to 1,
+        # even though occurrence_count (the lifetime total) keeps
+        # incrementing regardless.
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
+        )
+        mock_client = MagicMock()
+        mock_redis.Redis.return_value = mock_client
+        mock_client.set.return_value = True
+        self.safe_patch_object(type(self.incident_model), "_notify_on_duty")
+
+        fake_now = [fields.Datetime.now()]
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.fields.Datetime.now",
+            side_effect=lambda: fake_now[0],
+        )
+
+        vals = {"source": "window_reset_test", "severity": "low", "description": "first"}
+        first_id = self.incident_model.report_incident(vals)
+        incident = self.incident_model.browse(first_id)
+        self.assertEqual(incident.window_occurrence_count, 1)
+
+        # Well inside the window: a second occurrence increments the
+        # window counter, not just the lifetime counter.
+        fake_now[0] = fake_now[0] + datetime.timedelta(minutes=5)
+        self.incident_model.report_incident({**vals, "description": "second, inside window"})
+        incident.invalidate_recordset(["window_occurrence_count", "occurrence_count"])
+        self.assertEqual(incident.window_occurrence_count, 2, "Still within the window: must accumulate.")
+        self.assertEqual(incident.occurrence_count, 2)
+
+        # Past TREND_WINDOW_MINUTES since window_start: the window must
+        # reset, even though this is still the same still-open incident.
+        fake_now[0] = fake_now[0] + datetime.timedelta(minutes=TREND_WINDOW_MINUTES + 1)
+        self.incident_model.report_incident({**vals, "description": "third, window lapsed"})
+        incident.invalidate_recordset(["window_occurrence_count", "occurrence_count", "window_start"])
+        self.assertEqual(incident.window_occurrence_count, 1, "Window lapsed: must reset to 1, not keep accumulating.")
+        self.assertEqual(incident.occurrence_count, 3, "Lifetime total must keep incrementing regardless of window resets.")
+
+    def test_13_trend_threshold_raises_a_real_paging_incident_exactly_once(self):
+        # Tests [@ANCHOR: pager_raise_trend_incident]
+        # Crossing TREND_OCCURRENCE_THRESHOLD within the window for a
+        # low/medium-severity source must raise a real, distinct, paging
+        # "Trend:" incident -- and must not raise a second one on further
+        # occurrences of the same burst (trend_raised must gate this).
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.models.incident.redis")
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.redis_pool", MagicMock()
+        )
+        mock_client = MagicMock()
+        mock_redis.Redis.return_value = mock_client
+        mock_client.set.return_value = True
+        mock_notify = self.safe_patch_object(type(self.incident_model), "_notify_on_duty")
+
+        fake_clock_base = fields.Datetime.now()
+        fake_clock_calls = itertools.count()
+        self.safe_patch(
+            "odoo.addons.pager_duty.models.incident.fields.Datetime.now",
+            side_effect=lambda: fake_clock_base + datetime.timedelta(seconds=next(fake_clock_calls)),
+        )
+
+        vals = {"source": "trend_burst_test", "severity": "medium", "description": "burst"}
+        first_id = self.incident_model.report_incident(vals)
+        for _i in range(TREND_OCCURRENCE_THRESHOLD - 1):
+            self.incident_model.report_incident({**vals, "description": f"burst occurrence {_i}"})
+
+        # _notify_on_duty must have fired exactly once -- for the trend
+        # escalation raised by crossing the threshold above, never for the
+        # low/medium source's own individual occurrences.
+        mock_notify.assert_called_once()
+
+        trend_incident = self.incident_model.search([("source", "=", f"Trend: {vals['source']}")])
+        self.assertTrue(trend_incident, "Crossing the trend threshold must raise a real, separate incident.")
+        self.assertEqual(trend_incident.severity, "high", "A trend escalation must always page, regardless of the underlying pattern's own severity.")
+        mock_notify.assert_called_once()
+
+        source_incident = self.incident_model.browse(first_id)
+        source_incident.invalidate_recordset(["trend_raised"])
+        self.assertTrue(source_incident.trend_raised)
+
+        # One more occurrence of the same burst must NOT raise a second
+        # trend incident.
+        self.incident_model.report_incident({**vals, "description": "one more, after trend already raised"})
+        mock_notify.assert_called_once()
+        all_trend_incidents = self.incident_model.search([("source", "=", f"Trend: {vals['source']}")])
+        self.assertEqual(len(all_trend_incidents), 1, "trend_raised must prevent a duplicate trend incident for the same burst.")
 
 
 @tagged("integration", "post_install", "-at_install")
