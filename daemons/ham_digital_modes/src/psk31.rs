@@ -182,13 +182,19 @@ pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i
 /// phase matches the previous symbol, 0 if it flipped 180 degrees) --
 /// exactly mirroring the encoder's own phase-reversal convention.
 /// Correlates exactly one symbol's worth of samples against the local
-/// carrier reference and returns its estimated phase. `sample_idx` is
-/// the running sample count since the start of the whole signal (not
-/// just this chunk) so the carrier reference stays phase-continuous
-/// across repeated calls -- what makes this usable both for a
-/// whole-buffer decode and for `Psk31Decoder`'s incremental streaming
-/// use, from the same logic.
-fn correlate_symbol_phase(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_idx_start: u64) -> f64 {
+/// carrier reference and returns its raw (I, Q) correlation sums.
+/// `sample_idx_start` is the running sample count since the start of the
+/// whole signal (not just this chunk) so the carrier reference stays
+/// phase-continuous across repeated calls -- what makes this usable both
+/// for a whole-buffer decode and for `Psk31Decoder`'s incremental
+/// streaming use, from the same logic. Exposed separately from
+/// `correlate_symbol_phase` (which just calls this and takes the angle)
+/// because the raw I/Q pair is real, useful data in its own right --
+/// `DIGITAL_MODES.md`'s browser constellation display plots exactly this,
+/// not a re-derived approximation, so it needs the same numbers the
+/// demodulator itself decides bits from, not a separate computation that
+/// could silently drift from what's actually being decoded.
+fn correlate_symbol_iq(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_idx_start: u64) -> (f64, f64) {
     let samples_per_symbol = chunk.len().max(1);
     let mut i_sum = 0.0f64;
     let mut q_sum = 0.0f64;
@@ -205,6 +211,14 @@ fn correlate_symbol_phase(chunk: &[i16], carrier_hz: f64, sample_rate: u32, samp
         i_sum += x * carrier_phase.cos() * weight;
         q_sum += x * carrier_phase.sin() * weight;
     }
+    (i_sum, q_sum)
+}
+
+/// Correlates exactly one symbol's worth of samples against the local
+/// carrier reference and returns its estimated phase -- see
+/// `correlate_symbol_iq`'s own doc comment for the underlying math.
+fn correlate_symbol_phase(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_idx_start: u64) -> f64 {
+    let (i_sum, q_sum) = correlate_symbol_iq(chunk, carrier_hz, sample_rate, sample_idx_start);
     q_sum.atan2(i_sum)
 }
 
@@ -325,13 +339,33 @@ impl Psk31Decoder {
 
     /// Feeds newly-arrived audio samples in; returns any characters
     /// that completed decoding as a result (usually empty -- most calls
-    /// won't happen to land on a character boundary).
+    /// won't happen to land on a character boundary). Thin wrapper over
+    /// `feed_with_iq` that discards the per-symbol I/Q -- kept as its own
+    /// method (rather than making every caller ignore a tuple) since most
+    /// callers (the primary QSO channel decode, the attestation-subcarrier
+    /// detector) only ever wanted the text.
     pub fn feed(&mut self, samples: &[i16]) -> String {
+        self.feed_with_iq(samples).0
+    }
+
+    /// Same as `feed`, but also returns each symbol's raw (I, Q)
+    /// correlation pair, in the order they were decoded during this call
+    /// -- the real numbers `DIGITAL_MODES.md`'s browser constellation
+    /// display plots, not a re-derived approximation (see
+    /// `correlate_symbol_iq`'s own doc comment for why that distinction
+    /// matters). Usually 0 or 1 points per call at this daemon's real
+    /// audio-chunk cadence, since one symbol is ~32ms at 48kHz/31.25 baud
+    /// and audio chunks arrive faster than that -- never assume exactly
+    /// one.
+    pub fn feed_with_iq(&mut self, samples: &[i16]) -> (String, Vec<(f64, f64)>) {
         self.pending_samples.extend_from_slice(samples);
         let mut out = String::new();
+        let mut iq_points = Vec::new();
         while self.pending_samples.len() >= self.samples_per_symbol {
             let chunk: Vec<i16> = self.pending_samples.drain(..self.samples_per_symbol).collect();
-            let phase = correlate_symbol_phase(&chunk, self.carrier_hz, self.sample_rate, self.sample_idx);
+            let (i, q) = correlate_symbol_iq(&chunk, self.carrier_hz, self.sample_rate, self.sample_idx);
+            iq_points.push((i, q));
+            let phase = q.atan2(i);
             let bit = phase_to_bit(phase, self.prev_phase);
             self.prev_phase = Some(phase);
             self.sample_idx += self.samples_per_symbol as u64;
@@ -339,7 +373,7 @@ impl Psk31Decoder {
                 out.push(c);
             }
         }
-        out
+        (out, iq_points)
     }
 }
 
@@ -484,5 +518,99 @@ mod tests {
             decoded.push_str(&decoder.feed(&[sample]));
         }
         assert_eq!(decoded, msg);
+    }
+
+    #[test]
+    fn feed_with_iq_decodes_identically_to_feed() {
+        // feed() is a thin wrapper over feed_with_iq() -- prove they
+        // produce exactly the same text for the same input, not just
+        // that feed_with_iq() compiles.
+        let msg = "CQ CQ DE K6BP";
+        let sample_rate = 8000u32;
+        let carrier = 1000.0;
+        let audio = psk31_encode_text(msg, carrier, sample_rate);
+
+        let mut decoder_a = Psk31Decoder::new(carrier, sample_rate);
+        let mut decoder_b = Psk31Decoder::new(carrier, sample_rate);
+        let mut decoded_a = String::new();
+        let mut decoded_b = String::new();
+        for chunk in audio.chunks(41) {
+            decoded_a.push_str(&decoder_a.feed(chunk));
+            let (text, _) = decoder_b.feed_with_iq(chunk);
+            decoded_b.push_str(&text);
+        }
+        assert_eq!(decoded_a, msg);
+        assert_eq!(decoded_a, decoded_b);
+    }
+
+    #[test]
+    fn feed_with_iq_returns_one_point_per_decoded_symbol() {
+        // The real invariant a caller streaming this to a browser
+        // constellation display depends on: every symbol boundary
+        // crossed during a feed_with_iq() call produces exactly one (I,
+        // Q) point, in order, not a coincidental count.
+        let msg = "TEST";
+        let sample_rate = 8000u32;
+        let carrier = 1000.0;
+        let audio = psk31_encode_text(msg, carrier, sample_rate);
+        let samples_per_symbol = (sample_rate as f64 / PSK31_BAUD).round() as usize;
+        let expected_symbols = audio.len() / samples_per_symbol;
+
+        let mut decoder = Psk31Decoder::new(carrier, sample_rate);
+        let (_, iq_points) = decoder.feed_with_iq(&audio);
+        assert_eq!(iq_points.len(), expected_symbols);
+    }
+
+    #[test]
+    fn feed_with_iq_points_reproduce_the_same_phase_bit_decision_as_correlate_symbol_phase() {
+        // The real numbers this feeds a browser constellation display
+        // have to be the SAME numbers the demodulator itself used to
+        // decide each bit -- not a separately-computed approximation
+        // that could silently drift. Prove atan2(q, i) on each returned
+        // point reconstructs a phase sequence that differentially
+        // decodes to the same bits psk31_demodulate() (the reference,
+        // independently-tested whole-buffer decoder) gets from the
+        // identical audio.
+        let msg = "K6BP DE W1AW";
+        let sample_rate = 8000u32;
+        let carrier = 1000.0;
+        let audio = psk31_encode_text(msg, carrier, sample_rate);
+
+        let reference_bits = psk31_demodulate(&audio, carrier, sample_rate);
+
+        let mut decoder = Psk31Decoder::new(carrier, sample_rate);
+        let (_, iq_points) = decoder.feed_with_iq(&audio);
+
+        let mut prev_phase: Option<f64> = None;
+        let mut reconstructed_bits = Vec::new();
+        for (i, q) in &iq_points {
+            let phase = q.atan2(*i);
+            reconstructed_bits.push(phase_to_bit(phase, prev_phase));
+            prev_phase = Some(phase);
+        }
+        assert_eq!(reconstructed_bits, reference_bits);
+    }
+
+    #[test]
+    fn feed_with_iq_points_have_real_nonzero_magnitude_for_a_real_signal() {
+        // A degenerate all-zero (or near-zero) I/Q stream would still
+        // "decode" via atan2's own defined behavior at the origin, but
+        // would be visually meaningless as a constellation point --
+        // catches a broken correlation (e.g. an accidentally-zeroed
+        // carrier reference) that text-only decode correctness wouldn't
+        // surface, since phase_to_bit only cares about the angle, not
+        // the magnitude.
+        let msg = "DE K6BP";
+        let sample_rate = 8000u32;
+        let carrier = 1000.0;
+        let audio = psk31_encode_text(msg, carrier, sample_rate);
+
+        let mut decoder = Psk31Decoder::new(carrier, sample_rate);
+        let (_, iq_points) = decoder.feed_with_iq(&audio);
+        assert!(!iq_points.is_empty());
+        for (i, q) in &iq_points {
+            let magnitude = (i * i + q * q).sqrt();
+            assert!(magnitude > 0.01, "expected a real, non-degenerate correlation magnitude, got {magnitude}");
+        }
     }
 }
