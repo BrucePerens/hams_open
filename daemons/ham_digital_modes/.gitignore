@@ -1,1 +1,6 @@
 target/
+
+# Real third-party off-air WSPR recording used by
+# tests/wspr_real_off_air_capture.rs -- deliberately not committed (see
+# that file's own module doc comment for why and where to get it).
+tests/fixtures/
