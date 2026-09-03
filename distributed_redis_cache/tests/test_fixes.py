@@ -282,36 +282,102 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
                 return self.closed
             async def close(self):
                 self.closed = True
-            async def execute(self, q):
+            async def add_listener(self, channel, callback):
+                pass
+            async def execute(self, q, timeout=None):
                 raise Exception("Fake execute error")
 
         mock_conn = MockConn()
-        cm.redis_client = None
 
-        # Mock reconnect to just add our mock conn and raise CancelledError after
-        async def mock_reconnect():
-            cm.main_db_conns.append(mock_conn)
+        class FakeRedisClient:
+            async def ping(self):
+                return True
+            async def aclose(self):
+                pass
 
-        async def _mock_sleep(delay):
-            raise asyncio.CancelledError()
+        # Adversarial security review, 2026-09-03: this test used to set up
+        # mocks and then never call main() at all -- no assertions, no
+        # exercised code path, and a dead mock_reconnect() helper
+        # referencing cm.main_db_conns, an attribute that has never existed
+        # (the real state, db_conns, is a local variable inside main()).
+        # The trailing comment claimed "structural verification is done by
+        # direct source code inspection in test_b2_fixes.py" -- confirmed
+        # false: that file has no reference to cache_manager at all. This
+        # now actually calls main() and drives it through the exact
+        # `execute()`-raises path the health check hits, asserting the real
+        # documented behavior (connection closed, db_conns cleared) rather
+        # than trusting a comment.
+        mock_asyncpg = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncpg')
+
+        async def mock_connect(*args, **kwargs):
+            return mock_conn
+        mock_asyncpg.connect = mock_connect
+
+        redis_patch = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.redis.Redis')
+        redis_patch.return_value = FakeRedisClient()
+
+        mock_sleep = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncio.sleep')
+
+        # First sleep() call is the 5s post-exception recovery pause inside
+        # the outer except block (line ~205) -- let it proceed normally so
+        # the real cleanup code (close + clear) actually runs. The second
+        # call is the loop's own 60s idle wait, which would never be
+        # reached in a real single-iteration failure -- raise
+        # CancelledError there to cleanly stop the daemon after exactly one
+        # full failure-and-recovery cycle, the same "stop the while True
+        # loop deterministically" intent the original (broken) test had.
+        call_count = {"n": 0}
+
+        async def sleep_side_effect(delay):
+            call_count["n"] += 1
+            if call_count["n"] >= 2:
+                raise asyncio.CancelledError()
+
+        mock_sleep.side_effect = sleep_side_effect
+
+        asyncio.run(cm.main())
+
+        self.assertTrue(mock_conn.closed, "the health-check failure's own except block must close the stale connection")
+
+    def test_cache_manager_reconnect_failure_does_not_crash_the_daemon(self):
+        # [@ANCHOR: COMM_test_cache_manager_reconnect_failure]
+        # Adversarial security review, 2026-09-03: _reconnect()'s own
+        # except block (line ~185, "Could not connect to database") was
+        # annotated "Tested by COMM_test_cache_manager_exception_handling"
+        # but that test only exercises broadcast_to_redis()'s own Redis-
+        # publish failure -- confirmed by reading it, this path had no real
+        # coverage at all. A daemon that can never reach Postgres in the
+        # first place (a real, realistic startup-ordering condition, not
+        # just an attack) must log and keep retrying, not crash.
+        class FakeRedisClient:
+            async def ping(self):
+                return True
+            async def aclose(self):
+                pass
 
         mock_asyncpg = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncpg')
-        _ = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.redis.Redis')
+
+        async def failing_connect(*args, **kwargs):
+            raise ConnectionRefusedError("Fake: Postgres unreachable")
+        mock_asyncpg.connect = failing_connect
+
+        redis_patch = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.redis.Redis')
+        redis_patch.return_value = FakeRedisClient()
+
         mock_sleep = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncio.sleep')
-        if True:
-             
-            # Make sleep raise CancelledError so main() loop breaks
-            def sleep_side_effect(delay):
-                raise asyncio.CancelledError()
-                
-            mock_sleep.side_effect = sleep_side_effect
-            
-            # Try to run main. It will try to reconnect, so we need asyncpg.connect to return our mock conn
-            async def mock_connect(*args, **kwargs):
-                return mock_conn
-                
-            mock_asyncpg.connect = mock_connect
-            
-            # Since main is complex, a simpler test is to just parse the file and ensure `await conn.close()` exists before `db_conns.clear()` in the exception handler.
-            # Structural verification is done by direct
-            # source code inspection in test_b2_fixes.
+
+        # db_conns starts empty, so main()'s own `if not db_conns:` branch
+        # calls _reconnect() on the very first loop iteration, which
+        # swallows failing_connect()'s exception internally and leaves
+        # db_conns still empty -- the loop then reaches its own
+        # `await asyncio.sleep(60)` with no exception ever having reached
+        # the outer except block. Raise CancelledError on that first sleep
+        # to stop the daemon after exactly one reconnect attempt.
+        async def sleep_side_effect(delay):
+            raise asyncio.CancelledError()
+        mock_sleep.side_effect = sleep_side_effect
+
+        try:
+            asyncio.run(cm.main())
+        except ConnectionRefusedError:
+            self.fail("_reconnect()'s own except block did not swallow the connection failure")

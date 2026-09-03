@@ -134,6 +134,21 @@ async def main():
     logger.info("Initializing Distributed Cache Manager Daemon...")
 
     # 1. Connect to Redis
+    #
+    # Adversarial security review, 2026-09-03: no socket_timeout/
+    # socket_connect_timeout was set, and this client is created once and
+    # never re-verified after the initial ping() -- if Redis becomes
+    # unresponsive later (CPU-pegged, a blocking command from another
+    # client, a partial network partition), pipe.execute() in
+    # broadcast_to_redis() below could hang indefinitely. Since
+    # postgres_notify_handler() spawns a brand-new task per NOTIFY
+    # regardless of whether earlier ones finished, a sustained Redis stall
+    # would grow _background_tasks (and its open sockets/coroutine frames)
+    # without bound for as long as the stall lasted, while silently
+    # dropping every invalidation during that window. A real socket
+    # timeout means a stalled Redis surfaces as a real, per-call failure
+    # (caught by broadcast_to_redis()'s own except block) instead of an
+    # unbounded hang.
     try:
         redis_client = redis.Redis(
             host=REDIS_HOST,
@@ -141,6 +156,8 @@ async def main():
             db=0,
             password=REDIS_PASS,
             decode_responses=True,
+            socket_timeout=10,
+            socket_connect_timeout=10,
         )
         await redis_client.ping()
         logger.info("Connected to Redis at %s:%s", REDIS_HOST, REDIS_PORT)
@@ -191,11 +208,27 @@ async def main():
                 await _reconnect()
                 
             # Perform periodic health check on all connections
+            #
+            # Adversarial security review, 2026-09-03: this used to call
+            # execute() with no timeout. asyncpg.connect()'s own `timeout`
+            # kwarg only bounds the initial TCP/auth handshake -- it says
+            # nothing about later calls. If the TCP session goes into a
+            # real "blackhole" state after connecting (a NAT/firewall/
+            # routing change silently dropping packets, an overloaded
+            # Postgres backend that accepts the socket but never replies --
+            # a realistic infra failure, not an exotic attack), this
+            # execute() call blocked forever, inside the main loop, before
+            # ever reaching the except/reconnect branch below -- the daemon
+            # looked "up" while silently no longer noticing its own
+            # connection was dead, for as long as the OS TCP retransmit
+            # timeout takes (unbounded on some configurations). A real
+            # timeout here means a stuck connection surfaces as a real,
+            # loud reconnect attempt within seconds, not silently forever.
             for conn in list(db_conns):
                 if conn.is_closed():
                     await _reconnect()
                     break
-                await conn.execute("SELECT 1")
+                await conn.execute("SELECT 1", timeout=10)
             
             await asyncio.sleep(60)  # audit-ignore-sleep: # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
         except asyncio.CancelledError:
