@@ -11,7 +11,7 @@ import logging
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -115,6 +115,39 @@ class TestBinaryVersion(HamsTransactionCase):
             expected_filename,
             msg_deterministic,
         )
+
+    def test_action_download_to_pool_and_notify_tenants_reject_an_unprivileged_caller(self):
+        # Adversarial security review, 2026-09-03: neither action_download_
+        # to_pool nor action_notify_tenants had any group check at all,
+        # unlike their sibling action_install() (binary_manifest.py,
+        # test_12_action_install_permissions). binary.version grants
+        # base.group_portal read-only access, and read access alone is
+        # enough to invoke either method via RPC.
+        version = self.env["binary.version"].create(
+            {
+                "manifest_id": self.manifest.id,
+                "version_number": "1.4",
+                "url": "https://example.com/v1.4",
+                "checksum": "b" * 64,
+            }
+        )
+        restricted_user = self.env["res.users"].create(
+            {
+                "name": "Restricted Binary Version User",
+                "login": "restricted_binary_version_user",
+                "group_ids": [(6, 0, [])],
+            }
+        )
+        with self.assertRaises(
+            UserError,
+            msg="[!] DIAGNOSTIC FOR AI: a user without the downloader manager group must not be able to trigger a real download.",
+        ):
+            version.with_user(restricted_user).action_download_to_pool()
+        with self.assertRaises(
+            UserError,
+            msg="[!] DIAGNOSTIC FOR AI: a user without the downloader manager group must not be able to spam real pager.incident notifications.",
+        ):
+            version.with_user(restricted_user).action_notify_tenants()
 
     def test_download_to_pool_raw(self):
         # [!] DIAGNOSTIC FOR AI: Testing download to pool for raw binary.

@@ -4,7 +4,7 @@
 import logging
 import os
 from odoo import models, fields, api, tools, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -97,6 +97,21 @@ class BinaryVersion(models.Model):
         # [@ANCHOR: binary_version_download_pool]
         """Downloads and verifies the binary into the central version pool."""
         self.ensure_one()
+        # Adversarial security review, 2026-09-03: unlike its sibling
+        # action_install() (binary_manifest.py), this had no group check at
+        # all. binary.version grants base.group_portal read-only access
+        # (ir.model.access.csv), and the row-level rule allows any
+        # global (company_id=False) manifest's versions to be read by any
+        # portal user in any company -- read access alone is enough to
+        # invoke this via RPC (it never calls write(), which would have
+        # needed a write ACL). Any portal/customer account could trigger a
+        # real server-side download-and-disk-write cycle for any globally-
+        # scoped binary version. Same group check as action_install().
+        if not (
+            self.env.user.has_group("binary_downloader.group_binary_downloader_manager")
+            or self.env.is_admin()
+        ):
+            raise UserError(_("You do not have sufficient permissions to download binaries."))
 
         # Deterministic advisory lock to prevent concurrent downloads of the SAME version
         lock_id = self.env["zero_sudo.security.utils"]._get_deterministic_hash(
@@ -122,6 +137,18 @@ class BinaryVersion(models.Model):
 
     def action_notify_tenants(self):
         self.ensure_one()
+        # Adversarial security review, 2026-09-03: no group check at all --
+        # any portal user with read access to a global binary.version
+        # record could trigger real pager.incident.create() calls for
+        # every tenant/website linked to the manifest (real on-call pages/
+        # alerts), unbounded and with no rate limit, purely from read
+        # access to the triggering record. Same group check as
+        # action_install()/action_download_to_pool().
+        if not (
+            self.env.user.has_group("binary_downloader.group_binary_downloader_manager")
+            or self.env.is_admin()
+        ):
+            raise UserError(_("You do not have sufficient permissions to notify tenants."))
         limit = 100
         offset = 0
         
