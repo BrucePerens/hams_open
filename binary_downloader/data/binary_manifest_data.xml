@@ -24,8 +24,8 @@
         <record id="binary_manifest_cloudflared" model="binary.manifest">
             <field name="company_id" eval="False"/>
             <field name="name">cloudflared</field>
-            <field name="url">https://github.com/cloudflare/cloudflared/releases/download/2026.8.2/cloudflared-linux-amd64</field>
-            <field name="checksum">fcfb02b575a52ca1af2e3267af4e1517bcdeb30ac48c834c69abaed3c0576ad2</field>
+            <field name="url">https://github.com/cloudflare/cloudflared/releases/download/2026.8.3/cloudflared-linux-amd64</field>
+            <field name="checksum">f29324fe934d1e100617484c78deef803c4dc2cd351d645bbde42e96b4fccc5e</field>
             <field name="archive_type">binary</field>
         </record>
     </data>
