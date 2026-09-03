@@ -78,6 +78,8 @@ class TestBackupSecurity(RealTransactionCase):
             "/var/lib/odoo/backups/test`id`",
             "/var/lib/odoo/backups/test$(id)",
             "/var/lib/odoo/backups/test\n/etc",
+            "/var/lib/odoo/backups/test'id'",
+            '/var/lib/odoo/backups/test"id"',
         ]
 
         for path in malicious_paths:

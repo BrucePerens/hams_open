@@ -63,6 +63,8 @@ def validate_backup_path(path):
         "\n",
         "\r",
         "\\",
+        "'",
+        '"',
     ]
     if any(char in path for char in metacharacters):
         raise UserError(_("Invalid path: path contains illegal characters."))

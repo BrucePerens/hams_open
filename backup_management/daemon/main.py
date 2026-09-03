@@ -210,7 +210,7 @@ def execute_job(ch, method, properties, body):
                 if (
                     target_path_arg.startswith("-")
                     or ".." in target_path_arg
-                    or any(c in target_path_arg for c in "; &|`$()<>*?[]{\n")
+                    or any(c in target_path_arg for c in "; &|`$()<>*?[]{\n'\"")
                 ):
                     err_msg = f"""Malicious path detected in worker: {target_path_arg}"""
                     raise PermissionError(err_msg)
