@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 from odoo.tests import tagged
+from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError, AccessError
@@ -523,6 +524,54 @@ class TestKeyRegistry(RealTransactionCase):
             name for name in os.listdir(os.path.dirname(path)) if name.startswith(".daemon_key_")
         ]
         self.assertEqual(leftover_temp_files, [], "a failed write must not leave a stray temp file behind.")
+
+    def test_register_daemon_rejects_a_colliding_env_file_path(self):
+        # Adversarial security review, 2026-09-03: register_daemon()'s own
+        # authorization check only verifies the caller IS the target
+        # service account -- it never verified env_file_path was unique.
+        # A caller could previously register a brand-new daemon_name
+        # while pointing env_file_path at a DIFFERENT, already-registered
+        # daemon's real credential file, and register_daemon() would
+        # happily create the new row and overwrite that other daemon's
+        # real .env with its own (lower-privileged) credentials on the
+        # very next rotation. [!] DIAGNOSTIC FOR AI: this must now fail
+        # closed, before any file I/O happens.
+        real_path = "/opt/hams/etc/keys/collision_victim.env"
+        self.test_env_paths.append(real_path)
+        self.env["daemon.key.registry"].with_user(self.manager_user.id).register_daemon(
+            "Collision Victim Daemon",
+            "daemon_key_manager.user_daemon_key_manager_service",
+            real_path,
+        )
+        self.assertTrue(
+            os.path.exists(real_path), "test setup assumption: the victim's real .env was written"
+        )
+        with open(real_path, "r") as f:  # audit-ignore-path
+            original_content = f.read()
+
+        with mute_logger("odoo.sql_db"):
+            with self.assertRaises(Exception):
+                self.env["daemon.key.registry"].with_user(self.manager_user.id).register_daemon(
+                    "Attacker Daemon",
+                    "daemon_key_manager.user_daemon_key_manager_service",
+                    real_path,
+                )
+
+        with open(real_path, "r") as f:  # audit-ignore-path
+            content_after = f.read()
+        self.assertEqual(
+            content_after,
+            original_content,
+            "[!] DIAGNOSTIC FOR AI: a rejected registration must not "
+            "overwrite the real victim daemon's credential file at all.",
+        )
+        self.assertEqual(
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .search_count([("name", "=", "Attacker Daemon")]),
+            0,
+            "the colliding registration must not have been persisted either.",
+        )
 
 
 @tagged("post_install", "-at_install")

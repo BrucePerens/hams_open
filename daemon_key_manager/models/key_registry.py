@@ -59,6 +59,21 @@ class DaemonKeyRegistry(models.Model):
     _chk_path = "CHECK(LENGTH(TRIM(env_file_path)) > 0)"
     _path_not_empty = models.Constraint(_chk_path, _err_path)
 
+    # Adversarial security review, 2026-09-03: register_daemon()'s own
+    # authorization check only verified the CALLER is the target service
+    # account being registered -- it never verified env_file_path itself
+    # was unique. A caller could register_daemon() under a brand-new,
+    # never-used daemon_name while setting env_file_path to point at a
+    # DIFFERENT, already-registered daemon's real credential file --
+    # register_daemon() would create a new registry row and immediately
+    # call _rotate_key_and_write_file(), overwriting that other daemon's
+    # real .env with the calling account's own (lower-privileged)
+    # credentials. Real path is a real filesystem location -- inherently
+    # global, not per-company, unlike `name` above -- so this is a plain
+    # single-column uniqueness constraint, not company-scoped.
+    _err_path_uniq = "This environment file path is already registered to another daemon."
+    _path_uniq = models.Constraint("unique(env_file_path)", _err_path_uniq)
+
     @api.constrains("user_id")
     def _check_user_is_service_account(self):
         # # Tested by [@ANCHOR: COMM_test_security_constraints]
