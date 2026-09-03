@@ -539,6 +539,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "user_websites.docs_installed",
             "user_websites_seo.docs_installed",
             "user_websites.global_website_page_limit",
+            # Same shape as global_website_page_limit immediately above --
+            # a non-secret quota default blog.blog/blog.post's own create()
+            # overrides need to read as the acting (non-admin) user.
+            "user_websites.global_blog_limit",
+            "user_websites.global_blog_post_limit",
             "content_security_policy.report_url",
             "user_websites.last_digest_id",
             # An HTML disclaimer/preface field (res.config.settings'

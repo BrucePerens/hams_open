@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 from odoo import models, api, fields, _
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, ValidationError
 
 
 class BlogBlog(models.Model):
@@ -12,9 +12,55 @@ class BlogBlog(models.Model):
 
     _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog with this exact title!")
 
+    def _check_blog_quota(self, vals_list):
+        # [@ANCHOR: user_websites_blog_quota_check]
+        # Adversarial security review, 2026-09-03: unlike website.page
+        # ([@ANCHOR: website_page_quota_check]), blog.blog create() had no
+        # quota at all -- any authenticated user could create unbounded
+        # blog containers via direct RPC. Real default is small (5) since
+        # a real user typically needs very few of these, unlike posts.
+        # Deliberately no su/admin exemption here, matching
+        # website.page's own established _get_page_limit() check exactly
+        # -- that check is keyed purely on the owner_user_id field in the
+        # payload, not on who the RPC caller is, and adding an exemption
+        # here would be new, undiscussed behavior beyond what this
+        # proposal's own fix is meant to close.
+        owner_ids = [
+            vals.get("owner_user_id") for vals in vals_list if vals.get("owner_user_id")
+        ]
+        if not owner_ids:
+            return
+        unique_owner_ids = list(set(owner_ids))
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
+        limits = {user.id: user._get_blog_limit() for user in users}
+
+        existing_counts = {u_id: 0 for u_id in unique_owner_ids}
+        for owner, count in (
+            self.env["blog.blog"]
+            .with_user(svc_uid)
+            ._read_group([("owner_user_id", "in", unique_owner_ids)], ["owner_user_id"], ["__count"])
+        ):
+            existing_counts[owner.id] = count
+
+        batch_counts = {u_id: 0 for u_id in unique_owner_ids}
+        for vals in vals_list:
+            o_id = vals.get("owner_user_id")
+            if o_id:
+                batch_counts[o_id] += 1
+
+        for o_id in unique_owner_ids:
+            if existing_counts[o_id] + batch_counts[o_id] > limits[o_id]:
+                raise ValidationError(
+                    _("You have reached your limit of %s blogs.") % limits[o_id]
+                )
+
     @api.model_create_multi
     def create(self, vals_list):
         self._check_proxy_ownership_create(vals_list)
+        self._check_blog_quota(vals_list)
         if not (
             self.env.su
             or self.env.user.has_group("base.group_system")

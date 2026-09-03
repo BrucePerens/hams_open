@@ -394,6 +394,31 @@ class ResUsers(models.Model):
             )
         return int(limit)
 
+    # Adversarial security review, 2026-09-03: website.page enforces
+    # _get_page_limit() on create() (website_page.py, [@ANCHOR:
+    # website_page_quota_check]); blog.blog/blog.post had no equivalent at
+    # all -- any authenticated user could create unbounded numbers of
+    # either via direct RPC, each blog.post create also enqueuing a real
+    # Cloudflare cache-purge and a distributed cache-invalidation notify, a
+    # straightforward reachable-by-any-user resource-exhaustion gap.
+    # Separate, smaller default limits since a real user typically needs
+    # very few blogs but may reasonably write many posts within them.
+    def _get_blog_limit(self):
+        self.ensure_one()
+        return int(
+            self.env["zero_sudo.security.utils"]._get_system_param(
+                "user_websites.global_blog_limit", 5
+            )
+        )
+
+    def _get_blog_post_limit(self):
+        self.ensure_one()
+        return int(
+            self.env["zero_sudo.security.utils"]._get_system_param(
+                "user_websites.global_blog_post_limit", 500
+            )
+        )
+
     def _get_gdpr_streamed_keys(self):
         """
         Returns a dictionary mapping JSON keys to generator functions.
