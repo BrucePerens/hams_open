@@ -7,6 +7,7 @@ from odoo.tests.common import tagged
 from odoo.addons.web.controllers.database import Database
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError
+from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 
 from ..models.config_manager import DEFAULT_WAF_RULES
 
@@ -23,6 +24,24 @@ class TestWafManagement(HamsTransactionCase):
         self.website.write(
             {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
         )
+        # Adversarial security review, 2026-09-03, found debugging a flaky
+        # new test: _get_cloudflare_credentials() is @distributed_cache()-
+        # wrapped and keyed only on (model, record id, method, args) -- it
+        # is NOT invalidated just because this write() above changed the
+        # underlying field, and in this test environment nothing is
+        # running the real cache_manager.py daemon that would normally
+        # relay a write's own PostgreSQL NOTIFY into a real Redis
+        # invalidation. Without this, a stale cached credential tuple from
+        # an earlier test/run (on the same "current website" singleton
+        # record) can silently outlive this setUp()'s own fresh write,
+        # confirmed directly while debugging (website.cloudflare_api_token
+        # read back as False despite this exact write, only resolved once
+        # this explicit invalidation was added). Real production writes go
+        # through website.write()'s own override, which is expected to
+        # trigger this same invalidation via the real NOTIFY pipeline --
+        # this test environment doesn't have that daemon running, so it's
+        # done explicitly here instead.
+        invalidate_model_cache(self.env, "website")
 
     def test_01_cf_execute_ban(self):
         # [@ANCHOR: COMM_test_cf_execute_ban]
@@ -214,16 +233,30 @@ class TestWafManagement(HamsTransactionCase):
     def test_08_ban_ip_allows_a_real_waf_group_member(self):
         # The fix must not over-block: a genuine cloudflare.group_cloudflare_waf
         # member (not just the internal service account) must still be able
-        # to call this directly.
-        mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
-        mock_ban_ip.return_value = (True, "fake_rule_456")
+        # to call this directly. Mocked at _execute_ban itself (rather than
+        # asserting on ban_ip()'s own full return value) to isolate exactly
+        # what this test needs to prove -- that _check_waf_caller_authorized()
+        # lets a real WAF-group caller reach _execute_ban at all -- from the
+        # unrelated Fernet-encryption/service-account-resolution chain
+        # _get_cloudflare_credentials() depends on, which this test
+        # environment doesn't have fully provisioned (confirmed directly
+        # while debugging this test: real credential resolution needs a
+        # live cloudflare_encryption_key daemon.key.registry entry this
+        # sandbox doesn't have, unrelated to the authorization fix itself).
+        mock_execute_ban = self.safe_patch_object(
+            type(self.env["cloudflare.ip.ban"]), "_execute_ban"
+        )
+        mock_execute_ban.return_value = True
 
         waf_admin = self.env["res.users"].create(
             {
                 "name": "Real WAF Admin",
                 "login": "waf_admin",
                 "group_ids": [
-                    (6, 0, [self.env.ref("cloudflare.group_cloudflare_waf").id])
+                    (6, 0, [
+                        self.env.ref("base.group_user").id,
+                        self.env.ref("cloudflare.group_cloudflare_waf").id,
+                    ])
                 ],
             }
         )
@@ -231,6 +264,7 @@ class TestWafManagement(HamsTransactionCase):
             "203.0.113.6", website_id=self.website.id
         )
         self.assertTrue(result)
+        mock_execute_ban.assert_called_once()
 
     def test_09_action_pull_and_push_waf_rules_reject_an_unprivileged_caller(self):
         # Adversarial security review, 2026-09-03: both action_pull_waf_rules
