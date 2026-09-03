@@ -6,7 +6,7 @@ import re
 from odoo.tests.common import tagged
 from odoo.addons.web.controllers.database import Database
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 from ..models.config_manager import DEFAULT_WAF_RULES
 
@@ -187,6 +187,73 @@ class TestWafManagement(HamsTransactionCase):
         self.assertTrue(ban_record)
         self.assertEqual(ban_record.state, "failed")
         self.assertIn("Missing Cloudflare credentials", ban_record.notes)
+
+    def test_07_ban_ip_rejects_an_unprivileged_caller(self):
+        # Adversarial security review, 2026-09-03: ban_ip is a public
+        # @api.model method (directly RPC-reachable by any authenticated
+        # session) that used to escalate straight to the WAF service
+        # account with no check on who the real caller was -- any portal
+        # user could trigger a real Cloudflare Firewall Access Rules API
+        # call against any website. Must now be refused for a plain user
+        # with none of the authorizing groups.
+        unprivileged = self.env["res.users"].create(
+            {
+                "name": "Unprivileged WAF Caller",
+                "login": "waf_unprivileged",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        with self.assertRaises(
+            AccessError,
+            msg="[!] DIAGNOSTIC FOR AI: an unprivileged caller must not be able to trigger a real Cloudflare IP ban.",
+        ):
+            self.env["cloudflare.waf"].with_user(unprivileged).ban_ip(
+                "203.0.113.5", website_id=self.website.id
+            )
+
+    def test_08_ban_ip_allows_a_real_waf_group_member(self):
+        # The fix must not over-block: a genuine cloudflare.group_cloudflare_waf
+        # member (not just the internal service account) must still be able
+        # to call this directly.
+        mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
+        mock_ban_ip.return_value = (True, "fake_rule_456")
+
+        waf_admin = self.env["res.users"].create(
+            {
+                "name": "Real WAF Admin",
+                "login": "waf_admin",
+                "group_ids": [
+                    (6, 0, [self.env.ref("cloudflare.group_cloudflare_waf").id])
+                ],
+            }
+        )
+        result = self.env["cloudflare.waf"].with_user(waf_admin).ban_ip(
+            "203.0.113.6", website_id=self.website.id
+        )
+        self.assertTrue(result)
+
+    def test_09_action_pull_and_push_waf_rules_reject_an_unprivileged_caller(self):
+        # Adversarial security review, 2026-09-03: both action_pull_waf_rules
+        # and action_push_waf_rules are public @api.model methods that call
+        # website._get_cloudflare_credentials() -- a @distributed_cache()-
+        # wrapped method whose cache key never includes self.env.user, so a
+        # cache hit (realistically the common case) returned the site's
+        # real, decrypted Cloudflare token without the field-level ACL
+        # inside that method ever running. The check must happen in these
+        # entry points themselves, on every call, not rely on the cached
+        # method's own (skippable-on-hit) internal check.
+        unprivileged = self.env["res.users"].create(
+            {
+                "name": "Unprivileged Config Caller",
+                "login": "waf_config_unprivileged",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        manager = self.env["cloudflare.config.manager"].with_user(unprivileged)
+        with self.assertRaises(AccessError):
+            manager.action_pull_waf_rules(website_id=self.website.id)
+        with self.assertRaises(AccessError):
+            manager.action_push_waf_rules(website_id=self.website.id)
 
     def test_06_database_manager_waf_rule_covers_every_real_route(self):
         # Regression test for a real gap found via the 2026-08-26 usability-audit run: the

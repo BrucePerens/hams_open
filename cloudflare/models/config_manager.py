@@ -2,7 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import json
 import logging
-from odoo import models, api, fields
+from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
 from ..utils.cloudflare_api import (
     get_zone_ruleset,
@@ -198,9 +198,35 @@ class CloudflareConfigManager(models.AbstractModel):
             for website in websites_to_push:
                 self.action_push_waf_rules(website_id=website.id)
 
+    def _check_waf_caller_authorized(self):
+        # Adversarial security review, 2026-09-03: action_pull_waf_rules
+        # and action_push_waf_rules are public (non-underscore-prefixed)
+        # @api.model methods, directly reachable via /web/dataset/call_kw
+        # by any authenticated session. Both call
+        # website._get_cloudflare_credentials() unconditionally, with no
+        # caller-permission check at all -- and that method is wrapped in
+        # @distributed_cache(), whose own cache key never includes
+        # self.env.user, so a cache hit (realistically almost always warm,
+        # since post_init_hook/purge_queue/tunnel-sync all call it
+        # regularly as elevated/cron users) returns the site's real,
+        # decrypted Cloudflare API token WITHOUT the field-level ACL check
+        # inside that method ever running -- an unprivileged caller gets
+        # the real production secret used against the real Cloudflare API
+        # before any local ACL has a chance to block anything. Checking
+        # here, in the actual RPC entry point, runs on every call
+        # regardless of cache state (unlike a check placed inside the
+        # cached method itself, which a cache hit would skip entirely).
+        if not (
+            self.env.user.has_group("cloudflare.group_cloudflare_waf")
+            or self.env.user.has_group("base.group_system")
+            or self.env.user.is_service_account
+        ):
+            raise AccessError(_("You are not authorized to manage the Cloudflare WAF."))
+
     @api.model
     def action_pull_waf_rules(self, website_id=None):
         # [@ANCHOR: cf_action_pull_waf_rules]
+        self._check_waf_caller_authorized()
         website = (
             self.env["website"].browse(website_id)
             if website_id
@@ -246,6 +272,7 @@ class CloudflareConfigManager(models.AbstractModel):
     @api.model
     def action_push_waf_rules(self, website_id=None):
         # [@ANCHOR: cf_action_push_waf_rules]
+        self._check_waf_caller_authorized()
         website = (
             self.env["website"].browse(website_id)
             if website_id
