@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import AccessError
 
 
 class PagerLogPattern(models.Model):
@@ -70,6 +71,19 @@ class PagerLogSearchJob(models.TransientModel):
 
     @api.model
     def rpc_update_state(self, uuid, state, result_payload):
+        # Adversarial security review, 2026-09-03: no caller-identity
+        # check at all -- being @api.model, directly RPC-reachable by
+        # any authenticated user, who could feed forged results back
+        # into any log-search job. Only the background log-search daemon
+        # (running as this module's own service account) should ever
+        # call this.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "pager_duty.user_pager_service_internal"
+        )
+        if self.env.uid != svc_uid and not self.env.is_admin():
+            raise AccessError(
+                _("Only the background log-search daemon may update a job's state.")
+            )
         job = self.env["pager.log.search.job"].search([("uuid", "=", uuid)], limit=1)
         if job:
             job.write({"state": state, "result_payload": result_payload})

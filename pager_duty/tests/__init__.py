@@ -12,6 +12,7 @@ from . import test_incident_edge_cases
 from . import test_journeys_stories
 from . import test_log_analyzer
 from . import test_log_monitoring_seed_data
+from . import test_log_search_job_security
 from . import test_mail_ingest_incident
 from . import test_pager_check_edge_cases
 from . import test_pager_mcp_triage
