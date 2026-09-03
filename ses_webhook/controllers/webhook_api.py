@@ -3,11 +3,26 @@ import email
 import email.policy
 import logging
 import json
+import re
 import urllib.request
 from odoo import http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
+
+# Adversarial security review, 2026-09-03: real AWS SNS subscription-
+# confirmation URLs are always on a sns.<region>.amazonaws.com host over
+# HTTPS -- anyone holding a domain's shared webhook token (leaked via a
+# proxy/access log, browser history, or a compromised AWS console -- the
+# token lives in a plain query-string URL, not a signed AWS message) could
+# otherwise supply an arbitrary SubscribeURL and make this server fetch it.
+# On an EC2-hosted instance with the metadata service reachable, that's a
+# real path to steal the instance's own IAM credentials
+# (http://169.254.169.254/...), or to probe/attack other internal-only
+# services -- a classic SSRF, not a hypothetical.
+_SNS_SUBSCRIBE_URL_RE = re.compile(
+    r"^https://sns\.[a-z0-9-]+\.amazonaws\.com/", re.IGNORECASE
+)
 
 class SesWebhookController(http.Controller):
     
@@ -72,10 +87,22 @@ class SesWebhookController(http.Controller):
         try:
             if payload_type == 'SubscriptionConfirmation':
                 subscribe_url = payload.get('SubscribeURL')
-                if subscribe_url:
-                    urllib.request.urlopen(subscribe_url)
+                if subscribe_url and _SNS_SUBSCRIBE_URL_RE.match(subscribe_url):
+                    # Adversarial security review, 2026-09-03: real, explicit
+                    # timeout -- the old call had none at all, so a
+                    # SubscribeURL pointing at a server that accepts the
+                    # connection and never responds hung this worker
+                    # indefinitely (the same unbounded-hang bug class fixed
+                    # in several other daemons this session).
+                    urllib.request.urlopen(subscribe_url, timeout=10)
                     _logger.info("Successfully confirmed SNS subscription for domain %s.", domain.name)
                     log_vals.update({'status': 'success'})
+                elif subscribe_url:
+                    _logger.warning(
+                        "SES Webhook: refusing to fetch a SubscribeURL that isn't a real "
+                        "AWS SNS host for domain %s: %s", domain.name, subscribe_url,
+                    )
+                    log_vals.update({'status': 'rejected_subscribe_url'})
                     
             elif payload_type == 'Notification':
                 ses_message_str = payload.get('Message', '{}')
