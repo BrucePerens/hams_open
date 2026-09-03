@@ -27,8 +27,10 @@ for exactly this). Run e.g.:
 
 import os
 import stat
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import psycopg2
 from psycopg2 import sql
@@ -212,6 +214,44 @@ class ProvisionTests(unittest.TestCase):
             first_hash, second_hash,
             "the role's actual stored Postgres credential must change on a second provision() call",
         )
+
+
+class ParseArgsPasswordSourcingTests(unittest.TestCase):
+    # Adversarial security review, 2026-09-03: --admin-password used to be
+    # a plain, required CLI flag -- a superuser-capable credential visible
+    # in `ps aux`/`/proc/<pid>/cmdline` for the process's lifetime, and
+    # typically left behind in shell history. Real tests for the two
+    # replacement sourcing paths, not just the removed flag's absence.
+
+    _BASE_ARGV = [
+        "provision_cache_manager_db_role.py",
+        "--admin-host", "dbhost", "--admin-user", "postgres", "--target-db", "odoo",
+    ]
+
+    def test_reads_the_password_from_the_env_var_without_prompting(self):
+        with mock.patch.object(sys, "argv", self._BASE_ARGV), \
+             mock.patch.dict(os.environ, {"CACHE_MANAGER_DB_ADMIN_PASSWORD": "env-supplied-pw"}), \
+             mock.patch("getpass.getpass") as mock_getpass:
+            args = script.parse_args()
+        mock_getpass.assert_not_called()
+        self.assertEqual(args.admin_password, "env-supplied-pw")
+
+    def test_falls_back_to_an_interactive_prompt_when_the_env_var_is_unset(self):
+        env_without_the_var = {k: v for k, v in os.environ.items() if k != "CACHE_MANAGER_DB_ADMIN_PASSWORD"}
+        with mock.patch.object(sys, "argv", self._BASE_ARGV), \
+             mock.patch.dict(os.environ, env_without_the_var, clear=True), \
+             mock.patch("getpass.getpass", return_value="typed-pw") as mock_getpass:
+            args = script.parse_args()
+        mock_getpass.assert_called_once()
+        self.assertEqual(args.admin_password, "typed-pw")
+
+    def test_the_password_never_appears_as_a_cli_flag_the_parser_accepts(self):
+        # Real, direct proof the flag is gone, not just "we didn't wire it
+        # up" -- argparse must reject it outright.
+        argv_with_old_flag = self._BASE_ARGV + ["--admin-password", "leaked-in-argv"]
+        with mock.patch.object(sys, "argv", argv_with_old_flag):
+            with self.assertRaises(SystemExit):
+                script.parse_args()
 
 
 if __name__ == "__main__":

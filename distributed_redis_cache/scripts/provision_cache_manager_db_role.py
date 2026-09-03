@@ -28,14 +28,18 @@ DB_ENV_FILE).
 Usage:
     python3 provision_cache_manager_db_role.py \\
         --admin-host <your-postgres-host> --admin-port 5432 \\
-        --admin-user postgres --admin-password <admin-pw> \\
-        --target-db odoo
+        --admin-user postgres --target-db odoo
+    (prompts for the admin password interactively; set
+    CACHE_MANAGER_DB_ADMIN_PASSWORD instead for non-interactive/scripted
+    runs -- see the "adversarial security review" note on --admin-password
+    below for why this isn't a plain CLI flag.)
 
 Requires network/socket access to Postgres as a role that can CREATE ROLE
 and GRANT CONNECT (e.g. the Postgres superuser) -- run this once per
 deployment, then restart the cache_manager.py daemon.
 """
 import argparse
+import getpass
 import os
 import secrets
 import sys
@@ -53,11 +57,27 @@ def parse_args():
     parser.add_argument("--admin-host", required=True, help="Postgres host/DNS name (no default -- a loopback address resolves to this script's own container, not necessarily where Postgres runs).")
     parser.add_argument("--admin-port", default="5432")
     parser.add_argument("--admin-user", required=True, help="A Postgres role that can CREATE ROLE and GRANT CONNECT (e.g. the superuser).")
-    parser.add_argument("--admin-password", required=True)
+    # Adversarial security review, 2026-09-03: this used to be a plain
+    # required=True CLI flag -- a superuser-capable credential sitting in
+    # argv is visible to any other local user on the host for this
+    # process's lifetime (ps aux, /proc/<pid>/cmdline) and typically lands
+    # in shell history. This is a one-off, interactively-run provisioning
+    # tool (not a service with a long-lived argv), so the fix matches
+    # common CLI convention (psql's own -W/PGPASSWORD shape): no CLI flag
+    # at all -- read from CACHE_MANAGER_DB_ADMIN_PASSWORD for scripted runs,
+    # otherwise prompt interactively via getpass (never echoed, never in
+    # argv or shell history).
     parser.add_argument("--target-db", required=True, help="The Odoo database cache_manager.py should LISTEN on (its DB_NAME).")
     parser.add_argument("--role-name", default=ROLE_NAME)
     parser.add_argument("--env-file", default=DB_ENV_FILE)
-    return parser.parse_args()
+    args = parser.parse_args()
+    admin_password = os.environ.get("CACHE_MANAGER_DB_ADMIN_PASSWORD") or getpass.getpass(
+        "Postgres admin password (or set CACHE_MANAGER_DB_ADMIN_PASSWORD): "
+    )
+    if not admin_password:
+        parser.error("An admin password is required (CACHE_MANAGER_DB_ADMIN_PASSWORD or interactive prompt).")
+    args.admin_password = admin_password
+    return args
 
 
 def provision(admin_host, admin_port, admin_user, admin_password, target_db, role_name):
