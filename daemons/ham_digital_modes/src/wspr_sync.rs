@@ -721,9 +721,9 @@ fn evidence_to_symbol_values_windowed_clean_reference(
         // it directly), so a stack array sized off the fixed public
         // constant would silently overflow for any larger sweep value.
         let mut clean_samples = Vec::with_capacity(2 * (hi - lo + 1));
-        for j in lo..=hi {
-            clean_samples.push(impossible_tone_evidence[j][0]);
-            clean_samples.push(impossible_tone_evidence[j][1]);
+        for pair in &impossible_tone_evidence[lo..=hi] {
+            clean_samples.push(pair[0]);
+            clean_samples.push(pair[1]);
         }
         let clean_n = clean_samples.len();
         let clean_mean = clean_samples.iter().sum::<f64>() / (clean_n as f64);
@@ -992,9 +992,9 @@ mod tests {
         // gaps are ~33x wider than baseline gaps, a decisive, not
         // marginal, contrast.
         let mut evidence = [[0.0f64, 0.0f64]; WSPR_NUM_SYMBOLS];
-        for i in 0..WSPR_NUM_SYMBOLS {
+        for (i, slot) in evidence.iter_mut().enumerate() {
             let in_burst = (BURST_START..=BURST_END).contains(&i);
-            evidence[i] = match (in_burst, i % 2 == 0) {
+            *slot = match (in_burst, i % 2 == 0) {
                 (false, true) => [995.0, 1005.0],
                 (false, false) => [998.0, 1002.0],
                 (true, true) => [800.0, 1200.0],

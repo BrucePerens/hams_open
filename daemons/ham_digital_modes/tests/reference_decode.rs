@@ -77,7 +77,7 @@ fn generate_and_decode(message: &str, snr_db: i32, work_dir: &Path) -> (Vec<(Str
     let jt9_text = String::from_utf8_lossy(&jt9_out.stdout);
     let reference_message = jt9_text
         .lines()
-        .find(|l| l.contains(&message.split_whitespace().next().unwrap_or(message)))
+        .find(|l| l.contains(message.split_whitespace().next().unwrap_or(message)))
         .map(|l| l.trim().to_string());
 
     let _ = std::fs::remove_file(&wav_path);
@@ -129,7 +129,7 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
         // reference also misses is expected, honest behavior at the
         // noise floor, not a failure.
         assert!(
-            !(ours_decoded && !reference_decoded),
+            !ours_decoded || reference_decoded,
             "at {snr} dB, this decoder claimed a decode the reference itself didn't make -- \
              that's a false-positive risk, not just reduced sensitivity"
         );

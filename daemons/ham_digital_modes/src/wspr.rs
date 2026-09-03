@@ -671,8 +671,8 @@ mod tests {
         let out1 = convolutional_encode(&data);
         let out2 = convolutional_encode(&data);
         assert_eq!(out1, out2);
-        assert!(out1.iter().any(|&b| b == 1), "encoder output is all zero -- polynomials likely wrong");
-        assert!(out1.iter().any(|&b| b == 0), "encoder output is all one -- polynomials likely wrong");
+        assert!(out1.contains(&1), "encoder output is all zero -- polynomials likely wrong");
+        assert!(out1.contains(&0), "encoder output is all one -- polynomials likely wrong");
     }
 
     #[test]
