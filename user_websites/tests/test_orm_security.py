@@ -338,3 +338,101 @@ class TestORMSecurity(RealTransactionCase):
                 f"sanitizer moves it to -- same pattern as test_07).",
             )
             self.assertEqual(live_attrs.get("data-blocked-ssti-t-esc"), payload)
+
+    def test_09_qweb_arch_sanitization_blocks_javascript_uri_via_t_att_href(self):
+        # Adversarial security review, 2026-09-03: t-att-href/t-att-src are
+        # in ALLOWED_T_DIRECTIVES (real, legitimate uses), but the scheme
+        # check that blocks a plain href="javascript:..." only ever matched
+        # the literal attribute names "href"/"src" -- never "t-att-href"/
+        # "t-att-src" -- so a QWeb expression producing a javascript: URI
+        # reached only the unrelated SSTI-token check and rendered as a
+        # real, live href, full stored XSS for any visitor who clicked it.
+        malicious_arch = (
+            '<t name="Test"><a t-att-href="\'javascript:alert(document.cookie)\'">Click</a>'
+            '<img t-att-src="\'javascript:alert(1)\'"/></t>'
+        )
+        page = (
+            self.env["website.page"]
+            .with_user(self.user_a)
+            .create(
+                {
+                    "url": f"/{self.user_a.website_slug}/xss-t-att-href",
+                    "name": "XSS t-att-href Test",
+                    "type": "qweb",
+                    "owner_user_id": self.user_a.id,
+                    "arch": malicious_arch,
+                }
+            )
+        )
+        parsed = etree.fromstring(f"<root>{page.arch}</root>")
+        a_attrs = parsed.find(".//a").attrib
+        img_attrs = parsed.find(".//img").attrib
+        self.assertNotIn(
+            "t-att-href",
+            a_attrs,
+            "[!] DIAGNOSTIC FOR AI: a javascript: URI reaching the browser via "
+            "t-att-href is full stored XSS -- it must never survive as a live attribute.",
+        )
+        self.assertNotIn("t-att-src", img_attrs)
+        self.assertIn("javascript", a_attrs.get("data-blocked-t-att-href", ""))
+        self.assertIn("javascript", img_attrs.get("data-blocked-t-att-src", ""))
+
+    def test_10_qweb_arch_sanitization_blocks_base_and_meta_refresh(self):
+        # Adversarial security review, 2026-09-03: neither <base> (rewrites
+        # relative-URL resolution for the WHOLE rendered page) nor
+        # <meta http-equiv="refresh"> (a script-free automatic redirect)
+        # were on the tag-strip list or covered by any attribute check --
+        # both let a page owner silently redirect visitors to an
+        # attacker-controlled origin with no <script> tag involved at all.
+        malicious_arch = (
+            '<t name="Test">'
+            '<base href="https://attacker.example/"/>'
+            '<meta http-equiv="refresh" content="0;url=https://attacker.example/"/>'
+            "<p>hello</p>"
+            "</t>"
+        )
+        page = (
+            self.env["website.page"]
+            .with_user(self.user_a)
+            .create(
+                {
+                    "url": f"/{self.user_a.website_slug}/base-meta-redirect",
+                    "name": "Base/Meta Redirect Test",
+                    "type": "qweb",
+                    "owner_user_id": self.user_a.id,
+                    "arch": malicious_arch,
+                }
+            )
+        )
+        self.assertNotIn(
+            "<base",
+            page.arch,
+            "[!] DIAGNOSTIC FOR AI: <base> must be stripped entirely -- it "
+            "silently rewrites every later relative URL on the page.",
+        )
+        parsed = etree.fromstring(f"<root>{page.arch}</root>")
+        meta_attrs = parsed.find(".//meta").attrib
+        self.assertNotIn(
+            "http-equiv",
+            meta_attrs,
+            "[!] DIAGNOSTIC FOR AI: a meta refresh redirect is a script-free "
+            "XSS-equivalent -- http-equiv=\"refresh\" must not survive live.",
+        )
+        self.assertEqual(meta_attrs.get("data-blocked-http-equiv"), "refresh")
+        self.assertIn("attacker.example", meta_attrs.get("data-blocked-content", ""))
+        # A benign, legitimate meta tag (charset) must be left untouched --
+        # this fix must not become an over-broad "strip all meta" rule.
+        page2 = (
+            self.env["website.page"]
+            .with_user(self.user_a)
+            .create(
+                {
+                    "url": f"/{self.user_a.website_slug}/benign-meta",
+                    "name": "Benign Meta Test",
+                    "type": "qweb",
+                    "owner_user_id": self.user_a.id,
+                    "arch": '<t name="Test"><meta charset="utf-8"/></t>',
+                }
+            )
+        )
+        self.assertIn('charset="utf-8"', page2.arch)

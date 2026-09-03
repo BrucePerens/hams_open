@@ -98,10 +98,38 @@ class WebsitePage(models.Model):
 
             was_modified = False
 
-            # Strip script, iframe, object, embed entirely
-            for tag in ["script", "iframe", "object", "embed"]:
+            # Strip script, iframe, object, embed entirely. Adversarial
+            # security review, 2026-09-03: <base> added -- it rewrites how
+            # every later relative URL/form-action on the whole rendered
+            # page resolves, letting a page owner silently redirect the
+            # site's own relative links/assets to an attacker-controlled
+            # origin with no <script> tag involved at all, exactly the
+            # class of script-free bypass this strip list otherwise
+            # defends against.
+            for tag in ["script", "iframe", "object", "embed", "base"]:
                 for elem in root.xpath(f'//*[local-name()="{tag}"]'):
                     elem.getparent().remove(elem)
+                    was_modified = True
+
+            # Adversarial security review, 2026-09-03: a <meta
+            # http-equiv="refresh" content="0;url=https://evil.example/">
+            # is a real, script-free, one-tag automatic redirect of any
+            # visitor to an attacker-chosen URL -- the "content" attribute
+            # scheme check above only ever blocks javascript:/data:/
+            # vbscript:, not an arbitrary external http(s) redirect target,
+            # so this bypassed the sanitizer entirely. Strip http-equiv
+            # specifically (not the whole <meta> tag, which has legitimate
+            # uses like charset/viewport) whenever it's "refresh",
+            # case-insensitively.
+            for elem in root.xpath('//*[local-name()="meta"]'):
+                http_equiv = elem.attrib.get("http-equiv", "")
+                if http_equiv.strip().lower() == "refresh":
+                    blocked_content = elem.attrib.get("content", "")
+                    del elem.attrib["http-equiv"]
+                    if "content" in elem.attrib:
+                        del elem.attrib["content"]
+                    elem.attrib["data-blocked-http-equiv"] = "refresh"
+                    elem.attrib["data-blocked-content"] = blocked_content
                     was_modified = True
 
             # Strip all QWeb execution, inline JS directives, and javascript URIs
@@ -165,6 +193,32 @@ class WebsitePage(models.Model):
                         was_modified = True
                     elif attr_lower.startswith(dangerous_prefixes):
                         if attr_lower not in ALLOWED_T_DIRECTIVES:
+                            del elem.attrib[attr]
+                            elem.attrib[f"data-blocked-{attr}"] = val
+                            was_modified = True
+                        # Adversarial security review, 2026-09-03: t-att-href
+                        # and t-att-src are in ALLOWED_T_DIRECTIVES (real,
+                        # legitimate uses -- a page linking to an internal
+                        # anchor computed via a t-if, an image src built from
+                        # a t-foreach loop variable, etc.), but the literal-
+                        # attribute-name scheme check above only ever
+                        # matches the bare strings "href"/"src", never
+                        # "t-att-href"/"t-att-src" -- so a QWeb expression
+                        # like t-att-href="'javascript:alert(1)'" reached
+                        # only the SSTI-token regex below, which has nothing
+                        # to do with dangerous URI schemes, and sailed
+                        # through untouched into the real rendered href.
+                        # Unlike a plain href value, this attribute's own
+                        # text is Python expression SOURCE (quotes,
+                        # concatenation, etc. included), not the literal URL
+                        # itself, so an unanchored search for the dangerous
+                        # scheme name anywhere in the expression -- not just
+                        # at its very start -- is the correct check here,
+                        # the same conservative "search, don't match" shape
+                        # the SSTI check just below already uses.
+                        elif attr_lower in ("t-att-href", "t-att-src") and re.search(
+                            r"(javascript|data|vbscript)\s*:", val, re.IGNORECASE
+                        ):
                             del elem.attrib[attr]
                             elem.attrib[f"data-blocked-{attr}"] = val
                             was_modified = True
