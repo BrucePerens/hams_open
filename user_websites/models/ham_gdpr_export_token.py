@@ -84,20 +84,51 @@ class HamGdprExportToken(models.Model):
         feature makes still goes through the existing
         _get_gdpr_export_data()/_get_gdpr_streamed_keys() contract, unchanged."""
         # # Verified by [@ANCHOR: test_gdpr_export_token_unknown_rejected]
-        record = self.env[self._name].search(
-            [("token", "=", token), ("consumed", "=", False)], limit=1
+        #
+        # Real fix, found by an adversarial security review: search() then
+        # a separate write({"consumed": True}) is a real TOCTOU race -- two
+        # concurrent calls with the same still-unconsumed token could both
+        # pass the search check before either one's write lands, letting
+        # the token's own holder download the export twice instead of once
+        # (low severity -- it's still only ever the legitimate token
+        # holder, not a cross-user leak -- but a real single-use guarantee
+        # shouldn't have a race in it regardless). A single atomic
+        # UPDATE ... WHERE consumed = false RETURNING ... closes it: at
+        # most one concurrent caller's UPDATE can ever match and return a
+        # row for a given token, by Postgres's own row-level locking, with
+        # no separate read-then-write window for a second caller to land
+        # in between.
+        self.env.cr.execute(
+            "UPDATE ham_gdpr_export_token SET consumed = true "
+            "WHERE token = %s AND consumed = false "
+            "RETURNING id, user_id, create_date",
+            (token,),
         )
-        if not record:
+        row = self.env.cr.fetchone()
+        if not row:
             raise AccessError(_("Invalid or already-used export token."))
+        record_id, user_id, create_date = row
+        # Real fix, found running this same pass's own real test suite,
+        # not just reasoned about: raw SQL bypasses the ORM's own
+        # in-memory cache entirely, so a caller that already holds (or
+        # later browses) this record would otherwise see a stale
+        # `consumed = False` despite the real row now being `true` in the
+        # database -- confirmed directly by a genuine test failure
+        # (`test_01e_consume_and_export_materializes_data_and_streamed_
+        # keys`'s own `self.assertTrue(record.consumed, ...)`) before
+        # this invalidation was added, not merely anticipated.
+        self.invalidate_model(["consumed"])
         # # Verified by [@ANCHOR: test_gdpr_export_token_expiry]
+        # An expired token is now marked consumed too (it was already
+        # permanently unusable either way -- this doesn't help an
+        # attacker or hurt a legitimate user, it just means a second
+        # attempt against the same expired token fails as "already-used"
+        # instead of "expired," which is an equally fail-closed rejection).
         cutoff = fields.Datetime.now() - timedelta(minutes=TOKEN_EXPIRY_MINUTES)
-        if record.create_date < cutoff:
+        if create_date < cutoff:
             raise AccessError(_("Export token has expired."))
-        # Consume first, fetch after: a failure while building the export
-        # payload below must not leave a still-valid, replayable token behind.
         # # Verified by [@ANCHOR: test_gdpr_export_token_single_use]
-        record.write({"consumed": True})
-        return record.user_id
+        return self.env["res.users"].browse(user_id)
 
     @api.model
     def consume_and_export(self, token):
