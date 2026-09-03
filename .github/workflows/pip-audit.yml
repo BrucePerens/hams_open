@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'requirements.txt'
+      - 'daemons/cloudflared/component-tests/requirements.txt'
       - '.github/workflows/pip-audit.yml'
   pull_request:
     paths:
       - 'requirements.txt'
+      - 'daemons/cloudflared/component-tests/requirements.txt'
       - '.github/workflows/pip-audit.yml'
   schedule:
     # A pinned requirements.txt doesn't change just because a new advisory
@@ -37,11 +39,28 @@ on:
 # hams_com's own two requirements.txt files got the equivalent workflow
 # there instead (hams_com/.github/workflows/pip-audit.yml) -- same
 # pattern, same reasoning, opposite side of the symlink.
+#
+# Real gap found and closed 2026-09-03: this workflow only ever scanned
+# the root requirements.txt -- daemons/cloudflared/component-tests/
+# requirements.txt (a real, separate pinned dependency set: cloudflare,
+# pytest, websockets, etc.) existed in this repo the whole time and was
+# never covered by anything automated, the same shape of gap this whole
+# workflow exists to close for the root file. Found via `find -name
+# "requirements*.txt"` across both repos while investigating a related,
+# unrelated CI gap in hams_com's build-relay.yml -- confirmed directly,
+# not assumed, that this file wasn't in this workflow's own trigger paths
+# or audit step before this fix.
 permissions:
   contents: read
 
 jobs:
   pip-audit:
+    strategy:
+      fail-fast: false
+      matrix:
+        requirements_file:
+          - requirements.txt
+          - daemons/cloudflared/component-tests/requirements.txt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -50,5 +69,5 @@ jobs:
       - name: Install pip-audit
         run: python3 -m pip install --user pip-audit
 
-      - name: Audit requirements.txt
-        run: python3 -m pip_audit -r requirements.txt --progress-spinner off
+      - name: Audit ${{ matrix.requirements_file }}
+        run: python3 -m pip_audit -r ${{ matrix.requirements_file }} --progress-spinner off
