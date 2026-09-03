@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 import logging
-import base64
 import zipfile
 import gzip
 import io
@@ -9,6 +8,26 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
+
+# Adversarial security review, 2026-09-03: this whole parsing chain is
+# reachable by any unauthenticated external sender (DMARC's own rua=
+# address, by design, must be publicly published in DNS), so it must fail
+# closed (log and return False) on any malformed input, never raise out
+# of message_new() into Odoo's own mail gateway. A generous but real cap
+# on decompressed size guards against a small crafted zip/gzip attachment
+# expanding ~1000:1 in memory (a classic zip-bomb) -- real DMARC reports
+# are legitimately small (KBs to low single-digit MBs).
+_MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024
+
+
+def _safe_int(text, default=0):
+    """int() on attacker-supplied XML text must never raise -- a
+    non-numeric <begin>/<end>/<pct>/<count> value used to crash
+    _parse_dmarc_xml() with an uncaught ValueError."""
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return default
 
 class DmarcReport(models.Model):
     _name = "hams_base.dmarc.report"
@@ -67,20 +86,51 @@ class DmarcReport(models.Model):
     def process_dmarc_attachment(self, attachment_name, attachment_data):
         """
         Parses a DMARC XML report (could be raw XML, ZIP, or GZIP).
-        attachment_data is base64 encoded.
+
+        Adversarial security review, 2026-09-03: attachment_data is the
+        real, already-MIME-decoded content Odoo's own mail gateway
+        delivers (confirmed directly against mail_thread.py's own
+        _message_parse_extract_payload: content = part.get_content(), the
+        genuinely decoded payload -- str for text parts, bytes for binary
+        ones) -- NOT base64-encoded text. The unconditional
+        base64.b64decode() this used to open with raised an uncaught
+        binascii.Error for virtually every real report (binary zip/gzip
+        content essentially never validates as base64), crashing
+        message_new() with no try/except around it at all -- reachable by
+        any unauthenticated external sender, since DMARC's own rua=
+        address must be publicly published in DNS. Now handles both real
+        input shapes and never raises past this method.
         """
-        raw_data = base64.b64decode(attachment_data)
         xml_content = None
 
         try:
+            raw_data = (
+                attachment_data.encode("utf-8")
+                if isinstance(attachment_data, str)
+                else attachment_data
+            )
+
             if attachment_name.endswith('.zip'):
                 with zipfile.ZipFile(io.BytesIO(raw_data)) as z:  # audit-ignore-path
-                    for name in z.namelist():
-                        if name.endswith('.xml'):
-                            xml_content = z.read(name)
+                    for info in z.infolist():
+                        if info.filename.endswith('.xml'):
+                            if info.file_size > _MAX_DECOMPRESSED_BYTES:
+                                _logger.warning(
+                                    "Refusing to extract %s from %s: declared size %d exceeds cap",
+                                    info.filename, attachment_name, info.file_size,
+                                )
+                                return False
+                            xml_content = z.read(info.filename)
                             break
             elif attachment_name.endswith('.gz'):
-                xml_content = gzip.decompress(raw_data)
+                with gzip.GzipFile(fileobj=io.BytesIO(raw_data)) as gz:  # audit-ignore-path
+                    xml_content = gz.read(_MAX_DECOMPRESSED_BYTES + 1)
+                    if len(xml_content) > _MAX_DECOMPRESSED_BYTES:
+                        _logger.warning(
+                            "Refusing to decompress %s: exceeds %d byte cap",
+                            attachment_name, _MAX_DECOMPRESSED_BYTES,
+                        )
+                        return False
             elif attachment_name.endswith('.xml'):
                 xml_content = raw_data
         except Exception as e:  # audit-ignore-catch-all
@@ -112,8 +162,8 @@ class DmarcReport(models.Model):
         
         # Date range
         date_range = report_metadata.find("date_range")
-        begin = int(date_range.findtext("begin")) if date_range is not None else 0
-        end = int(date_range.findtext("end")) if date_range is not None else 0
+        begin = _safe_int(date_range.findtext("begin")) if date_range is not None else 0
+        end = _safe_int(date_range.findtext("end")) if date_range is not None else 0
 
         # Check if report already exists
         existing = self.env['hams_base.dmarc.report'].search([('report_id', '=', report_id)], limit=1)
@@ -136,7 +186,7 @@ class DmarcReport(models.Model):
             "aspf": policy_published.findtext("aspf"),
             "p": policy_published.findtext("p"),
             "sp": policy_published.findtext("sp"),
-            "pct": int(policy_published.findtext("pct") or 100),
+            "pct": _safe_int(policy_published.findtext("pct"), 100),
         }
 
         report = self.env['hams_base.dmarc.report'].create(report_vals)
@@ -145,7 +195,7 @@ class DmarcReport(models.Model):
         for record in root.findall("record"):
             row = record.find("row")
             source_ip = row.findtext("source_ip") if row is not None else False
-            count = int(row.findtext("count") or 0) if row is not None else 0
+            count = _safe_int(row.findtext("count")) if row is not None else 0
             
             policy_evaluated = row.find("policy_evaluated") if row is not None else None
             disposition = policy_evaluated.findtext("disposition") if policy_evaluated is not None else False

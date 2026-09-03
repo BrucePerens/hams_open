@@ -2,6 +2,7 @@ from odoo import models
 from odoo.tools.translate import _
 # -*- coding: utf-8 -*-
 # from odoo import models, api, _
+import html
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -57,12 +58,20 @@ class ResPartner(models.Model):
                 if club.email == email:
                     continue
 
+                # Adversarial security review, 2026-09-03: partner.name is
+                # a normal user-editable field, and this body reaches
+                # club.message_post() -- a backend chatter message any
+                # club officer sees. Escaping before interpolation, same
+                # defense-in-depth convention as event_sync's own scraped-
+                # field fix earlier tonight, rather than trusting
+                # message_post()'s own HTML sanitization to always catch
+                # a raw '%'-interpolated payload.
                 message = _(
                     "System Alert: Email deliveries to member %(name)s (%(email)s) are bouncing. "
                     "Please contact them via alternative means (phone, radio) to update their profile. "
                     "If you need assistance, please submit a ticket at our Helpdesk: /helpdesk"
-                ) % {'name': partner.name, 'email': email}
-                
+                ) % {'name': html.escape(partner.name or ''), 'email': html.escape(email or '')}
+
                 club.message_post(
                     body=message,
                     subject=_("Bounce Alert: %(name)s") % {'name': partner.name},
