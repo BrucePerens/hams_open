@@ -57,10 +57,16 @@ if not patterns:
 
 redis_host = os.getenv("REDIS_HOST") or "redis"
 redis_port = int(os.getenv("REDIS_PORT") or "6379")
+# Real fix, found by an adversarial security review: this used to
+# connect with no password at all, regardless of whether one is
+# configured -- see generalized_monitor.py's own REDIS_PASS comment for
+# the full reasoning (this daemon's log_search_req/log_search_res/
+# log_anomalies channels are the other end of that same trust boundary).
+redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
 
 try:
     r_client = redis.Redis(
-        host=redis_host, port=redis_port, db=0, decode_responses=True
+        host=redis_host, port=redis_port, db=0, password=redis_password, decode_responses=True
     )
     r_client.ping()
     logger.info("Connected to Redis successfully.")

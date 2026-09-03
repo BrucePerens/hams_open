@@ -33,6 +33,21 @@ import psycopg2
 import pymysql
 import redis as redis_lib
 
+# Real fix, found by an adversarial security review: this module's own
+# internal Redis connections (log_anomaly_proxy/log_search_proxy below)
+# used to construct bare redis.Redis(host=..., port=..., db=0) with no
+# password at all, regardless of whether one is configured -- unlike
+# distributed_redis_cache/daemons/cache_manager.py's own already-correct
+# REDIS_PASS handling, which this mirrors. The admin-only
+# /api/v1/pager/logs/search HTTP endpoint (log_api.py) is gated behind
+# pager_duty.group_pager_admin, but that check has no effect at all if
+# anything able to reach this Redis instance can just publish to the
+# same channels directly -- passing a real password here (when one is
+# configured) closes that gap rather than leaving the entire access
+# boundary for an admin-gated feature resting on Redis network
+# reachability alone.
+REDIS_PASS = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
+
 
 class OdooClient:
     def __init__(self, url, db, user, password):
@@ -1480,6 +1495,7 @@ if __name__ == "__main__":
             host=os.environ.get("REDIS_HOST") or "redis",
             port=int(os.environ.get("REDIS_PORT") or "6379"),
             db=0,
+            password=REDIS_PASS,
             decode_responses=True,
         )
         while True:
@@ -1508,6 +1524,7 @@ if __name__ == "__main__":
             host=os.environ.get("REDIS_HOST") or "redis",
             port=int(os.environ.get("REDIS_PORT") or "6379"),
             db=0,
+            password=REDIS_PASS,
             decode_responses=True,
         )
         while True:
