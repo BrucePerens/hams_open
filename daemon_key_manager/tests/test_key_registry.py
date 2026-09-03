@@ -470,6 +470,60 @@ class TestKeyRegistry(RealTransactionCase):
             registry._write_secure_env_file("/opt/hams/etc/keys/test_os_error_dir", "login", "key")
         os.rmdir("/opt/hams/etc/keys/test_os_error_dir")
 
+    def test_write_secure_env_file_refuses_to_write_a_credential_when_fchmod_fails(self):
+        """Real, CRITICAL fix, found by an adversarial security review,
+        live-reproduced on the real dev box: the old code opened the
+        REAL target path directly with O_CREAT|O_TRUNC. O_CREAT is a
+        no-op when the target already exists (e.g. left behind by an
+        earlier run under a different OS user/ownership) -- open() could
+        still succeed as long as the EXISTING file's own permissions
+        happened to allow this process to write it, with only the later
+        fchmod() failing (this process isn't the file's owner). That
+        failure used to just be logged as a warning while a fresh,
+        currently-valid credential got written into the still-
+        insecurely-permissioned file anyway -- confirmed live: every
+        ~59-day rotation cycle re-armed a real exposure this way. Worse,
+        O_TRUNC destroyed the target's prior content immediately on open,
+        before any permission problem could even be detected.
+
+        Real fix: write to a brand-new temp file (always correctly owned
+        and 0600 from creation) and atomically rename it onto the real
+        target -- the real target's own permissions/ownership never
+        matter at all, and its content is never touched unless the whole
+        write genuinely succeeds. This test simulates a write-time
+        failure (mocking `os.fchmod` on the temp file, since a real
+        failure there in production would mean something more seriously
+        wrong, e.g. disk full or a filesystem-level problem) and confirms
+        the target file's own prior content is left completely
+        untouched, and no stray temp file is left behind either.
+        """
+        registry = self.env["daemon.key.registry"].with_user(self.manager_user.id).create({
+            "name": "Fchmod Failure Test Daemon",
+            "user_id": self.service_user.id,
+            "env_file_path": "/opt/hams/etc/keys/fchmod_failure_test.env",
+        })
+        path = "/opt/hams/etc/keys/fchmod_failure_test.env"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:  # audit-ignore-path
+            f.write("PRE-EXISTING-CONTENT-FROM-A-DIFFERENT-OWNER\n")
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+
+        self.safe_patch("os.fchmod", side_effect=PermissionError("simulated: cannot secure the fresh temp file"))
+        with self.assertRaises(PermissionError):
+            registry._write_secure_env_file(path, "login", "key")
+
+        with open(path, "r") as f:  # audit-ignore-path
+            content = f.read()
+        self.assertEqual(
+            content,
+            "PRE-EXISTING-CONTENT-FROM-A-DIFFERENT-OWNER\n",
+            "a failed write must never overwrite the file's prior content with a live credential.",
+        )
+        leftover_temp_files = [
+            name for name in os.listdir(os.path.dirname(path)) if name.startswith(".daemon_key_")
+        ]
+        self.assertEqual(leftover_temp_files, [], "a failed write must not leave a stray temp file behind.")
+
 
 @tagged("post_install", "-at_install")
 class TestKeyRegistryTour(HamsHttpCase):

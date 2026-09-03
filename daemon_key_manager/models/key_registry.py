@@ -4,6 +4,7 @@
 import os
 import logging
 import datetime
+import tempfile
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError, AccessError
 
@@ -222,20 +223,38 @@ class DaemonKeyRegistry(models.Model):
             ("user_id", "in", user_ids),
             ("name", "in", key_names)
         ], limit=1000)
+        # Real fix, found by an adversarial security review: this used to
+        # re-raise (UserError/ValidationError/AccessError) or convert-and-
+        # raise (OSError) on the FIRST failing registry, aborting the
+        # whole bootstrap batch -- directly contradicting this module's
+        # own documented "Graceful Failure... one failed file-write does
+        # not block other rotations" contract (true only for the cron
+        # path, `_cron_rotate_all_keys` above, before this fix). Since
+        # this runs during systemd bootstrap "to prevent race conditions
+        # before daemon startup," aborting on daemon #1's broken key file
+        # meant daemons #2 through #N never got provisioned either, even
+        # though nothing was actually wrong with their own registries.
+        # Every registry is now attempted regardless of an earlier
+        # failure; failures are collected and reported together at the
+        # end via the same UserError-raising convention this function
+        # already used, so a caller (systemd bootstrap script, or a human
+        # via `odoo-bin shell`) still learns something went wrong, but
+        # everything that COULD succeed still does.
+        failures = []
         for reg in registries:
             _logger.info("Synchronously provisioning key for daemon: %s", reg.name)
             try:
                 reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
-            except (UserError, ValidationError, AccessError):
-                # Allow validation and authorization errors to bubble up naturally
-                raise
-            except OSError:
-                # [@ANCHOR: COMM_force_provision_error_handling]
-                msg = _(
-                    "Cannot write key file for '%s' at '%s'. "
-                    "Check permissions."
-                )
-                raise UserError(msg % (reg.name, reg.env_file_path))
+            except (UserError, ValidationError, AccessError, OSError) as e:
+                _logger.error("Failed to provision key for daemon %s: %s", reg.name, e)
+                failures.append(reg.name)
+
+        if failures:
+            msg = _(
+                "Provisioned keys for %(ok)d daemon(s); FAILED for: %(failed)s. "
+                "Check the server log for each failure's own real error."
+            )
+            raise UserError(msg % {"ok": len(registries) - len(failures), "failed": ", ".join(failures)})
 
         return {
             "type": "ir.actions.client",
@@ -386,16 +405,58 @@ class DaemonKeyRegistry(models.Model):
                     )
                     raise UserError(msg % directory)
 
-            # Ensure the file is created with 0600 from the start
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # Real, CRITICAL fix, found by an adversarial security
+            # review, live-reproduced on this exact dev box: the old code
+            # opened `path` directly with O_CREAT|O_TRUNC. O_CREAT is a
+            # no-op when `path` already exists (e.g. left behind by an
+            # earlier run under a different OS user/ownership) -- open()
+            # still SUCCEEDS as long as the EXISTING file's own
+            # permissions happen to allow this process to write it (a
+            # real, observed case here: three files left world-writable
+            # by an earlier partial run), with only the later fchmod()
+            # failing (this process isn't the file's owner, so it can't
+            # change its mode) -- and that failure used to just be logged
+            # as a warning while a fresh, currently-VALID credential got
+            # written into the still-insecurely-permissioned file anyway.
+            # Confirmed live: every ~59-day rotation cycle re-armed a
+            # real exposure this way. Worse, O_TRUNC destroys whatever
+            # was at `path` immediately on open, BEFORE any permission
+            # problem could even be detected -- so merely refusing to
+            # proceed at the fchmod step (an earlier version of this fix)
+            # would still have destroyed the prior, possibly-still-valid
+            # credential on every failed attempt.
+            #
+            # Real fix: write to a brand-new temp file in the same
+            # directory (always correctly owned and 0600 from creation --
+            # this process made it, no race, no dependency on whatever
+            # existed at `path` before) and atomically `os.rename()` it
+            # onto the real target. os.rename() only requires write
+            # permission on the DIRECTORY (already confirmed above via
+            # the chmod/makedirs check), never any permission on the file
+            # being replaced -- so this now correctly and atomically
+            # secures the file on every call regardless of what existed
+            # there before, rather than merely detecting and refusing a
+            # bad prior state. Same pattern hams_local_relay/src/lotw.rs's
+            # own `master_key()` already uses in this codebase (a
+            # NamedTempFile + persist_noclobber) for the identical
+            # "never corrupt/expose the real target on a partial
+            # failure" reasoning.
+            fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".daemon_key_")
             try:
-                os.fchmod(fd, 0o600)
-            except PermissionError as e:
-                _logger.warning("Could not fchmod %s: %s", path, e)
-            with os.fdopen(fd, "w") as env_file:
-                env_file.write("# Auto-generated by daemon.key.registry\n")
-                env_file.write("ODOO_RPC_LOGIN=%s\n" % login)
-                env_file.write("ODOO_RPC_KEY=%s\n" % key)
+                try:
+                    os.fchmod(fd, 0o600)
+                except BaseException:
+                    os.close(fd)
+                    raise
+                with os.fdopen(fd, "w") as env_file:
+                    env_file.write("# Auto-generated by daemon.key.registry\n")
+                    env_file.write("ODOO_RPC_LOGIN=%s\n" % login)
+                    env_file.write("ODOO_RPC_KEY=%s\n" % key)
+                os.rename(tmp_path, path)
+            except BaseException:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                raise
         except PermissionError as e:
             msg = "Failed to write secure env file %s due to permissions: %s"
             _logger.error(msg, path, e)
@@ -433,22 +494,35 @@ class DaemonKeyRegistry(models.Model):
         ], limit=1000)
 
         for reg in registries:
-            reg_id = reg.id
             reg_name = reg.name
             try:
                 reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
                 self.env.cr.commit()
             except (OSError, UserError, ValidationError, AccessError) as e:
+                # Real, CRITICAL fix, found by an adversarial security
+                # review: this used to run
+                # `UPDATE daemon_key_registry SET last_rotated = NOW()`
+                # even on a FAILED rotation, marking it as if it had
+                # succeeded. Since the eligibility query above is
+                # `last_rotated < threshold`, that silently exempted a
+                # registry whose rotation is demonstrably broken (e.g.
+                # the file-permission gap `_write_secure_env_file` now
+                # refuses to silently paper over) from any retry for
+                # another ~59 days -- directly defeating this module's
+                # own documented security property ("the key will expire
+                # and be revoked within 60 days... even if a backup is
+                # stolen") for exactly the registries most likely to
+                # actually need that property enforced. Leaving
+                # `last_rotated` untouched here means this same registry
+                # sorts first (`order="last_rotated asc"`) and gets
+                # retried on every future cron cycle until it genuinely
+                # succeeds, instead of being quietly exempted.
                 self.env.cr.rollback()
-                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() AT TIME ZONE 'UTC' WHERE id = %s", (reg_id,))
-                self.env.cr.commit()
                 _logger.error(
                     "Managed failure rotating key for daemon %s: %s", reg_name, e
                 )
             except Exception as e:  # audit-ignore-catch-all
                 self.env.cr.rollback()
-                self.env.cr.execute("UPDATE daemon_key_registry SET last_rotated = NOW() AT TIME ZONE 'UTC' WHERE id = %s", (reg_id,))
-                self.env.cr.commit()
                 _logger.error(
                     "Unexpected error during key rotation for daemon %s: %s",
                     reg.name,
