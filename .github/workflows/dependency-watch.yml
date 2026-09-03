@@ -18,6 +18,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          # hams_shared is a real git submodule (see .gitmodules), and
+          # actions/checkout defaults submodules to false -- without this,
+          # hams_shared/ checks out as an empty directory and the step
+          # below fails outright ("No such file or directory"). Confirmed
+          # directly with a fresh isolated clone (no submodule init) that
+          # this is exactly what happens today, found while investigating
+          # a related sibling-checkout gap in hams_com's build-relay.yml.
+          submodules: true
 
       - name: Check tracked dependencies against upstream releases
         # See hams_shared/tools/check_dependency_releases.py's own module
