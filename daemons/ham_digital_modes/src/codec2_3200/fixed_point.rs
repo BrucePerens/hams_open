@@ -11,19 +11,21 @@
 //! decision reserved for Bruce, and this port's own divergence baseline
 //! from the reference is separately unmeasured).
 //!
-//! `log2_lut`/`exp2_lut` below replace the plain-float `log10`/`powf`
-//! round trip in `quantise::encode_energy`/`decode_energy` with the
-//! same 8-bit (256-entry), linearly-interpolated log2/exp2 LUT
-//! primitive the plan doc validated for `aks_to_mag2`'s own `R^(2*BETA)`
-//! treatment (`x^k == 2^(k*log2(x))`, computed in base 2 specifically
-//! because that's what a real fixed-point target would implement --
-//! `frexp`-style exponent extraction is free, only the mantissa's own
-//! log2 needs a table). Everything surrounding the LUT call itself
-//! (the multiply by 10, the linear quantizer) deliberately stays in
-//! `f32` here, isolating the log-domain treatment specifically, matching
-//! the plan doc's own validation scope for `aks_to_mag2` (Q-format
-//! widths for the surrounding fixed-point arithmetic are a separate,
-//! later engineering step, not attempted here).
+//! `log2_lut`/`exp2_lut` below are what `quantise::encode_energy`/
+//! `decode_energy` actually call now -- not a parallel unused
+//! implementation sitting next to the plain-float one, the codec's real
+//! energy quantizer -- replacing the plain-float `log10`/`powf` round
+//! trip with the same 8-bit (256-entry), linearly-interpolated log2/exp2
+//! LUT primitive the plan doc validated for `aks_to_mag2`'s own
+//! `R^(2*BETA)` treatment (`x^k == 2^(k*log2(x))`, computed in base 2
+//! specifically because that's what a real fixed-point target would
+//! implement -- `frexp`-style exponent extraction is free, only the
+//! mantissa's own log2 needs a table). Everything surrounding the LUT
+//! call itself (the multiply by 10, the linear quantizer) deliberately
+//! stays in `f32` here, isolating the log-domain treatment specifically,
+//! matching the plan doc's own validation scope for `aks_to_mag2`
+//! (Q-format widths for the surrounding fixed-point arithmetic are a
+//! separate, later engineering step, not attempted here).
 
 use std::sync::OnceLock;
 
@@ -80,28 +82,16 @@ fn exp2_lut_generic(y: f32, bits: u32, table: &[f32]) -> f32 {
     mantissa * 2f32.powi(floor_y as i32)
 }
 
-fn log2_lut(x: f32) -> f32 {
+/// `pub(crate)`: `quantise::encode_energy` calls this directly (see
+/// that function) -- this is the actual implementation the codec uses,
+/// not a parallel unused sibling.
+pub(crate) fn log2_lut(x: f32) -> f32 {
     log2_lut_generic(x, LOG2_LUT_BITS, log2_lut_table())
 }
 
-fn exp2_lut(y: f32) -> f32 {
+/// `pub(crate)`: `quantise::decode_energy` calls this directly.
+pub(crate) fn exp2_lut(y: f32) -> f32 {
     exp2_lut_generic(y, LOG2_LUT_BITS, exp2_lut_table())
-}
-
-const LOG2_10: f32 = std::f32::consts::LOG2_10;
-
-/// LUT-based equivalent of `quantise::encode_energy` -- same quantizer
-/// range/step, only the `log10` call replaced with the log2/exp2-LUT
-/// primitive validated above.
-pub fn encode_energy_lut(e_linear: f32) -> u32 {
-    let e_db = 10.0 * (log2_lut(e_linear.max(1e-12)) / LOG2_10);
-    super::quantise::quantize_linear(e_db, super::E_MIN_DB, super::E_MAX_DB, super::E_BITS)
-}
-
-/// LUT-based equivalent of `quantise::decode_energy`.
-pub fn decode_energy_lut(index: u32) -> f32 {
-    let e_db = super::quantise::dequantize_linear(index, super::E_MIN_DB, super::E_MAX_DB, super::E_BITS);
-    exp2_lut(e_db / 10.0 * LOG2_10)
 }
 
 #[cfg(test)]
@@ -144,8 +134,19 @@ mod tests {
         assert!(max_rel_err < 1e-4, "log2_lut/exp2_lut round trip relative error too large: {max_rel_err}");
     }
 
+    /// Independent plain-float reference (`log10`/`powf`, no LUT at
+    /// all) for what `quantise::encode_energy` computed *before* this
+    /// module existed -- deliberately NOT calling
+    /// `quantise::encode_energy` itself, since that function now calls
+    /// straight into `log2_lut` (see this module's own doc comment):
+    /// comparing the LUT against itself via that indirection would be
+    /// circular and prove nothing.
+    fn reference_e_db(e_linear: f32) -> f32 {
+        10.0 * e_linear.max(1e-12).log10()
+    }
+
     #[test]
-    fn energy_lut_quantizer_matches_the_float_quantizer_on_real_encoder_side_data_with_zero_index_mismatches() {
+    fn the_8_bit_log2_lut_reproduces_the_plain_float_log10_quantizer_decision_on_real_encoder_side_data_with_zero_index_mismatches() {
         // Real ENCODER-side e (the actual encode_energy() call-site
         // argument, captured directly -- see quantise.rs's own test of
         // the same fixture for why that distinction matters).
@@ -156,26 +157,14 @@ mod tests {
         let mut mismatches = 0;
         for row in &es {
             let e = row[0];
-            let float_idx = super::super::quantise::encode_energy(e);
-            let lut_idx = encode_energy_lut(e);
-            if float_idx != lut_idx {
+            let plain_idx = super::super::quantise::quantize_linear(reference_e_db(e), super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
+            let lut_e_db = 10.0 * (log2_lut(e.max(1e-12)) / std::f32::consts::LOG2_10);
+            let lut_idx = super::super::quantise::quantize_linear(lut_e_db, super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
+            if plain_idx != lut_idx {
                 mismatches += 1;
             }
         }
-        assert_eq!(mismatches, 0, "LUT-based encode_energy diverged from the float version on {mismatches}/{} real frames -- the plan doc's own validated result for this LUT design is zero mismatches", es.len());
-
-        // decode_energy_lut should track decode_energy closely too
-        // (checked at a handful of real quantizer indices, not just
-        // round-numbers) -- not exact (LUT interpolation vs a single
-        // powf call), but tightly bounded.
-        let mut max_rel_err = 0.0f32;
-        for idx in 0..(1u32 << super::super::E_BITS) {
-            let float_back = super::super::quantise::decode_energy(idx);
-            let lut_back = decode_energy_lut(idx);
-            let rel_err = ((lut_back - float_back) / float_back).abs();
-            max_rel_err = max_rel_err.max(rel_err);
-        }
-        assert!(max_rel_err < 1e-4, "decode_energy_lut diverged from decode_energy by {max_rel_err} relative -- too large for an 8-bit LUT");
+        assert_eq!(mismatches, 0, "LUT-based log2 diverged from plain log10 on {mismatches}/{} real frames -- the plan doc's own validated result for this LUT design is zero mismatches", es.len());
     }
 
     #[test]
@@ -196,13 +185,42 @@ mod tests {
         let mut mismatches = 0;
         for row in &es {
             let e = row[0].max(1e-12);
-            let e_db_coarse = 10.0 * (log2_lut_generic(e, COARSE_BITS, &coarse_log2) / LOG2_10);
+            let e_db_coarse = 10.0 * (log2_lut_generic(e, COARSE_BITS, &coarse_log2) / std::f32::consts::LOG2_10);
             let coarse_idx = super::super::quantise::quantize_linear(e_db_coarse, super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
-            let float_idx = super::super::quantise::encode_energy(e);
-            if coarse_idx != float_idx {
+            let plain_idx = super::super::quantise::quantize_linear(reference_e_db(e), super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
+            if coarse_idx != plain_idx {
                 mismatches += 1;
             }
         }
-        assert!(mismatches > 0, "expected the deliberately coarse 4-bit LUT to produce at least one real index mismatch against the float quantizer -- got zero, which would mean the 8-bit result above isn't evidence of anything");
+        assert!(mismatches > 0, "expected the deliberately coarse 4-bit LUT to produce at least one real index mismatch against the plain float quantizer -- got zero, which would mean the 8-bit result above isn't evidence of anything");
+    }
+
+    #[test]
+    fn encode_energy_and_decode_energy_now_run_through_the_lut_and_still_round_trip_within_one_quantizer_step() {
+        // Closes the loop advisor flagged: after quantise::encode_energy/
+        // decode_energy were switched to call straight into this
+        // module's LUT, does a real captured e still round-trip through
+        // the *actual, now-LUT-backed* encode_energy/decode_energy to
+        // within the same one-quantizer-step bound the plain-float
+        // version always met? (quantise.rs's own
+        // energy_quantizer_matches_real_encoder_side_data_within_the_real_5_bit_step
+        // test already asserts this same bound against the same
+        // fixture -- this test exists so that guarantee is visible from
+        // this module too, right next to the LUT it now depends on.)
+        let e_path = fixture!("codec2_enc_e_dump.txt");
+        let es = read_dump(e_path, 1);
+        let step_db = (super::super::E_MAX_DB - super::super::E_MIN_DB) / (1 << super::super::E_BITS) as f32;
+
+        for row in &es {
+            let e = row[0];
+            let e_db = reference_e_db(e);
+            if !(super::super::E_MIN_DB..=super::super::E_MAX_DB).contains(&e_db) {
+                continue; // real, designed clamp region -- see quantise.rs's own test for why
+            }
+            let idx = super::super::quantise::encode_energy(e);
+            let back = super::super::quantise::decode_energy(idx);
+            let back_db = reference_e_db(back);
+            assert!((back_db - e_db).abs() <= step_db, "LUT-backed round trip for e={e} (db={e_db}) landed at {back} (db={back_db}), step {step_db}dB");
+        }
     }
 }

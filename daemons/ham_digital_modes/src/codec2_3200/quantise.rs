@@ -31,14 +31,25 @@ pub fn decode_wo(index: u32) -> f32 {
     dequantize_linear(index, W0_MIN, W0_MAX, WO_BITS)
 }
 
+/// Uses `fixed_point::log2_lut` (an 8-bit, linearly-interpolated
+/// log2/exp2 LUT -- the real fixed-point-friendly shape validated in
+/// `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md` for `aks_to_mag2`'s
+/// own `R^(2*BETA)` treatment, reused here for the same reason: it's
+/// the primitive a real fixed-point target would implement instead of a
+/// float `log10`/`powf` round trip) rather than plain `log10` -- see
+/// `fixed_point.rs`'s own tests for the real captured-data validation
+/// (zero index mismatches against a plain-float reference on 2539 real
+/// frames).
 pub fn encode_energy(e_linear: f32) -> u32 {
-    let e_db = 10.0 * e_linear.max(1e-12).log10();
+    let e_db = 10.0 * (super::fixed_point::log2_lut(e_linear.max(1e-12)) / std::f32::consts::LOG2_10);
     quantize_linear(e_db, E_MIN_DB, E_MAX_DB, E_BITS)
 }
 
+/// See `encode_energy`'s own doc comment for why this calls
+/// `fixed_point::exp2_lut` instead of plain `powf`.
 pub fn decode_energy(index: u32) -> f32 {
     let e_db = dequantize_linear(index, E_MIN_DB, E_MAX_DB, E_BITS);
-    10.0f32.powf(e_db / 10.0)
+    super::fixed_point::exp2_lut(e_db / 10.0 * std::f32::consts::LOG2_10)
 }
 
 /// Real linear scalar quantizer shared by `Wo` and energy: `bits`
