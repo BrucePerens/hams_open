@@ -1,9 +1,23 @@
 # Fixed-Point Encoder Implementation: Punch List
 
-## Status: scoped 2026-09-04, per Bruce's direct request "Implement the fixed-point encoder." Two
-## stages landed this pass (window, voicing threshold); the rest is real, unstarted, multi-session
-## work. This file is the ground truth for what's actually done -- re-derive from here, not from a
-## chat summary, before ever reporting this "complete."
+## Status: scoped 2026-09-04, per Bruce's direct request "Implement the fixed-point encoder." Real
+## structure now exists (`floating_reference::Encoder` + a parallel `EncoderFixed`, both build and
+## pass their own round-trip test), and `is_voiced_fixed` is genuinely wired into `EncoderFixed`. Two
+## more candidates exist but aren't wired anywhere yet. Everything else is real, unstarted,
+## multi-session work. This file is the ground truth for what's actually done -- re-derive from here
+## against the real code, not from a chat summary, before ever reporting this "complete."
+
+## Structure, resolved 2026-09-04 -- Bruce's own call on the open product decision below
+
+Parallel, not in-place replacement: `Encoder` moved to `codec2_3200::floating_reference::Encoder`
+(fully `f32`, untouched otherwise, kept live specifically as the per-frame diff reference every
+fixed-point stage gets checked against) and `codec2_3200::EncoderFixed` (`encoder_fixed.rs`) is the
+new, real, forward-looking build -- both compile, both pass a real round-trip sanity test today.
+`EncoderFixed`'s own doc comment is explicit that most of its pipeline still delegates to the same
+`f32` functions `floating_reference::Encoder` calls (converting its own `i16`-native `sn` to `f32` at
+each not-yet-migrated stage's own call site) -- only `voicing::is_voiced_fixed` is genuinely
+fixed-point in `EncoderFixed` today. `Decoder` did not move; see `floating_reference/mod.rs`'s own
+doc comment for why encode/decode aren't symmetric here.
 
 ## Why this is an architecture change, not an integration task
 
@@ -18,25 +32,13 @@ block-floating) representation across stages, not just wiring in the two already
 components (`levinson_durbin_fixed`, `cheb_poly_eval_fixed`) as-is -- wiring them in today would
 still round-trip through `f32` at every boundary, which isn't what "fixed-point encoder" means.
 
-## Open product decision -- Bruce's own call, not resolved by this pass
-
-**Replace `Encoder` in place, or build a parallel `EncoderFixed`?** `hams-not-yet-deployed-breaking-
-changes-ok` permits an in-place replacement (nothing is deployed yet). But the validation discipline
-that made every real win this session possible -- `cheb_poly_eval_fixed`'s bit-exactness proof
-against the live `f32` implementation, `levinson_durbin_fixed`'s clamp-disagreement discriminator
-against `levinson_durbin` -- depends on having the `f32` path live to diff against, frame by frame,
-for as long as validation is incomplete. A parallel `EncoderFixed` keeps that reference available
-through the whole build; replacing `Encoder` outright removes it the moment the swap happens, before
-every stage has its own passing cross-check. Recommend parallel, at least until every stage below
-is DONE -- but this is a real product-shaped decision, not a technical one, and it's Bruce's call.
-
 ## Punch list -- stage, current state, real acceptance bar, done or not
 
 | Stage | Current state | Real acceptance bar | Status |
 |---|---|---|---|
-| `window.rs` (`make_analysis_window`) | Computed at runtime in `f32`, but the window shape is a compile-time constant | Quantize the constructed window to a fixed-point output type with real measured margin | **DONE, this pass.** `make_analysis_window_fixed() -> [i32; M_PITCH]` added, Q0.30 (real measured peak ~0.0043, real margin under `i32`), validated against the real `f32` construction (max dequantized error < 1e-8). The one-time `cos()` construction itself stays `f32` internally (runs once per `Encoder` lifetime, not per-frame -- real but negligible cost); what changed is the *output* type, which is what the eventual per-frame consumer needs. **Not yet wired into `Encoder`.** |
-| `voicing.rs` (`is_voiced`) | Corrected after starting: `energy_db = 10*log10(energy)` is a real dependency on the still-incomplete `log2_lut` (not just a threshold to narrow) | See resolution below | **DONE, this pass, via a real design change** -- see below |
-| `autocorrelate` + `Autocorr` boundary | Full `f32`, output feeds `levinson_durbin_fixed` (which currently normalizes by `r[0]` in `f32` before its integer core) | Block-floating fixed-point representation with a shared exponent (`R[0..10]`'s own real measured range is ~10^11 across real speech, `CODEC2_MOD_FIXED_POINT_PLAN.md`'s own per-stage table) -- validate bit-exact or documented-divergence against `codec2_r_dump.txt`, record the real measured exponent range | **NOT STARTED -- the real gate.** Nothing downstream in the LPC chain can wire in without an `f32` round-trip until this boundary exists. |
+| `window.rs` (`make_analysis_window`) | Computed at runtime in `f32`, but the window shape is a compile-time constant | Quantize the constructed window to a fixed-point output type with real measured margin | **Candidate built and validated, NOT WIRED.** `make_analysis_window_fixed() -> [i32; M_PITCH]` added, Q0.30 (real measured peak ~0.0043, real margin under `i32`), validated against the real `f32` construction (max dequantized error < 1e-8). Not used by `EncoderFixed` yet -- nothing downstream (`autocorrelate`) is ready to consume a fixed-point windowed sample, so wiring this in now would just add a pointless round trip. |
+| `voicing.rs` (`is_voiced`) | Corrected after starting: `energy_db = 10*log10(energy)` is a real dependency on the still-incomplete `log2_lut` (not just a threshold to narrow) | See resolution below | **DONE and WIRED into `EncoderFixed`** -- the one genuinely fixed-point stage in the real forward-looking encoder today. Real design change, not a mechanical port -- see below. |
+| `autocorrelate` + `Autocorr` boundary | Full `f32`. **Correction, found while scoping the actual work**: `levinson_durbin_fixed_core`'s very first line already divides every `R[j]` by `r0` (in `f32`, before touching fixed-point at all) -- meaning the "block-floating with a shared exponent" framing this row originally had is more machinery than the real problem needs. The exponent that would have been tracked is `r0` itself, and it's cancelled at the only place it's ever consumed. | Two smaller changes, not a representation redesign: (1) `autocorrelate` accumulates raw `R[j]` as `i64` sums, no exponent; (2) `r[j]/r0` becomes a fixed-point division producing the same Q8.40 ratio `f32_to_q64(r[j]/r0, 40)` computes today. Before building (1), the real risk check is whether (2) can pass the *existing* discriminator test (`levinson_durbin_fixed_diverges_from_float_only_at_measured_clamp_disagreement_frames`, currently fed the `f32`-normalized input) when fed a fixed-point-normalized input instead -- that's a real, live risk: the division is the same `-(numerator)<<40 / r0` shape as `div_round_i128` (an 88-bit numerator over an `i64` divisor, `__divti3`), and unlike that earlier case, if this wires into `EncoderFixed` it would actually run, so the cost question closed for `div_round_i128` reopens here. Also still needs the real input-side bit budget: `wn[i]` (`i16` sample x Q0.30 window coefficient) and a 320-term accumulator -- measure against real captured `wn` data (`codec2_wn_dump.txt`, if it exists -- the existing `autocorrelate_matches_the_real_reference_r_on_a_synthetic_signals_real_captured_wn_data` test implies real captured `wn` is already on disk) before assuming `i64` holds it. | **NOT STARTED -- the real gate, now correctly scoped, not yet built.** Nothing downstream in the LPC chain can wire in without an `f32` round-trip until this boundary exists. |
 | `levinson_durbin_fixed` wiring | Built and validated (`levinson_durbin_fixed_diverges_from_float_only_at_measured_clamp_disagreement_frames`), but not called by `Encoder::encode()`, and its own output boundary is `f32` | Redesign its output to carry a fixed-point/block-floating type forward (not `LpcCoeffs`/`f32`), then wire into `Encoder::encode()` in place of `levinson_durbin` | **NOT STARTED**, blocked on the `autocorrelate` boundary above |
 | `lpc_energy` | Full `f32` | Fixed-point port + real fixture-corpus validation | **NOT STARTED** |
 | `bw_gamma` (bandwidth expansion) | Full `f32`, but `lpc.rs`'s own doc comments already note this "turned out to reduce to simple formulas" elsewhere in this codebase's history -- may be more tractable than it looks | Fixed-point port + validation | **NOT STARTED** |
@@ -66,9 +68,9 @@ arithmetic-flavored averaging), permissible per this module's own documented des
 need to reproduce [the reference]'s exact decision, only make a reasonable one"), and validated by
 running `is_voiced_fixed` against the *same* four real scenarios `is_voiced` itself is validated
 against (clean tone -> voiced, white noise -> not voiced, silence -> not voiced, quiet tone below a
-settled noise floor -> not voiced) -- all four matched. **Not yet wired into `Encoder`** (its input
-would need to be raw `i16` samples, not the `f32`-converted `self.sn` `Encoder::encode()` currently
-builds).
+settled noise floor -> not voiced) -- all four matched. **Wired into `EncoderFixed`** (which stores
+raw `i16` samples natively, unlike `floating_reference::Encoder`'s `f32` `sn` -- this is the reason
+`EncoderFixed`'s own `sn` field is `i16`, not just an aesthetic choice).
 
 ## Explicitly not attempted this pass
 
