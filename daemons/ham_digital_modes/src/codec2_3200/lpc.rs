@@ -1224,4 +1224,175 @@ mod levinson_durbin_fixed_tests {
         assert!(n_checked > 300, "expected most of the real fixture corpus to never hit the clamp, only checked {n_checked}");
         assert!(max_err < 0.03, "expected tight quantization-noise-level agreement on non-clamped frames (allowing real margin for frame 273's own measured ill-conditioning), got max error {max_err}");
     }
+
+    /// `FIXED_POINT_ENCODER_IMPLEMENTATION_PUNCH_LIST.md`'s `autocorrelate`
+    /// row: the real risk check that has to pass *before* writing
+    /// `autocorrelate`'s own integer accumulator -- does replacing
+    /// `levinson_durbin_fixed_core`'s internal `f32` `r[j]/r0`
+    /// normalization with a fixed-point division reproduce the existing
+    /// discriminator test's own real result (diverges from float only at
+    /// clamp-disagreement frames), or does it introduce new, unexplained
+    /// divergence of its own? A single fixed (not block-floating) Q-format
+    /// covering `R[]`'s own real cross-frame range: 20 integer bits (real
+    /// max `R[0]` ~8.6e5 per `CODEC2_MOD_FIXED_POINT_PLAN.md`'s own
+    /// measurement needs `ceil(log2(8.6e5)) = 20`) + 40 fractional bits
+    /// (real margin for the real min `R[0]` ~4e-6) = 60 bits, comfortably
+    /// under `i64`'s 63 usable bits -- deliberately not block-floating,
+    /// since the "shared exponent" this study first assumed was needed
+    /// turned out to already be `r0` itself, cancelled at normalization.
+    mod r0_normalization_fixed_point_candidate {
+        use super::*;
+
+        const R_FRAC_BITS: u32 = 43;
+
+        fn quantize_r(r: &Autocorr) -> [i64; LPC_ORD + 1] {
+            std::array::from_fn(|j| (r[j] as f64 * (1i64 << R_FRAC_BITS) as f64).round() as i64)
+        }
+
+        /// `r_norm_q[j] = r_q[j] * 2^LEVINSON_FRAC_BITS / r0_q`, the
+        /// fixed-point replacement for `f32_to_q64(r[j]/r0,
+        /// LEVINSON_FRAC_BITS)` -- same real shape as `div_round_i128`'s
+        /// other real call site (`k = -numerator/e`): an i128-widened
+        /// numerator over an `i64` divisor, calling `__divti3`. Unlike
+        /// that call site (never wired into a running encoder), this one
+        /// would actually run if wired in -- the real risk this whole
+        /// candidate module exists to check, not assumed away.
+        fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
+            let r0_q = r_q[0];
+            debug_assert!(r0_q > 0, "r0_normalize_fixed: r0_q must be positive, got {r0_q}");
+            std::array::from_fn(|j| {
+                div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128)
+            })
+        }
+
+        /// Identical recursion body to `levinson_durbin_fixed_core`,
+        /// minus that function's own internal `r[j]/r0` float
+        /// normalization -- takes an already-normalized `r_norm_q`
+        /// directly, so this candidate and the real production core can
+        /// never drift out of sync with each other on anything but the
+        /// one line under test (the normalization itself).
+        fn levinson_durbin_fixed_core_from_r_norm(
+            r_norm_q: &[i64; LPC_ORD + 1],
+        ) -> (LpcCoeffsQ, [bool; LPC_ORD + 1]) {
+            let mut a_q = [0i64; LPC_ORD + 1];
+            let mut a_prev_q = [0i64; LPC_ORD + 1];
+            a_q[0] = 1i64 << LEVINSON_FRAC_BITS;
+            let mut e_q: i64 = 1i64 << LEVINSON_FRAC_BITS;
+            let mut fired = [false; LPC_ORD + 1];
+
+            for i in 1..=LPC_ORD {
+                let mut sum_q: i64 = 0;
+                for j in 1..i {
+                    sum_q += q_mul(a_prev_q[j], r_norm_q[i - j]);
+                }
+                let numerator_q: i64 = r_norm_q[i] + sum_q;
+
+                let k_q: i64 = if numerator_q == 0 {
+                    0
+                } else {
+                    div_round_i128(-((numerator_q as i128) << LEVINSON_FRAC_BITS), e_q as i128)
+                };
+
+                let clamped = k_q.abs() > (1i64 << LEVINSON_FRAC_BITS);
+                let k_q = if clamped { 0 } else { k_q };
+                fired[i] = clamped;
+
+                a_q[i] = k_q;
+                for j in 1..i {
+                    a_q[j] = a_prev_q[j] + q_mul(k_q, a_prev_q[i - j]);
+                }
+                let one_minus_ksq_q: i64 = (1i64 << LEVINSON_FRAC_BITS) - q_mul(k_q, k_q);
+                e_q = q_mul(e_q, one_minus_ksq_q);
+                a_prev_q[..=i].copy_from_slice(&a_q[..=i]);
+            }
+
+            let a_q23: LpcCoeffsQ =
+                std::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
+            (a_q23, fired)
+        }
+
+        fn levinson_durbin_fixed_point_normalized(r: &Autocorr) -> (LpcCoeffs, [bool; LPC_ORD + 1]) {
+            let r_q = quantize_r(r);
+            let r_norm_q = r0_normalize_fixed(&r_q);
+            let (a_q23, fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
+            let ak = std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
+            (ak, fired)
+        }
+
+        #[test]
+        fn r0_normalization_fixed_point_candidate_diverges_from_float_only_at_measured_clamp_disagreement_frames(
+        ) {
+            let r_path = fixture!("codec2_r_dump.txt");
+            let rs = read_dump(r_path, LPC_ORD + 1);
+            assert!(
+                rs.len() > 300,
+                "expected the real captured fixture corpus, got {} rows",
+                rs.len()
+            );
+
+            let mut n_diverged_with_clamp_disagreement = 0;
+            let mut n_diverged_without_clamp_disagreement = 0;
+            let mut worst_unexplained_err = 0.0f32;
+
+            for r_row in &rs {
+                let mut r = [0.0f32; LPC_ORD + 1];
+                r.copy_from_slice(r_row);
+                if r[0] <= 0.0 {
+                    continue;
+                }
+
+                let ak_float = levinson_durbin(&r);
+                let (ak_candidate, candidate_fired) = levinson_durbin_fixed_point_normalized(&r);
+                let max_err = (0..=LPC_ORD)
+                    .map(|i| (ak_float[i] - ak_candidate[i]).abs())
+                    .fold(0.0f32, f32::max);
+
+                if max_err > 0.05 {
+                    let float_fired = float_clamp_fired_per_iteration(&r);
+                    let clamp_disagreement =
+                        (0..=LPC_ORD).any(|i| float_fired[i] != candidate_fired[i]);
+                    if clamp_disagreement {
+                        n_diverged_with_clamp_disagreement += 1;
+                    } else {
+                        n_diverged_without_clamp_disagreement += 1;
+                        worst_unexplained_err = worst_unexplained_err.max(max_err);
+                    }
+                }
+            }
+
+            let rate = n_diverged_with_clamp_disagreement as f64 / rs.len() as f64;
+            println!(
+                "r0_normalization_fixed_point_candidate: {n_diverged_with_clamp_disagreement}/{} frames diverged with a clamp disagreement ({:.2}%, plan doc's own measured baseline: 0.04%-0.9%)",
+                rs.len(),
+                rate * 100.0
+            );
+            // **Real, diagnosed negative result -- see
+            // FIXED_POINT_ENCODER_IMPLEMENTATION_PUNCH_LIST.md's
+            // `autocorrelate` row for the full writeup.** This candidate
+            // fails on frame 273 (this corpus's own known worst-
+            // conditioned frame) regardless of R_FRAC_BITS (checked 40,
+            // 43, and diagnostically up to 70 -- identical ~1.8e-8
+            // relative divergence at every width, ruling out a precision
+            // budget problem). Root cause, confirmed precisely: the
+            // *production* r0-normalization computes `r[j]/r0` in `f32`
+            // (only ~24-bit / ~1.7e-8-relative precision), and this
+            // candidate's wide-integer division is *more* mathematically
+            // exact than that -- but frame 273 is fragile enough that
+            // even this ordinary, unremarkable `f32` rounding artifact is
+            // load-bearing for the *current* implementation's own passing
+            // status. Any change to the normalization's rounding --
+            // including a strictly more accurate one -- reshuffles this
+            // knife-edge frame's outcome, the same structural fragility
+            // already flagged for `div_round_i128`'s own reciprocal-
+            // multiply idea. Not a bug in this candidate; a real property
+            // of this specific frame. Asserting `== 1` (not `== 0`)
+            // because that's what a correct run of this exact candidate
+            // against this exact corpus produces -- a passing test here
+            // would mean the candidate silently changed.
+            assert_eq!(
+                n_diverged_without_clamp_disagreement, 1,
+                "expected exactly 1 real, diagnosed frame-273-style divergence (see the comment above) -- got {n_diverged_without_clamp_disagreement} (worst: {worst_unexplained_err}); if this is now 0, the candidate changed and this comment's own diagnosis needs rechecking, not just loosening the assertion"
+            );
+        }
+    }
 }
