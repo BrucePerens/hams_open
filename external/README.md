@@ -217,6 +217,26 @@ To update or refresh the local assets, the script `fetch_assets.py` can be execu
 python3 external/fetch_assets.py
 ```
 
+`main()` calls `download_file` (Leaflet, Transformers.js) directly; a separate, lower-level pair
+handles the D3-family files, which need real post-download transformation (banner-prepending,
+and for `d3-geo-projection`, the `require()`-neutering fix documented above), and which are hash-
+verified against a pinned, currently-vendored-file hash rather than assumed correct:
+
+- `hash_file(path)` -- SHA-256 of a file on disk, or `None` if it doesn't exist yet.
+  [@ANCHOR: external:hash_file]
+- `download_and_transform_file(url, dest_path, transform_fn, expected_hash)` -- like
+  `download_file`, but applies `transform_fn(raw_bytes) -> bytes` to the download before hash-
+  verifying and writing it, so the pinned hash covers the real, post-transform content that
+  actually lands on disk. [@ANCHOR: external:download_and_transform_file]
+- `_odoo_module_banner_transform`/`_d3_geo_projection_transform` are the two real transforms in
+  current use, both documented in the D3.js section above.
+  [@ANCHOR: external:_odoo_module_banner_transform] [@ANCHOR: external:_d3_geo_projection_transform]
+- `fetch_d3_family_assets_INTENTIONALLY_NOT_CALLED_FROM_MAIN(lib_dir)` -- reproduces the D3-family
+  vendoring end to end. Deliberately not wired into `main()`/called automatically -- see its own
+  docstring for why (an earlier, reverted attempt at exactly that broke 12 unrelated tests). Run it
+  deliberately, then run the full test suite (not just map-specific tests) before replacing the
+  live vendored files with its output. [@ANCHOR: external:fetch_d3_family_assets]
+
 ## Usage in Other Modules
 
 ### Leaflet

@@ -20,6 +20,7 @@ _logger = logging.getLogger(__name__)
 
 
 def hash_file(path):
+    # [@ANCHOR: external:hash_file]
     sha256 = hashlib.sha256()
     try:
         with open(path, "rb") as file_stream:
@@ -68,6 +69,7 @@ def download_file(url, dest_path, expected_hash):
 
 
 def download_and_transform_file(url, dest_path, transform_fn, expected_hash):
+    # [@ANCHOR: external:download_and_transform_file]
     """Like download_file, but applies transform_fn(bytes) -> bytes to the raw
     download before hash-verifying and writing. Used for the D3-family assets
     below, which need a small, documented post-processing step (see
@@ -108,6 +110,7 @@ def download_and_transform_file(url, dest_path, transform_fn, expected_hash):
 
 
 def _odoo_module_banner_transform(raw):
+    # [@ANCHOR: external:_odoo_module_banner_transform]
     """Prepends the /** @odoo-module **/ banner line every vendored D3-family
     file carries as its first line. Confirmed this pass to be the ONLY
     transform topojson-client.min.js needs -- with this applied, a fresh
@@ -117,6 +120,7 @@ def _odoo_module_banner_transform(raw):
 
 
 def _d3_geo_projection_transform(raw):
+    # [@ANCHOR: external:_d3_geo_projection_transform]
     """Banner, plus the one substantive transform d3-geo-projection.v4.min.js
     carries that d3.v7.min.js and topojson-client.min.js don't need: its UMD
     wrapper's CommonJS branch calls require("d3-geo")/require("d3-array")
@@ -142,6 +146,7 @@ def _d3_geo_projection_transform(raw):
 
 
 def fetch_d3_family_assets_INTENTIONALLY_NOT_CALLED_FROM_MAIN(lib_dir):
+    # [@ANCHOR: external:fetch_d3_family_assets]
     """Reproduces the D3.js / d3-geo-projection / topojson-client vendoring,
     documented in docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md.
 
