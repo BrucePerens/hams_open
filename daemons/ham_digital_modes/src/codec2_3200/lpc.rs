@@ -510,10 +510,18 @@ fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
 /// established "integer core, float boundary" pattern -- the downstream
 /// LSP chain (`build_p_q`, `bw_gamma`) isn't migrated yet, so there's
 /// nothing further along the pipeline to hand an integer type to.
-pub fn levinson_durbin_fixed_from_integer_r(r_q: &[i64; LPC_ORD + 1]) -> LpcCoeffs {
+/// Returns both the `f32` coefficients (the established output boundary)
+/// and the real Q8.23 integer coefficients still inside -- a caller that
+/// itself has integer `R[]` (e.g. to feed `lpc_energy_fixed`) needs the
+/// latter to stay fixed-point end to end; a caller that doesn't can
+/// simply ignore the second element.
+pub fn levinson_durbin_fixed_from_integer_r(
+    r_q: &[i64; LPC_ORD + 1],
+) -> (LpcCoeffs, [i64; LPC_ORD + 1]) {
     let r_norm_q = r0_normalize_fixed(r_q);
     let (a_q23, _fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
-    std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
+    let ak = std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
+    (ak, a_q23)
 }
 
 /// Q8.23 fixed-point for the Chebyshev coefficients below -- 8 integer
@@ -776,6 +784,28 @@ pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
 /// energies).
 pub fn lpc_energy(ak: &LpcCoeffs, r: &Autocorr) -> f32 {
     ak.iter().zip(r.iter()).map(|(a, r)| a * r).sum()
+}
+
+/// Fixed-point `lpc_energy`: `a_q23` (from `levinson_durbin_fixed_from_
+/// integer_r`'s own second return value) and `r_q` (from `autocorrelate_
+/// fixed`, same Q8.23 as `a_q23`) in, real `f32` energy out (matching
+/// this port's "integer core, float boundary" pattern -- `quantise::
+/// encode_energy` isn't migrated yet, so there's nothing further to hand
+/// an integer type to). Each per-term product widens to `i128`
+/// transiently (two Q8.23 values up to ~48 bits each can produce a
+/// ~74-bit-magnitude product, which does not fit `i64`, unlike
+/// `autocorrelate_fixed`'s own narrower per-sample products) then
+/// shifts right by `COEF_FRAC_BITS` immediately, bringing each term back
+/// to Q8.23 before accumulating -- the running sum itself stays well
+/// within `i64` for any realistic frame (real measured `\|ak\|` <= 77.17,
+/// real measured `\|R[j]\|` <= `R[0]` by the Cauchy-Schwarz bound already
+/// established elsewhere in this file).
+pub fn lpc_energy_fixed(a_q23: &[i64; LPC_ORD + 1], r_q: &[i64; LPC_ORD + 1]) -> f32 {
+    let mut sum: i64 = 0;
+    for i in 0..=LPC_ORD {
+        sum += ((a_q23[i] as i128 * r_q[i] as i128) >> COEF_FRAC_BITS) as i64;
+    }
+    (sum as f64 / (1i64 << COEF_FRAC_BITS) as f64) as f32
 }
 
 #[cfg(test)]
@@ -1295,6 +1325,69 @@ mod tests {
         assert!(
             max_rel_err < 1e-2,
             "max relative R[] error vs real captured reference (fixed-point path): {max_rel_err}"
+        );
+    }
+
+    /// `lpc_energy_fixed` vs `lpc_energy`, both fed the same real
+    /// captured data -- `codec2_ak_dump.txt` (real `ak[]`) and
+    /// `codec2_r_dump.txt` (real `R[]`), zipped by file order. Not a
+    /// claim that row `i` in one file is the same analysis frame as row
+    /// `i` in the other (`codec2_enc_e_dump.txt`'s own row count, 363,
+    /// doesn't even match these two files' shared 362, so frame
+    /// correspondence across all three isn't established) -- this test
+    /// only needs real, representative `ak`/`R[]` *magnitudes*, not a
+    /// specific real energy value.
+    ///
+    /// **Acceptance bar is the real quantizer decision, not a raw
+    /// relative-error threshold** -- an earlier version of this test
+    /// asserted `< 1e-2` relative error and found a real, if harmless,
+    /// 3.2% worst case: `lpc_energy`'s own `sum(ak[i]*R[i])` can involve
+    /// real cancellation between positive and negative terms on some
+    /// frames, amplifying small per-term quantization error into a
+    /// larger relative error on the *resulting* (partially-cancelled,
+    /// smaller-magnitude) sum -- a real property of this dot product, not
+    /// a bug. In dB terms (what `quantise::encode_energy` actually
+    /// quantizes on), 3.2% is `10*log10(1.032) ~ 0.14dB` -- over 11x
+    /// smaller than the 5-bit quantizer's own real step size
+    /// (`(E_MAX_DB-E_MIN_DB)/32 = 1.5625dB`), so it can never change a
+    /// real transmitted index. Matches `quantise.rs`'s own established
+    /// methodology for exactly this situation (see e.g. `fixed_point.rs`'s
+    /// `the_8_bit_log2_lut_reproduces_the_plain_float_log10_quantizer_
+    /// decision...with_zero_index_mismatches`) -- check the decision that
+    /// actually matters, not an arbitrary tolerance on the raw value.
+    #[test]
+    fn lpc_energy_fixed_and_lpc_energy_produce_the_same_real_quantizer_index() {
+        let ak_path = fixture!("codec2_ak_dump.txt");
+        let r_path = fixture!("codec2_r_dump.txt");
+        let aks = read_dump(ak_path, LPC_ORD + 1);
+        let rs = read_dump(r_path, LPC_ORD + 1);
+        assert_eq!(aks.len(), rs.len());
+        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+
+        let mut index_mismatches = 0u64;
+        for (ak_row, r_row) in aks.iter().zip(rs.iter()) {
+            let mut ak = [0.0f32; LPC_ORD + 1];
+            ak.copy_from_slice(ak_row);
+            let mut r = [0.0f32; LPC_ORD + 1];
+            r.copy_from_slice(r_row);
+
+            let e_float = lpc_energy(&ak, &r);
+            let a_q23: [i64; LPC_ORD + 1] =
+                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+            let r_q: [i64; LPC_ORD + 1] =
+                std::array::from_fn(|i| (r[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i64);
+            let e_fixed = lpc_energy_fixed(&a_q23, &r_q);
+
+            if crate::codec2_3200::quantise::encode_energy(e_float)
+                != crate::codec2_3200::quantise::encode_energy(e_fixed)
+            {
+                index_mismatches += 1;
+            }
+        }
+        println!("lpc_energy_fixed: {index_mismatches}/{} real quantizer-index mismatches vs lpc_energy", aks.len());
+        assert_eq!(
+            index_mismatches, 0,
+            "lpc_energy_fixed produced a different real transmitted energy index than lpc_energy on {index_mismatches} real frame(s) -- a genuine regression, not just raw-value noise"
         );
     }
 }

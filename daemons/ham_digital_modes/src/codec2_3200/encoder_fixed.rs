@@ -6,26 +6,25 @@
 //! kept live specifically to serve as that per-frame diff reference --
 //! Bruce's own recorded product decision).
 //!
-//! **Honest current state, not aspirational**: much of the pipeline
-//! below still delegates to the exact same `f32` functions
-//! `floating_reference::Encoder` calls, converting `sn` (this struct's
-//! own real `i16`-native sample history -- no `f32` storage here, unlike
-//! the reference) to `f32` on the fly at each not-yet-migrated stage's
-//! own boundary. `voicing::is_voiced_fixed` and, as of this doc
-//! comment's last update, the windowing/`autocorrelate`/Levinson-Durbin
-//! chain (`lpc::autocorrelate_fixed` + `lpc::apply_white_noise_
-//! correction_fixed` + `lpc::levinson_durbin_fixed_from_integer_r`) are
-//! genuinely fixed-point today -- the LPC coefficient estimate itself,
-//! arguably the most numerically fragile part of this whole codec, no
-//! longer touches `f32`. `lpc_energy` still does (a real, small,
-//! duplicated windowing/autocorrelate pass just to feed it -- see
-//! `encode()`'s own comment at that call site), and everything after LSP
-//! conversion (`bw_gamma`, `quantise::encode_energy`/`encode_lsps_
-//! delta_scalar`) hasn't migrated at all. Re-derive this file's own real
-//! state directly by reading `encode()` below before trusting this
-//! comment -- per this project's own "keep-working-until-actually-done"
-//! discipline, a status claim can go stale the moment the next stage
-//! lands and this comment isn't updated to match.
+//! **Honest current state, not aspirational**: the whole windowing ->
+//! `autocorrelate` -> Levinson-Durbin -> `lpc_energy` chain
+//! (`lpc::autocorrelate_fixed` + `lpc::apply_white_noise_correction_
+//! fixed` + `lpc::levinson_durbin_fixed_from_integer_r` + `lpc::
+//! lpc_energy_fixed`), plus `voicing::is_voiced_fixed`, are genuinely
+//! fixed-point today -- no `f32` touches the LPC coefficient or energy
+//! estimate anywhere in this struct, arguably the most numerically
+//! fragile part of this whole codec. `nlp::nlp` (the pitch estimator)
+//! still converts `sn` (this struct's own real `i16`-native sample
+//! history -- no `f32` storage here, unlike `floating_reference::
+//! Encoder`) to `f32` on the fly, since its own fixed-point FFT hasn't
+//! been built yet (a real, separate, much larger piece of work -- see
+//! the punch list). Everything from LSP conversion onward (`bw_gamma`,
+//! `quantise::encode_wo`/`encode_energy`/`encode_lsps_delta_scalar`)
+//! hasn't migrated at all. Re-derive this file's own real state directly
+//! by reading `encode()` below before trusting this comment -- per this
+//! project's own "keep-working-until-actually-done" discipline, a status
+//! claim can go stale the moment the next stage lands and this comment
+//! isn't updated to match.
 
 use super::{bw_gamma, fallback_lsp, lpc, nlp, quantise, voicing, window};
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
@@ -36,11 +35,6 @@ pub struct EncoderFixed {
     /// own, at its own call site, so it's visible exactly where the real
     /// float boundary still is.
     sn: [i16; M_PITCH],
-    /// `f32` window table, still needed for `lpc_energy`'s own real,
-    /// uncorrected energy estimate (via the plain-float `autocorrelate`)
-    /// -- `lpc_energy` itself isn't migrated yet (see the punch list),
-    /// so its `r` input still has to come from the float path.
-    window: [f32; M_PITCH],
     /// `window::make_analysis_window_fixed()`, Q0.30 -- feeds the real,
     /// genuinely fixed-point autocorrelate/Levinson-Durbin chain below.
     window_fixed: [i32; M_PITCH],
@@ -52,7 +46,6 @@ impl Default for EncoderFixed {
     fn default() -> Self {
         EncoderFixed {
             sn: [0; M_PITCH],
-            window: window::make_analysis_window(),
             window_fixed: window::make_analysis_window_fixed(),
             nlp_state: nlp::NlpState::new(),
             voicing_state: voicing::VoicingStateFixed::new(),
@@ -117,30 +110,19 @@ impl EncoderFixed {
         {
             *w = ((s as i64 * win as i64) >> 7) as i32;
         }
-        let mut r_q = lpc::autocorrelate_fixed(&wn_q);
-        // White noise correction, in fixed point -- required before
-        // r0_normalize_fixed per that function's own documented
-        // precondition (see lpc::apply_white_noise_correction_fixed and
-        // lpc::levinson_durbin_fixed_from_integer_r's own doc comments).
-        lpc::apply_white_noise_correction_fixed(&mut r_q);
-        let mut ak = lpc::levinson_durbin_fixed_from_integer_r(&r_q);
+        let r_q = lpc::autocorrelate_fixed(&wn_q);
+        // White noise correction (fixed point) applies only to
+        // Levinson-Durbin's own input -- a separate corrected copy, so
+        // lpc_energy_fixed below still reports the real, uncorrected
+        // signal energy (matching floating_reference::Encoder's own
+        // r_for_levinson pattern).
+        let mut r_q_for_levinson = r_q;
+        lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
+        let (mut ak, a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
 
-        // lpc_energy: NOT migrated yet -- still needs a real, uncorrected
-        // f32 Autocorr, so the plain float windowing/autocorrelate path
-        // runs here too, purely to feed this one call. A real, if small,
-        // duplication of work versus the fixed-point windowing above,
-        // acceptable until lpc_energy itself migrates (see the punch
-        // list).
-        let mut windowed = [0.0f32; M_PITCH];
-        for ((w, &s), &win) in windowed
-            .iter_mut()
-            .zip(sn_f32.iter())
-            .zip(self.window.iter())
-        {
-            *w = s * win;
-        }
-        let r = lpc::autocorrelate(&windowed);
-        let e = lpc::lpc_energy(&ak, &r);
+        // lpc_energy: now fixed-point too -- no separate float windowing/
+        // autocorrelate pass needed anymore.
+        let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
 
         // bw_gamma + lpc_to_lsp + quantise::encode_energy/
         // encode_lsps_delta_scalar: NOT migrated yet.
