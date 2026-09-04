@@ -5,11 +5,39 @@
 //! stages that plan doc's own advisor review confirmed transfer
 //! cleanly to *this* port's own structurally-identical code, with an
 //! acceptance criterion that doesn't require a product-judgment call
-//! first (see `hams_com/night_shift_todo.md`'s 2026-09-04 entry for why
-//! Levinson-Durbin specifically is deliberately NOT here yet: its
-//! `|k|>1` clamp-boundary behavior is a real accept-vs-stabilize
-//! decision reserved for Bruce, and this port's own divergence baseline
-//! from the reference is separately unmeasured).
+//! first.
+//!
+//! **Levinson-Durbin's own `|k|>1` clamp-boundary decision (previously
+//! deliberately excluded here pending Bruce's own accept-vs-stabilize
+//! call) is now made and built**, per Bruce's own explicit direction:
+//! match the float reference's clamp behavior as closely as practical
+//! and no closer -- accept its real, measured divergence rate rather
+//! than adding a stabilization/smoothing step. See `lpc.rs`'s own
+//! `levinson_durbin_fixed` for the real, genuinely-integer
+//! implementation (not here, since it doesn't use this module's own
+//! log-domain LUT shape) and its own doc comment for the real
+//! measurement behind its Q8.40 internal format choice.
+//!
+//! **A real, honest limitation found while landing that work, not yet
+//! fixed**: `log2_lut`/`exp2_lut` below are described as "fixed-point-
+//! oriented," and their exponent/mantissa split is exact bit
+//! manipulation (`to_bits()`/`from_bits()`, free on real fixed-point
+//! hardware too), but the interpolation arithmetic itself
+//! (`(mantissa - 1.0) * levels as f32`, the table lookup's own linear
+//! blend) is genuine `f32` multiply/subtract -- it will not run on
+//! genuinely FPU-less hardware (the actual target this whole file
+//! exists for: cheap HTs, ESP32-class parts with no good FPU) without
+//! either real hardware float support or a software float-emulation
+//! library, which defeats the point. This is a real, separate stage
+//! needing its own genuine integer conversion (interpret the input as
+//! a Q-format integer, extract the exponent via a bit-scan/`clz`
+//! instead of IEEE754 bit tricks, interpolate in integer arithmetic) --
+//! not attempted in this pass, which was scoped to Levinson-Durbin's
+//! own clamp decision specifically. `levinson_durbin_fixed`'s own core
+//! recursion, by contrast, is genuine integer arithmetic throughout
+//! (`i64`/`i128` only, no `f32` inside the loop) -- the two stages are
+//! at different real maturity levels for the no-FPU target, not
+//! interchangeably "done."
 //!
 //! `log2_lut`/`exp2_lut` below are what `quantise::encode_energy`/
 //! `decode_energy` AND `synthesis::postfilter_step` actually call now --
