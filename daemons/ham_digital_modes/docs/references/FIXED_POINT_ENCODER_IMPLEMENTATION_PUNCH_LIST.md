@@ -112,6 +112,24 @@ settled noise floor -> not voiced) -- all four matched. **Wired into `EncoderFix
 raw `i16` samples natively, unlike `floating_reference::Encoder`'s `f32` `sn` -- this is the reason
 `EncoderFixed`'s own `sn` field is `i16`, not just an aesthetic choice).
 
+## Real follow-on, raised by Bruce, not yet started: move reference-only float code into `floating_reference/`
+
+Currently only `Encoder` itself lives in `floating_reference/mod.rs` -- the actual float
+*implementations* it calls (`lpc::autocorrelate`, `lpc::levinson_durbin`, `lpc::lpc_energy`,
+`lpc::build_p_q`, `lpc::lpc_to_lsp`, `bw_gamma`, `voicing::is_voiced`, `window::make_analysis_window`,
+`nlp::nlp`) still live in their original shared modules. As of `build_p_q`/`lpc_to_lsp` migrating
+(this pass), `bw_gamma`, `autocorrelate`, `levinson_durbin`, `lpc_energy`, `build_p_q`, `lpc_to_lsp`,
+and `voicing::is_voiced` are all genuinely exclusive to `floating_reference::Encoder` now -- no
+`EncoderFixed` call site needs them anymore -- and could reasonably move. **Two real, named
+exceptions that can't move without breaking the fixed path**: `window::make_analysis_window` (the
+`f32` version) is still called *inside* `make_analysis_window_fixed` itself to derive its own
+quantized table; `nlp::nlp` is still `EncoderFixed`'s own live pitch estimator (not migrated).
+`lpc.rs`/`voicing.rs` are single files holding both implementations side by side with shared test
+infrastructure (`read_dump`, `fixture!`), so moving only the reference-only functions out doesn't
+fully separate those files either way -- a real, honest trade-off, not free. Do this as its own
+dedicated pass once the remaining migration work below is further along (or immediately, if picked up
+before then) -- not silently forgotten, per Bruce's own explicit request to record it here.
+
 ## Explicitly not attempted this pass
 
 Everything still marked NOT STARTED above: `lpc_energy`, `bw_gamma`, `build_p_q`, `fixed_point.rs`'s

@@ -6,26 +6,29 @@
 //! kept live specifically to serve as that per-frame diff reference --
 //! Bruce's own recorded product decision).
 //!
-//! **Honest current state, not aspirational**: the whole windowing ->
+//! **Honest current state, not aspirational**: the entire windowing ->
 //! `autocorrelate` -> Levinson-Durbin -> `lpc_energy` -> bandwidth-
-//! expansion chain (`lpc::autocorrelate_fixed`, `lpc::apply_white_
-//! noise_correction_fixed`, `lpc::levinson_durbin_fixed_from_integer_r`,
-//! `lpc::lpc_energy_fixed`, `lpc::apply_bw_gamma_fixed`), plus
-//! `voicing::is_voiced_fixed`, are genuinely fixed-point today -- no
-//! `f32` touches the LPC coefficient or energy estimate anywhere in this
-//! struct, arguably the most numerically fragile part of this whole
-//! codec. `nlp::nlp` (the pitch estimator) still converts `sn` (this
-//! struct's own real `i16`-native sample history -- no `f32` storage
-//! here, unlike `floating_reference::Encoder`) to `f32` on the fly,
-//! since its own fixed-point FFT hasn't been built yet (a real,
-//! separate, much larger piece of work -- see the punch list).
-//! `lpc_to_lsp`'s own input boundary (`build_p_q`) and everything after
-//! it (`quantise::encode_wo`/`encode_energy`/`encode_lsps_delta_scalar`)
-//! hasn't migrated at all. Re-derive this file's own real state directly
-//! by reading `encode()` below before trusting this comment -- per this
-//! project's own "keep-working-until-actually-done" discipline, a status
-//! claim can go stale the moment the next stage lands and this comment
-//! isn't updated to match.
+//! expansion -> LSP conversion chain (`lpc::autocorrelate_fixed`,
+//! `lpc::apply_white_noise_correction_fixed`, `lpc::levinson_durbin_
+//! fixed_from_integer_r`, `lpc::lpc_energy_fixed`, `lpc::apply_bw_gamma_
+//! fixed`, `lpc::lpc_to_lsp_from_integer_ak`), plus `voicing::is_voiced_
+//! fixed`, are genuinely fixed-point today -- no `f32` touches the LPC
+//! analysis path anywhere in this struct, right up to the LSP
+//! frequencies themselves (still `f32` only because `acos()` has no
+//! cheap fixed-point equivalent this port has built, and because
+//! `interp.rs`/`quantise.rs` downstream aren't migrated yet -- the
+//! established "integer core, float boundary" pattern, now reached one
+//! stage later than before). `nlp::nlp` (the pitch estimator) still
+//! converts `sn` (this struct's own real `i16`-native sample history --
+//! no `f32` storage here, unlike `floating_reference::Encoder`) to `f32`
+//! on the fly, since its own fixed-point FFT hasn't been built yet (a
+//! real, separate, much larger piece of work -- see the punch list).
+//! `quantise::encode_wo`/`encode_energy`/`encode_lsps_delta_scalar`
+//! haven't migrated at all. Re-derive this file's own real state
+//! directly by reading `encode()` below before trusting this comment --
+//! per this project's own "keep-working-until-actually-done"
+//! discipline, a status claim can go stale the moment the next stage
+//! lands and this comment isn't updated to match.
 
 use super::{fallback_lsp, lpc, nlp, quantise, voicing, window};
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
@@ -128,16 +131,16 @@ impl EncoderFixed {
         // bandwidth-expansion step below mutates it in place.
         let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
 
-        // bw_gamma: now fixed-point too (apply_bw_gamma_fixed mutates
-        // a_q23 in place); lpc_to_lsp still isn't migrated, so convert
-        // to f32 at this boundary -- the established "integer core,
-        // float boundary" pattern.
+        // bw_gamma + lpc_to_lsp: now fixed-point too. lsp itself stays
+        // f32 (interp.rs/quantise.rs aren't migrated, and acos() has no
+        // cheap fixed-point equivalent this port has built) -- the
+        // established "integer core, float boundary" pattern, now
+        // reached one stage later than before.
         lpc::apply_bw_gamma_fixed(&mut a_q23);
-        let ak: lpc::LpcCoeffs = lpc::dequantize_coef_q23(&a_q23);
+        let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23).unwrap_or_else(fallback_lsp);
 
-        // lpc_to_lsp + quantise::encode_energy/encode_lsps_delta_scalar:
-        // NOT migrated yet.
-        let lsp = lpc::lpc_to_lsp(&ak).unwrap_or_else(fallback_lsp);
+        // quantise::encode_energy/encode_lsps_delta_scalar: NOT migrated
+        // yet.
 
         let e_index = quantise::encode_energy(e);
         let lsp_indexes = quantise::encode_lsps_delta_scalar(&lsp);

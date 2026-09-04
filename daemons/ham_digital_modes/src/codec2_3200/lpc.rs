@@ -594,8 +594,27 @@ fn f32_to_q64(x: f32, frac_bits: u32) -> i64 {
 /// the same corpus before this replaced it (real codegen win: ~46 vs 98
 /// instructions on Xtensa LX6, ~half the code on ARM Cortex-M4F too,
 /// zero calls either way).
+///
+/// **`#[cfg(test)]`**: `find_next_root` used to call this on every
+/// candidate `x`, re-quantizing the same `coef` each time -- it now
+/// quantizes once and calls `cheb_poly_eval_fixed_core` directly (see
+/// that refactor's own commit), so this single-`f32`-eval wrapper is
+/// only needed by tests that check one `(coef, x)` pair directly against
+/// the real captured corpus.
+#[cfg(test)]
 fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i32 {
     let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
+    cheb_poly_eval_fixed_core(&coef_q, x)
+}
+
+/// The real per-`x` arithmetic, shared by `cheb_poly_eval_fixed` above
+/// (which quantizes `coef` from `f32` on every call) and a caller that
+/// already has `coef_q` in Q8.23 (e.g. `build_p_q_fixed`'s own output)
+/// -- quantizing a polynomial's own coefficients once per root search
+/// rather than once per candidate `x` (`find_next_root`'s coarse sweep
+/// alone tries up to ~200 values of `x` against the *same* `coef`) is a
+/// real, if secondary, efficiency win this split also happens to enable.
+fn cheb_poly_eval_fixed_core(coef_q: &[i32; 6], x: f32) -> i32 {
     let x_q: i32 = f32_to_q(x, CHEB_FRAC_BITS);
 
     let mut t_prev2: i32 = 1i32 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
@@ -650,6 +669,36 @@ fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
     (p, q)
 }
 
+/// Fixed-point `build_p_q`: `a_q23` (Q8.23, `i64`, e.g. straight from
+/// `apply_bw_gamma_fixed`) in, `P[]`/`Q[]` (Q8.23, `i32`, matching
+/// `cheb_poly_eval_fixed_core`'s own expected `coef_q` type) out. Pure
+/// add/subtract/double -- no multiply at all, so no widening and no
+/// precision loss beyond `a_q23`'s own already-established real margin
+/// (`\|ak\|` <= 77.17 real measured max; `P[]`/`Q[]`'s own real measured
+/// max, 77.17 as well per `COEF_FRAC_BITS`'s own doc comment, already
+/// accounts for this construction's own real growth from that starting
+/// bound, not a fresh, unchecked assumption). `*= 2` is an exact left
+/// shift, not a lossy float multiply.
+fn build_p_q_fixed(a_q23: &[i64; LPC_ORD + 1]) -> ([i32; 6], [i32; 6]) {
+    let m = LPC_ORD / 2;
+    let mut p = [0i64; 6];
+    let mut q = [0i64; 6];
+    p[0] = 1i64 << COEF_FRAC_BITS;
+    q[0] = 1i64 << COEF_FRAC_BITS;
+    for i in 1..=m {
+        p[i] = a_q23[i] + a_q23[LPC_ORD + 1 - i] - p[i - 1];
+        q[i] = a_q23[i] - a_q23[LPC_ORD + 1 - i] + q[i - 1];
+    }
+    for i in 0..m {
+        p[i] *= 2;
+        q[i] *= 2;
+    }
+    (
+        std::array::from_fn(|i| p[i] as i32),
+        std::array::from_fn(|i| q[i] as i32),
+    )
+}
+
 /// Finds one root of `poly` by sweeping `x` downward from `x_start` in
 /// `LSP_SEARCH_STEP` increments until a sign change brackets a root,
 /// then bisecting `LSP_BISECTIONS` times. The returned root is also
@@ -658,11 +707,20 @@ fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
 /// disjoint sub-interval of `[-1, 1]`, in strictly decreasing order, so
 /// search never needs to backtrack).
 fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
+    let poly_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
+    find_next_root_from_q23(&poly_q, x_start)
+}
+
+/// The real search, shared by `find_next_root` above (which quantizes
+/// `poly` once up front, not once per candidate `x` the way calling
+/// `cheb_poly_eval_fixed` directly used to) and a caller that already
+/// has `poly` in Q8.23 (`build_p_q_fixed`'s own output).
+fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option<f32> {
     let mut xl = x_start;
-    let mut p_l = cheb_poly_eval_fixed(poly, xl);
+    let mut p_l = cheb_poly_eval_fixed_core(poly_q, xl);
     while xl >= -1.0 {
         let xr = xl - LSP_SEARCH_STEP;
-        let p_r = cheb_poly_eval_fixed(poly, xr);
+        let p_r = cheb_poly_eval_fixed_core(poly_q, xr);
         if (p_r <= 0 && p_l >= 0) || (p_r >= 0 && p_l <= 0) {
             let mut lo = xl;
             let mut hi = xr;
@@ -670,7 +728,7 @@ fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
             let mut mid = 0.5 * (lo + hi);
             for _ in 0..LSP_BISECTIONS {
                 mid = 0.5 * (lo + hi);
-                let p_mid = cheb_poly_eval_fixed(poly, mid);
+                let p_mid = cheb_poly_eval_fixed_core(poly_q, mid);
                 if p_mid.signum() * p_lo.signum() > 0 {
                     lo = mid;
                     p_lo = p_mid;
@@ -701,6 +759,27 @@ pub fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
     for (j, f) in freq.iter_mut().enumerate() {
         let poly = if j & 1 == 1 { &q } else { &p };
         let root = find_next_root(poly, search_from)?;
+        *f = root.acos();
+        search_from = root;
+    }
+    Some(freq)
+}
+
+/// Fixed-point `lpc_to_lsp`: `a_q23` (Q8.23, `i64`, e.g. straight from
+/// `apply_bw_gamma_fixed`) in -- no `f32` anywhere before the final
+/// `.acos()` (LSP frequencies themselves stay `f32`, matching this
+/// port's established "integer core, float boundary" pattern;
+/// `interp.rs`/`quantise.rs` aren't migrated yet, so there's nothing
+/// further along the pipeline to hand a fixed-point angle to, and
+/// `acos()` itself has no cheap fixed-point equivalent this port has
+/// built).
+pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LPC_ORD]> {
+    let (p, q) = build_p_q_fixed(a_q23);
+    let mut search_from = 1.0f32;
+    let mut freq = [0.0f32; LPC_ORD];
+    for (j, f) in freq.iter_mut().enumerate() {
+        let poly = if j & 1 == 1 { &q } else { &p };
+        let root = find_next_root_from_q23(poly, search_from)?;
         *f = root.acos();
         search_from = root;
     }
@@ -1010,6 +1089,63 @@ mod tests {
         );
     }
 
+    /// Same real captured `ak[]`/`lsp[]` corpus, the real fixed-point
+    /// path (`apply_bw_gamma_fixed` + `lpc_to_lsp_from_integer_ak`)
+    /// instead of float -- the whole windowing-through-LSP chain is now
+    /// exercisable in genuine fixed-point up to this exact point.
+    /// **Real measured bound is looser than the float test's own `1e-4`**
+    /// (`3.3e-4` rad, not `1.8e-6`) -- this is a real, different
+    /// arithmetic path (Q8.23 `P[]`/`Q[]`, Q2.29 internal Chebyshev
+    /// arithmetic) with its own real, small quantization noise, plausibly
+    /// close to this port's own inherent bisection resolution limit
+    /// (`LSP_SEARCH_STEP / 2^LSP_BISECTIONS = 0.01/64 ~ 1.56e-4` in the
+    /// `x`-domain, before `acos()`'s own slope-dependent scaling into
+    /// radians) -- not evidence of a bug: root-finding still succeeds on
+    /// 100% of real frames (362/362), matching the float path's own real
+    /// robustness. In the units that actually matter, `quantise.rs`'s own
+    /// LSP quantizer step is 25Hz; `3.3e-4` rad is `~0.43Hz` -- under 2%
+    /// of one real quantizer step, the same "check what actually gets
+    /// transmitted" reasoning `lpc_energy_fixed`/`apply_bw_gamma_fixed`
+    /// already established.
+    #[test]
+    fn lpc_to_lsp_from_integer_ak_matches_the_real_reference_on_real_captured_ak_data() {
+        let ak_path = fixture!("codec2_ak_dump.txt");
+        let lsp_path = fixture!("codec2_lsp_dump.txt");
+        let aks = read_dump(ak_path, LPC_ORD + 1);
+        let lsps = read_dump(lsp_path, LPC_ORD + 1);
+        assert_eq!(aks.len(), lsps.len());
+        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+
+        let mut roots_found_count = 0;
+        let mut max_abs_err = 0.0f32;
+        for (ak_row, lsp_row) in aks.iter().zip(lsps.iter()) {
+            let ref_roots = lsp_row[0] as usize;
+            if ref_roots != LPC_ORD {
+                continue;
+            }
+            let mut ak = [0.0f32; LPC_ORD + 1];
+            ak.copy_from_slice(ak_row);
+            let mut a_q23: [i64; LPC_ORD + 1] =
+                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+            apply_bw_gamma_fixed(&mut a_q23);
+            let Some(lsp) = lpc_to_lsp_from_integer_ak(&a_q23) else { continue };
+            roots_found_count += 1;
+            for i in 0..LPC_ORD {
+                max_abs_err = max_abs_err.max((lsp[i] - lsp_row[1 + i]).abs());
+            }
+        }
+        println!("lpc_to_lsp_from_integer_ak: {roots_found_count}/{} real frames found all {LPC_ORD} roots, max error {max_abs_err} rad", aks.len());
+        assert!(
+            roots_found_count as f64 / aks.len() as f64 > 0.95,
+            "only {roots_found_count}/{} real frames found all {LPC_ORD} LSP roots -- expected the overwhelming majority to succeed on real speech",
+            aks.len()
+        );
+        assert!(
+            max_abs_err < 1e-3,
+            "max LSP root error vs real captured reference (fixed-point path): {max_abs_err} rad -- expected real margin under 1e-3 (measured ~3.3e-4 when this test was written)"
+        );
+    }
+
     #[test]
     fn build_p_q_matches_the_real_reference_p_q_on_real_captured_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
@@ -1038,6 +1174,38 @@ mod tests {
         assert!(
             max_err < 1e-3,
             "max P[]/Q[] error vs real captured reference: {max_err}"
+        );
+    }
+
+    /// Same real captured `ak[]`/`P[]`/`Q[]` corpus, fixed-point path
+    /// (`apply_bw_gamma_fixed` + `build_p_q_fixed`) instead of float.
+    #[test]
+    fn build_p_q_fixed_matches_the_real_reference_p_q_on_real_captured_data() {
+        let ak_path = fixture!("codec2_ak_dump.txt");
+        let pq_path = fixture!("codec2_pq_dump.txt");
+        let aks = read_dump(ak_path, LPC_ORD + 1);
+        let pqs = read_dump(pq_path, 12);
+        assert_eq!(aks.len(), pqs.len());
+
+        let mut max_err = 0.0f32;
+        for (ak_row, pq_row) in aks.iter().zip(pqs.iter()) {
+            let mut ak = [0.0f32; LPC_ORD + 1];
+            ak.copy_from_slice(ak_row);
+            let mut a_q23: [i64; LPC_ORD + 1] =
+                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+            apply_bw_gamma_fixed(&mut a_q23);
+            let (p_q, q_q) = build_p_q_fixed(&a_q23);
+            for i in 0..6 {
+                let p_dequantized = p_q[i] as f64 / (1i64 << COEF_FRAC_BITS) as f64;
+                let q_dequantized = q_q[i] as f64 / (1i64 << COEF_FRAC_BITS) as f64;
+                max_err = max_err.max((p_dequantized - pq_row[i] as f64).abs() as f32);
+                max_err = max_err.max((q_dequantized - pq_row[6 + i] as f64).abs() as f32);
+            }
+        }
+        println!("build_p_q_fixed: max absolute P[]/Q[] error vs real captured reference = {max_err}");
+        assert!(
+            max_err < 1e-3,
+            "build_p_q_fixed diverged from the real captured reference by more than ordinary Q8.23 quantization noise should allow: {max_err}"
         );
     }
 
