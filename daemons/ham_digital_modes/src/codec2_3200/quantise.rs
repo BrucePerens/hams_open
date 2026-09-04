@@ -158,7 +158,12 @@ pub fn decode_lsps_delta_scalar(indexes: &[u32; LPC_ORD]) -> [f32; LPC_ORD] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec2_3200::{bw_gamma, lpc};
+
+    macro_rules! fixture {
+        ($name:literal) => {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+        };
+    }
 
     fn read_dump(path: &str, cols: usize) -> Vec<Vec<f32>> {
         std::fs::read_to_string(path)
@@ -189,9 +194,9 @@ mod tests {
         // session's own earlier methodology error, corrected: capture
         // the exact call-site argument, not a value from elsewhere in
         // the pipeline with the same name).
-        let e_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_enc_e_dump.txt";
+        let e_path = fixture!("codec2_enc_e_dump.txt");
         let es = read_dump(e_path, 1);
-        assert!(es.len() > 2000);
+        assert!(es.len() > 300, "expected the real captured fixture corpus, got {} rows", es.len());
         let step_db = (E_MAX_DB - E_MIN_DB) / (1 << E_BITS) as f32;
         for row in es {
             let e = row[0];
@@ -205,7 +210,7 @@ mod tests {
             // error at the boundary is expected, not a bug. Only assert
             // the tight within-range tolerance for values the quantizer
             // was actually designed to represent losslessly.
-            if e_db >= E_MIN_DB && e_db <= E_MAX_DB {
+            if (E_MIN_DB..=E_MAX_DB).contains(&e_db) {
                 assert!(
                     (back_db - e_db).abs() <= step_db,
                     "in-range real e={e} (db={e_db}) round-tripped to {back} (db={back_db}), step {step_db}dB"
@@ -230,11 +235,18 @@ mod tests {
         // failed on real data: the delta quantizer's own designed range
         // (max 1400Hz for the "widened" dimensions, 800Hz for the
         // others) is real and legitimately exceeded on some real frames
-        // -- e.g. frame 2055 in the real captured corpus has a genuine
-        // ~1874Hz gap between LSP[5] and LSP[6], clamped hard by design,
-        // the same way the real reference's own `index.clamp` would.
-        // Cross-checking against an independent reference transcription
-        // is the correct test; asserting small error universally was not.
+        // -- some real speech frames have a genuine ~1800Hz+ gap between
+        // adjacent LSPs, clamped hard by design, the same way the real
+        // reference's own `index.clamp` would. Cross-checking against an
+        // independent reference transcription is the correct test;
+        // asserting small error universally was not.
+        //
+        // Reads real captured `lsp[]` values from `codec2_lsp_dump.txt`
+        // (dumped right after the reference's own real `lpc_to_lsp()`
+        // call), NOT this crate's own `lpc::lpc_to_lsp` output -- feeding
+        // this quantizer test with LSPs this same codebase derived would
+        // make it blind to a bug in `lpc_to_lsp` itself (which has its
+        // own dedicated real-reference test in `lpc.rs`).
         fn reference_encode(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
             const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
             let mut indexes = [0u32; LPC_ORD];
@@ -262,17 +274,20 @@ mod tests {
             indexes
         }
 
-        let ak_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_ak_dump.txt";
-        let aks = read_dump(ak_path, LPC_ORD + 1);
-        assert!(aks.len() > 2000);
+        let lsp_path = fixture!("codec2_lsp_dump.txt");
+        let lsp_rows = read_dump(lsp_path, LPC_ORD + 1);
+        assert!(lsp_rows.len() > 300, "expected the real captured fixture corpus, got {} rows", lsp_rows.len());
         let mut n_checked = 0;
-        for ak_row in &aks {
-            let mut ak = [0.0f32; LPC_ORD + 1];
-            ak.copy_from_slice(ak_row);
-            for (i, a) in ak.iter_mut().enumerate() {
-                *a *= bw_gamma(i);
+        for row in &lsp_rows {
+            let roots = row[0] as i32;
+            if roots as usize != LPC_ORD {
+                // Real, rare LSP root-finding failure on this frame (the
+                // reference substitutes benign fallback LSPs instead) --
+                // the dumped lsp[] values aren't meaningful here, skip.
+                continue;
             }
-            let Some(lsp) = lpc::lpc_to_lsp(&ak) else { continue };
+            let mut lsp = [0.0f32; LPC_ORD];
+            lsp.copy_from_slice(&row[1..]);
             let indexes = encode_lsps_delta_scalar(&lsp);
             let reference = reference_encode(&lsp);
             assert_eq!(indexes, reference, "real captured frame's LSPs: {lsp:?}");
@@ -289,7 +304,7 @@ mod tests {
             }
             n_checked += 1;
         }
-        assert!(n_checked > 1000, "only checked {n_checked} real frames -- most should have found valid LSP roots");
+        assert!(n_checked > 150, "only checked {n_checked} real frames -- most should have found valid LSP roots");
     }
 
     #[test]

@@ -38,11 +38,11 @@ mod tests {
         let w = make_analysis_window();
         let mp2 = M_PITCH / 2;
         let nw2 = NW / 2;
-        for i in 0..(mp2 - nw2) {
-            assert_eq!(w[i], 0.0, "sample {i} should be outside the Hann support");
+        for (i, &v) in w.iter().enumerate().take(mp2 - nw2) {
+            assert_eq!(v, 0.0, "sample {i} should be outside the Hann support");
         }
-        for i in (mp2 + nw2)..M_PITCH {
-            assert_eq!(w[i], 0.0, "sample {i} should be outside the Hann support");
+        for (i, &v) in w.iter().enumerate().skip(mp2 + nw2) {
+            assert_eq!(v, 0.0, "sample {i} should be outside the Hann support");
         }
     }
 
@@ -57,8 +57,8 @@ mod tests {
         // (cos(0)=1 and cos(2*pi)=1 both give val=0).
         assert!(w[mp2 - nw2].abs() < 1e-6, "left edge should taper to ~0, got {}", w[mp2 - nw2]);
         assert!(w[mp2 + nw2 - 1].abs() < 1e-6, "right edge should taper to ~0, got {}", w[mp2 + nw2 - 1]);
-        for i in (mp2 - nw2 + 1)..(mp2 + nw2 - 1) {
-            assert!(w[i] <= center + 1e-6, "sample {i}={} should not exceed the center peak {center}", w[i]);
+        for (i, &v) in w.iter().enumerate().take(mp2 + nw2 - 1).skip(mp2 - nw2 + 1) {
+            assert!(v <= center + 1e-6, "sample {i}={v} should not exceed the center peak {center}");
         }
     }
 }

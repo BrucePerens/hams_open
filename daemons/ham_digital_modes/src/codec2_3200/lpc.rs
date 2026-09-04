@@ -127,8 +127,9 @@ fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
             let mut lo = xl;
             let mut hi = xr;
             let mut p_lo = p_l;
+            let mut mid = 0.5 * (lo + hi);
             for _ in 0..LSP_BISECTIONS {
-                let mid = 0.5 * (lo + hi);
+                mid = 0.5 * (lo + hi);
                 let p_mid = cheb_poly_eval(poly, mid);
                 if p_mid * p_lo > 0.0 {
                     lo = mid;
@@ -137,7 +138,11 @@ fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
                     hi = mid;
                 }
             }
-            return Some(0.5 * (lo + hi));
+            // Matches the reference's own manually-unrolled bisection: the
+            // root estimate is the midpoint computed in the *last*
+            // iteration, not a fresh average of the post-update bounds
+            // (that would be a 7th, uncounted bisection).
+            return Some(mid);
         }
         xl = xr;
         p_l = p_r;
@@ -175,7 +180,13 @@ pub fn lpc_energy(ak: &LpcCoeffs, r: &Autocorr) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codec2_3200::bw_gamma;
+    use crate::codec2_3200::{bw_gamma, M_PITCH};
+
+    macro_rules! fixture {
+        ($name:literal) => {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+        };
+    }
 
     fn read_dump(path: &str, cols: usize) -> Vec<Vec<f32>> {
         std::fs::read_to_string(path)
@@ -196,12 +207,12 @@ mod tests {
     /// just internal self-consistency.
     #[test]
     fn levinson_durbin_matches_the_real_reference_on_real_captured_speech_data() {
-        let r_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_r_dump.txt";
-        let ak_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_ak_dump.txt";
+        let r_path = fixture!("codec2_r_dump.txt");
+        let ak_path = fixture!("codec2_ak_dump.txt");
         let rs = read_dump(r_path, LPC_ORD + 1);
         let aks = read_dump(ak_path, LPC_ORD + 1);
         assert_eq!(rs.len(), aks.len());
-        assert!(rs.len() > 2000, "expected the real, large captured corpus, got {} rows", rs.len());
+        assert!(rs.len() > 300, "expected the real captured fixture corpus, got {} rows", rs.len());
 
         let mut max_abs_err = 0.0f32;
         let mut n_frames_over_tolerance = 0;
@@ -236,7 +247,7 @@ mod tests {
         // k is clamped to [-1,1] by construction on every real captured
         // frame -- assert the invariant holds, not just that it happens
         // to on this corpus.
-        let r_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_r_dump.txt";
+        let r_path = fixture!("codec2_r_dump.txt");
         for r_row in read_dump(r_path, LPC_ORD + 1) {
             let mut r = [0.0f32; LPC_ORD + 1];
             r.copy_from_slice(&r_row);
@@ -247,20 +258,41 @@ mod tests {
         }
     }
 
+    /// Not just "did root-finding succeed" -- compares the actual root
+    /// *values* against the reference's own real `lsp[]` output
+    /// (`codec2_lsp_dump.txt`, dumped right after its own `lpc_to_lsp()`
+    /// call). A success-rate-only check previously let a real bisection
+    /// off-by-one bug (this implementation was returning a value from one
+    /// extra, uncounted halving beyond the reference's real 6) through
+    /// silently, since the wrong root value still counted as "found".
     #[test]
     fn lpc_to_lsp_matches_the_real_reference_on_real_captured_ak_data() {
-        let ak_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_ak_dump.txt";
+        let ak_path = fixture!("codec2_ak_dump.txt");
+        let lsp_path = fixture!("codec2_lsp_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
-        assert!(aks.len() > 2000);
+        let lsps = read_dump(lsp_path, LPC_ORD + 1);
+        assert_eq!(aks.len(), lsps.len(), "real captures must be from the same corpus pass to line up 1:1");
+        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+
         let mut roots_found_count = 0;
-        for ak_row in &aks {
+        let mut max_abs_err = 0.0f32;
+        for (ak_row, lsp_row) in aks.iter().zip(lsps.iter()) {
+            let ref_roots = lsp_row[0] as usize;
+            if ref_roots != LPC_ORD {
+                // Real, rare root-finding failure on this frame -- the
+                // reference's own dumped lsp[] is a benign fallback, not
+                // a real root set, so there's nothing to compare here.
+                continue;
+            }
             let mut ak = [0.0f32; LPC_ORD + 1];
             ak.copy_from_slice(ak_row);
             for (i, a) in ak.iter_mut().enumerate() {
                 *a *= bw_gamma(i);
             }
-            if lpc_to_lsp(&ak).is_some() {
-                roots_found_count += 1;
+            let Some(lsp) = lpc_to_lsp(&ak) else { continue };
+            roots_found_count += 1;
+            for i in 0..LPC_ORD {
+                max_abs_err = max_abs_err.max((lsp[i] - lsp_row[1 + i]).abs());
             }
         }
         assert!(
@@ -268,12 +300,21 @@ mod tests {
             "only {roots_found_count}/{} real frames found all {LPC_ORD} LSP roots -- expected the overwhelming majority to succeed on real speech",
             aks.len()
         );
+        // Bisection resolves x to LSP_SEARCH_STEP / 2^LSP_BISECTIONS
+        // (~1.6e-4 in x); acos's derivative reaches ~7 across real LSPs'
+        // own x range, so a few times 1e-3 radians of slop is expected
+        // from float rounding alone. A bug that returns one extra
+        // (uncounted) bisection would show up here as error close to
+        // LSP_SEARCH_STEP / 2^(LSP_BISECTIONS+1) ~ 7.8e-5 in x, i.e. up to
+        // ~5e-4 radians beyond this bound -- this tolerance is tight
+        // enough to catch that.
+        assert!(max_abs_err < 2e-3, "max LSP root error vs real captured reference: {max_abs_err} rad");
     }
 
     #[test]
     fn build_p_q_matches_the_real_reference_p_q_on_real_captured_data() {
-        let ak_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_ak_dump.txt";
-        let pq_path = "/home/bruce/.claude-tmp/claude-1000/-home-bruce-workspace/44fa3b1d-b189-4e0a-bf9c-d06127ace94d/scratchpad/codec2_pq_dump.txt";
+        let ak_path = fixture!("codec2_ak_dump.txt");
+        let pq_path = fixture!("codec2_pq_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
         let pqs = read_dump(pq_path, 12);
         assert_eq!(aks.len(), pqs.len(), "real captures must be from the same corpus pass to line up 1:1");
@@ -292,5 +333,40 @@ mod tests {
             }
         }
         assert!(max_err < 1e-3, "max P[]/Q[] error vs real captured reference: {max_err}");
+    }
+
+    /// Cross-checks `autocorrelate` against the reference's own real
+    /// `R[]` output on the reference's own real windowed buffer
+    /// (`synthetic_codec2_wn_dump.txt`, dumped right before its own
+    /// `autocorrelate` call, from a locally synthesized non-speech test
+    /// signal -- see `tests/fixtures/codec2_3200/README.md` for why a
+    /// synthetic signal is used here specifically: `Wn[]` is audio-domain
+    /// data, unlike this file's other, real-speech-derived fixtures which
+    /// hold only abstracted numeric features). Catches a scale bug this
+    /// crate's own `window.rs` could introduce (a wrong window
+    /// normalization constant) that a self-consistency-only test can't:
+    /// `levinson_durbin`'s `ak` output is scale-invariant in `R[]` (every
+    /// reflection coefficient is a ratio), so a uniformly wrong `R[]`
+    /// scale wouldn't show up in the `ak`-based tests above at all, even
+    /// though `lpc_energy` (which feeds `encode_energy` directly into the
+    /// bitstream) is scale-dependent.
+    #[test]
+    fn autocorrelate_matches_the_real_reference_r_on_a_synthetic_signals_real_captured_wn_data() {
+        let wn_path = fixture!("synthetic_codec2_wn_dump.txt");
+        let r_path = fixture!("synthetic_codec2_r_dump.txt");
+        let wns = read_dump(wn_path, M_PITCH);
+        let rs = read_dump(r_path, LPC_ORD + 1);
+        assert_eq!(wns.len(), rs.len(), "real captures must be from the same corpus pass to line up 1:1");
+        assert!(wns.len() > 150, "expected the synthetic-signal fixture corpus, got {} rows", wns.len());
+
+        let mut max_rel_err = 0.0f32;
+        for (wn_row, r_row) in wns.iter().zip(rs.iter()) {
+            let r = autocorrelate(wn_row);
+            for i in 0..=LPC_ORD {
+                let denom = r_row[i].abs().max(1e-6);
+                max_rel_err = max_rel_err.max((r[i] - r_row[i]).abs() / denom);
+            }
+        }
+        assert!(max_rel_err < 1e-3, "max relative R[] error vs real captured reference: {max_rel_err}");
     }
 }

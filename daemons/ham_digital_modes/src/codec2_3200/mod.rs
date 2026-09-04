@@ -71,9 +71,8 @@ pub const E_MAX_DB: f32 = 40.0;
 pub const E_BITS: u32 = 5;
 
 /// One 3200bps frame: 64 bits (voiced x2, Wo, energy, 10 LSP deltas x 5
-/// bits each = 2 + 7 + 5 + 50 = 64), 40ms of audio (2 x 20-sample
-/// sub-frames -- wait, 2 x `N_SAMP` = 160 samples = 20ms; a 3200bps frame
-/// covers two 10ms sub-frames).
+/// bits each = 2 + 7 + 5 + 50 = 64) covering 20ms of audio (two 10ms,
+/// `N_SAMP`-sample sub-frames) -- 64 bits / 20ms = 3200bps.
 pub const BYTES_PER_FRAME: usize = 8;
 pub const SAMPLES_PER_FRAME: usize = 2 * N_SAMP;
 
