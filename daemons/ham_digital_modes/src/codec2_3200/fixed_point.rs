@@ -30,10 +30,10 @@
 
 use std::sync::OnceLock;
 
-/// LUT resolution used by the real `encode_energy_lut`/`decode_energy_lut`
-/// below -- 8 bits, matching the plan doc's own validated `aks_to_mag2`
-/// result (max relative error 8.25e-7 there). Kept as a named constant
-/// (not hardcoded into the table size) so the negative-control test can
+/// LUT resolution used by the real `log2_lut`/`exp2_lut` below -- 8
+/// bits, matching the plan doc's own validated `aks_to_mag2` result
+/// (max relative error 8.25e-7 there). Kept as a named constant (not
+/// hardcoded into the table size) so the negative-control tests can
 /// build a deliberately coarser table with the same generic code path
 /// and confirm the choice of resolution is actually load-bearing, not
 /// just present.

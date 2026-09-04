@@ -62,17 +62,55 @@ pub fn levinson_durbin(r: &Autocorr) -> LpcCoeffs {
     a
 }
 
-/// Evaluates a degree-`2*m` (here `m=LPC_ORD/2=5`) Chebyshev-basis
-/// polynomial `sum(coef[m-i] * T_i(x))` via the standard three-term
-/// recurrence `T_i = 2*x*T_{i-1} - T_{i-2}`.
-fn cheb_poly_eval(coef: &[f32; 6], x: f32) -> f32 {
-    let mut t_prev2 = 1.0f32; // T_0
-    let mut t_prev1 = x; // T_1
-    let mut sum = coef[5] * t_prev2 + coef[4] * t_prev1;
-    let two_x = 2.0 * x;
+/// Q8.23 fixed-point for the Chebyshev coefficients below -- 8 integer
+/// bits (real measured max \|coefficient\| across the real captured
+/// corpus is 77.17, comfortably under the 128 this format allows), 23
+/// fractional bits. Matches
+/// `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md`'s own validated
+/// width for this exact stage.
+const COEF_FRAC_BITS: u32 = 23;
+/// Q2.29 fixed-point for the Chebyshev recursion's own `T` register and
+/// `x` -- \|T\|<=1 and \|x\|<=1 by construction, so 2 integer bits give
+/// real margin; 29 fractional bits is the plan doc's own validated
+/// width (zero sign mismatches across 20.26 million real evaluations at
+/// this exact combination; deliberately coarsening `T`'s own precision
+/// there produced real, monotonically worsening mismatch rates).
+const CHEB_FRAC_BITS: u32 = 29;
+
+fn f32_to_q(x: f32, frac_bits: u32) -> i32 {
+    (x as f64 * (1i64 << frac_bits) as f64).round() as i32
+}
+
+/// Fixed-point evaluation of the same degree-`2*m` (`m=LPC_ORD/2=5`)
+/// Chebyshev-basis polynomial `sum(coef[m-i] * T_i(x))` (three-term
+/// recurrence `T_i = 2*x*T_{i-1} - T_{i-2}`) as the plain-float version
+/// this replaces, but in real Q8.23/Q2.29 integer arithmetic -- the
+/// exact stage `CODEC2_MOD_FIXED_POINT_PLAN.md` validated with zero
+/// sign mismatches at this width. `find_next_root`'s own bisection only
+/// ever consumes this result's *sign* (a bracketing/convergence test,
+/// never the magnitude), so this returns the raw fixed-point
+/// accumulator directly rather than converting back to `f32` -- the
+/// sign of the `i64` accumulator IS the real answer, and converting
+/// back to float first would just be adding an unnecessary lossy step
+/// on top of an already-validated fixed-point result.
+fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i64 {
+    let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
+    let x_q = f32_to_q(x, CHEB_FRAC_BITS) as i64;
+
+    let mut t_prev2: i64 = 1i64 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
+    let mut t_prev1: i64 = x_q; // T_1 = x, Q2.29
+
+    // Each term is (Q8.23 coefficient * Q2.29 T) >> 29, bringing the
+    // product back down to the coefficients' own Q8.23 format for the
+    // running sum -- both factors fit comfortably in i64 (each at most
+    // ~2^30 in magnitude), so the product (~2^60 at most) never
+    // approaches i64's own range.
+    let mut sum: i64 = (coef_q[5] as i64 * t_prev2) >> CHEB_FRAC_BITS;
+    sum += (coef_q[4] as i64 * t_prev1) >> CHEB_FRAC_BITS;
+
     for i in 2..=5 {
-        let t_i = two_x * t_prev1 - t_prev2;
-        sum += coef[5 - i] * t_i;
+        let t_i = ((2 * x_q * t_prev1) >> CHEB_FRAC_BITS) - t_prev2;
+        sum += (coef_q[5 - i] as i64 * t_i) >> CHEB_FRAC_BITS;
         t_prev2 = t_prev1;
         t_prev1 = t_i;
     }
@@ -119,19 +157,19 @@ fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
 /// search never needs to backtrack).
 fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
     let mut xl = x_start;
-    let mut p_l = cheb_poly_eval(poly, xl);
+    let mut p_l = cheb_poly_eval_fixed(poly, xl);
     while xl >= -1.0 {
         let xr = xl - LSP_SEARCH_STEP;
-        let p_r = cheb_poly_eval(poly, xr);
-        if (p_r <= 0.0 && p_l >= 0.0) || (p_r >= 0.0 && p_l <= 0.0) {
+        let p_r = cheb_poly_eval_fixed(poly, xr);
+        if (p_r <= 0 && p_l >= 0) || (p_r >= 0 && p_l <= 0) {
             let mut lo = xl;
             let mut hi = xr;
             let mut p_lo = p_l;
             let mut mid = 0.5 * (lo + hi);
             for _ in 0..LSP_BISECTIONS {
                 mid = 0.5 * (lo + hi);
-                let p_mid = cheb_poly_eval(poly, mid);
-                if p_mid * p_lo > 0.0 {
+                let p_mid = cheb_poly_eval_fixed(poly, mid);
+                if p_mid.signum() * p_lo.signum() > 0 {
                     lo = mid;
                     p_lo = p_mid;
                 } else {
@@ -402,6 +440,113 @@ mod tests {
             }
         }
         assert!(max_err < 1e-3, "max P[]/Q[] error vs real captured reference: {max_err}");
+    }
+
+    /// Independent plain-float reference for the Chebyshev evaluation
+    /// `cheb_poly_eval_fixed` replaced -- deliberately a fresh
+    /// transcription, not a call into fixed-point code, matching this
+    /// codebase's own established pattern (see `quantise.rs`'s
+    /// `reference_encode`/`reference_binary_search`) for validating a
+    /// fixed-point/optimized implementation against an independently
+    /// written float one.
+    fn reference_cheb_poly_eval(coef: &[f32; 6], x: f32) -> f32 {
+        let mut t_prev2 = 1.0f32;
+        let mut t_prev1 = x;
+        let mut sum = coef[5] * t_prev2 + coef[4] * t_prev1;
+        let two_x = 2.0 * x;
+        for i in 2..=5 {
+            let t_i = two_x * t_prev1 - t_prev2;
+            sum += coef[5 - i] * t_i;
+            t_prev2 = t_prev1;
+            t_prev1 = t_i;
+        }
+        sum
+    }
+
+    #[test]
+    fn cheb_poly_eval_fixed_matches_the_plain_float_sign_on_a_dense_sweep_of_real_captured_p_q_coefficients() {
+        // Same validation shape CODEC2_MOD_FIXED_POINT_PLAN.md used for
+        // this exact stage: a dense sweep of x across [-1,1] (4001
+        // points there; matched here) against every real captured P[]/Q[]
+        // coefficient set, checking SIGN agreement only -- the only
+        // thing find_next_root's own bisection ever consumes from this
+        // function's result (see cheb_poly_eval_fixed's own doc comment).
+        let pq_path = fixture!("codec2_pq_dump.txt");
+        let pqs = read_dump(pq_path, 12);
+        assert!(pqs.len() > 300, "expected the real captured fixture corpus, got {} rows", pqs.len());
+
+        let mut sign_mismatches = 0u64;
+        let mut total = 0u64;
+        for pq_row in &pqs {
+            let mut p = [0.0f32; 6];
+            let mut q = [0.0f32; 6];
+            p.copy_from_slice(&pq_row[0..6]);
+            q.copy_from_slice(&pq_row[6..12]);
+            for poly in [&p, &q] {
+                let mut x = -1.0f32;
+                while x <= 1.0 {
+                    let plain = reference_cheb_poly_eval(poly, x);
+                    let fixed = cheb_poly_eval_fixed(poly, x);
+                    // Sign-only comparison, matching what find_next_root
+                    // actually uses -- 0.0 (an exact root landing) is
+                    // vanishingly unlikely on this dense a sweep and
+                    // isn't the real comparison either implementation's
+                    // caller performs.
+                    if plain.signum() != (fixed.signum() as f32) && plain != 0.0 && fixed != 0 {
+                        sign_mismatches += 1;
+                    }
+                    total += 1;
+                    x += 0.0005; // ~4001 points, matching the plan doc's own sweep density
+                }
+            }
+        }
+        assert!(total > 1_000_000, "expected a real dense-sweep total, got {total}");
+        assert_eq!(sign_mismatches, 0, "{sign_mismatches}/{total} real sign mismatches between the fixed-point Chebyshev evaluation and plain float -- the plan doc's own validated result for this Q8.23/Q2.29 width is zero");
+    }
+
+    #[test]
+    fn a_deliberately_coarse_q_format_produces_real_sign_mismatches_confirming_the_test_above_is_not_vacuous() {
+        // Negative control, same methodology the plan doc itself used
+        // (deliberately coarsening the T register's own precision
+        // produced real, monotonically worsening mismatch rates there)
+        // -- rerun a subset of the real fixture corpus through the
+        // identical fixed-point control flow at a much coarser T
+        // register width and confirm it actually produces sign errors.
+        const COARSE_CHEB_FRAC_BITS: u32 = 8; // deliberately far below the validated 29
+        fn coarse_cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i64 {
+            let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
+            let x_q = f32_to_q(x, COARSE_CHEB_FRAC_BITS) as i64;
+            let mut t_prev2: i64 = 1i64 << COARSE_CHEB_FRAC_BITS;
+            let mut t_prev1: i64 = x_q;
+            let mut sum: i64 = (coef_q[5] as i64 * t_prev2) >> COARSE_CHEB_FRAC_BITS;
+            sum += (coef_q[4] as i64 * t_prev1) >> COARSE_CHEB_FRAC_BITS;
+            for i in 2..=5 {
+                let t_i = ((2 * x_q * t_prev1) >> COARSE_CHEB_FRAC_BITS) - t_prev2;
+                sum += (coef_q[5 - i] as i64 * t_i) >> COARSE_CHEB_FRAC_BITS;
+                t_prev2 = t_prev1;
+                t_prev1 = t_i;
+            }
+            sum
+        }
+
+        let pq_path = fixture!("codec2_pq_dump.txt");
+        let pqs = read_dump(pq_path, 12);
+
+        let mut sign_mismatches = 0u64;
+        for pq_row in pqs.iter().take(80) {
+            let mut p = [0.0f32; 6];
+            p.copy_from_slice(&pq_row[0..6]);
+            let mut x = -1.0f32;
+            while x <= 1.0 {
+                let plain = reference_cheb_poly_eval(&p, x);
+                let coarse = coarse_cheb_poly_eval_fixed(&p, x);
+                if plain.signum() != (coarse.signum() as f32) && plain != 0.0 && coarse != 0 {
+                    sign_mismatches += 1;
+                }
+                x += 0.0005;
+            }
+        }
+        assert!(sign_mismatches > 0, "expected the deliberately coarse Q-format to produce at least one real sign mismatch -- got zero, which would mean the zero-mismatch result above isn't evidence of anything");
     }
 
     /// `lsp_to_lpc` is the mathematical inverse of `lpc_to_lsp` (both
