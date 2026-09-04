@@ -103,6 +103,16 @@ A non-interactive configuration module that enforces baseline regulatory complia
 
 * **Non-Destructive Mandate:** If a page already exists at one of the target URLs, the module's boilerplate is unpublished to avoid duplication. `[@ANCHOR: COMM_test_compliance_non_destructive_mandate]`
 * **Editability Mandate:** Legal pages are standard `website.page` records, allowing administrators to use the Odoo website builder for customization.
+* **GDPR Base Contract:** `res.users` carries three base-architecture hooks other modules override
+  to participate in a user's GDPR erasure/export. Every override must merge into (not replace) the
+  base return shape, since Odoo's `_inherit` mechanism means only the final, fully-merged method
+  actually runs at request time.
+
+  * Deactivates the account at the base of the erasure chain. `[@ANCHOR: compliance_execute_gdpr_erasure]`
+
+  * Contributes this module's own export data. `[@ANCHOR: compliance_get_gdpr_export_data]`
+
+  * Contributes streamable per-user datasets too large to hold in memory. `[@ANCHOR: compliance_get_gdpr_streamed_keys]`
 
 ## 3. API & Integration
 ### Standardized Routes

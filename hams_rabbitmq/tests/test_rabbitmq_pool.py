@@ -23,6 +23,9 @@ class TestRabbitMQPool(RealTransactionCase):
     """
 
     def test_01_get_channel_connects_with_real_config(self):
+        # [@ANCHOR: COMM_test_01_get_channel_connects_with_real_config]
+
+        # Tests [@ANCHOR: rabbitmq_get_channel]
         pool = self.env["hams_rabbitmq.pool"]
         channel = pool._get_channel()
         self.assertIsNotNone(
@@ -33,12 +36,14 @@ class TestRabbitMQPool(RealTransactionCase):
         self.assertTrue(channel.is_open, "the returned channel must be open.")
 
     def test_02_publish_delivers_a_real_message_after_commit(self):
+        # [@ANCHOR: COMM_test_02_publish_delivers_a_real_message_after_commit]
         """
         publish() defers the actual send to a cr.postcommit hook, which
         only fires on a genuine commit -- RealTransactionCase is required
         here, not a normal (rolled-back) TransactionCase, or this hook
         would silently never run and the test would prove nothing.
         """
+        # Tests [@ANCHOR: rabbitmq_publish]
         pool = self.env["hams_rabbitmq.pool"]
         queue_name = f"hams_rabbitmq_test_{uuid.uuid4().hex[:12]}"
 
@@ -69,12 +74,14 @@ class TestRabbitMQPool(RealTransactionCase):
         self.assertEqual(received, payload)
 
     def test_03_publish_serializes_dict_bodies_to_json(self):
+        # [@ANCHOR: COMM_test_03_publish_serializes_dict_bodies_to_json]
         """
         publish() special-cases dict bodies (json.dumps), but a raw string
         body must pass through unchanged -- verify both, since a silent
         double-encode or a missed encode would corrupt every consumer's
         parsing without necessarily crashing publish() itself.
         """
+        # Tests [@ANCHOR: rabbitmq_publish]
         pool = self.env["hams_rabbitmq.pool"]
         queue_name = f"hams_rabbitmq_test_{uuid.uuid4().hex[:12]}"
 
@@ -98,6 +105,7 @@ class TestRabbitMQPool(RealTransactionCase):
         self.assertEqual(received, "plain-string-body")
 
     def test_04_get_channel_recreates_a_closed_channel_on_an_open_connection(self):
+        # [@ANCHOR: COMM_test_04_get_channel_recreates_a_closed_channel_on_an_open_connection]
         """
         _get_channel()'s elif branch (connection open, channel closed)
         was never exercised -- only the initial "no connection yet" path
@@ -108,6 +116,7 @@ class TestRabbitMQPool(RealTransactionCase):
         closed channel would otherwise wedge every future publish() until
         the whole process restarted.
         """
+        # Tests [@ANCHOR: rabbitmq_get_channel]
         pool = self.env["hams_rabbitmq.pool"]
         first_channel = pool._get_channel()
         self.assertTrue(first_channel.is_open)

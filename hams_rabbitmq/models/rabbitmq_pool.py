@@ -23,6 +23,9 @@ class RabbitMQPool(models.AbstractModel):
 
     @api.model
     def _get_channel(self):
+        # [@ANCHOR: rabbitmq_get_channel]
+
+        # # Verified by [@ANCHOR: COMM_test_01_get_channel_connects_with_real_config] [@ANCHOR: COMM_test_04_get_channel_recreates_a_closed_channel_on_an_open_connection]
         with self._lock:
             if not self._connection or self._connection.is_closed:
                 try:
@@ -50,6 +53,9 @@ class RabbitMQPool(models.AbstractModel):
 
     @api.model
     def publish(self, exchange, routing_key, body, properties=None):
+        # [@ANCHOR: rabbitmq_publish]
+
+        # # Verified by [@ANCHOR: COMM_test_02_publish_delivers_a_real_message_after_commit] [@ANCHOR: COMM_test_03_publish_serializes_dict_bodies_to_json]
         """
         Publishes a message using the global connection pool.
         """
