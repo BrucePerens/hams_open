@@ -1,6 +1,10 @@
 # Codec2 Fixed-Point Width-Reduction Study: Where Can 64/128-bit Narrow to 32?
 
-## Status: proposal only, 2026-09-04 -- no code written against this plan yet
+## Status: Question 1 measured and closed (no win), 2026-09-04. Question 2 (Chebyshev
+## Q2.29) and the divide-side optimization remain open. See "Real, measured findings"
+## below -- this replaces the plan's own methodology item 4, which had recommended
+## question 1 first as "highest-value, lowest-risk"; the value half of that claim is
+## now measured false and is retracted.
 
 Written per Bruce's own direct request: "do a study on codec2_3200 on where we can reduce the 64
 bit and 128 bit fixed-point to 32 without too much loss of performance." Scopes a real measurement
@@ -107,13 +111,78 @@ without touching the part of the format that's already known to need real precis
    have real target hardware to cross-compile and measure against, or does the study need to
    proceed on cycle-accurate architectural estimates only (a real, named limitation to disclose
    honestly if so, not silently treated as equivalent to a real measurement)?
-2. **Priority between question 1 (eliminate i128, lower risk) and question 2 (narrow i64 to i32,
-   higher risk, real precision headroom already measured as a concern)** -- this plan recommends
-   question 1 first, but sequencing both together or deferring question 2 entirely pending
-   question 1's own real results is Bruce's own call once question 1's real data exists.
+2. ~~Priority between question 1 and question 2~~ -- **resolved by measurement, not by Bruce's
+   choice**: question 1 (eliminate `i128` in `q_mul()`) is a measured no-op on both real target ISAs
+   checked (see "Real, measured findings" above) and is not being built. The real, separate
+   opportunity this measurement surfaced -- replacing `div_round_i128()`'s `__divti3` call with a
+   reciprocal-multiply technique -- is a new, higher-risk question of its own (bit-exactness is not
+   achievable; the acceptance bar is "diverges only at already-measured clamp-disagreement frames,"
+   unverified without a real fixture-corpus run) and is not yet started. Question 2 (Chebyshev/LSP's
+   Q2.29 narrowing) remains open and independent of both.
+
+## Real, measured findings (2026-09-04): Question 1 is a no-op, don't build it
+
+Per Bruce's direction to proceed ("Do the codec2 reduction... this change would be welcome"),
+`q_mul()` and `div_round_i128()` were extracted byte-for-byte into a standalone `no_std` crate
+(`codec2_fixedpoint_codegen_check/`, next to this document) and cross-compiled to real target ISAs
+to inspect what the `i128` arithmetic actually lowers to -- this answers "does the intermediate
+genuinely need a software bignum routine, or does the compiler already emit an efficient inlined
+sequence" directly, without guessing from x86 behavior. See that crate's own README.md for the
+exact recipe. **This is codegen inspection on the real target instruction set, not an on-device
+cycle measurement** -- no real ESP32/Cortex-M4 hardware was used or is available in this
+environment; that gap (open question 1, below) is unchanged.
+
+Two targets checked: `thumbv7em-none-eabihf` (ARM Cortex-M4F class, via stock `rustup`) and, since
+the actual target chip this port cares about is ESP32 specifically, `xtensa-esp32-none-elf` (the
+real Xtensa LX6 core, via the `espup`-installed Xtensa Rust fork -- upstream `rustc`'s own LLVM does
+not support Xtensa at all).
+
+**`q_mul()`'s `i128` product: fully inlined on both targets, zero calls.** On Xtensa LX6: 0xcc bytes
+(~74 instructions), built entirely from the chip's own native 32x32->64 widening multiply
+instructions (`mull`/`muluh`) plus carry-propagation adds/compares -- confirmed via `objdump -dr`
+that there is no `callx8` anywhere in the function body. On ARM Cortex-M4F: 0x6a bytes (~33
+instructions), same shape, built from `umull`/`umlal`. **This resolves methodology item 4's own
+premise as false: there is no software 128-bit multiply routine here to eliminate.** LLVM already
+does, on both real target ISAs, exactly what a hand-written split-multiply replacement would try to
+do -- build the 128-bit product from native widening multiplies. Writing one would replace inlined
+native-multiply codegen with differently-shaped inlined native-multiply codegen, not remove a call
+or shrink the arithmetic. **Not building it -- there is no measured win available.**
+
+**`div_round_i128()`: this is where the real cost is, and it genuinely calls out.** On Xtensa LX6:
+0x3e0 bytes (comparable size on ARM), with four `callx8` call sites. Resolved via `objdump -dr`'s
+relocations against the function's own literal pool (`.literal.div_round_i128_fn`), not guessed:
+three of the four resolve to the cold `panic_const_div_by_zero` path (never taken in steady state,
+since `d > 0` always holds by this recursion's own construction) -- but the fourth resolves to
+**`__divti3`**, a real, generic signed-128-bit division routine from `compiler-builtins`. This is
+the one true division in the Levinson-Durbin recursion (`k = -numerator/e`), called once per
+iteration -- 10 iterations/frame at 50 frames/sec for codec2_3200 -- and it is a genuine software
+bignum division, not something already optimized away.
+
+**Why this isn't a narrowing question, and isn't attempted this pass.** Eliminating the `i128`
+width here doesn't help the way it might have for `q_mul()` -- `__divti3` is already a generic
+algorithm (handles the full 128-bit range), and the real win would come from an *algorithmic*
+replacement exploiting this call site's own known structure (`e_q` is Q8.40 and strictly positive
+by construction; the numerator is a compile-time-shaped left-shift), e.g. reciprocal-multiply against
+a precomputed `1/e_q` with Newton-Raphson refinement -- not a width change at all. That is a real,
+separate, higher-risk piece of work: **bit-exactness against the current `__divti3`-based result is
+not achievable** with a reciprocal approximation (different rounding at the boundary is inherent to
+the technique), so the acceptance bar has to be "diverges from the current implementation only at
+the already-measured clamp-disagreement frames" (the same bar
+`levinson_durbin_fixed_diverges_from_float_only_at_measured_clamp_disagreement_frames` already
+enforces against float) -- which requires a real fixture-corpus run, including frame 273 (the
+~3600x amplification frame), to even know whether a given reciprocal-multiply design clears it. That
+run hasn't been done. **This document scopes it as a distinct follow-on; it is not started.**
+
+**The `log2_lut`/`exp2_lut` gap is still open and still real.** `fixed_point.rs`'s own doc comment
+(lines 22-54) already discloses that `quantise.rs`'s energy-quantization log/exp step is genuine
+`f32` arithmetic, not fixed-point -- this study's own scope (`lpc.rs`'s `i64`/`i128` only) doesn't
+touch it. Any framing of this work as "eliminated wide/software arithmetic for no-FPU targets" would
+be misleading to an audience that acts on it (the M17/codec2 groups this was announced to) while that
+gap remains -- worth stating plainly in any upstream message, not just in this internal doc.
 
 ## Not attempted this pass
 
-No code written, no measurement taken yet -- this document scopes the real study Bruce asked for;
-executing it (building the narrowed variants, running them against the fixture corpus, and, if
-real ESP32 access exists, a real on-target measurement) is the next, separate piece of work.
+The `div_round_i128()` reciprocal-multiply replacement (real opportunity, not yet built -- see
+above); Question 2 (Chebyshev/LSP's own Q2.29 `i64`-to-`i32` narrowing, genuinely unmeasured);
+Part 3's own real on-device cycle measurement (this pass used codegen inspection on the real target
+ISA, not an on-device timer).
