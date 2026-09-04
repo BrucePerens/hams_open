@@ -1,19 +1,19 @@
 # Fixed-Point Encoder Implementation: Punch List
 
 ## Status: scoped 2026-09-04, per Bruce's direct request "Implement the fixed-point encoder." Real,
-## substantial progress: `EncoderFixed`'s windowing -> `autocorrelate` -> Levinson-Durbin chain is now
-## genuinely fixed-point end to end, no `f32` anywhere in it -- the LPC coefficient estimate itself,
-## arguably the most numerically fragile part of this whole codec, no longer touches float in
-## `EncoderFixed`. Validated not just in isolation but by direct comparison against `floating_
-## reference::Encoder` on identical input: decoded-audio correlation **1.0**. Getting there required
-## a real detour: a fixed-point `r0`-normalization candidate initially failed on frame 273 (the same
-## structural reason `div_round_i128`'s reciprocal-multiply idea was already rejected), which led to
-## `lpc::apply_white_noise_correction` (a standard technique, Rabiner & Schafer 1978) -- a real
-## root-cause fix for Levinson-Durbin's own fragility, sent to the codec2 mailing list, which
-## independently resolved the normalization candidate's failure too. `lpc_energy` and everything from
-## `bw_gamma` onward are still `f32` and not yet started. This file is the ground truth for what's
-## actually done -- re-derive from here against the real code, not from a chat summary, before ever
-## reporting this "complete."
+## substantial progress: `EncoderFixed`'s windowing -> `autocorrelate` -> Levinson-Durbin ->
+## `lpc_energy` chain is now genuinely fixed-point end to end, no `f32` anywhere in it -- the LPC
+## coefficient and energy estimate, arguably the most numerically fragile part of this whole codec, no
+## longer touch float in `EncoderFixed`. Validated not just in isolation but by direct comparison
+## against `floating_reference::Encoder` on identical input: decoded-audio correlation **1.0**.
+## Getting there required a real detour: a fixed-point `r0`-normalization candidate initially failed
+## on frame 273 (the same structural reason `div_round_i128`'s reciprocal-multiply idea was already
+## rejected), which led to `lpc::apply_white_noise_correction` (a standard technique, Rabiner & Schafer
+## 1978) -- a real root-cause fix for Levinson-Durbin's own fragility, sent to the codec2 mailing list,
+## which independently resolved the normalization candidate's failure too. Everything from `bw_gamma`
+## onward (LSP conversion's own input boundary, the LSP/energy quantizers, the pitch estimator) is
+## still `f32` and not yet started. This file is the ground truth for what's actually done -- re-derive
+## from here against the real code, not from a chat summary, before ever reporting this "complete."
 
 ## White noise correction -- a root-cause fix, not part of the original punch list, added 2026-09-05
 
@@ -75,7 +75,7 @@ still round-trip through `f32` at every boundary, which isn't what "fixed-point 
 | `voicing.rs` (`is_voiced`) | Corrected after starting: `energy_db = 10*log10(energy)` is a real dependency on the still-incomplete `log2_lut` (not just a threshold to narrow) | See resolution below | **DONE and WIRED into `EncoderFixed`**. Real design change, not a mechanical port -- see below. |
 | `autocorrelate` + `Autocorr` boundary | Was: full `f32`. Now: `lpc::autocorrelate_fixed(wn_q: &[i32]) -> [i64; LPC_ORD+1]`, real, wired into `EncoderFixed`. `wn_q` is Q8.23 (real measured peak ~141.8, matches `COEF_FRAC_BITS`'s own established convention); each per-term product widens to `i64` transiently then shifts right immediately, so the running sum never needs more than ordinary `i64` headroom (real measured worst case ~5.4e13, `i64::MAX` ~9.2e18 -- over 17 bits of margin). Getting here required a real detour: a candidate `r0`-normalization *originally failed* frame 273 (this corpus's own known worst-conditioned frame) for the same structural reason `div_round_i128`'s reciprocal-multiply idea was already rejected -- even a division *more* exact than the current `f32` one diverged, because frame 273 was fragile enough that ordinary `f32` rounding was load-bearing. **Resolved, not worked around**: `apply_white_noise_correction` (see the section above) closes the gap completely, confirmed twice -- once at a synthetic wide Q(43) precision (isolating the normalization question), once again at `autocorrelate_fixed`'s own real, narrower Q8.23 output (the actual end-to-end precision) -- 0 unexplained divergences both times. | Real integer accumulator, real bit budget confirmed (both the input side, validated against `synthetic_codec2_wn_dump.txt`/`synthetic_codec2_r_dump.txt`, max relative error 1.37e-5; and the normalization, validated against `codec2_r_dump.txt`), wired into a real consumer | **DONE and WIRED into `EncoderFixed`.** |
 | `levinson_durbin_fixed` wiring | Was: built and validated but not called by any real `Encoder`, output boundary `f32`. Now: `levinson_durbin_fixed_core` refactored to extract `levinson_durbin_fixed_core_from_r_norm` as the real shared recursion body (used by both the original `f32`-normalizing entry point and the new one); `r0_normalize_fixed` and `levinson_durbin_fixed_from_integer_r` promoted from test-only candidates to real production functions, replacing the test module's own now-redundant local duplicates. Output stays `LpcCoeffs`/`f32` deliberately (see that function's own doc comment) -- downstream (`build_p_q`) isn't migrated, so there's nothing further to hand an integer type to yet. | Wire into a real encoder, validate against the float reference on real input, not just the isolated fixture corpus | **DONE and WIRED into `EncoderFixed`.** Real, direct comparison against `floating_reference::Encoder` on identical synthetic input: decoded-audio correlation **1.0**. |
-| `lpc_energy` | Full `f32`. `EncoderFixed` currently runs a real, small, separate float windowing/`autocorrelate` pass *just* to feed this one call (documented at the call site in `encoder_fixed.rs`) -- a real, honest duplication of work, not a hidden cost. | Fixed-point port + real fixture-corpus validation | **NOT STARTED** |
+| `lpc_energy` | Was: full `f32`, forcing `EncoderFixed` to run a real, separate duplicate float windowing/`autocorrelate` pass just to feed it. Now: `lpc::lpc_energy_fixed(a_q23, r_q) -> f32` (each Q8.23 per-term product widens to `i128` transiently, shifts back to Q8.23, accumulates in `i64`), wired into `EncoderFixed`, duplicate pass removed. | Real fixture-corpus validation, checked against the bar that actually matters (the transmitted quantizer index, not raw relative error -- see below) | **DONE and WIRED into `EncoderFixed`.** 0/362 real quantizer-index mismatches vs `lpc_energy` on real captured `ak`/`R[]` data (`quantise::encode_energy` agreement, not a raw-value tolerance -- an initial raw-relative-error version found a real, harmless 3.2% worst case from genuine cancellation in `sum(ak[i]*R[i])` on some frames, ~0.14dB, over 11x smaller than the 5-bit quantizer's own 1.5625dB step). |
 | `bw_gamma` (bandwidth expansion) | Full `f32`, but `lpc.rs`'s own doc comments already note this "turned out to reduce to simple formulas" elsewhere in this codebase's history -- may be more tractable than it looks | Fixed-point port + validation | **NOT STARTED** |
 | `build_p_q` | Full `f32` | Fixed-point port + validation | **NOT STARTED** |
 | `cheb_poly_eval_fixed` / `find_next_root` / `lpc_to_lsp` | **Already fixed-point internally** (this session: `i32`, proven bit-exact, real codegen win) | Its own input (`ak`) still arrives as `f32` from `build_p_q` -- not closed until `build_p_q` is | **PARTIALLY DONE** -- internal arithmetic done, input boundary still float |
