@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Bitstream field quantizers and bit packing.
+//! Bitstream field quantizers (bit packing itself lives in `bits.rs`).
 //!
 //! The LSP delta-scalar quantizer below reproduces Codec2's real
 //! quantization boundaries (needed for bitstream interoperability -- a

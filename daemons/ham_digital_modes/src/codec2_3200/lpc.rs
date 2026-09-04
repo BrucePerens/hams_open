@@ -167,6 +167,50 @@ pub fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
     Some(freq)
 }
 
+fn poly_mul(a: &[f32], b: &[f32]) -> Vec<f32> {
+    let mut out = vec![0.0f32; a.len() + b.len() - 1];
+    for (i, &ai) in a.iter().enumerate() {
+        for (j, &bj) in b.iter().enumerate() {
+            out[i + j] += ai * bj;
+        }
+    }
+    out
+}
+
+/// Inverse of `lpc_to_lsp`: `LPC_ORD` Line Spectral Frequencies (radians)
+/// back to `LPC_ORD` LPC coefficients. Standard LSP reconstruction
+/// (e.g. Kabal & Ramachandran 1986): `P(z)` is the product of a degree-2
+/// factor `1 - 2*cos(lsp_i)*z^-1 + z^-2` per even-indexed LSP (the same
+/// interleaving `lpc_to_lsp` produces them in) times `(1 + z^-1)`; `Q(z)`
+/// the same for odd-indexed LSPs times `(1 - z^-1)`. Both have degree
+/// `LPC_ORD+1`, but by construction their degree-`(LPC_ORD+1)` terms
+/// cancel exactly when summed (that's what makes `P = A + z^-(p+1)A(1/z)`
+/// and `Q = A - z^-(p+1)A(1/z)` sum back to `2A`), leaving
+/// `ak = (P+Z)/2` truncated to its first `LPC_ORD+1` terms. Reused
+/// `poly_mul` (plain convolution) rather than the reference's own
+/// cascaded-biquad shift-register formulation -- mathematically the same
+/// construction, just not optimized for a fixed small buffer.
+pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
+    let mut p = vec![1.0f32];
+    let mut q = vec![1.0f32];
+    for i in (0..LPC_ORD).step_by(2) {
+        let c = lsp[i].cos();
+        p = poly_mul(&p, &[1.0, -2.0 * c, 1.0]);
+    }
+    for i in (1..LPC_ORD).step_by(2) {
+        let c = lsp[i].cos();
+        q = poly_mul(&q, &[1.0, -2.0 * c, 1.0]);
+    }
+    p = poly_mul(&p, &[1.0, 1.0]);
+    q = poly_mul(&q, &[1.0, -1.0]);
+
+    let mut ak = [0.0f32; LPC_ORD + 1];
+    for i in 0..=LPC_ORD {
+        ak[i] = 0.5 * (p[i] + q[i]);
+    }
+    ak
+}
+
 /// LPC energy: `E = sum(ak[i] * R[i])`, the real prediction-error energy
 /// this analysis frame's LPC filter achieves against its own
 /// autocorrelation -- computed *before* bandwidth expansion is applied
@@ -334,6 +378,42 @@ mod tests {
             }
         }
         assert!(max_err < 1e-3, "max P[]/Q[] error vs real captured reference: {max_err}");
+    }
+
+    /// `lsp_to_lpc` is the mathematical inverse of `lpc_to_lsp` (both
+    /// operate on real captured, bandwidth-expanded `ak[]` -- no
+    /// reference `lsp_to_lpc` output is needed at all, since the round
+    /// trip is self-verifying).
+    #[test]
+    fn lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data() {
+        let ak_path = fixture!("codec2_ak_dump.txt");
+        let aks = read_dump(ak_path, LPC_ORD + 1);
+        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+
+        let mut n_checked = 0;
+        let mut max_abs_err = 0.0f32;
+        for ak_row in &aks {
+            let mut ak = [0.0f32; LPC_ORD + 1];
+            ak.copy_from_slice(ak_row);
+            for (i, a) in ak.iter_mut().enumerate() {
+                *a *= bw_gamma(i);
+            }
+            let Some(lsp) = lpc_to_lsp(&ak) else { continue };
+            let back = lsp_to_lpc(&lsp);
+            for i in 0..=LPC_ORD {
+                max_abs_err = max_abs_err.max((back[i] - ak[i]).abs());
+            }
+            n_checked += 1;
+        }
+        assert!(n_checked > 150, "only checked {n_checked} real frames");
+        // Confirmed (by rerunning poly_mul in f64, same result) that
+        // this floor isn't poly_mul's own rounding -- it's the LSP
+        // frequency's own f32 precision (root.acos() in lpc_to_lsp) that
+        // limits round-trip accuracy here. Real-world impact is moot:
+        // the actually-transmitted LSPs are 5-bit-quantized (~14-50Hz
+        // steps), a coarser bound than 0.0065's worth of ak-coefficient
+        // drift.
+        assert!(max_abs_err < 0.01, "max ak[] round-trip error: {max_abs_err}");
     }
 
     /// Cross-checks `autocorrelate` against the reference's own real

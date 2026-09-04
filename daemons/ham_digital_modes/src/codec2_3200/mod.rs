@@ -48,10 +48,33 @@
 //! bit-for-bit fidelity, but it's real, reproducible evidence this
 //! crate's own bitstream decodes cleanly with the real reference at a
 //! genuinely speech-like signal level, not silence or garbage -- real
-//! interoperability, not just internal self-consistency. **The decoder
-//! half of this codec (LSP-to-LPC, spectral envelope, phase/sinusoidal
-//! synthesis, postfilter, IDFT/overlap-add) is not yet implemented** --
-//! `synthesis.rs` is still a stub.
+//! interoperability, not just internal self-consistency.
+//!
+//! **Decoder verified against the real reference decoder, the direction
+//! that actually admits a numeric comparison** (see this doc comment's
+//! own note above on why encode/decode aren't symmetric here).
+//! `examples/codec2_decode_bin.rs` decoded a real ~2539-frame bitstream
+//! -- captured straight from the real reference *encoder* itself, not
+//! this crate's own encoder, so this checks `Decoder` in complete
+//! isolation from any of this crate's own encoder-side choices -- with
+//! this crate's own `Decoder`, and the same bitstream was separately
+//! decoded with the unmodified real `vendor/codec2-mod` C decoder.
+//! Per-sample Pearson correlation over the whole file: **0.958** (RMS
+//! 2718.0 vs 2718.5, essentially identical overall level) -- but a
+//! single global number over an energy-dominated signal can hide a real
+//! problem concentrated in quiet passages, so it was also checked
+//! segment-wise (fifty 1-second/8000-sample blocks): median block
+//! correlation **0.971**, with the worst blocks landing at 0.09-0.80 --
+//! but every one of those low-correlation blocks has near-identical
+//! per-block RMS between the two decoders (e.g. one block: RMS 2614 vs
+//! 2609; another: RMS 21 vs 21), meaning the amplitude/loudness envelope
+//! reconstruction agrees closely even where the sample-level waveform
+//! doesn't. That pattern -- right loudness, divergent fine structure --
+//! is exactly what's expected from unvoiced/postfilter-randomized
+//! harmonics drawing phase from this crate's own independent PRNG
+//! rather than the reference's `codec2_rand` (differently-seeded noise,
+//! not differently-*shaped* speech), not a structural defect in the
+//! reconstruction itself.
 //!
 //! Written from a from-scratch reading of the *algorithm* (LPC analysis,
 //! Levinson-Durbin, LSP conversion, pitch estimation, sinusoidal
@@ -80,6 +103,8 @@
 //! LGPL-2.1-only data file was needed here at all.
 
 pub mod bits;
+pub mod envelope;
+pub mod interp;
 pub mod lpc;
 pub mod nlp;
 pub mod quantise;
@@ -129,6 +154,11 @@ pub const SAMPLES_PER_FRAME: usize = 2 * N_SAMP;
 
 /// Highest sinusoidal harmonic this mode's `model_t` can track.
 pub const MAX_AMP: usize = 80;
+
+/// Synthesis (Parzen) window ramp width, samples -- ramps up/down over
+/// `TW` samples at each end of the `SAMPLES_PER_FRAME`-sample overlap-add
+/// window.
+pub const TW: usize = 40;
 
 /// LPC postfilter constants (bandwidth-expansion gamma exponent base,
 /// spectral-envelope-flattening beta) -- Codec2's own real, published
@@ -223,5 +253,189 @@ impl Encoder {
 
         let fields = bits::FrameFields { voiced0, voiced1, wo_index, e_index, lsp_indexes };
         bits::pack_frame(&fields, WO_BITS, E_BITS)
+    }
+}
+
+/// LSPs the reference's own decoder starts from before any real frame
+/// has been decoded -- evenly spaced across `[0, pi]`, same shape as
+/// `fallback_lsp` (a fresh decoder has nothing better to interpolate the
+/// very first frame's own first sub-frame from).
+fn initial_lsps() -> [f32; LPC_ORD] {
+    std::array::from_fn(|i| (i as f32 * std::f32::consts::PI) / (LPC_ORD as f32 + 1.0))
+}
+
+/// Persistent per-decoder state: the previous frame's own decoded
+/// `Wo`/voiced/LSPs/energy (needed for interpolating the next frame's
+/// first sub-frame), plus `synthesis::SynthesisState`'s own overlap-add
+/// memory and a forward FFT plan (`envelope.rs`'s own spectral-envelope
+/// computation).
+pub struct Decoder {
+    prev_wo: f32,
+    prev_voiced: bool,
+    prev_lsps: [f32; LPC_ORD],
+    prev_e: f32,
+    synth: synthesis::SynthesisState,
+    fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
+}
+
+impl Default for Decoder {
+    fn default() -> Self {
+        let mut planner = rustfft::FftPlanner::<f32>::new();
+        Decoder {
+            prev_wo: W0_MIN,
+            prev_voiced: false,
+            prev_lsps: initial_lsps(),
+            prev_e: 1.0,
+            synth: synthesis::SynthesisState::new(),
+            fft: planner.plan_fft_forward(FFT_ENC),
+        }
+    }
+}
+
+impl Decoder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Decodes `BYTES_PER_FRAME` real-format bytes into one 20ms
+    /// (`SAMPLES_PER_FRAME`-sample) frame of audio. Matches the
+    /// reference's own real `codec2_decode` structure: unpack this
+    /// frame's own (`Wo`, energy, LSPs, both `voiced` bits), interpolate
+    /// the first (earlier) sub-frame's parameters from the previous
+    /// frame's own decoded state, then run LSP-to-LPC, spectral-envelope
+    /// reconstruction, and sinusoidal synthesis once per sub-frame.
+    pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
+        let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
+        let wo1 = quantise::decode_wo(fields.wo_index);
+        let e1 = quantise::decode_energy(fields.e_index);
+        let lsps1 = quantise::decode_lsps_delta_scalar(&fields.lsp_indexes);
+
+        let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
+        let wo0 = interp::interp_wo(fields.voiced0, self.prev_wo, self.prev_voiced, wo1, fields.voiced1, W0_MIN);
+        let e0 = interp::interp_energy(self.prev_e, e1);
+        let lsps0 = interp::interpolate_lsp(&self.prev_lsps, &lsps1);
+
+        let mut out = [0i16; SAMPLES_PER_FRAME];
+        let subframes = [(wo0, voiced0, lsps0, e0), (wo1, fields.voiced1, lsps1, e1)];
+        for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
+            let ak = lpc::lsp_to_lpc(&lsps);
+            let mut model = envelope::Model::new(wo, voiced);
+            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            envelope::apply_first_harmonic_correction(&mut model);
+            let sub = self.synth.synthesize_subframe(&mut model, &aw);
+            out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
+        }
+
+        self.prev_wo = wo1;
+        self.prev_voiced = fields.voiced1;
+        self.prev_lsps = lsps1;
+        self.prev_e = e1;
+
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
+        std::array::from_fn(|i| {
+            let t = (t0 + i) as f32 / SAMPLE_RATE as f32;
+            let v = 8000.0 * (std::f32::consts::TAU * f0 * t).sin() + 3000.0 * (std::f32::consts::TAU * 2.0 * f0 * t).sin();
+            v as i16
+        })
+    }
+
+    /// Full round trip through this crate's own encoder and decoder:
+    /// not a claim of correctness against the reference (see mod.rs's
+    /// own module doc comment on why that's checked differently, with
+    /// `examples/codec2_encode_wav.rs`) -- just a basic sanity check
+    /// that a real multi-frame sequence produces finite, reasonably-
+    /// scaled, non-degenerate audio and doesn't panic.
+    #[test]
+    fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
+        let mut encoder = Encoder::new();
+        let mut decoder = Decoder::new();
+        let mut max_abs = 0i32;
+        let mut sumsq = 0.0f64;
+        let mut n_samples = 0u64;
+
+        for frame_idx in 0..40 {
+            let f0 = 120.0 + 40.0 * (frame_idx as f32 * 0.3).sin();
+            let speech = synthetic_speech_frame(f0, frame_idx * SAMPLES_PER_FRAME);
+            let bits = encoder.encode(&speech);
+            let out = decoder.decode(&bits);
+            for &s in &out {
+                max_abs = max_abs.max(s.abs() as i32);
+                sumsq += (s as f64) * (s as f64);
+                n_samples += 1;
+            }
+        }
+
+        let rms = (sumsq / n_samples as f64).sqrt();
+        assert!(rms > 50.0, "decoded audio looks like silence, RMS={rms}");
+        assert!(rms < 20000.0, "decoded audio implausibly loud, RMS={rms}");
+        assert!(max_abs > 0, "decoded audio is all zero");
+    }
+
+    /// The real cross-implementation decoder check (see this module's
+    /// own doc comment above) lived in a one-off shell session and
+    /// won't survive it -- this is that same check made permanent and
+    /// automated, guarding `Decoder` against regressions the way
+    /// `lpc.rs`/`quantise.rs`/`bits.rs`'s own real-reference tests guard
+    /// their own stages.
+    ///
+    /// Uses the *synthetic* (non-speech) signal's own real captured
+    /// bitstream and the real reference decoder's own PCM output for
+    /// it, not the real donated speech recordings: this crate's own
+    /// PRNG seed differs from the reference's `codec2_rand`, so
+    /// unvoiced/postfilter-randomized excitation legitimately diverges
+    /// between the two decoders' output -- real speech's natural mix of
+    /// voiced/unvoiced/silence content makes that divergence large
+    /// enough that a single global correlation threshold would need to
+    /// be loose enough to hide a real regression. The synthetic
+    /// signal's mostly-tonal, mostly-voiced content keeps that
+    /// divergence small (measured directly: 0.9987 correlation vs the
+    /// real speech check's 0.958 whole-file / 0.971 median-of-blocks),
+    /// so a tight threshold here is actually discriminating. Committing
+    /// vocoded PCM of the real donated recordings would also cross the
+    /// same line `tests/fixtures/codec2_3200/README.md` already draws
+    /// against real `Wn[]`/`Sn[]` data (still recognizable speech, even
+    /// lossily coded) -- the synthetic signal has no such concern.
+    #[test]
+    fn decoder_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream() {
+        let bits_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin");
+        let pcm_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/synthetic_c_decoded_pcm.bin");
+
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let pcm_data = std::fs::read(pcm_path).unwrap_or_else(|e| panic!("{pcm_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert_eq!(pcm_data.len(), n_frames * SAMPLES_PER_FRAME * 2, "bitstream/PCM fixture frame counts don't line up");
+
+        let mut decoder = Decoder::new();
+        let mut rust_pcm: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] = bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            rust_pcm.extend_from_slice(&decoder.decode(&frame));
+        }
+        let ref_pcm: Vec<i16> = pcm_data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+
+        let n = rust_pcm.len();
+        let mean_a: f64 = rust_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mean_b: f64 = ref_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mut cov = 0.0f64;
+        let mut var_a = 0.0f64;
+        let mut var_b = 0.0f64;
+        for i in 0..n {
+            let da = rust_pcm[i] as f64 - mean_a;
+            let db = ref_pcm[i] as f64 - mean_b;
+            cov += da * db;
+            var_a += da * da;
+            var_b += db * db;
+        }
+        let corr = cov / (var_a * var_b).sqrt();
+        assert!(corr > 0.99, "decoder output diverged from the real reference decoder on the same real captured bitstream: correlation={corr} (expected > 0.99, measured 0.9987 when this test was written)");
     }
 }
