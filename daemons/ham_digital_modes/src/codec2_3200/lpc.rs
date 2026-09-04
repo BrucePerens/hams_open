@@ -201,6 +201,17 @@ pub fn apply_white_noise_correction(r: &mut Autocorr) {
     r[0] *= 1.0 + WHITE_NOISE_CORRECTION_ALPHA;
 }
 
+/// Fixed-point `apply_white_noise_correction`: `r_q[0] += r_q[0] /
+/// 1000` -- an exact integer division standing in for `* (1 +
+/// WHITE_NOISE_CORRECTION_ALPHA)` (`1e-3 == 1/1000` exactly, unlike an
+/// arbitrary float constant, so this introduces no quantization error of
+/// its own beyond the division's own round-to-nearest). `r_q[0]` is
+/// always positive (real signal energy), so `div_round_i128`'s own
+/// positive-divisor precondition holds trivially.
+pub fn apply_white_noise_correction_fixed(r_q: &mut [i64; LPC_ORD + 1]) {
+    r_q[0] += div_round_i128(r_q[0] as i128, 1000);
+}
+
 /// Levinson-Durbin recursion: real autocorrelation coefficients in,
 /// LPC coefficients out (`ak[0] == 1.0` by definition, `ak[1..=LPC_ORD]`
 /// the real predictor coefficients).
@@ -412,6 +423,20 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
     let r_norm_q: [i64; LPC_ORD + 1] =
         std::array::from_fn(|j| f32_to_q64(r[j] / r0, LEVINSON_FRAC_BITS));
 
+    levinson_durbin_fixed_core_from_r_norm(&r_norm_q)
+}
+
+/// The real per-iteration recursion, shared by `levinson_durbin_fixed_
+/// core` above (which normalizes via `f32` division, matching this
+/// port's original validated behavior) and `levinson_durbin_fixed_from_
+/// integer_r` below (which normalizes in genuine fixed-point, for a
+/// caller that already has integer `R[]` from `autocorrelate_fixed`) --
+/// a single shared body means the two entry points can never drift out
+/// of sync with each other on anything but the one real difference
+/// between them (how `r_norm_q` itself gets computed).
+fn levinson_durbin_fixed_core_from_r_norm(
+    r_norm_q: &[i64; LPC_ORD + 1],
+) -> (LpcCoeffsQ, [bool; LPC_ORD + 1]) {
     let mut a_q = [0i64; LPC_ORD + 1]; // Q8.40
     let mut a_prev_q = [0i64; LPC_ORD + 1];
     a_q[0] = 1i64 << LEVINSON_FRAC_BITS;
@@ -453,6 +478,42 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
     let a_q23: LpcCoeffsQ =
         std::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
     (a_q23, fired)
+}
+
+/// `r_norm_q[j] = r_q[j] * 2^LEVINSON_FRAC_BITS / r0_q` -- the
+/// fixed-point replacement for `f32_to_q64(r[j]/r0, LEVINSON_FRAC_BITS)`
+/// (`levinson_durbin_fixed_core`'s own internal, `f32`-based
+/// normalization), for a caller that already has integer `R[]` (e.g.
+/// from `autocorrelate_fixed`). Validated against the real
+/// `codec2_r_dump.txt` corpus with `apply_white_noise_correction`/
+/// `apply_white_noise_correction_fixed` applied first -- see
+/// `levinson_durbin_fixed_tests::r0_normalization_fixed_point_candidate`
+/// for the full derivation and the real measured result (0 unexplained
+/// divergences from the plain-float reference). **Must not be called
+/// without white noise correction applied first** -- the discriminator
+/// tests back this function's own correctness specifically with that
+/// correction in place; frame 273's own real fragility (this file's own
+/// extensive documentation above) makes no promise about this
+/// normalization's behavior without it.
+fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
+    let r0_q = r_q[0];
+    debug_assert!(r0_q > 0, "r0_normalize_fixed: r0_q must be positive, got {r0_q}");
+    std::array::from_fn(|j| div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128))
+}
+
+/// The real, integer-in/integer-out entry point for a caller that
+/// already has `R[]` as integer Q(any format, e.g. `autocorrelate_
+/// fixed`'s own Q8.23) rather than `f32` -- **caller must apply white
+/// noise correction (`apply_white_noise_correction_fixed`) to `r_q`
+/// before calling this**, matching this function's own validated
+/// precondition. Output stays `LpcCoeffs` (`f32`), matching this port's
+/// established "integer core, float boundary" pattern -- the downstream
+/// LSP chain (`build_p_q`, `bw_gamma`) isn't migrated yet, so there's
+/// nothing further along the pipeline to hand an integer type to.
+pub fn levinson_durbin_fixed_from_integer_r(r_q: &[i64; LPC_ORD + 1]) -> LpcCoeffs {
+    let r_norm_q = r0_normalize_fixed(r_q);
+    let (a_q23, _fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
+    std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
 }
 
 /// Q8.23 fixed-point for the Chebyshev coefficients below -- 8 integer
@@ -1539,67 +1600,11 @@ mod levinson_durbin_fixed_tests {
             std::array::from_fn(|j| (r[j] as f64 * (1i64 << R_FRAC_BITS) as f64).round() as i64)
         }
 
-        /// `r_norm_q[j] = r_q[j] * 2^LEVINSON_FRAC_BITS / r0_q`, the
-        /// fixed-point replacement for `f32_to_q64(r[j]/r0,
-        /// LEVINSON_FRAC_BITS)` -- same real shape as `div_round_i128`'s
-        /// other real call site (`k = -numerator/e`): an i128-widened
-        /// numerator over an `i64` divisor, calling `__divti3`. Unlike
-        /// that call site (never wired into a running encoder), this one
-        /// would actually run if wired in -- the real risk this whole
-        /// candidate module exists to check, not assumed away.
-        fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
-            let r0_q = r_q[0];
-            debug_assert!(r0_q > 0, "r0_normalize_fixed: r0_q must be positive, got {r0_q}");
-            std::array::from_fn(|j| {
-                div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128)
-            })
-        }
-
-        /// Identical recursion body to `levinson_durbin_fixed_core`,
-        /// minus that function's own internal `r[j]/r0` float
-        /// normalization -- takes an already-normalized `r_norm_q`
-        /// directly, so this candidate and the real production core can
-        /// never drift out of sync with each other on anything but the
-        /// one line under test (the normalization itself).
-        fn levinson_durbin_fixed_core_from_r_norm(
-            r_norm_q: &[i64; LPC_ORD + 1],
-        ) -> (LpcCoeffsQ, [bool; LPC_ORD + 1]) {
-            let mut a_q = [0i64; LPC_ORD + 1];
-            let mut a_prev_q = [0i64; LPC_ORD + 1];
-            a_q[0] = 1i64 << LEVINSON_FRAC_BITS;
-            let mut e_q: i64 = 1i64 << LEVINSON_FRAC_BITS;
-            let mut fired = [false; LPC_ORD + 1];
-
-            for i in 1..=LPC_ORD {
-                let mut sum_q: i64 = 0;
-                for j in 1..i {
-                    sum_q += q_mul(a_prev_q[j], r_norm_q[i - j]);
-                }
-                let numerator_q: i64 = r_norm_q[i] + sum_q;
-
-                let k_q: i64 = if numerator_q == 0 {
-                    0
-                } else {
-                    div_round_i128(-((numerator_q as i128) << LEVINSON_FRAC_BITS), e_q as i128)
-                };
-
-                let clamped = k_q.abs() > (1i64 << LEVINSON_FRAC_BITS);
-                let k_q = if clamped { 0 } else { k_q };
-                fired[i] = clamped;
-
-                a_q[i] = k_q;
-                for j in 1..i {
-                    a_q[j] = a_prev_q[j] + q_mul(k_q, a_prev_q[i - j]);
-                }
-                let one_minus_ksq_q: i64 = (1i64 << LEVINSON_FRAC_BITS) - q_mul(k_q, k_q);
-                e_q = q_mul(e_q, one_minus_ksq_q);
-                a_prev_q[..=i].copy_from_slice(&a_q[..=i]);
-            }
-
-            let a_q23: LpcCoeffsQ =
-                std::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
-            (a_q23, fired)
-        }
+        // r0_normalize_fixed and levinson_durbin_fixed_core_from_r_norm
+        // are now real, production functions (promoted out of this test
+        // module once validated) -- brought into scope here by `use
+        // super::*` above, not redefined, so this test and the real
+        // production code can never drift out of sync with each other.
 
         fn levinson_durbin_fixed_point_normalized(r: &Autocorr) -> (LpcCoeffs, [bool; LPC_ORD + 1]) {
             let r_q = quantize_r(r);

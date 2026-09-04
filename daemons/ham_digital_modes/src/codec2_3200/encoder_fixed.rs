@@ -6,17 +6,26 @@
 //! kept live specifically to serve as that per-frame diff reference --
 //! Bruce's own recorded product decision).
 //!
-//! **Honest current state, not aspirational**: most of the pipeline
+//! **Honest current state, not aspirational**: much of the pipeline
 //! below still delegates to the exact same `f32` functions
 //! `floating_reference::Encoder` calls, converting `sn` (this struct's
 //! own real `i16`-native sample history -- no `f32` storage here, unlike
 //! the reference) to `f32` on the fly at each not-yet-migrated stage's
-//! own boundary. Only `voicing::is_voiced_fixed` is genuinely
-//! fixed-point today. Re-derive this file's own real state directly by
-//! reading `encode()` below before trusting this comment -- per this
-//! project's own "keep-working-until-actually-done" discipline, a status
-//! claim can go stale the moment the next stage lands and this comment
-//! isn't updated to match.
+//! own boundary. `voicing::is_voiced_fixed` and, as of this doc
+//! comment's last update, the windowing/`autocorrelate`/Levinson-Durbin
+//! chain (`lpc::autocorrelate_fixed` + `lpc::apply_white_noise_
+//! correction_fixed` + `lpc::levinson_durbin_fixed_from_integer_r`) are
+//! genuinely fixed-point today -- the LPC coefficient estimate itself,
+//! arguably the most numerically fragile part of this whole codec, no
+//! longer touches `f32`. `lpc_energy` still does (a real, small,
+//! duplicated windowing/autocorrelate pass just to feed it -- see
+//! `encode()`'s own comment at that call site), and everything after LSP
+//! conversion (`bw_gamma`, `quantise::encode_energy`/`encode_lsps_
+//! delta_scalar`) hasn't migrated at all. Re-derive this file's own real
+//! state directly by reading `encode()` below before trusting this
+//! comment -- per this project's own "keep-working-until-actually-done"
+//! discipline, a status claim can go stale the moment the next stage
+//! lands and this comment isn't updated to match.
 
 use super::{bw_gamma, fallback_lsp, lpc, nlp, quantise, voicing, window};
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
@@ -27,13 +36,14 @@ pub struct EncoderFixed {
     /// own, at its own call site, so it's visible exactly where the real
     /// float boundary still is.
     sn: [i16; M_PITCH],
-    /// Still the `f32` window table -- `window::make_analysis_window_
-    /// fixed()` exists and is validated (see the punch list), but
-    /// nothing downstream is ready to consume a fixed-point windowed
-    /// sample yet (`autocorrelate` isn't migrated), so wiring it in here
-    /// would just add a pointless fixed-to-float round trip. Swap this
-    /// the same commit `autocorrelate`/its normalization boundary lands.
+    /// `f32` window table, still needed for `lpc_energy`'s own real,
+    /// uncorrected energy estimate (via the plain-float `autocorrelate`)
+    /// -- `lpc_energy` itself isn't migrated yet (see the punch list),
+    /// so its `r` input still has to come from the float path.
     window: [f32; M_PITCH],
+    /// `window::make_analysis_window_fixed()`, Q0.30 -- feeds the real,
+    /// genuinely fixed-point autocorrelate/Levinson-Durbin chain below.
+    window_fixed: [i32; M_PITCH],
     nlp_state: nlp::NlpState,
     voicing_state: voicing::VoicingStateFixed,
 }
@@ -43,6 +53,7 @@ impl Default for EncoderFixed {
         EncoderFixed {
             sn: [0; M_PITCH],
             window: window::make_analysis_window(),
+            window_fixed: window::make_analysis_window_fixed(),
             nlp_state: nlp::NlpState::new(),
             voicing_state: voicing::VoicingStateFixed::new(),
         }
@@ -91,13 +102,35 @@ impl EncoderFixed {
         // quantise::encode_wo: NOT migrated.
         let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
 
-        // Windowing + autocorrelate + levinson_durbin + lpc_energy +
-        // bw_gamma + lpc_to_lsp + quantise::encode_energy/
-        // encode_lsps_delta_scalar: NONE of these are migrated yet --
-        // autocorrelate's own normalization boundary is the real gate
-        // (see the punch list), so this whole block still runs the
-        // identical float path `floating_reference::Encoder` does,
-        // converting from `sn_f32` above.
+        // Windowing + autocorrelate + Levinson-Durbin: MIGRATED, genuine
+        // fixed-point, no f32 anywhere in this block. `wn_q[i] = sn[i] *
+        // window_fixed[i]` is naturally Q30 (an integer sample times a
+        // Q0.30 coefficient adds no extra fractional bits of its own);
+        // `>> 7` brings it to Q8.23, autocorrelate_fixed's own expected
+        // input format (see that function's own doc comment for the
+        // real measured margin).
+        let mut wn_q = [0i32; M_PITCH];
+        for ((w, &s), &win) in wn_q
+            .iter_mut()
+            .zip(self.sn.iter())
+            .zip(self.window_fixed.iter())
+        {
+            *w = ((s as i64 * win as i64) >> 7) as i32;
+        }
+        let mut r_q = lpc::autocorrelate_fixed(&wn_q);
+        // White noise correction, in fixed point -- required before
+        // r0_normalize_fixed per that function's own documented
+        // precondition (see lpc::apply_white_noise_correction_fixed and
+        // lpc::levinson_durbin_fixed_from_integer_r's own doc comments).
+        lpc::apply_white_noise_correction_fixed(&mut r_q);
+        let mut ak = lpc::levinson_durbin_fixed_from_integer_r(&r_q);
+
+        // lpc_energy: NOT migrated yet -- still needs a real, uncorrected
+        // f32 Autocorr, so the plain float windowing/autocorrelate path
+        // runs here too, purely to feed this one call. A real, if small,
+        // duplication of work versus the fixed-point windowing above,
+        // acceptable until lpc_energy itself migrates (see the punch
+        // list).
         let mut windowed = [0.0f32; M_PITCH];
         for ((w, &s), &win) in windowed
             .iter_mut()
@@ -107,13 +140,10 @@ impl EncoderFixed {
             *w = s * win;
         }
         let r = lpc::autocorrelate(&windowed);
-        // White noise correction (lpc::apply_white_noise_correction) --
-        // a separate copy so lpc_energy still reports the real,
-        // uncorrected signal energy.
-        let mut r_for_levinson = r;
-        lpc::apply_white_noise_correction(&mut r_for_levinson);
-        let mut ak = lpc::levinson_durbin(&r_for_levinson);
         let e = lpc::lpc_energy(&ak, &r);
+
+        // bw_gamma + lpc_to_lsp + quantise::encode_energy/
+        // encode_lsps_delta_scalar: NOT migrated yet.
         for (i, a) in ak.iter_mut().enumerate() {
             *a *= bw_gamma(i);
         }
@@ -136,6 +166,7 @@ impl EncoderFixed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::codec2_3200::floating_reference;
     use crate::codec2_3200::Decoder;
 
     fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
@@ -178,5 +209,63 @@ mod tests {
         assert!(rms > 50.0, "decoded audio looks like silence, RMS={rms}");
         assert!(rms < 20000.0, "decoded audio implausibly loud, RMS={rms}");
         assert!(max_abs > 0, "decoded audio is all zero");
+    }
+
+    /// The real comparison the parallel-encoder architecture exists
+    /// for: does `EncoderFixed`'s own bitstream, decoded, sound like
+    /// `floating_reference::Encoder`'s does, on the identical real
+    /// input? Not bit-exactness (a quantized 3200bps vocoder was never
+    /// going to be that fragile a target, and `mod.rs`'s own doc comment
+    /// already establishes encoders have real design freedom in how they
+    /// arrive at a quantizer index) -- real, measured correlation between
+    /// the two decoded waveforms, matching this crate's own established
+    /// methodology for comparing two valid encoders/decoders of the same
+    /// signal (see `codec2_3200::tests::decoder_matches_the_real_
+    /// reference_decoder_on_a_real_captured_synthetic_signal_bitstream`'s
+    /// own use of Pearson correlation for exactly this kind of
+    /// comparison). This is the first point in `EncoderFixed`'s own
+    /// build where such a comparison is meaningful at all -- before the
+    /// windowing/autocorrelate/Levinson-Durbin migration, `EncoderFixed`
+    /// and `floating_reference::Encoder` ran identical float code for
+    /// everything but voicing, so a high correlation would have proven
+    /// nothing.
+    #[test]
+    fn encoder_fixed_produces_highly_correlated_audio_with_the_float_reference_encoder() {
+        let mut fixed_encoder = EncoderFixed::new();
+        let mut float_encoder = floating_reference::Encoder::new();
+        let mut fixed_decoder = Decoder::new();
+        let mut float_decoder = Decoder::new();
+
+        let mut fixed_pcm: Vec<i16> = Vec::new();
+        let mut float_pcm: Vec<i16> = Vec::new();
+
+        for frame_idx in 0..40 {
+            let f0 = 120.0 + 40.0 * (frame_idx as f32 * 0.3).sin();
+            let speech = synthetic_speech_frame(f0, frame_idx * SAMPLES_PER_FRAME);
+            let fixed_bits = fixed_encoder.encode(&speech);
+            let float_bits = float_encoder.encode(&speech);
+            fixed_pcm.extend_from_slice(&fixed_decoder.decode(&fixed_bits));
+            float_pcm.extend_from_slice(&float_decoder.decode(&float_bits));
+        }
+
+        let n = fixed_pcm.len();
+        let mean_a: f64 = fixed_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mean_b: f64 = float_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mut cov = 0.0f64;
+        let mut var_a = 0.0f64;
+        let mut var_b = 0.0f64;
+        for i in 0..n {
+            let da = fixed_pcm[i] as f64 - mean_a;
+            let db = float_pcm[i] as f64 - mean_b;
+            cov += da * db;
+            var_a += da * da;
+            var_b += db * db;
+        }
+        let corr = cov / (var_a * var_b).sqrt();
+        println!("EncoderFixed vs floating_reference::Encoder decoded-audio correlation: {corr}");
+        assert!(
+            corr > 0.99,
+            "EncoderFixed's own bitstream diverged from floating_reference::Encoder's on identical input: correlation={corr} (expected > 0.99) -- since both now run the same windowing/autocorrelate/Levinson-Durbin chain (fixed-point vs float), a large drop here would mean a real bug in the fixed-point migration, not just an expected quantizer-index difference"
+        );
     }
 }
