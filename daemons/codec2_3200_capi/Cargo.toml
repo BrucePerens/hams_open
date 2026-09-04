@@ -1,0 +1,16 @@
+[package]
+name = "codec2_3200_capi"
+version = "0.1.0"
+edition = "2021"
+description = "C ABI drop-in layer exposing ham_digital_modes's independent Codec2 3200bps port through the real upstream codec2.h API surface, for linking into C/C++ callers such as an M17 stack"
+license = "LGPL-3.0-or-later"
+
+# Real drop-in replacement for `-lcodec2`: the output artifact is named
+# libcodec2.so/libcodec2.a (not libcodec2_3200_capi.*), so a caller's
+# existing link line and #include <codec2.h> don't need to change.
+[lib]
+name = "codec2"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+ham_digital_modes = { path = "../ham_digital_modes" }
