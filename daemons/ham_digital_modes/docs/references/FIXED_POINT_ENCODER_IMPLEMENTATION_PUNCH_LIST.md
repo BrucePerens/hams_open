@@ -11,10 +11,11 @@
 ## `div_round_i128`'s reciprocal-multiply idea was already rejected), which led to `lpc::apply_white_
 ## noise_correction` (a standard technique, Rabiner & Schafer 1978) -- a real root-cause fix for
 ## Levinson-Durbin's own fragility, sent to the codec2 mailing list, which independently resolved the
-## normalization candidate's failure too. The `Wo`/energy/LSP quantizers, `log2_lut`/`exp2_lut`'s
-## interpolation, and the pitch estimator (`nlp.rs`) are still `f32` and not yet started. This file is
-## the ground truth for what's actually done -- re-derive from here against the real code, not from a
-## chat summary, before ever reporting this "complete."
+## normalization candidate's failure too. `fixed_point.rs`'s `log2_lut` interpolation is now genuinely
+## integer too (see its own row below); `exp2_lut`, the `Wo`/LSP quantizers, and the pitch estimator
+## (`nlp.rs`) are still `f32` and not yet started. This file is the ground truth for what's actually
+## done -- re-derive from here against the real code, not from a chat summary, before ever reporting
+## this "complete."
 
 ## White noise correction -- a root-cause fix, not part of the original punch list, added 2026-09-05
 
@@ -80,8 +81,10 @@ still round-trip through `f32` at every boundary, which isn't what "fixed-point 
 | `bw_gamma` (bandwidth expansion) | Was: full `f32`. Now: `lpc::apply_bw_gamma_fixed`, a real literal Q8.23 table (`BW_GAMMA_Q23`, generated from `bw_gamma`'s own real output, not an independently-computed `0.994^i`), mutating `a_q23` in place. | Fixed-point port + validation against real captured `ak[]` data | **DONE and WIRED into `EncoderFixed`.** Real absolute-error validation (3.6e-7, ordinary Q8.23 noise) -- an initial relative-error version found a real, harmless 0.043% worst case from small-denominator amplification, the same class of finding as `lpc_energy_fixed`'s own cancellation case; switched to the honest metric (absolute error) for a plain elementwise scale. |
 | `build_p_q` | Was: full `f32`. Now: `lpc::build_p_q_fixed(a_q23) -> ([i32;6], [i32;6])`, pure add/sub/double, no multiply, no widening. | Fixed-point port + validation against real captured `P[]`/`Q[]` data | **DONE and WIRED into `EncoderFixed`.** |
 | `cheb_poly_eval_fixed` / `find_next_root` / `lpc_to_lsp` | Was: fixed-point internally, but input (`ak`) still arrived as `f32` from `build_p_q`. Now: `cheb_poly_eval_fixed_core`/`find_next_root_from_q23`/`lpc_to_lsp_from_integer_ak` take Q8.23 integer input directly -- the `f32`-facing originals became thin wrappers (quantizing once, not per-candidate-`x`, a real efficiency win alongside the refactor). LSP frequencies stay `f32` (no fixed-point `acos()` built, downstream not migrated). | Real fixture-corpus validation, all the way through LSP root-finding | **DONE and WIRED into `EncoderFixed`.** 362/362 real frames found all 10 LSP roots (matching the float path's own robustness); max error 3.3e-4 rad, looser than the float path's own 1e-4 bound (real, different arithmetic, not a bug) but only ~0.43Hz against the real 25Hz LSP quantizer step. |
-| `fixed_point.rs`'s `log2_lut`/`exp2_lut` | Real LUT-based approach exists, but the interpolation step itself is genuine `f32` (that file's own doc comment, flagged three times this session already) | Fixed-point interpolation, validated against the real encoder-side data this file's own existing tests already use | **NOT STARTED** -- on the real encode path via `quantise::encode_energy`, not optional |
-| `quantise.rs` (`encode_wo`, `encode_lsps_delta_scalar`) | Full `f32` | Fixed-point port + validation | **NOT STARTED** |
+| `fixed_point.rs`'s `log2_lut` | Was: real LUT-based approach, but the interpolation step itself was genuine `f32`. Now: `log2_lut_generic_fixed` -- the raw IEEE754 mantissa bits (`x.to_bits() & 0x007F_FFFF`) are already an *exact* Q23 fixed-point representation of `(mantissa - 1.0)`, so the index/weight split and the table blend (a quantized `log2_lut_table_q23`) run in pure `u64`/`i64` arithmetic; `f32` is touched only at the exponent-extraction input and the final `exponent + interp` sum. Signature stays `f32 -> f32` (every real caller -- `quantise::encode_energy`, `synthesis::postfilter_step` -- is still float upstream), but the interpolation itself no longer is. | Direct dense sweep against the float interpolation across 12 decades (not just quantizer-index agreement, which is coarse enough to hide a sign/off-by-one bug), plus explicit boundary tests (exact powers of two, just-below-a-power-of-two where the `.min(levels-1)` clamp is load-bearing) | **DONE and WIRED** -- `log2_lut()` itself now calls the fixed path; `quantise::encode_energy`/`decode_energy` and `synthesis::postfilter_step` get it for free with no caller change. |
+| `fixed_point.rs`'s `exp2_lut` | Full `f32` (`floor()`, `2f32.powi()`, interpolation multiply/subtract) | Needs its own integer floor-via-arithmetic-shift (correct on negative inputs) plus IEEE754 bit *reconstruction* (not just extraction like `log2_lut`) -- a real, separate design with its own sign/range pitfalls, deliberately not bundled into the `log2_lut` pass above | **NOT STARTED** |
+| `quantise.rs` (`encode_wo`) | Full `f32` | Fixed-point port + validation | **NOT STARTED -- genuinely blocked for now**: its real input is `Wo` from `nlp::f0_to_wo(f0)`, itself `f32` because `nlp.rs`'s FFT isn't migrated. Porting the quantizer's own arithmetic wouldn't remove any real `f32` from `EncoderFixed` until `nlp.rs` moves. |
+| `quantise.rs` (`encode_lsps_delta_scalar`) | Full `f32` | Fixed-point port + validation | **NOT STARTED -- not actually blocked, corrected framing**: earlier scoping in this file said this had "no real payoff" alongside `encode_wo`, which was wrong (advisor caught it). Its input `lsp[]` is `f32` only because of the trailing `.acos()` in `lpc_to_lsp_from_integer_ak` -- `find_next_root_from_q23` already returns the root as a *cosine* (`x` in `[-1,1]`) before that call. A fixed-point LSP quantizer working in the cosine domain directly, or a fixed-point `acos` LUT (same shape as the `log2_lut` fix above), would close this boundary for real. Real, doable work, just not done yet. |
 | `nlp.rs` (FFT-based pitch estimator) | Full `f32`, uses `rustfft`/`Complex32` | **Different, weaker bar than everything above**: `nlp.rs`'s own module doc already establishes this has full design freedom -- a real decoder only ever sees the quantized `Wo` index, never this module's internal arithmetic, so the bar is "finds the same fundamental," not "reproduces the reference's arithmetic." Needs a fixed-point radix-2 FFT (`PE_FFT_SIZE` is fixed, input is real-valued -- a known design, not research) with a static twiddle table and real per-stage overflow/scaling analysis, plus its own validation corpus. | **NOT STARTED -- scope this as its own separate pass**, not bundled with the LPC-chain work above. Substantially larger than any single item above. |
 | `bits.rs` (`pack_frame`) | Already integer/bit-packing | N/A -- already done, not a gap | **DONE** (pre-existing, not part of this pass) |
 
@@ -132,10 +135,12 @@ before then) -- not silently forgotten, per Bruce's own explicit request to reco
 
 ## Explicitly not attempted this pass
 
-Everything still marked NOT STARTED above: `fixed_point.rs`'s `log2_lut`/`exp2_lut`, `quantise.rs`
-(`encode_wo`/`encode_energy`/`encode_lsps_delta_scalar`), and the fixed-point FFT (`nlp.rs`, still the
-largest single remaining item). Real progress landed on the entire LPC-analysis chain (windowing
-through LSP conversion), but the quantizers themselves and the pitch estimator haven't been touched.
+Everything still marked NOT STARTED above: `fixed_point.rs`'s `exp2_lut`, `quantise.rs`
+(`encode_wo`/`encode_lsps_delta_scalar` -- `encode_energy`/`decode_energy` now ride `log2_lut`'s real
+fix for free), and the fixed-point FFT (`nlp.rs`, still the largest single remaining item). Real
+progress landed on the entire LPC-analysis chain (windowing through LSP conversion) plus `log2_lut`'s
+own interpolation, but `exp2_lut`, the `Wo`/LSP quantizers, and the pitch estimator haven't been
+touched.
 Do not report this punch list as closed without re-reading this table against the actual current
 code -- per this project's own standing "keep-working-until-actually-done" discipline, a status
 header can go stale; re-derive from `grep`ing the real function signatures, not from this file's own

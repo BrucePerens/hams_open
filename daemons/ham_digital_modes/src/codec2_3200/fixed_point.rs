@@ -18,26 +18,22 @@
 //! log-domain LUT shape) and its own doc comment for the real
 //! measurement behind its Q8.40 internal format choice.
 //!
-//! **A real, honest limitation found while landing that work, not yet
-//! fixed**: `log2_lut`/`exp2_lut` below are described as "fixed-point-
-//! oriented," and their exponent/mantissa split is exact bit
-//! manipulation (`to_bits()`/`from_bits()`, free on real fixed-point
-//! hardware too), but the interpolation arithmetic itself
-//! (`(mantissa - 1.0) * levels as f32`, the table lookup's own linear
-//! blend) is genuine `f32` multiply/subtract -- it will not run on
-//! genuinely FPU-less hardware (the actual target this whole file
-//! exists for: cheap HTs, ESP32-class parts with no good FPU) without
-//! either real hardware float support or a software float-emulation
-//! library, which defeats the point. This is a real, separate stage
-//! needing its own genuine integer conversion (interpret the input as
-//! a Q-format integer, extract the exponent via a bit-scan/`clz`
-//! instead of IEEE754 bit tricks, interpolate in integer arithmetic) --
-//! not attempted in this pass, which was scoped to Levinson-Durbin's
-//! own clamp decision specifically. `levinson_durbin_fixed`'s own core
-//! recursion, by contrast, is genuine integer arithmetic throughout
-//! (`i64`/`i128` only, no `f32` inside the loop) -- the two stages are
-//! at different real maturity levels for the no-FPU target, not
-//! interchangeably "done."
+//! **`log2_lut`'s own interpolation is now genuinely integer** (see
+//! `log2_lut_generic_fixed` below): the raw IEEE754 mantissa bits
+//! (`x.to_bits() & 0x007F_FFFF`) are already an *exact* Q23 fixed-point
+//! representation of `(mantissa - 1.0)`, so the index/weight split and
+//! the table blend run entirely in `i64`/`u64` arithmetic, with `f32`
+//! touched only at the exponent-extraction input and the final
+//! `exponent + interp` sum. `exp2_lut` is the half of this pair still
+//! genuinely `f32` inside (`floor()`, `2f32.powi()`, and the
+//! interpolation multiply/subtract) -- it needs its own integer
+//! floor-via-arithmetic-shift and IEEE754 bit *reconstruction* (not
+//! just extraction), which is real, separate work with its own sign
+//! and range pitfalls, not bundled into this pass. `levinson_durbin_
+//! fixed`'s own core recursion, by contrast, has been genuine integer
+//! arithmetic throughout (`i64`/`i128` only, no `f32` inside the loop)
+//! since an earlier pass -- the three stages are at different real
+//! maturity levels for the no-FPU target, not interchangeably "done."
 //!
 //! `log2_lut`/`exp2_lut` below are what `quantise::encode_energy`/
 //! `decode_energy` AND `synthesis::postfilter_step` actually call now --
@@ -81,6 +77,19 @@ fn exp2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
         .get_or_init(|| std::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2()))
 }
 
+/// Q23-quantized sibling of `log2_lut_table()` -- what `log2_lut()`'s
+/// real integer path actually reads. Quantized straight from the same
+/// float table (not recomputed independently) so any rounding here is
+/// ordinary, single-step Q23 rounding noise, not a second source of
+/// disagreement with the float table other code still exercises.
+fn log2_lut_table_q23() -> &'static [i32; LOG2_LUT_SIZE] {
+    static TABLE: OnceLock<[i32; LOG2_LUT_SIZE]> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let f = log2_lut_table();
+        std::array::from_fn(|i| (f[i] * (1i64 << 23) as f32).round() as i32)
+    })
+}
+
 /// `log2(x)` via IEEE754 exponent/mantissa split (exact, free -- just
 /// the bit pattern) plus a linearly-interpolated table lookup for the
 /// mantissa's own log2 -- the real fixed-point-friendly approximation
@@ -88,6 +97,14 @@ fn exp2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
 /// `bits`/`table` are parameterized so the negative-control test below
 /// can exercise the exact same interpolation code at a deliberately
 /// coarser resolution.
+///
+/// Float reference only now -- kept `#[cfg(test)]` since the real
+/// `log2_lut()` entry point below calls `log2_lut_generic_fixed`
+/// instead (see that function's own doc comment for why). Still used
+/// directly by the deliberately-coarse negative-control test, which
+/// wants the plain-float interpolation shape at a resolution the real
+/// integer table below was never built at.
+#[cfg(test)]
 fn log2_lut_generic(x: f32, bits: u32, table: &[f32]) -> f32 {
     debug_assert!(x > 0.0, "log2_lut_generic: x must be positive, got {x}");
     let levels = 1u32 << bits;
@@ -98,6 +115,43 @@ fn log2_lut_generic(x: f32, bits: u32, table: &[f32]) -> f32 {
     let idx = (scaled as usize).min(levels as usize - 1);
     let frac = scaled - idx as f32;
     exponent as f32 + table[idx] + frac * (table[idx + 1] - table[idx])
+}
+
+/// Q23 fixed-point sibling of `log2_lut_generic` -- the real
+/// implementation `log2_lut()` now calls. `table[idx]`'s own log2
+/// values live in `[0.0, 1.0]` (log2 of a mantissa in `[1.0, 2.0)`), so
+/// Q23 (matching f32's own 23-bit mantissa width exactly) represents
+/// them exactly enough that quantizing the table costs nothing beyond
+/// ordinary Q23 rounding noise, and -- the actual point -- lets the
+/// interpolation's own weight come directly from the raw mantissa bits
+/// with no rescale.
+///
+/// The mantissa fraction `raw & 0x007F_FFFF` is already an *exact* Q23
+/// fixed-point representation of `(mantissa - 1.0)` for `mantissa` in
+/// `[1.0, 2.0)` -- IEEE754 stores exactly that value in exactly that
+/// many bits. So unlike `log2_lut_generic`'s `(mantissa - 1.0) * levels
+/// as f32` (a real `f32` multiply/subtract), this widens the raw
+/// mantissa bits to `u64`, multiplies by `levels` in integer arithmetic
+/// to get `scaled` pre-shifted by `2^23`, and splits that into an
+/// index (top bits) and a Q23 interpolation weight (remaining bits) --
+/// no float touches this until the final `exponent + interp` sum at
+/// the very end, which is the genuine float/fixed boundary (`exponent`
+/// itself came from an integer bit-shift, not a float op).
+fn log2_lut_generic_fixed(x: f32, bits: u32, table_q23: &[i32]) -> f32 {
+    debug_assert!(x > 0.0, "log2_lut_generic_fixed: x must be positive, got {x}");
+    let levels = 1u32 << bits;
+    let raw = x.to_bits();
+    let exponent = ((raw >> 23) & 0xFF) as i32 - 127;
+    let mantissa_frac_q23 = raw & 0x007F_FFFF; // exact, [0, 2^23)
+    // scaled_full == scaled (as in log2_lut_generic) * 2^23, exactly --
+    // an integer widen-multiply, no rounding introduced here at all.
+    let scaled_full = mantissa_frac_q23 as u64 * levels as u64;
+    let idx = ((scaled_full >> 23) as usize).min(levels as usize - 1);
+    let frac_q23 = (scaled_full - ((idx as u64) << 23)) as i64; // [0, 2^23)
+    let t0 = table_q23[idx] as i64;
+    let t1 = table_q23[idx + 1] as i64;
+    let interp_q23 = t0 + ((frac_q23 * (t1 - t0)) >> 23);
+    exponent as f32 + (interp_q23 as f32) / (1i64 << 23) as f32
 }
 
 /// `2^y` via integer/fractional split (`2^y = 2^floor(y) * 2^frac`) plus
@@ -116,9 +170,15 @@ fn exp2_lut_generic(y: f32, bits: u32, table: &[f32]) -> f32 {
 
 /// `pub(crate)`: `quantise::encode_energy` calls this directly (see
 /// that function) -- this is the actual implementation the codec uses,
-/// not a parallel unused sibling.
+/// not a parallel unused sibling. Signature stays `f32 -> f32` (every
+/// real caller is still float, since neither `encode_energy`'s own
+/// input nor `synthesis::postfilter_step`'s are migrated yet), but the
+/// interpolation itself now runs in `log2_lut_generic_fixed`'s integer
+/// arithmetic, not `f32` multiply/subtract -- closing the exact gap
+/// this module's own doc comment above described as "not attempted in
+/// this pass."
 pub(crate) fn log2_lut(x: f32) -> f32 {
-    log2_lut_generic(x, LOG2_LUT_BITS, log2_lut_table())
+    log2_lut_generic_fixed(x, LOG2_LUT_BITS, log2_lut_table_q23())
 }
 
 /// `pub(crate)`: `quantise::decode_energy` calls this directly.
@@ -269,6 +329,62 @@ mod tests {
             }
         }
         assert!(mismatches > 0, "expected the deliberately coarse 4-bit LUT to produce at least one real index mismatch against the plain float quantizer -- got zero, which would mean the 8-bit result above isn't evidence of anything");
+    }
+
+    #[test]
+    fn log2_lut_generic_fixeds_integer_interpolation_matches_the_float_interpolation_directly() {
+        // The corpus-based tests above only check quantizer-index
+        // agreement -- coarse enough to hide a real sign or off-by-one
+        // error in the new integer path (log2_lut_generic_fixed) that
+        // just happens not to cross an index boundary on real encoder
+        // data. This compares the two interpolation implementations
+        // directly, dense, across several decades of `x`, so an
+        // exponent-extraction or shift-direction bug shows up as a
+        // large error at a specific magnitude rather than as a
+        // silently-absorbed index shift.
+        let table_f32 = log2_lut_table();
+        let table_q23 = log2_lut_table_q23();
+        let mut max_abs_err = 0.0f32;
+        let mut x = 1e-6f32;
+        while x < 1e6 {
+            let want = log2_lut_generic(x, LOG2_LUT_BITS, table_f32);
+            let got = log2_lut_generic_fixed(x, LOG2_LUT_BITS, table_q23);
+            max_abs_err = max_abs_err.max((got - want).abs());
+            x *= 1.0011; // dense: tens of thousands of points over 12 decades
+        }
+        assert!(
+            max_abs_err < 1e-5,
+            "log2_lut_generic_fixed diverged from the float interpolation by {max_abs_err}, more than ordinary Q23 table-quantization noise"
+        );
+    }
+
+    #[test]
+    fn log2_lut_generic_fixed_handles_its_own_index_boundaries_correctly() {
+        // Exact powers of two: mantissa_frac bits are all zero, so
+        // idx == 0 and frac_q23 == 0 -- exercises the zero-weight edge
+        // with no interpolation blend at all.
+        for exp in -20i32..=20 {
+            let x = 2.0f32.powi(exp);
+            let want = log2_lut_generic(x, LOG2_LUT_BITS, log2_lut_table());
+            let got = log2_lut_generic_fixed(x, LOG2_LUT_BITS, log2_lut_table_q23());
+            assert!(
+                (got - want).abs() < 1e-5,
+                "power-of-two x={x} (2^{exp}): fixed={got} float={want}"
+            );
+            assert_eq!(want, exp as f32, "power-of-two log2 should be exact: {want} vs {exp}");
+        }
+
+        // Just below a power of two: mantissa_frac bits are all one
+        // (0x7FFFFF), pushing scaled_full's own top bits to exactly
+        // levels-1 and making the `.min(levels-1)` clamp load-bearing
+        // -- without it idx would read one past the table's own end.
+        let just_below_2 = f32::from_bits(0x3FFF_FFFF); // mantissa = 0x7FFFFF
+        let want = log2_lut_generic(just_below_2, LOG2_LUT_BITS, log2_lut_table());
+        let got = log2_lut_generic_fixed(just_below_2, LOG2_LUT_BITS, log2_lut_table_q23());
+        assert!(
+            (got - want).abs() < 1e-5,
+            "just-below-2 boundary: fixed={got} float={want}"
+        );
     }
 
     #[test]
