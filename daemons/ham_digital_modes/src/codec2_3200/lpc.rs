@@ -44,6 +44,42 @@ pub fn autocorrelate(wn: &[f32]) -> Autocorr {
     r
 }
 
+/// Q8.23 for the fixed-point windowed samples `autocorrelate_fixed`
+/// below consumes -- same width `COEF_FRAC_BITS` uses elsewhere in this
+/// file, chosen for the same reason: real measured `wn[i]` peaks at
+/// ~141.8 (a real `i16` sample, max magnitude 32767, times the real
+/// measured window peak ~0.00433), needing 8 integer bits (`2^8=256 >
+/// 141.8`) with real margin, and 23 fractional bits fits the remaining
+/// budget in an `i32` with room to spare (`141.8 * 2^23 ~ 1.19e9`,
+/// comfortably under `i32::MAX ~ 2.15e9`).
+const WN_FRAC_BITS: u32 = 23;
+
+/// Fixed-point `autocorrelate`: `wn_q` (Q8.23, `i32`) in, `R[]` (Q8.23,
+/// `i64`) out -- no `f32` anywhere. Each per-term product
+/// (`wn_q[i]*wn_q[i+j]`, both up to ~1.19e9 in magnitude, so a product up
+/// to ~1.42e18) widens to `i64` transiently (the native 32x32->64
+/// multiply every target this port cares about has in hardware, the same
+/// `q_mul`/`cheb_poly_eval_fixed` shape used throughout this file), then
+/// shifts right by `WN_FRAC_BITS` immediately -- bringing each term back
+/// to the same Q8.23 format as the inputs -- before accumulating, so the
+/// running sum itself never needs more than ordinary `i64` headroom.
+/// Real, measured worst-case bound (not assumed): summing up to 320
+/// such Q8.23 terms tops out around 5.4e13 in raw Q8.23 units --
+/// `i64::MAX` is ~9.2e18, over 17 bits of real margin even at this
+/// deliberately pessimistic (every sample simultaneously at its own real
+/// measured peak) bound.
+pub fn autocorrelate_fixed(wn_q: &[i32]) -> [i64; LPC_ORD + 1] {
+    let mut r_q = [0i64; LPC_ORD + 1];
+    for (j, r_j) in r_q.iter_mut().enumerate() {
+        let mut sum: i64 = 0;
+        for i in 0..(wn_q.len() - j) {
+            sum += (wn_q[i] as i64 * wn_q[i + j] as i64) >> WN_FRAC_BITS;
+        }
+        *r_j = sum;
+    }
+    r_q
+}
+
 // ---------------------------------------------------------------------
 // White noise correction (autocorrelation regularization) for
 // Levinson-Durbin's own numerical ill-conditioning.
@@ -1153,6 +1189,53 @@ mod tests {
             "max relative R[] error vs real captured reference: {max_rel_err}"
         );
     }
+
+    /// Same cross-check as the test above, but for `autocorrelate_fixed`
+    /// -- quantizes the reference's own real captured `wn[]` to Q8.23,
+    /// runs the fixed-point accumulator, dequantizes the result, and
+    /// compares against the same real captured `R[]` reference. Looser
+    /// tolerance than the plain-`f32` version above (`1e-2` vs `1e-3`)
+    /// is expected and correct, not a weakened bar: this path introduces
+    /// two real, additional quantization steps (`wn` itself to Q8.23,
+    /// and the per-term `>> WN_FRAC_BITS` rounding-toward-zero instead of
+    /// round-to-nearest -- deliberately not `rshift_round` here, since
+    /// summing 320 systematically-biased terms would be worse than one
+    /// unbiased truncation per term averaged over many terms) that the
+    /// plain-`f32` version doesn't have.
+    #[test]
+    fn autocorrelate_fixed_matches_the_real_reference_r_within_real_quantization_noise() {
+        let wn_path = fixture!("synthetic_codec2_wn_dump.txt");
+        let r_path = fixture!("synthetic_codec2_r_dump.txt");
+        let wns = read_dump(wn_path, M_PITCH);
+        let rs = read_dump(r_path, LPC_ORD + 1);
+        assert_eq!(wns.len(), rs.len());
+        assert!(wns.len() > 150, "expected the synthetic-signal fixture corpus, got {} rows", wns.len());
+
+        let mut max_rel_err = 0.0f32;
+        let mut max_abs_wn_q = 0i32;
+        for (wn_row, r_row) in wns.iter().zip(rs.iter()) {
+            let wn_q: Vec<i32> = wn_row
+                .iter()
+                .map(|&w| f32_to_q(w, WN_FRAC_BITS))
+                .collect();
+            max_abs_wn_q = max_abs_wn_q.max(wn_q.iter().map(|&w| w.abs()).max().unwrap_or(0));
+            let r_q = autocorrelate_fixed(&wn_q);
+            for i in 0..=LPC_ORD {
+                let r_dequantized = r_q[i] as f64 / (1i64 << WN_FRAC_BITS) as f64;
+                let denom = (r_row[i] as f64).abs().max(1e-6);
+                max_rel_err = max_rel_err.max(((r_dequantized - r_row[i] as f64) / denom).abs() as f32);
+            }
+        }
+        println!("autocorrelate_fixed: max relative R[] error = {max_rel_err}, max real |wn_q| = {max_abs_wn_q} (i32::MAX={})", i32::MAX);
+        assert!(
+            (max_abs_wn_q as i64) < i32::MAX as i64,
+            "real captured wn[] exceeded Q8.23's i32 headroom -- WN_FRAC_BITS's own doc comment needs rechecking against this real data"
+        );
+        assert!(
+            max_rel_err < 1e-2,
+            "max relative R[] error vs real captured reference (fixed-point path): {max_rel_err}"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1526,7 +1609,59 @@ mod levinson_durbin_fixed_tests {
             (ak, fired)
         }
 
+        /// Real check that `autocorrelate_fixed`'s own natural Q8.23
+        /// output precision (not this module's own synthetic Q(43),
+        /// used above only to isolate the normalization question from
+        /// the accumulator question) is *also* enough, with white noise
+        /// correction, to pass the same discriminator -- the real,
+        /// decisive end-to-end check before wiring `autocorrelate_fixed`
+        /// into a real encoder.
         #[test]
+        fn r0_normalization_at_autocorrelate_fixeds_real_q23_precision_also_passes_with_white_noise_correction(
+        ) {
+            const AUTOCORR_FRAC_BITS: u32 = WN_FRAC_BITS; // 23, matching autocorrelate_fixed's real output
+            let r_path = fixture!("codec2_r_dump.txt");
+            let rs = read_dump(r_path, LPC_ORD + 1);
+            let mut n_diverged_without_clamp_disagreement = 0;
+            let mut worst = 0.0f32;
+            for r_row in &rs {
+                let mut r = [0.0f32; LPC_ORD + 1];
+                r.copy_from_slice(r_row);
+                if r[0] <= 0.0 {
+                    continue;
+                }
+                apply_white_noise_correction(&mut r);
+                let r_q23: [i64; LPC_ORD + 1] = std::array::from_fn(|j| {
+                    (r[j] as f64 * (1i64 << AUTOCORR_FRAC_BITS) as f64).round() as i64
+                });
+                let r0_q = r_q23[0];
+                let r_norm_q: [i64; LPC_ORD + 1] = std::array::from_fn(|j| {
+                    div_round_i128((r_q23[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128)
+                });
+                let (a_q23, candidate_fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
+                let ak_candidate: LpcCoeffs =
+                    std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
+                let ak_float = levinson_durbin(&r);
+                let max_err = (0..=LPC_ORD)
+                    .map(|i| (ak_float[i] - ak_candidate[i]).abs())
+                    .fold(0.0f32, f32::max);
+                if max_err > 0.05 {
+                    let float_fired = float_clamp_fired_per_iteration(&r);
+                    let clamp_disagreement =
+                        (0..=LPC_ORD).any(|i| float_fired[i] != candidate_fired[i]);
+                    if !clamp_disagreement {
+                        n_diverged_without_clamp_disagreement += 1;
+                        worst = worst.max(max_err);
+                    }
+                }
+            }
+            println!("Q23-precision R[] + white noise correction: {n_diverged_without_clamp_disagreement} unexplained divergences, worst={worst}");
+            assert_eq!(
+                n_diverged_without_clamp_disagreement, 0,
+                "Q8.23-precision R[] (matching autocorrelate_fixed's real output) diverged from float by more than 0.05 with no clamp disagreement on {n_diverged_without_clamp_disagreement} frame(s) (worst {worst}) -- autocorrelate_fixed's own WN_FRAC_BITS may need to be wider than 23"
+            );
+        }
+
         /// **Resolved by `apply_white_noise_correction`, not just worked
         /// around.** This candidate's own earlier version (no
         /// correction) failed this exact test on frame 273 -- see this
@@ -1546,6 +1681,7 @@ mod levinson_durbin_fixed_tests {
         /// (Levinson-Durbin's own division, and this normalization
         /// candidate's rounding-sensitivity) found by two separate
         /// investigations.
+        #[test]
         fn r0_normalization_fixed_point_candidate_diverges_from_float_only_at_measured_clamp_disagreement_frames(
         ) {
             let r_path = fixture!("codec2_r_dump.txt");
