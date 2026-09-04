@@ -283,6 +283,25 @@ wasn't pursued further: `levinson_durbin_fixed` isn't wired into the real encode
 nothing running to speed up today. Recorded here so it isn't re-derived from scratch if/when a real
 fixed-point `Encoder` gets built.
 
+**Update, 2026-09-05: `lpc::apply_white_noise_correction` now exists and changes the numbers here,
+but doesn't obsolete this design.** Real, measured effect (`FIXED_POINT_ENCODER_IMPLEMENTATION_
+PUNCH_LIST.md` has the full derivation): the worst-case `1/e` amplification this whole document's own
+frame-273 finding is built on drops from ~3581x to ~269x, a >13x improvement. Two real follow-up
+questions, both checked directly rather than assumed:
+
+- **Does this let Q8.40 narrow toward `i32`?** Only modestly. The bits-needed-vs-amplification
+  relationship is logarithmic (`log2` of the amplification factor, not the factor itself), so a
+  13.3x reduction only recovers `log2(13.3) ~ 3.7` bits of real headroom -- nowhere near the ~17-bit
+  gap between Q8.40 and the Q8.23 format this document's own "Ground truth" section already measured
+  insufficient. Not sufficient alone to reach `i32`; would need an alpha large enough to be
+  perceptually questionable to close a gap that size.
+- **Does this obsolete the branch design above?** No -- complementary, and more attractive with the
+  correction in place, not less: it reduces both how often a real frame would cross whatever small-`e`
+  threshold triggers the wide path, and how extreme the wide path itself needs to be for the frames
+  that still do, but doesn't remove the need for it on the remaining, now-rarer, genuinely
+  ill-conditioned frames. Still not built, for the same reason as before (`levinson_durbin_fixed`
+  still isn't wired into a real encoder as of this update).
+
 ## Not attempted this pass
 
 Part 3's own real on-device cycle measurement (this pass
