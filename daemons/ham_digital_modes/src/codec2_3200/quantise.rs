@@ -512,6 +512,7 @@ mod tests {
             }
             n_checked += 1;
         }
+        println!("encode_lsps_delta_scalar_fixed: {n_mismatched}/{n_checked} mismatches ({} rows in fixture)", lsp_rows.len());
         assert!(n_checked > 150, "only checked {n_checked} real frames");
         assert_eq!(
             n_mismatched, 0,
