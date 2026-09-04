@@ -9,6 +9,9 @@ class ResUsers(models.Model):
     _inherit = "res.users"
 
     def _execute_gdpr_erasure(self):
+        # [@ANCHOR: compliance_execute_gdpr_erasure]
+
+        # # Verified by [@ANCHOR: COMM_test_execute_gdpr_erasure_deactivates_the_account] [@ANCHOR: COMM_test_execute_gdpr_erasure_uses_the_service_account_not_the_caller]
         """
         Base architectural contract for GDPR Erasure.
         Modules that manage user-generated content (e.g., user_websites, blog)
@@ -29,30 +32,31 @@ class ResUsers(models.Model):
         the one universal "the account is gone" bit every erasure must set.
         """
         self.ensure_one()
-        # Real verification found this needs care: zero_sudo's own data-file
-        # comment on group_gdpr_service claims it's scoped to user_websites'
-        # "own models" only, but that comment is stale -- user_websites'
-        # actual ir.model.access.csv grants this group real read/write on
-        # res.users directly (access_res_users_gdpr_svc). Tried
-        # zero_sudo.user_lockout_service_internal first instead (its ACL
-        # grant looked more purpose-built, from its own doc comment), but
-        # that grant lives in hams_base/security/ir.model.access.csv, and
-        # hams_base is not a dependency of user_websites or compliance --
-        # reproducing the exact cross-module gap this method exists to fix
-        # (confirmed by a real AccessError when compliance is exercised via
-        # user_websites' own standalone test suite). gdpr_service_internal's
-        # grant lives in user_websites itself, which every realistic caller
-        # of GDPR erasure already depends on (ham_onboarding and every other
-        # domain module with erasure logic depends on user_websites), so
-        # this is the account that's actually available in every real
-        # calling context, not just the one this bug happened to be found
-        # in.
+        # Real verification found this needs care, and a real gap this
+        # session's own function-test-anchor sweep found and closed
+        # (FUNCTION_TEST_ANCHOR_SWEEP.md): this method is compliance's own
+        # base contract, but until now the res.users write grant for
+        # zero_sudo.group_gdpr_service only existed in user_websites' own
+        # ir.model.access.csv (access_res_users_gdpr_svc) -- meaning
+        # compliance, exercised standalone (no user_websites installed,
+        # e.g. this module's own real test suite), got a real AccessError
+        # the moment this method actually ran. compliance now grants its
+        # own copy (access_res_users_gdpr_svc_compliance,
+        # compliance/security/ir.model.access.csv) -- the module that owns
+        # this write is the one that should grant it, not rely on a
+        # downstream module happening to also be installed. Odoo allows
+        # multiple ir.model.access rows for the same model+group (the
+        # effective permission is the OR across all of them), so
+        # user_websites' own grant stays too, redundant but harmless.
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "zero_sudo.gdpr_service_internal"
         )
         self.with_user(svc_uid).write({"active": False})
 
     def _get_gdpr_export_data(self):
+        # [@ANCHOR: compliance_get_gdpr_export_data]
+
+        # # Verified by [@ANCHOR: COMM_test_get_gdpr_export_data_always_returns_a_dict]
         """
         Base architectural contract for GDPR Export.
         Modules should override this to return user data for export.
@@ -60,6 +64,9 @@ class ResUsers(models.Model):
         return {}
 
     def _get_gdpr_streamed_keys(self):
+        # [@ANCHOR: compliance_get_gdpr_streamed_keys]
+
+        # # Verified by [@ANCHOR: COMM_test_get_gdpr_streamed_keys_always_returns_a_dict]
         """
         Base architectural contract for GDPR Export streaming.
         Modules with large/unbounded per-user datasets (QSO logs, blog

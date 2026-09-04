@@ -1,4 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_res_users_gdpr_svc_compliance,res.users gdpr svc (compliance base contract),base.model_res_users,zero_sudo.group_gdpr_service,1,1,0,0
 access_compliance_website,compliance.website,website.model_website,group_compliance_service,1,1,0,0
 access_compliance_website_page,compliance.website.page,website.model_website_page,group_compliance_service,1,1,1,0
 access_compliance_ir_ui_view,compliance.ir.ui.view,base.model_ir_ui_view,group_compliance_service,1,1,1,0
