@@ -13,12 +13,14 @@
 //! fixed_from_integer_r`, `lpc::lpc_energy_fixed`, `lpc::apply_bw_gamma_
 //! fixed`, `lpc::lpc_to_lsp_from_integer_ak`), plus `voicing::is_voiced_
 //! fixed`, are genuinely fixed-point today -- no `f32` touches the LPC
-//! analysis path anywhere in this struct, right up to the LSP
-//! frequencies themselves (still `f32` only because `acos()` has no
-//! cheap fixed-point equivalent this port has built, and because
-//! `interp.rs`/`quantise.rs` downstream aren't migrated yet -- the
-//! established "integer core, float boundary" pattern, now reached one
-//! stage later than before). `nlp::nlp` (the pitch estimator) still
+//! analysis path anywhere in this struct, including the LSP frequencies
+//! themselves now (`lpc::lpc_to_lsp_from_integer_ak`'s own `acos()` call
+//! is a fixed-point LUT, `lpc::acos_lut_fixed`, as of this pass -- the
+//! LSP frequencies stay `f32`-typed only because `interp.rs`/
+//! `quantise.rs` downstream aren't migrated yet, not because the
+//! conversion itself still needs a genuine float transcendental call --
+//! the established "integer core, float boundary" pattern). `nlp::nlp`
+//! (the pitch estimator) still
 //! converts `sn` (this struct's own real `i16`-native sample history --
 //! no `f32` storage here, unlike `floating_reference::Encoder`) to `f32`
 //! on the fly, since its own fixed-point FFT hasn't been built yet (a
@@ -131,11 +133,11 @@ impl EncoderFixed {
         // bandwidth-expansion step below mutates it in place.
         let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
 
-        // bw_gamma + lpc_to_lsp: now fixed-point too. lsp itself stays
-        // f32 (interp.rs/quantise.rs aren't migrated, and acos() has no
-        // cheap fixed-point equivalent this port has built) -- the
-        // established "integer core, float boundary" pattern, now
-        // reached one stage later than before.
+        // bw_gamma + lpc_to_lsp: now fixed-point too, including the
+        // acos() call itself (lpc::acos_lut_fixed). lsp stays f32-typed
+        // only because interp.rs/quantise.rs downstream aren't migrated
+        // yet -- the established "integer core, float boundary"
+        // pattern, now reached one stage later than before.
         lpc::apply_bw_gamma_fixed(&mut a_q23);
         let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23).unwrap_or_else(fallback_lsp);
 

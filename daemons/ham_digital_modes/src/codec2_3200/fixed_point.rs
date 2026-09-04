@@ -215,7 +215,9 @@ fn exp2_lut_table_frac_q23() -> &'static [i32; LOG2_LUT_SIZE] {
 /// frac_bits` -- a left shift when non-negative, otherwise a right
 /// shift with an explicit round-half-up bias term (`+ 2^(shift-1)`
 /// before shifting), never a genuine floating-point operation.
-fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64 {
+/// `pub(crate)`: also reused by `lpc.rs`'s `acos_lut_fixed`, the same
+/// general "quantize an arbitrary non-IEEE754-structured value" need.
+pub(crate) fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64 {
     if y == 0.0 {
         return 0;
     }

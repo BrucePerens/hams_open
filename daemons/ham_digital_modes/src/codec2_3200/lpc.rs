@@ -19,7 +19,9 @@
 //! a stabilization/smoothing step that would change the algorithm the
 //! plan doc's own two open options separately identified).
 
+use super::fixed_point;
 use super::LPC_ORD;
+use std::sync::OnceLock;
 
 pub type Autocorr = [f32; LPC_ORD + 1];
 pub type LpcCoeffs = [f32; LPC_ORD + 1];
@@ -765,14 +767,102 @@ pub fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
     Some(freq)
 }
 
+/// `acos` LUT resolution: 12 bits, chosen (not assumed) by measuring
+/// real captured roots from `codec2_ak_dump.txt` against several
+/// candidate widths -- the real worst-case root this corpus produces
+/// sits at `1 - |root| ~ 7.8e-4` (only one root in the whole 362-frame
+/// corpus gets that close to `+-1`, where `acos`'s own derivative blows
+/// up), and at that real worst case: 6 bits gives ~56Hz error, 8 bits
+/// ~28Hz, 10 bits ~5.3Hz, 12 bits ~0.09Hz -- against the real 25Hz LSP
+/// quantizer step.
+///
+/// A uniform-linear-interpolation table is genuinely *not* free near
+/// `acos`'s own singularity at `x = +-1` -- pushed past what this real
+/// corpus happens to produce, a synthetic dense sweep across the full
+/// `[-1, 1]` domain (see `acos_lut_fixed_matches_plain_float_acos_on_a_
+/// dense_sweep`'s own test) found the worst-case error anywhere in the
+/// domain is larger than the corpus-measured `0.09Hz` figure above --
+/// it peaks around `1 - |x| ~ 5e-5..1e-4` at **~7Hz**, then actually
+/// *shrinks* again for `x` even closer to `+-1` (the table's own last
+/// few nodes crowd close together in `acos`-value too, bounding the
+/// interpolation error even as the derivative keeps growing). `~7Hz`
+/// against the real 25Hz quantizer step is still comfortably under the
+/// bar (>3.5x margin) -- real, honest headroom across the *entire*
+/// domain, not just the specific values this one corpus happens to
+/// produce, which is why 12 bits (not fewer) was kept even though the
+/// corpus-only number alone would have looked like more margin than
+/// this function actually has everywhere.
+const ACOS_LUT_BITS: u32 = 12;
+const ACOS_LUT_SIZE: usize = (1 << ACOS_LUT_BITS) + 1;
+
+/// `acos(i/levels)` for `i` in `0..=levels`, quantized to the same Q23
+/// this module already uses for LPC coefficients (`COEF_FRAC_BITS`) --
+/// built once, table construction itself isn't the hot path so a plain
+/// float `.acos()`/round is fine here, unlike `acos_lut_fixed` below,
+/// which runs once per LSP root, every frame.
+fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
+    static TABLE: OnceLock<[i32; ACOS_LUT_SIZE]> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let levels = 1u32 << ACOS_LUT_BITS;
+        std::array::from_fn(|i| f32_to_q((i as f32 / levels as f32).acos(), COEF_FRAC_BITS))
+    })
+}
+
+/// `pi` in the same Q23 format, computed once via the exact bit-
+/// extraction conversion (`fixed_point::f32_to_q_exact_round`, no float
+/// multiply) rather than an independently-typed literal -- avoiding
+/// the exact class of table/reality mismatch `BW_GAMMA_Q23` hit
+/// earlier this pass (an independently-computed value disagreeing with
+/// Rust's own real output at a rounding tie).
+fn pi_q23() -> i64 {
+    static PI_Q23: OnceLock<i64> = OnceLock::new();
+    *PI_Q23.get_or_init(|| fixed_point::f32_to_q_exact_round(std::f32::consts::PI, COEF_FRAC_BITS))
+}
+
+/// Fixed-point `acos`: genuinely integer end to end, the same LUT shape
+/// `fixed_point.rs`'s `log2_lut`/`exp2_lut` already established.
+/// `x` (a Chebyshev root in `[-1, 1]`) isn't IEEE754-structured the way
+/// `log2_lut`'s own input is, so -- like `exp2_lut`'s `y` -- it's
+/// quantized once via `f32_to_q_exact_round` (exact bit extraction, no
+/// float multiply) rather than a mantissa-bits shortcut. Domain
+/// reduction (`acos(-x) == pi - acos(x)`) keeps the table itself over
+/// `[0, 1]` only; the final `pi - interp` combination (when `x < 0`)
+/// runs as a plain integer subtraction against `pi_q23()` above, so the
+/// *only* `f32` operations in this whole function are the input
+/// `.abs()`/sign test (a bit-level operation in spirit, not a real
+/// float op) and the final `result_q23 as f32 / 2^23` boundary
+/// conversion.
+fn acos_lut_fixed(x: f32) -> f32 {
+    debug_assert!(
+        (-1.0..=1.0).contains(&x),
+        "acos_lut_fixed: x must be in [-1, 1], got {x}"
+    );
+    let ax = x.abs();
+    let levels = 1i64 << ACOS_LUT_BITS;
+    let ax_q23 = fixed_point::f32_to_q_exact_round(ax, COEF_FRAC_BITS).clamp(0, 1i64 << COEF_FRAC_BITS);
+    let scaled_full = (ax_q23 as u64) * (levels as u64);
+    let idx = ((scaled_full >> COEF_FRAC_BITS) as usize).min(levels as usize - 1);
+    let frac_q23 = (scaled_full - ((idx as u64) << COEF_FRAC_BITS)) as i64;
+    let table = acos_lut_table_q23();
+    let t0 = table[idx] as i64;
+    let t1 = table[idx + 1] as i64;
+    let interp_q23 = t0 + ((frac_q23 * (t1 - t0)) >> COEF_FRAC_BITS);
+    let result_q23 = if x >= 0.0 {
+        interp_q23
+    } else {
+        pi_q23() - interp_q23
+    };
+    (result_q23 as f32) / (1i64 << COEF_FRAC_BITS) as f32
+}
+
 /// Fixed-point `lpc_to_lsp`: `a_q23` (Q8.23, `i64`, e.g. straight from
-/// `apply_bw_gamma_fixed`) in -- no `f32` anywhere before the final
-/// `.acos()` (LSP frequencies themselves stay `f32`, matching this
-/// port's established "integer core, float boundary" pattern;
-/// `interp.rs`/`quantise.rs` aren't migrated yet, so there's nothing
-/// further along the pipeline to hand a fixed-point angle to, and
-/// `acos()` itself has no cheap fixed-point equivalent this port has
-/// built).
+/// `apply_bw_gamma_fixed`) in -- genuinely fixed-point all the way
+/// through the LSP frequencies themselves now, via `acos_lut_fixed`
+/// above, not just up to the final `.acos()` (`interp.rs`/`quantise.rs`
+/// downstream still take these as `f32`, matching this port's
+/// established "integer core, float boundary" pattern -- there's
+/// nothing further along the pipeline yet to hand a fixed-point angle
+/// to, but the conversion itself is no longer the boundary).
 pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LPC_ORD]> {
     let (p, q) = build_p_q_fixed(a_q23);
     let mut search_from = 1.0f32;
@@ -780,7 +870,7 @@ pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LP
     for (j, f) in freq.iter_mut().enumerate() {
         let poly = if j & 1 == 1 { &q } else { &p };
         let root = find_next_root_from_q23(poly, search_from)?;
-        *f = root.acos();
+        *f = acos_lut_fixed(root);
         search_from = root;
     }
     Some(freq)
@@ -1144,6 +1234,72 @@ mod tests {
             max_abs_err < 1e-3,
             "max LSP root error vs real captured reference (fixed-point path): {max_abs_err} rad -- expected real margin under 1e-3 (measured ~3.3e-4 when this test was written)"
         );
+    }
+
+    const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
+
+    #[test]
+    fn acos_lut_fixed_matches_plain_float_acos_on_a_dense_sweep() {
+        // Direct comparison across the whole domain, not just the
+        // corpus's own real root values -- the corpus test above
+        // confirms this doesn't regress the end-to-end LSP error, but
+        // (matching log2_lut/exp2_lut's own methodology) only a dense,
+        // domain-wide sweep catches a sign or boundary bug that the
+        // real corpus's own root distribution happens not to exercise.
+        //
+        // Acceptance bar is in Hz (the real quantizer's own unit), not
+        // a flat rad threshold: a uniform table's error genuinely grows
+        // approaching `acos`'s singularity at `x = +-1` (an initial
+        // rad-based threshold here, picked from the corpus-specific
+        // worst root, failed at synthetic `x` values closer to the pole
+        // than any real captured root -- investigated, not just
+        // loosened: see `ACOS_LUT_BITS`'s own doc comment for the real
+        // full-domain worst case, ~7Hz, found this same way).
+        let mut max_err_hz = 0.0f32;
+        let mut x = -1.0f32;
+        while x <= 1.0 {
+            let want = x.acos();
+            let got = acos_lut_fixed(x);
+            max_err_hz = max_err_hz.max((got - want).abs() * HZ_PER_RAD);
+            x += 0.0001; // 20001 points across [-1, 1]
+        }
+        assert!(
+            max_err_hz < 10.0,
+            "acos_lut_fixed diverged from plain float acos by {max_err_hz} Hz across a dense sweep -- expected real margin under 10Hz (measured ~7Hz peak, near x=+-1, when this test was written), well under the real 25Hz LSP quantizer step"
+        );
+    }
+
+    #[test]
+    fn acos_lut_fixed_handles_its_own_domain_boundaries_correctly() {
+        // Exact endpoints: acos(1) == 0, acos(-1) == pi -- idx == levels
+        // (the table's own last valid entry) at x=1, and the sign
+        // branch (pi - interp) at x=-1.
+        assert!((acos_lut_fixed(1.0) - 0.0).abs() < 1e-5, "acos_lut_fixed(1.0) should be ~0");
+        assert!(
+            (acos_lut_fixed(-1.0) - std::f32::consts::PI).abs() < 1e-5,
+            "acos_lut_fixed(-1.0) should be ~pi"
+        );
+        // x == 0.0: real ax_q23 == 0, idx == 0, no interpolation blend.
+        assert!(
+            (acos_lut_fixed(0.0) - std::f32::consts::FRAC_PI_2).abs() < 1e-5,
+            "acos_lut_fixed(0.0) should be ~pi/2"
+        );
+        // Both the real corpus's own worst-case root distance from the
+        // pole (1 - |root| ~ 7.8e-4) and synthetic values closer still
+        // (down to the real full-domain worst region this LUT ever
+        // sees, 1 - |x| ~ 5e-5..1e-4, see `ACOS_LUT_BITS`'s own doc
+        // comment) -- same Hz-based bar as the dense sweep above, since
+        // a flat rad threshold isn't the right metric this close to the
+        // singularity.
+        for x in [0.9995f32, -0.9995, 0.99992, -0.99992, 0.999925, -0.999925] {
+            let want = x.acos();
+            let got = acos_lut_fixed(x);
+            let err_hz = (got - want).abs() * HZ_PER_RAD;
+            assert!(
+                err_hz < 10.0,
+                "acos_lut_fixed({x}) = {got}, want ~{want} ({err_hz} Hz off, expected under 10Hz)"
+            );
+        }
     }
 
     #[test]
@@ -2122,3 +2278,5 @@ mod levinson_durbin_fixed_tests {
         }
     }
 }
+
+
