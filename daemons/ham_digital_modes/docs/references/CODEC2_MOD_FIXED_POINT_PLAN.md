@@ -560,6 +560,36 @@ scratchpad, not committed to any repository -- reproducible directly from this s
 description (32-bit NCO phase representation, 1024-entry Q15 quarter-wave LUT, linear interpolation,
 quadrant symmetry for cos) for whoever picks this up next.
 
+### Correction: the synthetic constant-Wo test above understated the real error by ~9x, checked
+### against real captured pitch trajectories, 2026-09-04
+
+The "not degraded" claim above was checked against real data, not left resting on the synthetic
+constant-`Wo` test. Extended the instrumented harness (`INSTR_DUMP_WO`) to capture every real
+`(Wo, L, voiced)` sub-frame actually produced decoding the real speech corpus (5078 sub-frames: 3516
+voiced, 1562 unvoiced), then re-ran the identical `fixed_sincos` primitive against that real trajectory
+-- accumulating `ex_phase[0]` exactly as `phase_synth_zero_order()` does (every sub-frame,
+voiced or not, matching the real code), and checking sin/cos at harmonics 1 through `L` on voiced
+sub-frames only (real code notes phase isn't perceptually needed for unvoiced sound, and the unvoiced
+branch's PRNG-derived phase isn't reproducible bit-for-bit by this standalone replay).
+
+**Real result: max absolute error 3.47x10^-4, RMS 5.18x10^-5, across 145,576 real checks -- about 9x
+worse worst-case than the synthetic sweep's 3.73x10^-5.** Traced, not left unexplained: the worst case
+was `Wo=0.0393` (a long pitch period, near `P_MAX`) at harmonic `m=79` (near `MAX_AMP=80`) -- exactly
+where the mechanism this design already flagged as needing scrutiny (`phase_m = phase_acc * m`) is
+expected to matter most: any fixed-point quantization noise already present in `phase_acc` itself gets
+multiplied by `m` before the LUT lookup, so error at high harmonics of a low-`Wo` (many-harmonic)
+voiced frame scales with `m`, not with the LUT's own flat per-lookup floor the synthetic test happened
+to sit at. The synthetic test's single constant `Wo` (pitch period 45) never exercised the
+low-`Wo`/high-`L` combination real speech's own low-pitched voiced frames actually produce.
+
+**Still small in absolute terms** (3.47x10^-4 is well below, e.g., a typical 8-bit-or-coarser
+quantizer's own step size), but this is a real, measured correction to the earlier claim, not a
+reassuring restatement of it: **"not degraded by the per-harmonic multiplication" was wrong** for the
+real range of `(Wo, m)` combinations real speech produces, even though the base LUT/wraparound design
+itself remains sound and the absolute error stays small. Whoever wires this primitive in for real
+should re-check the worst-case error at this stage's own actual chosen LUT resolution and Q-format,
+not assume the synthetic-sweep numbers above characterize the real worst case.
+
 ## What this proposal does not attempt
 
 No fixed-point code was written in this pass -- per Bruce's own framing ("make a proposal"), this is
