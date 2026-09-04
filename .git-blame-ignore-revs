@@ -1,0 +1,9 @@
+# Commits listed here are skipped by `git blame --ignore-revs-file .git-blame-ignore-revs`
+# (or permanently via `git config blame.ignoreRevsFile .git-blame-ignore-revs`, a local
+# config setting each developer sets for themselves -- not committed here).
+#
+# 482be026c5acc1dbe223bfc3299aaddf1c818f1f -- cargo fmt: adopt rustfmt project-wide
+# (formatting only, no logic change), 2026-09-04. Every line this commit touched was
+# reformatted, not authored, by that commit -- real prior authorship for those lines is
+# in the commit immediately before it.
+482be026c5acc1dbe223bfc3299aaddf1c818f1f
