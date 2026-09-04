@@ -41,20 +41,40 @@ fn read_wav_mono_i16(path: &Path) -> Vec<f32> {
     // chunks -- ft8sim's own output matches this exactly (verified: the
     // 'data' chunk id appears at offset 36 in every file this test
     // generates).
-    assert_eq!(&bytes[36..40], b"data", "expected a standard 44-byte-header PCM WAV from ft8sim");
+    assert_eq!(
+        &bytes[36..40],
+        b"data",
+        "expected a standard 44-byte-header PCM WAV from ft8sim"
+    );
     let data = &bytes[44..];
     data.chunks_exact(2)
         .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
         .collect()
 }
 
-fn generate_and_decode(message: &str, snr_db: i32, work_dir: &Path) -> (Vec<(String, i32, f32)>, Option<String>) {
+fn generate_and_decode(
+    message: &str,
+    snr_db: i32,
+    work_dir: &Path,
+) -> (Vec<(String, i32, f32)>, Option<String>) {
     let out = Command::new("ft8sim")
-        .args([message, "1500.0", "0.0", "0.1", "1.0", "1", &snr_db.to_string()])
+        .args([
+            message,
+            "1500.0",
+            "0.0",
+            "0.1",
+            "1.0",
+            "1",
+            &snr_db.to_string(),
+        ])
         .current_dir(work_dir)
         .output()
         .expect("ft8sim must run");
-    assert!(out.status.success(), "ft8sim failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "ft8sim failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let wav_path = std::fs::read_dir(work_dir)
         .unwrap()
@@ -119,7 +139,9 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
     // operating range extends to roughly -20/-21 dB.
     for snr in [-5, -10, -15, -18, -20, -22] {
         let (ours, reference) = generate_and_decode(message, snr, &work_dir);
-        let ours_decoded = ours.iter().any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ"));
+        let ours_decoded = ours
+            .iter()
+            .any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ"));
         let reference_decoded = reference.is_some();
         results.push((snr, ours_decoded, reference_decoded));
 
@@ -172,7 +194,11 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
         .current_dir(&work_dir)
         .output()
         .expect("ft8sim must run");
-    assert!(out.status.success(), "ft8sim failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "ft8sim failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let wav_12k = std::fs::read_dir(&work_dir)
         .unwrap()
@@ -188,10 +214,15 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
         .arg(&wav_48k)
         .output()
         .expect("sox must run");
-    assert!(sox_out.status.success(), "sox resample failed: {}", String::from_utf8_lossy(&sox_out.stderr));
+    assert!(
+        sox_out.status.success(),
+        "sox resample failed: {}",
+        String::from_utf8_lossy(&sox_out.stderr)
+    );
 
     let samples_48k = read_wav_mono_i16(&wav_48k);
-    let mut decoder = Ft8Decoder::new(48000, 200.0, 3000.0).expect("decoder must initialize at 48000 Hz");
+    let mut decoder =
+        Ft8Decoder::new(48000, 200.0, 3000.0).expect("decoder must initialize at 48000 Hz");
     decoder.feed(&samples_48k);
     let ours = decoder.decode();
 
@@ -230,7 +261,11 @@ fn encode_message_matches_the_real_ft8sim_reference_tone_sequence() {
         .current_dir(&work_dir)
         .output()
         .expect("ft8sim must run");
-    assert!(out.status.success(), "ft8sim failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "ft8sim failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let mut lines = stdout.lines();
@@ -239,12 +274,22 @@ fn encode_message_matches_the_real_ft8sim_reference_tone_sequence() {
         .and_then(|_| lines.next())
         .map(|l| l.trim().to_string())
         .expect("ft8sim must print a 'Channel symbols:' line followed by the tone digit string");
-    assert_eq!(reference_tones.len(), 79, "sanity check: FT8_NN is 79 symbols");
+    assert_eq!(
+        reference_tones.len(),
+        79,
+        "sanity check: FT8_NN is 79 symbols"
+    );
 
     let tones = encode_message(message).expect("a valid standard-format message must encode");
-    let ours: String = tones.iter().map(|t| char::from_digit(*t as u32, 10).unwrap()).collect();
+    let ours: String = tones
+        .iter()
+        .map(|t| char::from_digit(*t as u32, 10).unwrap())
+        .collect();
 
-    assert_eq!(ours, reference_tones, "encode_message()'s tone sequence must match ft8sim's own reference output exactly");
+    assert_eq!(
+        ours, reference_tones,
+        "encode_message()'s tone sequence must match ft8sim's own reference output exactly"
+    );
 
     let _ = std::fs::remove_dir_all(&work_dir);
 }

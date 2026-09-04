@@ -48,8 +48,10 @@
 //! sync and report a message that ISN'T one of these nine known-real
 //! ones.
 
-use ham_digital_modes::wspr_sync::{required_window_samples, sync_search_and_decode_message, MIN_SYNC_SCORE};
 use ham_digital_modes::wspr_decode::MIN_ACCEPTABLE_METRIC;
+use ham_digital_modes::wspr_sync::{
+    required_window_samples, sync_search_and_decode_message, MIN_SYNC_SCORE,
+};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -82,7 +84,11 @@ fn read_wav_mono_i16(path: &Path) -> Vec<i16> {
     let mut file = std::fs::File::open(path).expect("wav fixture must exist");
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes).unwrap();
-    assert_eq!(&bytes[36..40], b"data", "expected a standard 44-byte-header PCM WAV");
+    assert_eq!(
+        &bytes[36..40],
+        b"data",
+        "expected a standard 44-byte-header PCM WAV"
+    );
     bytes[44..]
         .chunks_exact(2)
         .map(|c| i16::from_le_bytes([c[0], c[1]]))
@@ -102,7 +108,9 @@ fn decodes_a_real_off_air_capture_correctly_or_stays_silent_never_wrong() {
 
     let sample_rate = 12000u32;
     let samples = read_wav_mono_i16(&path);
-    let max_start_sample = samples.len().saturating_sub(required_window_samples(sample_rate));
+    let max_start_sample = samples
+        .len()
+        .saturating_sub(required_window_samples(sample_rate));
 
     let result = sync_search_and_decode_message(
         &samples,
@@ -133,7 +141,11 @@ fn decodes_a_real_off_air_capture_correctly_or_stays_silent_never_wrong() {
             eprintln!(
                 "real off-air capture: decoded {callsign} {grid} {power} at base_hz={base_hz:.1} \
                  (a real, known-correct message from this capture{}).",
-                if is_strongest { ", the strongest of the 9" } else { "" }
+                if is_strongest {
+                    ", the strongest of the 9"
+                } else {
+                    ""
+                }
             );
         }
         Some(Err(e)) => {

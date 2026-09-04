@@ -48,7 +48,11 @@ impl<'a> BitWriter<'a> {
         // right-shift can't introduce bits beyond that bound. `field`
         // itself is never modified; only `remaining` (which bits, from
         // the top, are still unsent) changes.
-        let field = if width > 1 { binary_to_gray(field) } else { field };
+        let field = if width > 1 {
+            binary_to_gray(field)
+        } else {
+            field
+        };
         let mut remaining = width;
         while remaining != 0 {
             let bits_left = 8 - (self.bit_index as u32 & 7);
@@ -80,7 +84,11 @@ impl<'a> BitReader<'a> {
         while remaining != 0 {
             let bits_left = 8 - (self.bit_index as u32 & 7);
             let slice = remaining.min(bits_left);
-            let mask = if slice == 8 { 0xFFu32 } else { (1u32 << slice) - 1 };
+            let mask = if slice == 8 {
+                0xFFu32
+            } else {
+                (1u32 << slice) - 1
+            };
             let byte = self.bits[self.bit_index >> 3] as u32;
             field |= ((byte >> (bits_left - slice)) & mask) << (remaining - slice);
             self.bit_index += slice as usize;
@@ -121,7 +129,11 @@ pub fn pack_frame(fields: &FrameFields, wo_bits: u32, e_bits: u32) -> [u8; super
 }
 
 /// Inverse of `pack_frame`.
-pub fn unpack_frame(bytes: &[u8; super::BYTES_PER_FRAME], wo_bits: u32, e_bits: u32) -> FrameFields {
+pub fn unpack_frame(
+    bytes: &[u8; super::BYTES_PER_FRAME],
+    wo_bits: u32,
+    e_bits: u32,
+) -> FrameFields {
     let mut r = BitReader::new(bytes);
     let voiced0 = r.read(1) != 0;
     let voiced1 = r.read(1) != 0;
@@ -131,7 +143,13 @@ pub fn unpack_frame(bytes: &[u8; super::BYTES_PER_FRAME], wo_bits: u32, e_bits: 
     for idx in lsp_indexes.iter_mut() {
         *idx = r.read(5);
     }
-    FrameFields { voiced0, voiced1, wo_index, e_index, lsp_indexes }
+    FrameFields {
+        voiced0,
+        voiced1,
+        wo_index,
+        e_index,
+        lsp_indexes,
+    }
 }
 
 #[cfg(test)]
@@ -140,7 +158,11 @@ mod tests {
 
     macro_rules! fixture {
         ($name:literal) => {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/",
+                $name
+            )
         };
     }
 
@@ -155,14 +177,33 @@ mod tests {
     fn adjacent_gray_codes_differ_by_exactly_one_bit() {
         for x in 0..1023u32 {
             let diff = binary_to_gray(x) ^ binary_to_gray(x + 1);
-            assert_eq!(diff.count_ones(), 1, "x={x} -> x+1={} differ by {} bits", x + 1, diff.count_ones());
+            assert_eq!(
+                diff.count_ones(),
+                1,
+                "x={x} -> x+1={} differ by {} bits",
+                x + 1,
+                diff.count_ones()
+            );
         }
     }
 
     #[test]
     fn bit_writer_reader_round_trip_arbitrary_field_widths() {
         let mut bytes = [0u8; 8];
-        let fields: [(u32, u32); 12] = [(1, 1), (0, 1), (73, 7), (19, 5), (5, 5), (31, 5), (0, 5), (17, 5), (9, 5), (22, 5), (13, 5), (11, 5)];
+        let fields: [(u32, u32); 12] = [
+            (1, 1),
+            (0, 1),
+            (73, 7),
+            (19, 5),
+            (5, 5),
+            (31, 5),
+            (0, 5),
+            (17, 5),
+            (9, 5),
+            (22, 5),
+            (13, 5),
+            (11, 5),
+        ];
         {
             let mut w = BitWriter::new(&mut bytes);
             for &(v, width) in &fields {
@@ -190,8 +231,16 @@ mod tests {
         let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
         let mut n_checked = 0;
         for line in text.lines() {
-            let v: Vec<i64> = line.split_whitespace().map(|s| s.parse().unwrap()).collect();
-            assert_eq!(v.len(), 4 + LPC_ORD + super::super::BYTES_PER_FRAME, "line has {} fields: {line}", v.len());
+            let v: Vec<i64> = line
+                .split_whitespace()
+                .map(|s| s.parse().unwrap())
+                .collect();
+            assert_eq!(
+                v.len(),
+                4 + LPC_ORD + super::super::BYTES_PER_FRAME,
+                "line has {} fields: {line}",
+                v.len()
+            );
             let fields = FrameFields {
                 voiced0: v[0] != 0,
                 voiced1: v[1] != 0,
@@ -199,9 +248,14 @@ mod tests {
                 e_index: v[3] as u32,
                 lsp_indexes: std::array::from_fn(|i| v[4 + i] as u32),
             };
-            let expected: [u8; super::super::BYTES_PER_FRAME] = std::array::from_fn(|i| v[4 + LPC_ORD + i] as u8);
+            let expected: [u8; super::super::BYTES_PER_FRAME] =
+                std::array::from_fn(|i| v[4 + LPC_ORD + i] as u8);
             let got = pack_frame(&fields, super::super::WO_BITS, super::super::E_BITS);
-            assert_eq!(got, expected, "real captured frame's fields: voiced=({},{}) wo_idx={} e_idx={} lsp={:?}", fields.voiced0, fields.voiced1, fields.wo_index, fields.e_index, fields.lsp_indexes);
+            assert_eq!(
+                got, expected,
+                "real captured frame's fields: voiced=({},{}) wo_idx={} e_idx={} lsp={:?}",
+                fields.voiced0, fields.voiced1, fields.wo_index, fields.e_index, fields.lsp_indexes
+            );
 
             let back = unpack_frame(&got, super::super::WO_BITS, super::super::E_BITS);
             assert_eq!(back.voiced0, fields.voiced0);
@@ -211,6 +265,9 @@ mod tests {
             assert_eq!(back.lsp_indexes, fields.lsp_indexes);
             n_checked += 1;
         }
-        assert!(n_checked > 150, "expected the real captured fixture corpus, got {n_checked} rows");
+        assert!(
+            n_checked > 150,
+            "expected the real captured fixture corpus, got {n_checked} rows"
+        );
     }
 }

@@ -41,7 +41,8 @@ pub fn decode_wo(index: u32) -> f32 {
 /// (zero index mismatches against a plain-float reference on 2539 real
 /// frames).
 pub fn encode_energy(e_linear: f32) -> u32 {
-    let e_db = 10.0 * (super::fixed_point::log2_lut(e_linear.max(1e-12)) / std::f32::consts::LOG2_10);
+    let e_db =
+        10.0 * (super::fixed_point::log2_lut(e_linear.max(1e-12)) / std::f32::consts::LOG2_10);
     quantize_linear(e_db, E_MIN_DB, E_MAX_DB, E_BITS)
 }
 
@@ -84,9 +85,19 @@ struct LspDim {
 /// comment) -- 7 of 10 dimensions are uniform, 3 (indices 3, 4, 5) widen
 /// to a coarser step after level 8.
 const LSP_DIMS: [LspDim; LPC_ORD] = {
-    const UNIFORM: LspDim = LspDim { step1: 25.0, breakpoint: 32, step2: 25.0 };
-    const WIDENED: LspDim = LspDim { step1: 25.0, breakpoint: 8, step2: 50.0 };
-    [UNIFORM, UNIFORM, UNIFORM, WIDENED, WIDENED, WIDENED, UNIFORM, UNIFORM, UNIFORM, UNIFORM]
+    const UNIFORM: LspDim = LspDim {
+        step1: 25.0,
+        breakpoint: 32,
+        step2: 25.0,
+    };
+    const WIDENED: LspDim = LspDim {
+        step1: 25.0,
+        breakpoint: 8,
+        step2: 50.0,
+    };
+    [
+        UNIFORM, UNIFORM, UNIFORM, WIDENED, WIDENED, WIDENED, UNIFORM, UNIFORM, UNIFORM, UNIFORM,
+    ]
 };
 
 const LSP_LEVELS: u32 = 32;
@@ -174,7 +185,11 @@ mod tests {
 
     macro_rules! fixture {
         ($name:literal) => {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/",
+                $name
+            )
         };
     }
 
@@ -183,8 +198,16 @@ mod tests {
             .unwrap_or_else(|e| panic!("{path}: {e}"))
             .lines()
             .map(|line| {
-                let v: Vec<f32> = line.split_whitespace().map(|s| s.parse().unwrap()).collect();
-                assert_eq!(v.len(), cols, "line has {} fields, expected {cols}", v.len());
+                let v: Vec<f32> = line
+                    .split_whitespace()
+                    .map(|s| s.parse().unwrap())
+                    .collect();
+                assert_eq!(
+                    v.len(),
+                    cols,
+                    "line has {} fields, expected {cols}",
+                    v.len()
+                );
                 v
             })
             .collect()
@@ -197,7 +220,10 @@ mod tests {
             let wo = W0_MIN + (W0_MAX - W0_MIN) * i as f32 / 200.0;
             let idx = encode_wo(wo);
             let back = decode_wo(idx);
-            assert!((back - wo).abs() <= step, "Wo {wo} round-tripped to {back}, step {step}");
+            assert!(
+                (back - wo).abs() <= step,
+                "Wo {wo} round-tripped to {back}, step {step}"
+            );
         }
     }
 
@@ -209,7 +235,11 @@ mod tests {
         // the pipeline with the same name).
         let e_path = fixture!("codec2_enc_e_dump.txt");
         let es = read_dump(e_path, 1);
-        assert!(es.len() > 300, "expected the real captured fixture corpus, got {} rows", es.len());
+        assert!(
+            es.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            es.len()
+        );
         let step_db = (E_MAX_DB - E_MIN_DB) / (1 << E_BITS) as f32;
         for row in es {
             let e = row[0];
@@ -277,19 +307,35 @@ mod tests {
                     let (mut lo, mut hi) = (0usize, 31usize);
                     while lo + 1 < hi {
                         let mid = (lo + hi) / 2;
-                        if cb[mid] <= target { lo = mid } else { hi = mid }
+                        if cb[mid] <= target {
+                            lo = mid
+                        } else {
+                            hi = mid
+                        }
                     }
-                    if (cb[lo] - target).abs() <= (cb[hi] - target).abs() { lo } else { hi }
+                    if (cb[lo] - target).abs() <= (cb[hi] - target).abs() {
+                        lo
+                    } else {
+                        hi
+                    }
                 };
                 indexes[i] = level as u32;
-                last_q_hz = if i == 0 { cb[level] } else { last_q_hz + cb[level] };
+                last_q_hz = if i == 0 {
+                    cb[level]
+                } else {
+                    last_q_hz + cb[level]
+                };
             }
             indexes
         }
 
         let lsp_path = fixture!("codec2_lsp_dump.txt");
         let lsp_rows = read_dump(lsp_path, LPC_ORD + 1);
-        assert!(lsp_rows.len() > 300, "expected the real captured fixture corpus, got {} rows", lsp_rows.len());
+        assert!(
+            lsp_rows.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            lsp_rows.len()
+        );
         let mut n_checked = 0;
         for row in &lsp_rows {
             let roots = row[0] as i32;
@@ -313,11 +359,17 @@ mod tests {
             const RAD_PER_HZ: f32 = std::f32::consts::PI / 4000.0;
             for i in 0..LPC_ORD {
                 acc += lsp_dim_value_hz(&LSP_DIMS[i], indexes[i]);
-                assert!((back[i] - RAD_PER_HZ * acc).abs() < 1e-4, "LSP[{i}] decode mismatch");
+                assert!(
+                    (back[i] - RAD_PER_HZ * acc).abs() < 1e-4,
+                    "LSP[{i}] decode mismatch"
+                );
             }
             n_checked += 1;
         }
-        assert!(n_checked > 150, "only checked {n_checked} real frames -- most should have found valid LSP roots");
+        assert!(
+            n_checked > 150,
+            "only checked {n_checked} real frames -- most should have found valid LSP roots"
+        );
     }
 
     #[test]
@@ -346,7 +398,11 @@ mod tests {
             }
             let e_lo = (cb[lo] - target).abs();
             let e_hi = (cb[hi] - target).abs();
-            if e_lo <= e_hi { lo as u32 } else { hi as u32 }
+            if e_lo <= e_hi {
+                lo as u32
+            } else {
+                hi as u32
+            }
         }
 
         for dim in &LSP_DIMS {
@@ -354,7 +410,11 @@ mod tests {
             while x <= 2000.0 {
                 let closed = lsp_dim_nearest_level(dim, x);
                 let reference = reference_binary_search(dim, x);
-                assert_eq!(closed, reference, "target={x} step1={} breakpoint={} step2={}", dim.step1, dim.breakpoint, dim.step2);
+                assert_eq!(
+                    closed, reference,
+                    "target={x} step1={} breakpoint={} step2={}",
+                    dim.step1, dim.breakpoint, dim.step2
+                );
                 x += 0.37; // irrational-ish step avoids only ever landing on exact boundaries
             }
         }

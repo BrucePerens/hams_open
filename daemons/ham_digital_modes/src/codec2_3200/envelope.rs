@@ -36,7 +36,13 @@ pub struct Model {
 impl Model {
     pub fn new(wo: f32, voiced: bool) -> Self {
         let l = ((std::f32::consts::PI / wo) as usize).min(MAX_AMP);
-        Model { wo, l, a: [0.0; MAX_AMP + 1], phi: [0.0; MAX_AMP + 1], voiced }
+        Model {
+            wo,
+            l,
+            a: [0.0; MAX_AMP + 1],
+            phi: [0.0; MAX_AMP + 1],
+            voiced,
+        }
     }
 }
 
@@ -63,9 +69,15 @@ fn lpc_spectrum(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC
 /// alongside it, since `synthesis.rs`'s own phase reconstruction needs
 /// that same spectrum (`H[m] = conj(Aw[bin])`, the synthesis filter
 /// being the LPC analysis filter's own phase response, reversed).
-pub fn compute_harmonic_amplitudes(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1], e: f32, model: &mut Model) -> [Complex32; SPEC_BINS] {
+pub fn compute_harmonic_amplitudes(
+    fft: &dyn Fft<f32>,
+    ak: &[f32; LPC_ORD + 1],
+    e: f32,
+    model: &mut Model,
+) -> [Complex32; SPEC_BINS] {
     let aw = lpc_spectrum(fft, ak);
-    let a2: [f32; SPEC_BINS] = std::array::from_fn(|i| aw[i].re * aw[i].re + aw[i].im * aw[i].im + 1e-6);
+    let a2: [f32; SPEC_BINS] =
+        std::array::from_fn(|i| aw[i].re * aw[i].re + aw[i].im * aw[i].im + 1e-6);
 
     let mut ak_gamma = [0.0f32; LPC_ORD + 1];
     ak_gamma[0] = ak[0];
@@ -75,7 +87,8 @@ pub fn compute_harmonic_amplitudes(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1], 
         g *= LPCPF_GAMMA;
     }
     let awg = lpc_spectrum(fft, &ak_gamma);
-    let a2g: [f32; SPEC_BINS] = std::array::from_fn(|i| awg[i].re * awg[i].re + awg[i].im * awg[i].im + 1e-6);
+    let a2g: [f32; SPEC_BINS] =
+        std::array::from_fn(|i| awg[i].re * awg[i].re + awg[i].im * awg[i].im + 1e-6);
 
     let mut e_before = 1e-12f32;
     let mut e_after = 1e-12f32;

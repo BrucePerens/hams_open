@@ -66,13 +66,13 @@ const RTTY_STOP_BIT_UNITS: f64 = 1.5;
 /// `Option` only for the two shift-control codes themselves, which are
 /// handled specially, not looked up here).
 const LTRS_CHARS: [char; 32] = [
-    '\0', 'E', '\n', 'A', ' ', 'S', 'I', 'U', '\r', 'D', 'R', 'J', 'N', 'F', 'C', 'K', 'T', 'Z', 'L', 'W', 'H', 'Y', 'P', 'Q', 'O', 'B', 'G',
-    '\0', /* FIGS */
+    '\0', 'E', '\n', 'A', ' ', 'S', 'I', 'U', '\r', 'D', 'R', 'J', 'N', 'F', 'C', 'K', 'T', 'Z',
+    'L', 'W', 'H', 'Y', 'P', 'Q', 'O', 'B', 'G', '\0', /* FIGS */
     'M', 'X', 'V', '\0', /* LTRS */
 ];
 const FIGS_CHARS: [char; 32] = [
-    '\0', '3', '\n', '-', ' ', '\x07', '8', '7', '\r', '$', '4', '\'', ',', '!', ':', '(', '5', '"', ')', '2', '#', '6', '0', '1', '9', '?', '&',
-    '\0', /* FIGS */
+    '\0', '3', '\n', '-', ' ', '\x07', '8', '7', '\r', '$', '4', '\'', ',', '!', ':', '(', '5',
+    '"', ')', '2', '#', '6', '0', '1', '9', '?', '&', '\0', /* FIGS */
     '.', '/', ';', '\0', /* LTRS */
 ];
 const CODE_LTRS_SHIFT: u8 = 0b11111;
@@ -105,9 +105,15 @@ fn text_to_framed_bits(text: &str) -> Vec<bool> {
     let mut bits: Vec<bool> = Vec::new();
     let mut current_figs = false;
     for c in text.chars() {
-        let Some((code, needs_figs)) = char_to_baudot(c) else { continue };
+        let Some((code, needs_figs)) = char_to_baudot(c) else {
+            continue;
+        };
         if needs_figs != current_figs {
-            let shift_code = if needs_figs { CODE_FIGS_SHIFT } else { CODE_LTRS_SHIFT };
+            let shift_code = if needs_figs {
+                CODE_FIGS_SHIFT
+            } else {
+                CODE_LTRS_SHIFT
+            };
             push_framed_char(&mut bits, shift_code);
             current_figs = needs_figs;
         }
@@ -148,13 +154,21 @@ pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16> {
         // emits exactly 7 bits per character (1 start + 5 data + 1
         // stop), so every 7th bit (idx % 7 == 6) is a stop bit.
         let is_stop_bit = idx % 7 == 6;
-        let bit_duration_units = if is_stop_bit { RTTY_STOP_BIT_UNITS } else { 1.0 };
+        let bit_duration_units = if is_stop_bit {
+            RTTY_STOP_BIT_UNITS
+        } else {
+            1.0
+        };
         let n_samples = (samples_per_bit * bit_duration_units).round() as usize;
         let freq = if is_mark { mark_hz } else { space_hz };
         let phase_inc = std::f64::consts::TAU * freq / sample_rate as f64;
         for _ in 0..n_samples {
             let sample = phase.sin();
-            out.push((sample * i16::MAX as f64 * 0.9).round().clamp(i16::MIN as f64, i16::MAX as f64) as i16);
+            out.push(
+                (sample * i16::MAX as f64 * 0.9)
+                    .round()
+                    .clamp(i16::MIN as f64, i16::MAX as f64) as i16,
+            );
             phase += phase_inc;
             if phase > std::f64::consts::TAU {
                 phase -= std::f64::consts::TAU;
@@ -176,7 +190,8 @@ pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16> {
 /// comment), computed here as a free byproduct of the same correlation
 /// rather than a second pass over `samples`.
 fn window_is_mark(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32) -> (bool, f64) {
-    let (is_mark, mark_energy, space_energy) = window_mark_space_energy(samples, mark_hz, space_hz, sample_rate);
+    let (is_mark, mark_energy, space_energy) =
+        window_mark_space_energy(samples, mark_hz, space_hz, sample_rate);
     (is_mark, mark_energy + space_energy)
 }
 
@@ -186,7 +201,12 @@ fn window_is_mark(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32
 /// (see its doc comment) needs the two energies separately, since their
 /// *ratio* -- not either one alone -- is what stays invariant to input
 /// amplitude.
-fn window_mark_space_energy(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32) -> (bool, f64, f64) {
+fn window_mark_space_energy(
+    samples: &[i16],
+    mark_hz: f64,
+    space_hz: f64,
+    sample_rate: u32,
+) -> (bool, f64, f64) {
     let mut mark_i = 0.0f64;
     let mut mark_q = 0.0f64;
     let mut space_i = 0.0f64;
@@ -359,7 +379,10 @@ impl PresenceGate {
         // makes an exact starting value not fragile -- see
         // `PresenceGate`'s own doc comment for the noise/signal numbers
         // this was tuned against.
-        Self { floor_db: 0.0, observations: 0 }
+        Self {
+            floor_db: 0.0,
+            observations: 0,
+        }
     }
 
     fn energy_to_db(energy: f64) -> f32 {
@@ -367,7 +390,8 @@ impl PresenceGate {
     }
 
     fn accepts(&self, energy: f64) -> bool {
-        self.observations >= PRESENCE_WARMUP_OBSERVATIONS && Self::energy_to_db(energy) > self.floor_db + PRESENCE_MARGIN_DB
+        self.observations >= PRESENCE_WARMUP_OBSERVATIONS
+            && Self::energy_to_db(energy) > self.floor_db + PRESENCE_MARGIN_DB
     }
 
     /// Called on every window `rtty_scan` evaluates, edge candidate or
@@ -394,7 +418,11 @@ struct ScanState {
 
 impl Default for ScanState {
     fn default() -> Self {
-        Self { pos: 0, current_figs: false, prev_was_mark: true }
+        Self {
+            pos: 0,
+            current_figs: false,
+            prev_was_mark: true,
+        }
     }
 }
 
@@ -418,7 +446,14 @@ impl Default for ScanState {
 /// committing to an under-buffered candidate, instead, means the next
 /// `feed()` call (with more buffered audio) retries that exact edge
 /// from scratch.
-fn rtty_scan(samples: &[i16], mark_hz: f64, sample_rate: u32, state: &mut ScanState, stop_if_insufficient_lookahead: bool, mut gate: Option<&mut PresenceGate>) -> String {
+fn rtty_scan(
+    samples: &[i16],
+    mark_hz: f64,
+    sample_rate: u32,
+    state: &mut ScanState,
+    stop_if_insufficient_lookahead: bool,
+    mut gate: Option<&mut PresenceGate>,
+) -> String {
     let space_hz = mark_hz + RTTY_DEFAULT_SHIFT_HZ;
     let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
     // Coarse scan grid: 4x oversampled relative to the bit rate. This was
@@ -437,7 +472,12 @@ fn rtty_scan(samples: &[i16], mark_hz: f64, sample_rate: u32, state: &mut ScanSt
     }
 
     while state.pos + window_len <= samples.len() {
-        let (this_is_mark, this_energy) = window_is_mark(&samples[state.pos..state.pos + window_len], mark_hz, space_hz, sample_rate);
+        let (this_is_mark, this_energy) = window_is_mark(
+            &samples[state.pos..state.pos + window_len],
+            mark_hz,
+            space_hz,
+            sample_rate,
+        );
 
         // Floor tracking (`PresenceGate`'s own doc comment): every
         // window feeds it now, not just non-edge ones -- the gate's
@@ -516,15 +556,18 @@ fn rtty_scan(samples: &[i16], mark_hz: f64, sample_rate: u32, state: &mut ScanSt
                             }
                         }
                     }
-                    let stop_ok = framing_ok
-                        && bit_at(6.5).unwrap_or(false); // must be MARK
+                    let stop_ok = framing_ok && bit_at(6.5).unwrap_or(false); // must be MARK
 
                     if framing_ok && stop_ok {
                         match code {
                             CODE_LTRS_SHIFT => state.current_figs = false,
                             CODE_FIGS_SHIFT => state.current_figs = true,
                             _ => {
-                                let c = if state.current_figs { FIGS_CHARS[code as usize] } else { LTRS_CHARS[code as usize] };
+                                let c = if state.current_figs {
+                                    FIGS_CHARS[code as usize]
+                                } else {
+                                    LTRS_CHARS[code as usize]
+                                };
                                 if c != '\0' {
                                     out.push(c);
                                 }
@@ -608,14 +651,27 @@ pub struct RttyDecoder {
 
 impl RttyDecoder {
     pub fn new(mark_hz: f64, sample_rate: u32) -> Self {
-        Self { mark_hz, sample_rate, pending_samples: Vec::new(), state: ScanState::default(), gate: PresenceGate::new() }
+        Self {
+            mark_hz,
+            sample_rate,
+            pending_samples: Vec::new(),
+            state: ScanState::default(),
+            gate: PresenceGate::new(),
+        }
     }
 
     /// Feeds newly-arrived audio samples in; returns any characters
     /// that completed decoding as a result.
     pub fn feed(&mut self, samples: &[i16]) -> String {
         self.pending_samples.extend_from_slice(samples);
-        let out = rtty_scan(&self.pending_samples, self.mark_hz, self.sample_rate, &mut self.state, true, Some(&mut self.gate));
+        let out = rtty_scan(
+            &self.pending_samples,
+            self.mark_hz,
+            self.sample_rate,
+            &mut self.state,
+            true,
+            Some(&mut self.gate),
+        );
 
         // Trim everything already scanned once it's built up a real
         // amount, so a long-running stream doesn't grow this buffer
@@ -664,11 +720,17 @@ mod tests {
         let sample_rate = 48000u32;
         let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let mono = rtty_modulate(letters, RTTY_DEFAULT_MARK_HZ, sample_rate);
-        assert_eq!(rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate), letters);
+        assert_eq!(
+            rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate),
+            letters
+        );
 
         let digits = "1234567890";
         let mono = rtty_modulate(digits, RTTY_DEFAULT_MARK_HZ, sample_rate);
-        assert_eq!(rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate), digits);
+        assert_eq!(
+            rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate),
+            digits
+        );
     }
 
     /// A real negative-case check, matching this codebase's own
@@ -707,7 +769,8 @@ mod tests {
     /// `pure_noise_does_not_panic_or_hang` (a looser, pre-gate,
     /// whole-buffer sanity bound) still tolerates.
     #[test]
-    fn rtty_decoder_stays_effectively_silent_against_10_seconds_of_real_noise_in_real_pipeline_chunks() {
+    fn rtty_decoder_stays_effectively_silent_against_10_seconds_of_real_noise_in_real_pipeline_chunks(
+    ) {
         let sample_rate = 48000u32;
         let mut state: u32 = 0xDEADBEEF;
         let noise: Vec<i16> = (0..sample_rate as usize * 10)
@@ -743,7 +806,8 @@ mod tests {
     /// +/-20000, so the real deadlock boundary above this amplitude
     /// (if any) remains unmeasured, not a confirmed vulnerability.
     #[test]
-    fn rtty_decoder_stays_effectively_silent_against_louder_noise_that_previously_deadlocked_the_floor() {
+    fn rtty_decoder_stays_effectively_silent_against_louder_noise_that_previously_deadlocked_the_floor(
+    ) {
         let sample_rate = 48000u32;
         let mut state: u32 = 0xC0FFEE;
         let noise: Vec<i16> = (0..sample_rate as usize * 10)
@@ -789,7 +853,10 @@ mod tests {
         for chunk in mono.chunks(960) {
             got.push_str(&decoder.feed(chunk));
         }
-        assert_eq!(got, text, "the presence gate must not reject a real, full-amplitude RTTY signal");
+        assert_eq!(
+            got, text,
+            "the presence gate must not reject a real, full-amplitude RTTY signal"
+        );
     }
 
     #[test]
@@ -816,14 +883,24 @@ mod tests {
     /// here because it inflates run-lengths (a real, longest-observed-run
     /// statistic is what a persistence-based gate actually needs, not a
     /// per-window percentile).
-    fn ratios_at_scan_step(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32) -> Vec<(bool, f64)> {
+    fn ratios_at_scan_step(
+        samples: &[i16],
+        mark_hz: f64,
+        space_hz: f64,
+        sample_rate: u32,
+    ) -> Vec<(bool, f64)> {
         let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
         let scan_step = (samples_per_bit / 4.0).max(1.0) as usize;
         let window_len = samples_per_bit.round() as usize;
         let mut out = Vec::new();
         let mut pos = 0;
         while pos + window_len <= samples.len() {
-            let (is_mark, mark_e, space_e) = window_mark_space_energy(&samples[pos..pos + window_len], mark_hz, space_hz, sample_rate);
+            let (is_mark, mark_e, space_e) = window_mark_space_energy(
+                &samples[pos..pos + window_len],
+                mark_hz,
+                space_hz,
+                sample_rate,
+            );
             let ratio_db = 10.0 * (mark_e.max(space_e) / mark_e.min(space_e).max(1e-12)).log10();
             out.push((is_mark, ratio_db));
             pos += scan_step;
@@ -857,7 +934,11 @@ mod tests {
         let idle = idle_mark_audio(mark_hz, sample_rate, 1.0);
         let idle_readings = ratios_at_scan_step(&idle, mark_hz, space_hz, sample_rate);
         let idle_run = longest_run_above(&idle_readings, RATIO_THRESHOLD_DB);
-        assert_eq!(idle_run, idle_readings.len(), "a real idle-MARK tone should sustain a confident-ratio run for its entire duration");
+        assert_eq!(
+            idle_run,
+            idle_readings.len(),
+            "a real idle-MARK tone should sustain a confident-ratio run for its entire duration"
+        );
 
         for amp in [2000i32, 10000, 20000, 32000] {
             let mut state: u32 = 0xC0FFEE ^ (amp as u32);
@@ -945,11 +1026,15 @@ mod tests {
             got.push_str(&decoder.feed(&mono[pos..pos + n]));
             pos += n;
         }
-        assert_eq!(got, text, "streaming decode across irregular chunk boundaries must match the real message");
+        assert_eq!(
+            got, text,
+            "streaming decode across irregular chunk boundaries must match the real message"
+        );
     }
 
     #[test]
-    fn the_final_character_lags_by_one_character_without_trailing_idle_audio_then_arrives_once_more_audio_does() {
+    fn the_final_character_lags_by_one_character_without_trailing_idle_audio_then_arrives_once_more_audio_does(
+    ) {
         // Directly verifies the real, documented latency behavior in
         // RttyDecoder's own doc comment, rather than just asserting it
         // in prose: feeding exactly the modulated signal (no trailing
@@ -968,8 +1053,12 @@ mod tests {
         // below so this test's own "real proper prefix of text" check
         // isn't testing the warm-up period at all, only the real
         // lookahead-margin behavior this test exists for.
-        let warmup_leftover = decoder.feed(&idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.4));
-        assert_eq!(warmup_leftover, "", "leading idle-MARK warmup audio should never itself decode to a character");
+        let warmup_leftover =
+            decoder.feed(&idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.4));
+        assert_eq!(
+            warmup_leftover, "",
+            "leading idle-MARK warmup audio should never itself decode to a character"
+        );
 
         let got_from_signal_alone = decoder.feed(&mono);
         assert!(
@@ -979,6 +1068,10 @@ mod tests {
 
         let tail = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05);
         let got_after_more_audio = decoder.feed(&tail);
-        assert_eq!(format!("{got_from_signal_alone}{got_after_more_audio}"), text, "the withheld character must arrive, not be lost, once more audio confirms it");
+        assert_eq!(
+            format!("{got_from_signal_alone}{got_after_more_audio}"),
+            text,
+            "the withheld character must arrive, not be lost, once more audio confirms it"
+        );
     }
 }

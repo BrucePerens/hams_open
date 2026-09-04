@@ -210,7 +210,11 @@ fn rshift_round(x: i64, n: u32) -> i64 {
 fn div_round_i128(n: i128, d: i128) -> i64 {
     debug_assert!(d > 0, "div_round_i128: divisor must be positive, got {d}");
     let half = d / 2;
-    (if n >= 0 { (n + half) / d } else { (n - half) / d }) as i64
+    (if n >= 0 {
+        (n + half) / d
+    } else {
+        (n - half) / d
+    }) as i64
 }
 
 /// `(a * b) >> LEVINSON_FRAC_BITS`, rounded to nearest, computed in
@@ -248,7 +252,8 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
     let r0 = r[0];
     debug_assert!(r0 > 0.0, "levinson_durbin_fixed: r[0] must be positive (matches the float reference's own implicit assumption -- real captured speech never measured r[0] <= 0)");
 
-    let r_norm_q: [i64; LPC_ORD + 1] = std::array::from_fn(|j| f32_to_q64(r[j] / r0, LEVINSON_FRAC_BITS));
+    let r_norm_q: [i64; LPC_ORD + 1] =
+        std::array::from_fn(|j| f32_to_q64(r[j] / r0, LEVINSON_FRAC_BITS));
 
     let mut a_q = [0i64; LPC_ORD + 1]; // Q8.40
     let mut a_prev_q = [0i64; LPC_ORD + 1];
@@ -269,7 +274,11 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
         // approach i64's own range for a pathological frame (this
         // stage's whole point is finding those frames, not assuming
         // they can't occur).
-        let k_q: i64 = if numerator_q == 0 { 0 } else { div_round_i128(-((numerator_q as i128) << LEVINSON_FRAC_BITS), e_q as i128) };
+        let k_q: i64 = if numerator_q == 0 {
+            0
+        } else {
+            div_round_i128(-((numerator_q as i128) << LEVINSON_FRAC_BITS), e_q as i128)
+        };
 
         let clamped = k_q.abs() > (1i64 << LEVINSON_FRAC_BITS);
         let k_q = if clamped { 0 } else { k_q };
@@ -284,7 +293,8 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
         a_prev_q[..=i].copy_from_slice(&a_q[..=i]);
     }
 
-    let a_q23: LpcCoeffsQ = std::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
+    let a_q23: LpcCoeffsQ =
+        std::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
     (a_q23, fired)
 }
 
@@ -459,7 +469,12 @@ const HALF_POLY_LEN: usize = LPC_ORD + 2;
 /// allocation -- `lsp_to_lpc` runs on a real-time codec's per-frame hot
 /// path, and `HALF_POLY_LEN` is a small compile-time constant, so a
 /// stack buffer is both simpler and cheaper than a `Vec` here.
-fn poly_mul_fixed(a: &[f32; HALF_POLY_LEN], a_len: usize, b: &[f32], out: &mut [f32; HALF_POLY_LEN]) -> usize {
+fn poly_mul_fixed(
+    a: &[f32; HALF_POLY_LEN],
+    a_len: usize,
+    b: &[f32],
+    out: &mut [f32; HALF_POLY_LEN],
+) -> usize {
     let out_len = a_len + b.len() - 1;
     out[..out_len].fill(0.0);
     for (i, &ai) in a[..a_len].iter().enumerate() {
@@ -474,7 +489,11 @@ fn poly_mul_fixed(a: &[f32; HALF_POLY_LEN], a_len: usize, b: &[f32], out: &mut [
 /// a degree-2 factor `1 - 2*cos(lsp_i)*z^-1 + z^-2` per LSP at indices
 /// `start_offset, start_offset+2, ...`, then multiplies by the boundary
 /// factor `1 + boundary_sign*z^-1`.
-fn build_half_poly(cos_lsp: &[f32; LPC_ORD], start_offset: usize, boundary_sign: f32) -> ([f32; HALF_POLY_LEN], usize) {
+fn build_half_poly(
+    cos_lsp: &[f32; LPC_ORD],
+    start_offset: usize,
+    boundary_sign: f32,
+) -> ([f32; HALF_POLY_LEN], usize) {
     let mut buf = [0.0f32; HALF_POLY_LEN];
     let mut scratch = [0.0f32; HALF_POLY_LEN];
     buf[0] = 1.0;
@@ -532,7 +551,11 @@ mod tests {
 
     macro_rules! fixture {
         ($name:literal) => {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/",
+                $name
+            )
         };
     }
 
@@ -541,8 +564,16 @@ mod tests {
             .unwrap_or_else(|e| panic!("{path}: {e}"))
             .lines()
             .map(|line| {
-                let v: Vec<f32> = line.split_whitespace().map(|s| s.parse().unwrap()).collect();
-                assert_eq!(v.len(), cols, "line has {} fields, expected {cols}: {line}", v.len());
+                let v: Vec<f32> = line
+                    .split_whitespace()
+                    .map(|s| s.parse().unwrap())
+                    .collect();
+                assert_eq!(
+                    v.len(),
+                    cols,
+                    "line has {} fields, expected {cols}: {line}",
+                    v.len()
+                );
                 v
             })
             .collect()
@@ -560,7 +591,11 @@ mod tests {
         let rs = read_dump(r_path, LPC_ORD + 1);
         let aks = read_dump(ak_path, LPC_ORD + 1);
         assert_eq!(rs.len(), aks.len());
-        assert!(rs.len() > 300, "expected the real captured fixture corpus, got {} rows", rs.len());
+        assert!(
+            rs.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            rs.len()
+        );
 
         let mut max_abs_err = 0.0f32;
         let mut n_frames_over_tolerance = 0;
@@ -601,7 +636,10 @@ mod tests {
             r.copy_from_slice(&r_row);
             let ak = levinson_durbin(&r);
             for &coeff in ak.iter() {
-                assert!(coeff.is_finite(), "non-finite LPC coefficient from real data: {ak:?}");
+                assert!(
+                    coeff.is_finite(),
+                    "non-finite LPC coefficient from real data: {ak:?}"
+                );
             }
         }
     }
@@ -619,8 +657,16 @@ mod tests {
         let lsp_path = fixture!("codec2_lsp_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
         let lsps = read_dump(lsp_path, LPC_ORD + 1);
-        assert_eq!(aks.len(), lsps.len(), "real captures must be from the same corpus pass to line up 1:1");
-        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+        assert_eq!(
+            aks.len(),
+            lsps.len(),
+            "real captures must be from the same corpus pass to line up 1:1"
+        );
+        assert!(
+            aks.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            aks.len()
+        );
 
         let mut roots_found_count = 0;
         let mut max_abs_err = 0.0f32;
@@ -657,7 +703,10 @@ mod tests {
         // sits with wide margin on both sides and actually discriminates
         // the bug this test exists to catch, not just root-finding
         // success/failure.
-        assert!(max_abs_err < 1e-4, "max LSP root error vs real captured reference: {max_abs_err} rad");
+        assert!(
+            max_abs_err < 1e-4,
+            "max LSP root error vs real captured reference: {max_abs_err} rad"
+        );
     }
 
     #[test]
@@ -666,7 +715,11 @@ mod tests {
         let pq_path = fixture!("codec2_pq_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
         let pqs = read_dump(pq_path, 12);
-        assert_eq!(aks.len(), pqs.len(), "real captures must be from the same corpus pass to line up 1:1");
+        assert_eq!(
+            aks.len(),
+            pqs.len(),
+            "real captures must be from the same corpus pass to line up 1:1"
+        );
 
         let mut max_err = 0.0f32;
         for (ak_row, pq_row) in aks.iter().zip(pqs.iter()) {
@@ -681,7 +734,10 @@ mod tests {
                 max_err = max_err.max((q[i] - pq_row[6 + i]).abs());
             }
         }
-        assert!(max_err < 1e-3, "max P[]/Q[] error vs real captured reference: {max_err}");
+        assert!(
+            max_err < 1e-3,
+            "max P[]/Q[] error vs real captured reference: {max_err}"
+        );
     }
 
     /// Independent plain-float reference for the Chebyshev evaluation
@@ -706,7 +762,8 @@ mod tests {
     }
 
     #[test]
-    fn cheb_poly_eval_fixed_matches_the_plain_float_sign_on_a_dense_sweep_of_real_captured_p_q_coefficients() {
+    fn cheb_poly_eval_fixed_matches_the_plain_float_sign_on_a_dense_sweep_of_real_captured_p_q_coefficients(
+    ) {
         // Same validation shape CODEC2_MOD_FIXED_POINT_PLAN.md used for
         // this exact stage: a dense sweep of x across [-1,1] (4001
         // points there; matched here) against every real captured P[]/Q[]
@@ -715,7 +772,11 @@ mod tests {
         // function's result (see cheb_poly_eval_fixed's own doc comment).
         let pq_path = fixture!("codec2_pq_dump.txt");
         let pqs = read_dump(pq_path, 12);
-        assert!(pqs.len() > 300, "expected the real captured fixture corpus, got {} rows", pqs.len());
+        assert!(
+            pqs.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            pqs.len()
+        );
 
         let mut sign_mismatches = 0u64;
         let mut total = 0u64;
@@ -742,12 +803,16 @@ mod tests {
                 }
             }
         }
-        assert!(total > 1_000_000, "expected a real dense-sweep total, got {total}");
+        assert!(
+            total > 1_000_000,
+            "expected a real dense-sweep total, got {total}"
+        );
         assert_eq!(sign_mismatches, 0, "{sign_mismatches}/{total} real sign mismatches between the fixed-point Chebyshev evaluation and plain float -- the plan doc's own validated result for this Q8.23/Q2.29 width is zero");
     }
 
     #[test]
-    fn a_deliberately_coarse_q_format_produces_real_sign_mismatches_confirming_the_test_above_is_not_vacuous() {
+    fn a_deliberately_coarse_q_format_produces_real_sign_mismatches_confirming_the_test_above_is_not_vacuous(
+    ) {
         // Negative control, same methodology the plan doc itself used
         // (deliberately coarsening the T register's own precision
         // produced real, monotonically worsening mismatch rates there)
@@ -799,7 +864,11 @@ mod tests {
     fn lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
-        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+        assert!(
+            aks.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            aks.len()
+        );
 
         let mut n_checked = 0;
         let mut max_abs_err = 0.0f32;
@@ -824,7 +893,10 @@ mod tests {
         // the actually-transmitted LSPs are 5-bit-quantized (~14-50Hz
         // steps), a coarser bound than 0.0065's worth of ak-coefficient
         // drift.
-        assert!(max_abs_err < 0.01, "max ak[] round-trip error: {max_abs_err}");
+        assert!(
+            max_abs_err < 0.01,
+            "max ak[] round-trip error: {max_abs_err}"
+        );
     }
 
     /// Cross-checks `autocorrelate` against the reference's own real
@@ -848,8 +920,16 @@ mod tests {
         let r_path = fixture!("synthetic_codec2_r_dump.txt");
         let wns = read_dump(wn_path, M_PITCH);
         let rs = read_dump(r_path, LPC_ORD + 1);
-        assert_eq!(wns.len(), rs.len(), "real captures must be from the same corpus pass to line up 1:1");
-        assert!(wns.len() > 150, "expected the synthetic-signal fixture corpus, got {} rows", wns.len());
+        assert_eq!(
+            wns.len(),
+            rs.len(),
+            "real captures must be from the same corpus pass to line up 1:1"
+        );
+        assert!(
+            wns.len() > 150,
+            "expected the synthetic-signal fixture corpus, got {} rows",
+            wns.len()
+        );
 
         let mut max_rel_err = 0.0f32;
         for (wn_row, r_row) in wns.iter().zip(rs.iter()) {
@@ -859,7 +939,10 @@ mod tests {
                 max_rel_err = max_rel_err.max((r[i] - r_row[i]).abs() / denom);
             }
         }
-        assert!(max_rel_err < 1e-3, "max relative R[] error vs real captured reference: {max_rel_err}");
+        assert!(
+            max_rel_err < 1e-3,
+            "max relative R[] error vs real captured reference: {max_rel_err}"
+        );
     }
 }
 
@@ -869,7 +952,11 @@ mod levinson_durbin_fixed_tests {
 
     macro_rules! fixture {
         ($name:literal) => {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/",
+                $name
+            )
         };
     }
 
@@ -878,8 +965,16 @@ mod levinson_durbin_fixed_tests {
             .unwrap_or_else(|e| panic!("{path}: {e}"))
             .lines()
             .map(|line| {
-                let v: Vec<f32> = line.split_whitespace().map(|s| s.parse().unwrap()).collect();
-                assert_eq!(v.len(), cols, "line has {} fields, expected {cols}", v.len());
+                let v: Vec<f32> = line
+                    .split_whitespace()
+                    .map(|s| s.parse().unwrap())
+                    .collect();
+                assert_eq!(
+                    v.len(),
+                    cols,
+                    "line has {} fields, expected {cols}",
+                    v.len()
+                );
                 v
             })
             .collect()
@@ -948,7 +1043,11 @@ mod levinson_durbin_fixed_tests {
     fn levinson_durbin_fixed_diverges_from_float_only_at_measured_clamp_disagreement_frames() {
         let r_path = fixture!("codec2_r_dump.txt");
         let rs = read_dump(r_path, LPC_ORD + 1);
-        assert!(rs.len() > 300, "expected the real captured fixture corpus, got {} rows", rs.len());
+        assert!(
+            rs.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            rs.len()
+        );
 
         let mut n_diverged_with_clamp_disagreement = 0;
         let mut n_diverged_without_clamp_disagreement = 0;
@@ -963,7 +1062,9 @@ mod levinson_durbin_fixed_tests {
 
             let ak_float = levinson_durbin(&r);
             let ak_fixed = levinson_durbin_fixed(&r);
-            let max_err = (0..=LPC_ORD).map(|i| (ak_float[i] - ak_fixed[i]).abs()).fold(0.0f32, f32::max);
+            let max_err = (0..=LPC_ORD)
+                .map(|i| (ak_float[i] - ak_fixed[i]).abs())
+                .fold(0.0f32, f32::max);
 
             if max_err > 0.05 {
                 let float_fired = float_clamp_fired_per_iteration(&r);
@@ -1036,4 +1137,3 @@ mod levinson_durbin_fixed_tests {
         assert!(max_err < 0.03, "expected tight quantization-noise-level agreement on non-clamped frames (allowing real margin for frame 273's own measured ill-conditioning), got max error {max_err}");
     }
 }
-

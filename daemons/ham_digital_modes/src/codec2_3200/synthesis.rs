@@ -27,13 +27,23 @@ fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
     let n0 = N_SAMP / 2;
     let n1 = 3 * N_SAMP / 2;
     let inv_2tw = 1.0 / (2.0 * TW as f32);
-    for (i, v) in pn.iter_mut().enumerate().take((n0 + TW).min(SAMPLES_PER_FRAME)).skip(n0.saturating_sub(TW)) {
+    for (i, v) in pn
+        .iter_mut()
+        .enumerate()
+        .take((n0 + TW).min(SAMPLES_PER_FRAME))
+        .skip(n0.saturating_sub(TW))
+    {
         *v = (i as f32 - (n0 - TW) as f32) * inv_2tw;
     }
     for v in pn.iter_mut().take(n1.saturating_sub(TW)).skip(n0 + TW) {
         *v = 1.0;
     }
-    for (i, v) in pn.iter_mut().enumerate().take((n1 + TW).min(SAMPLES_PER_FRAME)).skip(n1.saturating_sub(TW)) {
+    for (i, v) in pn
+        .iter_mut()
+        .enumerate()
+        .take((n1 + TW).min(SAMPLES_PER_FRAME))
+        .skip(n1.saturating_sub(TW))
+    {
         *v = ((n1 + TW) as f32 - i as f32) * inv_2tw;
     }
     pn
@@ -54,7 +64,12 @@ fn next_rand(state: &mut u32) -> f32 {
 /// `envelope::sample_filter_phase`) -- voiced harmonics phase-lock to a
 /// single tracked fundamental phase (zero-order-hold pitch synthesis);
 /// unvoiced harmonics get independent random phase.
-fn synthesize_phase(model: &mut Model, h: &[Complex32; MAX_AMP + 1], ex_phase: &mut f32, rng: &mut u32) {
+fn synthesize_phase(
+    model: &mut Model,
+    h: &[Complex32; MAX_AMP + 1],
+    ex_phase: &mut f32,
+    rng: &mut u32,
+) {
     *ex_phase += model.wo * N_SAMP as f32;
     *ex_phase -= std::f32::consts::TAU * (*ex_phase / std::f32::consts::TAU + 0.5).floor();
     let phi0 = *ex_phase;
@@ -93,7 +108,14 @@ fn synthesize_phase(model: &mut Model, h: &[Complex32; MAX_AMP + 1], ex_phase: &
 /// harmonics `1..=l` should get their phase randomized (unvoiced
 /// frames return an all-`false` array -- there's nothing to randomize
 /// on that branch, only `bg_est` updates).
-pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(voiced: bool, l: usize, a: &[f32; MAX_AMP + 1], bg_est: f32, log2: L, exp2: E) -> (f32, [bool; MAX_AMP + 1]) {
+pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(
+    voiced: bool,
+    l: usize,
+    a: &[f32; MAX_AMP + 1],
+    bg_est: f32,
+    log2: L,
+    exp2: E,
+) -> (f32, [bool; MAX_AMP + 1]) {
     let e: f32 = 1e-12 + a[1..=l].iter().map(|v| v * v).sum::<f32>();
     let e_db = 10.0 * (log2(e / l as f32) / std::f32::consts::LOG2_10);
 
@@ -120,7 +142,14 @@ pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(voiced: bool
 /// doc comment for the log-domain LUT this calls into and how it's
 /// validated.
 fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
-    let (new_bg_est, decisions) = postfilter_step(model.voiced, model.l, &model.a, *bg_est, super::fixed_point::log2_lut, super::fixed_point::exp2_lut);
+    let (new_bg_est, decisions) = postfilter_step(
+        model.voiced,
+        model.l,
+        &model.a,
+        *bg_est,
+        super::fixed_point::log2_lut,
+        super::fixed_point::exp2_lut,
+    );
     *bg_est = new_bg_est;
     if model.voiced {
         // `decisions` (read) and `model.phi` (written) are independent
@@ -252,13 +281,24 @@ mod tests {
     #[test]
     fn synthesis_window_peaks_at_1_in_the_middle_and_tapers_toward_0_at_both_ends() {
         let pn = make_synthesis_window();
-        assert!((pn[N_SAMP] - 1.0).abs() < 1e-6, "expected peak ~1.0 at the window center, got {}", pn[N_SAMP]);
-        assert_eq!(pn[0], 0.0, "the ramp starts exactly at 0 by construction (n0-TW == 0 here)");
+        assert!(
+            (pn[N_SAMP] - 1.0).abs() < 1e-6,
+            "expected peak ~1.0 at the window center, got {}",
+            pn[N_SAMP]
+        );
+        assert_eq!(
+            pn[0], 0.0,
+            "the ramp starts exactly at 0 by construction (n0-TW == 0 here)"
+        );
         // The ramp only reaches exactly 0 at the one-past-the-end index
         // n1+TW == SAMPLES_PER_FRAME, so the last real sample is one
         // step short of it (1/(2*TW)), not exactly 0.
         let last_step = 1.0 / (2.0 * TW as f32);
-        assert!((pn[SAMPLES_PER_FRAME - 1] - last_step).abs() < 1e-6, "expected the last sample one ramp-step above 0 ({last_step}), got {}", pn[SAMPLES_PER_FRAME - 1]);
+        assert!(
+            (pn[SAMPLES_PER_FRAME - 1] - last_step).abs() < 1e-6,
+            "expected the last sample one ramp-step above 0 ({last_step}), got {}",
+            pn[SAMPLES_PER_FRAME - 1]
+        );
     }
 
     #[test]
@@ -272,6 +312,9 @@ mod tests {
             max = max.max(v);
             assert!((0.0..std::f32::consts::TAU).contains(&v));
         }
-        assert!(max - min > std::f32::consts::TAU * 0.9, "PRNG output didn't spread across the range: min={min} max={max}");
+        assert!(
+            max - min > std::f32::consts::TAU * 0.9,
+            "PRNG output didn't spread across the range: min={min} max={max}"
+        );
     }
 }

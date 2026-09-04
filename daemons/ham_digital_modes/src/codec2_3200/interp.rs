@@ -16,7 +16,14 @@ use super::LPC_ORD;
 /// neighbor is actually voiced, or the plain midpoint if both are; an
 /// interpolated-unvoiced sub-frame just gets `Wo` reset to its own
 /// unvoiced floor.
-pub fn interp_wo(voiced0: bool, prev_wo: f32, prev_voiced: bool, next_wo: f32, next_voiced: bool, w0_min: f32) -> f32 {
+pub fn interp_wo(
+    voiced0: bool,
+    prev_wo: f32,
+    prev_voiced: bool,
+    next_wo: f32,
+    next_voiced: bool,
+    w0_min: f32,
+) -> f32 {
     // A voiced sub-frame flanked by two unvoiced neighbors is probably a
     // misclassified boundary -- treat as unvoiced rather than trust a
     // Wo that has nothing real to interpolate between.
@@ -80,7 +87,10 @@ mod tests {
     #[test]
     fn energy_interpolation_is_geometric() {
         let e = interp_energy(4.0, 9.0);
-        assert!((e - 6.0).abs() < 1e-5, "geometric mean of 4 and 9 should be 6, got {e}");
+        assert!(
+            (e - 6.0).abs() < 1e-5,
+            "geometric mean of 4 and 9 should be 6, got {e}"
+        );
     }
 
     #[test]

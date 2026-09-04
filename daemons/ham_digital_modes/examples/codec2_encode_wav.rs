@@ -19,8 +19,14 @@ use ham_digital_modes::codec2_3200::{Encoder, BYTES_PER_FRAME, SAMPLES_PER_FRAME
 
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    assert!(&data[36..40] == b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert!(
+        &data[36..40] == b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
@@ -33,11 +39,19 @@ fn main() {
 
     let n_frames = samples.len() / SAMPLES_PER_FRAME;
     for f in 0..n_frames {
-        let frame: [i16; SAMPLES_PER_FRAME] = samples[f * SAMPLES_PER_FRAME..(f + 1) * SAMPLES_PER_FRAME].try_into().unwrap();
+        let frame: [i16; SAMPLES_PER_FRAME] = samples
+            [f * SAMPLES_PER_FRAME..(f + 1) * SAMPLES_PER_FRAME]
+            .try_into()
+            .unwrap();
         let bits = encoder.encode(&frame);
         out.extend_from_slice(&bits);
     }
 
     std::fs::write(&args[2], &out).unwrap_or_else(|e| panic!("{}: {e}", args[2]));
-    eprintln!("{} frames, {} bytes -> {}", n_frames, n_frames * BYTES_PER_FRAME, args[2]);
+    eprintln!(
+        "{} frames, {} bytes -> {}",
+        n_frames,
+        n_frames * BYTES_PER_FRAME,
+        args[2]
+    );
 }

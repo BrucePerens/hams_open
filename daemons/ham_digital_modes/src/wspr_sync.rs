@@ -630,7 +630,11 @@ const CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH: usize = 20;
 /// writeup and the real, still-open remainder of the gap.
 pub fn evidence_to_symbol_values(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
-) -> ([f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS]) {
+) -> (
+    [f64; WSPR_NUM_SYMBOLS],
+    [f64; WSPR_NUM_SYMBOLS],
+    [f64; WSPR_NUM_SYMBOLS],
+) {
     evidence_to_symbol_values_windowed(evidence, CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH)
 }
 
@@ -642,7 +646,11 @@ pub fn evidence_to_symbol_values(
 fn evidence_to_symbol_values_windowed(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
     window_half_width: usize,
-) -> ([f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS]) {
+) -> (
+    [f64; WSPR_NUM_SYMBOLS],
+    [f64; WSPR_NUM_SYMBOLS],
+    [f64; WSPR_NUM_SYMBOLS],
+) {
     let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
     let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
     let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
@@ -671,8 +679,16 @@ fn evidence_to_symbol_values_windowed(
         let win_losemean = losers[lo..=hi].iter().sum::<f64>() / window_n;
         amplitude[i] = (win_winmean - win_losemean).max(1e-9);
 
-        let winvar = winners[lo..=hi].iter().map(|x| (x - win_winmean) * (x - win_winmean)).sum::<f64>() / window_n;
-        let losevar = losers[lo..=hi].iter().map(|x| (x - win_losemean) * (x - win_losemean)).sum::<f64>() / window_n;
+        let winvar = winners[lo..=hi]
+            .iter()
+            .map(|x| (x - win_winmean) * (x - win_winmean))
+            .sum::<f64>()
+            / window_n;
+        let losevar = losers[lo..=hi]
+            .iter()
+            .map(|x| (x - win_losemean) * (x - win_losemean))
+            .sum::<f64>()
+            / window_n;
         // Summed, not averaged (no `/2`) -- see this function's own
         // caller doc comment for the measured evidence behind this.
         noise_stddev[i] = (winvar + losevar).sqrt().max(1e-9);
@@ -693,7 +709,11 @@ fn evidence_to_symbol_values_windowed_clean_reference(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
     impossible_tone_evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
     window_half_width: usize,
-) -> ([f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS], [f64; WSPR_NUM_SYMBOLS]) {
+) -> (
+    [f64; WSPR_NUM_SYMBOLS],
+    [f64; WSPR_NUM_SYMBOLS],
+    [f64; WSPR_NUM_SYMBOLS],
+) {
     let mut symbol_values = [0.0f64; WSPR_NUM_SYMBOLS];
     let mut winners = [0.0f64; WSPR_NUM_SYMBOLS];
     let mut losers = [0.0f64; WSPR_NUM_SYMBOLS];
@@ -795,9 +815,19 @@ pub fn sync_search_and_decode(
     max_cycles: u64,
     min_acceptable_metric: f64,
 ) -> Option<(f64, Result<u128, ConfidenceGateError>)> {
-    let sync = find_sync(samples, sample_rate, freq_lo_hz, freq_hi_hz, max_start_sample, min_sync_score)?;
+    let sync = find_sync(
+        samples,
+        sample_rate,
+        freq_lo_hz,
+        freq_hi_hz,
+        max_start_sample,
+        min_sync_score,
+    )?;
     let evidence = extract_symbol_evidence(samples, sample_rate, sync.base_hz, sync.start_sample)?;
-    Some((sync.base_hz, decode_from_symbol_evidence(&evidence, max_cycles, min_acceptable_metric)))
+    Some((
+        sync.base_hz,
+        decode_from_symbol_evidence(&evidence, max_cycles, min_acceptable_metric),
+    ))
 }
 
 /// What `sync_search_and_decode_message()` returns for a failure --
@@ -819,7 +849,9 @@ impl From<ConfidenceGateError> for WsprMessageError {
     fn from(e: ConfidenceGateError) -> Self {
         match e {
             ConfidenceGateError::GaveUp { cycles } => WsprMessageError::GaveUp { cycles },
-            ConfidenceGateError::LowConfidence { bits, metric } => WsprMessageError::LowConfidence { bits, metric },
+            ConfidenceGateError::LowConfidence { bits, metric } => {
+                WsprMessageError::LowConfidence { bits, metric }
+            }
         }
     }
 }
@@ -865,7 +897,10 @@ pub fn sync_search_and_decode_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wspr::{add_awgn, pack_call, pack_grid4_power, unpack_wspr_message, wspr_encode_audio, wspr_encode_symbols, wspr_modulate};
+    use crate::wspr::{
+        add_awgn, pack_call, pack_grid4_power, unpack_wspr_message, wspr_encode_audio,
+        wspr_encode_symbols, wspr_modulate,
+    };
     use crate::wspr_decode::WSPR_DECODABLE_INPUT_BITS;
 
     /// Independently reconstructs the first `WSPR_DECODABLE_INPUT_BITS`
@@ -926,7 +961,16 @@ mod tests {
         let spsym = samples_per_symbol(sample_rate);
         let mut planner = FftPlanner::<f64>::new();
         let fft = planner.plan_fft_forward(spsym);
-        let mat = spectrum_matrix(&audio, sample_rate, fft.as_ref(), base_bin, base_bin + 3, 0.0, 0).unwrap();
+        let mat = spectrum_matrix(
+            &audio,
+            sample_rate,
+            fft.as_ref(),
+            base_bin,
+            base_bin + 3,
+            0.0,
+            0,
+        )
+        .unwrap();
         let tone_mags = tone_magnitudes_from_matrix(&mat, base_bin, base_bin);
         let tt = sync_statistic(&tone_mags);
         let pattern = sync_pattern();
@@ -941,7 +985,10 @@ mod tests {
             let v0 = evidence[i][0];
             let v1 = evidence[i][1];
             let recovered_bit = if v1 > v0 { 1u8 } else { 0u8 };
-            assert_eq!(recovered_bit, expected_data_bit, "symbol {i}: v0={v0} v1={v1}, expected data bit {expected_data_bit}");
+            assert_eq!(
+                recovered_bit, expected_data_bit,
+                "symbol {i}: v0={v0} v1={v1}, expected data bit {expected_data_bit}"
+            );
         }
     }
 
@@ -959,8 +1006,15 @@ mod tests {
         let evidence = extract_symbol_evidence(&audio, sample_rate, base_hz, 0).unwrap();
         for i in 0..WSPR_NUM_SYMBOLS {
             let expected_data_bit = (symbols[i] >> 1) & 1;
-            let recovered_bit = if evidence[i][1] > evidence[i][0] { 1u8 } else { 0u8 };
-            assert_eq!(recovered_bit, expected_data_bit, "symbol {i} at an off-grid frequency");
+            let recovered_bit = if evidence[i][1] > evidence[i][0] {
+                1u8
+            } else {
+                0u8
+            };
+            assert_eq!(
+                recovered_bit, expected_data_bit,
+                "symbol {i} at an off-grid frequency"
+            );
         }
     }
 
@@ -984,13 +1038,13 @@ mod tests {
     fn windowed_noise_estimate_detects_and_localizes_a_deliberate_noise_burst() {
         const BURST_START: usize = 50;
         const BURST_END: usize = 110; // inclusive
-        // Both regions alternate two winner/loser gap widths symbol-to-
-        // symbol, so each window has real, nonzero LOCAL variance for
-        // the summed-variance formula to actually measure -- a constant
-        // gap (even at a different level) would have zero local
-        // variance and wouldn't exercise the estimator at all. Burst
-        // gaps are ~33x wider than baseline gaps, a decisive, not
-        // marginal, contrast.
+                                      // Both regions alternate two winner/loser gap widths symbol-to-
+                                      // symbol, so each window has real, nonzero LOCAL variance for
+                                      // the summed-variance formula to actually measure -- a constant
+                                      // gap (even at a different level) would have zero local
+                                      // variance and wouldn't exercise the estimator at all. Burst
+                                      // gaps are ~33x wider than baseline gaps, a decisive, not
+                                      // marginal, contrast.
         let mut evidence = [[0.0f64, 0.0f64]; WSPR_NUM_SYMBOLS];
         for (i, slot) in evidence.iter_mut().enumerate() {
             let in_burst = (BURST_START..=BURST_END).contains(&i);
@@ -1074,15 +1128,28 @@ mod tests {
         audio.extend_from_slice(&tx);
         audio.extend_from_slice(&[0i16; 4]); // trailing pad so a slightly-over-shot search window still fits.
 
-        let sync = find_sync(&audio, sample_rate, 1490.0, 1510.0, 5 * spsym, MIN_SYNC_SCORE)
-            .expect("a real, clean, in-band signal must be found");
+        let sync = find_sync(
+            &audio,
+            sample_rate,
+            1490.0,
+            1510.0,
+            5 * spsym,
+            MIN_SYNC_SCORE,
+        )
+        .expect("a real, clean, in-band signal must be found");
 
         let bin_hz = WSPR_SYMBOL_RATE_HZ;
-        assert!((sync.base_hz - true_hz).abs() < bin_hz / 2.0, "recovered frequency {} too far from the real {true_hz}", sync.base_hz);
+        assert!(
+            (sync.base_hz - true_hz).abs() < bin_hz / 2.0,
+            "recovered frequency {} too far from the real {true_hz}",
+            sync.base_hz
+        );
         let true_start_sample = true_start_symbols_padding * spsym;
         assert!(
-            (sync.start_sample as i64 - true_start_sample as i64).unsigned_abs() <= (spsym / 8) as u64,
-            "recovered start_sample {} too far from the real {true_start_sample}", sync.start_sample
+            (sync.start_sample as i64 - true_start_sample as i64).unsigned_abs()
+                <= (spsym / 8) as u64,
+            "recovered start_sample {} too far from the real {true_start_sample}",
+            sync.start_sample
         );
     }
 
@@ -1146,8 +1213,15 @@ mod tests {
         let mut clean_audio = vec![0i16; 3 * spsym];
         clean_audio.extend_from_slice(&tx);
         clean_audio.extend_from_slice(&[0i16; 4]);
-        let signal_sync = find_sync(&clean_audio, sample_rate, 1490.0, 1510.0, 5 * spsym, MIN_SYNC_SCORE)
-            .expect("the real signal must be found");
+        let signal_sync = find_sync(
+            &clean_audio,
+            sample_rate,
+            1490.0,
+            1510.0,
+            5 * spsym,
+            MIN_SYNC_SCORE,
+        )
+        .expect("the real signal must be found");
 
         // Genuinely independent noise: add_awgn() against a constant,
         // non-signal reference (nonzero so add_awgn()'s own signal_power
@@ -1163,23 +1237,50 @@ mod tests {
             .map(|(&n, &r)| (n as i32 - r as i32) as i16)
             .collect();
 
-        let gated = find_sync(&independent_noise, sample_rate, 1490.0, 1510.0, 5 * spsym, MIN_SYNC_SCORE);
-        assert!(gated.is_none(), "find_sync() must reject genuinely independent noise via MIN_SYNC_SCORE, got {gated:?}");
+        let gated = find_sync(
+            &independent_noise,
+            sample_rate,
+            1490.0,
+            1510.0,
+            5 * spsym,
+            MIN_SYNC_SCORE,
+        );
+        assert!(
+            gated.is_none(),
+            "find_sync() must reject genuinely independent noise via MIN_SYNC_SCORE, got {gated:?}"
+        );
 
         // Second, independent layer: even granting the raw (ungated)
         // search its own best-effort candidate, the decode pipeline
         // must not confidently accept it either.
-        let ungated = find_sync(&independent_noise, sample_rate, 1490.0, 1510.0, 5 * spsym, f64::NEG_INFINITY)
-            .expect("the raw search always returns its own best-scoring candidate when ungated");
+        let ungated = find_sync(
+            &independent_noise,
+            sample_rate,
+            1490.0,
+            1510.0,
+            5 * spsym,
+            f64::NEG_INFINITY,
+        )
+        .expect("the raw search always returns its own best-scoring candidate when ungated");
         assert!(
             ungated.sync_score < signal_sync.sync_score - 0.5,
             "a real signal's own sync_score ({}) should be well clear of independent noise's own \
              best-scoring false candidate ({})",
-            signal_sync.sync_score, ungated.sync_score
+            signal_sync.sync_score,
+            ungated.sync_score
         );
-        let evidence = extract_symbol_evidence(&independent_noise, sample_rate, ungated.base_hz, ungated.start_sample)
-            .expect("the noise buffer is long enough for a full window at its own winning candidate");
-        let decode_result = decode_from_symbol_evidence(&evidence, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC);
+        let evidence = extract_symbol_evidence(
+            &independent_noise,
+            sample_rate,
+            ungated.base_hz,
+            ungated.start_sample,
+        )
+        .expect("the noise buffer is long enough for a full window at its own winning candidate");
+        let decode_result = decode_from_symbol_evidence(
+            &evidence,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        );
         assert!(
             decode_result.is_err(),
             "independent noise with no real transmission must not decode as if it were a confident, \
@@ -1230,8 +1331,17 @@ mod tests {
         padded.extend_from_slice(&audio);
         padded.extend_from_slice(&[0i16; 4]);
 
-        let (base_hz, result) = sync_search_and_decode(&padded, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
-            .expect("a real clean signal must be found");
+        let (base_hz, result) = sync_search_and_decode(
+            &padded,
+            sample_rate,
+            1490.0,
+            1505.0,
+            4 * spsym,
+            MIN_SYNC_SCORE,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        )
+        .expect("a real clean signal must be found");
         let decoded_bits = result.expect("a clean signal should decode with high confidence");
 
         let expected = expected_decodable_bits("K1ABC", "EM10", 23);
@@ -1240,7 +1350,10 @@ mod tests {
         // (true_hz above), not just decode correctly despite it --
         // AUTO_TUNE_AND_MODE_DETECTION.md's own tuning-correction use
         // needs this value to be accurate, not just present.
-        assert!((base_hz - true_hz).abs() < 1.0, "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}");
+        assert!(
+            (base_hz - true_hz).abs() < 1.0,
+            "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}"
+        );
     }
 
     /// The same end-to-end path, but with real additive Gaussian noise
@@ -1260,13 +1373,25 @@ mod tests {
         padded.extend_from_slice(&[0i16; 4]);
         let noisy = add_awgn(&padded, -20.0, 7);
 
-        let (base_hz, result) = sync_search_and_decode(&noisy, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
-            .expect("a real, moderately noisy signal must still be found");
+        let (base_hz, result) = sync_search_and_decode(
+            &noisy,
+            sample_rate,
+            1490.0,
+            1505.0,
+            4 * spsym,
+            MIN_SYNC_SCORE,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        )
+        .expect("a real, moderately noisy signal must still be found");
         let decoded_bits = result.expect("a moderately noisy signal should still decode");
 
         let expected = expected_decodable_bits("K6BP", "CM87", 30);
         assert_eq!(decoded_bits, expected);
-        assert!((base_hz - true_hz).abs() < 1.0, "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}");
+        assert!(
+            (base_hz - true_hz).abs() < 1.0,
+            "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}"
+        );
     }
 
     /// The real, full pipeline this build order's step 4 exists for:
@@ -1285,12 +1410,28 @@ mod tests {
         padded.extend_from_slice(&[0i16; 4]);
         let noisy = add_awgn(&padded, -20.0, 7);
 
-        let result = sync_search_and_decode_message(&noisy, sample_rate, 1490.0, 1505.0, 4 * spsym, MIN_SYNC_SCORE, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
-            .expect("a real, moderately noisy signal must still be found");
-        let (callsign, grid, power, base_hz) = result.expect("a moderately noisy signal should still decode to a valid message");
+        let result = sync_search_and_decode_message(
+            &noisy,
+            sample_rate,
+            1490.0,
+            1505.0,
+            4 * spsym,
+            MIN_SYNC_SCORE,
+            2_000_000,
+            crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+        )
+        .expect("a real, moderately noisy signal must still be found");
+        let (callsign, grid, power, base_hz) =
+            result.expect("a moderately noisy signal should still decode to a valid message");
 
-        assert_eq!((callsign, grid, power), ("K6BP".to_string(), "CM87".to_string(), 30));
-        assert!((base_hz - true_hz).abs() < 1.0, "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}");
+        assert_eq!(
+            (callsign, grid, power),
+            ("K6BP".to_string(), "CM87".to_string(), 30)
+        );
+        assert!(
+            (base_hz - true_hz).abs() < 1.0,
+            "base_hz {base_hz} should be within 1Hz of the real injected {true_hz}"
+        );
     }
 
     /// The isolating test `decimate_4x_box_average()`'s own doc comment
@@ -1329,9 +1470,13 @@ mod tests {
             crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
         )
         .expect("a real, clean 48kHz-synthesized-then-decimated signal must be found");
-        let (callsign, grid, power, _base_hz) = result.expect("a decimated clean signal should decode to a valid message");
+        let (callsign, grid, power, _base_hz) =
+            result.expect("a decimated clean signal should decode to a valid message");
 
-        assert_eq!((callsign, grid, power), ("K6BP".to_string(), "CM87".to_string(), 30));
+        assert_eq!(
+            (callsign, grid, power),
+            ("K6BP".to_string(), "CM87".to_string(), 30)
+        );
     }
 
     /// Diagnostic, not a correctness assertion: measures how much
@@ -1352,11 +1497,25 @@ mod tests {
         let buggy_max_start = buffer_len.saturating_sub(1);
 
         let t0 = std::time::Instant::now();
-        let _ = find_sync(&samples, sample_rate, 1400.0, 1600.0, correct_max_start, MIN_SYNC_SCORE);
+        let _ = find_sync(
+            &samples,
+            sample_rate,
+            1400.0,
+            1600.0,
+            correct_max_start,
+            MIN_SYNC_SCORE,
+        );
         let correct_elapsed = t0.elapsed();
 
         let t1 = std::time::Instant::now();
-        let _ = find_sync(&samples, sample_rate, 1400.0, 1600.0, buggy_max_start, MIN_SYNC_SCORE);
+        let _ = find_sync(
+            &samples,
+            sample_rate,
+            1400.0,
+            1600.0,
+            buggy_max_start,
+            MIN_SYNC_SCORE,
+        );
         let buggy_elapsed = t1.elapsed();
 
         println!(
@@ -1385,7 +1544,9 @@ mod tests {
         padded.extend_from_slice(&noisy);
         padded.extend(vec![0i16; pad]);
 
-        let max_start_sample = padded.len().saturating_sub(required_window_samples(sample_rate));
+        let max_start_sample = padded
+            .len()
+            .saturating_sub(required_window_samples(sample_rate));
         let t0 = std::time::Instant::now();
         let result = sync_search_and_decode_message(
             &padded,
@@ -1461,7 +1622,9 @@ mod tests {
         // Spans wsprd's own recorded boundary (decodes through -32.5,
         // seed-dependent -33.0 to -34.0, fails at -34.5) plus one easy
         // reference point and one point past the known failure floor.
-        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let snr_levels = [
+            -20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0,
+        ];
         let seeds = [1u64, 2, 3, 4, 5];
 
         let mut table = Vec::new();
@@ -1474,7 +1637,9 @@ mod tests {
                 let mut padded = vec![0i16; pad];
                 padded.extend_from_slice(&noisy);
                 padded.extend(vec![0i16; pad]);
-                let max_start_sample = padded.len().saturating_sub(required_window_samples(sample_rate));
+                let max_start_sample = padded
+                    .len()
+                    .saturating_sub(required_window_samples(sample_rate));
 
                 let result = sync_search_and_decode_message(
                     &padded,
@@ -1487,10 +1652,14 @@ mod tests {
                     crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
                 );
                 let outcome = match result {
-                    Some(Ok((callsign, grid, power, _base_hz))) if callsign == "K6BP" && grid == "CM87" && power == 30 => {
+                    Some(Ok((callsign, grid, power, _base_hz)))
+                        if callsign == "K6BP" && grid == "CM87" && power == 30 =>
+                    {
                         Outcome::Correct
                     }
-                    Some(Ok((callsign, grid, power, _base_hz))) => Outcome::WrongMessage(callsign, grid, power),
+                    Some(Ok((callsign, grid, power, _base_hz))) => {
+                        Outcome::WrongMessage(callsign, grid, power)
+                    }
                     Some(Err(_)) | None => Outcome::NoDecode,
                 };
                 match outcome {
@@ -1502,7 +1671,12 @@ mod tests {
                     }
                 }
             }
-            table.push((snr_db, correct, no_decode, seeds.len() - correct - no_decode));
+            table.push((
+                snr_db,
+                correct,
+                no_decode,
+                seeds.len() - correct - no_decode,
+            ));
         }
 
         println!("SNR(dB) | correct | no-decode | wrong");
@@ -1537,7 +1711,9 @@ mod tests {
         let true_base_hz = 1500.0;
         let true_start_sample = 0usize; // no padding -- exact alignment is hand-known, not searched for.
 
-        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let snr_levels = [
+            -20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0,
+        ];
         let seeds = [1u64, 2, 3, 4, 5];
 
         let mut table = Vec::new();
@@ -1547,13 +1723,24 @@ mod tests {
             let mut no_decode = 0;
             for &seed in &seeds {
                 let noisy = add_awgn(&clean, snr_db, seed);
-                let evidence = extract_symbol_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
-                    .expect("exact-known alignment on a fixture this long must always yield evidence");
-                let result = decode_from_symbol_evidence(&evidence, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC)
-                    .ok()
-                    .and_then(unpack_wspr_message);
+                let evidence =
+                    extract_symbol_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
+                        .expect(
+                        "exact-known alignment on a fixture this long must always yield evidence",
+                    );
+                let result = decode_from_symbol_evidence(
+                    &evidence,
+                    2_000_000,
+                    crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                )
+                .ok()
+                .and_then(unpack_wspr_message);
                 match result {
-                    Some((callsign, grid, power)) if callsign == "K6BP" && grid == "CM87" && power == 30 => correct += 1,
+                    Some((callsign, grid, power))
+                        if callsign == "K6BP" && grid == "CM87" && power == 30 =>
+                    {
+                        correct += 1
+                    }
                     Some((callsign, grid, power)) => {
                         any_wrong = true;
                         println!("WRONG MESSAGE at {snr_db}dB seed={seed}: got ({callsign}, {grid}, {power}), expected (K6BP, CM87, 30)");
@@ -1561,7 +1748,12 @@ mod tests {
                     None => no_decode += 1,
                 }
             }
-            table.push((snr_db, correct, no_decode, seeds.len() - correct - no_decode));
+            table.push((
+                snr_db,
+                correct,
+                no_decode,
+                seeds.len() - correct - no_decode,
+            ));
         }
 
         println!("exact-known-sync SNR(dB) | correct | no-decode | wrong");
@@ -1569,7 +1761,10 @@ mod tests {
             println!("{snr_db:>7} | {correct:>7} | {no_decode:>9} | {wrong:>5}");
         }
 
-        assert!(!any_wrong, "own decoder must never produce a confident wrong message even with exact known sync");
+        assert!(
+            !any_wrong,
+            "own decoder must never produce a confident wrong message even with exact known sync"
+        );
     }
 
     /// Diagnostic: fast K (window half-width) sweep at just the two
@@ -1605,12 +1800,30 @@ mod tests {
                 let mut correct = 0;
                 for &seed in &seeds {
                     let noisy = add_awgn(&clean, snr_db, seed);
-                    let evidence = extract_symbol_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
-                        .expect("exact-known alignment on a fixture this long must always yield evidence");
-                    let impossible_tone_evidence = extract_impossible_tone_evidence(&noisy, sample_rate, true_base_hz, true_start_sample)
-                        .expect("exact-known alignment on a fixture this long must always yield evidence");
+                    let evidence = extract_symbol_evidence(
+                        &noisy,
+                        sample_rate,
+                        true_base_hz,
+                        true_start_sample,
+                    )
+                    .expect(
+                        "exact-known alignment on a fixture this long must always yield evidence",
+                    );
+                    let impossible_tone_evidence = extract_impossible_tone_evidence(
+                        &noisy,
+                        sample_rate,
+                        true_base_hz,
+                        true_start_sample,
+                    )
+                    .expect(
+                        "exact-known alignment on a fixture this long must always yield evidence",
+                    );
                     let (symbol_values, amplitude, noise_stddev) =
-                        evidence_to_symbol_values_windowed_clean_reference(&evidence, &impossible_tone_evidence, half_width);
+                        evidence_to_symbol_values_windowed_clean_reference(
+                            &evidence,
+                            &impossible_tone_evidence,
+                            half_width,
+                        );
                     let channel_bit_values = deinterleave_symbol_values(&symbol_values);
                     let channel_amplitude = deinterleave_symbol_values(&amplitude);
                     let channel_noise_stddev = deinterleave_symbol_values(&noise_stddev);
@@ -1666,9 +1879,13 @@ mod tests {
         // (sum_variance, debias_k) -- sum_variance=false reproduces the
         // OLD /2 formula, just windowed; sum_variance=true is the
         // sqrt(2)-ish correction the scale-factor sweep found helpful.
-        let corrections: [(bool, f64); 4] = [(false, 0.0), (true, 0.0), (false, 1.13), (true, 1.13)];
+        let corrections: [(bool, f64); 4] =
+            [(false, 0.0), (true, 0.0), (false, 1.13), (true, 1.13)];
 
-        println!("SNR(dB) | half_width | sum_var | debias_k | correct/{}", seeds.len());
+        println!(
+            "SNR(dB) | half_width | sum_var | debias_k | correct/{}",
+            seeds.len()
+        );
         for &snr_db in &snr_levels {
             for &half_width in &window_half_widths {
                 for &(sum_variance, debias_k) in &corrections {
@@ -1697,15 +1914,25 @@ mod tests {
                             let n = (hi - lo + 1) as f64;
                             let winmean = winners[lo..=hi].iter().sum::<f64>() / n;
                             let losemean = losers[lo..=hi].iter().sum::<f64>() / n;
-                            let winvar = winners[lo..=hi].iter().map(|x| (x - winmean) * (x - winmean)).sum::<f64>() / n;
-                            let losevar = losers[lo..=hi].iter().map(|x| (x - losemean) * (x - losemean)).sum::<f64>() / n;
+                            let winvar = winners[lo..=hi]
+                                .iter()
+                                .map(|x| (x - winmean) * (x - winmean))
+                                .sum::<f64>()
+                                / n;
+                            let losevar = losers[lo..=hi]
+                                .iter()
+                                .map(|x| (x - losemean) * (x - losemean))
+                                .sum::<f64>()
+                                / n;
                             let amplitude_raw = (winmean - losemean).max(1e-9);
                             let noise_stddev_raw = if sum_variance {
                                 (winvar + losevar).sqrt().max(1e-9)
                             } else {
                                 ((winvar + losevar) / 2.0).sqrt().max(1e-9)
                             };
-                            amplitude[i] = (amplitude_raw - debias_k * ((winvar + losevar) / 2.0).sqrt()).max(1e-9);
+                            amplitude[i] = (amplitude_raw
+                                - debias_k * ((winvar + losevar) / 2.0).sqrt())
+                            .max(1e-9);
                             noise_stddev[i] = noise_stddev_raw;
                         }
 
@@ -1758,13 +1985,16 @@ mod tests {
             for seed in 1u64..=3 {
                 let noisy = add_awgn(&clean, snr_db, seed);
                 let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
-                let (_symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+                let (_symbol_values, amplitude, noise_stddev) =
+                    evidence_to_symbol_values(&evidence);
                 // Per-symbol arrays now (Per-Symbol Channel Model
                 // Redesign) -- this historical diagnostic printed one
                 // global pair, so mean() across the array preserves its
                 // original intent (a single comparable summary number)
                 // rather than dumping 162 rows.
-                let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64);
+                let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| {
+                    xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                };
                 let (mean_amplitude, mean_noise_stddev) = (mean(&amplitude), mean(&noise_stddev));
                 println!(
                     "{snr_db:>7} | {seed:>4} | {mean_amplitude:>9.4} | {mean_noise_stddev:>12.4} | {:>5.3}",
@@ -1803,8 +2033,13 @@ mod tests {
             let evidence =
                 extract_symbol_evidence(&silence_plus_noise, sample_rate, 1500.0, 0).unwrap();
             let (_symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
-            let mean = |xs: &[f64; WSPR_NUM_SYMBOLS]| xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64);
-            println!("{seed:>4} | {:>12.4} | {:>12.4}", mean(&amplitude), mean(&noise_stddev));
+            let mean =
+                |xs: &[f64; WSPR_NUM_SYMBOLS]| xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64);
+            println!(
+                "{seed:>4} | {:>12.4} | {:>12.4}",
+                mean(&amplitude),
+                mean(&noise_stddev)
+            );
         }
     }
 
@@ -1839,7 +2074,11 @@ mod tests {
             for &seed in &seeds {
                 let noisy = add_awgn(&clean, snr_db, seed);
                 let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
-                match decode_from_symbol_evidence(&evidence, 2_000_000, crate::wspr_decode::MIN_ACCEPTABLE_METRIC) {
+                match decode_from_symbol_evidence(
+                    &evidence,
+                    2_000_000,
+                    crate::wspr_decode::MIN_ACCEPTABLE_METRIC,
+                ) {
                     Ok(bits) => match unpack_wspr_message(bits) {
                         Some((callsign, grid, power))
                             if callsign == "K6BP" && grid == "CM87" && power == 30 =>
@@ -1886,7 +2125,8 @@ mod tests {
                 for &seed in &seeds {
                     let noisy = add_awgn(&clean, snr_db, seed);
                     let evidence = extract_symbol_evidence(&noisy, sample_rate, 1500.0, 0).unwrap();
-                    let (symbol_values, amplitude, noise_stddev) = evidence_to_symbol_values(&evidence);
+                    let (symbol_values, amplitude, noise_stddev) =
+                        evidence_to_symbol_values(&evidence);
                     let channel_bit_values = deinterleave_symbol_values(&symbol_values);
                     let channel_amplitude = deinterleave_symbol_values(&amplitude);
                     let mut scaled_noise_stddev = noise_stddev;
@@ -1965,7 +2205,8 @@ mod tests {
                         xs.iter().sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
                     };
                     let variance = |xs: &[f64; WSPR_NUM_SYMBOLS], m: f64| {
-                        xs.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (WSPR_NUM_SYMBOLS as f64)
+                        xs.iter().map(|x| (x - m) * (x - m)).sum::<f64>()
+                            / (WSPR_NUM_SYMBOLS as f64)
                     };
                     let winmean = mean(&winners);
                     let losemean = mean(&losers);
@@ -2017,7 +2258,9 @@ mod tests {
     fn diagnostic_clean_noise_reference_from_impossible_tones() {
         let sample_rate = 12000u32;
         let clean = wspr_encode_audio("K6BP", "CM87", 30, 1500.0, sample_rate).unwrap();
-        let snr_levels = [-20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0];
+        let snr_levels = [
+            -20.0, -30.0, -31.5, -32.5, -33.0, -33.5, -34.0, -34.5, -36.0,
+        ];
         let seeds = [1u64, 2, 3, 4, 5];
 
         println!("=== comparison at 3 seeds per rung ===");
@@ -2176,7 +2419,11 @@ mod tests {
                 // amplitude[i]/noise_stddev[i] are now LOCAL per-symbol
                 // estimates (Per-Symbol Channel Model Redesign), which is
                 // actually the more correct thing to z-score against here.
-                let expected_mean = if true_data_bit[i] == 1 { amplitude[i] } else { -amplitude[i] };
+                let expected_mean = if true_data_bit[i] == 1 {
+                    amplitude[i]
+                } else {
+                    -amplitude[i]
+                };
                 zscores.push((symbol_values[i] - expected_mean) / noise_stddev[i]);
             }
         }
@@ -2185,8 +2432,17 @@ mod tests {
         let mean = zscores.iter().sum::<f64>() / n;
         let variance = zscores.iter().map(|z| (z - mean) * (z - mean)).sum::<f64>() / n;
         let stddev = variance.sqrt();
-        let skewness = zscores.iter().map(|z| ((z - mean) / stddev).powi(3)).sum::<f64>() / n;
-        let excess_kurtosis = zscores.iter().map(|z| ((z - mean) / stddev).powi(4)).sum::<f64>() / n - 3.0;
+        let skewness = zscores
+            .iter()
+            .map(|z| ((z - mean) / stddev).powi(3))
+            .sum::<f64>()
+            / n;
+        let excess_kurtosis = zscores
+            .iter()
+            .map(|z| ((z - mean) / stddev).powi(4))
+            .sum::<f64>()
+            / n
+            - 3.0;
         let max_abs_z = zscores.iter().fold(0.0f64, |m, &z| m.max(z.abs()));
         let extreme_count = zscores.iter().filter(|&&z| z.abs() > 3.0).count();
         // For N truly-iid-Gaussian samples, P(|Z|>3) ~= 0.0027 per sample.

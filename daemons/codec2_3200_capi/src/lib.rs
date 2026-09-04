@@ -40,7 +40,10 @@ pub extern "C" fn codec2_create(mode: c_int) -> *mut CODEC2 {
     if mode != CODEC2_MODE_3200 {
         return std::ptr::null_mut();
     }
-    Box::into_raw(Box::new(CODEC2 { encoder: Encoder::new(), decoder: Decoder::new() }))
+    Box::into_raw(Box::new(CODEC2 {
+        encoder: Encoder::new(),
+        decoder: Decoder::new(),
+    }))
 }
 
 /// # Safety
@@ -50,7 +53,10 @@ pub extern "C" fn codec2_create(mode: c_int) -> *mut CODEC2 {
 /// non-NULL rather than tolerating it, so this does the same).
 #[no_mangle]
 pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
-    assert!(!codec2_state.is_null(), "codec2_destroy: codec2_state must not be NULL");
+    assert!(
+        !codec2_state.is_null(),
+        "codec2_destroy: codec2_state must not be NULL"
+    );
     drop(Box::from_raw(codec2_state));
 }
 
@@ -60,8 +66,15 @@ pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
 /// `int16_t`s; `bytes` must point to at least `codec2_bytes_per_frame`
 /// writable bytes.
 #[no_mangle]
-pub unsafe extern "C" fn codec2_encode(codec2_state: *mut CODEC2, bytes: *mut u8, speech_in: *const i16) {
-    assert!(!codec2_state.is_null(), "codec2_encode: codec2_state must not be NULL");
+pub unsafe extern "C" fn codec2_encode(
+    codec2_state: *mut CODEC2,
+    bytes: *mut u8,
+    speech_in: *const i16,
+) {
+    assert!(
+        !codec2_state.is_null(),
+        "codec2_encode: codec2_state must not be NULL"
+    );
     let state = &mut *codec2_state;
     let speech = &*(speech_in as *const [i16; SAMPLES_PER_FRAME]);
     let out = state.encoder.encode(speech);
@@ -74,7 +87,11 @@ pub unsafe extern "C" fn codec2_encode(codec2_state: *mut CODEC2, bytes: *mut u8
 /// `speech_out` must point to at least `codec2_samples_per_frame`
 /// writable `int16_t`s.
 #[no_mangle]
-pub unsafe extern "C" fn codec2_decode(codec2_state: *mut CODEC2, speech_out: *mut i16, bytes: *const u8) {
+pub unsafe extern "C" fn codec2_decode(
+    codec2_state: *mut CODEC2,
+    speech_out: *mut i16,
+    bytes: *const u8,
+) {
     codec2_decode_ber(codec2_state, speech_out, bytes, 0.0);
 }
 
@@ -88,8 +105,16 @@ pub unsafe extern "C" fn codec2_decode(codec2_state: *mut CODEC2, speech_out: *m
 /// # Safety
 /// Same pointer/length contract as `codec2_decode`.
 #[no_mangle]
-pub unsafe extern "C" fn codec2_decode_ber(codec2_state: *mut CODEC2, speech_out: *mut i16, bytes: *const u8, _ber_est: f32) {
-    assert!(!codec2_state.is_null(), "codec2_decode_ber: codec2_state must not be NULL");
+pub unsafe extern "C" fn codec2_decode_ber(
+    codec2_state: *mut CODEC2,
+    speech_out: *mut i16,
+    bytes: *const u8,
+    _ber_est: f32,
+) {
+    assert!(
+        !codec2_state.is_null(),
+        "codec2_decode_ber: codec2_state must not be NULL"
+    );
     let state = &mut *codec2_state;
     let frame = &*(bytes as *const [u8; BYTES_PER_FRAME]);
     let out = state.decoder.decode(frame);
@@ -102,7 +127,10 @@ pub unsafe extern "C" fn codec2_decode_ber(codec2_state: *mut CODEC2, speech_out
 /// ever creates `CODEC2_MODE_3200` handles).
 #[no_mangle]
 pub unsafe extern "C" fn codec2_samples_per_frame(codec2_state: *mut CODEC2) -> c_int {
-    assert!(!codec2_state.is_null(), "codec2_samples_per_frame: codec2_state must not be NULL");
+    assert!(
+        !codec2_state.is_null(),
+        "codec2_samples_per_frame: codec2_state must not be NULL"
+    );
     SAMPLES_PER_FRAME as c_int
 }
 
@@ -110,7 +138,10 @@ pub unsafe extern "C" fn codec2_samples_per_frame(codec2_state: *mut CODEC2) -> 
 /// Same contract as `codec2_samples_per_frame`.
 #[no_mangle]
 pub unsafe extern "C" fn codec2_bits_per_frame(codec2_state: *mut CODEC2) -> c_int {
-    assert!(!codec2_state.is_null(), "codec2_bits_per_frame: codec2_state must not be NULL");
+    assert!(
+        !codec2_state.is_null(),
+        "codec2_bits_per_frame: codec2_state must not be NULL"
+    );
     (BYTES_PER_FRAME * 8) as c_int
 }
 
@@ -118,7 +149,10 @@ pub unsafe extern "C" fn codec2_bits_per_frame(codec2_state: *mut CODEC2) -> c_i
 /// Same contract as `codec2_samples_per_frame`.
 #[no_mangle]
 pub unsafe extern "C" fn codec2_bytes_per_frame(codec2_state: *mut CODEC2) -> c_int {
-    assert!(!codec2_state.is_null(), "codec2_bytes_per_frame: codec2_state must not be NULL");
+    assert!(
+        !codec2_state.is_null(),
+        "codec2_bytes_per_frame: codec2_state must not be NULL"
+    );
     BYTES_PER_FRAME as c_int
 }
 
@@ -160,7 +194,10 @@ mod tests {
                 let mut speech_out = [0i16; SAMPLES_PER_FRAME];
                 codec2_decode(dec_handle, speech_out.as_mut_ptr(), bytes.as_ptr());
                 for &s in &speech_out {
-                    assert!(s.abs() < 32767, "sample hit clip boundary on frame {frame_i}: {s}");
+                    assert!(
+                        s.abs() < 32767,
+                        "sample hit clip boundary on frame {frame_i}: {s}"
+                    );
                 }
             }
 
@@ -172,7 +209,10 @@ mod tests {
     #[test]
     fn create_rejects_every_mode_but_3200() {
         for mode in [1, 2, 3, 4, 5, 8, -1, 999] {
-            assert!(codec2_create(mode).is_null(), "mode {mode} should be rejected (only CODEC2_MODE_3200 is implemented)");
+            assert!(
+                codec2_create(mode).is_null(),
+                "mode {mode} should be rejected (only CODEC2_MODE_3200 is implemented)"
+            );
         }
         unsafe {
             let h = codec2_create(CODEC2_MODE_3200);

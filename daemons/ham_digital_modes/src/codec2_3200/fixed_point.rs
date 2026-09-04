@@ -70,12 +70,15 @@ const LOG2_LUT_SIZE: usize = (1 << LOG2_LUT_BITS) + 1;
 
 fn log2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
     static TABLE: OnceLock<[f32; LOG2_LUT_SIZE]> = OnceLock::new();
-    TABLE.get_or_init(|| std::array::from_fn(|i| (1.0 + i as f32 / (1u32 << LOG2_LUT_BITS) as f32).log2()))
+    TABLE.get_or_init(|| {
+        std::array::from_fn(|i| (1.0 + i as f32 / (1u32 << LOG2_LUT_BITS) as f32).log2())
+    })
 }
 
 fn exp2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
     static TABLE: OnceLock<[f32; LOG2_LUT_SIZE]> = OnceLock::new();
-    TABLE.get_or_init(|| std::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2()))
+    TABLE
+        .get_or_init(|| std::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2()))
 }
 
 /// `log2(x)` via IEEE754 exponent/mantissa split (exact, free -- just
@@ -129,7 +132,11 @@ mod tests {
 
     macro_rules! fixture {
         ($name:literal) => {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/", $name)
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/",
+                $name
+            )
         };
     }
 
@@ -138,8 +145,16 @@ mod tests {
             .unwrap_or_else(|e| panic!("{path}: {e}"))
             .lines()
             .map(|line| {
-                let v: Vec<f32> = line.split_whitespace().map(|s| s.parse().unwrap()).collect();
-                assert_eq!(v.len(), cols, "line has {} fields, expected {cols}", v.len());
+                let v: Vec<f32> = line
+                    .split_whitespace()
+                    .map(|s| s.parse().unwrap())
+                    .collect();
+                assert_eq!(
+                    v.len(),
+                    cols,
+                    "line has {} fields, expected {cols}",
+                    v.len()
+                );
                 v
             })
             .collect()
@@ -160,7 +175,10 @@ mod tests {
             max_rel_err = max_rel_err.max(rel_err);
             x *= 1.0173; // dense, irrational-ish multiplicative step
         }
-        assert!(max_rel_err < 1e-4, "log2_lut/exp2_lut round trip relative error too large: {max_rel_err}");
+        assert!(
+            max_rel_err < 1e-4,
+            "log2_lut/exp2_lut round trip relative error too large: {max_rel_err}"
+        );
     }
 
     /// Independent plain-float reference (`log10`/`powf`, no LUT at
@@ -175,20 +193,35 @@ mod tests {
     }
 
     #[test]
-    fn the_8_bit_log2_lut_reproduces_the_plain_float_log10_quantizer_decision_on_real_encoder_side_data_with_zero_index_mismatches() {
+    fn the_8_bit_log2_lut_reproduces_the_plain_float_log10_quantizer_decision_on_real_encoder_side_data_with_zero_index_mismatches(
+    ) {
         // Real ENCODER-side e (the actual encode_energy() call-site
         // argument, captured directly -- see quantise.rs's own test of
         // the same fixture for why that distinction matters).
         let e_path = fixture!("codec2_enc_e_dump.txt");
         let es = read_dump(e_path, 1);
-        assert!(es.len() > 300, "expected the real captured fixture corpus, got {} rows", es.len());
+        assert!(
+            es.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            es.len()
+        );
 
         let mut mismatches = 0;
         for row in &es {
             let e = row[0];
-            let plain_idx = super::super::quantise::quantize_linear(reference_e_db(e), super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
+            let plain_idx = super::super::quantise::quantize_linear(
+                reference_e_db(e),
+                super::super::E_MIN_DB,
+                super::super::E_MAX_DB,
+                super::super::E_BITS,
+            );
             let lut_e_db = 10.0 * (log2_lut(e.max(1e-12)) / std::f32::consts::LOG2_10);
-            let lut_idx = super::super::quantise::quantize_linear(lut_e_db, super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
+            let lut_idx = super::super::quantise::quantize_linear(
+                lut_e_db,
+                super::super::E_MIN_DB,
+                super::super::E_MAX_DB,
+                super::super::E_BITS,
+            );
             if plain_idx != lut_idx {
                 mismatches += 1;
             }
@@ -197,7 +230,8 @@ mod tests {
     }
 
     #[test]
-    fn a_deliberately_coarse_4_bit_lut_produces_real_index_mismatches_confirming_the_test_above_is_not_vacuous() {
+    fn a_deliberately_coarse_4_bit_lut_produces_real_index_mismatches_confirming_the_test_above_is_not_vacuous(
+    ) {
         // Negative control, same methodology the plan doc itself used
         // for aks_to_mag2: rerun the real fixture corpus through the
         // exact same interpolation code at a much coarser resolution
@@ -206,7 +240,9 @@ mod tests {
         // resolution matters, just that log2/exp2-LUT-shaped code
         // happens to always match float here regardless of table size.
         const COARSE_BITS: u32 = 4;
-        let coarse_log2: Vec<f32> = (0..=(1u32 << COARSE_BITS)).map(|i| (1.0 + i as f32 / (1u32 << COARSE_BITS) as f32).log2()).collect();
+        let coarse_log2: Vec<f32> = (0..=(1u32 << COARSE_BITS))
+            .map(|i| (1.0 + i as f32 / (1u32 << COARSE_BITS) as f32).log2())
+            .collect();
 
         let e_path = fixture!("codec2_enc_e_dump.txt");
         let es = read_dump(e_path, 1);
@@ -214,9 +250,20 @@ mod tests {
         let mut mismatches = 0;
         for row in &es {
             let e = row[0].max(1e-12);
-            let e_db_coarse = 10.0 * (log2_lut_generic(e, COARSE_BITS, &coarse_log2) / std::f32::consts::LOG2_10);
-            let coarse_idx = super::super::quantise::quantize_linear(e_db_coarse, super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
-            let plain_idx = super::super::quantise::quantize_linear(reference_e_db(e), super::super::E_MIN_DB, super::super::E_MAX_DB, super::super::E_BITS);
+            let e_db_coarse =
+                10.0 * (log2_lut_generic(e, COARSE_BITS, &coarse_log2) / std::f32::consts::LOG2_10);
+            let coarse_idx = super::super::quantise::quantize_linear(
+                e_db_coarse,
+                super::super::E_MIN_DB,
+                super::super::E_MAX_DB,
+                super::super::E_BITS,
+            );
+            let plain_idx = super::super::quantise::quantize_linear(
+                reference_e_db(e),
+                super::super::E_MIN_DB,
+                super::super::E_MAX_DB,
+                super::super::E_BITS,
+            );
             if coarse_idx != plain_idx {
                 mismatches += 1;
             }
@@ -225,7 +272,8 @@ mod tests {
     }
 
     #[test]
-    fn encode_energy_and_decode_energy_now_run_through_the_lut_and_still_round_trip_within_one_quantizer_step() {
+    fn encode_energy_and_decode_energy_now_run_through_the_lut_and_still_round_trip_within_one_quantizer_step(
+    ) {
         // Closes the loop advisor flagged: after quantise::encode_energy/
         // decode_energy were switched to call straight into this
         // module's LUT, does a real captured e still round-trip through
@@ -238,7 +286,8 @@ mod tests {
         // this module too, right next to the LUT it now depends on.)
         let e_path = fixture!("codec2_enc_e_dump.txt");
         let es = read_dump(e_path, 1);
-        let step_db = (super::super::E_MAX_DB - super::super::E_MIN_DB) / (1 << super::super::E_BITS) as f32;
+        let step_db =
+            (super::super::E_MAX_DB - super::super::E_MIN_DB) / (1 << super::super::E_BITS) as f32;
 
         for row in &es {
             let e = row[0];
@@ -280,7 +329,10 @@ mod tests {
         let lsp_rows = read_dump(fixture!("codec2_lsp_dump.txt"), super::super::LPC_ORD + 1);
         let e_rows = read_dump(fixture!("codec2_enc_e_dump.txt"), 1);
         let n = lsp_rows.len().min(e_rows.len());
-        assert!(n > 300, "expected the real captured fixture corpus, got {n} rows");
+        assert!(
+            n > 300,
+            "expected the real captured fixture corpus, got {n} rows"
+        );
 
         let fft = {
             let mut planner = rustfft::FftPlanner::<f32>::new();
@@ -310,11 +362,30 @@ mod tests {
 
             let ak = super::super::lpc::lsp_to_lpc(&lsp);
             let mut model = super::super::envelope::Model::new(wo, voiced);
-            let _aw = super::super::envelope::compute_harmonic_amplitudes(fft.as_ref(), &ak, e, &mut model);
+            let _aw = super::super::envelope::compute_harmonic_amplitudes(
+                fft.as_ref(),
+                &ak,
+                e,
+                &mut model,
+            );
             super::super::envelope::apply_first_harmonic_correction(&mut model);
 
-            let (new_plain_bg, plain_decisions) = super::super::synthesis::postfilter_step(model.voiced, model.l, &model.a, plain_bg, f32::log2, f32::exp2);
-            let (new_lut_bg, lut_decisions) = super::super::synthesis::postfilter_step(model.voiced, model.l, &model.a, lut_bg, log2_lut, exp2_lut);
+            let (new_plain_bg, plain_decisions) = super::super::synthesis::postfilter_step(
+                model.voiced,
+                model.l,
+                &model.a,
+                plain_bg,
+                f32::log2,
+                f32::exp2,
+            );
+            let (new_lut_bg, lut_decisions) = super::super::synthesis::postfilter_step(
+                model.voiced,
+                model.l,
+                &model.a,
+                lut_bg,
+                log2_lut,
+                exp2_lut,
+            );
 
             max_bg_drift_db = max_bg_drift_db.max((new_plain_bg - new_lut_bg).abs());
             plain_bg = new_plain_bg;

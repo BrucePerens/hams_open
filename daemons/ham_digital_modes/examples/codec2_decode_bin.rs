@@ -10,7 +10,7 @@
 //!
 //! Usage: `cargo run --example codec2_decode_bin -- input.bin output.wav`
 
-use ham_digital_modes::codec2_3200::{Decoder, BYTES_PER_FRAME, SAMPLE_RATE, SAMPLES_PER_FRAME};
+use ham_digital_modes::codec2_3200::{Decoder, BYTES_PER_FRAME, SAMPLES_PER_FRAME, SAMPLE_RATE};
 
 fn write_wav_mono_i16(path: &str, samples: &[i16]) {
     let data_bytes = (samples.len() * 2) as u32;
@@ -43,7 +43,9 @@ fn main() {
     let mut decoder = Decoder::new();
     let mut samples = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
     for f in 0..n_frames {
-        let frame: [u8; BYTES_PER_FRAME] = data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+        let frame: [u8; BYTES_PER_FRAME] = data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+            .try_into()
+            .unwrap();
         let out = decoder.decode(&frame);
         samples.extend_from_slice(&out);
     }
@@ -53,5 +55,9 @@ fn main() {
     let sumsq: f64 = samples.iter().map(|&s| (s as f64) * (s as f64)).sum();
     let rms = (sumsq / samples.len() as f64).sqrt();
     let max_abs = samples.iter().map(|&s| s.unsigned_abs()).max().unwrap_or(0);
-    eprintln!("decoded {n_frames} frames, {} samples, RMS={rms:.1}, max|sample|={max_abs} -> {}", samples.len(), args[2]);
+    eprintln!(
+        "decoded {n_frames} frames, {} samples, RMS={rms:.1}, max|sample|={max_abs} -> {}",
+        samples.len(),
+        args[2]
+    );
 }

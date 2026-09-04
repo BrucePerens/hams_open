@@ -101,7 +101,8 @@ impl Ft8Decoder {
     /// slot's audio.
     pub fn decode(&mut self) -> Vec<(String, i32, f32)> {
         const MAX_MESSAGES: usize = 50;
-        let mut out_messages = [[0 as std::os::raw::c_char; ffi::FTX_MAX_MESSAGE_LENGTH]; MAX_MESSAGES];
+        let mut out_messages =
+            [[0 as std::os::raw::c_char; ffi::FTX_MAX_MESSAGE_LENGTH]; MAX_MESSAGES];
         let mut out_snr = [0i32; MAX_MESSAGES];
         let mut out_freq_hz = [0f32; MAX_MESSAGES];
 
@@ -118,7 +119,11 @@ impl Ft8Decoder {
         (0..count as usize)
             .map(|i| {
                 let cstr = unsafe { std::ffi::CStr::from_ptr(out_messages[i].as_ptr()) };
-                (cstr.to_string_lossy().trim().to_string(), out_snr[i], out_freq_hz[i])
+                (
+                    cstr.to_string_lossy().trim().to_string(),
+                    out_snr[i],
+                    out_freq_hz[i],
+                )
             })
             .collect()
     }
@@ -192,7 +197,11 @@ fn gfsk_pulse(t_over_symbol_period: f64, symbol_period_s: f64) -> f64 {
 /// integral of that deviation, and a raised-cosine amplitude ramp over
 /// the first/last T/8 = 20ms so the signal doesn't key on/off with a
 /// hard edge.
-pub fn synthesize_waveform(tones: &[u8; ffi::FT8_NN], sample_rate: u32, base_freq_hz: f32) -> Vec<f32> {
+pub fn synthesize_waveform(
+    tones: &[u8; ffi::FT8_NN],
+    sample_rate: u32,
+    base_freq_hz: f32,
+) -> Vec<f32> {
     synthesize_waveform_with_pulse(tones, sample_rate, base_freq_hz, gfsk_pulse)
 }
 
@@ -292,7 +301,10 @@ mod tests {
         // Feed a full ~15s slot of silence -- 12000 Hz * 15s.
         decoder.feed(&vec![0.0f32; 12000 * 15]);
         let messages = decoder.decode();
-        assert!(messages.is_empty(), "silence must never produce a phantom decode");
+        assert!(
+            messages.is_empty(),
+            "silence must never produce a phantom decode"
+        );
     }
 
     /// The real correctness proof for synthesize_waveform(): if the GFSK
@@ -413,7 +425,11 @@ mod tests {
         let samples = synthesize_waveform(&tones, sample_rate, 1500.0);
 
         // First sample (t=0): A(t) = 0.5*(1-cos(0)) = 0.
-        assert!(samples[0].abs() < 1e-6, "signal must start at exactly zero amplitude, got {}", samples[0]);
+        assert!(
+            samples[0].abs() < 1e-6,
+            "signal must start at exactly zero amplitude, got {}",
+            samples[0]
+        );
 
         // A few samples in (still well inside the 20ms ramp), amplitude
         // should be small but the carrier is already oscillating -- not
@@ -432,7 +448,10 @@ mod tests {
         let mid_start = (2.5 * 0.160 * sample_rate as f64) as usize;
         let mid_window = &samples[mid_start..mid_start + sample_rate as usize / 10];
         let mid_peak = mid_window.iter().fold(0.0f32, |m, &s| m.max(s.abs()));
-        assert!(mid_peak > 0.9, "steady-state envelope should reach near-unit amplitude, got peak {mid_peak}");
+        assert!(
+            mid_peak > 0.9,
+            "steady-state envelope should reach near-unit amplitude, got peak {mid_peak}"
+        );
     }
 
     /// An unfiltered rectangular pulse (unit height over one symbol
@@ -493,15 +512,18 @@ mod tests {
         let in_band_probe = (band_low + band_high) / 2.0;
 
         let gfsk = synthesize_waveform_with_pulse(&tones, sample_rate, base_freq_hz, gfsk_pulse);
-        let rect = synthesize_waveform_with_pulse(&tones, sample_rate, base_freq_hz, rectangular_pulse);
+        let rect =
+            synthesize_waveform_with_pulse(&tones, sample_rate, base_freq_hz, rectangular_pulse);
 
         let gfsk_in_band_db = db(power_at_freq(&gfsk, sample_rate, in_band_probe));
         let rect_in_band_db = db(power_at_freq(&rect, sample_rate, in_band_probe));
 
         for offset_hz in [50.0, 100.0, 200.0] {
             let probe = band_low - offset_hz;
-            let gfsk_suppression_db = gfsk_in_band_db - db(power_at_freq(&gfsk, sample_rate, probe));
-            let rect_suppression_db = rect_in_band_db - db(power_at_freq(&rect, sample_rate, probe));
+            let gfsk_suppression_db =
+                gfsk_in_band_db - db(power_at_freq(&gfsk, sample_rate, probe));
+            let rect_suppression_db =
+                rect_in_band_db - db(power_at_freq(&rect, sample_rate, probe));
             assert!(
                 gfsk_suppression_db > rect_suppression_db + 10.0,
                 "at {offset_hz}Hz below the band edge, real GFSK shaping (BT={FT8_BT}) should suppress \

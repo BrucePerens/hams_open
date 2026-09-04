@@ -7,9 +7,9 @@
 //! dependencies; a proprietary/trade-secret one cannot.
 
 pub mod codec2_3200;
+pub mod ft8;
 pub mod psk31;
+pub mod rtty;
 pub mod wspr;
 pub mod wspr_decode;
 pub mod wspr_sync;
-pub mod ft8;
-pub mod rtty;

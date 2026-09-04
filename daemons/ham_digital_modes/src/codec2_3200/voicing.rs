@@ -26,7 +26,9 @@ pub struct VoicingState {
 
 impl Default for VoicingState {
     fn default() -> Self {
-        VoicingState { noise_floor_db: -20.0 }
+        VoicingState {
+            noise_floor_db: -20.0,
+        }
     }
 }
 
@@ -40,7 +42,10 @@ impl VoicingState {
 /// Periodic (voiced) signals cross zero close to twice per period;
 /// broadband noise or fricatives cross far more often.
 fn zero_crossing_rate(samples: &[f32]) -> f32 {
-    let crossings = samples.windows(2).filter(|w| (w[0] >= 0.0) != (w[1] >= 0.0)).count();
+    let crossings = samples
+        .windows(2)
+        .filter(|w| (w[0] >= 0.0) != (w[1] >= 0.0))
+        .count();
     crossings as f32 / (samples.len() - 1) as f32
 }
 
@@ -78,7 +83,9 @@ mod tests {
     use super::*;
 
     fn synthetic_tone(f0_hz: f32, amp: f32, n: usize, sample_rate: f32) -> Vec<f32> {
-        (0..n).map(|i| amp * (std::f32::consts::TAU * f0_hz * i as f32 / sample_rate).sin()).collect()
+        (0..n)
+            .map(|i| amp * (std::f32::consts::TAU * f0_hz * i as f32 / sample_rate).sin())
+            .collect()
     }
 
     fn white_noise(amp: f32, n: usize, seed: &mut u32) -> Vec<f32> {
@@ -99,7 +106,10 @@ mod tests {
             is_voiced(&mut state, &silence);
         }
         let tone = synthetic_tone(150.0, 8000.0, 80, 8000.0);
-        assert!(is_voiced(&mut state, &tone), "a clean 150Hz tone at real speech amplitude should be judged voiced");
+        assert!(
+            is_voiced(&mut state, &tone),
+            "a clean 150Hz tone at real speech amplitude should be judged voiced"
+        );
     }
 
     #[test]
@@ -111,7 +121,10 @@ mod tests {
             is_voiced(&mut state, &silence);
         }
         let noise = white_noise(8000.0, 80, &mut seed);
-        assert!(!is_voiced(&mut state, &noise), "broadband noise should not be judged voiced");
+        assert!(
+            !is_voiced(&mut state, &noise),
+            "broadband noise should not be judged voiced"
+        );
     }
 
     #[test]
@@ -136,6 +149,9 @@ mod tests {
             is_voiced(&mut state, &noise);
         }
         let quiet_tone = synthetic_tone(150.0, 100.0, 80, 8000.0);
-        assert!(!is_voiced(&mut state, &quiet_tone), "a tone too quiet relative to the noise floor should not be voiced");
+        assert!(
+            !is_voiced(&mut state, &quiet_tone),
+            "a tone too quiet relative to the noise floor should not be voiced"
+        );
     }
 }

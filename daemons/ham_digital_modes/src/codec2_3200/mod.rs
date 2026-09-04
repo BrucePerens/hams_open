@@ -204,7 +204,12 @@ pub struct Encoder {
 
 impl Default for Encoder {
     fn default() -> Self {
-        Encoder { sn: [0.0; M_PITCH], window: window::make_analysis_window(), nlp_state: nlp::NlpState::new(), voicing_state: voicing::VoicingState::new() }
+        Encoder {
+            sn: [0.0; M_PITCH],
+            window: window::make_analysis_window(),
+            nlp_state: nlp::NlpState::new(),
+            voicing_state: voicing::VoicingState::new(),
+        }
     }
 }
 
@@ -238,7 +243,11 @@ impl Encoder {
         let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
 
         let mut windowed = [0.0f32; M_PITCH];
-        for ((w, &s), &win) in windowed.iter_mut().zip(self.sn.iter()).zip(self.window.iter()) {
+        for ((w, &s), &win) in windowed
+            .iter_mut()
+            .zip(self.sn.iter())
+            .zip(self.window.iter())
+        {
             *w = s * win;
         }
         let r = lpc::autocorrelate(&windowed);
@@ -252,7 +261,13 @@ impl Encoder {
         let e_index = quantise::encode_energy(e);
         let lsp_indexes = quantise::encode_lsps_delta_scalar(&lsp);
 
-        let fields = bits::FrameFields { voiced0, voiced1, wo_index, e_index, lsp_indexes };
+        let fields = bits::FrameFields {
+            voiced0,
+            voiced1,
+            wo_index,
+            e_index,
+            lsp_indexes,
+        };
         bits::pack_frame(&fields, WO_BITS, E_BITS)
     }
 }
@@ -312,7 +327,14 @@ impl Decoder {
         let lsps1 = quantise::decode_lsps_delta_scalar(&fields.lsp_indexes);
 
         let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
-        let wo0 = interp::interp_wo(fields.voiced0, self.prev_wo, self.prev_voiced, wo1, fields.voiced1, W0_MIN);
+        let wo0 = interp::interp_wo(
+            fields.voiced0,
+            self.prev_wo,
+            self.prev_voiced,
+            wo1,
+            fields.voiced1,
+            W0_MIN,
+        );
         let e0 = interp::interp_energy(self.prev_e, e1);
         let lsps0 = interp::interpolate_lsp(&self.prev_lsps, &lsps1);
 
@@ -343,7 +365,8 @@ mod tests {
     fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
         std::array::from_fn(|i| {
             let t = (t0 + i) as f32 / SAMPLE_RATE as f32;
-            let v = 8000.0 * (std::f32::consts::TAU * f0 * t).sin() + 3000.0 * (std::f32::consts::TAU * 2.0 * f0 * t).sin();
+            let v = 8000.0 * (std::f32::consts::TAU * f0 * t).sin()
+                + 3000.0 * (std::f32::consts::TAU * 2.0 * f0 * t).sin();
             v as i16
         })
     }
@@ -406,22 +429,41 @@ mod tests {
     /// lossily coded) -- the synthetic signal has no such concern.
     #[test]
     fn decoder_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream() {
-        let bits_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin");
-        let pcm_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/synthetic_c_decoded_pcm.bin");
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
+        );
+        let pcm_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_decoded_pcm.bin"
+        );
 
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let pcm_data = std::fs::read(pcm_path).unwrap_or_else(|e| panic!("{pcm_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
-        assert_eq!(pcm_data.len(), n_frames * SAMPLES_PER_FRAME * 2, "bitstream/PCM fixture frame counts don't line up");
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
+        assert_eq!(
+            pcm_data.len(),
+            n_frames * SAMPLES_PER_FRAME * 2,
+            "bitstream/PCM fixture frame counts don't line up"
+        );
 
         let mut decoder = Decoder::new();
         let mut rust_pcm: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] = bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             rust_pcm.extend_from_slice(&decoder.decode(&frame));
         }
-        let ref_pcm: Vec<i16> = pcm_data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+        let ref_pcm: Vec<i16> = pcm_data
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .collect();
 
         let n = rust_pcm.len();
         let mean_a: f64 = rust_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;

@@ -105,8 +105,13 @@ pub(crate) fn pack_call(callsign: &str) -> Option<u32> {
         return None; // not a standard-format callsign this function handles
     }
 
-    let codes: Vec<u32> = call6.iter().map(|&c| callsign_char_code(c)).collect::<Option<Vec<u8>>>()?
-        .into_iter().map(|v| v as u32).collect();
+    let codes: Vec<u32> = call6
+        .iter()
+        .map(|&c| callsign_char_code(c))
+        .collect::<Option<Vec<u8>>>()?
+        .into_iter()
+        .map(|v| v as u32)
+        .collect();
     let mut n = codes[0];
     n = n * 36 + codes[1];
     n = n * 10 + codes[2];
@@ -124,8 +129,13 @@ pub(crate) fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
     if bytes.len() != 4 {
         return None;
     }
-    let g: Vec<i64> = bytes.iter().map(|&c| grid_char_code(c)).collect::<Option<Vec<u8>>>()?
-        .into_iter().map(|v| v as i64).collect();
+    let g: Vec<i64> = bytes
+        .iter()
+        .map(|&c| grid_char_code(c))
+        .collect::<Option<Vec<u8>>>()?
+        .into_iter()
+        .map(|v| v as i64)
+        .collect();
     let m = (179 - 10 * g[0] - g[2]) * 180 + 10 * g[1] + g[3];
     let m = m * 128 + power_dbm as i64 + 64;
     if !(0..(1 << 22)).contains(&m) {
@@ -217,7 +227,11 @@ pub(crate) fn unpack_grid4_power(m: u32) -> Option<(String, i32)> {
     let g2 = sum % 10;
     let g1 = g1g3 / 10;
     let g3 = g1g3 % 10;
-    if !(0..18).contains(&g0) || !(0..18).contains(&g1) || !(0..10).contains(&g2) || !(0..10).contains(&g3) {
+    if !(0..18).contains(&g0)
+        || !(0..18).contains(&g1)
+        || !(0..10).contains(&g2)
+        || !(0..10).contains(&g3)
+    {
         return None; // m was outside the range any real pack_grid4_power() output could produce.
     }
     let grid = format!(
@@ -305,7 +319,11 @@ pub(crate) fn convolutional_encode(data: &[u8; 11]) -> [u8; 176] {
 /// Returns None for a callsign/grid this function's own documented
 /// scope doesn't cover (Type 2/3 messages, malformed input) rather than
 /// guessing at a result.
-pub fn wspr_encode_symbols(callsign: &str, grid4: &str, power_dbm: i32) -> Option<[u8; WSPR_NUM_SYMBOLS]> {
+pub fn wspr_encode_symbols(
+    callsign: &str,
+    grid4: &str,
+    power_dbm: i32,
+) -> Option<[u8; WSPR_NUM_SYMBOLS]> {
     let n = pack_call(callsign)?;
     let m = pack_grid4_power(grid4, power_dbm)?;
 
@@ -350,7 +368,11 @@ pub fn wspr_modulate(symbols: &[u8], base_hz: f64, sample_rate: u32) -> Vec<i16>
         let phase_inc = 2.0 * std::f64::consts::PI * freq / sample_rate as f64;
         for _ in 0..samples_per_symbol {
             let sample = phase.cos();
-            out.push((sample * i16::MAX as f64).round().clamp(i16::MIN as f64, i16::MAX as f64) as i16);
+            out.push(
+                (sample * i16::MAX as f64)
+                    .round()
+                    .clamp(i16::MIN as f64, i16::MAX as f64) as i16,
+            );
             phase += phase_inc;
             if phase > 2.0 * std::f64::consts::PI {
                 phase -= 2.0 * std::f64::consts::PI;
@@ -362,7 +384,13 @@ pub fn wspr_modulate(symbols: &[u8], base_hz: f64, sample_rate: u32) -> Vec<i16>
 
 /// High-level: message fields in, PCM audio out. `None` if the message
 /// is outside this function's documented Type-1-only scope.
-pub fn wspr_encode_audio(callsign: &str, grid4: &str, power_dbm: i32, base_hz: f64, sample_rate: u32) -> Option<Vec<i16>> {
+pub fn wspr_encode_audio(
+    callsign: &str,
+    grid4: &str,
+    power_dbm: i32,
+    base_hz: f64,
+    sample_rate: u32,
+) -> Option<Vec<i16>> {
     let symbols = wspr_encode_symbols(callsign, grid4, power_dbm)?;
     Some(wspr_modulate(&symbols, base_hz, sample_rate))
 }
@@ -422,7 +450,13 @@ fn wrap_mono_i16_as_wav(samples: &[i16], sample_rate: u32) -> Vec<u8> {
 /// WSJT-X sample recordings) once that multi-day DSP project is
 /// actually underway. Returns `None` for the same out-of-scope
 /// messages `wspr_encode_audio()` already refuses.
-pub fn wspr_encode_wav_bytes(callsign: &str, grid4: &str, power_dbm: i32, base_hz: f64, sample_rate: u32) -> Option<Vec<u8>> {
+pub fn wspr_encode_wav_bytes(
+    callsign: &str,
+    grid4: &str,
+    power_dbm: i32,
+    base_hz: f64,
+    sample_rate: u32,
+) -> Option<Vec<u8>> {
     let samples = wspr_encode_audio(callsign, grid4, power_dbm, base_hz, sample_rate)?;
     Some(wrap_mono_i16_as_wav(&samples, sample_rate))
 }
@@ -554,15 +588,23 @@ mod tests {
     #[test]
     fn pack_and_unpack_round_trip_for_both_callsign_layouts_and_several_grids() {
         for (call, grid, power) in [
-            ("K6BP", "CM87", 30),   // 1-letter prefix -- pack_call's implicit-leading-space layout.
-            ("W1AW", "FN31", 37),   // 1-letter prefix.
-            ("K9AN", "EN50", 33),   // 1-letter prefix.
+            ("K6BP", "CM87", 30), // 1-letter prefix -- pack_call's implicit-leading-space layout.
+            ("W1AW", "FN31", 37), // 1-letter prefix.
+            ("K9AN", "EN50", 33), // 1-letter prefix.
             ("KA9GRZ", "DM79", 20), // 2-letter prefix, digit at position 2 -- pack_call's other layout.
         ] {
             let n = pack_call(call).unwrap();
             let m = pack_grid4_power(grid, power).unwrap();
-            assert_eq!(unpack_call(n).as_deref(), Some(call), "callsign round trip for {call}");
-            assert_eq!(unpack_grid4_power(m), Some((grid.to_string(), power)), "grid/power round trip for {grid} {power}");
+            assert_eq!(
+                unpack_call(n).as_deref(),
+                Some(call),
+                "callsign round trip for {call}"
+            );
+            assert_eq!(
+                unpack_grid4_power(m),
+                Some((grid.to_string(), power)),
+                "grid/power round trip for {grid} {power}"
+            );
         }
     }
 
@@ -594,7 +636,10 @@ mod tests {
             }
         }
 
-        assert_eq!(unpack_wspr_message(decoded_bits), Some(("K6BP".to_string(), "CM87".to_string(), 30)));
+        assert_eq!(
+            unpack_wspr_message(decoded_bits),
+            Some(("K6BP".to_string(), "CM87".to_string(), 30))
+        );
     }
 
     #[test]
@@ -654,10 +699,17 @@ mod tests {
         let mut seen = [false; WSPR_NUM_SYMBOLS];
         for &target in perm.iter() {
             assert!(target < WSPR_NUM_SYMBOLS);
-            assert!(!seen[target], "index {} produced twice by the interleaver", target);
+            assert!(
+                !seen[target],
+                "index {} produced twice by the interleaver",
+                target
+            );
             seen[target] = true;
         }
-        assert!(seen.iter().all(|&s| s), "interleaver did not cover all 162 symbol slots");
+        assert!(
+            seen.iter().all(|&s| s),
+            "interleaver did not cover all 162 symbol slots"
+        );
     }
 
     #[test]
@@ -671,21 +723,36 @@ mod tests {
         let out1 = convolutional_encode(&data);
         let out2 = convolutional_encode(&data);
         assert_eq!(out1, out2);
-        assert!(out1.contains(&1), "encoder output is all zero -- polynomials likely wrong");
-        assert!(out1.contains(&0), "encoder output is all one -- polynomials likely wrong");
+        assert!(
+            out1.contains(&1),
+            "encoder output is all zero -- polynomials likely wrong"
+        );
+        assert!(
+            out1.contains(&0),
+            "encoder output is all one -- polynomials likely wrong"
+        );
     }
 
     #[test]
     fn encode_symbols_produces_valid_162_symbol_sequence_for_a_real_message() {
-        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).expect("valid Type 1 message should encode");
+        let symbols =
+            wspr_encode_symbols("K6BP", "CM87", 30).expect("valid Type 1 message should encode");
         assert_eq!(symbols.len(), WSPR_NUM_SYMBOLS);
-        assert!(symbols.iter().all(|&s| s <= 3), "every WSPR symbol must be a 2-bit (0-3) tone index");
+        assert!(
+            symbols.iter().all(|&s| s <= 3),
+            "every WSPR symbol must be a 2-bit (0-3) tone index"
+        );
         // The sync bit is always embedded in the symbol's LSB (symbol =
         // 2*data_bit + sync_bit) -- confirm that relationship holds for
         // every symbol against the known sync vector, not just that
         // values are in range.
         for i in 0..WSPR_NUM_SYMBOLS {
-            assert_eq!(symbols[i] & 1, SYNC_VECTOR[i], "symbol {} lost its sync bit", i);
+            assert_eq!(
+                symbols[i] & 1,
+                SYNC_VECTOR[i],
+                "symbol {} lost its sync bit",
+                i
+            );
         }
     }
 
@@ -704,7 +771,11 @@ mod tests {
     /// consumer, not just with itself.
     fn read_wav_mono_i16(bytes: &[u8]) -> Vec<i16> {
         assert_eq!(&bytes[8..12], b"WAVE");
-        assert_eq!(&bytes[36..40], b"data", "expected a standard 44-byte-header PCM WAV");
+        assert_eq!(
+            &bytes[36..40],
+            b"data",
+            "expected a standard 44-byte-header PCM WAV"
+        );
         bytes[44..]
             .chunks_exact(2)
             .map(|c| i16::from_le_bytes([c[0], c[1]]))
@@ -735,20 +806,43 @@ mod tests {
         assert_eq!(&wav_bytes[0..4], b"RIFF");
         assert_eq!(&wav_bytes[8..12], b"WAVE");
         assert_eq!(&wav_bytes[12..16], b"fmt ");
-        assert_eq!(u16::from_le_bytes([wav_bytes[20], wav_bytes[21]]), 1, "AudioFormat must be 1 (PCM)");
-        assert_eq!(u16::from_le_bytes([wav_bytes[22], wav_bytes[23]]), 1, "NumChannels must be 1 (mono)");
+        assert_eq!(
+            u16::from_le_bytes([wav_bytes[20], wav_bytes[21]]),
+            1,
+            "AudioFormat must be 1 (PCM)"
+        );
+        assert_eq!(
+            u16::from_le_bytes([wav_bytes[22], wav_bytes[23]]),
+            1,
+            "NumChannels must be 1 (mono)"
+        );
         assert_eq!(
             u32::from_le_bytes([wav_bytes[24], wav_bytes[25], wav_bytes[26], wav_bytes[27]]),
             sample_rate
         );
-        assert_eq!(u16::from_le_bytes([wav_bytes[34], wav_bytes[35]]), 16, "BitsPerSample must be 16");
+        assert_eq!(
+            u16::from_le_bytes([wav_bytes[34], wav_bytes[35]]),
+            16,
+            "BitsPerSample must be 16"
+        );
         assert_eq!(&wav_bytes[36..40], b"data");
 
-        let declared_data_size = u32::from_le_bytes([wav_bytes[40], wav_bytes[41], wav_bytes[42], wav_bytes[43]]) as usize;
-        assert_eq!(declared_data_size, wav_bytes.len() - 44, "declared data chunk size must match the actual payload length");
+        let declared_data_size =
+            u32::from_le_bytes([wav_bytes[40], wav_bytes[41], wav_bytes[42], wav_bytes[43]])
+                as usize;
+        assert_eq!(
+            declared_data_size,
+            wav_bytes.len() - 44,
+            "declared data chunk size must match the actual payload length"
+        );
 
-        let declared_riff_size = u32::from_le_bytes([wav_bytes[4], wav_bytes[5], wav_bytes[6], wav_bytes[7]]) as usize;
-        assert_eq!(declared_riff_size, wav_bytes.len() - 8, "declared RIFF chunk size must match (file length - 8)");
+        let declared_riff_size =
+            u32::from_le_bytes([wav_bytes[4], wav_bytes[5], wav_bytes[6], wav_bytes[7]]) as usize;
+        assert_eq!(
+            declared_riff_size,
+            wav_bytes.len() - 8,
+            "declared RIFF chunk size must match (file length - 8)"
+        );
     }
 
     #[test]
@@ -762,7 +856,10 @@ mod tests {
         let clean = wspr_modulate(&symbols, 1500.0, 12000);
         let noisy1 = add_awgn(&clean, -20.0, 42);
         let noisy2 = add_awgn(&clean, -20.0, 42);
-        assert_eq!(noisy1, noisy2, "same seed must produce byte-identical noise for a reproducible fixture");
+        assert_eq!(
+            noisy1, noisy2,
+            "same seed must produce byte-identical noise for a reproducible fixture"
+        );
     }
 
     #[test]
@@ -771,7 +868,10 @@ mod tests {
         let clean = wspr_modulate(&symbols, 1500.0, 12000);
         let noisy_a = add_awgn(&clean, -20.0, 1);
         let noisy_b = add_awgn(&clean, -20.0, 2);
-        assert_ne!(noisy_a, noisy_b, "different seeds must not coincidentally produce identical noise");
+        assert_ne!(
+            noisy_a, noisy_b,
+            "different seeds must not coincidentally produce identical noise"
+        );
     }
 
     #[test]
@@ -806,18 +906,30 @@ mod tests {
     #[test]
     fn wav_fixture_with_noise_round_trips_and_returns_none_for_out_of_scope_messages() {
         let sample_rate = 12000u32;
-        let wav_bytes = wspr_encode_wav_bytes_with_noise("K6BP", "CM87", 30, 1500.0, sample_rate, -20.0, 99)
-            .expect("K6BP/CM87/30 is a valid Type 1 message");
+        let wav_bytes =
+            wspr_encode_wav_bytes_with_noise("K6BP", "CM87", 30, 1500.0, sample_rate, -20.0, 99)
+                .expect("K6BP/CM87/30 is a valid Type 1 message");
         // Same 44-byte header shape as the clean variant -- only the PCM
         // payload differs (noisy, not byte-identical to the clean
         // encoder's own output), so the existing header-shape assertions
         // already cover format correctness; just confirm it parses and
         // has the right sample count.
         assert_eq!(&wav_bytes[0..4], b"RIFF");
-        let declared_data_size = u32::from_le_bytes([wav_bytes[40], wav_bytes[41], wav_bytes[42], wav_bytes[43]]) as usize;
+        let declared_data_size =
+            u32::from_le_bytes([wav_bytes[40], wav_bytes[41], wav_bytes[42], wav_bytes[43]])
+                as usize;
         assert_eq!(declared_data_size, wav_bytes.len() - 44);
 
-        assert!(wspr_encode_wav_bytes_with_noise("PJ4/K1ABC", "EN50", 33, 1500.0, sample_rate, -20.0, 99).is_none());
+        assert!(wspr_encode_wav_bytes_with_noise(
+            "PJ4/K1ABC",
+            "EN50",
+            33,
+            1500.0,
+            sample_rate,
+            -20.0,
+            99
+        )
+        .is_none());
     }
 
     #[test]
@@ -825,10 +937,15 @@ mod tests {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let sample_rate = 12000u32;
         let audio = wspr_modulate(&symbols, 1500.0, sample_rate);
-        let expected_samples = WSPR_NUM_SYMBOLS * (sample_rate as f64 / WSPR_SYMBOL_RATE_HZ).round() as usize;
+        let expected_samples =
+            WSPR_NUM_SYMBOLS * (sample_rate as f64 / WSPR_SYMBOL_RATE_HZ).round() as usize;
         assert_eq!(audio.len(), expected_samples);
         // ~110.6s at 12kHz is the documented WSPR transmission length.
         let duration_s = audio.len() as f64 / sample_rate as f64;
-        assert!((duration_s - 110.6).abs() < 0.5, "duration {} s is not close to the documented ~110.6s", duration_s);
+        assert!(
+            (duration_s - 110.6).abs() < 0.5,
+            "duration {} s is not close to the documented ~110.6s",
+            duration_s
+        );
     }
 }

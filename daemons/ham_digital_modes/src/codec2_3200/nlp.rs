@@ -21,7 +21,7 @@
 //! (not exclusive to this one codec's own source) and reimplemented here
 //! from that general understanding, not translated from it.
 
-use super::{M_PITCH, N_SAMP, NLP_DEC, P_MAX, P_MIN, PE_FFT_SIZE, SAMPLE_RATE};
+use super::{M_PITCH, NLP_DEC, N_SAMP, PE_FFT_SIZE, P_MAX, P_MIN, SAMPLE_RATE};
 use rustfft::num_complex::Complex32;
 use rustfft::FftPlanner;
 
@@ -93,7 +93,11 @@ fn design_lowpass(taps: usize, cutoff: f32) -> [f32; LPF_TAPS] {
     let mut sum = 0.0f32;
     for (i, hi) in h.iter_mut().enumerate() {
         let x = i as f32 - center;
-        let sinc = if x.abs() < 1e-8 { 2.0 * cutoff } else { (2.0 * std::f32::consts::PI * cutoff * x).sin() / (std::f32::consts::PI * x) };
+        let sinc = if x.abs() < 1e-8 {
+            2.0 * cutoff
+        } else {
+            (2.0 * std::f32::consts::PI * cutoff * x).sin() / (std::f32::consts::PI * x)
+        };
         let hann = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (taps - 1) as f32).cos();
         *hi = sinc * hann;
         sum += *hi;
@@ -145,7 +149,13 @@ const CNLP: f32 = 0.3;
 /// sub-multiples of `gmax_bin`, preferring one if it's both a genuine
 /// local peak and strong enough (relative to `gmax`) to plausibly be the
 /// real fundamental.
-fn correct_sub_multiples(power: &[f32], gmax: f32, gmax_bin: usize, prev_f0_bin: usize, min_bin: usize) -> usize {
+fn correct_sub_multiples(
+    power: &[f32],
+    gmax: f32,
+    gmax_bin: usize,
+    prev_f0_bin: usize,
+    min_bin: usize,
+) -> usize {
     let mut cmax_bin = gmax_bin;
     let mut mult = 2usize;
     while gmax_bin / mult >= min_bin {
@@ -153,7 +163,11 @@ fn correct_sub_multiples(power: &[f32], gmax: f32, gmax_bin: usize, prev_f0_bin:
         let bmin = ((0.8 * b as f32) as usize).max(min_bin);
         let bmax = ((1.2 * b as f32) as usize).min(power.len() - 1);
 
-        let thresh = if prev_f0_bin > bmin && prev_f0_bin < bmax { CNLP * 0.5 * gmax } else { CNLP * gmax };
+        let thresh = if prev_f0_bin > bmin && prev_f0_bin < bmax {
+            CNLP * 0.5 * gmax
+        } else {
+            CNLP * gmax
+        };
 
         let mut lmax = 0.0f32;
         let mut lmax_bin = bmin;
@@ -164,7 +178,12 @@ fn correct_sub_multiples(power: &[f32], gmax: f32, gmax_bin: usize, prev_f0_bin:
             }
         }
 
-        if lmax > thresh && lmax_bin > 0 && lmax_bin < power.len() - 1 && lmax > power[lmax_bin - 1] && lmax > power[lmax_bin + 1] {
+        if lmax > thresh
+            && lmax_bin > 0
+            && lmax_bin < power.len() - 1
+            && lmax > power[lmax_bin - 1]
+            && lmax > power[lmax_bin + 1]
+        {
             cmax_bin = lmax_bin;
         }
         mult += 1;
@@ -216,7 +235,9 @@ pub fn nlp(state: &mut NlpState, sn: &[f32; M_PITCH]) -> f32 {
 
     const HALF: usize = PE_FFT_SIZE / 2 + 1;
     let half = HALF;
-    let power: [f32; HALF] = std::array::from_fn(|i| state.fft_buf[i].re * state.fft_buf[i].re + state.fft_buf[i].im * state.fft_buf[i].im);
+    let power: [f32; HALF] = std::array::from_fn(|i| {
+        state.fft_buf[i].re * state.fft_buf[i].re + state.fft_buf[i].im * state.fft_buf[i].im
+    });
 
     let bin_to_hz = SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32;
     let lo = (PE_FFT_SIZE * NLP_DEC / P_MAX).max(1);
@@ -293,7 +314,11 @@ mod tests {
             let amps = [1.0, 0.6, 0.3, 0.15];
             let est = estimate_synthetic_pitch(f0, &amps);
             let rel_err = (est - f0).abs() / f0;
-            assert!(rel_err < 0.05, "f0={f0}Hz estimated as {est}Hz, {}% error", rel_err * 100.0);
+            assert!(
+                rel_err < 0.05,
+                "f0={f0}Hz estimated as {est}Hz, {}% error",
+                rel_err * 100.0
+            );
         }
     }
 
@@ -313,7 +338,10 @@ mod tests {
         power[true_bin] = 0.5; // genuine local peak at the true sub-multiple, well above CNLP*gmax
 
         let cmax = correct_sub_multiples(&power, 1.0, true_bin * 2, 0, lo);
-        assert_eq!(cmax, true_bin, "expected correction down to the true sub-multiple bin");
+        assert_eq!(
+            cmax, true_bin,
+            "expected correction down to the true sub-multiple bin"
+        );
     }
 
     #[test]
@@ -328,7 +356,10 @@ mod tests {
         power[gmax_bin] = 1.0;
 
         let cmax = correct_sub_multiples(&power, 1.0, gmax_bin, 0, lo);
-        assert_eq!(cmax, gmax_bin, "nothing should have qualified for correction");
+        assert_eq!(
+            cmax, gmax_bin,
+            "nothing should have qualified for correction"
+        );
     }
 
     #[test]
@@ -350,7 +381,10 @@ mod tests {
         for _ in 0..2000 {
             y = dc_notch(big_offset, &mut mem_x, &mut mem_y);
         }
-        assert!(y.abs() < 1e-3, "notch failed to reject a large constant offset: settled at {y}");
+        assert!(
+            y.abs() < 1e-3,
+            "notch failed to reject a large constant offset: settled at {y}"
+        );
     }
 
     #[test]
@@ -365,13 +399,17 @@ mod tests {
         let n = 2000;
         let mut max_abs = 0.0f32;
         for i in 0..n {
-            let x = 8000.0 * (std::f32::consts::TAU * freq_hz * i as f32 / SAMPLE_RATE as f32).sin();
+            let x =
+                8000.0 * (std::f32::consts::TAU * freq_hz * i as f32 / SAMPLE_RATE as f32).sin();
             let y = dc_notch(x, &mut mem_x, &mut mem_y);
             if i > 200 {
                 max_abs = max_abs.max(y.abs()); // skip the initial transient
             }
         }
-        assert!(max_abs > 4000.0, "notch attenuated a genuine {freq_hz}Hz AC component too much: max |y|={max_abs}");
+        assert!(
+            max_abs > 4000.0,
+            "notch attenuated a genuine {freq_hz}Hz AC component too much: max |y|={max_abs}"
+        );
     }
 
     #[test]

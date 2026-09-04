@@ -29,38 +29,134 @@ const PSK31_BAUD: f64 = 31.25;
 /// (code, bitcount) for each ASCII value 0..127, MSB-first as documented
 /// by the ARRL spec ("transmitted left bit first").
 const VARICODE: [(u16, u8); 128] = [
-    (0b1010101011, 10), (0b1011011011, 10), (0b1011101101, 10), (0b1101110111, 10),
-    (0b1011101011, 10), (0b1101011111, 10), (0b1011101111, 10), (0b1011111101, 10),
-    (0b1011111111, 10), (0b11101111, 8),    (0b11101, 5),       (0b1101101111, 10),
-    (0b1011011101, 10), (0b11111, 5),       (0b1101110101, 10), (0b1110101011, 10),
-    (0b1011110111, 10), (0b1011110101, 10), (0b1110101101, 10), (0b1110101111, 10),
-    (0b1101011011, 10), (0b1101101011, 10), (0b1101101101, 10), (0b1101010111, 10),
-    (0b1101111011, 10), (0b1101111101, 10), (0b1110110111, 10), (0b1101010101, 10),
-    (0b1101011101, 10), (0b1110111011, 10), (0b1011111011, 10), (0b1101111111, 10),
-    (0b1, 1),            (0b111111111, 9),   (0b101011111, 9),   (0b111110101, 9),
-    (0b111011011, 9),    (0b1011010101, 10), (0b1010111011, 10), (0b101111111, 9),
-    (0b11111011, 8),     (0b11110111, 8),    (0b101101111, 9),   (0b111011111, 9),
-    (0b1110101, 7),      (0b110101, 6),      (0b1010111, 7),     (0b110101111, 9),
-    (0b10110111, 8),     (0b10111101, 8),    (0b11101101, 8),    (0b11111111, 8),
-    (0b101110111, 9),    (0b101011011, 9),   (0b101101011, 9),   (0b110101101, 9),
-    (0b110101011, 9),    (0b110110111, 9),   (0b11110101, 8),    (0b110111101, 9),
-    (0b111101101, 9),    (0b1010101, 7),     (0b111010111, 9),   (0b1010101111, 10),
-    (0b1010111101, 10),  (0b1111101, 7),     (0b11101011, 8),    (0b10101101, 8),
-    (0b10110101, 8),     (0b1110111, 7),     (0b11011011, 8),    (0b11111101, 8),
-    (0b101010101, 9),    (0b1111111, 7),     (0b111111101, 9),   (0b101111101, 9),
-    (0b11010111, 8),     (0b10111011, 8),    (0b11011101, 8),    (0b10101011, 8),
-    (0b11010101, 8),     (0b111011101, 9),   (0b10101111, 8),    (0b1101111, 7),
-    (0b1101101, 7),      (0b101010111, 9),   (0b110110101, 9),   (0b101011101, 9),
-    (0b101110101, 9),    (0b101111011, 9),   (0b1010101101, 10), (0b111110111, 9),
-    (0b111101111, 9),    (0b111111011, 9),   (0b1010111111, 10), (0b101101101, 9),
-    (0b1011011111, 10),  (0b1011, 4),        (0b1011111, 7),     (0b101111, 6),
-    (0b101101, 6),       (0b11, 2),          (0b111101, 6),      (0b1011011, 7),
-    (0b101011, 6),       (0b1101, 4),        (0b111101011, 9),   (0b10111111, 8),
-    (0b11011, 5),        (0b111011, 6),      (0b1111, 4),        (0b111, 3),
-    (0b111111, 6),       (0b110111111, 9),   (0b10101, 5),       (0b10111, 5),
-    (0b101, 3),          (0b110111, 6),      (0b1111011, 7),     (0b1101011, 7),
-    (0b11011111, 8),     (0b1011101, 7),     (0b111010101, 9),   (0b1010110111, 10),
-    (0b110111011, 9),    (0b1010110101, 10), (0b1011010111, 10), (0b1110110101, 10),
+    (0b1010101011, 10),
+    (0b1011011011, 10),
+    (0b1011101101, 10),
+    (0b1101110111, 10),
+    (0b1011101011, 10),
+    (0b1101011111, 10),
+    (0b1011101111, 10),
+    (0b1011111101, 10),
+    (0b1011111111, 10),
+    (0b11101111, 8),
+    (0b11101, 5),
+    (0b1101101111, 10),
+    (0b1011011101, 10),
+    (0b11111, 5),
+    (0b1101110101, 10),
+    (0b1110101011, 10),
+    (0b1011110111, 10),
+    (0b1011110101, 10),
+    (0b1110101101, 10),
+    (0b1110101111, 10),
+    (0b1101011011, 10),
+    (0b1101101011, 10),
+    (0b1101101101, 10),
+    (0b1101010111, 10),
+    (0b1101111011, 10),
+    (0b1101111101, 10),
+    (0b1110110111, 10),
+    (0b1101010101, 10),
+    (0b1101011101, 10),
+    (0b1110111011, 10),
+    (0b1011111011, 10),
+    (0b1101111111, 10),
+    (0b1, 1),
+    (0b111111111, 9),
+    (0b101011111, 9),
+    (0b111110101, 9),
+    (0b111011011, 9),
+    (0b1011010101, 10),
+    (0b1010111011, 10),
+    (0b101111111, 9),
+    (0b11111011, 8),
+    (0b11110111, 8),
+    (0b101101111, 9),
+    (0b111011111, 9),
+    (0b1110101, 7),
+    (0b110101, 6),
+    (0b1010111, 7),
+    (0b110101111, 9),
+    (0b10110111, 8),
+    (0b10111101, 8),
+    (0b11101101, 8),
+    (0b11111111, 8),
+    (0b101110111, 9),
+    (0b101011011, 9),
+    (0b101101011, 9),
+    (0b110101101, 9),
+    (0b110101011, 9),
+    (0b110110111, 9),
+    (0b11110101, 8),
+    (0b110111101, 9),
+    (0b111101101, 9),
+    (0b1010101, 7),
+    (0b111010111, 9),
+    (0b1010101111, 10),
+    (0b1010111101, 10),
+    (0b1111101, 7),
+    (0b11101011, 8),
+    (0b10101101, 8),
+    (0b10110101, 8),
+    (0b1110111, 7),
+    (0b11011011, 8),
+    (0b11111101, 8),
+    (0b101010101, 9),
+    (0b1111111, 7),
+    (0b111111101, 9),
+    (0b101111101, 9),
+    (0b11010111, 8),
+    (0b10111011, 8),
+    (0b11011101, 8),
+    (0b10101011, 8),
+    (0b11010101, 8),
+    (0b111011101, 9),
+    (0b10101111, 8),
+    (0b1101111, 7),
+    (0b1101101, 7),
+    (0b101010111, 9),
+    (0b110110101, 9),
+    (0b101011101, 9),
+    (0b101110101, 9),
+    (0b101111011, 9),
+    (0b1010101101, 10),
+    (0b111110111, 9),
+    (0b111101111, 9),
+    (0b111111011, 9),
+    (0b1010111111, 10),
+    (0b101101101, 9),
+    (0b1011011111, 10),
+    (0b1011, 4),
+    (0b1011111, 7),
+    (0b101111, 6),
+    (0b101101, 6),
+    (0b11, 2),
+    (0b111101, 6),
+    (0b1011011, 7),
+    (0b101011, 6),
+    (0b1101, 4),
+    (0b111101011, 9),
+    (0b10111111, 8),
+    (0b11011, 5),
+    (0b111011, 6),
+    (0b1111, 4),
+    (0b111, 3),
+    (0b111111, 6),
+    (0b110111111, 9),
+    (0b10101, 5),
+    (0b10111, 5),
+    (0b101, 3),
+    (0b110111, 6),
+    (0b1111011, 7),
+    (0b1101011, 7),
+    (0b11011111, 8),
+    (0b1011101, 7),
+    (0b111010101, 9),
+    (0b1010110111, 10),
+    (0b110111011, 9),
+    (0b1010110101, 10),
+    (0b1011010111, 10),
+    (0b1110110101, 10),
 ];
 
 fn char_to_code(c: u8) -> Option<(u16, u8)> {
@@ -72,7 +168,9 @@ fn char_to_code(c: u8) -> Option<(u16, u8)> {
 }
 
 fn code_to_char(code: u16, bitcount: u8) -> Option<u8> {
-    (0u16..128).find(|&i| VARICODE[i as usize] == (code, bitcount)).map(|i| i as u8)
+    (0u16..128)
+        .find(|&i| VARICODE[i as usize] == (code, bitcount))
+        .map(|i| i as u8)
 }
 
 /// Encodes text into a Varicode bitstream: each character's code
@@ -159,9 +257,14 @@ pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i
         for n in 0..samples_per_symbol {
             let t = n as f64 / samples_per_symbol as f64;
             let envelope = 0.5 * (1.0 - (2.0 * std::f64::consts::PI * t).cos());
-            let carrier_phase = 2.0 * std::f64::consts::PI * carrier_hz * (sample_idx as f64 / sample_rate as f64);
+            let carrier_phase =
+                2.0 * std::f64::consts::PI * carrier_hz * (sample_idx as f64 / sample_rate as f64);
             let sample = envelope * (carrier_phase + phase_offset).cos();
-            out.push((sample * i16::MAX as f64).round().clamp(i16::MIN as f64, i16::MAX as f64) as i16);
+            out.push(
+                (sample * i16::MAX as f64)
+                    .round()
+                    .clamp(i16::MIN as f64, i16::MAX as f64) as i16,
+            );
             sample_idx += 1;
         }
     }
@@ -194,7 +297,12 @@ pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i
 /// not a re-derived approximation, so it needs the same numbers the
 /// demodulator itself decides bits from, not a separate computation that
 /// could silently drift from what's actually being decoded.
-fn correlate_symbol_iq(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_idx_start: u64) -> (f64, f64) {
+fn correlate_symbol_iq(
+    chunk: &[i16],
+    carrier_hz: f64,
+    sample_rate: u32,
+    sample_idx_start: u64,
+) -> (f64, f64) {
     let samples_per_symbol = chunk.len().max(1);
     let mut i_sum = 0.0f64;
     let mut q_sum = 0.0f64;
@@ -206,7 +314,8 @@ fn correlate_symbol_iq(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_
         // the zero-crossing at each edge.
         let weight = 0.5 * (1.0 - (2.0 * std::f64::consts::PI * t).cos());
         let sample_idx = sample_idx_start + n as u64;
-        let carrier_phase = 2.0 * std::f64::consts::PI * carrier_hz * (sample_idx as f64 / sample_rate as f64);
+        let carrier_phase =
+            2.0 * std::f64::consts::PI * carrier_hz * (sample_idx as f64 / sample_rate as f64);
         let x = (s as f64) / i16::MAX as f64;
         i_sum += x * carrier_phase.cos() * weight;
         q_sum += x * carrier_phase.sin() * weight;
@@ -217,7 +326,12 @@ fn correlate_symbol_iq(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_
 /// Correlates exactly one symbol's worth of samples against the local
 /// carrier reference and returns its estimated phase -- see
 /// `correlate_symbol_iq`'s own doc comment for the underlying math.
-fn correlate_symbol_phase(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_idx_start: u64) -> f64 {
+fn correlate_symbol_phase(
+    chunk: &[i16],
+    carrier_hz: f64,
+    sample_rate: u32,
+    sample_idx_start: u64,
+) -> f64 {
     let (i_sum, q_sum) = correlate_symbol_iq(chunk, carrier_hz, sample_rate, sample_idx_start);
     q_sum.atan2(i_sum)
 }
@@ -281,7 +395,11 @@ struct VaricodeAccumulator {
 
 impl VaricodeAccumulator {
     fn new() -> Self {
-        Self { acc: 0, count: 0, prev_was_zero: false }
+        Self {
+            acc: 0,
+            count: 0,
+            prev_was_zero: false,
+        }
     }
 
     /// Pushes one bit; returns a decoded character if this bit completed
@@ -293,7 +411,11 @@ impl VaricodeAccumulator {
                 self.acc >>= 1;
                 self.count -= 1;
             }
-            let result = if self.count > 0 { code_to_char(self.acc, self.count) } else { None };
+            let result = if self.count > 0 {
+                code_to_char(self.acc, self.count)
+            } else {
+                None
+            };
             self.acc = 0;
             self.count = 0;
             self.prev_was_zero = false;
@@ -362,8 +484,12 @@ impl Psk31Decoder {
         let mut out = String::new();
         let mut iq_points = Vec::new();
         while self.pending_samples.len() >= self.samples_per_symbol {
-            let chunk: Vec<i16> = self.pending_samples.drain(..self.samples_per_symbol).collect();
-            let (i, q) = correlate_symbol_iq(&chunk, self.carrier_hz, self.sample_rate, self.sample_idx);
+            let chunk: Vec<i16> = self
+                .pending_samples
+                .drain(..self.samples_per_symbol)
+                .collect();
+            let (i, q) =
+                correlate_symbol_iq(&chunk, self.carrier_hz, self.sample_rate, self.sample_idx);
             iq_points.push((i, q));
             let phase = q.atan2(i);
             let bit = phase_to_bit(phase, self.prev_phase);
@@ -424,7 +550,12 @@ mod tests {
         // makes "treat the first symbol as a steady carrier" correct by
         // the standard's own design rather than a guess.
         for &(code, bitcount) in VARICODE.iter() {
-            assert_eq!((code >> (bitcount - 1)) & 1, 1, "codeword {:b} does not start with 1", code);
+            assert_eq!(
+                (code >> (bitcount - 1)) & 1,
+                1,
+                "codeword {:b} does not start with 1",
+                code
+            );
         }
     }
 
@@ -437,7 +568,11 @@ mod tests {
             for i in (0..bitcount).rev() {
                 let bit = (code >> i) & 1 == 1;
                 if !bit && prev_zero {
-                    panic!("codeword {:0width$b} has two consecutive zero bits", code, width = bitcount as usize);
+                    panic!(
+                        "codeword {:0width$b} has two consecutive zero bits",
+                        code,
+                        width = bitcount as usize
+                    );
                 }
                 prev_zero = !bit;
             }
@@ -446,7 +581,11 @@ mod tests {
 
     #[test]
     fn encode_decode_bits_round_trips_real_text() {
-        for msg in ["CQ CQ CQ DE K6BP K6BP", "hello world", "The Quick Brown Fox 123!"] {
+        for msg in [
+            "CQ CQ CQ DE K6BP K6BP",
+            "hello world",
+            "The Quick Brown Fox 123!",
+        ] {
             let bits = psk31_encode_bits(msg);
             let decoded = psk31_decode_bits(&bits);
             assert_eq!(decoded, msg, "round-trip failed for {:?}", msg);
@@ -610,7 +749,10 @@ mod tests {
         assert!(!iq_points.is_empty());
         for (i, q) in &iq_points {
             let magnitude = (i * i + q * q).sqrt();
-            assert!(magnitude > 0.01, "expected a real, non-degenerate correlation magnitude, got {magnitude}");
+            assert!(
+                magnitude > 0.01,
+                "expected a real, non-degenerate correlation magnitude, got {magnitude}"
+            );
         }
     }
 }
