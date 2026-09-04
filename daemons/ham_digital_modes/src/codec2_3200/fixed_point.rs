@@ -18,22 +18,28 @@
 //! log-domain LUT shape) and its own doc comment for the real
 //! measurement behind its Q8.40 internal format choice.
 //!
-//! **`log2_lut`'s own interpolation is now genuinely integer** (see
-//! `log2_lut_generic_fixed` below): the raw IEEE754 mantissa bits
-//! (`x.to_bits() & 0x007F_FFFF`) are already an *exact* Q23 fixed-point
-//! representation of `(mantissa - 1.0)`, so the index/weight split and
-//! the table blend run entirely in `i64`/`u64` arithmetic, with `f32`
-//! touched only at the exponent-extraction input and the final
-//! `exponent + interp` sum. `exp2_lut` is the half of this pair still
-//! genuinely `f32` inside (`floor()`, `2f32.powi()`, and the
-//! interpolation multiply/subtract) -- it needs its own integer
-//! floor-via-arithmetic-shift and IEEE754 bit *reconstruction* (not
-//! just extraction), which is real, separate work with its own sign
-//! and range pitfalls, not bundled into this pass. `levinson_durbin_
-//! fixed`'s own core recursion, by contrast, has been genuine integer
-//! arithmetic throughout (`i64`/`i128` only, no `f32` inside the loop)
-//! since an earlier pass -- the three stages are at different real
-//! maturity levels for the no-FPU target, not interchangeably "done."
+//! **Both `log2_lut` and `exp2_lut`'s own interpolation are now
+//! genuinely integer** (see `log2_lut_generic_fixed`/`exp2_lut_generic_
+//! fixed` below, landed as two separate passes since they carry
+//! different real risk -- `log2_lut`'s index/weight split comes free
+//! from `x`'s own raw IEEE754 mantissa bits [`x.to_bits() &
+//! 0x007F_FFFF`, already an *exact* Q23 fixed-point `(mantissa - 1.0)`],
+//! while `exp2_lut`'s `y` has no such free structure and needs its own
+//! boundary quantization, an arithmetic-shift floor correct on negative
+//! input, and a final IEEE754 bit *reconstruction* rather than
+//! extraction). Both now run their interpolation entirely in
+//! `i64`/`u64` arithmetic, with `f32` touched only at genuine
+//! boundaries (the exponent-extraction input and final sum for
+//! `log2_lut`; the initial `y` quantization and final bit-pattern
+//! `from_bits` for `exp2_lut`). Both keep their `f32 -> f32` signature,
+//! since every real caller (`quantise::encode_energy`/`decode_energy`,
+//! `synthesis::postfilter_step`) is still float upstream -- this closes
+//! the *interpolation* gap specifically, not the surrounding call
+//! sites. `levinson_durbin_fixed`'s own core recursion, by contrast,
+//! has been genuine integer arithmetic throughout (`i64`/`i128` only,
+//! no `f32` inside the loop) since an earlier pass -- the stages here
+//! are at different real maturity levels for the no-FPU target, not
+//! interchangeably "done."
 //!
 //! `log2_lut`/`exp2_lut` below are what `quantise::encode_energy`/
 //! `decode_energy` AND `synthesis::postfilter_step` actually call now --
@@ -157,6 +163,12 @@ fn log2_lut_generic_fixed(x: f32, bits: u32, table_q23: &[i32]) -> f32 {
 /// `2^y` via integer/fractional split (`2^y = 2^floor(y) * 2^frac`) plus
 /// a linearly-interpolated table lookup for `2^frac` -- the inverse of
 /// `log2_lut_generic`, same real fixed-point-friendly shape.
+///
+/// Float reference only now -- kept `#[cfg(test)]` since `exp2_lut()`
+/// below calls `exp2_lut_generic_fixed` instead. Still used directly by
+/// the round-trip test and to build the fixed path's own quantized
+/// table.
+#[cfg(test)]
 fn exp2_lut_generic(y: f32, bits: u32, table: &[f32]) -> f32 {
     let levels = 1u32 << bits;
     let floor_y = y.floor();
@@ -166,6 +178,68 @@ fn exp2_lut_generic(y: f32, bits: u32, table: &[f32]) -> f32 {
     let t = scaled - idx as f32;
     let mantissa = table[idx] + t * (table[idx + 1] - table[idx]);
     mantissa * 2f32.powi(floor_y as i32)
+}
+
+/// Total fractional-bit precision `exp2_lut_generic_fixed` keeps for its
+/// own `y_q` boundary conversion -- `LOG2_LUT_BITS` of it select the
+/// table index (matching the table's own resolution), the rest
+/// (`EXP2_Y_EXTRA_BITS`) give the interpolation weight `t` sub-index
+/// precision it would otherwise have none of (unlike `log2_lut_generic_
+/// fixed`, whose weight comes for free from the input's own raw mantissa
+/// bits, `y` here has no such free source -- it isn't an IEEE754-shaped
+/// value, just a real number needing an explicit floor/frac split).
+const EXP2_Y_EXTRA_BITS: u32 = 16;
+const EXP2_Y_FRAC_BITS: u32 = LOG2_LUT_BITS + EXP2_Y_EXTRA_BITS;
+
+/// Q23-fractional-only sibling of `exp2_lut_table()`: stores
+/// `(2^frac - 1.0)` in Q23, i.e. just the part above the implicit
+/// leading `1.0` -- exactly the raw-mantissa-bits format IEEE754 itself
+/// uses, so the final bit-reconstruction below needs no rescale, mirror
+/// image of `log2_lut_table_q23`.
+fn exp2_lut_table_frac_q23() -> &'static [i32; LOG2_LUT_SIZE] {
+    static TABLE: OnceLock<[i32; LOG2_LUT_SIZE]> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let f = exp2_lut_table();
+        std::array::from_fn(|i| ((f[i] - 1.0) * (1i64 << 23) as f32).round() as i32)
+    })
+}
+
+/// Q23 fixed-point sibling of `exp2_lut_generic` -- the real
+/// implementation `exp2_lut()` now calls. Unlike `log2_lut_generic_
+/// fixed` (whose input `x` is already IEEE754-shaped, so its
+/// index/weight split comes free from the raw mantissa bits), `y` here
+/// is an arbitrary real number with no such free structure, so it's
+/// quantized once at the float/fixed boundary (`y_q`, `EXP2_Y_FRAC_BITS`
+/// fractional bits) via a genuine `f32` multiply -- the one real,
+/// unavoidable boundary conversion, matching this whole port's
+/// established "integer core, float boundary" convention. From there:
+/// `floor(y)` and its fractional remainder both come from a plain
+/// integer arithmetic-shift (correct on negative `y_q` too, since Rust's
+/// `>>` on signed integers rounds toward negative infinity, exactly
+/// matching `f32::floor()`), the index/weight split matches `log2_lut_
+/// generic_fixed`'s own shape, and the final `mantissa * 2^floor(y)` is
+/// built directly as an IEEE754 bit pattern (`biased_exp << 23 |
+/// mantissa_frac`) rather than computed via `2f32.powi()` -- the exact
+/// mirror image of `log2_lut_generic_fixed`'s own bit *extraction*, this
+/// time *reconstructing* the pattern instead.
+fn exp2_lut_generic_fixed(y: f32, bits: u32, table_frac_q23: &[i32]) -> f32 {
+    let extra_bits = EXP2_Y_FRAC_BITS - bits;
+    let y_q = (y as f64 * (1i64 << EXP2_Y_FRAC_BITS) as f64).round() as i64;
+    let floor_y = y_q >> EXP2_Y_FRAC_BITS;
+    let frac_full_q = y_q - (floor_y << EXP2_Y_FRAC_BITS); // [0, 2^EXP2_Y_FRAC_BITS)
+    let levels = 1i64 << bits;
+    let idx = ((frac_full_q >> extra_bits) as usize).min(levels as usize - 1);
+    let t_num = frac_full_q - ((idx as i64) << extra_bits); // [0, 2^extra_bits)
+    let t0 = table_frac_q23[idx] as i64;
+    let t1 = table_frac_q23[idx + 1] as i64;
+    let interp_frac_q23 = t0 + ((t_num * (t1 - t0)) >> extra_bits);
+    let biased_exp = floor_y + 127;
+    debug_assert!(
+        (1..=254).contains(&biased_exp),
+        "exp2_lut_generic_fixed: floor(y)={floor_y} is out of f32's representable exponent range"
+    );
+    let raw_bits = ((biased_exp as u32) << 23) | (interp_frac_q23 as u32 & 0x007F_FFFF);
+    f32::from_bits(raw_bits)
 }
 
 /// `pub(crate)`: `quantise::encode_energy` calls this directly (see
@@ -181,9 +255,11 @@ pub(crate) fn log2_lut(x: f32) -> f32 {
     log2_lut_generic_fixed(x, LOG2_LUT_BITS, log2_lut_table_q23())
 }
 
-/// `pub(crate)`: `quantise::decode_energy` calls this directly.
+/// `pub(crate)`: `quantise::decode_energy` calls this directly. As of
+/// this pass, `exp2_lut_generic_fixed` closes the same interpolation gap
+/// for `exp2_lut` that `log2_lut_generic_fixed` closed above.
 pub(crate) fn exp2_lut(y: f32) -> f32 {
-    exp2_lut_generic(y, LOG2_LUT_BITS, exp2_lut_table())
+    exp2_lut_generic_fixed(y, LOG2_LUT_BITS, exp2_lut_table_frac_q23())
 }
 
 #[cfg(test)]
@@ -384,6 +460,60 @@ mod tests {
         assert!(
             (got - want).abs() < 1e-5,
             "just-below-2 boundary: fixed={got} float={want}"
+        );
+    }
+
+    #[test]
+    fn exp2_lut_generic_fixeds_integer_interpolation_matches_the_float_interpolation_directly() {
+        // Same rationale as log2's own direct-comparison test above:
+        // dense, across a real range for y (matching E_MIN_DB..E_MAX_DB
+        // converted through log2, with margin), so a sign or
+        // shift-direction bug in the new floor/frac/bit-reconstruction
+        // path shows up as a large error at a specific y rather than
+        // hiding behind quantizer-index agreement.
+        let table_f32 = exp2_lut_table();
+        let table_frac_q23 = exp2_lut_table_frac_q23();
+        let mut max_rel_err = 0.0f32;
+        let mut y = -20.0f32;
+        while y < 20.0 {
+            let want = exp2_lut_generic(y, LOG2_LUT_BITS, table_f32);
+            let got = exp2_lut_generic_fixed(y, LOG2_LUT_BITS, table_frac_q23);
+            let rel_err = ((got - want) / want).abs();
+            max_rel_err = max_rel_err.max(rel_err);
+            y += 0.0037; // dense: ~10800 points across the range
+        }
+        assert!(
+            max_rel_err < 1e-4,
+            "exp2_lut_generic_fixed diverged from the float interpolation by {max_rel_err} relative, more than ordinary Q23 table-quantization noise"
+        );
+    }
+
+    #[test]
+    fn exp2_lut_generic_fixed_handles_negative_y_and_its_own_index_boundaries_correctly() {
+        // Exact integers (frac == 0, including negative ones -- the
+        // arithmetic-shift floor is the part with real sign risk):
+        // idx == 0, t_num == 0, no interpolation blend.
+        for exp in -20i32..=20 {
+            let y = exp as f32;
+            let want = exp2_lut_generic(y, LOG2_LUT_BITS, exp2_lut_table());
+            let got = exp2_lut_generic_fixed(y, LOG2_LUT_BITS, exp2_lut_table_frac_q23());
+            assert!(
+                (got - want).abs() / want.abs() < 1e-5,
+                "integer y={y}: fixed={got} float={want}"
+            );
+            assert_eq!(want, 2.0f32.powi(exp), "exp2 of an exact integer should be exact: {want}");
+        }
+
+        // Just below a negative integer boundary (e.g. -0.0001), where
+        // floor_y must correctly come out one below y itself -- the
+        // exact case an off-by-one in the arithmetic-shift floor would
+        // get wrong only for negative input.
+        let just_below_neg3 = -3.0001f32;
+        let want = exp2_lut_generic(just_below_neg3, LOG2_LUT_BITS, exp2_lut_table());
+        let got = exp2_lut_generic_fixed(just_below_neg3, LOG2_LUT_BITS, exp2_lut_table_frac_q23());
+        assert!(
+            (got - want).abs() / want.abs() < 1e-4,
+            "just-below-negative-integer boundary: fixed={got} float={want}"
         );
     }
 
