@@ -77,27 +77,58 @@ fn synthesize_phase(model: &mut Model, h: &[Complex32; MAX_AMP + 1], ex_phase: &
     }
 }
 
+/// Pure decision logic behind `postfilter` below -- no RNG/phi
+/// mutation, and the two log-domain operations (`e_db`, `thresh`) are
+/// parameterized (`log2`/`exp2`) rather than hardcoded, so
+/// `fixed_point.rs`'s own tests can run the *identical* control flow
+/// with the real `fixed_point::log2_lut`/`exp2_lut` swapped out for
+/// plain `f32::log2`/`f32::exp2` (mathematically the same operations
+/// `postfilter`'s own pre-LUT code used, just expressed in base 2
+/// instead of base 10 -- `10*log10(x) == 10*log2(x)/LOG2_10`,
+/// `10^y == 2^(y*LOG2_10)`) and compare real per-harmonic decisions
+/// against each other over a real temporal replay, the same validation
+/// shape `CODEC2_MOD_FIXED_POINT_PLAN.md` used for this exact stage
+/// (145,576 real per-harmonic decisions, zero mismatches there).
+/// Returns the updated `bg_est` and, for a voiced frame, which
+/// harmonics `1..=l` should get their phase randomized (unvoiced
+/// frames return an all-`false` array -- there's nothing to randomize
+/// on that branch, only `bg_est` updates).
+pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(voiced: bool, l: usize, a: &[f32; MAX_AMP + 1], bg_est: f32, log2: L, exp2: E) -> (f32, [bool; MAX_AMP + 1]) {
+    let e: f32 = 1e-12 + a[1..=l].iter().map(|v| v * v).sum::<f32>();
+    let e_db = 10.0 * (log2(e / l as f32) / std::f32::consts::LOG2_10);
+
+    let mut decisions = [false; MAX_AMP + 1];
+    let mut new_bg_est = bg_est;
+    if !voiced {
+        if e_db < BG_THRESH {
+            new_bg_est = bg_est * (1.0 - BG_BETA) + e_db * BG_BETA;
+        }
+    } else {
+        let thresh = exp2((bg_est + BG_MARGIN) / 20.0 * std::f32::consts::LOG2_10);
+        for (m, &am) in a.iter().enumerate().take(l + 1).skip(1) {
+            decisions[m] = am < thresh;
+        }
+    }
+    (new_bg_est, decisions)
+}
+
 /// Randomizes the phase of harmonics quiet relative to the tracked
 /// background-noise level during voiced frames (makes them sound
 /// unvoiced/noise-like rather than tonal, closer to real speech's own
 /// mixed excitation); tracks that background level from unvoiced
-/// frames' own average energy otherwise.
+/// frames' own average energy otherwise. See `postfilter_step`'s own
+/// doc comment for the log-domain LUT this calls into and how it's
+/// validated.
 fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
-    let e: f32 = 1e-12 + model.a[1..=model.l].iter().map(|a| a * a).sum::<f32>();
-    let e_db = 10.0 * (e / model.l as f32).log10();
-
-    if !model.voiced {
-        if e_db < BG_THRESH {
-            *bg_est = *bg_est * (1.0 - BG_BETA) + e_db * BG_BETA;
-        }
-    } else {
-        let thresh = 10f32.powf((*bg_est + BG_MARGIN) / 20.0);
-        // `model.a` (read) and `model.phi` (written) are sibling fields
-        // of the same struct at the same harmonic index -- not a clean
-        // fit for `.iter().enumerate()` without destructuring `model`.
+    let (new_bg_est, decisions) = postfilter_step(model.voiced, model.l, &model.a, *bg_est, super::fixed_point::log2_lut, super::fixed_point::exp2_lut);
+    *bg_est = new_bg_est;
+    if model.voiced {
+        // `decisions` (read) and `model.phi` (written) are independent
+        // arrays at the same harmonic index -- not a clean fit for
+        // `.iter().enumerate()`.
         #[allow(clippy::needless_range_loop)]
         for m in 1..=model.l {
-            if model.a[m] < thresh {
+            if decisions[m] {
                 model.phi[m] = next_rand(rng);
             }
         }

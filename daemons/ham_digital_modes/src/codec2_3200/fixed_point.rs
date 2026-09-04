@@ -12,20 +12,21 @@
 //! from the reference is separately unmeasured).
 //!
 //! `log2_lut`/`exp2_lut` below are what `quantise::encode_energy`/
-//! `decode_energy` actually call now -- not a parallel unused
-//! implementation sitting next to the plain-float one, the codec's real
-//! energy quantizer -- replacing the plain-float `log10`/`powf` round
-//! trip with the same 8-bit (256-entry), linearly-interpolated log2/exp2
-//! LUT primitive the plan doc validated for `aks_to_mag2`'s own
-//! `R^(2*BETA)` treatment (`x^k == 2^(k*log2(x))`, computed in base 2
-//! specifically because that's what a real fixed-point target would
-//! implement -- `frexp`-style exponent extraction is free, only the
-//! mantissa's own log2 needs a table). Everything surrounding the LUT
-//! call itself (the multiply by 10, the linear quantizer) deliberately
-//! stays in `f32` here, isolating the log-domain treatment specifically,
-//! matching the plan doc's own validation scope for `aks_to_mag2`
-//! (Q-format widths for the surrounding fixed-point arithmetic are a
-//! separate, later engineering step, not attempted here).
+//! `decode_energy` AND `synthesis::postfilter_step` actually call now --
+//! not a parallel unused implementation sitting next to a plain-float
+//! one, the codec's real log-domain primitive at both call sites --
+//! replacing each site's own plain-float `log10`/`powf` round trip with
+//! the same 8-bit (256-entry), linearly-interpolated log2/exp2 LUT
+//! shape the plan doc validated for `aks_to_mag2`'s own `R^(2*BETA)`
+//! treatment (`x^k == 2^(k*log2(x))`, computed in base 2 specifically
+//! because that's what a real fixed-point target would implement --
+//! `frexp`-style exponent extraction is free, only the mantissa's own
+//! log2 needs a table). Everything surrounding the LUT call itself (the
+//! multiply by 10, the linear quantizer, the EMA) deliberately stays in
+//! `f32` here, isolating the log-domain treatment specifically, matching
+//! the plan doc's own validation scope for `aks_to_mag2` (Q-format
+//! widths for the surrounding fixed-point arithmetic are a separate,
+//! later engineering step, not attempted here).
 
 use std::sync::OnceLock;
 
@@ -222,5 +223,87 @@ mod tests {
             let back_db = reference_e_db(back);
             assert!((back_db - e_db).abs() <= step_db, "LUT-backed round trip for e={e} (db={e_db}) landed at {back} (db={back_db}), step {step_db}dB");
         }
+    }
+
+    #[test]
+    fn postfilter_lut_decisions_match_plain_float_across_a_real_temporal_replay() {
+        // Same validation shape CODEC2_MOD_FIXED_POINT_PLAN.md used for
+        // this exact stage (bg_est is a real stateful EMA carrying
+        // across frames, so a faithful test needs a real temporal
+        // replay, not independent per-frame samples): run two parallel
+        // postfilter_step state machines -- one plain float, one this
+        // module's LUT -- forward through an identical real sequence of
+        // (voiced, l, a[]), and check every real per-harmonic threshold
+        // decision matches.
+        //
+        // The per-harmonic amplitudes (`a[]`) driving this come from
+        // real captured data (this port's own already-validated
+        // lsp_to_lpc + compute_harmonic_amplitudes run on real captured
+        // lsp[]/e[] fixture rows) -- that's what determines whether the
+        // log-domain LUT approximation ever changes a real decision, so
+        // it has to be real. `voiced`/`Wo` only select which branch
+        // runs and how many harmonics exist; a representative synthetic
+        // sweep (long voiced/unvoiced RUNS, not frame-by-frame
+        // alternation, so bg_est's own EMA has real stretches to settle
+        // against before being tested) is fine there -- the same
+        // encoder/decoder-internal-design-freedom reasoning `nlp.rs`'s
+        // own module doc comment uses for a transmitted value, applied
+        // here to a purely decoder-internal test-harness choice instead.
+        let lsp_rows = read_dump(fixture!("codec2_lsp_dump.txt"), super::super::LPC_ORD + 1);
+        let e_rows = read_dump(fixture!("codec2_enc_e_dump.txt"), 1);
+        let n = lsp_rows.len().min(e_rows.len());
+        assert!(n > 300, "expected the real captured fixture corpus, got {n} rows");
+
+        let fft = {
+            let mut planner = rustfft::FftPlanner::<f32>::new();
+            planner.plan_fft_forward(super::super::FFT_ENC)
+        };
+
+        let mut plain_bg = 0.0f32;
+        let mut lut_bg = 0.0f32;
+        let mut decisions_checked = 0usize;
+        let mut decision_mismatches = 0usize;
+        let mut max_bg_drift_db = 0.0f32;
+
+        for i in 0..n {
+            let roots = lsp_rows[i][0] as i32;
+            if roots as usize != super::super::LPC_ORD {
+                continue; // real, rare LSP root-finding failure -- skip, same as quantise.rs's own test
+            }
+            let mut lsp = [0.0f32; super::super::LPC_ORD];
+            lsp.copy_from_slice(&lsp_rows[i][1..]);
+            let e = e_rows[i][0];
+
+            // 30-frame runs: long enough for bg_est's BG_BETA=0.1 EMA
+            // to settle meaningfully within each unvoiced run before
+            // the following voiced run's decisions get checked against it.
+            let voiced = (i / 30) % 2 == 1;
+            let wo = super::super::W0_MIN + (super::super::W0_MAX - super::super::W0_MIN) * 0.3;
+
+            let ak = super::super::lpc::lsp_to_lpc(&lsp);
+            let mut model = super::super::envelope::Model::new(wo, voiced);
+            let _aw = super::super::envelope::compute_harmonic_amplitudes(fft.as_ref(), &ak, e, &mut model);
+            super::super::envelope::apply_first_harmonic_correction(&mut model);
+
+            let (new_plain_bg, plain_decisions) = super::super::synthesis::postfilter_step(model.voiced, model.l, &model.a, plain_bg, f32::log2, f32::exp2);
+            let (new_lut_bg, lut_decisions) = super::super::synthesis::postfilter_step(model.voiced, model.l, &model.a, lut_bg, log2_lut, exp2_lut);
+
+            max_bg_drift_db = max_bg_drift_db.max((new_plain_bg - new_lut_bg).abs());
+            plain_bg = new_plain_bg;
+            lut_bg = new_lut_bg;
+
+            if voiced {
+                for m in 1..=model.l {
+                    decisions_checked += 1;
+                    if plain_decisions[m] != lut_decisions[m] {
+                        decision_mismatches += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(decisions_checked > 1000, "expected a real number of per-harmonic decisions checked across the replay, got {decisions_checked}");
+        assert_eq!(decision_mismatches, 0, "{decision_mismatches}/{decisions_checked} real per-harmonic postfilter decisions diverged between the LUT and plain float across the temporal replay");
+        assert!(max_bg_drift_db < 1e-3, "bg_est drifted {max_bg_drift_db}dB between the LUT and plain-float state machines over the replay -- too large for an 8-bit LUT");
     }
 }
