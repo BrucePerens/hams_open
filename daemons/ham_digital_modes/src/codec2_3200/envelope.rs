@@ -40,27 +40,32 @@ impl Model {
     }
 }
 
+/// Bins actually used from an `FFT_ENC`-point real-input spectrum (the
+/// rest is the conjugate mirror, redundant).
+const SPEC_BINS: usize = FFT_ENC / 2 + 1;
+
 /// `ak[]` zero-padded into a `FFT_ENC`-point real buffer, forward FFT'd,
-/// returning the complex spectrum's first `FFT_ENC/2+1` bins (the rest
-/// is the conjugate mirror of a real input's spectrum, redundant).
-fn lpc_spectrum(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1]) -> Vec<Complex32> {
-    let mut buf = vec![Complex32::new(0.0, 0.0); FFT_ENC];
+/// returning the complex spectrum's first `SPEC_BINS` bins. Fixed-size
+/// stack buffers throughout (`FFT_ENC` is a compile-time constant) --
+/// this runs twice per 10ms sub-frame on a real-time codec's decode
+/// path, so no heap allocation here.
+fn lpc_spectrum(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
+    let mut buf = [Complex32::new(0.0, 0.0); FFT_ENC];
     for (i, &a) in ak.iter().enumerate() {
         buf[i] = Complex32::new(a, 0.0);
     }
     fft.process(&mut buf);
-    buf.truncate(FFT_ENC / 2 + 1);
-    buf
+    std::array::from_fn(|i| buf[i])
 }
 
 /// Computes `model.a[1..=model.l]` from `ak`/`e` (the real LPC energy),
-/// and returns the raw LPC spectrum (`Aw`, `FFT_ENC/2+1` complex bins)
+/// and returns the raw LPC spectrum (`Aw`, `SPEC_BINS` complex bins)
 /// alongside it, since `synthesis.rs`'s own phase reconstruction needs
 /// that same spectrum (`H[m] = conj(Aw[bin])`, the synthesis filter
 /// being the LPC analysis filter's own phase response, reversed).
-pub fn compute_harmonic_amplitudes(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1], e: f32, model: &mut Model) -> Vec<Complex32> {
+pub fn compute_harmonic_amplitudes(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1], e: f32, model: &mut Model) -> [Complex32; SPEC_BINS] {
     let aw = lpc_spectrum(fft, ak);
-    let a2: Vec<f32> = aw.iter().map(|c| c.re * c.re + c.im * c.im + 1e-6).collect();
+    let a2: [f32; SPEC_BINS] = std::array::from_fn(|i| aw[i].re * aw[i].re + aw[i].im * aw[i].im + 1e-6);
 
     let mut ak_gamma = [0.0f32; LPC_ORD + 1];
     ak_gamma[0] = ak[0];
@@ -70,7 +75,7 @@ pub fn compute_harmonic_amplitudes(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1], 
         g *= LPCPF_GAMMA;
     }
     let awg = lpc_spectrum(fft, &ak_gamma);
-    let a2g: Vec<f32> = awg.iter().map(|c| c.re * c.re + c.im * c.im + 1e-6).collect();
+    let a2g: [f32; SPEC_BINS] = std::array::from_fn(|i| awg[i].re * awg[i].re + awg[i].im * awg[i].im + 1e-6);
 
     let mut e_before = 1e-12f32;
     let mut e_after = 1e-12f32;

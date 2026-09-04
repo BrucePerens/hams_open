@@ -131,7 +131,10 @@ pub struct SynthesisState {
     bg_est: f32,
     rng: u32,
     ifft: Arc<dyn Fft<f32>>,
-    ifft_buf: Vec<Complex32>,
+    /// `FFT_ENC` is a compile-time constant, and this buffer is reused
+    /// every call -- a fixed-size stack array, not a `Vec`, since this
+    /// runs on a real-time codec's per-10ms-sub-frame decode path.
+    ifft_buf: [Complex32; FFT_ENC],
 }
 
 impl Default for SynthesisState {
@@ -144,7 +147,7 @@ impl Default for SynthesisState {
             bg_est: 0.0,
             rng: 0xC0FFEE,
             ifft: planner.plan_fft_inverse(FFT_ENC),
-            ifft_buf: vec![Complex32::new(0.0, 0.0); FFT_ENC],
+            ifft_buf: [Complex32::new(0.0, 0.0); FFT_ENC],
         }
     }
 }
@@ -187,26 +190,27 @@ impl SynthesisState {
         }
 
         self.ifft.process(&mut self.ifft_buf);
-        let sw_: Vec<f32> = self.ifft_buf.iter().map(|c| c.re).collect();
 
-        // Three arrays (`sn_`, `sw_`, `parzen`), each at its own offset
-        // from the loop index -- not a clean fit for `.enumerate()`.
+        // Three arrays (`sn_`, `ifft_buf`, `parzen`), each at its own
+        // offset from the loop index -- not a clean fit for
+        // `.enumerate()`. `sw_` (the IDFT's real time-domain output) is
+        // `ifft_buf[..].re` read directly, no separate buffer needed.
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP - 1) {
-            self.sn_[i] += sw_[FFT_ENC - N_SAMP + 1 + i] * self.parzen[i];
+            self.sn_[i] += self.ifft_buf[FFT_ENC - N_SAMP + 1 + i].re * self.parzen[i];
         }
         #[allow(clippy::needless_range_loop)]
         for j in 0..(N_SAMP + 1) {
             let idx = N_SAMP - 1 + j;
             if idx < SAMPLES_PER_FRAME {
-                self.sn_[idx] = sw_[j] * self.parzen[N_SAMP - 1 + j];
+                self.sn_[idx] = self.ifft_buf[j].re * self.parzen[N_SAMP - 1 + j];
             }
         }
 
-        let mut out_f32: Vec<f32> = self.sn_[..N_SAMP].to_vec();
-        ear_protection(&mut out_f32);
+        let mut out: [f32; N_SAMP] = std::array::from_fn(|i| self.sn_[i]);
+        ear_protection(&mut out);
 
-        std::array::from_fn(|i| out_f32[i].clamp(-32767.0, 32767.0) as i16)
+        std::array::from_fn(|i| out[i].clamp(-32767.0, 32767.0) as i16)
     }
 }
 

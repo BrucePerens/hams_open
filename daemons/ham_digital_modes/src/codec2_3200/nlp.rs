@@ -57,8 +57,10 @@ pub struct NlpState {
     /// `plan_fft_forward` are real, non-trivial work that shouldn't
     /// repeat every 10ms frame.
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
-    /// Reused scratch buffer for the FFT, sized `PE_FFT_SIZE`.
-    fft_buf: Vec<Complex32>,
+    /// Reused scratch buffer for the FFT -- a fixed-size stack array
+    /// (`PE_FFT_SIZE` is a compile-time constant), not a `Vec`, since
+    /// this runs on a real-time codec's per-10ms-sub-frame encode path.
+    fft_buf: [Complex32; PE_FFT_SIZE],
 }
 
 impl Default for NlpState {
@@ -71,7 +73,7 @@ impl Default for NlpState {
             mem_y: 0.0,
             prev_f0: 100.0,
             fft,
-            fft_buf: vec![Complex32::new(0.0, 0.0); PE_FFT_SIZE],
+            fft_buf: [Complex32::new(0.0, 0.0); PE_FFT_SIZE],
         }
     }
 }
@@ -212,8 +214,9 @@ pub fn nlp(state: &mut NlpState, sn: &[f32; M_PITCH]) -> f32 {
 
     state.fft.process(&mut state.fft_buf);
 
-    let half = PE_FFT_SIZE / 2 + 1;
-    let power: Vec<f32> = state.fft_buf[..half].iter().map(|c| c.re * c.re + c.im * c.im).collect();
+    const HALF: usize = PE_FFT_SIZE / 2 + 1;
+    let half = HALF;
+    let power: [f32; HALF] = std::array::from_fn(|i| state.fft_buf[i].re * state.fft_buf[i].re + state.fft_buf[i].im * state.fft_buf[i].im);
 
     let bin_to_hz = SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32;
     let lo = (PE_FFT_SIZE * NLP_DEC / P_MAX).max(1);

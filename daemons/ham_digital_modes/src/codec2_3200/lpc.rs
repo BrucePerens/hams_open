@@ -167,14 +167,46 @@ pub fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
     Some(freq)
 }
 
-fn poly_mul(a: &[f32], b: &[f32]) -> Vec<f32> {
-    let mut out = vec![0.0f32; a.len() + b.len() - 1];
-    for (i, &ai) in a.iter().enumerate() {
+/// Max coefficients either half-polynomial `build_half_poly` grows to:
+/// `LPC_ORD/2` degree-2 factors (degree `LPC_ORD`) times one
+/// degree-1 boundary factor (degree `LPC_ORD+1`) = `LPC_ORD+2`
+/// coefficients.
+const HALF_POLY_LEN: usize = LPC_ORD + 2;
+
+/// Multiplies two polynomials (ascending-power coefficient order,
+/// `a_len`/`b_len` real lengths within their fixed-capacity buffers) into
+/// `out`, returning the product's own length. Plain convolution, no heap
+/// allocation -- `lsp_to_lpc` runs on a real-time codec's per-frame hot
+/// path, and `HALF_POLY_LEN` is a small compile-time constant, so a
+/// stack buffer is both simpler and cheaper than a `Vec` here.
+fn poly_mul_fixed(a: &[f32; HALF_POLY_LEN], a_len: usize, b: &[f32], out: &mut [f32; HALF_POLY_LEN]) -> usize {
+    let out_len = a_len + b.len() - 1;
+    out[..out_len].fill(0.0);
+    for (i, &ai) in a[..a_len].iter().enumerate() {
         for (j, &bj) in b.iter().enumerate() {
             out[i + j] += ai * bj;
         }
     }
-    out
+    out_len
+}
+
+/// Builds `P(z)` or `Q(z)` (see `lsp_to_lpc`'s own doc comment): cascades
+/// a degree-2 factor `1 - 2*cos(lsp_i)*z^-1 + z^-2` per LSP at indices
+/// `start_offset, start_offset+2, ...`, then multiplies by the boundary
+/// factor `1 + boundary_sign*z^-1`.
+fn build_half_poly(cos_lsp: &[f32; LPC_ORD], start_offset: usize, boundary_sign: f32) -> ([f32; HALF_POLY_LEN], usize) {
+    let mut buf = [0.0f32; HALF_POLY_LEN];
+    let mut scratch = [0.0f32; HALF_POLY_LEN];
+    buf[0] = 1.0;
+    let mut len = 1usize;
+    for i in (start_offset..LPC_ORD).step_by(2) {
+        let c = cos_lsp[i];
+        len = poly_mul_fixed(&buf, len, &[1.0, -2.0 * c, 1.0], &mut scratch);
+        buf[..len].copy_from_slice(&scratch[..len]);
+    }
+    len = poly_mul_fixed(&buf, len, &[1.0, boundary_sign], &mut scratch);
+    buf[..len].copy_from_slice(&scratch[..len]);
+    (buf, len)
 }
 
 /// Inverse of `lpc_to_lsp`: `LPC_ORD` Line Spectral Frequencies (radians)
@@ -186,23 +218,15 @@ fn poly_mul(a: &[f32], b: &[f32]) -> Vec<f32> {
 /// `LPC_ORD+1`, but by construction their degree-`(LPC_ORD+1)` terms
 /// cancel exactly when summed (that's what makes `P = A + z^-(p+1)A(1/z)`
 /// and `Q = A - z^-(p+1)A(1/z)` sum back to `2A`), leaving
-/// `ak = (P+Z)/2` truncated to its first `LPC_ORD+1` terms. Reused
-/// `poly_mul` (plain convolution) rather than the reference's own
-/// cascaded-biquad shift-register formulation -- mathematically the same
-/// construction, just not optimized for a fixed small buffer.
+/// `ak = (P+Q)/2` truncated to its first `LPC_ORD+1` terms. Same
+/// construction as the reference's own cascaded-biquad shift-register
+/// formulation, just written as plain (allocation-free) polynomial
+/// convolution rather than optimized for a fixed small buffer the way
+/// the reference's own version is.
 pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
-    let mut p = vec![1.0f32];
-    let mut q = vec![1.0f32];
-    for i in (0..LPC_ORD).step_by(2) {
-        let c = lsp[i].cos();
-        p = poly_mul(&p, &[1.0, -2.0 * c, 1.0]);
-    }
-    for i in (1..LPC_ORD).step_by(2) {
-        let c = lsp[i].cos();
-        q = poly_mul(&q, &[1.0, -2.0 * c, 1.0]);
-    }
-    p = poly_mul(&p, &[1.0, 1.0]);
-    q = poly_mul(&q, &[1.0, -1.0]);
+    let cos_lsp: [f32; LPC_ORD] = std::array::from_fn(|i| lsp[i].cos());
+    let (p, _) = build_half_poly(&cos_lsp, 0, 1.0);
+    let (q, _) = build_half_poly(&cos_lsp, 1, -1.0);
 
     let mut ak = [0.0f32; LPC_ORD + 1];
     for i in 0..=LPC_ORD {
