@@ -82,11 +82,21 @@ vendoring a second one, a real pre-existing gap for the first, not a new omissio
 | Library | License | Notes |
 |---|---|---|
 | `ft8_lib` | MIT (`vendor/ft8_lib/LICENSE-MIT`) | FT8/FT4 decode reference, predates this survey |
-| `codec2-mod` | LGPL-2.1 (`vendor/codec2-mod/LICENSE`) | M17 project's Codec2 3200bps fork, itself derived from David Rowe's LGPL-2.1 `drowe67/codec2`; see `vendor/codec2-mod/VENDORED_FROM.md` for the exact commit, and `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md` for the fixed-point analysis it supports |
+| `codec2-mod` | **Not uniform** -- LGPL-2.1-only for most of the tree, but its bundled KISS FFT (`src/kiss_fft.c`, `src/kiss_fftr.c`, `inc/kiss_fft.h`, `inc/kiss_fftr.h`, `inc/kiss_fft_log.h`, `inc/_kiss_fft_guts.h`) is separately BSD-3-Clause per its own SPDX headers | M17 project's Codec2 3200bps fork, itself derived from David Rowe's LGPL-2.1-only `drowe67/codec2` (checked directly against that project's own file headers, not assumed); see `vendor/codec2-mod/VENDORED_FROM.md` for the exact commit and the full per-file license breakdown, and `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md` for the fixed-point analysis it supports |
 
-Both are compatible with this crate's own LGPL-3.0-or-later: vendoring preserves each library's own
-license file unmodified rather than relicensing it, the same relationship `external/`'s table
-above has with the rest of this repo's AGPL-3.0-or-later.
+`ft8_lib` (MIT) is straightforwardly compatible with this crate's own LGPL-3.0-or-later: vendoring
+preserves its license file unmodified rather than relicensing it, the same relationship `external/`'s
+table above has with the rest of this repo's AGPL-3.0-or-later.
+
+**`codec2-mod`'s LGPL-2.1-only portion is a real, open compatibility question, not yet resolved**:
+LGPL-2.1-only code (no "or later version" grant) is not automatically combinable into an
+LGPL-3.0-or-later work -- this isn't a formality, it's the specific reason this project's own choice
+of LGPL-3.0-or-later (see above) is not guaranteed to extend to Codec2-mod-derived code. Not yet a
+real problem, since nothing in `vendor/codec2-mod/` is linked into this crate's build (see
+`vendor/codec2-mod/VENDORED_FROM.md`) -- but whoever writes an actual fixed-point implementation
+informed by this vendored reference needs to resolve it deliberately (most likely: treat the
+vendored tree as reference-only and write genuinely independent new code, not a derivative one)
+rather than assume vendoring already settled it.
 
 ## Unlabeled files
 

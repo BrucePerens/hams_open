@@ -2,12 +2,14 @@
 
 **Relocated here 2026-09-04, from `hams_com/docs/proposals/` (that repo's private planning area) to
 this LGPL-3.0-or-later crate's own `docs/references/`, alongside `FT8_FT4_GFSK_WAVEFORM_SPEC.md`** --
-this document analyzes and quotes real source from Codec2-mod, an LGPL-2.1 project
-(`github.com/M17-Project/Codec2-mod`, itself derived from David Rowe's LGPL-2.1 `drowe67/codec2`), so
-it belongs alongside the LGPL-licensed code it studies, not in a private repo. The actual Codec2-mod
-source this document was checked against is vendored, unmodified, at `../../vendor/codec2-mod/`
-(its own LGPL-2.1 `LICENSE` preserved there, matching how `../../vendor/ft8_lib/` keeps its own
-`LICENSE-MIT` alongside this crate's LGPL-3.0-or-later code -- vendoring doesn't relicense anything).
+this document analyzes and quotes real source from Codec2-mod, an LGPL-2.1-only project for most of
+its tree (`github.com/M17-Project/Codec2-mod`, itself derived from David Rowe's LGPL-2.1-only
+`drowe67/codec2`; its bundled KISS FFT is separately BSD-3-Clause), so it belongs alongside the
+LGPL-licensed code it studies, not in a private repo. The actual Codec2-mod source this document was
+checked against is vendored, unmodified, at `../../vendor/codec2-mod/` (per-file license breakdown
+and a real, still-open LGPL-2.1-only-vs-LGPL-3.0-or-later compatibility question -- not yet resolved,
+not yet load-bearing since nothing here is linked into this crate's build -- both in
+`../../vendor/codec2-mod/VENDORED_FROM.md`).
 See `../../vendor/codec2-mod/VENDORED_FROM.md` for the exact commit vendored.
 
 **Status: research/planning proposal, 2026-09-04. Bruce's own direct request: look at the M17
