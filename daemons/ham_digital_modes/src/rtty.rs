@@ -196,16 +196,15 @@ fn window_is_mark(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32
 pub fn rtty_demodulate(samples: &[i16], mark_hz: f64, sample_rate: u32) -> String {
     let space_hz = mark_hz + RTTY_DEFAULT_SHIFT_HZ;
     let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
-    // Coarse scan grid: 32x oversampled relative to the bit rate. Cheap
-    // for a whole-buffer (non-realtime-hot-path) decode, and this fine a
-    // grid keeps the coarse edge estimate's own alignment error well
-    // clear of a bit-window decision boundary on a clean signal --
-    // confirmed directly: 4x oversampling (the first value tried here)
-    // produced real, occasional single-bit errors on an otherwise clean
-    // synthetic round-trip test, traced to this coarse edge position
-    // itself (not the true, precise edge) being used as the reference
-    // point for every subsequent bit-center offset in `bit_at` below.
-    let scan_step = (samples_per_bit / 32.0).max(1.0) as usize;
+    // Coarse scan grid: 4x oversampled relative to the bit rate. This was
+    // widened to 32x during an earlier debugging pass, on the mistaken
+    // assumption that coarse-edge alignment error was the source of a
+    // real round-trip failure -- it was not: the actual bug was the
+    // post-character advance under-counting the stop bit's real 1.5-unit
+    // length (see the advance calculation below), and once that was
+    // fixed, 4x oversampling was confirmed directly to pass every test
+    // in this file just as well as 32x did, at 1/8th the scan cost.
+    let scan_step = (samples_per_bit / 4.0).max(1.0) as usize;
     let window_len = samples_per_bit.round() as usize;
     if window_len == 0 || samples.len() < window_len {
         return String::new();
