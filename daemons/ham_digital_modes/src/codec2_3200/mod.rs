@@ -103,8 +103,10 @@
 //! LGPL-2.1-only data file was needed here at all.
 
 pub mod bits;
+pub mod encoder_fixed;
 pub mod envelope;
 pub mod fixed_point;
+pub mod floating_reference;
 pub mod interp;
 pub mod lpc;
 pub mod nlp;
@@ -112,6 +114,8 @@ pub mod quantise;
 pub mod synthesis;
 pub mod voicing;
 pub mod window;
+
+pub use encoder_fixed::EncoderFixed;
 
 /// LPC analysis order -- 10 reflection coefficients / LSP frequencies,
 /// the real Codec2 3200bps format's own choice.
@@ -190,86 +194,6 @@ pub fn bw_gamma(i: usize) -> f32 {
 /// reference's own documented fallback for the same case.
 fn fallback_lsp() -> [f32; LPC_ORD] {
     std::array::from_fn(|i| (std::f32::consts::PI / LPC_ORD as f32) * i as f32)
-}
-
-/// Persistent per-call encoder state: the `M_PITCH`-sample speech
-/// history window shared by pitch estimation and LPC analysis, plus
-/// `nlp`/`voicing`'s own state.
-pub struct Encoder {
-    sn: [f32; M_PITCH],
-    window: [f32; M_PITCH],
-    nlp_state: nlp::NlpState,
-    voicing_state: voicing::VoicingState,
-}
-
-impl Default for Encoder {
-    fn default() -> Self {
-        Encoder {
-            sn: [0.0; M_PITCH],
-            window: window::make_analysis_window(),
-            nlp_state: nlp::NlpState::new(),
-            voicing_state: voicing::VoicingState::new(),
-        }
-    }
-}
-
-impl Encoder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn shift_in(&mut self, new_samples: &[i16]) {
-        self.sn.copy_within(N_SAMP.., 0);
-        for (dst, &s) in self.sn[M_PITCH - N_SAMP..].iter_mut().zip(new_samples) {
-            *dst = s as f32;
-        }
-    }
-
-    /// Encodes one 20ms (`SAMPLES_PER_FRAME`-sample) frame into
-    /// `BYTES_PER_FRAME` real-format bytes. Matches the reference's own
-    /// real `codec2_encode` structure: two 10ms analysis sub-steps (each
-    /// advancing pitch estimation and contributing one `voiced` bit, the
-    /// second also setting the transmitted `Wo`), then one LSP/energy
-    /// analysis pass over the full `M_PITCH`-sample history window.
-    pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
-        self.shift_in(&speech[..N_SAMP]);
-        nlp::nlp(&mut self.nlp_state, &self.sn);
-        let voiced0 = voicing::is_voiced(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
-
-        self.shift_in(&speech[N_SAMP..]);
-        let f0 = nlp::nlp(&mut self.nlp_state, &self.sn);
-        let voiced1 = voicing::is_voiced(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
-
-        let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
-
-        let mut windowed = [0.0f32; M_PITCH];
-        for ((w, &s), &win) in windowed
-            .iter_mut()
-            .zip(self.sn.iter())
-            .zip(self.window.iter())
-        {
-            *w = s * win;
-        }
-        let r = lpc::autocorrelate(&windowed);
-        let mut ak = lpc::levinson_durbin(&r);
-        let e = lpc::lpc_energy(&ak, &r);
-        for (i, a) in ak.iter_mut().enumerate() {
-            *a *= bw_gamma(i);
-        }
-        let lsp = lpc::lpc_to_lsp(&ak).unwrap_or_else(fallback_lsp);
-
-        let e_index = quantise::encode_energy(e);
-        let lsp_indexes = quantise::encode_lsps_delta_scalar(&lsp);
-
-        let fields = bits::FrameFields {
-            voiced0,
-            voiced1,
-            wo_index,
-            e_index,
-            lsp_indexes,
-        };
-        bits::pack_frame(&fields, WO_BITS, E_BITS)
-    }
 }
 
 /// LSPs the reference's own decoder starts from before any real frame
@@ -360,6 +284,7 @@ impl Decoder {
 
 #[cfg(test)]
 mod tests {
+    use super::floating_reference::Encoder;
     use super::*;
 
     fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
