@@ -23,6 +23,7 @@ class TestHamsS3Hooks(HamsTransactionCase):
     same gap -- see distributed_redis_cache/tests/test_hooks.py.
     """
 
+    # Tests [@ANCHOR: hams_s3_post_init_hook]
     def test_post_init_hook_registers_the_s3_manager_daemon(self):
         # Confirms the referenced service account actually exists before
         # calling the hook -- if this ref() fails, the hook itself would

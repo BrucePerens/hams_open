@@ -12,6 +12,7 @@ _logger = logging.getLogger(__name__)
 
 
 def post_init_hook(env):
+    # [@ANCHOR: hams_s3_post_init_hook]
     env["daemon.key.registry"].register_daemon(
         daemon_name="S3 Storage Manager",
         user_xml_id="hams_s3.s3_manager_service_internal",

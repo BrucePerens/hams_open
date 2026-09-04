@@ -55,17 +55,20 @@ class ResConfigSettings(models.TransientModel):
     # require on storage.backend is unverified. Review and test against a
     # real storage_backend install before relying on this.
     def _get_s3_service_env(self):
+        # [@ANCHOR: hams_s3_get_s3_service_env]
         return self.env["zero_sudo.security.utils"]._get_service_env(
             "hams_s3.s3_manager_service_internal"
         )
 
     @api.depends('hams_s3_use_s3')
     def _compute_hams_s3_oca_installed(self):
+        # [@ANCHOR: hams_s3_compute_oca_installed]
         for rec in self:
             rec.hams_s3_oca_installed = 'storage.backend' in self.env  # burn-ignore-optional-oca-dep
 
     @api.model
     def get_values(self):
+        # [@ANCHOR: hams_s3_get_values]
         res = super(ResConfigSettings, self).get_values()
         if 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
             env_svc = self._get_s3_service_env()
@@ -83,6 +86,7 @@ class ResConfigSettings(models.TransientModel):
         return res
 
     def set_values(self):
+        # [@ANCHOR: hams_s3_set_values]
         super(ResConfigSettings, self).set_values()
         if self.hams_s3_use_s3 and 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
             env_svc = self._get_s3_service_env()
