@@ -25,12 +25,19 @@
 //! no `f32` storage here, unlike `floating_reference::Encoder`) to `f32`
 //! on the fly, since its own fixed-point FFT hasn't been built yet (a
 //! real, separate, much larger piece of work -- see the punch list).
-//! `quantise::encode_wo`/`encode_energy`/`encode_lsps_delta_scalar`
-//! haven't migrated at all. Re-derive this file's own real state
-//! directly by reading `encode()` below before trusting this comment --
-//! per this project's own "keep-working-until-actually-done"
-//! discipline, a status claim can go stale the moment the next stage
-//! lands and this comment isn't updated to match.
+//! `quantise::encode_energy` already routed through `fixed_point::
+//! log2_lut` (now genuinely integer) even before this pass;
+//! `quantise::encode_lsps_delta_scalar_fixed` is this pass's own new
+//! fixed-point sibling, wired in below, verified to produce
+//! byte-identical transmitted indices to the float version on the real
+//! captured LSP corpus. `quantise::encode_wo` alone remains genuinely
+//! unmigrated -- its real input, `Wo`, comes from `nlp::f0_to_wo(f0)`,
+//! itself `f32` because `nlp.rs`'s own FFT isn't fixed-point yet.
+//! Re-derive this file's own real state directly by reading `encode()`
+//! below before trusting this comment -- per this project's own
+//! "keep-working-until-actually-done" discipline, a status claim can go
+//! stale the moment the next stage lands and this comment isn't updated
+//! to match.
 
 use super::{fallback_lsp, lpc, nlp, quantise, voicing, window};
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
@@ -141,11 +148,15 @@ impl EncoderFixed {
         lpc::apply_bw_gamma_fixed(&mut a_q23);
         let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23).unwrap_or_else(fallback_lsp);
 
-        // quantise::encode_energy/encode_lsps_delta_scalar: NOT migrated
-        // yet.
+        // quantise::encode_energy already routes through fixed_point::
+        // log2_lut (now genuinely integer, see that module). encode_
+        // lsps_delta_scalar_fixed below is this stage's own fixed-point
+        // sibling, verified to produce byte-identical transmitted
+        // indices to the float version on the real captured LSP corpus
+        // (quantise.rs's own test) -- no tolerance, exact agreement.
 
         let e_index = quantise::encode_energy(e);
-        let lsp_indexes = quantise::encode_lsps_delta_scalar(&lsp);
+        let lsp_indexes = quantise::encode_lsps_delta_scalar_fixed(&lsp);
 
         let fields = bits::FrameFields {
             voiced0,
