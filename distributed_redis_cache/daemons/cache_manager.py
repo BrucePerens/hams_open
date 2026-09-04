@@ -200,6 +200,9 @@ async def main():
             db_conns.append(conn)
             logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, DB_NAME)
         except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
+            # A daemon that can never reach Postgres in the first place
+            # (a real, realistic startup-ordering condition) must not crash.
+            # # Verified by [@ANCHOR: COMM_test_cache_manager_reconnect_failure]
             logger.exception("Could not connect to database %s: %s", DB_NAME, e)
 
     while True:

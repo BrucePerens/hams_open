@@ -73,8 +73,10 @@ class BlogPost(models.Model):
 
     def _check_blog_post_quota(self, vals_list):
         # [@ANCHOR: user_websites_blog_post_quota_check]
-        # Adversarial security review, 2026-09-03: unlike website.page
-        # ([@ANCHOR: website_page_quota_check]), blog.post create() had no
+
+        # # Verified by [@ANCHOR: test_blog_post_quota_limit]
+        # Adversarial security review, 2026-09-03: unlike website.page,
+        # see [@ANCHOR: website_page_quota_check] -- blog.post create() had no
         # quota at all -- any authenticated user could create unbounded
         # posts via direct RPC, each one also enqueuing a real Cloudflare
         # cache purge and a distributed cache-invalidation notify.

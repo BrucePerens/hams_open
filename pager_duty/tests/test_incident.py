@@ -257,9 +257,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertGreater(incident.last_occurred, first_last_occurred, "last_occurred must actually advance on a repeat report, not just tie.")
 
     def test_11_low_severity_does_not_page_but_high_severity_still_does(self):
-        # Tests [@ANCHOR: pager_trend_severity_gate]
-        # Tests [@ANCHOR: pager_trend_detection_params]
-        # Tests [@ANCHOR: pager_trend_detection]
+        # Tests [@ANCHOR: pager_trend_severity_gate] [@ANCHOR: pager_trend_detection_params] [@ANCHOR: pager_trend_detection]
         # PAGER_DUTY_MCP_AI_TRIAGE.md's own trend-detection design: low/
         # medium severity incidents get tracked but must NOT page on_duty
         # immediately (that's the whole point of deferring to a trend

@@ -14,8 +14,10 @@ class BlogBlog(models.Model):
 
     def _check_blog_quota(self, vals_list):
         # [@ANCHOR: user_websites_blog_quota_check]
-        # Adversarial security review, 2026-09-03: unlike website.page
-        # ([@ANCHOR: website_page_quota_check]), blog.blog create() had no
+
+        # # Verified by [@ANCHOR: test_blog_quota_limit]
+        # Adversarial security review, 2026-09-03: unlike website.page,
+        # see [@ANCHOR: website_page_quota_check] -- blog.blog create() had no
         # quota at all -- any authenticated user could create unbounded
         # blog containers via direct RPC. Real default is small (5) since
         # a real user typically needs very few of these, unlike posts.

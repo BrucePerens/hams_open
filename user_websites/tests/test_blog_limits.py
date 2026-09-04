@@ -8,8 +8,8 @@ from odoo.exceptions import ValidationError
 
 @tagged("post_install", "-at_install")
 class TestBlogLimits(RealTransactionCase):
-    # Adversarial security review, 2026-09-03: unlike website.page (see
-    # test_page_limits.py, [@ANCHOR: website_page_quota_check]),
+    # Adversarial security review, 2026-09-03: unlike website.page,
+    # tested in test_page_limits.py (see [@ANCHOR: website_page_quota_check]),
     # blog.blog/blog.post create() had no quota at all -- any authenticated
     # user could create unbounded blogs/posts via direct RPC, each
     # blog.post create also enqueuing a real Cloudflare cache purge and a
@@ -41,6 +41,9 @@ class TestBlogLimits(RealTransactionCase):
 
     def test_01_blog_creation_is_blocked_past_the_configured_limit(self):
         # [@ANCHOR: test_blog_quota_limit]
+        # Creates blogs up to the configured limit, then asserts the next
+        # one over that limit raises ValidationError -- the real behavior
+        # _check_blog_quota() below exists to enforce.
         # Tests [@ANCHOR: user_websites_blog_quota_check]
         for i in range(2):
             self.env["blog.blog"].create(
@@ -57,6 +60,9 @@ class TestBlogLimits(RealTransactionCase):
 
     def test_02_blog_post_creation_is_blocked_past_the_configured_limit(self):
         # [@ANCHOR: test_blog_post_quota_limit]
+        # Creates posts up to the configured limit, then asserts the next
+        # one over that limit raises ValidationError -- the real behavior
+        # _check_blog_post_quota() below exists to enforce.
         # Tests [@ANCHOR: user_websites_blog_post_quota_check]
         blog = self.env["blog.blog"].create(
             {"name": "Quota Test Blog", "owner_user_id": self.user.id}

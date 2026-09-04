@@ -25,6 +25,14 @@ As a **Community Member**, I want to create and manage my own personal website a
 - **When** I attempt to create more pages than allowed
 - **Then** the system enforces a quota check ([@ANCHOR: website_page_quota_check]) and prevents the creation of the new page with a helpful error message. Verified by `[@ANCHOR: test_page_quota_limit]`.
 
+- **Given** the administrator has set a global blog limit
+- **When** I attempt to create more blogs than allowed
+- **Then** the system enforces a quota check ([@ANCHOR: user_websites_blog_quota_check]) and prevents the creation of the new blog with a helpful error message. Verified by `[@ANCHOR: test_blog_quota_limit]`.
+
+- **Given** the administrator has set a global blog-post limit
+- **When** I attempt to create more posts than allowed
+- **Then** the system enforces a quota check ([@ANCHOR: user_websites_blog_post_quota_check]) and prevents the creation of the new post with a helpful error message. Verified by `[@ANCHOR: test_blog_post_quota_limit]`.
+
 ## Technical Notes
 - Site creation uses a service account to bypass standard Odoo restrictions while maintaining strict ownership ([@ANCHOR: mixin_proxy_ownership_create]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
 

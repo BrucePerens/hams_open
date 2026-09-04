@@ -24,3 +24,6 @@ Alice wakes up to the alert. She logs into the NOC Dashboard [@ANCHOR: pager_boa
 2.  **Investigation:** She uses the integrated Log Analyzer [@ANCHOR: test_log_analyzer_views] to tail the production logs and identifies the offending SQL query.
 3.  **Fix:** Alice kills the long-running transaction.
 4.  **Verification:** The `generalized_monitor.py` daemon completes its next check cycle. Finding the system healthy again, it triggers the auto-resolution sequence [@ANCHOR: auto_resolve_incidents], closing Alice's ticket and logging her MTTR (Mean Time To Resolve) for the morning's post-mortem.
+
+## AI Triage Assist
+Before Alice even wakes up, an on-call AI triage assistant (running as an MCP client against this module's own MCP server) has already looked at the incident. It calls three genuinely non-destructive tools [@ANCHOR: pager_mcp_triage_tools] -- listing open incidents, reading one incident's full detail, and adding a triage note to it -- all backed by a narrowly-scoped, read-only-on-`pager.incident` service account rather than raw ORM access, so the assistant can gather context and leave Alice a head start without ever being able to acknowledge, resolve, or otherwise mutate an incident itself.
