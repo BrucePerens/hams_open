@@ -135,7 +135,7 @@ planning, because every squaring/FFT-power operation downstream compounds that s
 
 | Stage (function) | Quantity | Real domain, from the actual code | Fixed-point risk / recommended treatment |
 |---|---|---|---|
-| `nlp()` | `sq[i]`, `Fw[i].r/i` power | int16^2 up through a 512-pt FFT power, ~10^9 to ~10^23 | High risk -- block-floating-point (per-frame renormalized exponent), not linear Q-format |
+| `nlp()` | `sq[i]`, `Fw[i].r/i` power | int16^2 up through a 512-pt FFT power, real measured range ~10^9 to 2.30x10^19 | **Validated 2026-09-04, see that section below.** Every downstream use of `Fw[i].r` (gmax search, `post_process_sub_multiples()`) is a same-frame comparison, scale-invariant to uniform rescaling -- block-floating (exact exponent via `frexp`, quantized mantissa) tested against 5078 real captured `Fw[]`/`best_f0` pairs: smooth, monotonic convergence with mantissa width, zero pitch-bin mismatches at 18 bits and above, no bifurcation anywhere in the sweep (contrast Levinson-Durbin's identical-at-every-width clamp risk). A concrete 18-bit mantissa width is now established against real data. |
 | `nlp()` | notch filter (`mem_x`, `mem_y`, `COEFF=0.95`) | Simple IIR on the same huge-range `sq[]` signal | Inherits the block-floating treatment above; coefficient `0.95` itself is trivially fixed-point (Q15) |
 | `nlp()` | pitch period / `best_f0` | Bounded, `P_MIN..P_MAX` = 20-160 samples, ~50-400Hz | Low risk -- narrow range, ordinary fixed-point |
 | `autocorrelate()` | `R[0..10]` | **Real measured range (see "Real measured ranges" below): 4.15x10^-6 to 8.60x10^5 across real speech** -- a real ~10^11 span, not just a bounded maximum | **Revised to high risk** after real measurement -- the maximum alone fits a 32-bit accumulator, but the real quiet-frame minimum is 11 orders of magnitude below it; needs the same block-floating/log-domain treatment as the NLP power path, not a plain linear accumulator |
@@ -515,6 +515,55 @@ on** -- unlike Levinson-Durbin, this stage does not need a stabilization-vs-acce
 LUT is already accurate enough that the remaining question is purely an engineering one (exact Q-format
 widths for the surrounding fixed-point multiply/divide/sqrt operations this test deliberately left in
 float to isolate the log-domain piece specifically), not an open numerical-soundness question.
+
+## The highest-flagged risk stage, actually tested: `nlp()`'s post-square FFT power spectrum is
+## block-floating-clean, no bifurcation, 2026-09-04
+
+The per-stage table's own top row flags `nlp()`'s squared-signal FFT power (`Fw[i].r`, real measured
+range ~10^9 to 2.30x10^19 -- about 10 orders of magnitude, the widest span measured anywhere in this
+codec) as "High risk," recommending block-floating-point. This pass tested that recommendation
+directly, and found a genuinely favorable structural property first, before running any numbers:
+**every real use of `Fw[i].r` downstream (`nlp()`'s own `gmax` search, and every comparison inside
+`post_process_sub_multiples()`: `lmax > thresh` where `thresh = CNLP*gmax`, and neighbor-bin
+comparisons) is scale-invariant to a uniform positive rescaling of one frame's whole `Fw[]` array** --
+checked directly against the real source, not assumed. Nothing in this path combines magnitudes
+*across* frames or against a fixed absolute threshold; everything is a same-frame ratio or ordering.
+That's structurally close to `lpc_to_lsp()`'s own bisection row ("only cares about the sign of `psum`,
+not its magnitude") -- and it means block-floating (one shared exponent per frame, the exponent itself
+exact via `frexp`, only the mantissa is approximated) can't introduce a Levinson-Durbin-style clamp
+bifurcation here: the only real question is whether mantissa rounding alone ever flips a near-tie
+comparison and changes which bin (and therefore which pitch estimate) wins.
+
+**Tested that question directly against real data**: extended the instrumented harness
+(`INSTR_DUMP_NLP`) to capture the real `Fw[0..256]` power-spectrum array and the real `best_f0` output
+for all 5078 real `nlp()` calls across the same speech corpus used throughout this proposal. Built a
+byte-for-byte transcription of `nlp()`'s own `gmax` search and `post_process_sub_multiples()`
+(`nlp_blockfloat.c`; `prev_f0`'s pitch-tracking threshold-lowering fixed at a neutral value identically
+on both the reference and candidate runs, isolating the effect of `Fw[]` quantization specifically),
+run once against the exact real `Fw[]` values and once against a block-floating-quantized copy
+(`frexp`/`ldexp`-based mantissa requantization, mirroring the technique already validated for
+Levinson-Durbin's `e`), then compared the resulting `best_f0` bin choice at several mantissa widths:
+
+| Mantissa width | Frames where `best_f0` changed | Worst-case error when it did |
+|---|---|---|
+| 8-bit | 1394 / 5078 (27.5%) | 331 Hz |
+| 12-bit | 120 / 5078 (2.4%) | 288 Hz |
+| 16-bit | 9 / 5078 (0.18%) | 134 Hz |
+| 17-bit | 2 / 5078 (0.04%) | 134 Hz |
+| **18-bit** | **0 / 5078 (0.0%)** | -- |
+| 19-bit, 20-bit, 24-bit | 0 / 5078 (0.0%) | -- |
+
+**Real result: smooth, monotonic convergence with mantissa width, zero mismatches at 18 bits and
+above, and no cliff anywhere in the sweep** -- a materially different, more favorable risk shape than
+Levinson-Durbin's clamp bifurcation (which showed *identical* divergence at every mantissa width tested
+16 through 32 bits, because that risk is a discontinuity, not a precision floor) and structurally
+similar to the `aks_to_mag2` log2/exp2-LUT result (smooth, resolution-dependent, no discontinuity).
+**The per-stage table's own recommendation (block-floating-point, not linear Q-format) is validated,
+and a concrete, real mantissa width (18 bits, comfortably inside a 32-bit accumulator with room for a
+few bits of headroom) is now established against real data** rather than left as an unverified
+recommendation. Not tested here: the notch-filter/decimating-FIR stages feeding into `Fw[]` (the
+per-stage table's own second `nlp()` row) -- this pass validated the *power-spectrum comparison* risk
+specifically, the largest of the two `nlp()` rows, not the full signal chain leading into it.
 
 ## First real fixed-point primitive, built and validated, 2026-09-04
 
