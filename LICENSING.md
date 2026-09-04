@@ -75,6 +75,19 @@ verifying this: D3.js and topojson-client aren't wired into `fetch_assets.py` li
 and the currently-vendored files don't byte-match a fresh download of the same published version
 -- not yet resolved.
 
+**`daemons/ham_digital_modes/vendor/` also vendors two C libraries, missing from the table above
+because that table was scoped to `external/`'s own JS/ML assets -- added here 2026-09-04 while
+vendoring a second one, a real pre-existing gap for the first, not a new omission:**
+
+| Library | License | Notes |
+|---|---|---|
+| `ft8_lib` | MIT (`vendor/ft8_lib/LICENSE-MIT`) | FT8/FT4 decode reference, predates this survey |
+| `codec2-mod` | LGPL-2.1 (`vendor/codec2-mod/LICENSE`) | M17 project's Codec2 3200bps fork, itself derived from David Rowe's LGPL-2.1 `drowe67/codec2`; see `vendor/codec2-mod/VENDORED_FROM.md` for the exact commit, and `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md` for the fixed-point analysis it supports |
+
+Both are compatible with this crate's own LGPL-3.0-or-later: vendoring preserves each library's own
+license file unmodified rather than relicensing it, the same relationship `external/`'s table
+above has with the rest of this repo's AGPL-3.0-or-later.
+
 ## Unlabeled files
 
 Just under half of this repo's Python files (226 of 461) carry no `SPDX-License-Identifier` at
