@@ -43,15 +43,17 @@ pub fn decode_energy(index: u32) -> f32 {
 
 /// Real linear scalar quantizer shared by `Wo` and energy: `bits`
 /// levels evenly spaced across `[min, max]`, index rounded to nearest
-/// and clamped.
-fn quantize_linear(value: f32, min: f32, max: f32, bits: u32) -> u32 {
+/// and clamped. `pub(crate)` so `fixed_point.rs`'s LUT-based energy
+/// quantizer can reuse the exact same clamp/rounding logic rather than
+/// duplicating it.
+pub(crate) fn quantize_linear(value: f32, min: f32, max: f32, bits: u32) -> u32 {
     let levels = 1u32 << bits;
     let norm = (value - min) / (max - min);
     let index = (levels as f32 * norm + 0.5) as i32;
     index.clamp(0, levels as i32 - 1) as u32
 }
 
-fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f32 {
+pub(crate) fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f32 {
     let levels = 1u32 << bits;
     let step = (max - min) / levels as f32;
     min + step * index as f32

@@ -104,6 +104,7 @@
 
 pub mod bits;
 pub mod envelope;
+pub mod fixed_point;
 pub mod interp;
 pub mod lpc;
 pub mod nlp;
