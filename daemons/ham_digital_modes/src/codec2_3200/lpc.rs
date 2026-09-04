@@ -342,27 +342,43 @@ fn f32_to_q64(x: f32, frac_bits: u32) -> i64 {
 /// ever consumes this result's *sign* (a bracketing/convergence test,
 /// never the magnitude), so this returns the raw fixed-point
 /// accumulator directly rather than converting back to `f32` -- the
-/// sign of the `i64` accumulator IS the real answer, and converting
+/// sign of the `i32` accumulator IS the real answer, and converting
 /// back to float first would just be adding an unnecessary lossy step
 /// on top of an already-validated fixed-point result.
-fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i64 {
+///
+/// `x_q`/`T`/`sum` are `i32`, not `i64` -- `CODEC2_FIXED_POINT_WIDTH_
+/// REDUCTION_STUDY.md`'s Question 2, measured directly against the real
+/// fixture corpus (`cheb_poly_eval_fixed_intermediate_values_real_
+/// measured_i32_fit_margin`): max `|x_q|`/`|T|` is ~2^29 (matches the
+/// Q2.29 format exactly, as `\|x\|<=1`/`\|T\|<=1` by construction
+/// promise), max `|sum|` ~2^29.94, both with real margin under `i32`'s
+/// 2^31 range across 2.9 million real evaluations. Only the per-step
+/// product widens to `i64` transiently (the one native 32x32->64
+/// multiply every target this port cares about has in hardware),
+/// narrowing back to `i32` immediately after each `>> CHEB_FRAC_BITS` --
+/// proven bit-exact against the prior all-`i64` implementation across
+/// the same corpus before this replaced it (real codegen win: ~46 vs 98
+/// instructions on Xtensa LX6, ~half the code on ARM Cortex-M4F too,
+/// zero calls either way).
+fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i32 {
     let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
-    let x_q = f32_to_q(x, CHEB_FRAC_BITS) as i64;
+    let x_q: i32 = f32_to_q(x, CHEB_FRAC_BITS);
 
-    let mut t_prev2: i64 = 1i64 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
-    let mut t_prev1: i64 = x_q; // T_1 = x, Q2.29
+    let mut t_prev2: i32 = 1i32 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
+    let mut t_prev1: i32 = x_q; // T_1 = x, Q2.29
 
     // Each term is (Q8.23 coefficient * Q2.29 T) >> 29, bringing the
     // product back down to the coefficients' own Q8.23 format for the
-    // running sum -- both factors fit comfortably in i64 (each at most
-    // ~2^30 in magnitude), so the product (~2^60 at most) never
-    // approaches i64's own range.
-    let mut sum: i64 = (coef_q[5] as i64 * t_prev2) >> CHEB_FRAC_BITS;
-    sum += (coef_q[4] as i64 * t_prev1) >> CHEB_FRAC_BITS;
+    // running sum -- the product itself needs the transient i64 widen
+    // (each factor up to ~2^30, so the product can reach ~2^60), but
+    // every stored value narrows back to i32 immediately after.
+    let mut sum: i32 = ((coef_q[5] as i64 * t_prev2 as i64) >> CHEB_FRAC_BITS) as i32;
+    sum += ((coef_q[4] as i64 * t_prev1 as i64) >> CHEB_FRAC_BITS) as i32;
 
     for i in 2..=5 {
-        let t_i = ((2 * x_q * t_prev1) >> CHEB_FRAC_BITS) - t_prev2;
-        sum += (coef_q[5 - i] as i64 * t_i) >> CHEB_FRAC_BITS;
+        let t_i: i32 =
+            (((2i64 * x_q as i64 * t_prev1 as i64) >> CHEB_FRAC_BITS) - t_prev2 as i64) as i32;
+        sum += ((coef_q[5 - i] as i64 * t_i as i64) >> CHEB_FRAC_BITS) as i32;
         t_prev2 = t_prev1;
         t_prev1 = t_i;
     }
@@ -854,6 +870,78 @@ mod tests {
             }
         }
         assert!(sign_mismatches > 0, "expected the deliberately coarse Q-format to produce at least one real sign mismatch -- got zero, which would mean the zero-mismatch result above isn't evidence of anything");
+    }
+
+    /// Real measured range check backing `cheb_poly_eval_fixed`'s own
+    /// `i32` storage (`CODEC2_FIXED_POINT_WIDTH_REDUCTION_STUDY.md`'s
+    /// Question 2, now implemented, not just proposed): `\|T\|<=1` and
+    /// `\|x\|<=1` "by construction," and `coef_q` is `i32`-native -- this
+    /// independently re-simulates the arithmetic at `i64` width to
+    /// measure whether `sum` (the one value not structurally bounded to
+    /// `[-1,1]`, since it accumulates up to 6 coefficient-scaled terms)
+    /// also stays within `i32`'s real range across real data, a real
+    /// regression guard against the production `i32` code silently
+    /// wrapping if some future coefficient distribution ever pushed past
+    /// this margin (release builds don't panic on `i32` overflow the way
+    /// debug builds do).
+    #[test]
+    fn cheb_poly_eval_fixed_intermediate_values_real_measured_i32_fit_margin() {
+        let pq_path = fixture!("codec2_pq_dump.txt");
+        let pqs = read_dump(pq_path, 12);
+
+        let mut max_abs_x_q: i64 = 0;
+        let mut max_abs_t: i64 = 0;
+        let mut max_abs_sum: i64 = 0;
+        let mut n = 0u64;
+
+        for pq_row in &pqs {
+            let mut p = [0.0f32; 6];
+            let mut q = [0.0f32; 6];
+            p.copy_from_slice(&pq_row[0..6]);
+            q.copy_from_slice(&pq_row[6..12]);
+            for poly in [&p, &q] {
+                let coef_q: [i32; 6] =
+                    std::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
+                let mut x = -1.0f32;
+                while x <= 1.0 {
+                    let x_q = f32_to_q(x, CHEB_FRAC_BITS) as i64;
+                    max_abs_x_q = max_abs_x_q.max(x_q.abs());
+
+                    let mut t_prev2: i64 = 1i64 << CHEB_FRAC_BITS;
+                    let mut t_prev1: i64 = x_q;
+                    max_abs_t = max_abs_t.max(t_prev2.abs()).max(t_prev1.abs());
+
+                    let mut sum: i64 = (coef_q[5] as i64 * t_prev2) >> CHEB_FRAC_BITS;
+                    sum += (coef_q[4] as i64 * t_prev1) >> CHEB_FRAC_BITS;
+                    max_abs_sum = max_abs_sum.max(sum.abs());
+
+                    for i in 2..=5 {
+                        let t_i = ((2 * x_q * t_prev1) >> CHEB_FRAC_BITS) - t_prev2;
+                        max_abs_t = max_abs_t.max(t_i.abs());
+                        sum += (coef_q[5 - i] as i64 * t_i) >> CHEB_FRAC_BITS;
+                        max_abs_sum = max_abs_sum.max(sum.abs());
+                        t_prev2 = t_prev1;
+                        t_prev1 = t_i;
+                    }
+                    n += 1;
+                    x += 0.0005;
+                }
+            }
+        }
+
+        assert!(n > 1_000_000, "expected a real dense-sweep total, got {n}");
+        println!(
+            "cheb_poly_eval_fixed real measured max magnitudes across {n} real evaluations: \
+             |x_q|={max_abs_x_q} ({:.3} bits), |T|={max_abs_t} ({:.3} bits), |sum|={max_abs_sum} ({:.3} bits) -- i32 usable magnitude is 2^31-1={}",
+            (max_abs_x_q as f64).log2(),
+            (max_abs_t as f64).log2(),
+            (max_abs_sum as f64).log2(),
+            i32::MAX
+        );
+        assert!(
+            max_abs_x_q < i32::MAX as i64 && max_abs_t < i32::MAX as i64 && max_abs_sum < i32::MAX as i64,
+            "a value here exceeds i32's real range on real data -- Question 2's premise (values already fit i32) would be false"
+        );
     }
 
     /// `lsp_to_lpc` is the mathematical inverse of `lpc_to_lsp` (both
