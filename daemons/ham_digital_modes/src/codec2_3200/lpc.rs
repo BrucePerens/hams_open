@@ -300,15 +300,16 @@ mod tests {
             "only {roots_found_count}/{} real frames found all {LPC_ORD} LSP roots -- expected the overwhelming majority to succeed on real speech",
             aks.len()
         );
-        // Bisection resolves x to LSP_SEARCH_STEP / 2^LSP_BISECTIONS
-        // (~1.6e-4 in x); acos's derivative reaches ~7 across real LSPs'
-        // own x range, so a few times 1e-3 radians of slop is expected
-        // from float rounding alone. A bug that returns one extra
-        // (uncounted) bisection would show up here as error close to
-        // LSP_SEARCH_STEP / 2^(LSP_BISECTIONS+1) ~ 7.8e-5 in x, i.e. up to
-        // ~5e-4 radians beyond this bound -- this tolerance is tight
-        // enough to catch that.
-        assert!(max_abs_err < 2e-3, "max LSP root error vs real captured reference: {max_abs_err} rad");
+        // With the fix, real measured max error against the reference's
+        // own captured lsp[] is ~1.8e-6 rad (float rounding noise).
+        // Negative-controlled: temporarily reverting to a fresh 7th
+        // (uncounted) bisection average instead of the last computed
+        // midpoint pushes the real measured max error to ~1.9e-3 rad on
+        // this same fixture -- three orders of magnitude apart, so 1e-4
+        // sits with wide margin on both sides and actually discriminates
+        // the bug this test exists to catch, not just root-finding
+        // success/failure.
+        assert!(max_abs_err < 1e-4, "max LSP root error vs real captured reference: {max_abs_err} rad");
     }
 
     #[test]

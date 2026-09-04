@@ -13,16 +13,26 @@ energy -- at specific call sites, one line per real analysis frame.
 
 - `codec2_r_dump.txt`, `codec2_ak_dump.txt`, `codec2_pq_dump.txt`,
   `codec2_lsp_dump.txt`, `codec2_enc_e_dump.txt`: derived from running the
-  real reference against the standard Codec2/FreeDV project's own publicly
-  committed test speech (the project leadership team's own donated voice
-  samples, from `drowe67/codec2`'s `raw/` directory -- callsigns
-  `g8sez`/`vk5dgr`/`k0pfx`/`mooneer`/a fifth clip appear in the source
-  filenames). These files hold only *abstracted numeric analysis features*
-  (LPC coefficients, Chebyshev polynomial coefficients, LSP frequencies in
-  radians, a single energy scalar per frame) -- not audio waveform data,
-  and not byte-recoverable back into speech. Subsampled (every 7th frame)
-  from a larger local capture to keep the fixture small; frame indices are
-  not meaningful outside this file.
+  real reference against five local 8kHz WAV files (filenames
+  `brian_g8sez.wav`, `david_vk5dgr.wav`, `k0pfx_mel.wav`, `mooneer.wav`,
+  `peter.wav`) whose names match the callsigns of the Codec2/FreeDV
+  project's own leadership team (David Rowe VK5DGR, Mooneer Salem K6AQ,
+  Mel Whitten K0PFX, Brian Morrison G8SEZ, Peter Marks VK3TPM) -- almost
+  certainly their own donated voice samples used somewhere in that
+  project's own testing, in the same spirit as `raw/` in
+  `drowe67/codec2`'s own repo (checked: NOT literally that directory --
+  its current contents don't include these five files, so their exact
+  origin repo/path and license terms were **not independently confirmed**
+  before committing this derived data; flagged for Bruce's own review).
+  What's actually committed here holds only *abstracted numeric analysis
+  features* (LPC coefficients, Chebyshev polynomial coefficients, LSP
+  frequencies in radians, a single energy scalar per frame) -- not audio
+  waveform data, and not byte-recoverable back into speech, which is why
+  this was judged low-risk enough to commit even without that
+  confirmation (unlike the waveform-adjacent `Wn[]` data below, which
+  wasn't). Subsampled (every 7th frame) from a larger local capture to
+  keep the fixture small; frame indices are not meaningful outside this
+  file.
 - `synthetic_codec2_wn_dump.txt`, `synthetic_codec2_r_dump.txt`: the
   reference's real windowed analysis buffer (`Wn[]`, which *is*
   essentially audio-domain data -- real samples, just multiplied by a Hann

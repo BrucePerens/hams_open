@@ -1,8 +1,36 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! An independently-authored Rust port of Codec2's 3200bps mode, aimed at
 //! interoperating with real Codec2/Codec2-mod encoders and decoders in the
-//! wild (bit-identical output for identical input) without being a
-//! derivative work of Codec2-mod's own LGPL-2.1-only source.
+//! wild, without being a derivative work of Codec2-mod's own
+//! LGPL-2.1-only source.
+//!
+//! "Interoperate" is *not* symmetric, and it's worth being precise here
+//! since it shapes what a real acceptance test for this module can and
+//! can't check:
+//!
+//! - **Decoding a real bitstream** (from this crate's own encoder or any
+//!   real Codec2/Codec2-mod encoder) must use the exact same quantizer
+//!   dequantization formulas and bit-packing/Gray-coding the real format
+//!   defines -- there's no design freedom here, and this direction *is*
+//!   checkable by feeding a real captured bitstream through both this
+//!   decoder and the reference decoder and comparing. (Reconstructed PCM
+//!   audio samples themselves can still differ slightly in float
+//!   rounding even then -- `vendor/codec2-mod/README.md`'s own README
+//!   makes the identical caveat about *its* bit-exactness claim:
+//!   "Bit-exactness refers to the encoded bitstream - decoded audio
+//!   samples may differ from the reference implementation.")
+//! - **Encoding** must produce a bitstream any compliant decoder decodes
+//!   correctly, but does *not* need to choose the exact same quantizer
+//!   index values the reference's own encoder would have chosen for
+//!   identical input speech -- a decoder has no way to know, or care,
+//!   how the encoder arrived at a given `Wo`/energy/LSP index (see
+//!   `nlp.rs`'s own module doc comment for where this matters most: its
+//!   pitch estimate has full design freedom). This direction can only be
+//!   checked for decodability and intelligibility, never bit-compared
+//!   against what the reference encoder would have produced -- a future
+//!   session building a cross-codec acceptance harness should not expect
+//!   an encode-in-Rust/decode-in-C round trip to ever bit-match a
+//!   reference encode-in-C/decode-in-C round trip on the same input.
 //!
 //! Written from a from-scratch reading of the *algorithm* (LPC analysis,
 //! Levinson-Durbin, LSP conversion, pitch estimation, sinusoidal
