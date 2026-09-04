@@ -48,9 +48,11 @@
 //! noisy off-air audio. `RttyDecoder` is the `Psk31Decoder`-style
 //! chunk-surviving streaming wrapper (see its own doc comment for the
 //! real, RTTY-specific lookahead-margin subtlety asynchronous framing
-//! needs that PSK31's fixed-symbol-length decode doesn't) -- built here;
-//! wiring it into `digital_decoder.rs`'s dispatch the way PSK31/FT8/
-//! WSPR already are is separate, in-progress follow-on work.
+//! needs that PSK31's fixed-symbol-length decode doesn't) -- built, and
+//! wired into `hams_com`'s `digital_decoder.rs` dispatch the same way
+//! PSK31/FT8/WSPR already are, proven end to end by that crate's own
+//! `raw_input_audio_reaches_a_real_rtty_decode` test (real audio in
+//! through the actual pipeline entry point, real decoded text out).
 
 const RTTY_BAUD: f64 = 45.45;
 const RTTY_DEFAULT_MARK_HZ: f64 = 2125.0;
