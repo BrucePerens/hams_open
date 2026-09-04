@@ -83,7 +83,14 @@ impl Encoder {
             *w = s * win;
         }
         let r = lpc::autocorrelate(&windowed);
-        let mut ak = lpc::levinson_durbin(&r);
+        // White noise correction (see lpc::apply_white_noise_correction's
+        // own doc comment) applies only to Levinson-Durbin's own input --
+        // a separate, explicitly-named copy, so lpc_energy below still
+        // reports the real, uncorrected signal energy rather than the
+        // artificially-inflated-by-alpha value.
+        let mut r_for_levinson = r;
+        lpc::apply_white_noise_correction(&mut r_for_levinson);
+        let mut ak = lpc::levinson_durbin(&r_for_levinson);
         let e = lpc::lpc_energy(&ak, &r);
         for (i, a) in ak.iter_mut().enumerate() {
             *a *= bw_gamma(i);

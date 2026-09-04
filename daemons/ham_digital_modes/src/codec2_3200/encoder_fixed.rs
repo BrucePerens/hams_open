@@ -107,7 +107,12 @@ impl EncoderFixed {
             *w = s * win;
         }
         let r = lpc::autocorrelate(&windowed);
-        let mut ak = lpc::levinson_durbin(&r);
+        // White noise correction (lpc::apply_white_noise_correction) --
+        // a separate copy so lpc_energy still reports the real,
+        // uncorrected signal energy.
+        let mut r_for_levinson = r;
+        lpc::apply_white_noise_correction(&mut r_for_levinson);
+        let mut ak = lpc::levinson_durbin(&r_for_levinson);
         let e = lpc::lpc_energy(&ak, &r);
         for (i, a) in ak.iter_mut().enumerate() {
             *a *= bw_gamma(i);

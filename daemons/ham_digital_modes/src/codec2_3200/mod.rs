@@ -50,6 +50,19 @@
 //! genuinely speech-like signal level, not silence or garbage -- real
 //! interoperability, not just internal self-consistency.
 //!
+//! **Stale as of `lpc::apply_white_noise_correction`'s addition,
+//! flagged plainly rather than silently left to look current**: the
+//! measurement above predates that function's own real, if small,
+//! change to `floating_reference::Encoder`'s LPC estimate (`R[0] *=
+//! 1 + 1e-3` before Levinson-Durbin). This crate's own automated tests
+//! (round-trip sanity, decoder-vs-reference on a bitstream this crate's
+//! own encoder never touches) still pass, but the specific real
+//! cross-decoder numbers above have not been re-measured against the
+//! corrected encoder -- that check is a manual step (see
+//! `examples/codec2_encode_wav.rs`'s own doc comment for why it's kept
+//! outside this crate's automated build) that needs re-running before
+//! treating this section as current again.
+//!
 //! **Decoder verified against the real reference decoder, the direction
 //! that actually admits a numeric comparison** (see this doc comment's
 //! own note above on why encode/decode aren't symmetric here).
