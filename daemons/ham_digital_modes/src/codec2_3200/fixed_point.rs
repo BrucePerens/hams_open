@@ -25,13 +25,14 @@
 //! from `x`'s own raw IEEE754 mantissa bits [`x.to_bits() &
 //! 0x007F_FFFF`, already an *exact* Q23 fixed-point `(mantissa - 1.0)`],
 //! while `exp2_lut`'s `y` has no such free structure and needs its own
-//! boundary quantization, an arithmetic-shift floor correct on negative
-//! input, and a final IEEE754 bit *reconstruction* rather than
-//! extraction). Both now run their interpolation entirely in
-//! `i64`/`u64` arithmetic, with `f32` touched only at genuine
-//! boundaries (the exponent-extraction input and final sum for
-//! `log2_lut`; the initial `y` quantization and final bit-pattern
-//! `from_bits` for `exp2_lut`). Both keep their `f32 -> f32` signature,
+//! boundary quantization -- `f32_to_q_exact_round`, itself exact bit
+//! extraction from `y`'s own IEEE754 pattern, not a float multiply --
+//! an arithmetic-shift floor correct on negative input, and a final
+//! IEEE754 bit *reconstruction* rather than extraction). Both now run
+//! entirely in `i64`/`u64` arithmetic with no float operation anywhere
+//! inside -- `f32` is touched only at the true boundaries (`to_bits()`/
+//! `from_bits()` on the way in and out, never a multiply, subtract, or
+//! `powi`/`powf` call in between). Both keep their `f32 -> f32` signature,
 //! since every real caller (`quantise::encode_energy`/`decode_energy`,
 //! `synthesis::postfilter_step`) is still float upstream -- this closes
 //! the *interpolation* gap specifically, not the surrounding call
@@ -204,27 +205,68 @@ fn exp2_lut_table_frac_q23() -> &'static [i32; LOG2_LUT_SIZE] {
     })
 }
 
+/// Exact `round(y * 2^frac_bits)` computed straight from `y`'s own
+/// IEEE754 bit pattern -- no float multiply at all, the same bit-
+/// extraction trick `log2_lut_generic_fixed` already uses on its own
+/// input, applied here instead to the value that needs converting *to*
+/// fixed point rather than one already interpreted as one. `y == sign *
+/// (2^23 | mantissa) * 2^(exp_biased - 127 - 23)`, so `y * 2^frac_bits`
+/// is that same 24-bit significand shifted by `exp_biased - 150 +
+/// frac_bits` -- a left shift when non-negative, otherwise a right
+/// shift with an explicit round-half-up bias term (`+ 2^(shift-1)`
+/// before shifting), never a genuine floating-point operation.
+fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64 {
+    if y == 0.0 {
+        return 0;
+    }
+    let raw = y.to_bits();
+    let sign: i64 = if raw & 0x8000_0000 != 0 { -1 } else { 1 };
+    let exp_biased = ((raw >> 23) & 0xFF) as i32;
+    debug_assert!(
+        exp_biased != 0,
+        "f32_to_q_exact_round: subnormal y not supported here, got {y}"
+    );
+    let significand = (1u64 << 23) | (raw & 0x007F_FFFF) as u64; // [2^23, 2^24)
+    let shift = exp_biased - 127 - 23 + frac_bits as i32;
+    let mag = if shift >= 0 {
+        debug_assert!(
+            shift < 40,
+            "f32_to_q_exact_round: y={y} too large for a {frac_bits}-fractional-bit Q format"
+        );
+        significand << shift
+    } else {
+        let neg_shift = (-shift) as u32;
+        if neg_shift >= 64 {
+            0
+        } else {
+            (significand + (1u64 << (neg_shift - 1))) >> neg_shift
+        }
+    };
+    sign * mag as i64
+}
+
 /// Q23 fixed-point sibling of `exp2_lut_generic` -- the real
 /// implementation `exp2_lut()` now calls. Unlike `log2_lut_generic_
 /// fixed` (whose input `x` is already IEEE754-shaped, so its
 /// index/weight split comes free from the raw mantissa bits), `y` here
-/// is an arbitrary real number with no such free structure, so it's
-/// quantized once at the float/fixed boundary (`y_q`, `EXP2_Y_FRAC_BITS`
-/// fractional bits) via a genuine `f32` multiply -- the one real,
-/// unavoidable boundary conversion, matching this whole port's
-/// established "integer core, float boundary" convention. From there:
-/// `floor(y)` and its fractional remainder both come from a plain
-/// integer arithmetic-shift (correct on negative `y_q` too, since Rust's
-/// `>>` on signed integers rounds toward negative infinity, exactly
-/// matching `f32::floor()`), the index/weight split matches `log2_lut_
-/// generic_fixed`'s own shape, and the final `mantissa * 2^floor(y)` is
-/// built directly as an IEEE754 bit pattern (`biased_exp << 23 |
-/// mantissa_frac`) rather than computed via `2f32.powi()` -- the exact
-/// mirror image of `log2_lut_generic_fixed`'s own bit *extraction*, this
-/// time *reconstructing* the pattern instead.
+/// is an arbitrary real number that first needs converting *to* a
+/// Q(`EXP2_Y_FRAC_BITS`) integer -- done via `f32_to_q_exact_round`
+/// above (exact bit extraction, not a float multiply: an `f64` multiply
+/// was tried first and reads as fixed-point but isn't, exactly the kind
+/// of doc/code mismatch this project has been burned by before). From
+/// there: `floor(y)` and its fractional remainder both come from a
+/// plain integer arithmetic-shift (correct on negative `y_q` too, since
+/// Rust's `>>` on signed integers rounds toward negative infinity,
+/// exactly matching `f32::floor()`), the index/weight split matches
+/// `log2_lut_generic_fixed`'s own shape, and the final `mantissa *
+/// 2^floor(y)` is built directly as an IEEE754 bit pattern
+/// (`biased_exp << 23 | mantissa_frac`) rather than computed via
+/// `2f32.powi()` -- the exact mirror image of `log2_lut_generic_
+/// fixed`'s own bit *extraction*, this time *reconstructing* the
+/// pattern instead. Genuinely integer, boundary to boundary.
 fn exp2_lut_generic_fixed(y: f32, bits: u32, table_frac_q23: &[i32]) -> f32 {
     let extra_bits = EXP2_Y_FRAC_BITS - bits;
-    let y_q = (y as f64 * (1i64 << EXP2_Y_FRAC_BITS) as f64).round() as i64;
+    let y_q = f32_to_q_exact_round(y, EXP2_Y_FRAC_BITS);
     let floor_y = y_q >> EXP2_Y_FRAC_BITS;
     let frac_full_q = y_q - (floor_y << EXP2_Y_FRAC_BITS); // [0, 2^EXP2_Y_FRAC_BITS)
     let levels = 1i64 << bits;
@@ -233,6 +275,10 @@ fn exp2_lut_generic_fixed(y: f32, bits: u32, table_frac_q23: &[i32]) -> f32 {
     let t0 = table_frac_q23[idx] as i64;
     let t1 = table_frac_q23[idx + 1] as i64;
     let interp_frac_q23 = t0 + ((t_num * (t1 - t0)) >> extra_bits);
+    debug_assert!(
+        (0..(1i64 << 23)).contains(&interp_frac_q23),
+        "exp2_lut_generic_fixed: interp_frac_q23={interp_frac_q23} out of the Q23 mantissa-fraction range -- would silently truncate below"
+    );
     let biased_exp = floor_y + 127;
     debug_assert!(
         (1..=254).contains(&biased_exp),
