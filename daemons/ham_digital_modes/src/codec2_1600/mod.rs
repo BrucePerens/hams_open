@@ -483,7 +483,7 @@ impl DecoderFixed {
 
         let mut lsps3 = lsp_quantiser::decode_lsps_scalar_fixed(&fields.lsp_indexes);
         lsp_post::check_lsp_order_fixed(&mut lsps3);
-        lsp_post::bw_expand_lsps_fixed(&mut lsps3, lsp_post::min_sep_q23(50.0), lsp_post::min_sep_q23(100.0));
+        lsp_post::bw_expand_lsps_fixed(&mut lsps3, lsp_post::min_sep_low_q23(), lsp_post::min_sep_high_q23());
 
         let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
         let wo0 = interp::interp_wo_fixed(

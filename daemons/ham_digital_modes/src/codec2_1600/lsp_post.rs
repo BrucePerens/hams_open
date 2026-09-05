@@ -96,29 +96,27 @@ pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize {
     swaps
 }
 
-/// `min_sep * (pi/4000)` in Q23 for a given Hz margin -- callers pass
-/// the real Hz value (`50.0`/`100.0`, the only two real values this
-/// mode's own decoder ever uses), computed once via `OnceLock` rather
-/// than hand-typed.
-pub fn min_sep_q23(min_sep_hz: f32) -> i64 {
-    static V: OnceLock<[(u32, i64); 2]> = OnceLock::new();
-    let cache = V.get_or_init(|| {
-        [
-            (50, f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS)),
-            (100, f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS)),
-        ]
-    });
-    let key = min_sep_hz.round() as u32;
-    cache
-        .iter()
-        .find(|(hz, _)| *hz == key)
-        .unwrap_or_else(|| panic!("min_sep_q23: unexpected Hz value {min_sep_hz}, only 50.0/100.0 are cached"))
-        .1
+/// `50.0 * (pi/4000)` in Q23 -- the real reference's own `min_sep_low`
+/// for the 1600bps decoder's one real `bw_expand_lsps_fixed` call site,
+/// computed once via `OnceLock` rather than hand-typed. A no-argument
+/// function rather than a value looked up by Hz: this mode's decoder
+/// only ever needs these two specific margins, so there's no real
+/// "wrong Hz value" case to guard against at runtime.
+pub fn min_sep_low_q23() -> i64 {
+    static V: OnceLock<i64> = OnceLock::new();
+    *V.get_or_init(|| f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS))
+}
+
+/// `100.0 * (pi/4000)` in Q23 -- the real reference's own `min_sep_high`
+/// for the same call site `min_sep_low_q23` documents.
+pub fn min_sep_high_q23() -> i64 {
+    static V: OnceLock<i64> = OnceLock::new();
+    *V.get_or_init(|| f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS))
 }
 
 /// Fixed-point sibling of `bw_expand_lsps`, entirely in `i64` Q23
 /// arithmetic. `min_sep_low_q23`/`min_sep_high_q23` come from
-/// `min_sep_q23` above.
+/// `min_sep_low_q23()`/`min_sep_high_q23()` above.
 pub fn bw_expand_lsps_fixed(lsp: &mut [i64; LPC_ORD], min_sep_low_q23: i64, min_sep_high_q23: i64) {
     for i in 1..4 {
         if (lsp[i] - lsp[i - 1]) < min_sep_low_q23 {
@@ -238,7 +236,7 @@ mod tests {
         let mut lsp_q23: [i64; super::LPC_ORD] = std::array::from_fn(|i| to_q23(lsp[i]));
 
         bw_expand_lsps(&mut lsp, 50.0, 100.0);
-        bw_expand_lsps_fixed(&mut lsp_q23, min_sep_q23(50.0), min_sep_q23(100.0));
+        bw_expand_lsps_fixed(&mut lsp_q23, min_sep_low_q23(), min_sep_high_q23());
 
         for i in 0..super::LPC_ORD {
             assert!(
