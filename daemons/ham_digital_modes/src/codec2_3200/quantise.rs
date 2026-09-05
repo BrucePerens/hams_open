@@ -39,6 +39,34 @@ pub fn decode_wo(index: u32) -> f32 {
     dequantize_linear(index, W0_MIN, W0_MAX, WO_BITS)
 }
 
+/// `W0_MIN` in Q23 (`lpc::COEF_FRAC_BITS`'s own format, matching the
+/// angle domain used throughout the LSP chain -- `Wo` is also a small
+/// radians-per-sample angular frequency, `[0.039, 0.314]`, well within
+/// Q23's headroom).
+fn w0_min_q23() -> i64 {
+    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(W0_MIN, super::lpc::COEF_FRAC_BITS))
+}
+
+/// One quantizer step, `(W0_MAX - W0_MIN) / 2^WO_BITS`, in the same Q23
+/// format as `w0_min_q23()`.
+fn w0_step_q23() -> i64 {
+    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        let step = (W0_MAX - W0_MIN) / (1u32 << WO_BITS) as f32;
+        super::fixed_point::f32_to_q_exact_round(step, super::lpc::COEF_FRAC_BITS)
+    })
+}
+
+/// Fixed-point `decode_wo`: `index` is a plain integer count, so unlike
+/// most of this port's fixed-point arithmetic, no rescale is needed at
+/// all -- `w0_min_q23() + w0_step_q23() * index` is already Q23 by
+/// construction (a Q23 value plus an integer multiple of another Q23
+/// value stays Q23).
+pub fn decode_wo_fixed(index: u32) -> i64 {
+    w0_min_q23() + w0_step_q23() * index as i64
+}
+
 /// Uses `fixed_point::log2_lut` (an 8-bit, linearly-interpolated
 /// log2/exp2 LUT -- the real fixed-point-friendly shape validated in
 /// `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md` for `aks_to_mag2`'s
@@ -59,6 +87,41 @@ pub fn encode_energy(e_linear: f32) -> u32 {
 pub fn decode_energy(index: u32) -> f32 {
     let e_db = dequantize_linear(index, E_MIN_DB, E_MAX_DB, E_BITS);
     super::fixed_point::exp2_lut(e_db / 10.0 * std::f32::consts::LOG2_10)
+}
+
+/// `E_MIN_DB/10*LOG2_10` in Q23 -- the `y` `exp2_q23` would see for
+/// `index == 0`, precomputed the same one-time way `w0_min_q23()` is.
+fn energy_y_min_q23() -> i64 {
+    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        super::fixed_point::f32_to_q_exact_round(
+            E_MIN_DB / 10.0 * std::f32::consts::LOG2_10,
+            23,
+        )
+    })
+}
+
+/// One quantizer step's own contribution to `y` (`step_db/10*LOG2_10`),
+/// in Q23.
+fn energy_y_step_q23() -> i64 {
+    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        let step_db = (E_MAX_DB - E_MIN_DB) / (1u32 << E_BITS) as f32;
+        super::fixed_point::f32_to_q_exact_round(step_db / 10.0 * std::f32::consts::LOG2_10, 23)
+    })
+}
+
+/// Fixed-point `decode_energy`: genuinely integer in/out (Q23 linear
+/// energy, `i64`) -- `index` (a plain integer count) linearly
+/// determines `y = e_db/10*LOG2_10` the same way `decode_wo_fixed`
+/// linearly determines `Wo` (no rescale needed, `energy_y_min_q23() +
+/// energy_y_step_q23() * index` is already Q23 by construction), then
+/// `fixed_point::exp2_q23` -- `decode_energy`'s own no-FPU sibling --
+/// turns that into the actual linear energy value. No `f32` touches
+/// this function at all, not even at entry/exit.
+pub fn decode_energy_fixed(index: u32) -> i64 {
+    let y_q23 = energy_y_min_q23() + energy_y_step_q23() * index as i64;
+    super::fixed_point::exp2_q23(y_q23)
 }
 
 /// Real linear scalar quantizer shared by `Wo` and energy: `bits`
@@ -233,6 +296,38 @@ pub fn encode_lsps_delta_scalar_fixed(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
         };
     }
     indexes
+}
+
+/// `pi/4000` in Q23 (`lpc::COEF_FRAC_BITS`'s own format, the angle
+/// domain `decode_lsps_delta_scalar_fixed` returns) -- the reciprocal
+/// direction of `hz_per_rad_q16()` above, computed the same
+/// exact-bit-extraction way for the same reason (no independently
+/// typed literal to risk a rounding-tie mismatch against).
+fn rad_per_hz_q23() -> i64 {
+    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        super::fixed_point::f32_to_q_exact_round(
+            std::f32::consts::PI / 4000.0,
+            super::lpc::COEF_FRAC_BITS,
+        )
+    })
+}
+
+/// Fixed-point `decode_lsps_delta_scalar`: same per-dimension
+/// accumulation as the real `decode_lsps_delta_scalar` above, but
+/// entirely in `i64` Q16 Hz arithmetic (`LSP_DIMS_Q16`/`lsp_dim_value_
+/// hz_q16`, the same tables `encode_lsps_delta_scalar_fixed` already
+/// built), converting to Q23 radians (`lpc::COEF_FRAC_BITS`'s own
+/// format -- what `lsp_to_lpc`'s upcoming fixed-point cos LUT will
+/// want) only once per dimension, not per intermediate Hz value.
+pub fn decode_lsps_delta_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD] {
+    let mut lsp_q23 = [0i64; LPC_ORD];
+    let mut lsp_hz_q16 = 0i64;
+    for i in 0..LPC_ORD {
+        lsp_hz_q16 += lsp_dim_value_hz_q16(&LSP_DIMS_Q16[i], indexes[i]);
+        lsp_q23[i] = (lsp_hz_q16 * rad_per_hz_q23()) >> 16;
+    }
+    lsp_q23
 }
 
 // `pub(crate)`, not the usual bare `mod tests`: `floating_reference::
@@ -414,4 +509,83 @@ pub(crate) mod tests {
         );
     }
 
+    #[test]
+    fn decode_lsps_delta_scalar_fixed_matches_the_float_version_within_quantization_noise_on_real_captured_indices() {
+        // Real transmitted indices, derived the same way a real decoder
+        // would see them: `encode_lsps_delta_scalar_fixed` (already
+        // verified byte-identical to the float encoder above) on real
+        // captured LSPs. Acceptance bar is in Hz (the real quantizer's
+        // own unit, same convention `acos_lut_fixed`'s own dense-sweep
+        // test uses and for the same reason: a flat rad threshold isn't
+        // the natural metric here) -- `decode_lsps_delta_scalar_fixed`
+        // accumulates in Q16 Hz then converts to Q23 radians once per
+        // dimension via `rad_per_hz_q23()`'s own one-time-rounded
+        // constant, vs. the float version's per-dimension `f32`
+        // accumulation in Hz directly multiplied by an exact `RAD_PER_
+        // HZ` on every use; both are exact reconstructions of the same
+        // integer codebook values, so any divergence is pure Q23
+        // constant-rounding noise (measured ~0.23Hz at the real
+        // quantizer's own ~5000Hz top end), not a formula difference --
+        // negligible next to the real 25Hz quantizer step.
+        let lsp_path = fixture!("codec2_lsp_dump.txt");
+        let lsp_rows = read_dump(lsp_path, LPC_ORD + 1);
+        assert!(
+            lsp_rows.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            lsp_rows.len()
+        );
+        const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
+        let mut n_checked = 0;
+        let mut max_err_hz = 0.0f32;
+        for row in &lsp_rows {
+            let roots = row[0] as i32;
+            if roots as usize != LPC_ORD {
+                continue;
+            }
+            let mut lsp = [0.0f32; LPC_ORD];
+            lsp.copy_from_slice(&row[1..]);
+            let indexes = encode_lsps_delta_scalar_fixed(&lsp);
+
+            let float_back = decode_lsps_delta_scalar(&indexes);
+            let fixed_back_q23 = decode_lsps_delta_scalar_fixed(&indexes);
+            for i in 0..LPC_ORD {
+                let fixed_back = fixed_back_q23[i] as f32 / (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32;
+                max_err_hz = max_err_hz.max((fixed_back - float_back[i]).abs() * HZ_PER_RAD);
+            }
+            n_checked += 1;
+        }
+        assert!(n_checked > 150, "only checked {n_checked} real frames");
+        assert!(
+            max_err_hz < 1.0,
+            "decode_lsps_delta_scalar_fixed diverged from the float version by {max_err_hz}Hz, expected agreement well within the real 25Hz quantizer step"
+        );
+    }
+
+    #[test]
+    fn decode_wo_fixed_matches_decode_wo_on_every_valid_index() {
+        let mut max_abs_err = 0.0f32;
+        for index in 0..(1u32 << super::super::WO_BITS) {
+            let float_wo = decode_wo(index);
+            let fixed_wo = decode_wo_fixed(index) as f32 / (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32;
+            max_abs_err = max_abs_err.max((fixed_wo - float_wo).abs());
+        }
+        assert!(
+            max_abs_err < 1e-5,
+            "decode_wo_fixed diverged from decode_wo by {max_abs_err} rad, more than ordinary Q23 rounding noise"
+        );
+    }
+
+    #[test]
+    fn decode_energy_fixed_matches_decode_energy_on_every_valid_index() {
+        let mut max_rel_err = 0.0f32;
+        for index in 0..(1u32 << E_BITS) {
+            let float_e = decode_energy(index);
+            let fixed_e = decode_energy_fixed(index) as f32 / (1i64 << 23) as f32;
+            max_rel_err = max_rel_err.max(((fixed_e - float_e) / float_e).abs());
+        }
+        assert!(
+            max_rel_err < 1e-4,
+            "decode_energy_fixed diverged from decode_energy by {max_rel_err} relative, more than ordinary Q23/LUT rounding noise"
+        );
+    }
 }

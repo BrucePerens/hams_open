@@ -310,6 +310,76 @@ pub(crate) fn exp2_lut(y: f32) -> f32 {
     exp2_lut_generic_fixed(y, LOG2_LUT_BITS, exp2_lut_table_frac_q23())
 }
 
+/// Genuinely integer-in/integer-out sibling of `log2_lut` -- Q23 in
+/// (`x_q23`, must be positive), Q23 out (`log2(x)` in Q23, `i64`).
+/// `log2_lut`/`log2_lut_generic_fixed` above are already integer
+/// *inside*, but still take/return `f32` at their own boundary (every
+/// real caller there is still float upstream); this is the decoder's
+/// own no-FPU entry point, called with a genuine Q23 integer on both
+/// ends -- no `f32` touches this function at all, not even at entry/exit.
+///
+/// `x_q23` isn't IEEE754-shaped the way a real `f32` is, so this can't
+/// reuse `log2_lut_generic_fixed`'s free exponent/mantissa bit split --
+/// instead it does the equivalent integer normalization directly:
+/// `x_q23 = mantissa_q23 * 2^shift` where `mantissa_q23` is the Q23
+/// value renormalized into `[2^23, 2^24)` (i.e. `[1.0, 2.0)` in Q23) by
+/// counting `x_q23`'s own leading zero bits, exactly the fixed-point
+/// analogue of an IEEE754 exponent extraction.
+pub(crate) fn log2_q23(x_q23: i64) -> i64 {
+    debug_assert!(x_q23 > 0, "log2_q23: x_q23 must be positive, got {x_q23}");
+    let bits = 63 - x_q23.leading_zeros() as i32; // position of the top set bit
+    let shift = bits - 23; // x_q23 == mantissa_q23 * 2^shift, mantissa_q23 in [2^23, 2^24)
+    let mantissa_q23: i64 = if shift >= 0 {
+        x_q23 >> shift
+    } else {
+        x_q23 << (-shift)
+    };
+    let mantissa_frac_q23 = (mantissa_q23 - (1i64 << 23)) as u64; // [0, 2^23)
+    let levels = 1u32 << LOG2_LUT_BITS;
+    let scaled_full = mantissa_frac_q23 * levels as u64;
+    let idx = ((scaled_full >> 23) as usize).min(levels as usize - 1);
+    let frac_q23 = (scaled_full - ((idx as u64) << 23)) as i64;
+    let table = log2_lut_table_q23();
+    let t0 = table[idx] as i64;
+    let t1 = table[idx + 1] as i64;
+    let interp_q23 = t0 + ((frac_q23 * (t1 - t0)) >> 23);
+    ((shift as i64) << 23) + interp_q23
+}
+
+/// Genuinely integer-in/integer-out sibling of `exp2_lut` -- Q23 in
+/// (`y_q23`, `2^y` where `y = y_q23 / 2^23`), Q23 out (`i64`). Mirrors
+/// `log2_q23`'s own no-FPU boundary: `exp2_lut_generic_fixed`'s float
+/// entry point converts `y` to Q(`EXP2_Y_FRAC_BITS`) via `f32_to_q_
+/// exact_round` and reconstructs an `f32` bit pattern at the end; this
+/// instead takes `y_q23` directly (rescaled to `EXP2_Y_FRAC_BITS`
+/// internally) and returns the Q23 mantissa shifted by `floor(y)`
+/// directly as an integer -- no IEEE754 bit pattern involved on either
+/// end.
+pub(crate) fn exp2_q23(y_q23: i64) -> i64 {
+    let y_q = y_q23 << (EXP2_Y_FRAC_BITS - 23); // rescale Q23 -> Q(EXP2_Y_FRAC_BITS)
+    let floor_y = y_q >> EXP2_Y_FRAC_BITS;
+    let frac_full_q = y_q - (floor_y << EXP2_Y_FRAC_BITS);
+    let extra_bits = EXP2_Y_FRAC_BITS - LOG2_LUT_BITS;
+    let levels = 1i64 << LOG2_LUT_BITS;
+    let idx = ((frac_full_q >> extra_bits) as usize).min(levels as usize - 1);
+    let t_num = frac_full_q - ((idx as i64) << extra_bits);
+    let table = exp2_lut_table_frac_q23();
+    let t0 = table[idx] as i64;
+    let t1 = table[idx + 1] as i64;
+    let interp_frac_q23 = t0 + ((t_num * (t1 - t0)) >> extra_bits); // (2^frac - 1.0) in Q23, [0, 2^23)
+    let mantissa_q23 = (1i64 << 23) + interp_frac_q23; // 2^frac in Q23, [2^23, 2^24)
+    if floor_y >= 0 {
+        mantissa_q23 << floor_y
+    } else {
+        let neg = (-floor_y) as u32;
+        if neg >= 63 {
+            0
+        } else {
+            (mantissa_q23 + (1i64 << (neg - 1))) >> neg
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -695,8 +765,134 @@ mod tests {
             }
         }
 
-        assert!(decisions_checked > 1000, "expected a real number of per-harmonic decisions checked across the replay, got {decisions_checked}");
+        assert!(decisions_checked > 1000, "expected a real number of real per-harmonic decisions checked across the replay, got {decisions_checked}");
         assert_eq!(decision_mismatches, 0, "{decision_mismatches}/{decisions_checked} real per-harmonic postfilter decisions diverged between the LUT and plain float across the temporal replay");
         assert!(max_bg_drift_db < 1e-3, "bg_est drifted {max_bg_drift_db}dB between the LUT and plain-float state machines over the replay -- too large for an 8-bit LUT");
+    }
+
+    #[test]
+    fn log2_q23_matches_log2_lut_across_a_wide_dynamic_range() {
+        // log2_q23 is DecoderFixed's own no-FPU entry point (Q23 in, Q23
+        // out, no f32 touches it at all) -- this checks it against
+        // log2_lut (the existing, already-validated integer-inside/
+        // float-boundary sibling) rather than plain float log2 directly,
+        // since any disagreement between the two integer paths would be
+        // a bug in the new normalization (leading-zero-count exponent
+        // extraction) specifically, not just ordinary LUT error both
+        // would share against plain float.
+        //
+        // Both sides are fed the SAME already-Q23-quantized x (round-
+        // tripped through f32 once for log2_lut's own f32 boundary),
+        // not the original continuous x -- otherwise this would also be
+        // measuring x's own Q23 input-quantization error (real and
+        // large at the low end of a wide sweep, since Q23's fixed
+        // absolute step is a large relative fraction of a small x, but
+        // not a log2_q23 bug), which isn't what this test is checking.
+        let mut max_abs_err_q23 = 0i64;
+        let mut x = 1e-3f32;
+        while x < 1e6 {
+            let x_q23 = f32_to_q_exact_round(x, 23);
+            if x_q23 <= 0 {
+                x *= 1.0173;
+                continue; // too small to represent in Q23 at all
+            }
+            let x_reconstructed = x_q23 as f32 / (1i64 << 23) as f32;
+            let want_q23 = f32_to_q_exact_round(log2_lut(x_reconstructed), 23);
+            let got_q23 = log2_q23(x_q23);
+            max_abs_err_q23 = max_abs_err_q23.max((got_q23 - want_q23).abs());
+            x *= 1.0173;
+        }
+        assert!(
+            max_abs_err_q23 < 16,
+            "log2_q23 diverged from log2_lut by {max_abs_err_q23} Q23 counts, more than ordinary rounding noise"
+        );
+    }
+
+    #[test]
+    fn log2_q23_handles_x_less_than_one_correctly() {
+        // x < 1.0 means shift < 0 (the left-shift renormalization
+        // branch) and a negative result -- the case most likely to
+        // break in an exponent-extraction rewrite, called out
+        // specifically since exp2_lut_generic_fixed's own negative-y
+        // branch was exactly this kind of bug risk historically.
+        for &x in &[0.5f32, 0.25, 0.125, 0.001, 0.9999] {
+            let x_q23 = f32_to_q_exact_round(x, 23);
+            let want = x.log2();
+            let got = log2_q23(x_q23) as f32 / (1i64 << 23) as f32;
+            assert!(
+                (got - want).abs() < 1e-4,
+                "log2_q23({x}) = {got}, want ~{want}"
+            );
+        }
+    }
+
+    #[test]
+    fn exp2_q23_matches_exp2_lut_across_a_wide_range() {
+        // Range bound is -8..16, not the full +-20 log2_lut/exp2_lut's
+        // own round-trip test sweeps: at very negative y, 2^y is only a
+        // handful of Q23 counts (e.g. 2^-16 is ~128 counts), so +-0.5
+        // count of ordinary rounding is already a large RELATIVE error
+        // there -- a real, inherent property of any fixed-point format's
+        // fixed absolute resolution at tiny magnitudes, not a bug, and
+        // well outside the real operating range this actually needs
+        // (`decode_energy_fixed`'s own y stays within roughly
+        // -3.3..13.3, see E_MIN_DB/E_MAX_DB) -- -8 keeps a generous
+        // margin below that while staying far enough from the format's
+        // own low-count noise floor for a tight relative bound to be
+        // the right metric. Both sides are also fed the same already-
+        // Q23-quantized y (see `log2_q23`'s own sibling test for why),
+        // isolating the algorithmic comparison from y's own input
+        // quantization noise.
+        let mut max_rel_err = 0.0f32;
+        let mut y = -8.0f32;
+        while y < 16.0 {
+            let y_q23 = f32_to_q_exact_round(y, 23);
+            let y_reconstructed = y_q23 as f32 / (1i64 << 23) as f32;
+            let want = exp2_lut(y_reconstructed);
+            let got = exp2_q23(y_q23) as f32 / (1i64 << 23) as f32;
+            let rel_err = ((got - want) / want).abs();
+            max_rel_err = max_rel_err.max(rel_err);
+            y += 0.0037;
+        }
+        assert!(
+            max_rel_err < 1e-4,
+            "exp2_q23 diverged from exp2_lut by {max_rel_err} relative, more than ordinary Q23 rounding noise"
+        );
+    }
+
+    #[test]
+    fn exp2_q23_handles_negative_y_correctly() {
+        // -14.0, not -19.5: same "tiny result -> large relative error
+        // is inherent, not a bug" reasoning as the wide-range test above
+        // -- 2^-14 is a real, well-resolved Q23 value (~512 counts),
+        // unlike 2^-19.5 (~11 counts).
+        for &y in &[-1.0f32, -5.0, -14.0, -0.1] {
+            let y_q23 = f32_to_q_exact_round(y, 23);
+            let want = y.exp2();
+            let got = exp2_q23(y_q23) as f32 / (1i64 << 23) as f32;
+            assert!(
+                (got - want).abs() / want < 1e-4,
+                "exp2_q23({y}) = {got}, want ~{want}"
+            );
+        }
+    }
+
+    #[test]
+    fn log2_q23_and_exp2_q23_are_real_inverses_of_each_other() {
+        let mut x = 1e-2f32;
+        let mut max_rel_err = 0.0f32;
+        while x < 1e5 {
+            let x_q23 = f32_to_q_exact_round(x, 23);
+            let y_q23 = log2_q23(x_q23);
+            let back_q23 = exp2_q23(y_q23);
+            let back = back_q23 as f32 / (1i64 << 23) as f32;
+            let rel_err = ((back - x) / x).abs();
+            max_rel_err = max_rel_err.max(rel_err);
+            x *= 1.0311;
+        }
+        assert!(
+            max_rel_err < 1e-4,
+            "log2_q23/exp2_q23 round trip relative error too large: {max_rel_err}"
+        );
     }
 }
