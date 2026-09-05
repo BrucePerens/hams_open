@@ -513,7 +513,20 @@ static void ft8_decode_multi_symbols(const WF_ELEM_T* wf, int num_bins, int n_sy
     const int n_bits = 3 * n_syms;
     const int n_tones = (1 << n_bits);
 
-    float s2[n_tones];
+    // s2[] was a `float s2[n_tones];` variable-length array -- a GNU/C99
+    // extension MSVC's cl.exe rejects outright ("error C2057: expected
+    // constant expression"), which broke every Windows build of a program
+    // linking this library. Replaced with a fixed-size array bounded to this
+    // function's own real design ceiling, not an arbitrary guess: the loop
+    // body below only has distinct cases for n_syms == 1 and n_syms == 2,
+    // falling through to a hardcoded 3-symbol (j1/j2/j3) computation for
+    // anything else -- so n_syms > 3 was never a supported input in the
+    // first place, giving n_tones <= 1 << (3 * 3) == 512.
+    if (n_tones > 512)
+    {
+        return;
+    }
+    float s2[512];
 
     for (int j = 0; j < n_tones; ++j)
     {

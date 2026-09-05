@@ -33,6 +33,17 @@ typedef struct
     float fft_norm;      ///< FFT normalization factor
     float* window;       ///< Window function for STFT analysis (nfft samples)
     float* last_frame;   ///< Current STFT analysis frame (nfft samples)
+    // Per-call scratch buffers for monitor_process()'s FFT step, heap-allocated
+    // once here (same lifetime/pattern as window/last_frame above) rather than
+    // declared as local variable-length arrays sized by me->nfft: a C VLA of
+    // runtime size is a GNU/C99 extension MSVC's cl.exe rejects outright
+    // ("error C2057: expected constant expression"), which broke every
+    // Windows build of a program linking this library. nfft is a genuine
+    // runtime value (block_size * freq_osr, set in monitor_init() below), not
+    // a fixed constant, so a heap allocation sized once at init time -- not a
+    // guessed fixed upper bound -- is the correct portable replacement.
+    kiss_fft_scalar* timedata_buf; ///< Scratch buffer for monitor_process()'s DFT input (nfft samples)
+    kiss_fft_cpx* freqdata_buf;    ///< Scratch buffer for monitor_process()'s DFT output (nfft / 2 + 1 samples)
     ftx_waterfall_t wf;  ///< Waterfall object
     float max_mag;       ///< Maximum detected magnitude (debug stats)
 
