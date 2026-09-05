@@ -6,6 +6,7 @@
 //! license conflict -- an LGPL-3.0 project can incorporate GPL-3.0
 //! dependencies; a proprietary/trade-secret one cannot.
 
+pub mod codec2_1600;
 pub mod codec2_3200;
 pub mod ft8;
 pub mod psk31;

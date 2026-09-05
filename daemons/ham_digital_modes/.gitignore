@@ -8,3 +8,7 @@ tests/fixtures/*
 # features, plus a synthetic-signal waveform -- never real recorded
 # speech itself). See tests/fixtures/codec2_3200/README.md.
 !tests/fixtures/codec2_3200/
+# Same reasoning for codec2_1600 -- a synthesized non-speech signal run
+# through plain upstream Codec2's own reference encoder/decoder, never
+# real recorded speech. See tests/fixtures/codec2_1600/README.md.
+!tests/fixtures/codec2_1600/
