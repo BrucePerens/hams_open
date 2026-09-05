@@ -126,6 +126,7 @@ pub mod lpc;
 pub mod nlp;
 pub mod quantise;
 pub mod synthesis;
+pub mod trig_fixed;
 pub mod voicing;
 pub mod window;
 
