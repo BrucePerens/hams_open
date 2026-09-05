@@ -764,6 +764,62 @@ fn acos_lut_fixed(x: f32) -> f32 {
     (result_q23 as f32) / (1i64 << COEF_FRAC_BITS) as f32
 }
 
+/// Resolution for `cos_q23` below -- same bit count `ACOS_LUT_BITS`
+/// uses, for the same reason (a real, measured worst-case error bound
+/// this port has already validated at this resolution for a similarly-
+/// shaped trig LUT); `cos` has no singularity anywhere in its domain
+/// the way `acos` does near `x = +-1`, so there's no equivalent
+/// "shrinks again near the pole" analysis needed here, just the
+/// ordinary interpolation error a linearly-interpolated 12-bit table
+/// gives any smooth, bounded-second-derivative function.
+const COS_LUT_BITS: u32 = 12;
+const COS_LUT_SIZE: usize = (1 << COS_LUT_BITS) + 1;
+
+/// `cos(i/levels * pi)` for `i` in `0..=levels`, Q23 -- built once, same
+/// "table construction isn't the hot path" reasoning as `acos_lut_table_
+/// q23`.
+fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE] {
+    static TABLE: OnceLock<[i32; COS_LUT_SIZE]> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let levels = 1u32 << COS_LUT_BITS;
+        std::array::from_fn(|i| {
+            f32_to_q((i as f32 / levels as f32 * std::f32::consts::PI).cos(), COEF_FRAC_BITS)
+        })
+    })
+}
+
+/// Genuinely integer-in/integer-out `cos`: Q23 angle in, Q23 `cos`
+/// value out -- `lsp_to_lpc_fixed`'s own no-FPU entry point (unlike
+/// `acos_lut_fixed` above, which still takes/returns `f32` at its own
+/// boundary since every real caller there is still float upstream).
+/// Domain is `[0, pi]` (an LSP angle's own real range, `acos`'s range by
+/// construction) -- clamped rather than `debug_assert`-ed, since unlike
+/// `acos_lut_fixed`'s input (a Chebyshev root this same module already
+/// validated is in `[-1, 1]`), an LSP angle arriving here has passed
+/// through several upstream fixed-point stages this function has no way
+/// to re-verify.
+///
+/// Unlike `acos_lut_fixed`'s domain (`[-1, 1]`, already naturally a Q23
+/// fraction needing no rescale), `cos`'s domain here is `[0, pi]`, not a
+/// power of two -- normalizing it into a Q23 table-index fraction takes
+/// one real integer division. That's still a genuine no-FPU operation
+/// (ordinary integer division, not a float op -- every real fixed-point
+/// target has integer division in hardware or a cheap library routine,
+/// unlike floating point), just not the free bit-shift `acos_lut_fixed`
+/// got to use.
+pub(crate) fn cos_q23(angle_q23: i64) -> i64 {
+    let clamped = angle_q23.clamp(0, pi_q23());
+    let levels = 1i64 << COS_LUT_BITS;
+    let frac_of_pi_q23 = (((clamped as i128) << COEF_FRAC_BITS) / pi_q23() as i128) as i64;
+    let scaled_full = (frac_of_pi_q23 as u64) * (levels as u64);
+    let idx = ((scaled_full >> COEF_FRAC_BITS) as usize).min(levels as usize - 1);
+    let frac_q23 = (scaled_full - ((idx as u64) << COEF_FRAC_BITS)) as i64;
+    let table = cos_lut_table_q23();
+    let t0 = table[idx] as i64;
+    let t1 = table[idx + 1] as i64;
+    t0 + ((frac_q23 * (t1 - t0)) >> COEF_FRAC_BITS)
+}
+
 /// Fixed-point `lpc_to_lsp`: `a_q23` (Q8.23, `i64`, e.g. straight from
 /// `apply_bw_gamma_fixed`) in -- genuinely fixed-point all the way
 /// through the LSP frequencies themselves now, via `acos_lut_fixed`
@@ -858,6 +914,75 @@ pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
     let mut ak = [0.0f32; LPC_ORD + 1];
     for i in 0..=LPC_ORD {
         ak[i] = 0.5 * (p[i] + q[i]);
+    }
+    ak
+}
+
+/// Fixed-point sibling of `poly_mul_fixed` -- genuinely Q8.23 `i64`
+/// arithmetic (`poly_mul_fixed` itself is only "fixed" in the sense of
+/// a fixed-*size* stack buffer, still `f32` throughout). Each per-term
+/// product widens to `i128` transiently (two Q8.23 values can produce a
+/// product too wide for `i64`) then shifts right by `COEF_FRAC_BITS`
+/// immediately, the same accumulate-then-narrow pattern `lpc_energy_
+/// fixed` already established.
+fn poly_mul_q23(
+    a: &[i64; HALF_POLY_LEN],
+    a_len: usize,
+    b: &[i64],
+    out: &mut [i64; HALF_POLY_LEN],
+) -> usize {
+    let out_len = a_len + b.len() - 1;
+    out[..out_len].fill(0);
+    for (i, &ai) in a[..a_len].iter().enumerate() {
+        for (j, &bj) in b.iter().enumerate() {
+            out[i + j] += ((ai as i128 * bj as i128) >> COEF_FRAC_BITS) as i64;
+        }
+    }
+    out_len
+}
+
+/// Fixed-point sibling of `build_half_poly` -- `cos_lsp_q23` and
+/// `boundary_sign_q23` (`+-1.0`) both Q8.23. `-2 * c` is a Q8.23 value
+/// times a plain integer constant (not another Q8.23 value), so it
+/// stays Q8.23 with no rescale needed, unlike `poly_mul_q23`'s own
+/// per-term products.
+fn build_half_poly_q23(
+    cos_lsp_q23: &[i64; LPC_ORD],
+    start_offset: usize,
+    boundary_sign_q23: i64,
+) -> ([i64; HALF_POLY_LEN], usize) {
+    let one_q23 = 1i64 << COEF_FRAC_BITS;
+    let mut buf = [0i64; HALF_POLY_LEN];
+    let mut scratch = [0i64; HALF_POLY_LEN];
+    buf[0] = one_q23;
+    let mut len = 1usize;
+    for i in (start_offset..LPC_ORD).step_by(2) {
+        let neg2c = -2 * cos_lsp_q23[i];
+        len = poly_mul_q23(&buf, len, &[one_q23, neg2c, one_q23], &mut scratch);
+        buf[..len].copy_from_slice(&scratch[..len]);
+    }
+    len = poly_mul_q23(&buf, len, &[one_q23, boundary_sign_q23], &mut scratch);
+    buf[..len].copy_from_slice(&scratch[..len]);
+    (buf, len)
+}
+
+/// Fixed-point `lsp_to_lpc`: `lsp_q23` (Q8.23 angles, `quantise::decode_
+/// lsps_delta_scalar_fixed`'s own format) in, `ak` (Q8.23, the same
+/// format `EncoderFixed`'s own Levinson-Durbin output uses) out.
+/// Genuinely integer end to end -- `cos_q23` above replaces the float
+/// `.cos()` call, `poly_mul_q23`/`build_half_poly_q23` replace the
+/// float polynomial convolution, and the final `0.5*(p+q)` becomes a
+/// plain arithmetic right shift (matching this port's established
+/// midpoint convention elsewhere, e.g. `interp::interpolate_lsp_fixed`).
+pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1] {
+    let cos_lsp_q23: [i64; LPC_ORD] = std::array::from_fn(|i| cos_q23(lsp_q23[i]));
+    let one_q23 = 1i64 << COEF_FRAC_BITS;
+    let (p, _) = build_half_poly_q23(&cos_lsp_q23, 0, one_q23);
+    let (q, _) = build_half_poly_q23(&cos_lsp_q23, 1, -one_q23);
+
+    let mut ak = [0i64; LPC_ORD + 1];
+    for i in 0..=LPC_ORD {
+        ak[i] = (p[i] + q[i]) >> 1;
     }
     ak
 }
@@ -1044,6 +1169,30 @@ pub(crate) mod tests {
         assert!(
             max_err_hz < 10.0,
             "acos_lut_fixed diverged from plain float acos by {max_err_hz} Hz across a dense sweep -- expected real margin under 10Hz (measured ~7Hz peak, near x=+-1, when this test was written), well under the real 25Hz LSP quantizer step"
+        );
+    }
+
+    #[test]
+    fn cos_q23_matches_plain_float_cos_on_a_dense_sweep_of_its_whole_domain() {
+        // cos_q23's whole real domain is [0, pi] (an LSP angle's own
+        // real range) -- dense sweep across it, same "direct comparison
+        // beyond just the real corpus's own values" methodology
+        // acos_lut_fixed's own dense-sweep test above uses. No
+        // singularity anywhere in this domain (unlike acos near
+        // x=+-1), so a flat absolute tolerance on the cos value itself
+        // is the right metric here, not a domain-specific rescaling.
+        let mut max_abs_err = 0.0f32;
+        let mut angle = 0.0f32;
+        while angle <= std::f32::consts::PI {
+            let angle_q23 = fixed_point::f32_to_q_exact_round(angle, COEF_FRAC_BITS);
+            let want = angle.cos();
+            let got = cos_q23(angle_q23) as f32 / (1i64 << COEF_FRAC_BITS) as f32;
+            max_abs_err = max_abs_err.max((got - want).abs());
+            angle += 0.0001; // ~31416 points across [0, pi]
+        }
+        assert!(
+            max_abs_err < 1e-4,
+            "cos_q23 diverged from plain float cos by {max_abs_err} across a dense sweep of its whole domain"
         );
     }
 
@@ -1341,6 +1490,48 @@ pub(crate) mod tests {
         assert!(
             max_abs_err < 0.01,
             "max ak[] round-trip error: {max_abs_err}"
+        );
+    }
+
+    #[test]
+    fn lsp_to_lpc_fixed_matches_lsp_to_lpc_on_real_captured_lsp_data() {
+        // Real captured LSP values (codec2_lsp_dump.txt), not this
+        // crate's own lpc_to_lsp output -- same "don't validate against
+        // your own upstream output" reasoning the delta-scalar
+        // quantizer test uses, so a bug in this crate's own lpc_to_lsp
+        // couldn't hide a real lsp_to_lpc_fixed bug behind it.
+        let lsp_path = fixture!("codec2_lsp_dump.txt");
+        let lsp_rows = read_dump(lsp_path, LPC_ORD + 1);
+        assert!(
+            lsp_rows.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            lsp_rows.len()
+        );
+
+        let mut n_checked = 0;
+        let mut max_abs_err = 0.0f32;
+        for row in &lsp_rows {
+            let roots = row[0] as i32;
+            if roots as usize != LPC_ORD {
+                continue;
+            }
+            let mut lsp = [0.0f32; LPC_ORD];
+            lsp.copy_from_slice(&row[1..]);
+
+            let float_ak = lsp_to_lpc(&lsp);
+            let lsp_q23: [i64; LPC_ORD] =
+                std::array::from_fn(|i| fixed_point::f32_to_q_exact_round(lsp[i], COEF_FRAC_BITS));
+            let fixed_ak_q23 = lsp_to_lpc_fixed(&lsp_q23);
+            for i in 0..=LPC_ORD {
+                let fixed_ak = fixed_ak_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32;
+                max_abs_err = max_abs_err.max((fixed_ak - float_ak[i]).abs());
+            }
+            n_checked += 1;
+        }
+        assert!(n_checked > 150, "only checked {n_checked} real frames");
+        assert!(
+            max_abs_err < 0.01,
+            "lsp_to_lpc_fixed diverged from lsp_to_lpc by {max_abs_err} on real captured LSP data, more than ordinary Q23/LUT rounding noise"
         );
     }
 
