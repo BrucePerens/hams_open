@@ -67,6 +67,86 @@ pub fn interpolate_lsp_ver2(
     std::array::from_fn(|i| (1.0 - weight) * prev[i] + weight * next[i])
 }
 
+use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
+use std::sync::OnceLock;
+
+const FRAC_BITS: u32 = 23;
+
+fn swap_nudge_q23() -> i64 {
+    static V: OnceLock<i64> = OnceLock::new();
+    *V.get_or_init(|| f32_to_q_exact_round(0.1, FRAC_BITS))
+}
+
+/// Fixed-point sibling of `check_lsp_order`: identical logic (including
+/// the same real reference restart-index quirk), entirely in `i64` Q23
+/// arithmetic.
+pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize {
+    let mut swaps = 0usize;
+    let mut i = 1usize;
+    while i < LPC_ORD {
+        if lsp[i] < lsp[i - 1] {
+            swaps += 1;
+            let tmp = lsp[i - 1];
+            lsp[i - 1] = lsp[i] - swap_nudge_q23();
+            lsp[i] = tmp + swap_nudge_q23();
+            i = 1;
+        }
+        i += 1;
+    }
+    swaps
+}
+
+/// `min_sep * (pi/4000)` in Q23 for a given Hz margin -- callers pass
+/// the real Hz value (`50.0`/`100.0`, the only two real values this
+/// mode's own decoder ever uses), computed once via `OnceLock` rather
+/// than hand-typed.
+pub fn min_sep_q23(min_sep_hz: f32) -> i64 {
+    static V: OnceLock<[(u32, i64); 2]> = OnceLock::new();
+    let cache = V.get_or_init(|| {
+        [
+            (50, f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS)),
+            (100, f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS)),
+        ]
+    });
+    let key = min_sep_hz.round() as u32;
+    cache
+        .iter()
+        .find(|(hz, _)| *hz == key)
+        .unwrap_or_else(|| panic!("min_sep_q23: unexpected Hz value {min_sep_hz}, only 50.0/100.0 are cached"))
+        .1
+}
+
+/// Fixed-point sibling of `bw_expand_lsps`, entirely in `i64` Q23
+/// arithmetic. `min_sep_low_q23`/`min_sep_high_q23` come from
+/// `min_sep_q23` above.
+pub fn bw_expand_lsps_fixed(lsp: &mut [i64; LPC_ORD], min_sep_low_q23: i64, min_sep_high_q23: i64) {
+    for i in 1..4 {
+        if (lsp[i] - lsp[i - 1]) < min_sep_low_q23 {
+            lsp[i] = lsp[i - 1] + min_sep_low_q23;
+        }
+    }
+    for i in 4..LPC_ORD {
+        if lsp[i] - lsp[i - 1] < min_sep_high_q23 {
+            lsp[i] = lsp[i - 1] + min_sep_high_q23;
+        }
+    }
+}
+
+/// Fixed-point sibling of `interpolate_lsp_ver2`, restricted to the
+/// three exact quarter-weights the decoder ever actually uses
+/// (0.25/0.5/0.75, `quarters` = 1/2/3) -- each is an exact binary
+/// fraction, so this is a plain integer multiply-add and a rounded
+/// right-shift, no division and no rounding loss beyond that one
+/// final round-to-nearest shift.
+pub fn interpolate_lsp_ver2_fixed(
+    prev: &[i64; LPC_ORD],
+    next: &[i64; LPC_ORD],
+    quarters: i64,
+) -> [i64; LPC_ORD] {
+    debug_assert!((1..=3).contains(&quarters), "quarters must be 1, 2, or 3 (0.25/0.5/0.75)");
+    std::array::from_fn(|i| ((4 - quarters) * prev[i] + quarters * next[i] + 2) >> 2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +201,73 @@ mod tests {
         let next: [f32; super::LPC_ORD] = std::array::from_fn(|i| 10.0 + i as f32);
         assert_eq!(interpolate_lsp_ver2(&prev, &next, 0.0), prev);
         assert_eq!(interpolate_lsp_ver2(&prev, &next, 1.0), next);
+    }
+
+    fn to_q23(x: f32) -> i64 {
+        f32_to_q_exact_round(x, FRAC_BITS)
+    }
+    fn from_q23(x: i64) -> f32 {
+        x as f32 / (1i64 << FRAC_BITS) as f32
+    }
+
+    #[test]
+    fn check_lsp_order_fixed_matches_the_float_version_on_an_out_of_order_pair() {
+        let mut lsp: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
+        lsp.swap(3, 4);
+        let mut lsp_q23: [i64; super::LPC_ORD] = std::array::from_fn(|i| to_q23(lsp[i]));
+
+        check_lsp_order(&mut lsp);
+        check_lsp_order_fixed(&mut lsp_q23);
+
+        for i in 0..super::LPC_ORD {
+            assert!(
+                (from_q23(lsp_q23[i]) - lsp[i]).abs() < 1e-4,
+                "index {i}: fixed={} float={}",
+                from_q23(lsp_q23[i]),
+                lsp[i]
+            );
+        }
+    }
+
+    #[test]
+    fn bw_expand_lsps_fixed_matches_the_float_version() {
+        let mut lsp = [0.0f32; super::LPC_ORD];
+        for (i, v) in lsp.iter_mut().enumerate() {
+            *v = 0.05 * i as f32;
+        }
+        let mut lsp_q23: [i64; super::LPC_ORD] = std::array::from_fn(|i| to_q23(lsp[i]));
+
+        bw_expand_lsps(&mut lsp, 50.0, 100.0);
+        bw_expand_lsps_fixed(&mut lsp_q23, min_sep_q23(50.0), min_sep_q23(100.0));
+
+        for i in 0..super::LPC_ORD {
+            assert!(
+                (from_q23(lsp_q23[i]) - lsp[i]).abs() < 1e-4,
+                "index {i}: fixed={} float={}",
+                from_q23(lsp_q23[i]),
+                lsp[i]
+            );
+        }
+    }
+
+    #[test]
+    fn interpolate_lsp_ver2_fixed_matches_the_float_version_at_all_three_real_weights() {
+        let prev: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.05 * i as f32);
+        let next: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.2 + 0.06 * i as f32);
+        let prev_q23: [i64; super::LPC_ORD] = std::array::from_fn(|i| to_q23(prev[i]));
+        let next_q23: [i64; super::LPC_ORD] = std::array::from_fn(|i| to_q23(next[i]));
+
+        for (weight, quarters) in [(0.25, 1), (0.5, 2), (0.75, 3)] {
+            let float_result = interpolate_lsp_ver2(&prev, &next, weight);
+            let fixed_result = interpolate_lsp_ver2_fixed(&prev_q23, &next_q23, quarters);
+            for i in 0..super::LPC_ORD {
+                assert!(
+                    (from_q23(fixed_result[i]) - float_result[i]).abs() < 1e-5,
+                    "weight={weight} index {i}: fixed={} float={}",
+                    from_q23(fixed_result[i]),
+                    float_result[i]
+                );
+            }
+        }
     }
 }

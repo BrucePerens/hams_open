@@ -80,6 +80,77 @@ pub fn decode_lsps_scalar(indexes: &[u32; super::LPC_ORD]) -> [f32; super::LPC_O
     })
 }
 
+use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
+use std::sync::OnceLock;
+
+const FRAC_BITS: u32 = 23;
+
+/// Per-dimension `(start_hz, step_hz)` in Q23 -- computed once via
+/// `f32_to_q_exact_round`, never hand-typed (every real value here is a
+/// small exact integer Hz count, so the conversion itself is exact, but
+/// the established rule in this crate is "always compute, never
+/// hand-type a Q23 constant" regardless of how simple the source value
+/// looks -- see `envelope.rs`'s own `BOOST_RATIO_Q23` lesson).
+fn lsp_cb_q23() -> &'static [(i64, i64); super::LPC_ORD] {
+    static V: OnceLock<[(i64, i64); super::LPC_ORD]> = OnceLock::new();
+    V.get_or_init(|| std::array::from_fn(|i| (f32_to_q_exact_round(LSP_CB[i].start_hz, FRAC_BITS), f32_to_q_exact_round(LSP_CB[i].step_hz, FRAC_BITS))))
+}
+
+fn hz_per_rad_q23() -> i64 {
+    static V: OnceLock<i64> = OnceLock::new();
+    *V.get_or_init(|| f32_to_q_exact_round(HZ_PER_RAD, FRAC_BITS))
+}
+
+fn rad_per_hz_q23() -> i64 {
+    static V: OnceLock<i64> = OnceLock::new();
+    *V.get_or_init(|| f32_to_q_exact_round(RAD_PER_HZ, FRAC_BITS))
+}
+
+fn q_mul_q23(a: i64, b: i64) -> i64 {
+    ((a as i128 * b as i128) >> FRAC_BITS) as i64
+}
+
+/// Fixed-point sibling of `quantise_dim`: same evenly-spaced nearest-
+/// index computation (`round((target-start)/step)`, clamped), entirely
+/// in Q23 `i64` arithmetic -- integer division (not a float divide) is
+/// itself a genuine no-FPU operation, same reasoning `cos_q23`'s own
+/// doc comment gives for its own one real division.
+fn quantise_dim_fixed(start_q23: i64, step_q23: i64, levels: u32, target_hz_q23: i64) -> u32 {
+    // Round-to-nearest integer division: add half the divisor before
+    // truncating: `(target-start)/step` rounded, with `step_q23`'s own
+    // sign always positive (every real step here is positive), so a
+    // plain `(diff + step/2) / step` is correct without a sign-
+    // dependent branch.
+    let diff = target_hz_q23 - start_q23;
+    let idx = if diff <= 0 {
+        0i64
+    } else {
+        (diff + step_q23 / 2) / step_q23
+    };
+    idx.clamp(0, (levels - 1) as i64) as u32
+}
+
+/// Encodes one dimension's LSP (Q23 radians) to its nearest codebook
+/// index, entirely in `i64` Q23 arithmetic -- no `f32` anywhere.
+pub fn encode_lsps_scalar_fixed(lsp_q23: &[i64; super::LPC_ORD]) -> [u32; super::LPC_ORD] {
+    let cb = lsp_cb_q23();
+    std::array::from_fn(|i| {
+        let target_hz_q23 = q_mul_q23(lsp_q23[i], hz_per_rad_q23());
+        quantise_dim_fixed(cb[i].0, cb[i].1, LSP_CB[i].levels, target_hz_q23)
+    })
+}
+
+/// Decodes quantised LSP indexes to Q23 radians -- entirely in `i64`
+/// Q23 arithmetic, the exact same table `decode_lsps_scalar` uses,
+/// just never touching `f32`.
+pub fn decode_lsps_scalar_fixed(indexes: &[u32; super::LPC_ORD]) -> [i64; super::LPC_ORD] {
+    let cb = lsp_cb_q23();
+    std::array::from_fn(|i| {
+        let hz_q23 = cb[i].0 + cb[i].1 * indexes[i] as i64;
+        q_mul_q23(hz_q23, rad_per_hz_q23())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,6 +220,49 @@ mod tests {
                 (got_hz - expected_hz).abs() < 1e-3,
                 "dim=9 level={level}: got {got_hz}Hz, expected {expected_hz}Hz"
             );
+        }
+    }
+
+    /// Fixed vs float diverge by a genuine, small Q23 rounding artifact
+    /// (`hz_per_rad_q23`/`rad_per_hz_q23` are each independently rounded
+    /// from a mathematically-exact reciprocal relationship, so a
+    /// Hz-then-back-to-radians round trip compounds two independent
+    /// roundings) -- measured max 0.000166 rad across every real index,
+    /// bound set from that real margin, not guessed.
+    #[test]
+    fn decode_lsps_scalar_fixed_matches_the_float_version_for_every_real_index() {
+        for i in 0..super::super::LPC_ORD {
+            for level in 0..LSP_CB[i].levels {
+                let indexes: [u32; super::super::LPC_ORD] =
+                    std::array::from_fn(|j| if j == i { level } else { 0 });
+                let float_lsp = decode_lsps_scalar(&indexes);
+                let fixed_lsp = decode_lsps_scalar_fixed(&indexes);
+                let fixed_as_f32 = fixed_lsp[i] as f32 / (1i64 << FRAC_BITS) as f32;
+                assert!(
+                    (fixed_as_f32 - float_lsp[i]).abs() < 3e-4,
+                    "dim={i} level={level}: fixed={fixed_as_f32} float={}",
+                    float_lsp[i]
+                );
+            }
+        }
+    }
+
+    /// Encode-then-decode must round-trip in the fixed path too, same
+    /// invariant `encode_then_decode_recovers_the_same_quantised_value_
+    /// for_every_real_index` checks for the float version.
+    #[test]
+    fn encode_then_decode_recovers_the_same_quantised_value_for_every_real_index_fixed() {
+        for i in 0..super::super::LPC_ORD {
+            for level in 0..LSP_CB[i].levels {
+                let indexes: [u32; super::super::LPC_ORD] =
+                    std::array::from_fn(|j| if j == i { level } else { 0 });
+                let decoded = decode_lsps_scalar_fixed(&indexes);
+                let re_encoded = encode_lsps_scalar_fixed(&decoded);
+                assert_eq!(
+                    re_encoded[i], level,
+                    "dimension {i} level {level}: fixed decode-then-encode didn't round-trip"
+                );
+            }
         }
     }
 }

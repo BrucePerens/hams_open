@@ -33,6 +33,64 @@
 ## DONE 2026-09-05: `DecoderFixed` built, wired, and validated end to end -- the full Codec2 3200
 ## fixed-point port (encoder + decoder) is now complete
 
+## DONE 2026-09-05 (continued): Codec2 1600bps+data mode (used by M17), both float reference and
+## fixed-point, encoder and decoder, all four combinations built and validated
+
+## Confirmed directly against the real spec (`M17/M17_spec/M17_spec.tex` line 727, not from memory)
+## before writing any code: M17's "Voice + Data" stream type uses Codec2 1600bps ("64 bits encoded
+## speech + 64 bits arbitrary data" per 40ms). The vendored M17-specific fork (`vendor/codec2-mod`)
+## turns out to have no 1600bps mode at all -- confirmed by reading its own `codec2_mod.c` (149
+## lines, no mode dispatch) -- so the reference used is a local unmodified build of plain upstream
+## Codec2 (also LGPL-2.1-only, same "informed by, not copied from" discipline).
+
+## New module: `src/codec2_1600/` (`mod.rs`, `lsp_quantiser.rs`, `lsp_post.rs`, `bits.rs`). Reuses
+## almost the entire codec2_3200 signal-processing pipeline directly (pitch estimation, voicing,
+## LPC analysis, LSP<->LPC conversion, spectral envelope, sinusoidal synthesis, and every one of
+## the already-built fixed-point primitives -- `decode_wo_fixed`, `decode_energy_fixed`,
+## `lsp_to_lpc_fixed`, `ModelFixed`, `compute_harmonic_amplitudes_fixed`,
+## `apply_first_harmonic_correction_fixed`, `synthesize_subframe_fixed`, `interp_wo_fixed`,
+## `interp_energy_fixed`, and the entire windowing->autocorrelate->Levinson-Durbin->energy->
+## bandwidth-expansion->LSP chain `codec2_3200::EncoderFixed` already validated -- are all
+## genuinely mode-independent and reused unchanged). What's genuinely new: a ten-dimension
+## per-dimension scalar LSP quantizer (checked directly against the real upstream codebook text
+## files, `lsp1.txt`..`lsp10.txt` -- every dimension turns out evenly spaced, so it reduces to a
+## `(start,step,levels)` formula, the same "closed-form, not opaque trained data" situation
+## `bw_gamma` already established, both float and fixed-point Q23 siblings built and
+## cross-validated), LSP order/bandwidth post-processing and 3-way (0.25/0.5/0.75) interpolation
+## the 40ms LSP-update cadence needs (float and fixed -- the fixed interpolation uses exact binary
+## quarter-weights, `(3*prev+next+2)>>2` etc., no division), and the 64-bit frame layout.
+
+## Validated at every level, real captured references not just self-consistency: built plain
+## upstream Codec2's own `c2enc`/`c2dec 1600` locally, captured two real bitstream/PCM fixtures (one
+## mixed voiced/noise, one mostly-voiced matching codec2_3200's own fixture character).
+## - Float `Decoder` vs the real reference decoder: correlation 0.99996 on the mostly-voiced
+##   fixture (0.9492 on the mixed one, investigated and confirmed as real by-design PRNG divergence
+##   on noise-dominated content, not a defect -- isolated by re-running the identical comparison on
+##   the mostly-voiced fixture and recovering 0.99996 there).
+## - Float `Encoder` vs the real reference decoder (the harder direction to check, since a sinusoidal
+##   codec's own reconstruction doesn't preserve fine time-domain structure against the *original*
+##   input even when correct): fed a Rust-encoded bitstream to real `c2dec 1600`, compared its
+##   decode against this crate's own `Decoder` decoding the *same* bitstream -- correlation 0.99996.
+## - Fixed `DecoderFixed` vs the real reference decoder: correlation 0.998, RMS ratio ~1.0005.
+## - Fixed `EncoderFixed` vs the float `Encoder` (same methodology `codec2_3200::encoder_fixed`'s own
+##   test uses): decoded-audio correlation 0.999.
+## Total: 193 tests passing (up from 173), clippy-clean, both release and debug mode.
+
+## Honest current boundary, not hidden: `EncoderFixed`'s LSP array is `f32`-typed between
+## `lpc::lpc_to_lsp_from_integer_ak` (whose own root-finding returns `f32` even though its internal
+## `acos()` is a fixed-point LUT) and this mode's own quantizer -- the exact same boundary
+## `codec2_3200::EncoderFixed`'s own doc comment already documents and accepts, not a gap unique to
+## this port. `DecoderFixed` has no such boundary: genuinely integer end to end, `f32` only at the
+## final `i16` PCM sample conversion.
+
+## Next: nothing further requested on this front. Bruce's own separate, subsequent request
+## (2026-09-05, same session): add "Spectral Bridge" (harmonic-domain bandwidth extension --
+## `hams_com/docs/proposals/SPECTRAL_BRIDGE_AND_COMB_SQUELCH.md`) as a toggleable option (default
+## enabled) to these codecs, since they already know their true fundamental (`Wo`, transmitted
+## exactly) and per-harmonic amplitude envelope -- the harder part of that proposal's own scoped
+## approach (inferring the fundamental from a band-limited spectrum) doesn't apply here at all. Not
+## started as of this entry.
+
 Every decoder-side stage below is genuinely integer, no `f32` conversion of real signal data
 anywhere, matching `EncoderFixed`'s own established bar. Built and validated front-to-back, largest
 piece last, per advisor's own recommended order:
