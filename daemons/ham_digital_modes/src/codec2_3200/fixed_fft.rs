@@ -66,13 +66,6 @@ impl ComplexQ23 {
         ComplexQ23 { re, im }
     }
 
-    /// Multiplies by a plain (non-Q23) integer scalar -- stays Q23 with
-    /// no rescale, the same "plain integer times a Q_n value stays
-    /// Q_n" reasoning `lpc.rs`'s own `build_half_poly_q23` uses for its
-    /// `-2 * cos_lsp_q23[i]`.
-    pub(crate) fn scale_int(self, k: i64) -> ComplexQ23 {
-        ComplexQ23 { re: self.re * k, im: self.im * k }
-    }
 }
 
 /// Round-to-nearest right shift for an `i128` accumulator, narrowing to

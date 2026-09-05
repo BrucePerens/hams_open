@@ -297,6 +297,91 @@ impl Decoder {
     }
 }
 
+fn w0_min_q23() -> i64 {
+    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    *V.get_or_init(|| fixed_point::f32_to_q_exact_round(W0_MIN, lpc::COEF_FRAC_BITS))
+}
+
+fn initial_lsps_q23() -> [i64; LPC_ORD] {
+    static V: std::sync::OnceLock<[i64; LPC_ORD]> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        let lsps = initial_lsps();
+        std::array::from_fn(|i| fixed_point::f32_to_q_exact_round(lsps[i], lpc::COEF_FRAC_BITS))
+    })
+}
+
+/// Fixed-point sibling of `Decoder` -- genuinely integer end to end, no
+/// `f32` anywhere except the final `i16` PCM boundary each sub-frame's
+/// own `synthesize_subframe_fixed` call already handles. No FFT planner
+/// field (unlike `Decoder`'s own `fft: Arc<dyn Fft<f32>>`) since
+/// `envelope::compute_harmonic_amplitudes_fixed` calls straight into
+/// `fixed_fft::fft_fixed`, no trait object needed.
+pub struct DecoderFixed {
+    prev_wo: i64,
+    prev_voiced: bool,
+    prev_lsps: [i64; LPC_ORD],
+    prev_e: i64,
+    synth: synthesis::SynthesisStateFixed,
+}
+
+impl Default for DecoderFixed {
+    fn default() -> Self {
+        DecoderFixed {
+            prev_wo: w0_min_q23(),
+            prev_voiced: false,
+            prev_lsps: initial_lsps_q23(),
+            prev_e: 1i64 << 23,
+            synth: synthesis::SynthesisStateFixed::new(),
+        }
+    }
+}
+
+impl DecoderFixed {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Same real frame structure as `Decoder::decode` (see that
+    /// function's own doc comment) -- this is `DecoderFixed`'s own
+    /// mirror, genuinely fixed-point end to end.
+    pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
+        let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
+        let wo1 = quantise::decode_wo_fixed(fields.wo_index);
+        let e1 = quantise::decode_energy_fixed(fields.e_index);
+        let lsps1 = quantise::decode_lsps_delta_scalar_fixed(&fields.lsp_indexes);
+
+        let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
+        let wo0 = interp::interp_wo_fixed(
+            fields.voiced0,
+            self.prev_wo,
+            self.prev_voiced,
+            wo1,
+            fields.voiced1,
+            w0_min_q23(),
+        );
+        let e0 = interp::interp_energy_fixed(self.prev_e, e1);
+        let lsps0 = interp::interpolate_lsp_fixed(&self.prev_lsps, &lsps1);
+
+        let mut out = [0i16; SAMPLES_PER_FRAME];
+        let subframes = [(wo0, voiced0, lsps0, e0), (wo1, fields.voiced1, lsps1, e1)];
+        for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
+            let ak = lpc::lsp_to_lpc_fixed(&lsps);
+            let mut model = envelope::ModelFixed::new(wo, voiced);
+            let aw = envelope::compute_harmonic_amplitudes_fixed(&ak, e, &mut model);
+            envelope::apply_first_harmonic_correction_fixed(&mut model);
+            let sub = self.synth.synthesize_subframe_fixed(&mut model, &aw);
+            out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
+        }
+
+        self.prev_wo = wo1;
+        self.prev_voiced = fields.voiced1;
+        self.prev_lsps = lsps1;
+        self.prev_e = e1;
+
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::floating_reference::Encoder;
@@ -420,5 +505,75 @@ mod tests {
         }
         let corr = cov / (var_a * var_b).sqrt();
         assert!(corr > 0.99, "decoder output diverged from the real reference decoder on the same real captured bitstream: correlation={corr} (expected > 0.99, measured 0.9987 when this test was written)");
+    }
+
+    /// `DecoderFixed`'s own acceptance bar -- same real captured
+    /// bitstream/PCM fixture, same correlation threshold as `Decoder`'s
+    /// own test above, plus an RMS comparison the correlation check
+    /// alone wouldn't catch: correlation is scale-invariant, so a
+    /// uniform gain bug (e.g. a missing or extra `1/FFT_ENC` somewhere
+    /// in the fixed-point synthesis chain) would pass a correlation-only
+    /// check and only show up as implausibly loud or quiet audio.
+    #[test]
+    fn decoder_fixed_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream(
+    ) {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
+        );
+        let pcm_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_decoded_pcm.bin"
+        );
+
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let pcm_data = std::fs::read(pcm_path).unwrap_or_else(|e| panic!("{pcm_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
+
+        let mut decoder = DecoderFixed::new();
+        let mut fixed_pcm: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
+            fixed_pcm.extend_from_slice(&decoder.decode(&frame));
+        }
+        let ref_pcm: Vec<i16> = pcm_data
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .collect();
+
+        let n = fixed_pcm.len();
+        let mean_a: f64 = fixed_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mean_b: f64 = ref_pcm.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mut cov = 0.0f64;
+        let mut var_a = 0.0f64;
+        let mut var_b = 0.0f64;
+        for i in 0..n {
+            let da = fixed_pcm[i] as f64 - mean_a;
+            let db = ref_pcm[i] as f64 - mean_b;
+            cov += da * db;
+            var_a += da * da;
+            var_b += db * db;
+        }
+        let corr = cov / (var_a * var_b).sqrt();
+        let rms_a = (var_a / n as f64 + mean_a * mean_a).sqrt();
+        let rms_b = (var_b / n as f64 + mean_b * mean_b).sqrt();
+        let rms_ratio = rms_a / rms_b;
+        println!("DecoderFixed vs reference: correlation={corr}, rms_fixed={rms_a}, rms_reference={rms_b}, ratio={rms_ratio}");
+        // Measured 1.0005 (essentially exact scale match -- no missing
+        // or extra FFT_ENC factor anywhere in the fixed-point synthesis
+        // chain) and correlation 0.9964 when this test was written;
+        // real margin either side, not a loosened guess.
+        assert!(
+            (0.9..1.1).contains(&rms_ratio),
+            "DecoderFixed's own RMS ({rms_a}) diverged from the reference's ({rms_b}), ratio={rms_ratio} -- looks like a gain/scale bug, not fixed-point rounding noise"
+        );
+        assert!(corr > 0.99, "DecoderFixed diverged from the real reference decoder on the same real captured bitstream: correlation={corr} (expected > 0.99, measured 0.9964 when this test was written)");
     }
 }

@@ -282,7 +282,7 @@ fn ratio_pow_term_q23(log2_a2g: i64, log2_a2: i64) -> i64 {
 /// is preserved by widening to `i128` before the `<<FRAC_BITS`
 /// rescale-back-to-Q23 (dividing by `TAU_Q23`, itself Q23, cancels one
 /// factor of the scaling, so the explicit `<<FRAC_BITS` restores it).
-fn synth_k_q23(wo_q23: i64) -> i64 {
+pub(crate) fn synth_k_q23(wo_q23: i64) -> i64 {
     let tau_q23 = 2 * pi_q23();
     (((wo_q23 as i128 * FFT_ENC as i128) << FRAC_BITS) / tau_q23 as i128) as i64
 }
