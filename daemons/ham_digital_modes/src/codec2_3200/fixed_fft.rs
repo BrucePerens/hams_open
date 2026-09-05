@@ -2,7 +2,12 @@
 //! Genuinely fixed-point, phase-correct radix-2 FFT for the decoder's
 //! own `FFT_ENC`=512-point transforms: `envelope.rs`'s forward analysis
 //! (`ak[]` -> `Aw[]`) and `synthesis.rs`'s inverse synthesis (a sparse
-//! harmonic spectrum -> time-domain samples).
+//! harmonic spectrum -> time-domain samples). Also serves
+//! `spectral_bridge.rs`'s own doubled `FFT_ENC_SB`=1024-point inverse
+//! synthesis (`fft_fixed` takes a runtime size, not just `FFT_ENC` --
+//! see that function's own doc comment); this module imports
+//! `spectral_bridge::FFT_ENC_SB` for its cached-table lookup, so it now
+//! depends on that module even though this doc comment predates it.
 //!
 //! Deliberately a separate implementation from `nlp.rs`'s own
 //! `fft_fixed`, even though both are the same radix-2 DIT butterfly

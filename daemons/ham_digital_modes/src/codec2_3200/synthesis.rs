@@ -294,7 +294,7 @@ const FRAC_BITS: u32 = 23;
 /// division; the final cast to `u32` keeps only the fractional-turn
 /// part (the whole-turn count is discarded, correctly, since only the
 /// angle mod one turn ever matters downstream).
-fn phase_increment_q32(wo_q23: i64) -> u32 {
+pub(crate) fn phase_increment_q32(wo_q23: i64) -> u32 {
     let tau_q23 = 2 * super::lpc::pi_q23();
     let scaled = (wo_q23 as i128 * N_SAMP as i128) << 32;
     let half_denom = tau_q23 as i128 / 2;
@@ -449,7 +449,7 @@ fn ear_protection_thresh_q23() -> i64 {
 /// spend extra LUT-interpolation error (same reasoning `envelope.rs`'s
 /// own `gain_q23` uses division instead of a third log-domain
 /// composition).
-fn ear_protection_fixed(samples: &mut [i64]) {
+pub(crate) fn ear_protection_fixed(samples: &mut [i64]) {
     let max_abs = samples.iter().fold(0i64, |m, &s| m.max(s.abs()));
     let thresh = ear_protection_thresh_q23();
     if max_abs <= thresh {

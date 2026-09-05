@@ -394,6 +394,7 @@ pub struct DecoderFixed {
     prev_lsps: [i64; LPC_ORD],
     prev_e: i64,
     synth: synthesis::SynthesisStateFixed,
+    pub(crate) spectral_bridge: spectral_bridge::SpectralBridgeStateFixed,
 }
 
 impl Default for DecoderFixed {
@@ -404,6 +405,7 @@ impl Default for DecoderFixed {
             prev_lsps: initial_lsps_q23(),
             prev_e: 1i64 << 23,
             synth: synthesis::SynthesisStateFixed::new(),
+            spectral_bridge: spectral_bridge::SpectralBridgeStateFixed::new(),
         }
     }
 }
@@ -443,6 +445,56 @@ impl DecoderFixed {
             envelope::apply_first_harmonic_correction_fixed(&mut model);
             let sub = self.synth.synthesize_subframe_fixed(&mut model, &aw);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
+        }
+
+        self.prev_wo = wo1;
+        self.prev_voiced = fields.voiced1;
+        self.prev_lsps = lsps1;
+        self.prev_e = e1;
+
+        out
+    }
+
+    /// Fixed-point sibling of `Decoder::decode_16k` -- see that method's
+    /// own doc comment for the design (a new, separate method,
+    /// `decode()` above untouched) and its warning about not
+    /// interleaving `decode()`/`decode_16k_fixed()` on one instance
+    /// (same shared inter-frame state here too).
+    pub fn decode_16k_fixed(
+        &mut self,
+        bytes: &[u8; BYTES_PER_FRAME],
+    ) -> [i16; 2 * spectral_bridge::N_SAMP_SB] {
+        let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
+        let wo1 = quantise::decode_wo_fixed(fields.wo_index);
+        let e1 = quantise::decode_energy_fixed(fields.e_index);
+        let lsps1 = quantise::decode_lsps_delta_scalar_fixed(&fields.lsp_indexes);
+
+        let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
+        let wo0 = interp::interp_wo_fixed(
+            fields.voiced0,
+            self.prev_wo,
+            self.prev_voiced,
+            wo1,
+            fields.voiced1,
+            w0_min_q23(),
+        );
+        let e0 = interp::interp_energy_fixed(self.prev_e, e1);
+        let lsps0 = interp::interpolate_lsp_fixed(&self.prev_lsps, &lsps1);
+
+        let mut out = [0i16; 2 * spectral_bridge::N_SAMP_SB];
+        let subframes = [(wo0, voiced0, lsps0, e0), (wo1, fields.voiced1, lsps1, e1)];
+        for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
+            let ak = lpc::lsp_to_lpc_fixed(&lsps);
+            let mut model = envelope::ModelFixed::new(wo, voiced);
+            let aw = envelope::compute_harmonic_amplitudes_fixed(&ak, e, &mut model);
+            envelope::apply_first_harmonic_correction_fixed(&mut model);
+            // Populates model.phi[1..=l] as a side effect, reused
+            // unchanged by the spectral bridge synthesis below -- same
+            // reasoning as decode_16k's own float version.
+            let _sub = self.synth.synthesize_subframe_fixed(&mut model, &aw);
+            let sub_sb = self.spectral_bridge.synthesize_subframe_sb_fixed(&model);
+            let n = spectral_bridge::N_SAMP_SB;
+            out[i * n..(i + 1) * n].copy_from_slice(&sub_sb);
         }
 
         self.prev_wo = wo1;
@@ -617,6 +669,118 @@ mod tests {
         assert!(windows > 50, "expected enough 1024-sample windows to be meaningful, got {windows}");
 
         println!("decode_16k (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
+        assert!(
+            high_energy > low_energy * 1e-4,
+            "extrapolated 4-8kHz band carries ~no energy (high={high_energy:e}, low={low_energy:e}) -- Spectral Bridge looks like a no-op on this fixture"
+        );
+        assert!(
+            high_energy < low_energy,
+            "extrapolated 4-8kHz band ({high_energy:e}) exceeds the real 0-4kHz band ({low_energy:e}) -- the amplitude fit may be running away despite its beta.min(0.0) clamp"
+        );
+    }
+
+    /// Fixed-point sibling of
+    /// `decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated`
+    /// -- same real captured fixture, same decimation offset (the
+    /// overlap-add geometry is identical between float and fixed, so
+    /// the same one-sample offset applies).
+    #[test]
+    fn decode_16k_fixed_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated()
+    {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
+        );
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+
+        let mut decoder_8k = DecoderFixed::new();
+        let mut decoder_16k = DecoderFixed::new();
+        decoder_16k.spectral_bridge.enabled = false;
+
+        let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] =
+                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
+            let out_16k = decoder_16k.decode_16k_fixed(&frame);
+            pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
+        }
+
+        assert_eq!(pcm_8k.len(), pcm_16k_decimated.len());
+        let n = pcm_8k.len();
+        let mean_a: f64 = pcm_8k.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mean_b: f64 = pcm_16k_decimated.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mut cov = 0.0f64;
+        let mut var_a = 0.0f64;
+        let mut var_b = 0.0f64;
+        for i in 0..n {
+            let da = pcm_8k[i] as f64 - mean_a;
+            let db = pcm_16k_decimated[i] as f64 - mean_b;
+            cov += da * db;
+            var_a += da * da;
+            var_b += db * db;
+        }
+        let corr = cov / (var_a * var_b).sqrt();
+        println!("decode_16k_fixed (disabled, decimated) vs decode(): correlation={corr}");
+        assert!(
+            corr > 0.99,
+            "decode_16k_fixed's own reused-harmonics content diverged from the base fixed decoder: correlation={corr} (expected > 0.99)"
+        );
+    }
+
+    /// Fixed-point sibling of
+    /// `decode_16k_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band`.
+    /// The measured ratio should land near the float path's own 7.4e-4
+    /// -- a large gap there would be the signal that something in the
+    /// fixed-point amplitude fit is wrong, not merely imprecise.
+    #[test]
+    fn decode_16k_fixed_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band()
+    {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
+        );
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+
+        let mut decoder_16k = DecoderFixed::new();
+        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+
+        let mut pcm_16k: Vec<f32> = Vec::with_capacity(n_frames * 2 * spectral_bridge::N_SAMP_SB);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] =
+                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let out_16k = decoder_16k.decode_16k_fixed(&frame);
+            pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
+        }
+
+        const WIN: usize = 1024;
+        let mut planner = rustfft::FftPlanner::<f32>::new();
+        let fft = planner.plan_fft_forward(WIN);
+        let mut low_energy = 0.0f64;
+        let mut high_energy = 0.0f64;
+        let mut windows = 0usize;
+        for chunk in pcm_16k.chunks_exact(WIN) {
+            let mut buf: Vec<rustfft::num_complex::Complex32> =
+                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            fft.process(&mut buf);
+            for (k, c) in buf.iter().enumerate().take(WIN / 2) {
+                let e = (c.norm() as f64).powi(2);
+                if k < WIN / 4 {
+                    low_energy += e;
+                } else {
+                    high_energy += e;
+                }
+            }
+            windows += 1;
+        }
+        assert!(windows > 50, "expected enough 1024-sample windows to be meaningful, got {windows}");
+
+        println!("decode_16k_fixed (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
         assert!(
             high_energy > low_energy * 1e-4,
             "extrapolated 4-8kHz band carries ~no energy (high={high_energy:e}, low={low_energy:e}) -- Spectral Bridge looks like a no-op on this fixture"
