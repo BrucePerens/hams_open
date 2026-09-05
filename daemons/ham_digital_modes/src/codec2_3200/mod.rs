@@ -312,6 +312,16 @@ impl Decoder {
     /// way this always returns genuine 16kHz audio (harmonics `1..=l`
     /// reused unchanged either way, only whether harmonics above `l`
     /// get synthesized differs).
+    ///
+    /// **A given `Decoder` serves one rate or the other, not both**:
+    /// this and `decode()` both advance the same inter-frame state
+    /// (`prev_wo`/`prev_voiced`/`prev_lsps`/`prev_e`, `self.synth`'s own
+    /// overlap-add memory) from the same bitstream. Calling both on one
+    /// instance for the same frame sequence advances that shared state
+    /// twice per frame, corrupting the next frame's interpolation for
+    /// whichever call runs second. Use two separate `Decoder`s (as this
+    /// module's own tests do) if both rates are ever needed from the
+    /// same stream.
     pub fn decode_16k(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],

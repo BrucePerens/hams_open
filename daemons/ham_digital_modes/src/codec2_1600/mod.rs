@@ -230,7 +230,11 @@ fn initial_lsps() -> [f32; LPC_ORD] {
 /// Persistent per-decoder state: the previous frame's own decoded
 /// `Wo`/voiced/LSPs/energy (sub-frame 3's own, needed to interpolate
 /// the next frame's sub-frames 0/1/2), plus `synthesis::SynthesisState`'s
-/// own overlap-add memory and a forward FFT plan.
+/// own overlap-add memory and a forward FFT plan. `spectral_bridge` is
+/// the same opt-in 16kHz harmonic-extension state
+/// `codec2_3200::Decoder` carries -- see `decode_16k` below and
+/// `codec2_3200::spectral_bridge`'s own doc comment; `.enabled` toggles
+/// it (on by default), the ordinary `decode()` above never touches it.
 pub struct Decoder {
     prev_wo: f32,
     prev_voiced: bool,
@@ -238,6 +242,7 @@ pub struct Decoder {
     prev_e: f32,
     synth: synthesis::SynthesisState,
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
+    pub spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeState,
 }
 
 impl Default for Decoder {
@@ -250,6 +255,7 @@ impl Default for Decoder {
             prev_e: 1.0,
             synth: synthesis::SynthesisState::new(),
             fft: planner.plan_fft_forward(codec2_3200::FFT_ENC),
+            spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeState::new(),
         }
     }
 }
@@ -314,6 +320,95 @@ impl Decoder {
             envelope::apply_first_harmonic_correction(&mut model);
             let sub = self.synth.synthesize_subframe(&mut model, &aw);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
+        }
+
+        self.prev_wo = wo_b;
+        self.prev_voiced = fields.voiced3;
+        self.prev_lsps = lsps3;
+        self.prev_e = e_b;
+
+        out
+    }
+
+    /// Opt-in 16kHz decode, the same Spectral Bridge extension
+    /// `codec2_3200::Decoder::decode_16k` provides -- see that method's
+    /// own doc comment and `codec2_3200::spectral_bridge`'s module doc
+    /// comment for the mechanism. Deliberately a *separate* method from
+    /// `decode()` above, which this leaves byte-for-byte untouched;
+    /// duplicates `decode()`'s own four-sub-frame loop structure rather
+    /// than sharing it, for the same reason `codec2_3200`'s own
+    /// `decode_16k` does: zero risk of this newer, less-validated path
+    /// regressing the real, reference-validated 8kHz one.
+    ///
+    /// **A given `Decoder` serves one rate or the other, not both**:
+    /// this and `decode()` both advance the same inter-frame state
+    /// (`prev_wo`/`prev_voiced`/`prev_lsps`/`prev_e`, `self.synth`'s own
+    /// overlap-add memory) from the same bitstream. Calling both on one
+    /// instance for the same frame sequence advances that shared state
+    /// twice per frame, corrupting the next frame's interpolation for
+    /// whichever call runs second. Use two separate `Decoder`s (as this
+    /// module's own tests do) if both rates are ever needed from the
+    /// same stream.
+    pub fn decode_16k(
+        &mut self,
+        bytes: &[u8; BYTES_PER_FRAME],
+    ) -> [i16; 4 * codec2_3200::spectral_bridge::N_SAMP_SB] {
+        let fields = bits::unpack_frame_1600(bytes);
+        let wo_a = quantise::decode_wo(fields.wo_index_a);
+        let e_a = quantise::decode_energy(fields.e_index_a);
+        let wo_b = quantise::decode_wo(fields.wo_index_b);
+        let e_b = quantise::decode_energy(fields.e_index_b);
+
+        let mut lsps3 = lsp_quantiser::decode_lsps_scalar(&fields.lsp_indexes);
+        lsp_post::check_lsp_order(&mut lsps3);
+        lsp_post::bw_expand_lsps(&mut lsps3, 50.0, 100.0);
+
+        let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
+        let wo0 = interp::interp_wo(
+            fields.voiced0,
+            self.prev_wo,
+            self.prev_voiced,
+            wo_a,
+            fields.voiced1,
+            codec2_3200::W0_MIN,
+        );
+        let e0 = interp::interp_energy(self.prev_e, e_a);
+
+        let voiced2 = interp::interp_voiced(fields.voiced2, fields.voiced1, fields.voiced3);
+        let wo2 = interp::interp_wo(
+            fields.voiced2,
+            wo_a,
+            fields.voiced1,
+            wo_b,
+            fields.voiced3,
+            codec2_3200::W0_MIN,
+        );
+        let e2 = interp::interp_energy(e_a, e_b);
+
+        let lsps0 = lsp_post::interpolate_lsp_ver2(&self.prev_lsps, &lsps3, 0.25);
+        let lsps1 = lsp_post::interpolate_lsp_ver2(&self.prev_lsps, &lsps3, 0.5);
+        let lsps2 = lsp_post::interpolate_lsp_ver2(&self.prev_lsps, &lsps3, 0.75);
+
+        let mut out = [0i16; 4 * codec2_3200::spectral_bridge::N_SAMP_SB];
+        let subframes = [
+            (wo0, voiced0, lsps0, e0),
+            (wo_a, fields.voiced1, lsps1, e_a),
+            (wo2, voiced2, lsps2, e2),
+            (wo_b, fields.voiced3, lsps3, e_b),
+        ];
+        for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
+            let ak = lpc::lsp_to_lpc(&lsps);
+            let mut model = envelope::Model::new(wo, voiced);
+            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            envelope::apply_first_harmonic_correction(&mut model);
+            // Populates model.phi[1..=l] with its own final phase (the
+            // spectral bridge synthesis below reuses this unchanged for
+            // harmonics 1..=l) -- discards the 8kHz output itself, this
+            // method's own caller wants the 16kHz one instead.
+            let _sub = self.synth.synthesize_subframe(&mut model, &aw);
+            let sub_sb = self.spectral_bridge.synthesize_subframe_sb(&model);
+            let n = codec2_3200::spectral_bridge::N_SAMP_SB;
+            out[i * n..(i + 1) * n].copy_from_slice(&sub_sb);
         }
 
         self.prev_wo = wo_b;
@@ -833,5 +928,123 @@ mod tests {
             "Decoder's own RMS diverged from the reference's, ratio={rms_ratio} -- looks like a gain/scale bug"
         );
         assert!(corr > 0.99, "decoder output diverged from the real reference decoder on the same real captured bitstream: correlation={corr} (expected > 0.99 on mostly-voiced content)");
+    }
+
+    /// Same real, end-to-end design invariant `codec2_3200::mod::tests`'s
+    /// own `decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated`
+    /// checks there: with Spectral Bridge disabled, `decode_16k`'s
+    /// harmonics `1..=l` are reused unchanged from the base 8kHz decode,
+    /// so decimating its 16kHz output by 2 should closely match
+    /// `decode()`'s own output for the same bitstream. Samples the *odd*
+    /// indices (`skip(1).step_by(2)`), matching the same one-sample
+    /// overlap-add framing offset already measured and documented on
+    /// `codec2_3200`'s own version of this test -- this is the same
+    /// `SpectralBridgeState` synthesis, so the same offset applies here.
+    #[test]
+    fn decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated() {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_1600/synthetic_voiced_c_encoded_bits.bin"
+        );
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 50, "expected the real captured fixture corpus, got {n_frames} frames");
+
+        let mut decoder_8k = Decoder::new();
+        let mut decoder_16k = Decoder::new();
+        decoder_16k.spectral_bridge.enabled = false;
+
+        let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] =
+                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
+            let out_16k = decoder_16k.decode_16k(&frame);
+            pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
+        }
+
+        assert_eq!(pcm_8k.len(), pcm_16k_decimated.len());
+        let n = pcm_8k.len();
+        let mean_a: f64 = pcm_8k.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mean_b: f64 = pcm_16k_decimated.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mut cov = 0.0f64;
+        let mut var_a = 0.0f64;
+        let mut var_b = 0.0f64;
+        for i in 0..n {
+            let da = pcm_8k[i] as f64 - mean_a;
+            let db = pcm_16k_decimated[i] as f64 - mean_b;
+            cov += da * db;
+            var_a += da * da;
+            var_b += db * db;
+        }
+        let corr = cov / (var_a * var_b).sqrt();
+        println!("codec2_1600 decode_16k (disabled, decimated) vs decode(): correlation={corr}");
+        assert!(
+            corr > 0.99,
+            "decode_16k's own reused-harmonics content diverged from the base decoder: correlation={corr} (expected > 0.99)"
+        );
+    }
+
+    /// Same measurement `codec2_3200::mod::tests`'s own
+    /// `decode_16k_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band`
+    /// makes there: with Spectral Bridge enabled (the real default),
+    /// does the newly-available 4-8kHz band actually carry bounded,
+    /// non-trivial extrapolated energy? Uses the mostly-voiced fixture
+    /// specifically, since extrapolation only ever runs on voiced
+    /// sub-frames.
+    #[test]
+    fn decode_16k_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band() {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_1600/synthetic_voiced_c_encoded_bits.bin"
+        );
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 50, "expected the real captured fixture corpus, got {n_frames} frames");
+
+        let mut decoder_16k = Decoder::new();
+        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+
+        let mut pcm_16k: Vec<f32> =
+            Vec::with_capacity(n_frames * 4 * codec2_3200::spectral_bridge::N_SAMP_SB);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] =
+                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let out_16k = decoder_16k.decode_16k(&frame);
+            pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
+        }
+
+        const WIN: usize = 1024;
+        let mut planner = rustfft::FftPlanner::<f32>::new();
+        let fft = planner.plan_fft_forward(WIN);
+        let mut low_energy = 0.0f64;
+        let mut high_energy = 0.0f64;
+        let mut windows = 0usize;
+        for chunk in pcm_16k.chunks_exact(WIN) {
+            let mut buf: Vec<rustfft::num_complex::Complex32> =
+                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            fft.process(&mut buf);
+            for (k, c) in buf.iter().enumerate().take(WIN / 2) {
+                let e = (c.norm() as f64).powi(2);
+                if k < WIN / 4 {
+                    low_energy += e;
+                } else {
+                    high_energy += e;
+                }
+            }
+            windows += 1;
+        }
+        assert!(windows > 10, "expected enough 1024-sample windows to be meaningful, got {windows}");
+
+        println!("codec2_1600 decode_16k (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
+        assert!(
+            high_energy > low_energy * 1e-4,
+            "extrapolated 4-8kHz band carries ~no energy (high={high_energy:e}, low={low_energy:e}) -- Spectral Bridge looks like a no-op on this fixture"
+        );
+        assert!(
+            high_energy < low_energy,
+            "extrapolated 4-8kHz band ({high_energy:e}) exceeds the real 0-4kHz band ({low_energy:e}) -- the amplitude fit may be running away despite its beta.min(0.0) clamp"
+        );
     }
 }
