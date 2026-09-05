@@ -30,6 +30,110 @@
 ## encoder's bitstream implies (`mod.rs`'s own doc comment already establishes this asymmetry). Once
 ## this is done, Bruce's own follow-on goal is Codec2 1600bps+data mode (used by M17) -- not started.
 
+## DONE 2026-09-05: `DecoderFixed` built, wired, and validated end to end -- the full Codec2 3200
+## fixed-point port (encoder + decoder) is now complete
+
+Every decoder-side stage below is genuinely integer, no `f32` conversion of real signal data
+anywhere, matching `EncoderFixed`'s own established bar. Built and validated front-to-back, largest
+piece last, per advisor's own recommended order:
+
+- **`quantise.rs` decode-side**: `decode_wo_fixed`/`decode_energy_fixed`/`decode_lsps_delta_scalar_fixed`,
+  each genuinely integer in/out (Q23). `decode_energy_fixed` needed a real new primitive first --
+  `fixed_point::log2_q23`/`exp2_q23`, genuinely integer-in/integer-out siblings of the existing
+  `log2_lut`/`exp2_lut` (which are integer *inside* but still `f32` at their own boundary, since every
+  caller there was still float upstream). `decode_lsps_delta_scalar_fixed` reuses the Q16 Hz-domain
+  tables `encode_lsps_delta_scalar_fixed` already built.
+- **`interp.rs`**: `interp_wo_fixed`/`interp_energy_fixed`/`interpolate_lsp_fixed` -- `interp_voiced`
+  needed no fixed twin at all, being pure bool logic already. `interp_energy_fixed`'s geometric mean
+  composes `log2_q23`/`exp2_q23` (`sqrt(a*b) == exp2((log2(a)+log2(b))/2)`) rather than a fixed-point
+  square root.
+- **`lpc.rs`'s `lsp_to_lpc_fixed`**: needed a genuinely integer-in/integer-out `cos_q23` (same 12-bit
+  LUT shape `acos_lut_fixed` already established, but normalizing its `[0,pi]` domain into a Q23
+  table-index fraction needs one real integer division, unlike `acos_lut_fixed`'s `[-1,1]` domain,
+  which is already a Q23 fraction) plus `poly_mul_q23`/`build_half_poly_q23` (genuine Q8.23 siblings of
+  `poly_mul_fixed`/`build_half_poly`, which were only "fixed" in the fixed-*size*-buffer sense, still
+  `f32` throughout).
+- **`envelope.rs`** (the largest stage before synthesis): `ModelFixed`, `compute_harmonic_amplitudes_fixed`,
+  `apply_first_harmonic_correction_fixed`, `sample_filter_phase_fixed`. Needed a new, separate
+  fixed-point FFT (`fixed_fft.rs`, below) and composes `log2_q23`/`exp2_q23` for every `sqrt`/`powf`/
+  reciprocal (`r.powf(2*BETA)/a2` reduces in log domain to `a2g^BETA * a2^-(1+BETA)`, one shared helper
+  for both the gain-normalization sum and the per-harmonic sum). The sub-1kHz postfilter boost's
+  frequency threshold turned out to be an *exact* integer bin boundary (`1000Hz / 15.625Hz-per-bin ==
+  64.0` exactly, given this codec's real `SAMPLE_RATE`/`FFT_ENC`), not something needing a LUT or
+  rounding margin at all.
+- **`fixed_fft.rs`** (new): a phase-correct fixed-point radix-2 FFT, deliberately *separate* from
+  `nlp.rs`'s own `fft_fixed` even though both are the same butterfly shape at the same coincidental
+  512-point size -- `nlp.rs`'s own version only ever reads magnitude/power, so its sign convention was
+  deliberately left unpinned; this one needs real phase (`envelope::sample_filter_phase_fixed` reads
+  `Aw[b].conj()` directly, `synthesis.rs` needs a real inverse transform), so its forward/inverse
+  conventions are verified directly against `rustfft`'s own complex output, not just power -- including
+  a forward-then-inverse round trip confirming the **unnormalized** inverse convention (no `1/N`
+  divide) matches `rustfft`'s own. Also adds `ComplexQ23` (Q23 complex value, `conj`/`mul`).
+- **`trig_fixed.rs`** (new): `sin_cos_q23`, genuinely integer `sin`/`cos` with the angle in a plain
+  `u32` "turns" representation (binary angle measurement) rather than Q23 radians -- the full `u32`
+  range is one turn, so a phase accumulator's own per-subframe advance (`wrapping_add`) and
+  per-harmonic scaling (`wrapping_mul`, widened through `u64`) both fold angle wraparound into ordinary
+  integer overflow, no modulo or float range-reduction anywhere.
+- **`synthesis.rs`** (the largest and final stage): `synthesize_phase_fixed` (voiced-excitation phase
+  tracking via `sin_cos_q23` and the `u32` phase accumulator; unit-vector normalization composes
+  `log2_q23`/`exp2_q23` for `1/sqrt`), `postfilter_step_fixed`/`postfilter_fixed` (the `e_db`/`thresh`
+  comparison ported directly to Q23 log-domain composition; `bg_est` carried as a genuine Q23 EMA
+  across frames, not converted per call), `ear_protection_fixed` (`gain = (thresh/max_abs)^2` via one
+  direct `i128` division, not a log-domain round trip -- the one path whose entire job is bounding
+  amplitude, so exactness beats LUT economy), `SynthesisStateFixed`/`synthesize_subframe_fixed`
+  (`fixed_fft::fft_fixed(forward: false)` in place of the `Arc<dyn Fft<f32>>` inverse plan; the Parzen
+  window precomputed once to Q23 from the existing float construction, since table construction isn't
+  the hot path).
+- **`mod.rs`'s `DecoderFixed`**: mirrors `Decoder::decode`'s exact structure with every `_fixed`
+  sibling wired in. No FFT-planner field at all (unlike `Decoder`'s own `Arc<dyn Fft<f32>>`) --
+  `compute_harmonic_amplitudes_fixed` calls straight into `fixed_fft`, no trait object needed.
+
+**Real acceptance bar, same one `Decoder`'s own test uses**: `DecoderFixed` decoded against the real
+captured reference bitstream/PCM fixture (`synthetic_c_encoded_bits.bin`/`synthetic_c_decoded_pcm.bin`)
+-- correlation **0.9964** (> 0.99) and RMS ratio **1.0005** (essentially exact scale match, confirmed
+by direct measurement, not derived: an early design question was whether `envelope.rs`'s own amplitude
+gain needed to absorb `rustfft`'s unnormalized-inverse `FFT_ENC` scaling factor somewhere, and the
+measured ratio settles it -- no missing or extra factor anywhere in the fixed-point synthesis chain).
+
+**Two real divergences found, checked, and accepted as design-choice-level, not bugs** (this module's
+own doc comment already establishes decoder-internal quantities like harmonic count and postfilter
+phase randomization are "not a bitstream format question... exact formulas are a design choice"):
+- `ModelFixed::new`'s harmonic count (`l = pi_q23()/wo_q23`) can differ from `Model::new`'s
+  (`l = (PI/wo) as usize`) by exactly one harmonic at `wo == W0_MIN` (where `PI/wo == 80` exactly in
+  true arithmetic, but the two independent Q23/f32 roundings of `PI` and `wo` land on opposite sides of
+  that boundary) -- checked exhaustively across all 128 real transmitted `Wo` indices, tolerance 1.
+- The two decoders' unvoiced/postfilter-randomized harmonics pick different random phases for the same
+  harmonic on the same frame (each decoder holds its own independent `rng: u32` seeded at `0xC0FFEE`;
+  the float path derives an angle via `(state>>8) as f32/2^24*TAU`, the fixed path uses the raw
+  post-step state directly as a `u32` turns angle) -- by design, not a bug: `next_rand`'s own doc
+  comment already establishes this doesn't need to match the reference's generator, "purely a
+  synthesis-quality detail, not transmitted." What *does* need to match (and was checked) is the
+  *number and order* of draws per sub-frame, not the numeric values themselves.
+
+Every new fixed-point primitive/module this pass added was validated against its own float sibling on
+real captured data before being wired into `DecoderFixed`, then again as part of the acceptance test
+above: `log2_q23`/`exp2_q23` (against `log2_lut`/`exp2_lut`, both directions, plus as real inverses of
+each other), `cos_q23` (dense sweep of its whole `[0,pi]` domain against plain float `cos`),
+`fixed_fft::fft_fixed` (both `forward` and inverse against `rustfft`'s own complex output directly, not
+just power), `trig_fixed::sin_cos_q23` (dense sweep of the full `u32` range against plain float
+`sin_cos`, plus an explicit wraparound-seam test), `compute_harmonic_amplitudes_fixed` (absolute
+per-harmonic amplitude, not just shape, against real captured LSP/energy data -- the stage where real
+amplitude scale first becomes load-bearing), `postfilter_step_fixed` (a real multi-frame temporal
+replay comparing `bg_est` EMA drift, not just single-frame decisions, mirroring
+`postfilter_lut_decisions_match_plain_float_across_a_real_temporal_replay`'s own methodology).
+
+Two real bugs caught by this pass's own review discipline before they shipped, not found later:
+one hand-typed Q23 literal (`1.96*2^23` in `envelope.rs`) was arithmetically wrong by 455 counts in a
+first draft -- caught by re-deriving it, and fixed by switching every Q23 constant in this pass to
+`f32_to_q_exact_round` computed once in a `OnceLock`, never a hand-typed literal (the same
+`BW_GAMMA_Q23` lesson this project already learned once, relearned and this time generalized as a
+standing practice for the whole pass). `fixed_point::exp2_q23` had no overflow guard on its
+`floor(y)>=0` branch (a silent `i64` wrap past `floor(y)>=39`, the same failure class as the earlier
+`correct_sub_multiples_fixed`/`CNLP*gmax` bug from the encoder pass) -- added a `debug_assert` before
+any real caller could hit it.
+
+**Next**: per Bruce's own explicit direction, Codec2 1600bps+data mode (used by M17) -- not started.
+
 ## White noise correction -- a root-cause fix, not part of the original punch list, added 2026-09-05
 
 Not one of the stages below -- a fix to the underlying numerical fragility several of them run into.
