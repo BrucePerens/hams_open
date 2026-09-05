@@ -19,20 +19,18 @@
 //! LSP frequencies stay `f32`-typed only because `interp.rs`/
 //! `quantise.rs` downstream aren't migrated yet, not because the
 //! conversion itself still needs a genuine float transcendental call --
-//! the established "integer core, float boundary" pattern). `nlp::nlp`
-//! (the pitch estimator) still
-//! converts `sn` (this struct's own real `i16`-native sample history --
-//! no `f32` storage here, unlike `floating_reference::Encoder`) to `f32`
-//! on the fly, since its own fixed-point FFT hasn't been built yet (a
-//! real, separate, much larger piece of work -- see the punch list).
+//! the established "integer core, float boundary" pattern). `nlp::
+//! nlp_fixed` (the pitch estimator, including its own fixed-point radix-2
+//! FFT -- `nlp.rs`'s own `fft_fixed`) now runs directly on `sn` (this
+//! struct's own real `i16`-native sample history), no `f32` conversion
+//! at all; it returns `f0` (Hz) as `f32` only at that one final boundary
+//! (see `nlp.rs`'s own doc comment), so `nlp::f0_to_wo`/`quantise::
+//! encode_wo` immediately downstream need no changes of their own.
 //! `quantise::encode_energy` already routed through `fixed_point::
 //! log2_lut` (now genuinely integer) even before this pass;
-//! `quantise::encode_lsps_delta_scalar_fixed` is this pass's own new
-//! fixed-point sibling, wired in below, verified to produce
-//! byte-identical transmitted indices to the float version on the real
-//! captured LSP corpus. `quantise::encode_wo` alone remains genuinely
-//! unmigrated -- its real input, `Wo`, comes from `nlp::f0_to_wo(f0)`,
-//! itself `f32` because `nlp.rs`'s own FFT isn't fixed-point yet.
+//! `quantise::encode_lsps_delta_scalar_fixed` is a fixed-point sibling
+//! wired in earlier, verified to produce byte-identical transmitted
+//! indices to the float version on the real captured LSP corpus.
 //! Re-derive this file's own real state directly by reading `encode()`
 //! below before trusting this comment -- per this project's own
 //! "keep-working-until-actually-done" discipline, a status claim can go
@@ -51,7 +49,7 @@ pub struct EncoderFixed {
     /// `window::make_analysis_window_fixed()`, Q0.30 -- feeds the real,
     /// genuinely fixed-point autocorrelate/Levinson-Durbin chain below.
     window_fixed: [i32; M_PITCH],
-    nlp_state: nlp::NlpState,
+    nlp_state: nlp::NlpStateFixed,
     voicing_state: voicing::VoicingStateFixed,
 }
 
@@ -60,7 +58,7 @@ impl Default for EncoderFixed {
         EncoderFixed {
             sn: [0; M_PITCH],
             window_fixed: window::make_analysis_window_fixed(),
-            nlp_state: nlp::NlpState::new(),
+            nlp_state: nlp::NlpStateFixed::new(),
             voicing_state: voicing::VoicingStateFixed::new(),
         }
     }
@@ -85,11 +83,8 @@ impl EncoderFixed {
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[..N_SAMP]);
 
-        // nlp::nlp: NOT migrated (needs a real fixed-point FFT, its own
-        // separate pass per the punch list) -- converts to f32 here,
-        // just for this call.
-        let sn_f32: [f32; M_PITCH] = std::array::from_fn(|i| self.sn[i] as f32);
-        nlp::nlp(&mut self.nlp_state, &sn_f32);
+        // nlp::nlp_fixed: migrated, real i16 in, no conversion at all.
+        nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
         // voicing::is_voiced_fixed: migrated, real i16 in, no
         // conversion at all.
         let voiced0 = voicing::is_voiced_fixed(
@@ -98,14 +93,17 @@ impl EncoderFixed {
         );
 
         self.shift_in(&speech[N_SAMP..]);
-        let sn_f32: [f32; M_PITCH] = std::array::from_fn(|i| self.sn[i] as f32);
-        let f0 = nlp::nlp(&mut self.nlp_state, &sn_f32);
+        let f0 = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
         let voiced1 = voicing::is_voiced_fixed(
             &mut self.voicing_state,
             &self.sn[M_PITCH - N_SAMP..],
         );
 
-        // quantise::encode_wo: NOT migrated.
+        // quantise::encode_wo takes the one f32 boundary value nlp_fixed
+        // itself produces (its own final Hz->bin conversion) -- see
+        // nlp.rs's own doc comment on why that's still the right
+        // boundary point rather than pushing the quantizer itself into
+        // fixed point.
         let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
 
         // Windowing + autocorrelate + Levinson-Durbin: MIGRATED, genuine

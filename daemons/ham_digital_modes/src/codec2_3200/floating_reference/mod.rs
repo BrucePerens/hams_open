@@ -3,25 +3,49 @@
 //! encode pipeline -- moved into this dedicated subdirectory so its status
 //! is structural, not just a doc comment: it exists as the validated
 //! reference implementation every fixed-point stage in
-//! `super::floating_reference::Encoder`'s parallel replacement,
-//! `super::EncoderFixed` (`encoder_fixed.rs`), is checked against, per
+//! `super::EncoderFixed` (`encoder_fixed.rs`), its parallel replacement,
+//! is checked against, per
 //! `docs/references/FIXED_POINT_ENCODER_IMPLEMENTATION_PUNCH_LIST.md`'s
 //! own recorded product decision (Bruce's own call, 2026-09-04: build
 //! `EncoderFixed` in parallel, keep this one live as a per-frame diff
 //! reference until every stage in the punch list has its own passing
 //! cross-check).
 //!
-//! `Decoder` did **not** move -- it stays in `super` (`codec2_3200::mod`)
-//! since this move is scoped to the encoder half only; see that module's
-//! own doc comment for why encode/decode aren't symmetric here (a decoder
-//! only ever sees the transmitted bitstream, never how the encoder
-//! arrived at it, so there's no equivalent "fixed-point decoder" question
-//! forced by interoperability the way there is for `q_mul`/`div_round_
-//! i128`-style internal arithmetic -- `Decoder` itself is already the one
-//! and only real decoder this crate needs).
+//! **Every real float implementation `Encoder` calls now lives in this
+//! same subdirectory**, one submodule per parent module it moved out of
+//! (`lpc`, `nlp`, `quantise`, `voicing`), mirroring `codec2_3200`'s own
+//! top-level layout -- completed 2026-09-04, per Bruce's own explicit
+//! follow-up request ("move all of the floating encoder code to
+//! floating_reference"), closing the "Real follow-on" the punch list had
+//! left open. Each parent module keeps only what its own fixed-point
+//! production code (or the one shared `Decoder`) still needs directly --
+//! see each submodule's own doc comment for the specific pieces it
+//! borrows back via `pub(crate)` (e.g. `nlp::lowpass_coeffs`, `lpc::
+//! find_next_root_from_q23`, `quantise::lsp_dim_value_hz`) and why they
+//! can't move. Verified with a hard invariant throughout the move: the
+//! crate's own lib test count (147) never changed -- every test either
+//! moved with the float function it validates, stayed behind as a
+//! cross-validation test importing the moved function back, or was
+//! genuinely unaffected.
+//!
+//! `Decoder` did **not** move -- it stays in `super` (`codec2_3200::mod`).
+//! Historically this was because a decoder has no design freedom (it only
+//! ever sees the transmitted bitstream, never how the encoder arrived at
+//! it) and so needed no fixed-point *port* at all, just the one real
+//! `Decoder` both encoders' bitstreams already go through -- but Bruce has
+//! since directed a genuine fixed-point decoder be built (`DecoderFixed`,
+//! parallel to `Decoder`, mirroring the encoder's own precedent), so this
+//! module's own float pieces (`lsp_to_lpc`, `envelope.rs`, `synthesis.rs`)
+//! remain shared/unmoved for a different, real reason now: `Decoder`
+//! itself hasn't moved yet, not because it never will.
 
-use super::{bw_gamma, fallback_lsp, nlp, quantise, voicing, window};
-use super::{bits, lpc};
+pub mod lpc;
+pub mod nlp;
+pub mod quantise;
+pub mod voicing;
+
+use super::bits;
+use super::{bw_gamma, fallback_lsp, window};
 use super::{BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
 
 /// Persistent per-call encoder state: the `M_PITCH`-sample speech
@@ -72,7 +96,11 @@ impl Encoder {
         let f0 = nlp::nlp(&mut self.nlp_state, &self.sn);
         let voiced1 = voicing::is_voiced(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
-        let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
+        // `f0_to_wo`/`encode_wo` stay in the parent (`codec2_3200::nlp`/
+        // `codec2_3200::quantise`), shared unchanged by both encoders --
+        // not part of this module's own local `nlp`/`quantise`
+        // submodules.
+        let wo_index = super::quantise::encode_wo(super::nlp::f0_to_wo(f0));
 
         let mut windowed = [0.0f32; M_PITCH];
         for ((w, &s), &win) in windowed
@@ -97,7 +125,7 @@ impl Encoder {
         }
         let lsp = lpc::lpc_to_lsp(&ak).unwrap_or_else(fallback_lsp);
 
-        let e_index = quantise::encode_energy(e);
+        let e_index = super::quantise::encode_energy(e);
         let lsp_indexes = quantise::encode_lsps_delta_scalar(&lsp);
 
         let fields = bits::FrameFields {

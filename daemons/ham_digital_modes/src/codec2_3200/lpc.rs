@@ -1,8 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! LPC analysis: autocorrelation, Levinson-Durbin recursion (Makhoul
-//! 1975), and LPC-to-LSP conversion via the standard Chebyshev-polynomial
-//! root-search technique (Sugamura & Itakura 1981 and its many
-//! descendants -- the general method, not any one implementation of it).
+//! Fixed-point LPC analysis: autocorrelation, Levinson-Durbin recursion
+//! (Makhoul 1975), and LPC-to-LSP conversion via the standard
+//! Chebyshev-polynomial root-search technique (Sugamura & Itakura 1981
+//! and its many descendants -- the general method, not any one
+//! implementation of it). The original `f32` versions (`autocorrelate`,
+//! `apply_white_noise_correction`, `levinson_durbin`, `build_p_q`,
+//! `find_next_root`, `lpc_to_lsp`, `lpc_energy`) moved to
+//! `floating_reference::lpc` once this module's own fixed-point siblings
+//! made these the only remaining callers. This module keeps, and exports
+//! via `pub(crate)`, the pieces that module's own `find_next_root` and
+//! `lpc_to_lsp` still need directly (`find_next_root_from_q23`,
+//! `COEF_FRAC_BITS`) -- the reverse of the usual direction, because this
+//! fixed module's own `lpc_to_lsp_from_integer_ak` calls `find_next_
+//! root_from_q23` directly too, so it can't move out from under that
+//! caller. `lsp_to_lpc` (the LSP-to-LPC *decoder* reconstruction, used by
+//! the one shared `Decoder` both encoders' bitstreams go through) and
+//! `Autocorr`/`LpcCoeffs` (the crate-wide type aliases both sides use)
+//! also stay here, unmoved -- neither is part of the encoder-only move.
 //!
 //! `levinson_durbin`'s own `|k|>1` safety clamp is a genuine numerical
 //! bifurcation point, not just a defensive bound -- see
@@ -11,13 +25,16 @@
 //! real data" section for the full characterization (a tiny rounding
 //! difference earlier in the recursion can flip whether a later
 //! iteration's reflection coefficient crosses the clamp, cascading into
-//! an order-of-magnitude coefficient error). This float implementation
-//! is the reference; `levinson_durbin_fixed` below is the validated
-//! fixed-point port, per Bruce's own explicit direction: match the
-//! float reference's clamp behavior as closely as practical and no
-//! closer (accept its real, measured divergence rate rather than adding
-//! a stabilization/smoothing step that would change the algorithm the
-//! plan doc's own two open options separately identified).
+//! an order-of-magnitude coefficient error). `floating_reference::lpc::
+//! levinson_durbin` is the reference; `levinson_durbin_fixed` below is a
+//! superseded fixed-point candidate kept for its own historical
+//! clamp-divergence study (`levinson_durbin_fixed_from_integer_r` is the
+//! real production path `EncoderFixed` uses), per Bruce's own explicit
+//! direction: match the float reference's clamp behavior as closely as
+//! practical and no closer (accept its real, measured divergence rate
+//! rather than adding a stabilization/smoothing step that would change
+//! the algorithm the plan doc's own two open options separately
+//! identified).
 
 use super::fixed_point;
 use super::LPC_ORD;
@@ -31,20 +48,6 @@ pub type LpcCoeffs = [f32; LPC_ORD + 1];
 /// its own output boundary, matching this port's established "integer
 /// core, float boundary" pattern.
 type LpcCoeffsQ = [i64; LPC_ORD + 1];
-
-/// `R[j] = sum(Wn[i] * Wn[i+j])` for `j` in `0..=LPC_ORD`, over the
-/// windowed analysis buffer `wn`.
-pub fn autocorrelate(wn: &[f32]) -> Autocorr {
-    let mut r = [0.0f32; LPC_ORD + 1];
-    for (j, r_j) in r.iter_mut().enumerate() {
-        let mut sum = 0.0f32;
-        for i in 0..(wn.len() - j) {
-            sum += wn[i] * wn[i + j];
-        }
-        *r_j = sum;
-    }
-    r
-}
 
 /// Q8.23 for the fixed-point windowed samples `autocorrelate_fixed`
 /// below consumes -- same width `COEF_FRAC_BITS` uses elsewhere in this
@@ -184,25 +187,6 @@ pub fn autocorrelate_fixed(wn_q: &[i32]) -> [i64; LPC_ORD + 1] {
 // isolated numerical effect on this corpus.
 // ---------------------------------------------------------------------
 
-/// Standard white noise correction factor for `apply_white_noise_
-/// correction` below -- see that function's own extensive doc comment
-/// (and the module-level comment above it) for the full derivation and
-/// the real measurement this specific value was chosen from.
-pub const WHITE_NOISE_CORRECTION_ALPHA: f32 = 1e-3;
-
-/// Applies white noise correction to `r[0]` only (see the module-level
-/// comment above `autocorrelate` for why `r[0]` alone, and not a uniform
-/// rescaling of `r[]`). Deliberately a separate, explicit step callers
-/// must invoke themselves, rather than folded silently into
-/// `autocorrelate`'s own output -- `autocorrelate` is validated directly
-/// against a real captured reference (`autocorrelate_matches_the_real_
-/// reference_r_on_a_synthetic_signals_real_captured_wn_data`), and this
-/// correction is a deliberate, visible, separate decision, not an
-/// invisible side effect of computing an autocorrelation.
-pub fn apply_white_noise_correction(r: &mut Autocorr) {
-    r[0] *= 1.0 + WHITE_NOISE_CORRECTION_ALPHA;
-}
-
 /// Fixed-point `apply_white_noise_correction`: `r_q[0] += r_q[0] /
 /// 1000` -- an exact integer division standing in for `* (1 +
 /// WHITE_NOISE_CORRECTION_ALPHA)` (`1e-3 == 1/1000` exactly, unlike an
@@ -212,34 +196,6 @@ pub fn apply_white_noise_correction(r: &mut Autocorr) {
 /// positive-divisor precondition holds trivially.
 pub fn apply_white_noise_correction_fixed(r_q: &mut [i64; LPC_ORD + 1]) {
     r_q[0] += div_round_i128(r_q[0] as i128, 1000);
-}
-
-/// Levinson-Durbin recursion: real autocorrelation coefficients in,
-/// LPC coefficients out (`ak[0] == 1.0` by definition, `ak[1..=LPC_ORD]`
-/// the real predictor coefficients).
-pub fn levinson_durbin(r: &Autocorr) -> LpcCoeffs {
-    let mut a = [0.0f32; LPC_ORD + 1];
-    let mut a_prev = [0.0f32; LPC_ORD + 1];
-    a[0] = 1.0;
-    let mut e = r[0];
-
-    for i in 1..=LPC_ORD {
-        let mut sum = 0.0f32;
-        for j in 1..i {
-            sum += a_prev[j] * r[i - j];
-        }
-        let mut k = -(r[i] + sum) / e;
-        if k.abs() > 1.0 {
-            k = 0.0;
-        }
-        a[i] = k;
-        for j in 1..i {
-            a[j] = a_prev[j] + k * a_prev[i - j];
-        }
-        e *= 1.0 - k * k;
-        a_prev[..=i].copy_from_slice(&a[..=i]);
-    }
-    a
 }
 
 /// Uniform internal Q8.40 fixed-point format for every quantity in
@@ -508,10 +464,11 @@ fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
 /// fixed`'s own Q8.23) rather than `f32` -- **caller must apply white
 /// noise correction (`apply_white_noise_correction_fixed`) to `r_q`
 /// before calling this**, matching this function's own validated
-/// precondition. Output stays `LpcCoeffs` (`f32`), matching this port's
-/// established "integer core, float boundary" pattern -- the downstream
-/// LSP chain (`build_p_q`, `bw_gamma`) isn't migrated yet, so there's
-/// nothing further along the pipeline to hand an integer type to.
+/// precondition. Output stays `LpcCoeffs` (`f32`) alongside the real
+/// Q8.23 integer coefficients (see below) -- `EncoderFixed` itself uses
+/// the latter, feeding it directly into `lpc_energy_fixed`/
+/// `apply_bw_gamma_fixed`/`lpc_to_lsp_from_integer_ak`, all genuinely
+/// fixed-point today.
 /// Returns both the `f32` coefficients (the established output boundary)
 /// and the real Q8.23 integer coefficients still inside -- a caller that
 /// itself has integer `R[]` (e.g. to feed `lpc_energy_fixed`) needs the
@@ -529,7 +486,9 @@ pub fn levinson_durbin_fixed_from_integer_r(
 /// `levinson_durbin_fixed_from_integer_r` or after `apply_bw_gamma_
 /// fixed`) to `LpcCoeffs` (`f32`) -- the "integer core, float boundary"
 /// conversion, exposed as its own function so a caller in another module
-/// doesn't need `COEF_FRAC_BITS` (private to this module) to do it.
+/// doesn't need `COEF_FRAC_BITS` (`pub(crate)`, not `pub` -- only
+/// `floating_reference::lpc`'s own `find_next_root` needs to reach it
+/// from outside this module) to do it.
 pub fn dequantize_coef_q23(a_q23: &[i64; LPC_ORD + 1]) -> LpcCoeffs {
     std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
 }
@@ -540,7 +499,7 @@ pub fn dequantize_coef_q23(a_q23: &[i64; LPC_ORD + 1]) -> LpcCoeffs {
 /// fractional bits. Matches
 /// `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md`'s own validated
 /// width for this exact stage.
-const COEF_FRAC_BITS: u32 = 23;
+pub(crate) const COEF_FRAC_BITS: u32 = 23;
 /// Q2.29 fixed-point for the Chebyshev recursion's own `T` register and
 /// `x` -- \|T\|<=1 and \|x\|<=1 by construction, so 2 integer bits give
 /// real margin; 29 fractional bits is the plan doc's own validated
@@ -648,29 +607,6 @@ const LSP_SEARCH_STEP: f32 = 0.01;
 /// accurate to `LSP_SEARCH_STEP / 2^LSP_BISECTIONS`.
 const LSP_BISECTIONS: u32 = 6;
 
-/// Builds the symmetric/antisymmetric `P'(z)`/`Q'(z)` Chebyshev-domain
-/// polynomials whose interleaved roots are the LPC filter's Line
-/// Spectral Frequencies, per the standard LSP construction: factor the
-/// LPC inverse filter `A(z)` into `P(z) = A(z) + z^-(p+1)*A(z^-1)` and
-/// `Q(z) = A(z) - z^-(p+1)*A(z^-1)`, both of which have all roots on the
-/// unit circle for a stable `A(z)`.
-fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
-    let m = LPC_ORD / 2;
-    let mut p = [0.0f32; 6];
-    let mut q = [0.0f32; 6];
-    p[0] = 1.0;
-    q[0] = 1.0;
-    for i in 1..=m {
-        p[i] = ak[i] + ak[LPC_ORD + 1 - i] - p[i - 1];
-        q[i] = ak[i] - ak[LPC_ORD + 1 - i] + q[i - 1];
-    }
-    for i in 0..m {
-        p[i] *= 2.0;
-        q[i] *= 2.0;
-    }
-    (p, q)
-}
-
 /// Fixed-point `build_p_q`: `a_q23` (Q8.23, `i64`, e.g. straight from
 /// `apply_bw_gamma_fixed`) in, `P[]`/`Q[]` (Q8.23, `i32`, matching
 /// `cheb_poly_eval_fixed_core`'s own expected `coef_q` type) out. Pure
@@ -701,23 +637,13 @@ fn build_p_q_fixed(a_q23: &[i64; LPC_ORD + 1]) -> ([i32; 6], [i32; 6]) {
     )
 }
 
-/// Finds one root of `poly` by sweeping `x` downward from `x_start` in
-/// `LSP_SEARCH_STEP` increments until a sign change brackets a root,
-/// then bisecting `LSP_BISECTIONS` times. The returned root is also
-/// where the *next* root's search should resume, matching LSP roots'
-/// own real interleaving property (each of the `LPC_ORD` roots lies in a
-/// disjoint sub-interval of `[-1, 1]`, in strictly decreasing order, so
-/// search never needs to backtrack).
-fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
-    let poly_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
-    find_next_root_from_q23(&poly_q, x_start)
-}
-
-/// The real search, shared by `find_next_root` above (which quantizes
-/// `poly` once up front, not once per candidate `x` the way calling
-/// `cheb_poly_eval_fixed` directly used to) and a caller that already
-/// has `poly` in Q8.23 (`build_p_q_fixed`'s own output).
-fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option<f32> {
+/// The real search, shared by `floating_reference::lpc::find_next_root`
+/// (which quantizes `poly` once up front, not once per candidate `x` the
+/// way calling `cheb_poly_eval_fixed` directly used to) and a caller
+/// that already has `poly` in Q8.23 (`build_p_q_fixed`'s own output).
+/// `pub(crate)`: that float-facing wrapper lives in a different module
+/// now.
+pub(crate) fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option<f32> {
     let mut xl = x_start;
     let mut p_l = cheb_poly_eval_fixed_core(poly_q, xl);
     while xl >= -1.0 {
@@ -748,23 +674,6 @@ fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option<f32> {
         p_l = p_r;
     }
     None
-}
-
-/// LPC coefficients -> `LPC_ORD` Line Spectral Frequencies (radians,
-/// strictly increasing). Returns `None` if fewer than `LPC_ORD` roots
-/// were found in `[-1, 1]` (a real, if rare, LPC analysis failure mode
-/// on pathological input -- callers substitute benign fallback LSPs).
-pub fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
-    let (p, q) = build_p_q(ak);
-    let mut search_from = 1.0f32;
-    let mut freq = [0.0f32; LPC_ORD];
-    for (j, f) in freq.iter_mut().enumerate() {
-        let poly = if j & 1 == 1 { &q } else { &p };
-        let root = find_next_root(poly, search_from)?;
-        *f = root.acos();
-        search_from = root;
-    }
-    Some(freq)
 }
 
 /// `acos` LUT resolution: 12 bits, chosen (not assumed) by measuring
@@ -953,16 +862,6 @@ pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
     ak
 }
 
-/// LPC energy: `E = sum(ak[i] * R[i])`, the real prediction-error energy
-/// this analysis frame's LPC filter achieves against its own
-/// autocorrelation -- computed *before* bandwidth expansion is applied
-/// to `ak`, matching the real reference's own ordering (bandwidth
-/// expansion after this computation would introduce spurious negative
-/// energies).
-pub fn lpc_energy(ak: &LpcCoeffs, r: &Autocorr) -> f32 {
-    ak.iter().zip(r.iter()).map(|(a, r)| a * r).sum()
-}
-
 /// Fixed-point `lpc_energy`: `a_q23` (from `levinson_durbin_fixed_from_
 /// integer_r`'s own second return value) and `r_q` (from `autocorrelate_
 /// fixed`, same Q8.23 as `a_q23`) in, real `f32` energy out (matching
@@ -1014,8 +913,12 @@ pub fn apply_bw_gamma_fixed(a_q23: &mut [i64; LPC_ORD + 1]) {
     }
 }
 
+// `pub(crate)`, not the usual bare `mod tests`: `floating_reference::
+// lpc`'s own tests reuse this module's `fixture!`/`read_dump` (see
+// their own doc comments) rather than duplicating real fixture-parsing
+// infrastructure across files.
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::codec2_3200::{bw_gamma, M_PITCH};
 
@@ -1028,8 +931,13 @@ mod tests {
             )
         };
     }
+    // `macro_rules!` itself can't take a visibility qualifier directly;
+    // a `pub(crate) use` re-export is the real mechanism for a
+    // path-scoped (non-`#[macro_export]`, crate-root-polluting) macro --
+    // `floating_reference::lpc`'s own tests import `fixture!` this way.
+    pub(crate) use fixture;
 
-    fn read_dump(path: &str, cols: usize) -> Vec<Vec<f32>> {
+    pub(crate) fn read_dump(path: &str, cols: usize) -> Vec<Vec<f32>> {
         std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("{path}: {e}"))
             .lines()
@@ -1047,136 +955,6 @@ mod tests {
                 v
             })
             .collect()
-    }
-
-    /// Real R[] vectors and their real Levinson-Durbin ak[] outputs,
-    /// captured from actual Codec2-mod real speech decoding this same
-    /// session -- cross-validates this independently-written
-    /// implementation against the real reference's own real output, not
-    /// just internal self-consistency.
-    #[test]
-    fn levinson_durbin_matches_the_real_reference_on_real_captured_speech_data() {
-        let r_path = fixture!("codec2_r_dump.txt");
-        let ak_path = fixture!("codec2_ak_dump.txt");
-        let rs = read_dump(r_path, LPC_ORD + 1);
-        let aks = read_dump(ak_path, LPC_ORD + 1);
-        assert_eq!(rs.len(), aks.len());
-        assert!(
-            rs.len() > 300,
-            "expected the real captured fixture corpus, got {} rows",
-            rs.len()
-        );
-
-        let mut max_abs_err = 0.0f32;
-        let mut n_frames_over_tolerance = 0;
-        for (r_row, ak_row) in rs.iter().zip(aks.iter()) {
-            let mut r = [0.0f32; LPC_ORD + 1];
-            r.copy_from_slice(r_row);
-            let ak = levinson_durbin(&r);
-            let mut this_max = 0.0f32;
-            for i in 0..=LPC_ORD {
-                this_max = this_max.max((ak[i] - ak_row[i]).abs());
-            }
-            max_abs_err = max_abs_err.max(this_max);
-            // The real reference's own clamp-boundary bifurcation
-            // (CODEC2_MOD_FIXED_POINT_PLAN.md) means a handful of real
-            // frames can legitimately diverge if this independent
-            // implementation's arithmetic rounds a hair differently at
-            // exactly the |k|>1 boundary -- tolerate that known,
-            // documented failure mode, don't paper over a real bug.
-            if this_max > 0.01 {
-                n_frames_over_tolerance += 1;
-            }
-        }
-        assert!(
-            n_frames_over_tolerance <= rs.len() / 20,
-            "{n_frames_over_tolerance}/{} frames exceeded tolerance -- too many for the known clamp-boundary sensitivity alone, likely a real implementation bug (max err {max_abs_err})",
-            rs.len()
-        );
-    }
-
-    #[test]
-    fn levinson_durbin_reflection_coefficients_stay_within_the_construction_bound() {
-        // k is clamped to [-1,1] by construction on every real captured
-        // frame -- assert the invariant holds, not just that it happens
-        // to on this corpus.
-        let r_path = fixture!("codec2_r_dump.txt");
-        for r_row in read_dump(r_path, LPC_ORD + 1) {
-            let mut r = [0.0f32; LPC_ORD + 1];
-            r.copy_from_slice(&r_row);
-            let ak = levinson_durbin(&r);
-            for &coeff in ak.iter() {
-                assert!(
-                    coeff.is_finite(),
-                    "non-finite LPC coefficient from real data: {ak:?}"
-                );
-            }
-        }
-    }
-
-    /// Not just "did root-finding succeed" -- compares the actual root
-    /// *values* against the reference's own real `lsp[]` output
-    /// (`codec2_lsp_dump.txt`, dumped right after its own `lpc_to_lsp()`
-    /// call). A success-rate-only check previously let a real bisection
-    /// off-by-one bug (this implementation was returning a value from one
-    /// extra, uncounted halving beyond the reference's real 6) through
-    /// silently, since the wrong root value still counted as "found".
-    #[test]
-    fn lpc_to_lsp_matches_the_real_reference_on_real_captured_ak_data() {
-        let ak_path = fixture!("codec2_ak_dump.txt");
-        let lsp_path = fixture!("codec2_lsp_dump.txt");
-        let aks = read_dump(ak_path, LPC_ORD + 1);
-        let lsps = read_dump(lsp_path, LPC_ORD + 1);
-        assert_eq!(
-            aks.len(),
-            lsps.len(),
-            "real captures must be from the same corpus pass to line up 1:1"
-        );
-        assert!(
-            aks.len() > 300,
-            "expected the real captured fixture corpus, got {} rows",
-            aks.len()
-        );
-
-        let mut roots_found_count = 0;
-        let mut max_abs_err = 0.0f32;
-        for (ak_row, lsp_row) in aks.iter().zip(lsps.iter()) {
-            let ref_roots = lsp_row[0] as usize;
-            if ref_roots != LPC_ORD {
-                // Real, rare root-finding failure on this frame -- the
-                // reference's own dumped lsp[] is a benign fallback, not
-                // a real root set, so there's nothing to compare here.
-                continue;
-            }
-            let mut ak = [0.0f32; LPC_ORD + 1];
-            ak.copy_from_slice(ak_row);
-            for (i, a) in ak.iter_mut().enumerate() {
-                *a *= bw_gamma(i);
-            }
-            let Some(lsp) = lpc_to_lsp(&ak) else { continue };
-            roots_found_count += 1;
-            for i in 0..LPC_ORD {
-                max_abs_err = max_abs_err.max((lsp[i] - lsp_row[1 + i]).abs());
-            }
-        }
-        assert!(
-            roots_found_count as f64 / aks.len() as f64 > 0.95,
-            "only {roots_found_count}/{} real frames found all {LPC_ORD} LSP roots -- expected the overwhelming majority to succeed on real speech",
-            aks.len()
-        );
-        // With the fix, real measured max error against the reference's
-        // own captured lsp[] is ~1.8e-6 rad (float rounding noise).
-        // Negative-controlled: temporarily reverting to a fresh 7th
-        // (uncounted) bisection average instead of the last computed
-        // midpoint pushes the real measured max error to ~1.9e-3 rad on
-        // this same fixture -- three orders of magnitude apart, so 1e-4
-        // sits with wide margin on both sides and actually discriminates
-        // the bug this test exists to catch, not just root-finding
-        // success/failure.
-        assert!(
-            max_abs_err < 1e-4,
-            "max LSP root error vs real captured reference: {max_abs_err} rad"
-        );
     }
 
     /// Same real captured `ak[]`/`lsp[]` corpus, the real fixed-point
@@ -1300,37 +1078,6 @@ mod tests {
                 "acos_lut_fixed({x}) = {got}, want ~{want} ({err_hz} Hz off, expected under 10Hz)"
             );
         }
-    }
-
-    #[test]
-    fn build_p_q_matches_the_real_reference_p_q_on_real_captured_data() {
-        let ak_path = fixture!("codec2_ak_dump.txt");
-        let pq_path = fixture!("codec2_pq_dump.txt");
-        let aks = read_dump(ak_path, LPC_ORD + 1);
-        let pqs = read_dump(pq_path, 12);
-        assert_eq!(
-            aks.len(),
-            pqs.len(),
-            "real captures must be from the same corpus pass to line up 1:1"
-        );
-
-        let mut max_err = 0.0f32;
-        for (ak_row, pq_row) in aks.iter().zip(pqs.iter()) {
-            let mut ak = [0.0f32; LPC_ORD + 1];
-            ak.copy_from_slice(ak_row);
-            for (i, a) in ak.iter_mut().enumerate() {
-                *a *= bw_gamma(i);
-            }
-            let (p, q) = build_p_q(&ak);
-            for i in 0..6 {
-                max_err = max_err.max((p[i] - pq_row[i]).abs());
-                max_err = max_err.max((q[i] - pq_row[6 + i]).abs());
-            }
-        }
-        assert!(
-            max_err < 1e-3,
-            "max P[]/Q[] error vs real captured reference: {max_err}"
-        );
     }
 
     /// Same real captured `ak[]`/`P[]`/`Q[]` corpus, fixed-point path
@@ -1559,6 +1306,7 @@ mod tests {
     /// trip is self-verifying).
     #[test]
     fn lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data() {
+        use crate::codec2_3200::floating_reference::lpc::lpc_to_lsp;
         let ak_path = fixture!("codec2_ak_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
         assert!(
@@ -1596,53 +1344,10 @@ mod tests {
         );
     }
 
-    /// Cross-checks `autocorrelate` against the reference's own real
-    /// `R[]` output on the reference's own real windowed buffer
-    /// (`synthetic_codec2_wn_dump.txt`, dumped right before its own
-    /// `autocorrelate` call, from a locally synthesized non-speech test
-    /// signal -- see `tests/fixtures/codec2_3200/README.md` for why a
-    /// synthetic signal is used here specifically: `Wn[]` is audio-domain
-    /// data, unlike this file's other, real-speech-derived fixtures which
-    /// hold only abstracted numeric features). Catches a scale bug this
-    /// crate's own `window.rs` could introduce (a wrong window
-    /// normalization constant) that a self-consistency-only test can't:
-    /// `levinson_durbin`'s `ak` output is scale-invariant in `R[]` (every
-    /// reflection coefficient is a ratio), so a uniformly wrong `R[]`
-    /// scale wouldn't show up in the `ak`-based tests above at all, even
-    /// though `lpc_energy` (which feeds `encode_energy` directly into the
-    /// bitstream) is scale-dependent.
-    #[test]
-    fn autocorrelate_matches_the_real_reference_r_on_a_synthetic_signals_real_captured_wn_data() {
-        let wn_path = fixture!("synthetic_codec2_wn_dump.txt");
-        let r_path = fixture!("synthetic_codec2_r_dump.txt");
-        let wns = read_dump(wn_path, M_PITCH);
-        let rs = read_dump(r_path, LPC_ORD + 1);
-        assert_eq!(
-            wns.len(),
-            rs.len(),
-            "real captures must be from the same corpus pass to line up 1:1"
-        );
-        assert!(
-            wns.len() > 150,
-            "expected the synthetic-signal fixture corpus, got {} rows",
-            wns.len()
-        );
-
-        let mut max_rel_err = 0.0f32;
-        for (wn_row, r_row) in wns.iter().zip(rs.iter()) {
-            let r = autocorrelate(wn_row);
-            for i in 0..=LPC_ORD {
-                let denom = r_row[i].abs().max(1e-6);
-                max_rel_err = max_rel_err.max((r[i] - r_row[i]).abs() / denom);
-            }
-        }
-        assert!(
-            max_rel_err < 1e-3,
-            "max relative R[] error vs real captured reference: {max_rel_err}"
-        );
-    }
-
-    /// Same cross-check as the test above, but for `autocorrelate_fixed`
+    /// Same cross-check `floating_reference::lpc`'s own
+    /// `autocorrelate_matches_the_real_reference_r_on_a_synthetic_
+    /// signals_real_captured_wn_data` runs for the plain `f32`
+    /// `autocorrelate`, but for `autocorrelate_fixed`
     /// -- quantizes the reference's own real captured `wn[]` to Q8.23,
     /// runs the fixed-point accumulator, dequantizes the result, and
     /// compares against the same real captured `R[]` reference. Looser
@@ -1718,6 +1423,7 @@ mod tests {
     /// actually matters, not an arbitrary tolerance on the raw value.
     #[test]
     fn lpc_energy_fixed_and_lpc_energy_produce_the_same_real_quantizer_index() {
+        use crate::codec2_3200::floating_reference::lpc::lpc_energy;
         let ak_path = fixture!("codec2_ak_dump.txt");
         let r_path = fixture!("codec2_r_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
@@ -1822,9 +1528,13 @@ mod tests {
 #[cfg(test)]
 mod levinson_durbin_fixed_tests {
     use super::*;
+    use crate::codec2_3200::floating_reference::lpc::{
+        apply_white_noise_correction, levinson_durbin, WHITE_NOISE_CORRECTION_ALPHA,
+    };
 
     /// Real measurement backing `WHITE_NOISE_CORRECTION_ALPHA`'s own
-    /// choice (see `apply_white_noise_correction`'s doc comment for the
+    /// choice (see `floating_reference::lpc::apply_white_noise_
+    /// correction`'s doc comment for the
     /// full derivation) -- runs the plain-float recursion (`e`'s own
     /// trajectory doesn't depend on which arithmetic implementation
     /// carries it) across the whole real `codec2_r_dump.txt` corpus,
@@ -2278,5 +1988,3 @@ mod levinson_durbin_fixed_tests {
         }
     }
 }
-
-

@@ -1,23 +1,34 @@
 # Fixed-Point Encoder Implementation: Punch List
 
-## Status: scoped 2026-09-04, per Bruce's direct request "Implement the fixed-point encoder." Real,
-## substantial progress: `EncoderFixed`'s entire windowing -> `autocorrelate` -> Levinson-Durbin ->
-## `lpc_energy` -> bandwidth-expansion -> LSP-conversion chain is now genuinely fixed-point end to end,
-## no `f32` anywhere in it -- including the LSP frequencies themselves (`acos()` is now a fixed-point
-## LUT, `lpc::acos_lut_fixed`; they stay `f32`-*typed* only because `interp.rs`/`quantise.rs` downstream
-## aren't migrated). Validated not just in isolation but by direct comparison against
-## `floating_reference::Encoder` on identical input: decoded-audio correlation **1.0**. Getting there
-## required a real detour: a fixed-point `r0`-normalization candidate initially failed on frame 273 (the
-## same structural reason `div_round_i128`'s reciprocal-multiply idea was already rejected), which led
-## to `lpc::apply_white_noise_correction` (a standard technique, Rabiner & Schafer 1978) -- a real
-## root-cause fix for Levinson-Durbin's own fragility, sent to the codec2 mailing list, which
-## independently resolved the normalization candidate's failure too. `fixed_point.rs`'s `log2_lut` and
-## `exp2_lut` interpolation, `lpc.rs`'s `acos_lut_fixed`, and now `quantise.rs`'s `encode_lsps_delta_
-## scalar_fixed` are all genuinely integer and wired into `EncoderFixed` (see their own rows below);
-## only `quantise::encode_wo` (genuinely blocked on `nlp.rs`'s own unmigrated FFT) and the pitch
-## estimator itself (`nlp.rs`) are still `f32` and not yet started. This file is the ground truth for
-## what's actually done -- re-derive from here against the real code, not from a chat summary, before
-## ever reporting this "complete."
+## Status: scoped 2026-09-04, per Bruce's direct request "Implement the fixed-point encoder." **As of
+## 2026-09-04's follow-on pass, `EncoderFixed`'s entire encode path is genuinely fixed-point end to
+## end -- no `f32` conversion of any real signal data anywhere in it.** The windowing ->
+## `autocorrelate` -> Levinson-Durbin -> `lpc_energy` -> bandwidth-expansion -> LSP-conversion chain
+## (including the LSP frequencies' own `acos()`, `lpc::acos_lut_fixed`) was already fixed-point as of
+## the prior pass; this pass closed the one remaining piece, the pitch estimator (`nlp.rs`): `nlp::
+## nlp_fixed` runs the same DC-notch/decimate/Hann-window/FFT/peak-search/sub-multiple-correction shape
+## as the original `nlp()` entirely in `i64`/`i128` scaled-integer arithmetic, including a genuine
+## fixed-point radix-2 FFT (`fft_fixed`, quantized Q23 twiddle table, no per-stage rescaling needed --
+## `i64`/`i128` give far more dynamic-range headroom than a real block-floating-point FFT would need at
+## this signal's actual magnitude), and returns `f0` (Hz) as `f32` only at its own single final
+## boundary, so `quantise::encode_wo` needed no changes at all once wired to that boundary value.
+## Validated against the already-tested float `nlp()` (agreement across a wide synthetic
+## f0/harmonic-content sweep: 0% disagreement in the realistic range this crate's own original test
+## already established) and, more importantly, against `floating_reference::Encoder` end to end:
+## `EncoderFixed`'s decoded-audio correlation is **1.0**, same as before this pass, now with the *entire*
+## encode path -- not just the LPC chain -- genuinely integer. This file is the ground truth for what's
+## actually done -- re-derive from here against the real code, not from a chat summary, before ever
+## reporting this "complete."
+
+## Scope widened 2026-09-05, per Bruce's own explicit direction: "completely port codec2 3200 to
+## fixed-point, so that it would actually work on a processor with no FPU." The encoder half above is
+## done; the real remaining piece is a genuine fixed-point `DecoderFixed`, parallel to `Decoder`
+## (mirroring the encoder's own build precedent: float kept live as a per-frame diff reference, fixed
+## built and checked stage by stage against it) -- unlike the encoder, the decoder has **no design
+## freedom**: it must reproduce the real reference's own dequantization/reconstruction exactly, since a
+## real Codec2/Codec2-mod decoder or this crate's own decoder must land on the same real audio a real
+## encoder's bitstream implies (`mod.rs`'s own doc comment already establishes this asymmetry). Once
+## this is done, Bruce's own follow-on goal is Codec2 1600bps+data mode (used by M17) -- not started.
 
 ## White noise correction -- a root-cause fix, not part of the original punch list, added 2026-09-05
 
@@ -85,10 +96,10 @@ still round-trip through `f32` at every boundary, which isn't what "fixed-point 
 | `cheb_poly_eval_fixed` / `find_next_root` / `lpc_to_lsp` | Was: fixed-point internally, but input (`ak`) still arrived as `f32` from `build_p_q`. Now: `cheb_poly_eval_fixed_core`/`find_next_root_from_q23`/`lpc_to_lsp_from_integer_ak` take Q8.23 integer input directly -- the `f32`-facing originals became thin wrappers (quantizing once, not per-candidate-`x`, a real efficiency win alongside the refactor). LSP frequencies stay `f32`-*typed*, but the `acos()` call itself is now `lpc::acos_lut_fixed` (see its own row below), not a genuine float transcendental. | Real fixture-corpus validation, all the way through LSP root-finding | **DONE and WIRED into `EncoderFixed`.** 362/362 real frames found all 10 LSP roots (matching the float path's own robustness); max error 3.3e-4 rad even with the acos LUT wired in (looser than the pre-fixed-point float path's own 1e-4 bound -- real, different arithmetic, not a bug -- but only ~0.43Hz against the real 25Hz LSP quantizer step). |
 | `fixed_point.rs`'s `log2_lut` | Was: real LUT-based approach, but the interpolation step itself was genuine `f32`. Now: `log2_lut_generic_fixed` -- the raw IEEE754 mantissa bits (`x.to_bits() & 0x007F_FFFF`) are already an *exact* Q23 fixed-point representation of `(mantissa - 1.0)`, so the index/weight split and the table blend (a quantized `log2_lut_table_q23`) run in pure `u64`/`i64` arithmetic; `f32` is touched only at the exponent-extraction input and the final `exponent + interp` sum. Signature stays `f32 -> f32` (every real caller -- `quantise::encode_energy`, `synthesis::postfilter_step` -- is still float upstream), but the interpolation itself no longer is. | Direct dense sweep against the float interpolation across 12 decades (not just quantizer-index agreement, which is coarse enough to hide a sign/off-by-one bug), plus explicit boundary tests (exact powers of two, just-below-a-power-of-two where the `.min(levels-1)` clamp is load-bearing) | **DONE and WIRED** -- `log2_lut()` itself now calls the fixed path; `quantise::encode_energy`/`decode_energy` and `synthesis::postfilter_step` get it for free with no caller change. |
 | `fixed_point.rs`'s `exp2_lut` | Was: full `f32` (`floor()`, `2f32.powi()`, interpolation multiply/subtract). Now: `exp2_lut_generic_fixed` -- `y` (not IEEE754-shaped, unlike `log2_lut`'s `x`) is quantized once at the boundary (`y_q`, Q(8+16)), `floor(y)` and its remainder come from a plain arithmetic-shift (correct on negative `y_q`, confirmed by direct test against negative integers and just-below-a-negative-integer boundaries), the index/weight split mirrors `log2_lut_generic_fixed`'s own shape against a table storing `(2^frac - 1.0)` in Q23 (the raw-mantissa-bits format), and the final `mantissa * 2^floor(y)` is built as a direct IEEE754 bit pattern (`biased_exp<<23 \| mantissa_frac`), not `2f32.powi()`. | Direct dense sweep against the float interpolation across the real `y` range (`-20..20`, wider margin than `E_MIN_DB..E_MAX_DB` converted through log2 needs), plus explicit boundary tests (exact integers including negative ones, just-below-a-negative-integer) | **DONE and WIRED** -- `exp2_lut()` itself now calls the fixed path; `quantise::decode_energy` and `synthesis::postfilter_step` get it for free with no caller change. |
-| `quantise.rs` (`encode_wo`) | Full `f32` | Fixed-point port + validation | **NOT STARTED -- genuinely blocked for now**: its real input is `Wo` from `nlp::f0_to_wo(f0)`, itself `f32` because `nlp.rs`'s FFT isn't migrated. Porting the quantizer's own arithmetic wouldn't remove any real `f32` from `EncoderFixed` until `nlp.rs` moves. |
+| `quantise.rs` (`encode_wo`) | Full `f32` | N/A -- its own arithmetic (`quantize_linear`) was already a trivial, already-integer-friendly linear formula; the real blocker was always its input | **DONE, unblocked by `nlp_fixed` below.** `encode_wo` itself needed no changes: its real input, `Wo`, now comes from `nlp::f0_to_wo(f0)` where `f0` is `nlp_fixed`'s own single `f32`-boundary output (the "integer core, float boundary" pattern, same as `lpc_to_lsp_from_integer_ak`'s `lsp`) -- wired into `EncoderFixed`, no `f32` conversion of `sn` anywhere upstream of it anymore. |
 | `lpc.rs`'s `acos_lut_fixed` | Real gap identified from the `encode_lsps_delta_scalar` row's own corrected framing below: `lpc_to_lsp_from_integer_ak`'s trailing `.acos()` was the last genuine `f32` transcendental call in the LPC-analysis chain. Now: `acos_lut_fixed`, the same integer LUT shape as `log2_lut`/`exp2_lut` -- `x` (a Chebyshev root, not IEEE754-structured) is quantized via `fixed_point::f32_to_q_exact_round` (exact bit extraction, reused from the `exp2_lut` fix, not a float multiply); domain reduction (`acos(-x) = pi - acos(x)`) keeps the table over `[0,1]`; the final `pi - interp` combination runs as plain integer subtraction against a `pi_q23()` computed the same exact-bit-extraction way (avoiding the `BW_GAMMA_Q23`-style independent-literal mismatch risk). | LUT resolution (12 bits) picked from a *real measurement*, not assumed: candidate widths tested against real captured roots from `codec2_ak_dump.txt` (worst real root sits at `1 - \|root\| ~ 7.8e-4`) — 6 bits ~56Hz error, 8 bits ~28Hz, 10 bits ~5.3Hz, 12 bits ~0.09Hz, against the real 25Hz LSP quantizer step. A synthetic dense sweep across the *entire* `[-1,1]` domain (not just this corpus's own roots) then found the true worst case is larger than the corpus number -- ~7Hz, peaking near `1 - \|x\| ~ 5e-5..1e-4` (a uniform table genuinely isn't free near `acos`'s own singularity) -- still >3.5x under the real 25Hz bar, and an initial test written with too tight a rad-based threshold (picked from the corpus number alone) caught its own miscalibration when the dense sweep found this larger, still-acceptable, full-domain number; fixed by switching the acceptance bar to Hz (the real quantizer's own unit), not a flat rad threshold. | **DONE and WIRED into `EncoderFixed`** (via `lpc_to_lsp_from_integer_ak`, replacing its own `.acos()` call). |
 | `quantise.rs` (`encode_lsps_delta_scalar`) | Was: full `f32`. Now: `encode_lsps_delta_scalar_fixed` -- `lsp[i]` (still `f32`-typed, per `lpc_to_lsp_from_integer_ak`'s own boundary) is quantized once via `fixed_point::f32_to_q_exact_round` (exact bit extraction), `HZ_PER_RAD` (`4000/pi`) folds into a one-time Q16 constant (`hz_per_rad_q16()`), and `LspDim`'s own `step1`/`step2`/breakpoint (always exact integer Hz in the real reference) become a plain integer Q16 table (`LspDimQ16`, no float conversion needed at all -- `25i64 << 16` is exact) -- `lsp_dim_nearest_level_q16`'s linear scan and comparison run entirely in `i64`. Signature unchanged (`f32 -> [u32; LPC_ORD]`), matching this pass's established "keep the caller-facing type, fix the interpolation/arithmetic inside" pattern. Earlier scoping in this file said this had "no real payoff" alongside `encode_wo`, which was wrong (advisor caught it) -- its real blocker was the `.acos()` call, now closed by `acos_lut_fixed`. | Real acceptance bar is index agreement, not tolerance: byte-identical `[u32; LPC_ORD]` against the float version on the real captured LSP corpus (`codec2_lsp_dump.txt`) -- any single-level disagreement would also shift every later dimension's own delta target. Plus a dedicated exact-tie test (`lsp_dim_nearest_level_q16_keeps_the_lower_index_on_an_exact_tie`), since exact ties are *more* likely in integer arithmetic than float (no rounding noise to break one by accident) and the float version's own doc comment records a real historical bug from getting this tie-break direction wrong once already. | **DONE and WIRED into `EncoderFixed`.** 0/362 real index mismatches (`encode_lsps_delta_scalar_fixed_matches_the_float_version_exactly_on_real_captured_lsp_data`); `EncoderFixed`'s own decoded-audio correlation against `floating_reference::Encoder` stayed **1.0** after wiring this in. Real follow-on, not done this pass: `lpc_to_lsp_from_integer_ak`'s own Q23 angle currently round-trips through `f32` (lossy for angles near `pi`, since values up to `pi*2^23` exceed `f32`'s exact-integer range of `2^24`) before this function re-quantizes it back to Q23 -- a `acos_lut_fixed_q23` core (mirroring the `cheb_poly_eval_fixed`/`find_next_root` wrapper/core split) handed through `lpc_to_lsp_from_integer_ak` directly would close that redundant round trip; not needed for correctness today since it's the same precision `EncoderFixed`'s own `lsp` field already carries, just a real, doable tightening. |
-| `nlp.rs` (FFT-based pitch estimator) | Full `f32`, uses `rustfft`/`Complex32` | **Different, weaker bar than everything above**: `nlp.rs`'s own module doc already establishes this has full design freedom -- a real decoder only ever sees the quantized `Wo` index, never this module's internal arithmetic, so the bar is "finds the same fundamental," not "reproduces the reference's arithmetic." Needs a fixed-point radix-2 FFT (`PE_FFT_SIZE` is fixed, input is real-valued -- a known design, not research) with a static twiddle table and real per-stage overflow/scaling analysis, plus its own validation corpus. | **NOT STARTED -- scope this as its own separate pass**, not bundled with the LPC-chain work above. Substantially larger than any single item above. |
+| `nlp.rs` (FFT-based pitch estimator) | Was: full `f32`, `rustfft`/`Complex32`. Now: `nlp::nlp_fixed(state, sn: &[i16; M_PITCH]) -> f32` -- same DC-notch/decimate/Hann-window/peak-search/sub-multiple-correction shape as `nlp()`, entirely `i64`/`i128` scaled-integer arithmetic (Q23 throughout: `notch_a_q23`, `lowpass_coeffs_q23`, `hann_window_q23`, `cnlp_q23`), plus a genuine fixed-point radix-2 DIT FFT (`fft_fixed`, quantized Q23 twiddle table via `fft_twiddles_q23`, bit-reversal via `fft_bit_reverse_table`). Key design realization (advisor-prompted before starting): `power[]` is used only for *ordinal* comparisons (peak search, `CNLP*gmax` threshold tests) -- absolute magnitude never escapes this module except the one final `f0` scalar -- so a uniform integer scale at every stage is free, and `i64`/`i128`'s own dynamic range (measured: real signals at this crate's own realistic amplitude never approach overflow even without any block-floating-point rescaling) removes the need for the per-stage rescaling a genuinely bit-width-constrained fixed-point FFT would require. | **Different, weaker bar than everything above** (per `nlp.rs`'s own module doc: a real decoder only ever sees the quantized `Wo` index, so "finds the same fundamental," not "reproduces the reference's arithmetic," was always the right bar) -- validated by direct front-end-first comparison against each float twin (`dc_notch_fixed`/`decimate_fixed`/`fft_fixed` each checked against `dc_notch`/`decimate`/a real `rustfft` FFT independently, before composing them), by `nlp_fixed` vs `nlp` agreement across a wide synthetic f0/harmonic-content sweep (0% disagreement in the realistic range `nlp()`'s own original test already established), and by two dedicated exact-tie tests pinning `correct_sub_multiples_fixed`'s own strict-`>` local-peak comparison (a real, reachable case where float and fixed-point can legitimately land on different sides of a tie -- documented as expected behavior, not a bug, matching this crate's own precedent for the LSP quantizer's exact-tie case). | **DONE and WIRED into `EncoderFixed`.** `EncoderFixed`'s own decoded-audio correlation against `floating_reference::Encoder` stayed **1.0** after wiring this in -- the entire encode path, not just the LPC chain, is now genuinely fixed-point end to end. |
 | `bits.rs` (`pack_frame`) | Already integer/bit-packing | N/A -- already done, not a gap | **DONE** (pre-existing, not part of this pass) |
 
 ## This pass: window.rs, voicing.rs, then the whole autocorrelate/Levinson-Durbin chain
@@ -118,38 +129,80 @@ settled noise floor -> not voiced) -- all four matched. **Wired into `EncoderFix
 raw `i16` samples natively, unlike `floating_reference::Encoder`'s `f32` `sn` -- this is the reason
 `EncoderFixed`'s own `sn` field is `i16`, not just an aesthetic choice).
 
-## Real follow-on, raised by Bruce, not yet started: move reference-only float code into `floating_reference/`
+## DONE 2026-09-04: moved all floating encoder code into `floating_reference/`
 
-Currently only `Encoder` itself lives in `floating_reference/mod.rs` -- the actual float
-*implementations* it calls (`lpc::autocorrelate`, `lpc::levinson_durbin`, `lpc::lpc_energy`,
-`lpc::build_p_q`, `lpc::lpc_to_lsp`, `bw_gamma`, `voicing::is_voiced`, `window::make_analysis_window`,
-`nlp::nlp`) still live in their original shared modules. As of `build_p_q`/`lpc_to_lsp` migrating
-(this pass), `bw_gamma`, `autocorrelate`, `levinson_durbin`, `lpc_energy`, `build_p_q`, `lpc_to_lsp`,
-and `voicing::is_voiced` are all genuinely exclusive to `floating_reference::Encoder` now -- no
-`EncoderFixed` call site needs them anymore -- and could reasonably move. **Two real, named
-exceptions that can't move without breaking the fixed path**: `window::make_analysis_window` (the
-`f32` version) is still called *inside* `make_analysis_window_fixed` itself to derive its own
-quantized table; `nlp::nlp` is still `EncoderFixed`'s own live pitch estimator (not migrated).
-`lpc.rs`/`voicing.rs` are single files holding both implementations side by side with shared test
-infrastructure (`read_dump`, `fixture!`), so moving only the reference-only functions out doesn't
-fully separate those files either way -- a real, honest trade-off, not free. Do this as its own
-dedicated pass once the remaining migration work below is further along (or immediately, if picked up
-before then) -- not silently forgotten, per Bruce's own explicit request to record it here.
+Per Bruce's own explicit follow-up request ("Move all of the floating encoder code to
+floating_reference"). `floating_reference/` is now a directory mirroring `codec2_3200`'s own
+top-level layout, one submodule per parent module the float implementations moved out of:
+`floating_reference::lpc` (`autocorrelate`, `apply_white_noise_correction`, `levinson_durbin`,
+`build_p_q`, `find_next_root`, `lpc_to_lsp`, `lpc_energy`), `floating_reference::nlp` (`NlpState`,
+`nlp`, `decimate`, `correct_sub_multiples`, `dc_notch`), `floating_reference::quantise`
+(`encode_lsps_delta_scalar`, `lsp_dim_nearest_level`), `floating_reference::voicing` (`VoicingState`,
+`is_voiced`). Each parent module (`lpc.rs`, `nlp.rs`, `quantise.rs`, `voicing.rs`) keeps only what its
+own fixed-point production code, or the one shared `Decoder`, still needs directly -- exported back
+via `pub(crate)`, documented in each parent module's own updated doc comment:
+- `lpc.rs` keeps `find_next_root_from_q23`/`COEF_FRAC_BITS` (its own `lpc_to_lsp_from_integer_ak`
+  calls the former directly) and `lsp_to_lpc`/`Autocorr`/`LpcCoeffs` (the shared `Decoder`'s own LSP
+  reconstruction, and the crate-wide type aliases both sides use -- neither was ever part of this
+  move, confirmed by checking real call sites, not assumed from the punch list's own earlier text).
+- `nlp.rs` keeps `lowpass_coeffs`/`LPF_TAPS`/`NOTCH_A`/`CNLP`/`NDEC` (its own `*_q23` table builders
+  read these directly) and `f0_to_wo` (genuinely shared, unchanged).
+- `quantise.rs` keeps `LspDim`/`LSP_DIMS`/`LSP_LEVELS`/`lsp_dim_value_hz` (`decode_lsps_delta_scalar`,
+  the shared `Decoder`'s own function, also uses these).
+- `voicing.rs` needed no exception at all -- `VoicingStateFixed`/`is_voiced_fixed` were already a
+  fully independent struct/function pair, the cleanest of the four moves.
 
-## Explicitly not attempted this pass
+**Verified with a hard invariant throughout, not just "it compiles"**: the crate's own lib test count
+(147) never changed across the whole move. Every test in each moved file was individually classified
+into exactly one of three buckets before moving anything: (a) tests solely of the moving float
+function -> moved with it; (b) genuine float-vs-fixed cross-validation tests (e.g. `lpc_energy_fixed_
+and_lpc_energy_produce_the_same_real_quantizer_index`, `lsp_to_lpc_round_trips_lpc_to_lsp_on_real_
+captured_ak_data`) -> stayed in the fixed-point file, importing the moved float function back; (c)
+tests of fixed-point-only code or genuinely unrelated -> untouched. Shared fixture-parsing
+infrastructure (`read_dump`/`fixture!` in `lpc.rs` and `quantise.rs`) was *not* duplicated -- each
+parent module's own `mod tests` was made `pub(crate)` and its `fixture!` macro re-exported via
+`pub(crate) use fixture;` (a `macro_rules!` can't take a visibility qualifier directly), so
+`floating_reference`'s own tests import and reuse the same real fixture-reading code rather than
+maintaining a second copy that could drift. `nlp.rs`'s `NlpState` (previously a single struct mixing
+both float and fixed fields, from the earlier `nlp_fixed` pass) was split cleanly into two independent
+structs -- `floating_reference::nlp::NlpState` (float-only fields) and `nlp::NlpStateFixed`
+(fixed-only fields, needing no FFT-planner field at all, since `fft_fixed` is a from-scratch radix-2
+implementation, not `rustfft`) -- a real, deliberate breaking API change, permitted per this project's
+own standing "not yet deployed, breaking changes OK" rule.
 
-Everything still marked NOT STARTED above: `quantise::encode_wo` (genuinely blocked on `nlp::f0_to_wo`'s
-own unmigrated-FFT input, not a real payoff to port on its own), and the fixed-point FFT (`nlp.rs`, still
-the largest single remaining item, and now the *only* remaining piece of real work in `EncoderFixed`'s
-own encode path -- every other stage, including both `fixed_point.rs` LUTs and the LSP delta-scalar
-quantizer, is done and wired). A real, honest, smaller follow-on left open (not a correctness gap,
-recorded in the `encode_lsps_delta_scalar` row above): `lpc_to_lsp_from_integer_ak`'s Q23 angle
-round-trips through a lossy `f32` conversion before `encode_lsps_delta_scalar_fixed` re-quantizes it --
-closing that redundant round trip needs an `acos_lut_fixed_q23` core handed through directly, not yet
-built. Also noted, pre-existing, not a regression: `lpc.rs`'s own `f32_to_q` helper (used for one-time
-coefficient/table quantization, not a per-sample hot-path call) does `x as f64 * ... .round() as i32` --
-the same "claims fixed-point, does an f64 multiply" shape the `exp2_lut` fix caught and corrected in
-that file, left here as a known, low-priority gap rather than fixed mid-stream.
+One real, honest gap found and left as a separate, later exception: `window::make_analysis_window`
+(the `f32` version) is still called *inside* `make_analysis_window_fixed` itself to derive its own
+quantized table, so it couldn't move -- the one case among all four modules where the float
+implementation is a genuine, ongoing dependency of fixed-point production code, not just its own
+historical validation target.
+
+## Remaining, as of the `nlp.rs` pass (2026-09-04 follow-on)
+
+Every row in the table above is now **DONE and WIRED**. `EncoderFixed`'s entire encode path -- windowing,
+autocorrelate, Levinson-Durbin, `lpc_energy`, bandwidth expansion, LSP conversion, the LSP delta-scalar
+quantizer, the pitch estimator (including its own fixed-point FFT), and `encode_wo` -- runs with no
+`f32` conversion of real signal data anywhere in it; the only `f32` left in `EncoderFixed` are the
+established "integer core, float boundary" single-scalar handoffs (`lsp: [f32; LPC_ORD]`, `f0: f32`)
+that downstream code already consumes as `f32` and has no reason to change. Two real, honest, smaller
+follow-ons left open, neither a correctness gap:
+- Recorded in the `encode_lsps_delta_scalar` row above: `lpc_to_lsp_from_integer_ak`'s Q23 angle
+  round-trips through a lossy `f32` conversion before `encode_lsps_delta_scalar_fixed` re-quantizes it
+  -- closing that redundant round trip needs an `acos_lut_fixed_q23` core handed through directly, not
+  yet built.
+- Pre-existing, not a regression: `lpc.rs`'s own `f32_to_q` helper, and `nlp.rs`'s own `f32_to_q23`
+  (both used only for one-time coefficient/table quantization at program start, never per-sample) do
+  `x as f64 * ... .round() as iNN` -- the same "claims fixed-point, does an f64 multiply" shape the
+  `exp2_lut` fix caught and corrected for a genuine *per-sample* hot path in that file; here it's a
+  one-time table-construction cost, the same convention `acos_lut_table_q23`/`lowpass_coeffs_q23`/
+  `hann_window_q23`/`fft_twiddles_q23` all already use, left as a known, low-priority stylistic note
+  rather than fixed mid-stream.
+- Also noted, not part of `EncoderFixed`'s own encode path: `nlp_fixed`'s validation sweep intentionally
+  excludes a pure, harmonic-free tone right at the pitch range's own edge (~380Hz, near `P_MIN`'s ~400Hz
+  limit) -- checked directly, even `nlp()` alone is only marginally accurate there (~3.6% error against
+  the true frequency) and real voiced speech always carries harmonics, so an agreement bound between
+  two already-only-approximately-accurate estimates at that specific edge case wasn't a fair or useful
+  bar (see `nlp_fixed_agrees_with_the_float_reference_across_a_wide_synthetic_sweep`'s own doc comment).
+
 Do not report this punch list as closed without re-reading this table against the actual current
 code -- per this project's own standing "keep-working-until-actually-done" discipline, a status
 header can go stale; re-derive from `grep`ing the real function signatures, not from this file's own
