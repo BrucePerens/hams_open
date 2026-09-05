@@ -84,39 +84,80 @@ pub(crate) fn rshift_round_i128(x: i128, n: u32) -> i64 {
     shifted as i64
 }
 
-/// Twiddles for the FORWARD convention (`e^{-i*2*pi*k/N}`) -- the
-/// inverse convention's own `e^{+i*theta}` is just this table's
-/// imaginary part negated (a conjugate), computed in the butterfly
-/// itself rather than as a second table.
-fn fft_twiddles_q23() -> &'static [(i64, i64); FFT_ENC / 2] {
-    static TABLE: std::sync::OnceLock<[(i64, i64); FFT_ENC / 2]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        std::array::from_fn(|k| {
-            let theta = -std::f32::consts::TAU * k as f32 / FFT_ENC as f32;
+/// `spectral_bridge.rs`'s own doubled-resolution FFT size -- imported
+/// here (rather than re-derived as `2*FFT_ENC`) so there is exactly one
+/// definition of it, matching `spectral_bridge.rs`'s own `pub const
+/// FFT_ENC_SB`.
+use super::spectral_bridge::FFT_ENC_SB;
+
+fn build_twiddles_q23(n: usize) -> Vec<(i64, i64)> {
+    (0..n / 2)
+        .map(|k| {
+            let theta = -std::f32::consts::TAU * k as f32 / n as f32;
             (f32_to_q23(theta.cos()), f32_to_q23(theta.sin()))
         })
-    })
+        .collect()
 }
 
-fn fft_bit_reverse_table() -> &'static [usize; FFT_ENC] {
-    static TABLE: std::sync::OnceLock<[usize; FFT_ENC]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        let bits = FFT_ENC.trailing_zeros();
-        std::array::from_fn(|i| ((i as u32).reverse_bits() >> (32 - bits)) as usize)
-    })
+fn build_bit_reverse_table(n: usize) -> Vec<usize> {
+    let bits = n.trailing_zeros();
+    (0..n).map(|i| ((i as u32).reverse_bits() >> (32 - bits)) as usize).collect()
 }
 
-/// In-place radix-2 decimation-in-time FFT, `FFT_ENC`-point, Q23
-/// fixed-point throughout (no `f32` inside the transform itself -- only
-/// the one-time twiddle-table construction above uses float, the same
-/// "table construction isn't the hot path" convention this port uses
-/// elsewhere). No per-stage rescaling: `i64`/`i128` headroom vastly
-/// exceeds this transform's real dynamic range (LPC-spectrum and
-/// sparse-harmonic-spectrum inputs, not full-scale noise), the same
-/// reasoning `nlp.rs`'s own `fft_fixed` documents for its own,
-/// differently-scaled input.
-pub(crate) fn fft_fixed(re: &mut [i64; FFT_ENC], im: &mut [i64; FFT_ENC], forward: bool) {
-    let bitrev = fft_bit_reverse_table();
+/// Twiddle/bit-reversal tables for the two real FFT sizes this port
+/// ever needs (`FFT_ENC`=512, and `spectral_bridge.rs`'s own doubled
+/// `FFT_ENC_SB`=1024) -- two named `OnceLock`s, not a keyed cache,
+/// since there are exactly two call sites and a size this function
+/// hasn't been built for is a programming error, not a runtime
+/// condition to handle gracefully.
+fn fft_twiddles_q23(n: usize) -> &'static [(i64, i64)] {
+    static T_512: std::sync::OnceLock<Vec<(i64, i64)>> = std::sync::OnceLock::new();
+    static T_1024: std::sync::OnceLock<Vec<(i64, i64)>> = std::sync::OnceLock::new();
+    match n {
+        FFT_ENC => T_512.get_or_init(|| build_twiddles_q23(FFT_ENC)),
+        FFT_ENC_SB => T_1024.get_or_init(|| build_twiddles_q23(FFT_ENC_SB)),
+        _ => panic!("fft_twiddles_q23: unsupported FFT size {n} (only {FFT_ENC} and {FFT_ENC_SB} have cached tables)"),
+    }
+}
+
+fn fft_bit_reverse_table(n: usize) -> &'static [usize] {
+    static T_512: std::sync::OnceLock<Vec<usize>> = std::sync::OnceLock::new();
+    static T_1024: std::sync::OnceLock<Vec<usize>> = std::sync::OnceLock::new();
+    match n {
+        FFT_ENC => T_512.get_or_init(|| build_bit_reverse_table(FFT_ENC)),
+        FFT_ENC_SB => T_1024.get_or_init(|| build_bit_reverse_table(FFT_ENC_SB)),
+        _ => panic!("fft_bit_reverse_table: unsupported FFT size {n} (only {FFT_ENC} and {FFT_ENC_SB} have cached tables)"),
+    }
+}
+
+/// In-place radix-2 decimation-in-time FFT, Q23 fixed-point throughout
+/// (no `f32` inside the transform itself -- only the one-time twiddle-
+/// table construction above uses float, the same "table construction
+/// isn't the hot path" convention this port uses elsewhere). No
+/// per-stage rescaling: `i64`/`i128` headroom vastly exceeds this
+/// transform's real dynamic range (LPC-spectrum and sparse-harmonic-
+/// spectrum inputs, not full-scale noise), the same reasoning `nlp.rs`'s
+/// own `fft_fixed` documents for its own, differently-scaled input --
+/// re-verified, not just inherited, at the doubled `FFT_ENC_SB` size by
+/// this module's own `spectral_bridge_size_matches_rustfft_on_a_real_
+/// extended_harmonic_spectrum` test, which stresses a real extended
+/// (up to `MAX_AMP_SB`-harmonic) spectrum rather than the 4-tone
+/// fixture the original 512-point tests use.
+///
+/// Takes plain slices at a runtime size `n = re.len()` (a power of two,
+/// `debug_assert`ed) rather than a `[i64; FFT_ENC]`-shaped array --
+/// genuinely the same algorithm at two different sizes for the same
+/// semantic use (phase-correct spectral synthesis), unlike `nlp.rs`'s
+/// own separate `fft_fixed`, which exists apart from this one because
+/// it serves a *different* consumer with different phase-correctness
+/// needs, not merely a different size (see this module's own doc
+/// comment above).
+pub(crate) fn fft_fixed(re: &mut [i64], im: &mut [i64], forward: bool) {
+    let n = re.len();
+    debug_assert!(n.is_power_of_two(), "fft_fixed: n={n} must be a power of two");
+    debug_assert_eq!(im.len(), n, "fft_fixed: re/im length mismatch");
+
+    let bitrev = fft_bit_reverse_table(n);
     for (i, &j) in bitrev.iter().enumerate() {
         if j > i {
             re.swap(i, j);
@@ -124,13 +165,13 @@ pub(crate) fn fft_fixed(re: &mut [i64; FFT_ENC], im: &mut [i64; FFT_ENC], forwar
         }
     }
 
-    let twiddles = fft_twiddles_q23();
+    let twiddles = fft_twiddles_q23(n);
     let mut len = 2usize;
-    while len <= FFT_ENC {
+    while len <= n {
         let half = len / 2;
-        let step = FFT_ENC / len;
+        let step = n / len;
         let mut i = 0;
-        while i < FFT_ENC {
+        while i < n {
             for j in 0..half {
                 let (wr, wi_fwd) = twiddles[j * step];
                 let wi = if forward { wi_fwd } else { -wi_fwd };
@@ -262,6 +303,69 @@ mod tests {
         assert!(
             max_recon_err < 1e-3,
             "forward-then-inverse round trip (rescaled by 1/FFT_ENC) diverged from the original input by {max_recon_err}"
+        );
+    }
+
+    /// `fft_fixed`'s own doc comment on "`i64`/`i128` headroom vastly
+    /// exceeds this transform's real dynamic range" was measured at
+    /// `FFT_ENC`=512 with up to `MAX_AMP`=80 populated bins -- this
+    /// re-verifies it at the doubled `FFT_ENC_SB`=1024 size with up to
+    /// `MAX_AMP_SB`/2=80 *newly populated* bins on top of the base
+    /// harmonics (`spectral_bridge::extrapolate_amplitudes`'s own real
+    /// `l2` ceiling), one more butterfly stage and twice the summed
+    /// bins than the existing 4-tone fixture stresses.
+    #[test]
+    fn inverse_fft_fixed_at_fft_enc_sb_matches_rustfft_on_a_real_extended_harmonic_spectrum() {
+        use super::super::spectral_bridge::{FFT_ENC_SB, MAX_AMP_SB};
+        let l2 = MAX_AMP_SB / 2;
+        let mut re = vec![0i64; FFT_ENC_SB];
+        let mut im = vec![0i64; FFT_ENC_SB];
+        let mut re_f = vec![0.0f32; FFT_ENC_SB];
+        let mut im_f = vec![0.0f32; FFT_ENC_SB];
+        let mut seed = 42u32;
+        for m in 1..=l2 {
+            let bin = (m * (FFT_ENC_SB / 2) / l2).min(FFT_ENC_SB / 2 - 1);
+            let amp = 20000.0 * 0.98f32.powi(m as i32);
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let phase = (seed >> 16) as i16 as f32 / 32768.0 * std::f32::consts::PI;
+            let (s, c) = phase.sin_cos();
+            let (vr, vi) = (amp * c, amp * s);
+            re[bin] = f32_to_q23(vr);
+            im[bin] = f32_to_q23(vi);
+            re_f[bin] = vr;
+            im_f[bin] = vi;
+        }
+        for k in 1..(FFT_ENC_SB / 2) {
+            re[FFT_ENC_SB - k] = re[k];
+            im[FFT_ENC_SB - k] = -im[k];
+            re_f[FFT_ENC_SB - k] = re_f[k];
+            im_f[FFT_ENC_SB - k] = -im_f[k];
+        }
+
+        fft_fixed(&mut re, &mut im, false);
+
+        let mut planner = FftPlanner::<f32>::new();
+        let ifft = planner.plan_fft_inverse(FFT_ENC_SB);
+        let mut buf: Vec<Complex32> =
+            re_f.iter().zip(im_f.iter()).map(|(&r, &i)| Complex32::new(r, i)).collect();
+        ifft.process(&mut buf);
+
+        let mut max_abs_err = 0.0f32;
+        let mut max_ref_mag = 0.0f32;
+        for i in 0..FFT_ENC_SB {
+            let got_re = re[i] as f32 / (1i64 << FRAC_BITS) as f32;
+            let got_im = im[i] as f32 / (1i64 << FRAC_BITS) as f32;
+            max_abs_err = max_abs_err.max((got_re - buf[i].re).abs()).max((got_im - buf[i].im).abs());
+            max_ref_mag = max_ref_mag.max(buf[i].re.abs()).max(buf[i].im.abs());
+        }
+        println!(
+            "FFT_ENC_SB inverse vs rustfft: max_abs_err={max_abs_err}, max_ref_mag={max_ref_mag}, ratio={}",
+            max_abs_err / max_ref_mag
+        );
+        assert!(max_ref_mag > 1.0, "sanity: reconstructed signal shouldn't be near-zero");
+        assert!(
+            max_abs_err / max_ref_mag < 1e-4,
+            "FFT_ENC_SB inverse fft_fixed diverged from rustfft's plan_fft_inverse: max_abs_err={max_abs_err}, max_ref_mag={max_ref_mag}"
         );
     }
 }
