@@ -118,6 +118,7 @@
 pub mod bits;
 pub mod encoder_fixed;
 pub mod envelope;
+pub mod fixed_fft;
 pub mod fixed_point;
 pub mod floating_reference;
 pub mod interp;

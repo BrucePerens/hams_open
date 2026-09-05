@@ -723,7 +723,7 @@ fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
 /// the exact class of table/reality mismatch `BW_GAMMA_Q23` hit
 /// earlier this pass (an independently-computed value disagreeing with
 /// Rust's own real output at a rounding tie).
-fn pi_q23() -> i64 {
+pub(crate) fn pi_q23() -> i64 {
     static PI_Q23: OnceLock<i64> = OnceLock::new();
     *PI_Q23.get_or_init(|| fixed_point::f32_to_q_exact_round(std::f32::consts::PI, COEF_FRAC_BITS))
 }

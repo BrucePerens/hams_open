@@ -369,6 +369,17 @@ pub(crate) fn exp2_q23(y_q23: i64) -> i64 {
     let interp_frac_q23 = t0 + ((t_num * (t1 - t0)) >> extra_bits); // (2^frac - 1.0) in Q23, [0, 2^23)
     let mantissa_q23 = (1i64 << 23) + interp_frac_q23; // 2^frac in Q23, [2^23, 2^24)
     if floor_y >= 0 {
+        // mantissa_q23 < 2^24, so this silently overflows i64 (a plain
+        // bit shift, not a checked one -- Rust only panics on a shift
+        // *amount* >= the type's bit width, never on the shifted
+        // *value* overflowing) once floor_y+24 >= 63. The same failure
+        // mode this port's own correct_sub_multiples_fixed/`CNLP*gmax`
+        // bug was, caught once already -- guarded here instead of
+        // relearned.
+        debug_assert!(
+            floor_y < 39,
+            "exp2_q23: floor(y)={floor_y} overflows i64 at Q23 -- caller's y domain exceeds this function's safe range"
+        );
         mantissa_q23 << floor_y
     } else {
         let neg = (-floor_y) as u32;
