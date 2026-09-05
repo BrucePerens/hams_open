@@ -25,11 +25,24 @@ use rustfft::Fft;
 /// (`wo`, normalized angular frequency), harmonic count (`l`), per
 /// harmonic amplitude/phase (`a`/`phi`, both 1-indexed -- index 0
 /// unused, matching the harmonics' own 1-based numbering), and voicing.
+///
+/// `phi` stores each harmonic's phase as a unit complex vector
+/// (`cos`/`sin` already evaluated) rather than an angle in radians.
+/// `synthesize_phase` derives it from `h[m] * ex` by dividing out the
+/// magnitude directly -- no `atan2` needed, since the only later use
+/// (`synthesize_subframe`'s IFFT-input construction) immediately turns
+/// an angle back into exactly this same unit vector via `sin_cos`. That
+/// round trip (`atan2` then `sin_cos`) was an identity for every
+/// harmonic postfilter didn't overwrite; storing the vector directly
+/// removes both the `atan2` call and one of the two `sin_cos` calls per
+/// harmonic, which matters once this runs in fixed point (no
+/// arctangent primitive needed at all, and the remaining `sin_cos`
+/// wants a single well-designed LUT rather than two).
 pub struct Model {
     pub wo: f32,
     pub l: usize,
     pub a: [f32; MAX_AMP + 1],
-    pub phi: [f32; MAX_AMP + 1],
+    pub phi: [Complex32; MAX_AMP + 1],
     pub voiced: bool,
 }
 
@@ -40,7 +53,7 @@ impl Model {
             wo,
             l,
             a: [0.0; MAX_AMP + 1],
-            phi: [0.0; MAX_AMP + 1],
+            phi: [Complex32::new(1.0, 0.0); MAX_AMP + 1],
             voiced,
         }
     }

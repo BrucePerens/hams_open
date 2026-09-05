@@ -88,7 +88,13 @@ fn synthesize_phase(
             Complex32::new(c, s)
         };
         let a = h[m] * ex;
-        model.phi[m] = a.im.atan2(a.re + 1e-12);
+        // Unit vector in the direction of `a`, replacing the old
+        // `a.im.atan2(a.re + 1e-12)` angle extraction -- see `Model::phi`'s
+        // own doc comment. The `1e-12` floor plays the same role the old
+        // `atan2` epsilon did: guard the degenerate near-zero-magnitude
+        // case rather than dividing by (near) zero.
+        let mag = (a.re * a.re + a.im * a.im).sqrt().max(1e-12);
+        model.phi[m] = Complex32::new(a.re / mag, a.im / mag);
     }
 }
 
@@ -158,7 +164,9 @@ fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
         #[allow(clippy::needless_range_loop)]
         for m in 1..=model.l {
             if decisions[m] {
-                model.phi[m] = next_rand(rng);
+                let phi = next_rand(rng);
+                let (s, c) = phi.sin_cos();
+                model.phi[m] = Complex32::new(c, s);
             }
         }
     }
@@ -237,8 +245,7 @@ impl SynthesisState {
         let fft_r = std::f32::consts::TAU / FFT_ENC as f32;
         for l in 1..=model.l {
             let b = (((l as f32 * model.wo / fft_r) + 0.5) as usize).min(FFT_ENC / 2 - 1);
-            let (s, c) = model.phi[l].sin_cos();
-            self.ifft_buf[b] = Complex32::new(model.a[l] * c, model.a[l] * s);
+            self.ifft_buf[b] = model.phi[l] * model.a[l];
         }
         // Mirror into a full Hermitian-symmetric spectrum so the
         // inverse FFT's output is real (up to float rounding): bin 0
