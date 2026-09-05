@@ -52,7 +52,7 @@ fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
 /// Simple xorshift PRNG for unvoiced-excitation and postfilter phase
 /// randomization -- doesn't need to match the reference's own generator
 /// (purely a synthesis-quality detail, not transmitted).
-fn next_rand(state: &mut u32) -> f32 {
+pub(crate) fn next_rand(state: &mut u32) -> f32 {
     *state ^= *state << 13;
     *state ^= *state >> 17;
     *state ^= *state << 5;
@@ -175,7 +175,7 @@ fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
 /// Attenuates a whole frame if any sample would exceed a safe int16
 /// level -- a defensive measure against bit-error-induced amplitude
 /// spikes reaching real ears/speakers, not a normal-operation limiter.
-fn ear_protection(samples: &mut [f32]) {
+pub(crate) fn ear_protection(samples: &mut [f32]) {
     let max_abs = samples.iter().fold(0.0f32, |m, &s| m.max(s.abs()));
     if max_abs <= 30000.0 {
         return;

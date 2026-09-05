@@ -125,6 +125,7 @@ pub mod interp;
 pub mod lpc;
 pub mod nlp;
 pub mod quantise;
+pub mod spectral_bridge;
 pub mod synthesis;
 pub mod trig_fixed;
 pub mod voicing;
@@ -223,7 +224,9 @@ fn initial_lsps() -> [f32; LPC_ORD] {
 /// `Wo`/voiced/LSPs/energy (needed for interpolating the next frame's
 /// first sub-frame), plus `synthesis::SynthesisState`'s own overlap-add
 /// memory and a forward FFT plan (`envelope.rs`'s own spectral-envelope
-/// computation).
+/// computation). `spectral_bridge` is `pub` so a caller can toggle
+/// `.enabled` at any time (on by default) -- see `decode_16k`'s own
+/// doc comment; it plays no part in the ordinary `decode()` path at all.
 pub struct Decoder {
     prev_wo: f32,
     prev_voiced: bool,
@@ -231,6 +234,7 @@ pub struct Decoder {
     prev_e: f32,
     synth: synthesis::SynthesisState,
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
+    pub spectral_bridge: spectral_bridge::SpectralBridgeState,
 }
 
 impl Default for Decoder {
@@ -243,6 +247,7 @@ impl Default for Decoder {
             prev_e: 1.0,
             synth: synthesis::SynthesisState::new(),
             fft: planner.plan_fft_forward(FFT_ENC),
+            spectral_bridge: spectral_bridge::SpectralBridgeState::new(),
         }
     }
 }
@@ -286,6 +291,63 @@ impl Decoder {
             envelope::apply_first_harmonic_correction(&mut model);
             let sub = self.synth.synthesize_subframe(&mut model, &aw);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
+        }
+
+        self.prev_wo = wo1;
+        self.prev_voiced = fields.voiced1;
+        self.prev_lsps = lsps1;
+        self.prev_e = e1;
+
+        out
+    }
+
+    /// Opt-in 16kHz decode: Spectral Bridge (see `spectral_bridge.rs`'s
+    /// own doc comment). Deliberately a *separate* method, not a
+    /// parameter on `decode()` -- the ordinary 8kHz path above is
+    /// completely untouched by this one (same real per-subframe model
+    /// computation, duplicated rather than shared, so there is zero
+    /// risk of this new, less-validated path regressing the real,
+    /// reference-validated one). Toggle `self.spectral_bridge.enabled`
+    /// (on by default) to turn harmonic extrapolation on/off; either
+    /// way this always returns genuine 16kHz audio (harmonics `1..=l`
+    /// reused unchanged either way, only whether harmonics above `l`
+    /// get synthesized differs).
+    pub fn decode_16k(
+        &mut self,
+        bytes: &[u8; BYTES_PER_FRAME],
+    ) -> [i16; 2 * spectral_bridge::N_SAMP_SB] {
+        let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
+        let wo1 = quantise::decode_wo(fields.wo_index);
+        let e1 = quantise::decode_energy(fields.e_index);
+        let lsps1 = quantise::decode_lsps_delta_scalar(&fields.lsp_indexes);
+
+        let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
+        let wo0 = interp::interp_wo(
+            fields.voiced0,
+            self.prev_wo,
+            self.prev_voiced,
+            wo1,
+            fields.voiced1,
+            W0_MIN,
+        );
+        let e0 = interp::interp_energy(self.prev_e, e1);
+        let lsps0 = interp::interpolate_lsp(&self.prev_lsps, &lsps1);
+
+        let mut out = [0i16; 2 * spectral_bridge::N_SAMP_SB];
+        let subframes = [(wo0, voiced0, lsps0, e0), (wo1, fields.voiced1, lsps1, e1)];
+        for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
+            let ak = lpc::lsp_to_lpc(&lsps);
+            let mut model = envelope::Model::new(wo, voiced);
+            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            envelope::apply_first_harmonic_correction(&mut model);
+            // Populates model.phi[1..=l] with its own final phase (the
+            // spectral bridge synthesis below reuses this unchanged
+            // for harmonics 1..=l) -- discards the 8kHz output itself,
+            // this method's own caller wants the 16kHz one instead.
+            let _sub = self.synth.synthesize_subframe(&mut model, &aw);
+            let sub_sb = self.spectral_bridge.synthesize_subframe_sb(&model);
+            out[i * spectral_bridge::N_SAMP_SB..(i + 1) * spectral_bridge::N_SAMP_SB]
+                .copy_from_slice(&sub_sb);
         }
 
         self.prev_wo = wo1;
@@ -426,6 +488,133 @@ mod tests {
         assert!(rms > 50.0, "decoded audio looks like silence, RMS={rms}");
         assert!(rms < 20000.0, "decoded audio implausibly loud, RMS={rms}");
         assert!(max_abs > 0, "decoded audio is all zero");
+    }
+
+    /// `decode_16k`'s own real, end-to-end design invariant: with
+    /// Spectral Bridge *disabled*, harmonics `1..=l` are reused
+    /// unchanged from the base decode -- so decimating its 16kHz output
+    /// by 2 (safe here specifically because there is no >4kHz content
+    /// to alias down when disabled) should closely match `decode()`'s
+    /// own real output for the *same* bitstream. Uses the same real
+    /// captured synthetic-signal fixture the base decoder's own
+    /// reference test uses, so this doesn't need a new fixture.
+    ///
+    /// Samples the *odd* 16kHz indices (`skip(1).step_by(2)`), not the
+    /// even ones -- measured directly (a small standalone diagnostic
+    /// comparing both phases sample-by-sample) that the odd phase lines
+    /// up with the base decoder's own output almost exactly (within a
+    /// few counts, ordinary float-rounding noise from the larger IFFT)
+    /// while the even phase does not. A one-sample framing offset
+    /// between the two overlap-add buffers' own "carried tail" vs "new"
+    /// halves, not a defect in either decoder's own output.
+    #[test]
+    fn decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated() {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
+        );
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+
+        let mut decoder_8k = Decoder::new();
+        let mut decoder_16k = Decoder::new();
+        decoder_16k.spectral_bridge.enabled = false;
+
+        let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] =
+                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
+            let out_16k = decoder_16k.decode_16k(&frame);
+            pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
+        }
+
+        assert_eq!(pcm_8k.len(), pcm_16k_decimated.len());
+        let n = pcm_8k.len();
+        let mean_a: f64 = pcm_8k.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mean_b: f64 = pcm_16k_decimated.iter().map(|&s| s as f64).sum::<f64>() / n as f64;
+        let mut cov = 0.0f64;
+        let mut var_a = 0.0f64;
+        let mut var_b = 0.0f64;
+        for i in 0..n {
+            let da = pcm_8k[i] as f64 - mean_a;
+            let db = pcm_16k_decimated[i] as f64 - mean_b;
+            cov += da * db;
+            var_a += da * da;
+            var_b += db * db;
+        }
+        let corr = cov / (var_a * var_b).sqrt();
+        println!("decode_16k (disabled, decimated) vs decode(): correlation={corr}");
+        assert!(
+            corr > 0.99,
+            "decode_16k's own reused-harmonics content diverged from the base decoder: correlation={corr} (expected > 0.99)"
+        );
+    }
+
+    /// The one measurement the disabled-path test above can't make:
+    /// with Spectral Bridge *enabled* (the real default), does the
+    /// newly-available 4-8kHz band actually carry extrapolated energy,
+    /// and is that energy bounded relative to the real 0-4kHz band
+    /// (not a runaway fit)? Every other Spectral Bridge test either
+    /// disables extrapolation or checks the amplitude array directly,
+    /// never the resulting 16kHz audio itself -- this closes that gap.
+    #[test]
+    fn decode_16k_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band() {
+        let bits_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
+        );
+        let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
+        let n_frames = bits_data.len() / BYTES_PER_FRAME;
+        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+
+        let mut decoder_16k = Decoder::new();
+        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+
+        let mut pcm_16k: Vec<f32> = Vec::with_capacity(n_frames * 2 * spectral_bridge::N_SAMP_SB);
+        for f in 0..n_frames {
+            let frame: [u8; BYTES_PER_FRAME] =
+                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let out_16k = decoder_16k.decode_16k(&frame);
+            pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
+        }
+
+        // Non-overlapping 1024-sample (64ms @ 16kHz) DFT windows -- bin
+        // k covers k*(16000/1024)=15.625Hz, so bins 0..256 are 0-4kHz
+        // and 256..512 are the new 4-8kHz band (Nyquist at bin 512).
+        const WIN: usize = 1024;
+        let mut planner = rustfft::FftPlanner::<f32>::new();
+        let fft = planner.plan_fft_forward(WIN);
+        let mut low_energy = 0.0f64;
+        let mut high_energy = 0.0f64;
+        let mut windows = 0usize;
+        for chunk in pcm_16k.chunks_exact(WIN) {
+            let mut buf: Vec<rustfft::num_complex::Complex32> =
+                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            fft.process(&mut buf);
+            for (k, c) in buf.iter().enumerate().take(WIN / 2) {
+                let e = (c.norm() as f64).powi(2);
+                if k < WIN / 4 {
+                    low_energy += e;
+                } else {
+                    high_energy += e;
+                }
+            }
+            windows += 1;
+        }
+        assert!(windows > 50, "expected enough 1024-sample windows to be meaningful, got {windows}");
+
+        println!("decode_16k (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
+        assert!(
+            high_energy > low_energy * 1e-4,
+            "extrapolated 4-8kHz band carries ~no energy (high={high_energy:e}, low={low_energy:e}) -- Spectral Bridge looks like a no-op on this fixture"
+        );
+        assert!(
+            high_energy < low_energy,
+            "extrapolated 4-8kHz band ({high_energy:e}) exceeds the real 0-4kHz band ({low_energy:e}) -- the amplitude fit may be running away despite its beta.min(0.0) clamp"
+        );
     }
 
     /// The real cross-implementation decoder check (see this module's
