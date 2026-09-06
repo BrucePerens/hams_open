@@ -19,6 +19,7 @@ class ResConfigSettings(models.TransientModel):
     enable_dmarc_instructions = fields.Boolean("Enable Custom DMARC", config_parameter="hams_base.enable_dmarc_instructions", default=False, help="Disable if using AWS SES or another provider that manages DMARC natively.")
     dns_dmarc_record = fields.Text("DMARC Record (TXT)", compute="_compute_dns_records")
 
+    # [@ANCHOR: hams_base:COMM_compute_dns_records]
     @api.depends('company_id')
     def _compute_dns_records(self):
         for record in self:

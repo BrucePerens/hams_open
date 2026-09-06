@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 class ResUsers(models.Model):
     _inherit = "res.users"
 
+    # [@ANCHOR: hams_base:COMM_res_users_write]
     def write(self, vals):
         """
         Override write to detect email/login changes and notify the old address.

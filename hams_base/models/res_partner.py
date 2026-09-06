@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
+    # [@ANCHOR: hams_base:COMM_message_receive_bounce]
     def _message_receive_bounce(self, email, partner):
         """
         Override the native bounce handler to intercept bounces and notify

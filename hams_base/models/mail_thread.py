@@ -7,6 +7,7 @@ _logger = logging.getLogger(__name__)
 class MailThread(models.AbstractModel):
     _inherit = 'mail.thread'
 
+    # [@ANCHOR: hams_base:COMM_message_route]
     @api.model
     def message_route(self, message, message_dict, model=None, thread_id=None, custom_values=None):
         """

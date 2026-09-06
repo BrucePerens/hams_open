@@ -20,3 +20,15 @@ class TestResConfigSettings(common.TransactionCase):
             "123 Main St, Anytown USA",
             "[!] DIAGNOSTIC FOR AI: compliance_mailing_address default value did not load onto a newly created res.config.settings record.",
         )
+
+    def test_dns_records_reflect_the_configured_catchall_domain(self):
+        # Tests [@ANCHOR: hams_base:COMM_compute_dns_records]
+        self.env["ir.config_parameter"].with_user(
+            self.env.ref("base.user_admin").id
+        ).set_param("mail.catchall.domain", "example-club.org")
+        settings = self.env["res.config.settings"].create({})
+        self.assertIn("spf1", settings.dns_spf_record)
+        self.assertEqual(
+            settings.dns_dmarc_record,
+            "v=DMARC1; p=quarantine; rua=mailto:not-read@example-club.org;",
+        )

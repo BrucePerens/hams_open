@@ -20,6 +20,7 @@ _logger = logging.getLogger(__name__)
 _MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024
 
 
+# [@ANCHOR: hams_base:COMM_safe_int]
 def _safe_int(text, default=0):
     """int() on attacker-supplied XML text must never raise -- a
     non-numeric <begin>/<end>/<pct>/<count> value used to crash
@@ -51,6 +52,7 @@ class DmarcReport(models.Model):
 
     record_ids = fields.One2many("hams_base.dmarc.record", "report_id", string="Records")
 
+    # [@ANCHOR: hams_base:COMM_dmarc_message_new]
     @api.model
     def message_new(self, msg_dict, custom_values=None):
         """
@@ -82,6 +84,7 @@ class DmarcReport(models.Model):
             vals.update(custom_values)
         return super().message_new(msg_dict, custom_values=vals)
 
+    # [@ANCHOR: hams_base:COMM_process_dmarc_attachment]
     @api.model
     def process_dmarc_attachment(self, attachment_name, attachment_data):
         """
@@ -142,6 +145,7 @@ class DmarcReport(models.Model):
 
         return self._parse_dmarc_xml(xml_content)
 
+    # [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
     @api.model
     def _parse_dmarc_xml(self, xml_content):
         try:

@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 from email.message import EmailMessage
-from unittest import mock
 
-from odoo.tests import common, tagged
+from odoo.tests import tagged
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged('post_install', '-at_install')
-class TestMailThread(common.TransactionCase):
+class TestMailThread(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.env['ir.config_parameter'].with_user(self.env.ref('base.user_admin').id).set_param('mail.bounce.alias', 'auto-mail-failure')
 
     def test_vacation_reply_dropped(self):
+        # Tests [@ANCHOR: hams_base:COMM_message_route]
         msg_dict = {
             'to': 'not-read@hams.com',
             'subject': 'Out of Office: Thank you',
@@ -95,11 +96,9 @@ class TestMailThread(common.TransactionCase):
         real_message['Message-Id'] = '<test-postmaster-genuine@example.net>'
         real_message.set_content(msg_dict['body'])
 
-        with mock.patch(
-            'odoo.addons.hams_base.models.mail_thread._logger'
-        ) as mock_logger:
-            with self.assertRaises(ValueError):
-                self.env['mail.thread'].message_route(real_message, msg_dict)
+        mock_logger = self.safe_patch('odoo.addons.hams_base.models.mail_thread._logger')
+        with self.assertRaises(ValueError):
+            self.env['mail.thread'].message_route(real_message, msg_dict)
         for call in mock_logger.info.call_args_list:
             self.assertNotIn(
                 'Dropping', call.args[0],

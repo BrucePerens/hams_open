@@ -61,6 +61,7 @@ class TestUnsubscribePage(HamsHttpCase):
         )
 
     def test_public_user_sees_login_prompt_not_lockout_form(self):
+        # Tests [@ANCHOR: hams_base:COMM_unsubscribe_page_route]
         self.authenticate(None, None)
         response = self.url_open("/unsubscribe")
         self.assertEqual(response.status_code, 200)
@@ -96,6 +97,8 @@ class TestUnsubscribePage(HamsHttpCase):
 
     def test_authenticated_user_post_to_lockout_deactivates_and_logs_out(self):
         # Tests [@ANCHOR: hams_base:unsubscribe_lockout_success]
+
+        # Tests [@ANCHOR: hams_base:COMM_unsubscribe_lockout_route]
         self.authenticate(self.test_user.login, "unsub_pw")
         response = self.url_open(
             "/unsubscribe/lockout",
@@ -120,6 +123,7 @@ class TestUnsubscribePage(HamsHttpCase):
 class TestEmailPolicyPage(HamsHttpCase):
     # Tests [@ANCHOR: hams_base:email_policy_template]
 
+    # Tests [@ANCHOR: hams_base:COMM_email_policy_route]
     def test_email_policy_page_reachable(self):
         response = self.url_open("/email-policy")
         msg = "[!] DIAGNOSTIC FOR AI: /email-policy should be reachable (200 OK) to anonymous visitors -- it's a public disclosure page."

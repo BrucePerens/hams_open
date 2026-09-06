@@ -4,11 +4,13 @@ from odoo import http
 from odoo.http import request
 
 class UnsubscribeController(http.Controller):
+    # [@ANCHOR: hams_base:COMM_unsubscribe_page_route]
     @http.route('/unsubscribe', type='http', auth='public', website=True)
     def unsubscribe_page(self, **kw):
         is_public_user = request.env.user.id == request.env.ref('base.public_user').id
         return request.render('hams_base.unsubscribe_page_template', {'is_public_user': is_public_user})
 
+    # [@ANCHOR: hams_base:COMM_unsubscribe_lockout_route]
     @http.route('/unsubscribe/lockout', type='http', auth='user', website=True, methods=['POST'])
     def unsubscribe_lockout(self, **kw):
         user = request.env.user

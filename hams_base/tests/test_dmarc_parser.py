@@ -3,6 +3,8 @@ from odoo.tests import common, tagged
 import zipfile
 import io
 
+from odoo.addons.hams_base.models.dmarc_report import _MAX_DECOMPRESSED_BYTES
+
 @tagged('post_install', '-at_install')
 class TestDmarcParser(common.TransactionCase):
     def setUp(self):
@@ -41,6 +43,7 @@ class TestDmarcParser(common.TransactionCase):
 </feedback>"""
 
     def test_dmarc_xml_parsing(self):
+        # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
         report = self.DmarcReport._parse_dmarc_xml(self.sample_xml)
         self.assertTrue(report)
         self.assertEqual(report.org_name, "google.com")
@@ -54,6 +57,9 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(record.dkim_alignment, "pass")
 
     def test_message_new_with_zip(self):
+        # Tests [@ANCHOR: hams_base:COMM_dmarc_message_new]
+
+        # Tests [@ANCHOR: hams_base:COMM_process_dmarc_attachment]
         # Adversarial security review, 2026-09-03: attachment_data is the
         # real, already-MIME-decoded content Odoo's own mail gateway
         # delivers (raw bytes for a binary attachment like this zip),
@@ -94,6 +100,7 @@ class TestDmarcParser(common.TransactionCase):
         self.assertIn("Unparsed Email", report.org_name)
 
     def test_message_new_with_non_numeric_count_does_not_crash(self):
+        # Tests [@ANCHOR: hams_base:COMM_safe_int]
         # A well-formed XML document with a non-numeric <count>/<pct>/
         # <begin>/<end> used to throw an uncaught ValueError out of
         # message_new() -- same externally-triggerable-input category.
@@ -109,8 +116,6 @@ class TestDmarcParser(common.TransactionCase):
         # (not forged zip-header metadata) is simpler and just as real a
         # proof: the check reads the member's own real declared size
         # (ZipInfo.file_size) before ever calling z.read().
-        from odoo.addons.hams_base.models.dmarc_report import _MAX_DECOMPRESSED_BYTES
-
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as z:
             z.writestr('report.xml', b"0" * (_MAX_DECOMPRESSED_BYTES + 1))
