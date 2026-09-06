@@ -87,18 +87,52 @@ class TestSesWebhook(HamsHttpCase):
         payload = {
             "Type": "SubscriptionConfirmation",
             "MessageId": "msg-sub-1",
-            "SubscribeURL": "http://mock-aws.com/confirm"
+            # A real AWS SNS-shaped host: the SSRF-hardening regex added
+            # 2026-09-03 (_SNS_SUBSCRIBE_URL_RE) only fetches URLs matching
+            # sns.<region>.amazonaws.com over HTTPS -- this test's own
+            # mock URL used to be a plain http://mock-aws.com host, which
+            # no longer matches, so it was silently exercising the
+            # rejected-URL branch instead of the success path it was
+            # actually written to test.
+            "SubscribeURL": "https://sns.us-east-1.amazonaws.com/confirm"
         }
         mock_urlopen = self.safe_patch('urllib.request.urlopen')
         mock_urlopen.return_value = True
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
-        mock_urlopen.assert_called_once_with("http://mock-aws.com/confirm")
+        mock_urlopen.assert_called_once_with(
+            "https://sns.us-east-1.amazonaws.com/confirm", timeout=10
+        )
 
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sub-1')])
         self.assertEqual(len(log), 1)
         self.assertEqual(log.status, 'success')
         self.assertEqual(log.domain_id, self.domain_a)
+
+    def test_03b_webhook_subscription_confirmation_rejects_non_aws_url(self):
+        """A real, previously-undiscovered production bug: the reject
+        branch set status='rejected_subscribe_url', a value never added
+        to ses.webhook.log's own Selection field, so ANY non-AWS
+        SubscribeURL (exactly the SSRF scenario this regex exists to
+        defend against) crashed the whole webhook handler with an
+        uncaught 500 instead of logging the rejection gracefully. Found
+        live by this test suite's own real run, not by static review."""
+        payload = {
+            "Type": "SubscriptionConfirmation",
+            "MessageId": "msg-sub-rejected",
+            "SubscribeURL": "https://evil.example.com/confirm",
+        }
+        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        response = self.url_open(
+            f'/mail/webhook/sns?token={self.domain_a.secret_token}',
+            data=json.dumps(payload).encode('utf-8'),
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_urlopen.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sub-rejected')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'rejected_subscribe_url')
 
     def test_04_webhook_notification_processed_company_a(self):
         """Verify Notification extracts content and passes to mail.thread in Company A context."""
@@ -169,6 +203,7 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(log.status, 'ignored')
 
     def test_23_webhook_complaint_blacklists_immediately(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_handle_ses_event_notification]
         """A spam complaint suppresses the complained recipient outright, regardless of count --
         the real gap this AWS SES production-access review surfaced: complaints don't arrive as
         a bounce DSN email, they need their own SNS notificationType handler."""
@@ -222,6 +257,7 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(self.env['mail.blacklist'].search([('email', '=', 'mailboxfull@example.com')])), 0)
 
     def test_09_webhook_url_computes_for_plain_internal_user(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_compute_webhook_url]
         """
         _compute_webhook_url() used to read web.base.url via .sudo(),
         forbidden on this platform. ir.config_parameter's only ACL grants
@@ -406,6 +442,9 @@ class TestSesWebhook(HamsHttpCase):
     # ------------------------------------------------------------------
 
     def test_15_service_account_company_ids_synced_on_domain_create(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_domain_create]
+
+        # Tests [@ANCHOR: ses_webhook:COMM_sync_service_account_companies]
         """
         ses_webhook_domain.py's create() override must grow the service
         account's company_ids the moment a domain is configured for a
@@ -432,6 +471,32 @@ class TestSesWebhook(HamsHttpCase):
             svc_user.company_ids,
             "Creating a domain for a new company MUST grow the service "
             "account's company_ids automatically -- no hardcoded count.",
+        )
+
+    def test_15b_write_company_id_syncs_service_account(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_domain_write]
+        """write()'s own sync path is distinct from create()'s -- moving an
+        existing domain to a company the service account doesn't yet cover
+        must grow company_ids the same way create() does."""
+        new_company = self.env['res.company'].create({'name': 'Company E (write test)'})
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        svc_user = self.env["res.users"].browse(svc_uid)
+        self.assertNotIn(new_company, svc_user.company_ids)
+
+        domain = self.env["ses.webhook.domain"].create({
+            "name": "test-e.com",
+            "secret_token": "mock_secret_e_write_test",
+            "company_id": self.company_a.id,
+        })
+        domain.write({"company_id": new_company.id})
+
+        self.assertIn(
+            new_company,
+            svc_user.company_ids,
+            "write()'s company_id change MUST grow the service account's "
+            "company_ids the same way create() does.",
         )
 
     def test_16_security_backfill_action_syncs_pre_existing_domains(self):
@@ -621,6 +686,9 @@ class TestSesWebhook(HamsHttpCase):
         self.assertIn('simulated processing failure', log.error_message)
 
     def test_19_unmatched_sender_is_gated_not_processed(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
+
+        # Tests [@ANCHOR: ses_webhook:COMM_pending_submission_compute_name]
         """
         SES_WEBHOOK_SENDER_REGISTRATION.md: an unmatched sender must never
         reach message_process() -- a real, unregistered address, verified
@@ -661,6 +729,7 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(submission.company_id, self.company_a)
         self.assertFalse(submission.consumed)
         self.assertTrue(submission.token)
+        self.assertIn('nobody-registered@test-a.com', submission.name)
 
         mail = self.env['mail.mail'].search([('email_to', '=', 'nobody-registered@test-a.com')])
         self.assertEqual(len(mail), 1)
@@ -697,7 +766,37 @@ class TestSesWebhook(HamsHttpCase):
         )
         self.assertFalse(submission)
 
+    def test_20b_log_cron_truncates_old_rows_only(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_cron_truncate_logs]
+        """_cron_truncate_logs() must delete rows past the 30-day window
+        and leave recent ones alone -- both directions, matching the same
+        proof _cron_truncate_pending_submissions() gets below."""
+        old = self.env['ses.webhook.log'].create({
+            'name': 'old-log-msg',
+            'payload_type': 'Notification',
+            'status': 'success',
+            'domain_id': self.domain_a.id,
+        })
+        recent = self.env['ses.webhook.log'].create({
+            'name': 'recent-log-msg',
+            'payload_type': 'Notification',
+            'status': 'success',
+            'domain_id': self.domain_a.id,
+        })
+        self.env.cr.execute(
+            "UPDATE ses_webhook_log SET create_date = create_date - interval '31 days' WHERE id = %s",
+            (old.id,),
+        )
+
+        self.env['ses.webhook.log'].with_user(
+            self.env.ref('base.user_root').id
+        )._cron_truncate_logs()
+
+        self.assertFalse(old.exists())
+        self.assertTrue(recent.exists())
+
     def test_21_pending_submission_cron_truncates_old_rows_only(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_cron_truncate_pending_submissions]
         """_cron_truncate_pending_submissions() must delete rows past the
         7-day window and leave recent ones alone -- both directions, not
         just "it doesn't crash."""

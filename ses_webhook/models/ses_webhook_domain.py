@@ -12,6 +12,7 @@ class SesWebhookDomain(models.Model):
     webhook_url = fields.Char(string='Webhook URL', compute='_compute_webhook_url')
     log_ids = fields.One2many('ses.webhook.log', 'domain_id', string='Logs')
     
+    # [@ANCHOR: ses_webhook:COMM_compute_webhook_url]
     @api.depends('secret_token')
     def _compute_webhook_url(self):
         # .sudo() is forbidden on this platform. base.group_user has no
@@ -30,18 +31,21 @@ class SesWebhookDomain(models.Model):
     _name_uniq = models.Constraint("UNIQUE(name)", "The domain name must be unique!")
     _token_uniq = models.Constraint("UNIQUE(secret_token)", "The secret token must be unique!")
 
+    # [@ANCHOR: ses_webhook:COMM_domain_create]
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
         records._sync_service_account_companies()
         return records
 
+    # [@ANCHOR: ses_webhook:COMM_domain_write]
     def write(self, vals):
         res = super().write(vals)
         if 'company_id' in vals:
             self._sync_service_account_companies()
         return res
 
+    # [@ANCHOR: ses_webhook:COMM_sync_service_account_companies]
     def _sync_service_account_companies(self):
         # webhook_api.py's service account (with_user(), in place of the
         # .sudo() this used to need) must be a company_ids member of every

@@ -42,11 +42,13 @@ class SesWebhookPendingSubmission(models.Model):
 
     _token_uniq = models.Constraint("UNIQUE(token)", "The token must be unique!")
 
+    # [@ANCHOR: ses_webhook:COMM_pending_submission_compute_name]
     @api.depends('sender_email')
     def _compute_name(self):
         for record in self:
             record.name = _('Pending submission from %s', record.sender_email) if record.sender_email else _('New')
 
+    # [@ANCHOR: ses_webhook:COMM_cron_truncate_pending_submissions]
     @api.model
     def _cron_truncate_pending_submissions(self):
         """Deletes pending submissions older than a 7-day retention window,
@@ -64,6 +66,7 @@ class SesWebhookPendingSubmission(models.Model):
         if old:
             old.unlink()
 
+    # [@ANCHOR: ses_webhook:COMM_create_and_notify]
     @api.model
     def create_and_notify(self, sender_email, raw_content, domain):
         """SES_WEBHOOK_SENDER_REGISTRATION.md sections 1-4: creates the

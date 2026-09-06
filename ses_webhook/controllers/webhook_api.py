@@ -250,6 +250,7 @@ class SesWebhookController(http.Controller):
 
         return request.make_response("OK", status=200)
 
+    # [@ANCHOR: ses_webhook:COMM_handle_ses_event_notification]
     def _handle_ses_event_notification(self, notification_type, ses_message):
         """Suppresses future sends to addresses SES reports as bounced/complained, using
         Odoo's own mail.blacklist -- the same suppression list message_process() and every
