@@ -6,20 +6,22 @@
 //! `AMBE_PLUS_2_NOTES.md` in this same directory for what's known about that generation, kept as
 //! documentation only.
 //!
-//! # Real, current state: scaffold only, no working codec yet
+//! # Real, current state: scaffold plus one verified piece, not a working codec yet
 //!
 //! This module is a real starting point, not a placeholder pretending to be more than it is. What
-//! exists: the frame structure and pipeline stage documentation below, transcribed from spec text that
-//! renders as clean, verifiable prose/equations (not at risk of a silent transcription error). What
-//! does NOT exist yet, deliberately: the FEC generator matrices ([23,12] Golay, [15,11] Hamming) and
-//! the quantizer/codebook tables (Annexes E, F, G, J the spec's own text repeatedly refers out to).
-//! Those are printed in the spec as literal bit-matrix *figures* (images), not extractable text --
-//! transcribing an 12x11 matrix or a multi-hundred-entry codebook table by eye from a rendered PDF page
-//! carries real, silent-failure risk (a single misread bit produces a generator matrix that still
-//! *looks* plausible and compiles fine, but silently corrupts every codeword). That transcription needs
-//! its own dedicated, cross-validated pass -- e.g. verifying the transcribed Golay matrix reproduces
-//! the code's own well-known minimum distance (7) and codeword-weight distribution before it's trusted
-//! -- not a one-shot visual read folded into unrelated other work. Real next step, not attempted here.
+//! exists: the frame structure and pipeline stage documentation below (transcribed from spec text that
+//! renders as clean, verifiable prose/equations, not at risk of a silent transcription error), plus
+//! `fec.rs`'s own Golay/Hamming FEC -- see that module's own doc comment for how its generator
+//! matrices were transcribed from a 400 DPI render AND independently verified against each code's own
+//! published, spec-external weight distribution before being trusted (a real transcription error was
+//! caught and fixed this way, not just guarded against in theory). What does NOT exist yet,
+//! deliberately: the quantizer/codebook tables (Annexes E, F, G, J the spec's own text repeatedly
+//! refers out to) -- these are large (Annex G alone tabulates bit allocation per value of `L`, not a
+//! small fixed matrix), and unlike the two FEC codes above, generic quantizer step tables have no
+//! equivalent independent, spec-external mathematical invariant to check a transcription against.
+//! Real next step: find or construct a real check for these before transcribing them the same way
+//! (e.g. cross-referencing against a real off-air capture's own known-good decode, once one exists),
+//! not a one-shot visual read taken on faith.
 //!
 //! # The encode pipeline, per TIA-102.BABA section 6-7 (spectral amplitude/pitch encoding, error
 //! control)
@@ -37,10 +39,12 @@
 //! 4. **Bit prioritization**: the quantized bits `b_0..b_(L+2)` are reordered by importance (Fig. 22's
 //!    own "priority scanning") into eight bit vectors `u_0..u_7` before FEC.
 //! 5. **Forward error correction**: `u_0..u_3` each get a `[23,12]` Golay code, `u_4..u_6` each get a
-//!    `[15,11]` Hamming code, `u_7` is left unprotected (Eq. 81-83) -- see the real transcription-risk
-//!    note above; not yet implemented.
+//!    `[15,11]` Hamming code, `u_7` is left unprotected (Eq. 81-83) -- implemented and verified in
+//!    [`fec`].
 //! 6. **Random bit modulation and interleaving** produce the final 144-bit, 20ms transmitted frame
 //!    (88 voice bits + 56 FEC bits, per the spec's own section 7.3).
+
+pub mod fec;
 
 /// 7.2kbps frame rate: 144 bits every 20ms, per TIA-102.BABA section 7.3 ("At 7.2 kbps with a 20 ms
 /// frame size, 144 bits per frame are available for voice coding").
