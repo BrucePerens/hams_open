@@ -29,6 +29,7 @@ class DatabasePgSetting(models.Model):
     context = fields.Char(string="Context", readonly=True)
     pending_restart = fields.Boolean(string="Pending Restart", readonly=True)
 
+    # [@ANCHOR: COMM_db_pg_setting_init]
     def init(self):
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
@@ -157,6 +158,7 @@ class PgHaWizard(models.TransientModel):
     patroni_secondary = fields.Text(string="Secondary Patroni YAML", readonly=True)
     pgbouncer_ini = fields.Text(string="PgBouncer INI", readonly=True)
 
+    # [@ANCHOR: COMM_pg_ha_wizard_get_executable]
     def _get_executable(self, cmd_name):
         pkg_map = {
             "patroni": "patroni",
@@ -169,6 +171,7 @@ class PgHaWizard(models.TransientModel):
             pkg_name=pkg_map.get(cmd_name, cmd_name),
         )
 
+    # [@ANCHOR: COMM_pg_ha_wizard_validate_inputs]
     def _validate_inputs(self):
         try:
             ipaddress.ip_address(self.primary_ip)

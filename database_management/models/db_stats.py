@@ -35,6 +35,7 @@ class DatabaseTableStat(models.Model):
         help="Percentage of data reads satisfied by RAM rather than Disk I/O.",
     )
 
+    # [@ANCHOR: COMM_db_table_stat_init]
     def init(self):
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
@@ -55,6 +56,7 @@ class DatabaseTableStat(models.Model):
         """
         )
 
+    # [@ANCHOR: COMM_db_table_stat_get_executable]
     def _get_executable(self, cmd_name):
         return self.env["zero_sudo.security.utils"]._ensure_executable(
             cmd_name,
@@ -327,6 +329,7 @@ class DatabaseActivity(models.Model):
     query = fields.Text(string="Active Query", readonly=True)
     duration = fields.Float(string="Duration (s)", readonly=True)
 
+    # [@ANCHOR: COMM_db_activity_init]
     def init(self):
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
@@ -379,6 +382,7 @@ class DatabaseIndexStat(models.Model):
     idx_scan = fields.Integer(string="Total Scans (Usage)", readonly=True)
     index_size_kb = fields.Float(string="Size (KB)", readonly=True)
 
+    # [@ANCHOR: COMM_db_index_stat_init]
     def init(self):
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
@@ -422,6 +426,7 @@ class DatabaseReplicationStat(models.Model):
     sync_priority = fields.Integer(string="Priority", readonly=True)
     sync_state = fields.Char(string="Sync State", readonly=True)
 
+    # [@ANCHOR: COMM_db_replication_stat_init]
     def init(self):
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
@@ -466,6 +471,7 @@ class DatabaseIndexAdvisor(models.Model):
     idx_scan = fields.Integer(string="Index Scans", readonly=True)
     table_size_mb = fields.Float(string="Table Size (MB)", readonly=True)
 
+    # [@ANCHOR: COMM_db_index_advisor_init]
     def init(self):
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(
@@ -493,5 +499,6 @@ class PgExplainWizard(models.TransientModel):
     query = fields.Text(string="SQL Query", readonly=True)
     explain_plan = fields.Text(string="Explain Plan", readonly=True)
 
+    # [@ANCHOR: COMM_pg_explain_wizard_close]
     def action_close(self):
         return {"type": "ir.actions.act_window_close"}

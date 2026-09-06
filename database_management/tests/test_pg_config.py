@@ -133,6 +133,7 @@ class TestPgConfig(HamsTransactionCase):
             wizard2.action_apply_optimizations()
 
     def test_02d_ha_wizard_validation_errors(self):
+        # Tests [@ANCHOR: COMM_pg_ha_wizard_validate_inputs]
         # Test invalid IP
         wizard = (
             self.env["pg.ha.wizard"]
@@ -197,6 +198,7 @@ class TestPgConfig(HamsTransactionCase):
             wizard.action_generate()
 
     def test_02c_etcd_auto_download(self):
+        # Tests [@ANCHOR: COMM_pg_ha_wizard_get_executable]
         mock_ensure = self.safe_patch(
             "odoo.addons.binary_downloader.models.binary_manifest.BinaryManifest.ensure_executable"
         )
@@ -216,6 +218,8 @@ class TestPgConfig(HamsTransactionCase):
         # Tests [@ANCHOR: COMM_test_pg_config_views]
         
         # Tests [@ANCHOR: COMM_db_settings_audit]
+
+        # Tests [@ANCHOR: COMM_db_pg_setting_init]
         v1 = self.env["database.pg.setting"].get_view(view_type="list")
         self.assertIn("setting", v1["arch"])
 

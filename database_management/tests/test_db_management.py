@@ -15,6 +15,8 @@ _logger = logging.getLogger(__name__)
 class TestDatabaseManagement(HamsTransactionCase):
     def test_01_vacuum_analyze(self):
         # Tests [@ANCHOR: COMM_vacuum_analyze]
+
+        # Tests [@ANCHOR: COMM_db_table_stat_get_executable]
         mock_run = self.safe_patch("subprocess.run")
         self.safe_patch("shutil.which", return_value="/bin/mock")
         mock_res = MagicMock()
@@ -111,6 +113,7 @@ class TestDatabaseManagement(HamsTransactionCase):
     def test_04_views(self):
         # Tests [@ANCHOR: COMM_test_dba_view]
 
+        # Tests [@ANCHOR: COMM_db_table_stat_init]
         v1 = self.env["database.table.stat"].get_view(view_type="list")
         self.assertIn("table_name", v1["arch"])
 
@@ -119,18 +122,26 @@ class TestDatabaseManagement(HamsTransactionCase):
         self.assertIn("query", v2["arch"])
 
         # Tests [@ANCHOR: COMM_db_active_sessions]
+
+        # Tests [@ANCHOR: COMM_db_activity_init]
         v3 = self.env["database.activity"].get_view(view_type="list")
         self.assertIn("pid", v3["arch"])
 
         # Tests [@ANCHOR: COMM_db_index_stats]
+
+        # Tests [@ANCHOR: COMM_db_index_stat_init]
         v4 = self.env["database.index.stat"].get_view(view_type="list")
         self.assertIn("index_name", v4["arch"])
 
         # Tests [@ANCHOR: COMM_db_replication_stats]
+
+        # Tests [@ANCHOR: COMM_db_replication_stat_init]
         v5 = self.env["database.replication.stat"].get_view(view_type="list")
         self.assertIn("usename", v5["arch"])
 
         # Tests [@ANCHOR: COMM_db_index_advisor]
+
+        # Tests [@ANCHOR: COMM_db_index_advisor_init]
         v6 = self.env["database.index.advisor"].get_view(view_type="list")
         self.assertIn("table_name", v6["arch"])
 
@@ -180,6 +191,14 @@ class TestDatabaseManagement(HamsTransactionCase):
         msg_only_select = "Only SELECT queries can be analyzed via Explain."
         with self.assertRaises(UserError, msg=msg_only_select):
             stat.action_explain_query()
+
+    def test_07b_explain_wizard_close(self):
+        # Tests [@ANCHOR: COMM_pg_explain_wizard_close]
+        wizard = self.env["pg.explain.wizard"].create(
+            {"query": "SELECT 1", "explain_plan": "dummy plan"}
+        )
+        result = wizard.action_close()
+        self.assertEqual(result, {"type": "ir.actions.act_window_close"})
 
     def test_08_doc_injection(self):
         # Tests [@ANCHOR: COMM_db_doc_injection]
