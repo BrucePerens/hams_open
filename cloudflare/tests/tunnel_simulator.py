@@ -11,6 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class CloudflareTunnelSimulator:
     
+    # [@ANCHOR: cloudflare:COMM_simulator_setup]
     def setUp(self):
         super().setUp()
         # Start the native Go CGO simulator, pointing it to Odoo's test
@@ -31,10 +32,12 @@ class CloudflareTunnelSimulator:
         # the same process tree, not a different container's service.
         self.simulator_url = "https://127.0.0.1:%s" % self.simulator_port  # burn-ignore-self-hosted-server
 
+    # [@ANCHOR: cloudflare:COMM_simulator_teardown]
     def tearDown(self):
         super().tearDown()
         stop_tunnel_simulator()
 
+    # [@ANCHOR: cloudflare:COMM_simulate_edge_request]
     def simulate_edge_request(self, path, cf_connecting_ip='1.2.3.4', cf_visitor='{"scheme":"https"}', extra_headers=None):
         """
         Sends an HTTPS request directly to the Go CGO Simulator, which will proxy

@@ -30,6 +30,7 @@ class CloudflareTunnelRoute(models.Model):
     )
 
     @api.depends("hostname", "path", "service_url")
+    # [@ANCHOR: cloudflare:COMM_tunnel_route_compute_name]
     def _compute_name(self):
         for route in self:
             target = route.hostname or "*"

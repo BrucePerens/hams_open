@@ -10,6 +10,7 @@ from urllib3.util.retry import Retry
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: cloudflare:COMM_handle_api_error]
 def _handle_api_error(context_msg, exception):
     if "External requests verboten" in str(exception):
         _logger.info("%s (Disabled in tests): %s", context_msg, exception)
@@ -28,6 +29,7 @@ session.mount("https://", adapter)
 session.mount("http://", adapter)
 
 
+# [@ANCHOR: cloudflare:COMM_make_request]
 def _make_request(method, endpoint, token, error_msg, **kwargs):
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     if "headers" in kwargs:
@@ -90,6 +92,7 @@ def purge_urls(urls, token, zone_id):
     return success
 
 
+# [@ANCHOR: cloudflare:COMM_purge_tags]
 def purge_tags(tags, token, zone_id):
     if not token or not zone_id:
         return False
@@ -266,6 +269,7 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_update_cfd_tunnel_configuration]
 def update_cfd_tunnel_configuration(account_id, token, tunnel_id, payload):
     if not token or not account_id or not tunnel_id:
         return False, "Missing credentials or tunnel ID"

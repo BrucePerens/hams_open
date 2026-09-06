@@ -122,6 +122,8 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         )
 
     def test_push_configuration_merges_global_and_tunnel_routes(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_action_push_configuration]
+
         # Tests [@ANCHOR: COMM_cf_tunnel_views_render]
         """
         action_push_configuration() must merge this tunnel's own routes

@@ -10,6 +10,18 @@ from .tunnel_simulator import CloudflareTunnelSimulator
 class TestCloudflareTunnelDaemon(CloudflareTunnelSimulator, HamsHttpCase):
 
     def test_edge_traffic_parsing(self):
+        # Tests [@ANCHOR: cloudflare:COMM_simulator_setup]
+
+        # Tests [@ANCHOR: cloudflare:COMM_simulator_teardown]
+
+        # Tests [@ANCHOR: cloudflare:COMM_simulate_edge_request]
+
+        # Tests [@ANCHOR: cloudflare:COMM_get_lib]
+
+        # Tests [@ANCHOR: cloudflare:COMM_start_tunnel_simulator]
+
+        # Tests [@ANCHOR: cloudflare:COMM_stop_tunnel_simulator]
+
         # [@ANCHOR: COMM_test_edge_traffic_parsing]
         """Verify that traffic from the Go simulator properly applies CF headers."""
         # The Go simulator will inject CF-Connecting-IP and CF-Visitor before hitting Odoo

@@ -46,6 +46,8 @@ class TestCloudflareUITours(HamsHttpCase):
         self.start_tour("/odoo?debug=1", "cf_waf_rule_tour", login=self.admin.login)
 
     def test_03_purge_wizard_tour(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_wizard_action_purge]
+
         # Tests [@ANCHOR: COMM_cf_purge_wizard_tour]
         """Executes the JS tour for the Manual Cache Purge Wizard."""
         mock_creds = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_cloudflare_credentials")
@@ -60,6 +62,10 @@ class TestCloudflareUITours(HamsHttpCase):
         self.start_tour("/odoo?debug=1", "cf_purge_wizard_tour", login=self.admin.login)
 
     def test_04_zone_settings_tour(self):
+        # Tests [@ANCHOR: cloudflare:COMM_zone_settings_default_get]
+
+        # Tests [@ANCHOR: cloudflare:COMM_zone_settings_action_apply]
+
         # Tests [@ANCHOR: COMM_cf_zone_settings_tour]
         """Executes the JS tour for the Zone Settings Wizard."""
         mock_creds = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_cloudflare_credentials")

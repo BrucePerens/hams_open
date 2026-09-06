@@ -61,6 +61,20 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         super().tearDown()
 
     def test_multi_website_purge_queue(self):
+        # Tests [@ANCHOR: cloudflare:COMM_get_cloudflare_credentials]
+
+        # Tests [@ANCHOR: cloudflare:COMM_compute_cf_api_token]
+
+        # Tests [@ANCHOR: cloudflare:COMM_inverse_cf_api_token]
+
+        # Tests [@ANCHOR: cloudflare:COMM_get_fernet]
+
+        # Tests [@ANCHOR: cloudflare:COMM_crypt_field]
+
+        # Tests [@ANCHOR: cloudflare:COMM_compute_encrypted_field]
+
+        # Tests [@ANCHOR: cloudflare:COMM_inverse_encrypted_field]
+
         # [@ANCHOR: COMM_test_multi_website_purge_queue]
         """Verify that the purge queue correctly isolates zones and credentials."""
         # Clear any leftover 'everything' records from previous tests or init that would wipe our queue
@@ -98,6 +112,10 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         self.assertIn("https://website-b.com/page-b", call_b[0][0])
 
     def test_content_hook_multi_website(self):
+        # Tests [@ANCHOR: cloudflare:COMM_enqueue_cloudflare_purge]
+
+        # Tests [@ANCHOR: cloudflare:COMM_page_write]
+
         # [@ANCHOR: COMM_test_content_hook_multi_website]
         """Verify that editing a page linked to a specific website only enqueues for that website."""
         view_a = self.env["ir.ui.view"].create(

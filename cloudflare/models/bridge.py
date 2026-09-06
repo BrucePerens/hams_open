@@ -8,12 +8,14 @@ class WebsitePage(models.Model):
     _inherit = ["website.page", "cloudflare.purge.mixin"]
     name = fields.Char(string="Name")
 
+    # [@ANCHOR: cloudflare:COMM_page_write]
     def write(self, vals):
         self._enqueue_cloudflare_purge("url")
         res = super().write(vals)
         self._enqueue_cloudflare_purge("url")
         return res
 
+    # [@ANCHOR: cloudflare:COMM_page_unlink]
     def unlink(self):
         self._enqueue_cloudflare_purge("url")
         return super().unlink()
@@ -24,6 +26,7 @@ class BlogPost(models.Model):
     _inherit = ["blog.post", "cloudflare.purge.mixin"]
     name = fields.Char(string="Name")
 
+    # [@ANCHOR: cloudflare:COMM_blog_post_write]
     def write(self, vals):
         self._enqueue_cloudflare_purge("website_url")
         res = super().write(vals)
@@ -36,11 +39,13 @@ class WebsiteMenu(models.Model):
     _inherit = ["website.menu", "cloudflare.purge.mixin"]
     name = fields.Char(string="Name")
 
+    # [@ANCHOR: cloudflare:COMM_menu_write]
     def write(self, vals):
         res = super().write(vals)
         self._purge_cloudflare_menus()
         return res
 
+    # [@ANCHOR: cloudflare:COMM_menu_unlink]
     def unlink(self):
         self._purge_cloudflare_menus()
         return super().unlink()
@@ -51,6 +56,7 @@ class ProductTemplate(models.Model):
     _inherit = ["product.template", "cloudflare.purge.mixin"]
     name = fields.Char(string="Name")
 
+    # [@ANCHOR: cloudflare:COMM_product_write]
     def write(self, vals):
         self._enqueue_cloudflare_purge("website_url")
         res = super().write(vals)

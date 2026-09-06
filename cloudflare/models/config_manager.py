@@ -50,6 +50,7 @@ class CloudflareConfigManager(models.AbstractModel):
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
+    # [@ANCHOR: cloudflare:COMM_trigger_edge_purge_static_assets]
     def _trigger_edge_purge_static_assets(self):
         """
         Scans static directories during Odoo boot. If a modification is detected,
@@ -121,6 +122,7 @@ class CloudflareConfigManager(models.AbstractModel):
             _logger.exception("Failed to process static mtime purge: %s", e)
 
     @api.model
+    # [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
     def initialize_cloudflare_state(self):
         _logger.info("[*] Initializing Cloudflare Edge State across Websites...")
         websites_to_pull = []
@@ -198,6 +200,7 @@ class CloudflareConfigManager(models.AbstractModel):
             for website in websites_to_push:
                 self.action_push_waf_rules(website_id=website.id)
 
+    # [@ANCHOR: cloudflare:COMM_check_waf_caller_authorized]
     def _check_waf_caller_authorized(self):
         # Adversarial security review, 2026-09-03: action_pull_waf_rules
         # and action_push_waf_rules are public (non-underscore-prefixed)

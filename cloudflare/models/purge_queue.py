@@ -23,6 +23,7 @@ class CloudflarePurgeQueue(models.Model):
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
 
     @api.model
+    # [@ANCHOR: cloudflare:COMM_enqueue_urls_batch]
     def enqueue_urls_batch(self, purge_map):
         if not purge_map:
             return

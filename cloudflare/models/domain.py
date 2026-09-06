@@ -27,6 +27,7 @@ class CloudflareRoutingDomain(models.Model):
     )
 
     @api.model_create_multi
+    # [@ANCHOR: cloudflare:COMM_domain_create]
     def create(self, vals_list):
         records = super(CloudflareRoutingDomain, self).create(vals_list)
         records._create_cloudflare_custom_hostname_batch()
@@ -57,6 +58,7 @@ class CloudflareRoutingDomain(models.Model):
         self._delete_cloudflare_custom_hostname_batch()
         return super(CloudflareRoutingDomain, self).unlink()
 
+    # [@ANCHOR: cloudflare:COMM_get_website_mapping]
     def _get_website_mapping(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_tunnel"
@@ -65,6 +67,7 @@ class CloudflareRoutingDomain(models.Model):
         websites = self.env["website"].with_user(svc_uid).search([("domain", "in", names)], limit=len(names))
         return {w.domain: w for w in websites if w.domain}
 
+    # [@ANCHOR: cloudflare:COMM_create_custom_hostname_batch]
     def _create_cloudflare_custom_hostname_batch(self):
         website_map = self._get_website_mapping()
         for record in self:
@@ -80,6 +83,7 @@ class CloudflareRoutingDomain(models.Model):
                         "status", "pending_validation"
                     )
 
+    # [@ANCHOR: cloudflare:COMM_delete_custom_hostname_batch]
     def _delete_cloudflare_custom_hostname_batch(self):
         website_map = self._get_website_mapping()
         for record in self:
@@ -92,6 +96,7 @@ class CloudflareRoutingDomain(models.Model):
             if token and zone_id:
                 cf_utils.delete_custom_hostname(record.cloudflare_hostname_id, token, zone_id)
 
+    # [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]
     def action_sync_ssl_status(self):
         website_map = self._get_website_mapping()
         for record in self:

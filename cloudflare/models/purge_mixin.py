@@ -8,6 +8,7 @@ class CloudflarePurgeMixin(models.AbstractModel):
     _description = "Cloudflare Purge Mixin"
     name = fields.Char(string="Name")
 
+    # [@ANCHOR: cloudflare:COMM_enqueue_cloudflare_purge]
     def _enqueue_cloudflare_purge(self, url_field):
         purge_map = {}
         all_website_ids = None
@@ -37,6 +38,7 @@ class CloudflarePurgeMixin(models.AbstractModel):
             QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
             QueueModel.enqueue_urls_batch(purge_map)
 
+    # [@ANCHOR: cloudflare:COMM_purge_cloudflare_menus]
     def _purge_cloudflare_menus(self):
         website_ids = self.mapped("website_id").ids
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

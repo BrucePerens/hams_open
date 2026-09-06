@@ -17,6 +17,7 @@ _lib = None
 _tunnel_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="CloudflareTunnelDaemon")
 _tunnel_future = None
 
+# [@ANCHOR: cloudflare:COMM_get_lib]
 def _get_lib():
     global _lib
     if _lib is not None:
@@ -73,6 +74,7 @@ def start_tunnel_daemon(token):
 
     _tunnel_future = _tunnel_executor.submit(run_tunnel)
 
+# [@ANCHOR: cloudflare:COMM_stop_tunnel_daemon]
 def stop_tunnel_daemon():
     """
     Signals the Cloudflare tunnel to stop.
@@ -82,6 +84,7 @@ def stop_tunnel_daemon():
         _stop_event.set()
         _lib.StopTunnel()
 
+# [@ANCHOR: cloudflare:COMM_start_tunnel_simulator]
 def start_tunnel_simulator(target_port):
     """
     Starts the native Go HTTPS reverse proxy simulator.
@@ -94,6 +97,7 @@ def start_tunnel_simulator(target_port):
         raise RuntimeError("Failed to start CGO local simulator.")
     return bound_port
 
+# [@ANCHOR: cloudflare:COMM_stop_tunnel_simulator]
 def stop_tunnel_simulator():
     """
     Stops the native Go HTTPS reverse proxy simulator.

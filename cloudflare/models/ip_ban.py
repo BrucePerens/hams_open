@@ -112,6 +112,7 @@ class CloudflareIPBan(models.Model):
             if rec.state == "active" and rec.cf_rule_id:
                 rec._action_lift_ban_sync()
 
+    # [@ANCHOR: cloudflare:COMM_action_lift_ban_sync]
     def _action_lift_ban_sync(self):
         self.ensure_one()
         token, zone_id = (

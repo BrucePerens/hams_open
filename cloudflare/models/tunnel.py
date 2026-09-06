@@ -34,6 +34,7 @@ class CloudflareTunnel(models.Model):
         "cloudflare.tunnel.route", "tunnel_id", string="Routing Table"
     )
 
+    # [@ANCHOR: cloudflare:COMM_tunnel_action_push_configuration]
     def action_push_configuration(self):
         # Pre-fetched once outside the loop below: the same global routes
         # (tunnel_id=False) apply to every tunnel in self, so searching for
@@ -138,6 +139,7 @@ class CloudflareTunnel(models.Model):
         }
 
     @api.model
+    # [@ANCHOR: cloudflare:COMM_sync_tunnels_for_website]
     def _sync_tunnels_for_website(self, website_id):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_tunnel"

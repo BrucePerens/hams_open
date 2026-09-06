@@ -32,6 +32,10 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertTrue(res)
 
     def test_02_turnstile_secret_fetch(self):
+        # Tests [@ANCHOR: cloudflare:COMM_compute_cf_turnstile_secret]
+
+        # Tests [@ANCHOR: cloudflare:COMM_inverse_cf_turnstile_secret]
+
         # [@ANCHOR: COMM_test_cf_turnstile_verify]
 
         # Tests [@ANCHOR: COMM_cf_turnstile_verify]
@@ -82,6 +86,8 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertIn("mock_token_xyz", wizard.command)
 
     def test_04_sync_tunnels(self):
+        # Tests [@ANCHOR: cloudflare:COMM_sync_tunnels_for_website]
+
         # [@ANCHOR: COMM_test_cf_sync_tunnels]
 
         # Tests [@ANCHOR: COMM_cf_sync_tunnels]
@@ -174,6 +180,12 @@ class TestCloudflareAPIs(HamsTransactionCase):
             self.assertFalse(purge_urls(["https://a.com"], "tok1", "zone1"))
 
     def test_07_purge_tags(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_tags]
+
+        # Tests [@ANCHOR: cloudflare:COMM_make_request]
+
+        # Tests [@ANCHOR: cloudflare:COMM_handle_api_error]
+
         # [@ANCHOR: COMM_test_purge_tags_api]
 
         # Tests [@ANCHOR: COMM_cf_purge_tags_api]

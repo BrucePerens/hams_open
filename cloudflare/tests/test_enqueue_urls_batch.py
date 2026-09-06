@@ -35,6 +35,7 @@ class TestEnqueueUrlsBatch(RealTransactionCase):
         )
 
     def test_a_relative_path_is_expanded_using_the_websites_own_domain(self):
+        # Tests [@ANCHOR: cloudflare:COMM_enqueue_urls_batch]
         self.PurgeQueue.enqueue_urls_batch({self.website.id: ["/some/page"]})
         self.assertIn("https://enqueue-test.example/some/page", self._pending_urls())
 

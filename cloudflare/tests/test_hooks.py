@@ -22,6 +22,9 @@ class TestCloudflareHooks(HamsTransactionCase):
     no-credentials path), not a mock of the network call."""
 
     def test_post_init_hook_completes_without_error_when_no_website_has_cloudflare_credentials(self):
+        # Tests [@ANCHOR: cloudflare:COMM_post_init_hook]
+
+        # Tests [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
         self.env.ref("cloudflare.user_cloudflare_waf")
         post_init_hook(self.env)  # must not raise
 

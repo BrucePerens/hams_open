@@ -38,6 +38,7 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
     )
 
     @api.model
+    # [@ANCHOR: cloudflare:COMM_zone_settings_default_get]
     def default_get(self, fields_list):
         res = super(CloudflareZoneSettingsWizard, self).default_get(fields_list)
         website_id = res.get("website_id")
@@ -70,6 +71,7 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
 
         return res
 
+    # [@ANCHOR: cloudflare:COMM_zone_settings_action_apply]
     def action_apply_settings(self):
         self.ensure_one()
         token, zone_id = self.website_id._get_cloudflare_credentials()

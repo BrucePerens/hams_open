@@ -34,6 +34,7 @@ class CloudflarePurgeWizard(models.TransientModel):
         help="Enter URLs or Cache-Tags separated by a new line or comma.",
     )
 
+    # [@ANCHOR: cloudflare:COMM_purge_wizard_action_purge]
     def action_purge(self):
         self.ensure_one()
         token, zone_id = self.website_id._get_cloudflare_credentials()

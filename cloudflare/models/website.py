@@ -47,6 +47,7 @@ class WebsiteCloudflare(models.Model):
         help="Secret key for Cloudflare Turnstile integration.",
     )
 
+    # [@ANCHOR: cloudflare:COMM_get_fernet]
     def _get_fernet(self):
         # The key MUST be retrieved securely.
         # In multi-tenant systems, environment variables are shared and break isolation.
@@ -58,6 +59,7 @@ class WebsiteCloudflare(models.Model):
             return None
         return Fernet(key.encode("utf-8"))
 
+    # [@ANCHOR: cloudflare:COMM_crypt_field]
     def _crypt_field(self, value, decrypt=False):
         f = self._get_fernet()
         if not f or not value:
@@ -71,28 +73,35 @@ class WebsiteCloudflare(models.Model):
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
             return "***ERROR***" if decrypt else False
 
+    # [@ANCHOR: cloudflare:COMM_compute_encrypted_field]
     def _compute_encrypted_field(self, plain_field, crypt_field):
         for rec in self:
             setattr(rec, plain_field, rec._crypt_field(getattr(rec, crypt_field), decrypt=True))
 
+    # [@ANCHOR: cloudflare:COMM_inverse_encrypted_field]
     def _inverse_encrypted_field(self, plain_field, crypt_field):
         for rec in self:
             setattr(rec, crypt_field, rec._crypt_field(getattr(rec, plain_field)))
 
+    # [@ANCHOR: cloudflare:COMM_compute_cf_api_token]
     @api.depends("cloudflare_api_token_crypt")
     def _compute_cf_api_token(self):
         self._compute_encrypted_field("cloudflare_api_token", "cloudflare_api_token_crypt")
 
+    # [@ANCHOR: cloudflare:COMM_inverse_cf_api_token]
     def _inverse_cf_api_token(self):
         self._inverse_encrypted_field("cloudflare_api_token", "cloudflare_api_token_crypt")
 
+    # [@ANCHOR: cloudflare:COMM_compute_cf_turnstile_secret]
     @api.depends("cloudflare_turnstile_secret_crypt")
     def _compute_cf_turnstile_secret(self):
         self._compute_encrypted_field("cloudflare_turnstile_secret", "cloudflare_turnstile_secret_crypt")
 
+    # [@ANCHOR: cloudflare:COMM_inverse_cf_turnstile_secret]
     def _inverse_cf_turnstile_secret(self):
         self._inverse_encrypted_field("cloudflare_turnstile_secret", "cloudflare_turnstile_secret_crypt")
 
+    # [@ANCHOR: cloudflare:COMM_get_cloudflare_credentials]
     @distributed_cache()
     def _get_cloudflare_credentials(self, override_svc_uid=None):
         """

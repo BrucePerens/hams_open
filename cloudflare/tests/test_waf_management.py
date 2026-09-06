@@ -72,6 +72,8 @@ class TestWafManagement(HamsTransactionCase):
         self.assertEqual(ban_record.website_id.id, self.website.id)
 
     def test_02_cf_action_lift_ban(self):
+        # Tests [@ANCHOR: cloudflare:COMM_action_lift_ban_sync]
+
         # [@ANCHOR: COMM_test_cf_action_lift_ban]
 
         # Tests [@ANCHOR: COMM_cf_action_lift_ban]
@@ -267,6 +269,7 @@ class TestWafManagement(HamsTransactionCase):
         mock_execute_ban.assert_called_once()
 
     def test_09_action_pull_and_push_waf_rules_reject_an_unprivileged_caller(self):
+        # Tests [@ANCHOR: cloudflare:COMM_check_waf_caller_authorized]
         # Adversarial security review, 2026-09-03: both action_pull_waf_rules
         # and action_push_waf_rules are public @api.model methods that call
         # website._get_cloudflare_credentials() -- a @distributed_cache()-

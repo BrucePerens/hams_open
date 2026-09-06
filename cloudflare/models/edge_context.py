@@ -11,6 +11,7 @@ class CloudflareUtils(models.AbstractModel):
     name = fields.Char(string="Name", default=lambda self: self._description)
 
     @api.model
+    # [@ANCHOR: cloudflare:COMM_get_current_website_id]
     def get_current_website_id(self):
         """
         Unified helper to resolve the active website ID across HTTP and Cron contexts.

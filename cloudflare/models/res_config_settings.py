@@ -23,6 +23,7 @@ class ResConfigSettings(models.TransientModel):
         related="website_id.cloudflare_turnstile_secret", readonly=False
     )
 
+    # [@ANCHOR: cloudflare:COMM_action_deploy_cf_waf]
     def action_deploy_cf_waf(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_waf"
@@ -51,6 +52,7 @@ class ResConfigSettings(models.TransientModel):
         else:
             raise UserError(_("Failed to deploy WAF rules: %s") % msg)
 
+    # [@ANCHOR: cloudflare:COMM_action_pull_cf_waf]
     def action_pull_cf_waf(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_waf"
