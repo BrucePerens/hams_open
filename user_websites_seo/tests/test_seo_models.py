@@ -156,3 +156,15 @@ class TestSEOModels(RealTransactionCase):
         arch = res_post["arch"]
         msg = "The SEO page must exist in blog.post arch."
         self.assertIn('name="seo_settings"', arch, msg)
+
+    def test_mixin_base_check_seo_write_permission_is_abstract(self):
+        # Tests [@ANCHOR: user_websites_seo:COMM_mixin_check_seo_write_permission]
+        """Every concrete model using this mixin overrides
+        _check_seo_write_permission() with its own real check -- the base
+        implementation itself is never reached in normal operation, so
+        nothing else in this test suite ever actually calls it. Prove it
+        directly: it must refuse to silently allow anything, raising
+        NotImplementedError rather than defaulting to permissive."""
+        mixin = self.env["user.websites.seo.metadata.mixin"]
+        with self.assertRaises(NotImplementedError):
+            mixin._check_seo_write_permission()

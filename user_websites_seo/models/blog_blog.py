@@ -7,5 +7,6 @@ class BlogBlogSEO(models.Model):  # burn-ignore-env
     _name = "blog.blog"
     _inherit = ["blog.blog", "user.websites.seo.metadata.mixin"]
 
+    # [@ANCHOR: user_websites_seo:COMM_blog_check_seo_write_permission]
     def _check_seo_write_permission(self):
         self.check_access("write")

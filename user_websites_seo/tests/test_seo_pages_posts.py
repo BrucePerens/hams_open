@@ -59,6 +59,11 @@ class TestSEOPagesPosts(RealTransactionCase):
         )
 
     def test_page_seo_write(self):
+        # Tests [@ANCHOR: user_websites_seo:COMM_page_check_seo_write_permission]
+
+        # Tests [@ANCHOR: user_websites_seo:COMM_mixin_write]
+
+        # Tests [@ANCHOR: user_websites_seo:COMM_get_seo_fields]
         """Test that a user can write to their own page's SEO fields."""
         page_by_user = self.page.with_user(self.regular_user)
         page_by_user.write({"website_meta_title": "Page SEO Title"})
@@ -69,6 +74,7 @@ class TestSEOPagesPosts(RealTransactionCase):
         )
 
     def test_post_seo_write(self):
+        # Tests [@ANCHOR: user_websites_seo:COMM_post_check_seo_write_permission]
         """Test that a user can write to their own post's SEO fields."""
         post_by_user = self.post.with_user(self.regular_user)
         post_by_user.write({"website_meta_title": "Post SEO Title"})
@@ -79,6 +85,7 @@ class TestSEOPagesPosts(RealTransactionCase):
         )
 
     def test_blog_seo_write(self):
+        # Tests [@ANCHOR: user_websites_seo:COMM_blog_check_seo_write_permission]
         """Test that a user can write to their own blog's SEO fields."""
         blog_by_user = self.blog.with_user(self.regular_user)
         blog_by_user.write({"website_meta_title": "Blog SEO Title"})

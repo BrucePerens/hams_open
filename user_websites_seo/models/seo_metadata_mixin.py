@@ -7,6 +7,7 @@ class SEOMetadataMixin(models.AbstractModel):  # burn-ignore-env
     _name = "user.websites.seo.metadata.mixin"
     _description = "User Websites SEO Metadata Mixin"
 
+    # [@ANCHOR: user_websites_seo:COMM_get_seo_fields]
     def _get_seo_fields(self):
         return {
             "website_meta_title",
@@ -16,6 +17,7 @@ class SEOMetadataMixin(models.AbstractModel):  # burn-ignore-env
             "seo_name",
         }
 
+    # [@ANCHOR: user_websites_seo:COMM_mixin_check_seo_write_permission]
     def _check_seo_write_permission(self):
         """
         To be overridden by models using this mixin to define
@@ -23,6 +25,7 @@ class SEOMetadataMixin(models.AbstractModel):  # burn-ignore-env
         """
         raise NotImplementedError("Each model must implement its own permission check.")
 
+    # [@ANCHOR: user_websites_seo:COMM_mixin_write]
     def write(self, vals):
         if self.env.context.get("skip_seo_metadata_mixin"):
             return super().write(vals)
