@@ -51,6 +51,7 @@ class BinaryVersion(models.Model):
     _chksum_not_empty = models.Constraint("CHECK(LENGTH(TRIM(checksum)) > 0)", "The checksum cannot be empty.")
 
     @api.constrains("version_number")
+    # [@ANCHOR: binary_version_check_version_no_slashes]
     def _check_version_no_slashes(self):
         for record in self:
             if "/" in record.version_number or "\\" in record.version_number:
@@ -59,6 +60,7 @@ class BinaryVersion(models.Model):
                 )
 
     @api.constrains("url")
+    # [@ANCHOR: binary_version_check_url_scheme]
     def _check_url_scheme(self):
         for record in self:
             if record.url:
@@ -68,6 +70,7 @@ class BinaryVersion(models.Model):
                     raise ValidationError(msg)
 
     @api.constrains("archive_type", "extract_member")
+    # [@ANCHOR: binary_version_check_extract_member]
     def _check_extract_member(self):
         for record in self:
             if record.archive_type in ("tar.gz", "zip") and not record.extract_member:
@@ -76,6 +79,7 @@ class BinaryVersion(models.Model):
                     % record.archive_type
                 )
 
+    # [@ANCHOR: binary_version_get_central_path]
     def _get_central_path(self):
         """Returns the deterministic central storage path for this specific version."""
         self.ensure_one()
@@ -85,6 +89,7 @@ class BinaryVersion(models.Model):
         return os.path.join(bin_dir, filename)
 
     @api.depends("version_number", "checksum")
+    # [@ANCHOR: binary_version_compute_is_downloaded]
     def _compute_is_downloaded(self):
         for record in self:
             if not record.id or not record.checksum:
@@ -135,6 +140,7 @@ class BinaryVersion(models.Model):
         )
         return True
 
+    # [@ANCHOR: binary_version_action_notify_tenants]
     def action_notify_tenants(self):
         self.ensure_one()
         # Adversarial security review, 2026-09-03: no group check at all --
@@ -196,6 +202,7 @@ class BinaryVersion(models.Model):
             },
         }
 
+    # [@ANCHOR: binary_version_unlink]
     def unlink(self):
         checksums = [r.checksum for r in self if r.checksum]
         checksum_counts = {}

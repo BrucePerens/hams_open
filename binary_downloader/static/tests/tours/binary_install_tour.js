@@ -53,11 +53,29 @@ registry.category("web_tour.tours").add("binary_install_tour", {
             run: 'click',
         }
     ].concat(TourUtils.safeSave()).concat([
+        // action_install()'s own display_notification client action
+        // chains a "next": {"tag": "reload"} action right behind the
+        // RPC's response. expectUnloadPage does NOT fit this: per Odoo's
+        // own web_tour engine (tour_automatic.js/macro.js), that flag
+        // makes the JS macro halt silently (no success AND no error
+        // signal) expecting a real page navigation to load a NEW page
+        // that resumes the tour from persisted tourState -- this
+        // headless single-page test harness's own start_tour()/
+        // browser_js() wrapper (zero_sudo/tests/common.py) has no such
+        // resume-after-reload mechanism, so with the flag set the tour
+        // just hangs for the full 10s timeout with zero further JS-side
+        // log output, confirmed across two real runs (flag on the click
+        // step alone, then on both the click and the notification-wait
+        // step). ensure_executable() inside action_install() already
+        // runs synchronously before the RPC responds -- the click's own
+        // 200 OK response IS the real success signal -- so the tour
+        // simply ends here; the actual installed-on-disk outcome is
+        // asserted at the DB/filesystem level in the Python test instead
+        // of chasing the notification's own reload race in JS.
         {
             content: "Click Install Now using immutable name attribute",
             trigger: 'button[name="action_install"]:not(:disabled)',
             run: 'click',
         },
-        TourUtils.waitForElement('.o_notification', 'success notification'),
     ]),
 });

@@ -120,6 +120,7 @@ class TestBinaryManifest(HamsTransactionCase):
             self.env["binary.manifest"].ensure_executable("testbin")
 
     def test_04_successful_download_and_checksum(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
         # [!] DIAGNOSTIC FOR AI: Testing full download, checksum, and installation flow for raw binary.
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
@@ -175,6 +176,8 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertIn("symlink_path", v1["arch"])
 
     def test_06_is_installed_compute(self):
+        # Tests [@ANCHOR: binary_utils_get_target_filename]
+
         # Tests [@ANCHOR: binary_compute_installed]
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         target_bin = os.path.join(
@@ -254,6 +257,7 @@ class TestBinaryManifest(HamsTransactionCase):
             self.env.flush_all()
 
     def test_11_url_validation(self):
+        # Tests [@ANCHOR: binary_manifest_check_url_scheme]
         # [!] DIAGNOSTIC FOR AI: Testing URL scheme validation (http/https only).
         with self.assertRaises(
             ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block non-HTTP URLs"
@@ -268,7 +272,24 @@ class TestBinaryManifest(HamsTransactionCase):
             )
             self.env.flush_all()
 
+    def test_11_1_extract_member_required_for_archives(self):
+        # Tests [@ANCHOR: binary_manifest_check_extract_member]
+        with self.assertRaises(
+            ValidationError,
+            msg="[!] DIAGNOSTIC FOR AI: tar.gz/zip archives must require extract_member.",
+        ):
+            self.env["binary.manifest"].create(
+                {
+                    "name": "noextract",
+                    "url": "https://example.com/noextract.tar.gz",
+                    "checksum": "fakehash",
+                    "archive_type": "tar.gz",
+                }
+            )
+            self.env.flush_all()
+
     def test_09_constraints(self):
+        # Tests [@ANCHOR: binary_manifest_check_name_no_slashes]
         # [!] DIAGNOSTIC FOR AI: Testing name constraints on write.
         with self.assertRaises(
             ValidationError, msg="[!] DIAGNOSTIC FOR AI: Must block slashes on write"
@@ -570,6 +591,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.assertNotEqual(path, "/usr/bin/testbin")
 
     def test_19_unlink_privilege_escalation(self):
+        # Tests [@ANCHOR: binary_manifest_unlink]
         # [!] DIAGNOSTIC FOR AI: Testing prevention of privilege escalation in unlink.
         # A manifest's unlink() must not delete the on-disk binary file if
         # another manifest/version record still references the same
@@ -622,3 +644,35 @@ class TestBinaryManifest(HamsTransactionCase):
         company_b_manifest.with_user(user_b).unlink()
 
         mock_unlink_file.assert_not_called()
+
+    def test_20_unlink_deletes_the_real_file_when_the_checksum_is_not_shared(self):
+        # Tests [@ANCHOR: binary_utils_unlink_binary_file]
+        # The other unlink test above only proves the shared-checksum
+        # dedup case (file kept). This proves the real deletion actually
+        # happens on the unshared path -- _unlink_binary_file() was
+        # never exercised for real anywhere else, only ever mocked.
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+        bin_dir = os.path.join(data_dir, "hams_bin")
+        chksum = "unshared_delete_test_hash"
+        manifest = self.env["binary.manifest"].create(
+            {
+                "name": "unshared_delete_bin",
+                "url": "https://example.com/unshared_delete_bin",
+                "checksum": chksum,
+                "archive_type": "binary",
+            }
+        )
+        filename = self.env["binary_downloader.mixin"]._get_target_filename(
+            manifest.name, manifest.checksum
+        )
+        target_bin = os.path.join(bin_dir, filename)
+        with open(target_bin, "wb") as f:
+            f.write(b"fake binary content")
+        self.assertTrue(os.path.exists(target_bin))
+
+        manifest.unlink()
+
+        self.assertFalse(
+            os.path.exists(target_bin),
+            "[!] DIAGNOSTIC FOR AI: the on-disk file must actually be removed when no other record shares its checksum.",
+        )

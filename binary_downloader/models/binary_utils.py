@@ -26,6 +26,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
     name = fields.Char(string="Name")
 
     @api.model
+    # [@ANCHOR: binary_utils_download_and_extract]
     def _download_and_extract(self, cmd_name, url, checksum, archive_type, extract_member=None):
         """
         Downloads a binary, verifies its checksum, extracts it (if archive),
@@ -185,12 +186,14 @@ class BinaryDownloaderMixin(models.AbstractModel):
             raise UserError(_("Failed to auto-install %s: %s") % (cmd_name, str(e)))
 
     @api.model
+    # [@ANCHOR: binary_utils_get_target_filename]
     def _get_target_filename(self, cmd_name, checksum):
         """Generates a stable, unique filename based on the binary name and its checksum."""
         identifier = hashlib.sha256(f"{cmd_name}_{checksum}".encode()).hexdigest()[:16]
         return f"{cmd_name}_{identifier}"
 
     @api.model
+    # [@ANCHOR: binary_utils_unlink_binary_file]
     def _unlink_binary_file(self, cmd_name, checksum):
         """Safely removes a binary from the hams_bin directory."""
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")

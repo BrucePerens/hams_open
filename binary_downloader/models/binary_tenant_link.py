@@ -42,6 +42,7 @@ class BinaryTenantLink(models.Model):
     _tenant_manifest_uniq = models.Constraint("unique(website_id, manifest_id)", "A tenant can only have one active version of a specific binary at a time.")
 
     @api.depends("website_id", "manifest_id")
+    # [@ANCHOR: binary_tenant_link_compute_symlink_path]
     def _compute_symlink_path(self):
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         for record in self:
@@ -88,12 +89,14 @@ class BinaryTenantLink(models.Model):
         return True
 
     @api.model_create_multi
+    # [@ANCHOR: binary_tenant_link_create]
     def create(self, vals_list):
         records = super().create(vals_list)
         for record in records:
             record.apply_symlink()
         return records
 
+    # [@ANCHOR: binary_tenant_link_write]
     def write(self, vals):
         res = super().write(vals)
         if "active_version_id" in vals:
@@ -101,6 +104,7 @@ class BinaryTenantLink(models.Model):
                 record.apply_symlink()
         return res
 
+    # [@ANCHOR: binary_tenant_link_unlink]
     def unlink(self):
         for record in self:
             if record.symlink_path and os.path.lexists(record.symlink_path):
@@ -114,6 +118,7 @@ class BinaryTenantLink(models.Model):
                     )
         return super().unlink()
 
+    # [@ANCHOR: binary_tenant_link_action_upgrade_to_latest]
     def action_upgrade_to_latest(self):
         """Finds the most recent upstream release and automatically repoints the tenant symlink."""
         self.ensure_one()

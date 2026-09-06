@@ -43,6 +43,7 @@ class BinaryManifest(models.Model):
     )
 
     @api.constrains("url")
+    # [@ANCHOR: binary_manifest_check_url_scheme]
     def _check_url_scheme(self):
         for record in self:
             if record.url:
@@ -63,6 +64,7 @@ class BinaryManifest(models.Model):
     _chksum_not_empty = models.Constraint("CHECK(LENGTH(TRIM(checksum)) > 0)", _msg_chksum_not_empty)
 
     @api.constrains("name")
+    # [@ANCHOR: binary_manifest_check_name_no_slashes]
     def _check_name_no_slashes(self):
         for record in self:
             if "/" in record.name or "\\" in record.name:
@@ -72,6 +74,7 @@ class BinaryManifest(models.Model):
                 raise ValidationError(_("The binary name cannot be '.' or '..'."))
 
     @api.constrains("archive_type", "extract_member")
+    # [@ANCHOR: binary_manifest_check_extract_member]
     def _check_extract_member(self):
         for record in self:
             if record.archive_type in ("tar.gz", "zip") and not record.extract_member:
@@ -178,6 +181,7 @@ class BinaryManifest(models.Model):
         )
 
 
+    # [@ANCHOR: binary_manifest_unlink]
     def unlink(self):
         checksums = [r.checksum for r in self if r.checksum]
         checksum_counts = {}

@@ -97,6 +97,8 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
 
     def test_pure_python_symlink_engine(self):
         # Tests [@ANCHOR: COMM_pure_python_symlink_engine]
+
+        # Tests [@ANCHOR: binary_tenant_link_compute_symlink_path]
         website = self.env["website"].search([], limit=1)
         if not website:
             website = self.env["website"].create({"name": "Test Tenant"})
@@ -146,6 +148,9 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
 class TestBinaryManifestReal(RealTransactionCase):
 
     def test_pager_integration_batching(self):
+        # Tests [@ANCHOR: binary_version_action_notify_tenants]
+
+        # Tests [@ANCHOR: binary_tenant_link_create]
         # [!] DIAGNOSTIC FOR AI: Testing that PagerDuty notification batches iteratively.
         # binary.version and binary.tenant.link only grant CRUD to
         # binary_downloader.group_binary_downloader_manager (and read-only

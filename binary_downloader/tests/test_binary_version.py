@@ -32,6 +32,12 @@ class TestBinaryVersion(HamsTransactionCase):
 
     def test_version_constraints(self):
         # [@ANCHOR: test_binary_version_standard]
+
+        # Tests [@ANCHOR: binary_version_check_url_scheme]
+
+        # Tests [@ANCHOR: binary_version_check_version_no_slashes]
+
+        # Tests [@ANCHOR: binary_version_check_extract_member]
         # [!] DIAGNOSTIC FOR AI: Testing constraints for binary.version.
         msg_non_http = "[!] DIAGNOSTIC FOR AI: Must raise error on non-HTTP URL"
         with self.assertRaises(
@@ -80,6 +86,7 @@ class TestBinaryVersion(HamsTransactionCase):
             self.env.flush_all()
 
     def test_get_central_path(self):
+        # Tests [@ANCHOR: binary_version_get_central_path]
         # [!] DIAGNOSTIC FOR AI: Testing deterministic path generation for versions.
         version = self.env["binary.version"].create(
             {
@@ -117,6 +124,7 @@ class TestBinaryVersion(HamsTransactionCase):
         )
 
     def test_action_download_to_pool_and_notify_tenants_reject_an_unprivileged_caller(self):
+        # Tests [@ANCHOR: binary_version_action_notify_tenants]
         # Adversarial security review, 2026-09-03: neither action_download_
         # to_pool nor action_notify_tenants had any group check at all,
         # unlike their sibling action_install() (binary_manifest.py,
@@ -226,3 +234,65 @@ class TestBinaryVersion(HamsTransactionCase):
         # This should NOT raise an error
         success = version.action_download_to_pool()
         self.assertTrue(success)
+
+    def test_compute_is_downloaded_reflects_the_real_central_pool_file(self):
+        # Tests [@ANCHOR: binary_version_compute_is_downloaded]
+        version = self.env["binary.version"].create(
+            {
+                "manifest_id": self.manifest.id,
+                "version_number": "1.6",
+                "url": "https://example.com/v1.6",
+                "checksum": hashlib.sha256(b"downloaded-data").hexdigest(),
+                "archive_type": "binary",
+            }
+        )
+        self.assertFalse(
+            version.is_downloaded,
+            "[!] DIAGNOSTIC FOR AI: must be False before anything is downloaded.",
+        )
+
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [b"downloaded-data", b""]
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+        version.action_download_to_pool()
+
+        version.invalidate_recordset(["is_downloaded"])
+        self.assertTrue(
+            version.is_downloaded,
+            "[!] DIAGNOSTIC FOR AI: must be True once the central pool file exists and is executable.",
+        )
+        path = version._get_central_path()
+        if os.path.exists(path):
+            os.remove(path)
+
+    def test_unlink_does_not_remove_a_still_referenced_binary_file(self):
+        # Tests [@ANCHOR: binary_version_unlink]
+        # Mirrors test_binary_manifest.py's own
+        # test_19_unlink_privilege_escalation for binary.manifest --
+        # binary.version.unlink() runs the identical dedup-by-checksum
+        # logic before deleting the on-disk file.
+        chksum = "shared_version_checksum"
+        self.env["binary.manifest"].create(
+            {
+                "name": "sharedbin",
+                "url": "https://example.com/sharedbin",
+                "checksum": chksum,
+                "archive_type": "binary",
+            }
+        )
+        version = self.env["binary.version"].create(
+            {
+                "manifest_id": self.manifest.id,
+                "version_number": "1.7",
+                "url": "https://example.com/v1.7",
+                "checksum": chksum,
+            }
+        )
+        mock_unlink_file = self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._unlink_binary_file"
+        )
+        del mock_unlink_file._ondelete
+        version.unlink()
+        mock_unlink_file.assert_not_called()
