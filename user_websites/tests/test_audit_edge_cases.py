@@ -258,7 +258,7 @@ class TestAuditEdgeCases(RealTransactionCase):
             self.env.cr.execute = original_execute
 
         # 3. Trigger Invalidation
-        group.write({"website_slug": "newcachegroup"})
+        group.write({"website_slug": "newcachegroup"})  # Tests [@ANCHOR: user_websites:COMM_group_write]
 
         # 4. Verify cache was cleared (next call must execute SQL)
         group_id = self.env["user.websites.group"].get_record_by_slug("newcachegroup")
@@ -425,3 +425,49 @@ class TestAuditEdgeCases(RealTransactionCase):
             "A registry/cursor acquisition failure in the background "
             "unpublish task must be logged, not swallowed silently.",
         )
+
+    def test_09_get_user_id_by_slug_resolves_via_the_content_routing_view(self):
+        # Tests [@ANCHOR: user_websites:COMM_get_user_id_by_slug]
+
+        # Tests [@ANCHOR: user_websites:COMM_content_routing_view_init]
+        """_get_user_id_by_slug() is a real, direct raw-SQL resolver
+        against user_websites_content_routing_view -- confirmed (grepped
+        both repos) that nothing currently calls it; the generic
+        edge.routing.mixin.get_record_by_slug() dispatch this module also
+        relies on elsewhere does its own separate ORM search instead, not
+        this method. Tested directly here as a genuinely reachable unit
+        regardless of caller wiring, and flagged as dead/unwired code for
+        a deliberate follow-up decision (wire it up, or remove it)."""
+        user = self.env["res.users"].create(
+            {
+                "name": "Slug By Function User",
+                "login": "slug_by_function_user",
+                "website_slug": "slug-by-function-user",
+            }
+        )
+        self.env.flush_all()
+
+        resolved_id = self.env["res.users"]._get_user_id_by_slug(
+            "slug-by-function-user"
+        )
+        self.assertEqual(resolved_id, user.id)
+
+        self.assertFalse(
+            self.env["res.users"]._get_user_id_by_slug("no-such-slug-at-all"),
+            "An unknown slug must resolve to False, not raise or return a stale id.",
+        )
+
+    def test_10_action_mark_under_review_transitions_state(self):
+        # Tests [@ANCHOR: user_websites:COMM_action_mark_under_review]
+        """action_mark_under_review() had zero test coverage -- confirm
+        it moves a fresh report into the 'under_review' state, the same
+        way action_dismiss() already had proven coverage for 'dismissed'."""
+        report = self.env["content.violation.report"].create(
+            {
+                "target_url": "/some/reported/url",
+                "description": "Reported for review",
+            }
+        )
+        self.assertEqual(report.state, "new")
+        report.action_mark_under_review()
+        self.assertEqual(report.state, "under_review")

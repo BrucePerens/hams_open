@@ -98,6 +98,7 @@ class UserWebsitesController(http.Controller):
         auth="public",
         website=True,
     )
+    # [@ANCHOR: user_websites:COMM_user_blog_index]
     def user_blog_index(
         self,
         website_slug,
@@ -250,6 +251,7 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )
+    # [@ANCHOR: user_websites:COMM_create_site]
     def create_site(self, website_slug, **kwargs):
         user = request.env.user
 
@@ -326,6 +328,7 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )
+    # [@ANCHOR: user_websites:COMM_create_blog]
     def create_blog(self, website_slug, **kwargs):
         user = request.env.user
         utils = request.env["zero_sudo.security.utils"]
@@ -414,6 +417,7 @@ class UserWebsitesController(http.Controller):
         )
 
     @http.route("/my/privacy", type="http", auth="user", website=True)
+    # [@ANCHOR: user_websites:COMM_privacy_dashboard]
     def privacy_dashboard(self, **kwargs):
         return request.render("user_websites.portal_my_privacy", {})
 
@@ -474,6 +478,7 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )
+    # [@ANCHOR: user_websites:COMM_privacy_delete_content]
     def privacy_delete_content(self, **kwargs):
         user = request.env.user
         user._execute_gdpr_erasure()
@@ -521,6 +526,7 @@ class UserWebsitesController(http.Controller):
         auth="public",
         website=True,
     )
+    # [@ANCHOR: user_websites:COMM_pending_reports]
     def pending_reports(self, **kwargs):
         user = request.env.user
         if user._is_public() or (

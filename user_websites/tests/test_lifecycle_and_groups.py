@@ -229,6 +229,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
         )
 
     def test_05_community_directory_opt_in(self):
+        # Tests [@ANCHOR: user_websites:COMM_public_directory_view_init]
         self.assertFalse(self.user_a.privacy_show_in_directory)
 
         self.env.cr.commit()
@@ -347,6 +348,9 @@ class TestLifecycleAndGroups(RealTransactionCase):
         )
 
     def test_09_reserved_slug_validation(self):
+        # Tests [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
+
+        # Tests [@ANCHOR: user_websites:COMM_group_check_reserved_slugs]
         """
         Verify that protected terms (e.g., 'community', 'blog') are rejected
         to avoid intercepting core Odoo routes.

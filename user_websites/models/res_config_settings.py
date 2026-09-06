@@ -29,6 +29,7 @@ class ResConfigSettings(models.TransientModel):
     )
 
     @api.model
+    # [@ANCHOR: user_websites:COMM_settings_get_values]
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
         admin_group = self.env.ref(
@@ -46,6 +47,7 @@ class ResConfigSettings(models.TransientModel):
             res["user_websites_administrators_ids"] = [(6, 0, [])]
         return res
 
+    # [@ANCHOR: user_websites:COMM_settings_set_values]
     def set_values(self):
         super(ResConfigSettings, self).set_values()
         admin_group = self.env.ref(

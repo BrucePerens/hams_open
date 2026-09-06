@@ -75,6 +75,7 @@ class TestUserWebsitesControllers(RealTransactionCase):
         self.env.cr.commit()
 
     def test_01_api_pending_reports_admin_access(self):
+        # Tests [@ANCHOR: user_websites:COMM_pending_reports]
         """
         # [@ANCHOR: test_admin_violation_toast_rpc]
 

@@ -164,7 +164,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
             for report in reports:
                 action = secrets.choice(["dismiss", "strike"])
                 if action == "dismiss":
-                    report.action_dismiss()
+                    report.action_dismiss()  # Tests [@ANCHOR: user_websites:COMM_report_action_dismiss]
                 else:
                     report.action_take_action_and_strike()
 

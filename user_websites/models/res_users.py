@@ -25,6 +25,7 @@ BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: user_websites:COMM_async_unpublish_content]
 def _async_unpublish_content(db_name, user_ids):
     """Unpublishes user content in the background to prevent transaction lock exhaustion."""
     registry = Registry(db_name)
@@ -110,6 +111,7 @@ class ResUsers(models.Model):
     _inherit = ["res.users", "edge.routing.mixin"]
     _website_slug_format = models.Constraint("CHECK(website_slug IS NULL OR website_slug = '' OR website_slug ~ '^[a-z0-9\\-]+$')", 'The Website Slug can only contain lowercase letters, numbers, and hyphens.')
 
+    # [@ANCHOR: user_websites:COMM_register_hook]
     def _register_hook(self):
         super(ResUsers, self)._register_hook()
         # Early initialization of sys_provisioner to satisfy cross-module dependencies
@@ -171,6 +173,7 @@ class ResUsers(models.Model):
     )
 
     @api.constrains("website_slug")
+    # [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
     def _check_reserved_slugs(self):
         for record in self:
             if record.website_slug and record.website_slug.lower() in RESERVED_SLUGS:
@@ -226,6 +229,7 @@ class ResUsers(models.Model):
 
     _website_slug_unique = models.Constraint("UNIQUE(website_slug)", "The Website Slug must be unique!")
 
+    # [@ANCHOR: user_websites:COMM_is_admin]
     def _is_admin(self):
         """Helper to check if the user has administration rights."""
         return super()._is_admin() or self.has_group(
@@ -234,6 +238,7 @@ class ResUsers(models.Model):
 
     @api.model
     @distributed_cache()
+    # [@ANCHOR: user_websites:COMM_get_user_id_by_slug]
     def _get_user_id_by_slug(self, slug, override_svc_uid=None):
         if not slug:
             return False
@@ -252,6 +257,7 @@ class ResUsers(models.Model):
         row = self.env.cr.fetchone()
         return row[0] if row else False
 
+    # [@ANCHOR: user_websites:COMM_res_users_create]
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -260,6 +266,7 @@ class ResUsers(models.Model):
 
         return super(ResUsers, self).create(vals_list)
 
+    # [@ANCHOR: user_websites:COMM_res_users_write]
     def write(self, vals):
         old_slugs = {}
         if "website_slug" in vals:
@@ -385,6 +392,7 @@ class ResUsers(models.Model):
 
     # --- Business & GDPR Extensible Methods ---
 
+    # [@ANCHOR: user_websites:COMM_get_page_limit]
     def _get_page_limit(self):
         self.ensure_one()
         limit = self.website_page_limit
@@ -403,6 +411,7 @@ class ResUsers(models.Model):
     # straightforward reachable-by-any-user resource-exhaustion gap.
     # Separate, smaller default limits since a real user typically needs
     # very few blogs but may reasonably write many posts within them.
+    # [@ANCHOR: user_websites:COMM_get_blog_limit]
     def _get_blog_limit(self):
         self.ensure_one()
         return int(
@@ -411,6 +420,7 @@ class ResUsers(models.Model):
             )
         )
 
+    # [@ANCHOR: user_websites:COMM_get_blog_post_limit]
     def _get_blog_post_limit(self):
         self.ensure_one()
         return int(
@@ -419,6 +429,7 @@ class ResUsers(models.Model):
             )
         )
 
+    # [@ANCHOR: user_websites:COMM_get_gdpr_streamed_keys]
     def _get_gdpr_streamed_keys(self):
         """
         Returns a dictionary mapping JSON keys to generator functions.

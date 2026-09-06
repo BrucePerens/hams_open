@@ -99,6 +99,7 @@ class ContentViolationReport(models.Model):
                     )
                     template.with_user(mail_svc).with_company(company).with_context(pending_count=count).send_mail(company.id, force_send=False, email_values=email_vals)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]  # fmt: skip
 
+    # [@ANCHOR: user_websites:COMM_increment_strike_count]
     def _increment_strike_count(self, table_name, rec_id):
         """Atomically locks and increments a strike count via the
         increment_strike_count() stored procedure (sql_views.py).
@@ -112,9 +113,11 @@ class ContentViolationReport(models.Model):
         )
 
     # --- Moderation Action Methods ---
+    # [@ANCHOR: user_websites:COMM_action_mark_under_review]
     def action_mark_under_review(self):
         self.write({"state": "under_review"})
 
+    # [@ANCHOR: user_websites:COMM_report_action_dismiss]
     def action_dismiss(self):
         self.write({"state": "dismissed"})
 

@@ -33,6 +33,7 @@ class TestConfigSettings(HamsTransactionCase):
         settings = self.env["res.config.settings"].create(
             {"user_websites_administrators_ids": [(4, self.user_admin_test.id)]}
         )
+        # Tests [@ANCHOR: user_websites:COMM_settings_set_values]
         settings.set_values()
 
         # Verify user is now in the security group
@@ -44,6 +45,7 @@ class TestConfigSettings(HamsTransactionCase):
 
         # Step 2: Read values back via settings
         new_settings = self.env["res.config.settings"].create({})
+        # Tests [@ANCHOR: user_websites:COMM_settings_get_values]
         retrieved_values = new_settings.get_values()
 
         self.assertIn(

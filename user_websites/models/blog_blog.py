@@ -59,6 +59,7 @@ class BlogBlog(models.Model):
                     _("You have reached your limit of %s blogs.") % limits[o_id]
                 )
 
+    # [@ANCHOR: user_websites:COMM_blog_blog_create]
     @api.model_create_multi
     def create(self, vals_list):
         self._check_proxy_ownership_create(vals_list)
@@ -93,6 +94,7 @@ class BlogBlog(models.Model):
         self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
         return super(BlogBlog, self_svc).create(vals_list)
 
+    # [@ANCHOR: user_websites:COMM_blog_blog_check_access]
     def check_access(self, operation):
         """Proactively catch write/unlink access violations to prevent ir.rule INFO log spam."""
         if operation in ("write", "unlink") and not self.env.su and self:
@@ -132,6 +134,7 @@ class BlogBlog(models.Model):
                         )
         return super(BlogBlog, self).check_access(operation)
 
+    # [@ANCHOR: user_websites:COMM_blog_blog_write]
     def write(self, vals):
         self.check_access("write")
         self._check_proxy_ownership_write(vals)
@@ -164,6 +167,7 @@ class BlogBlog(models.Model):
         self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
         return super(BlogBlog, self_svc).write(vals)
 
+    # [@ANCHOR: user_websites:COMM_blog_blog_unlink]
     def unlink(self):
         self.check_access("unlink")
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

@@ -107,6 +107,7 @@ class TestUserWebsitesUITours(RealTransactionCase):
     def test_03_gdpr_privacy_tour(self):
         # Tests [@ANCHOR: test_tour_gdpr_privacy]
         self.authenticate(self.user_test.login, "touruser")
+        # Tests [@ANCHOR: user_websites:COMM_privacy_dashboard]
         self.url_open("/my/privacy")
 
         # Adding a minor delay allows Owl components to hydrate in constrained VM environments
@@ -133,6 +134,8 @@ class TestUserWebsitesUITours(RealTransactionCase):
 
     def test_05_create_site_tour(self):
         # Tests [@ANCHOR: test_tour_create_site]
+
+        # Tests [@ANCHOR: user_websites:COMM_create_site]
         user_no_site = self.env["res.users"].create(
             {
                 "name": "Site Tour User",

@@ -17,6 +17,13 @@ class ContentViolationAppeal(models.Model):
         required=False,
         ondelete="cascade",
         tracking=True,
+        # Odoo only runs @api.constrains methods whose watched fields were
+        # actually present in the create()/write() vals; an explicit default
+        # (even False) guarantees user_id/group_id are always in vals, so
+        # _check_appeal_target() reliably fires even when a caller omits
+        # both fields, rather than silently allowing an appeal tied to
+        # neither a user nor a group.
+        default=False,
     )
     group_id = fields.Many2one(
         "user.websites.group",
@@ -24,6 +31,7 @@ class ContentViolationAppeal(models.Model):
         required=False,
         ondelete="cascade",
         tracking=True,
+        default=False,
     )
     reason = fields.Text(string="Appeal Reason", required=True)
 
@@ -47,6 +55,7 @@ class ContentViolationAppeal(models.Model):
     )
 
     @api.constrains("user_id", "group_id")
+    # [@ANCHOR: user_websites:COMM_check_appeal_target]
     def _check_appeal_target(self):
         for appeal in self:
             if bool(appeal.user_id) == bool(appeal.group_id):
@@ -80,6 +89,7 @@ class ContentViolationAppeal(models.Model):
                 subtype_xmlid="mail.mt_note",
             )
 
+    # [@ANCHOR: user_websites:COMM_appeal_action_reject]
     def action_reject(self):
         """Rejects the appeal."""
         # ADR 0078: Fetch service account outside the loop for O(1) Memory Mapping

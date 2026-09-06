@@ -7,6 +7,7 @@ This file defines the Odoo model for User Websites Groups.
 
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 from psycopg2 import IntegrityError
 import psycopg2
@@ -176,6 +177,7 @@ class UserWebsitesGroup(models.Model):
     )
 
     @api.constrains("website_slug")
+    # [@ANCHOR: user_websites:COMM_group_check_reserved_slugs]
     def _check_reserved_slugs(self):
         for record in self:
             if record.website_slug and record.website_slug.lower() in RESERVED_SLUGS:
@@ -271,6 +273,7 @@ class UserWebsitesGroup(models.Model):
 
         return super(UserWebsitesGroup, self).create(vals_list)
 
+    # [@ANCHOR: user_websites:COMM_group_write]
     def write(self, vals):
         old_slugs = {}
         if "website_slug" in vals:
@@ -333,6 +336,7 @@ class UserWebsitesGroup(models.Model):
 
         return result
 
+    # [@ANCHOR: user_websites:COMM_action_suspend_group_websites]
     def action_suspend_group_websites(self):
         """Forcefully unpublishes all group content and flags them as suspended."""
         group_ids = self.ids
@@ -384,6 +388,10 @@ class UserWebsitesGroup(models.Model):
 
         for group in self:
             group.is_suspended_from_websites = True
+            # See res_users_moderation.py's identical call: _get_page_id_by_url()
+            # also checks user_websites_group_id.is_suspended_from_websites at
+            # cache-population time and must not keep serving a stale cached hit.
+            notify_model_invalidation(self.env, "website.page")
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
@@ -394,11 +402,13 @@ class UserWebsitesGroup(models.Model):
                 subtype_xmlid="mail.mt_note",
             )
 
+    # [@ANCHOR: user_websites:COMM_action_pardon_group_websites]
     def action_pardon_group_websites(self):
         """Resets strikes and lifts the suspension (Does NOT automatically republish content)."""
         for group in self:
             group.violation_strike_count = 0
             group.is_suspended_from_websites = False
+            notify_model_invalidation(self.env, "website.page")
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )

@@ -61,6 +61,16 @@ class TestModeration(RealTransactionCase):
         # [@ANCHOR: test_moderation_suspension]
 
         # Tests [@ANCHOR: action_take_action_and_strike]
+
+        # Tests [@ANCHOR: user_websites:COMM_increment_strike_count]
+
+        # Tests [@ANCHOR: user_websites:COMM_async_unpublish_content]
+
+        # Tests [@ANCHOR: user_websites:COMM_register_hook]
+
+        # Tests [@ANCHOR: user_websites:COMM_action_suspend_user_websites]
+
+        # Tests [@ANCHOR: user_websites:COMM_db_functions_init]
         """
         Verify that hitting 3 strikes automatically suspends the user
         and unpublishes all their content.
@@ -113,6 +123,7 @@ class TestModeration(RealTransactionCase):
         )
 
     def test_02_pardon_functionality(self):
+        # Tests [@ANCHOR: user_websites:COMM_action_pardon_user_websites]
         """Verify the pardon action resets strikes and lifts suspension."""
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()

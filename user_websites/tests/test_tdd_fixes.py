@@ -15,6 +15,7 @@ class TestTDDFixes(HamsHttpCase):
 @tagged('post_install', '-at_install')
 class TestTDDFixesORM(HamsTransactionCase):
     def test_res_users_is_admin(self):
+        # Tests [@ANCHOR: user_websites:COMM_is_admin]
         user = self.env['res.users'].create({
             'name': 'Test ERP Manager',
             'login': 'erp_manager',

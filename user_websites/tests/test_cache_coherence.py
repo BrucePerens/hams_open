@@ -32,6 +32,7 @@ class TestCacheCoherence(RealTransactionCase):
         self.env.cr.commit()
 
     def test_01_slug_reassignment_cache_invalidation(self):
+        # Tests [@ANCHOR: user_websites:COMM_res_users_write]
         """
         Action: User A creates a site. Then User A changes their slug to release it.
         User B immediately claims the old slug and creates a new site.

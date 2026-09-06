@@ -6,6 +6,7 @@ import urllib.error
 import odoo.tests
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class TestAppealsAndViews(RealTransactionCase):
                         tracks.unlink()
 
                     if self.page and self.page.exists():
-                        self.page.unlink()
+                        self.page.unlink()  # Tests [@ANCHOR: user_websites:COMM_website_page_unlink]
                     if self.user_public and self.user_public.exists():
                         self.user_public.unlink()
                 break
@@ -137,3 +138,33 @@ class TestAppealsAndViews(RealTransactionCase):
             self.user_public.is_suspended_from_websites,
             "User should be automatically pardoned.",
         )
+
+    def test_03_reject_appeal_leaves_suspension_in_place(self):
+        # Tests [@ANCHOR: user_websites:COMM_appeal_action_reject]
+
+        # Tests [@ANCHOR: user_websites:COMM_check_appeal_target]
+        """action_reject() had zero test coverage -- confirm it moves an
+        appeal to 'rejected' without pardoning the user. Also proves
+        _check_appeal_target()'s own real constraint: an appeal must be
+        tied to exactly one of user_id/group_id, not both and not
+        neither."""
+        self.user_public.is_suspended_from_websites = True
+        self.env.cr.commit()
+
+        appeal = self.env["content.violation.appeal"].create(
+            {"user_id": self.user_public.id, "reason": "Please reconsider."}
+        )
+        appeal.action_reject()
+
+        self.assertEqual(appeal.state, "rejected")
+        self.assertTrue(
+            self.user_public.is_suspended_from_websites,
+            "Rejecting an appeal must NOT lift the user's suspension.",
+        )
+
+        with self.assertRaises(
+            ValidationError,
+            msg="An appeal tied to neither a user nor a group must be rejected.",
+        ):
+            self.env["content.violation.appeal"].create({"reason": "No target"})
+            self.env.flush_all()

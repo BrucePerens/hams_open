@@ -104,6 +104,7 @@ class TestQWebContext(HamsHttpCase):
         self.env.flush_all()
 
     def test_01_blog_rendering_context(self):
+        # Tests [@ANCHOR: user_websites:COMM_user_blog_index]
         """
         Ensure that the /blog route injects 'pager', 'blogs', 'main_object',
         and 'blog_url' into the context so standard Odoo templates don't crash.

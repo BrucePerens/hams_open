@@ -124,6 +124,7 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
         )
 
     def test_04_public_cannot_create_blog(self):
+        # Tests [@ANCHOR: user_websites:COMM_create_blog]
         self.authenticate(None, None)
         create_url = f"/{self.user_a.website_slug}/create_blog"
 

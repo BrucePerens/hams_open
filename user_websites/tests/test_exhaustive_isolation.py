@@ -114,6 +114,11 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         )
 
     def test_01_community_blog_container_protection(self):
+        # Tests [@ANCHOR: user_websites:COMM_blog_blog_check_access]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_blog_write]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_blog_unlink]
         """
         Risk: Because users share 'Community Blog', Malice might try to delete or rename it.
         Action: Malice executes write() or unlink() on blog.blog.
@@ -230,6 +235,11 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
             _logger.info("QWeb rendering exception caught as expected.")
 
     def test_05_blog_post_cross_tenant_mutation(self):
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_check_access]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_write]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_unlink]
         """
         Risk: Malice modifies the content of Victim's blog post via RPC.
         Action: Malice writes to Victim's blog.post ID.

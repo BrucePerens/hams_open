@@ -144,6 +144,10 @@ class TestPrivacyGDPR(HamsHttpCase):
 
     def test_01b_export_token_is_single_use(self):
         # [@ANCHOR: test_gdpr_export_token_single_use]
+
+        # Tests [@ANCHOR: user_websites:COMM_create_for_current_user]
+
+        # Tests [@ANCHOR: user_websites:COMM_gdpr_token_compute_name]
         """_consume() must refuse a second attempt against the same token --
         this is what makes the daemon-facing handoff token non-replayable."""
         env_as_user = self.env(user=self.user_privacy)
@@ -195,6 +199,8 @@ class TestPrivacyGDPR(HamsHttpCase):
             Token._consume("an-old-token")
 
     def test_01e_consume_and_export_materializes_data_and_streamed_keys(self):
+        # Tests [@ANCHOR: user_websites:COMM_get_gdpr_streamed_keys]
+
         # [@ANCHOR: test_gdpr_consume_and_export_payload]
         """The one RPC entrypoint the daemon calls -- must return the same
         underlying data _get_gdpr_export_data()/_get_gdpr_streamed_keys()
@@ -253,7 +259,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         # Tests [@ANCHOR: UX_GDPR_ERASURE]
         self.env.flush_all()
         response = self.url_open(
-            "/my/privacy/delete_content",
+            "/my/privacy/delete_content",  # Tests [@ANCHOR: user_websites:COMM_privacy_delete_content]
             data={"csrf_token": odoo.http.Request.csrf_token(self)},
             method="POST",
         )

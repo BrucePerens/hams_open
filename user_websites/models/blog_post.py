@@ -55,6 +55,7 @@ class BlogPost(models.Model):
                     "Fatal error during Cloudflare purge"
                 )
 
+    # [@ANCHOR: user_websites:COMM_get_blog_urls]
     def _get_blog_urls(self):
         """Helper method to construct the blog index URLs for Cloudflare cache invalidation."""
         urls = set()
@@ -167,6 +168,7 @@ class BlogPost(models.Model):
         posts._invalidate_cloudflare_cache()
         return posts
 
+    # [@ANCHOR: user_websites:COMM_blog_post_check_access]
     def check_access(self, operation):
         """
         Proactively catch write/unlink access violations to prevent ir.rule INFO log spam
@@ -211,6 +213,7 @@ class BlogPost(models.Model):
                         )
         return super(BlogPost, self).check_access(operation)
 
+    # [@ANCHOR: user_websites:COMM_blog_post_write]
     def write(self, vals):
         self.check_access("write")
         self._check_proxy_ownership_write(vals)
@@ -264,6 +267,7 @@ class BlogPost(models.Model):
         self._invalidate_cloudflare_cache()
         return res
 
+    # [@ANCHOR: user_websites:COMM_blog_post_unlink]
     def unlink(self):
         self.check_access("unlink")
 

@@ -51,6 +51,7 @@ class WebsitePage(models.Model):
             _logger.warning("Redis view counter increment failed")
         return response
 
+    # [@ANCHOR: user_websites:COMM_page_invalidate_cloudflare_cache]
     def _invalidate_cloudflare_cache(self):
         """Soft-dependency hook to purge the global Cache-Tag at the edge."""
         # Enforce strict architectural schema. Do not mask missing dependencies.
@@ -264,6 +265,7 @@ class WebsitePage(models.Model):
             return "<div>Sanitization Error</div>", True
 
     @api.model
+    # [@ANCHOR: user_websites:COMM_trigger_malicious_arch_violation]
     def _trigger_malicious_arch_violation(self, vals, records=None):
         """Creates an automated violation report and issues a strike when malicious SSTI/XSS is stripped."""
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -323,6 +325,7 @@ class WebsitePage(models.Model):
 
     @api.model
     @distributed_cache()
+    # [@ANCHOR: user_websites:COMM_get_page_id_by_url]
     def _get_page_id_by_url(self, url, website_id, override_svc_uid=None):
         if not url:
             return False
@@ -705,6 +708,7 @@ class WebsitePage(models.Model):
         self._invalidate_cloudflare_cache()
         return res
 
+    # [@ANCHOR: user_websites:COMM_website_page_unlink]
     def unlink(self):
         self.check_access("unlink")
 

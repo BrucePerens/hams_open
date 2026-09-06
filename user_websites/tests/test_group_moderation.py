@@ -45,7 +45,7 @@ class TestGroupModeration(RealTransactionCase):
 
     def test_01_group_suspension(self):
         # Suspend the group
-        self.group.action_suspend_group_websites()
+        self.group.action_suspend_group_websites()  # Tests [@ANCHOR: user_websites:COMM_action_suspend_group_websites]
         self.env.cr.commit()
 
         # Verify suspension
@@ -92,7 +92,53 @@ class TestGroupModeration(RealTransactionCase):
         self.group.violation_strike_count = 3
         self.group.is_suspended_from_websites = True
 
-        self.group.action_pardon_group_websites()
+        self.group.action_pardon_group_websites()  # Tests [@ANCHOR: user_websites:COMM_action_pardon_group_websites]
 
         self.assertEqual(self.group.violation_strike_count, 0)
         self.assertFalse(self.group.is_suspended_from_websites)
+
+    def test_03_compute_suspended_group_ids(self):
+        # Tests [@ANCHOR: user_websites:COMM_compute_suspended_group_ids]
+        """_compute_suspended_group_ids() had zero test coverage -- prove
+        a member's suspended_group_ids reflects only groups they belong
+        to that are actually suspended, both directions."""
+        member = self.env["res.users"].create(
+            {
+                "name": "Group Member For Suspension Compute",
+                "login": f"suspend_compute_member_{self.id()}",
+                "group_ids": [
+                    (6, 0, [self.env.ref("base.group_portal").id])
+                ],
+            }
+        )
+        self.group.write({"member_ids": [(4, member.id)]})
+        self.assertNotIn(self.group, member.suspended_group_ids)
+
+        self.group.action_suspend_group_websites()
+
+        # See test_01_group_suspension's own comment: the actual unpublish
+        # work runs on a real background thread with its own registry/cursor,
+        # so we must poll for its real committed state (not a fixed sleep)
+        # before this test method returns -- otherwise RealTransactionCase's
+        # teardown can start deleting group/page/post rows while that thread
+        # is still writing to them, which surfaces as a false "database
+        # pollution" leak rather than as a real assertion failure here.
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            self.env.cr.commit()
+            self.group_page.invalidate_recordset(["is_published", "website_published"])
+            self.group_post.invalidate_recordset(["is_published"])
+            if (
+                not self.group_page.is_published
+                and not self.group_page.website_published
+                and not self.group_post.is_published
+            ):
+                break
+            time.sleep(0.25)  # audit-ignore-sleep
+
+        member.invalidate_recordset(["suspended_group_ids"])
+        self.assertIn(self.group, member.suspended_group_ids)
+
+        self.group.action_pardon_group_websites()
+        member.invalidate_recordset(["suspended_group_ids"])
+        self.assertNotIn(self.group, member.suspended_group_ids)

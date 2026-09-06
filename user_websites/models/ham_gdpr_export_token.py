@@ -38,6 +38,7 @@ class HamGdprExportToken(models.Model):
     )
 
     @api.depends("user_id", "user_id.login", "user_id.name")
+    # [@ANCHOR: user_websites:COMM_gdpr_token_compute_name]
     def _compute_name(self):
         for record in self:
             record.name = _("GDPR Export Token for %s") % (
@@ -45,6 +46,7 @@ class HamGdprExportToken(models.Model):
             )
 
     @api.model
+    # [@ANCHOR: user_websites:COMM_create_for_current_user]
     def create_for_current_user(self):
         """Called from the authenticated /my/privacy/export.zip controller,
         as the requesting user's own session -- this is the only path that

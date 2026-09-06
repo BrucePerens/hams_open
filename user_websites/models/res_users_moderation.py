@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 from odoo import models, fields, _
+from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from .res_users import _async_unpublish_content, BACKGROUND_EXECUTOR
 
 
@@ -30,6 +31,7 @@ class ResUsersModeration(models.Model):
         string="Suspended Groups",
     )
 
+    # [@ANCHOR: user_websites:COMM_compute_suspended_group_ids]
     def _compute_suspended_group_ids(self):
         groups = self.env["user.websites.group"].search(
             [("member_ids", "in", self.ids), ("is_suspended_from_websites", "=", True)],
@@ -45,6 +47,7 @@ class ResUsersModeration(models.Model):
         for user in self:
             user.suspended_group_ids = mapping[user.id]
 
+    # [@ANCHOR: user_websites:COMM_action_suspend_user_websites]
     def action_suspend_user_websites(self):
         """Forcefully unpublishes all user content and flags them as suspended."""
         user_ids = self.ids
@@ -55,6 +58,13 @@ class ResUsersModeration(models.Model):
 
         for user in self:
             user.is_suspended_from_websites = True
+
+            # _get_page_id_by_url() (website_page.py) caches resolved page
+            # ids keyed by URL and checks owner_user_id.is_suspended_from_websites
+            # at cache-population time -- without this, a page resolved and
+            # cached before suspension would keep resolving after suspension
+            # until the distributed cache entry happened to expire on its own.
+            notify_model_invalidation(self.env, "website.page")
 
             # Note: We use Odoo's mail.thread on the underlying partner to log the suspension
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -67,11 +77,13 @@ class ResUsersModeration(models.Model):
                 subtype_xmlid="mail.mt_note",
             )
 
+    # [@ANCHOR: user_websites:COMM_action_pardon_user_websites]
     def action_pardon_user_websites(self):
         """Resets strikes and lifts the suspension (Does NOT automatically republish content)."""
         for user in self:
             user.violation_strike_count = 0
             user.is_suspended_from_websites = False
+            notify_model_invalidation(self.env, "website.page")
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "zero_sudo.mail_service_internal"
             )

@@ -40,6 +40,8 @@ class TestBlogLimits(RealTransactionCase):
         self.env["ir.config_parameter"].set_param("user_websites.global_blog_post_limit", "2")
 
     def test_01_blog_creation_is_blocked_past_the_configured_limit(self):
+        # Tests [@ANCHOR: user_websites:COMM_blog_blog_create]
+
         # [@ANCHOR: test_blog_quota_limit]
         # Creates blogs up to the configured limit, then asserts the next
         # one over that limit raises ValidationError -- the real behavior
@@ -59,6 +61,12 @@ class TestBlogLimits(RealTransactionCase):
             self.env.flush_all()
 
     def test_02_blog_post_creation_is_blocked_past_the_configured_limit(self):
+        # Tests [@ANCHOR: user_websites:COMM_get_blog_urls]
+
+        # Tests [@ANCHOR: user_websites:COMM_get_blog_limit]
+
+        # Tests [@ANCHOR: user_websites:COMM_get_blog_post_limit]
+
         # [@ANCHOR: test_blog_post_quota_limit]
         # Creates posts up to the configured limit, then asserts the next
         # one over that limit raises ValidationError -- the real behavior

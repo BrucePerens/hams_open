@@ -231,6 +231,8 @@ class TestORMSecurity(RealTransactionCase):
         # [@ANCHOR: test_website_page_sanitize_arch]
 
         # Tests [@ANCHOR: website_page_sanitize_arch]
+
+        # Tests [@ANCHOR: user_websites:COMM_trigger_malicious_arch_violation]
         """
         # Tests [@ANCHOR: website_page_sanitize_arch]
         Verify that script tags, iframes, and dangerous QWeb directives are actively stripped
@@ -272,6 +274,20 @@ class TestORMSecurity(RealTransactionCase):
             'data-blocked-onmouseover="alert(1)"',
             page.arch,
             "The inline JS event must be neutralized.",
+        )
+
+        # _trigger_malicious_arch_violation() had zero test coverage of
+        # its own effect -- confirm the sanitizer's own strip actually
+        # files an automated content.violation.report against the
+        # offending page's owner, not just that the arch itself got
+        # cleaned.
+        auto_report = self.env["content.violation.report"].search(
+            [("content_owner_id", "=", self.user_a.id)], limit=1
+        )
+        self.assertTrue(
+            auto_report,
+            "Stripping malicious arch content must automatically file a "
+            "content.violation.report against the page's owner.",
         )
 
         # Test write operation

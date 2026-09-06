@@ -19,6 +19,7 @@ class UserWebsitesPublicDirectoryView(models.Model):
     # column to this name.
     write_date = fields.Datetime(string="Last Updated", readonly=True)
 
+    # [@ANCHOR: user_websites:COMM_public_directory_view_init]
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
         with self.env.cr.savepoint():
@@ -55,6 +56,7 @@ class UserWebsitesContentRoutingView(models.Model):
     res_id = fields.Integer(string="Resource ID", readonly=True)
     website_slug = fields.Char(string="Slug", readonly=True)
 
+    # [@ANCHOR: user_websites:COMM_content_routing_view_init]
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
         with self.env.cr.savepoint():
@@ -99,6 +101,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
     post_ids_string = fields.Char(string="Post IDs", readonly=True)
     first_post_id = fields.Integer(string="First Post ID", readonly=True)
 
+    # [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
         with self.env.cr.savepoint():
@@ -149,6 +152,7 @@ class UserWebsitesDbFunctions(models.AbstractModel):
     name = fields.Char(string="Name", default=lambda self: self._description)
     _description = "User Websites DB Functions"
 
+    # [@ANCHOR: user_websites:COMM_db_functions_init]
     def init(self):
         with self.env.cr.savepoint():
             self.env.cr.execute(

@@ -91,7 +91,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         # Tests [@ANCHOR: controller_unsubscribe_digest]
 
         # Execute the cron job method directly
-        self.env["blog.post"].send_weekly_digest()
+        self.env["blog.post"].send_weekly_digest()  # Tests [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
 
         # Find the generated email natively linked to the recipient partner
         # We search as the mail service account to bypass any restrictive rules and
