@@ -11,6 +11,7 @@ import tempfile
 logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: pager_duty:generate_smart_spool]
 def generate_smart_spool():
     try:
         # 1. Autodiscover all block devices supporting SMART
@@ -33,7 +34,11 @@ def generate_smart_spool():
                     logger.warning("JSON decode error for SMART data: %s", e)
 
         # 3. Write to the read-only spool directory accessible by the main daemon
-        spool_file = "/var/log/pager_smart_spool.json"
+        # Overridable so a test (or a genuinely different deployment layout)
+        # doesn't have to write into the real, hardcoded system path --
+        # matching check_cloudflare_token_expiry.py's own established
+        # HAMS_*_PATH override convention.
+        spool_file = os.environ.get("HAMS_SMART_SPOOL_PATH") or "/var/log/pager_smart_spool.json"  # burn-ignore-env
 
         # Atomic Write: Write to a tmp file and rename to prevent the main daemon from reading a partial write
         fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(spool_file))

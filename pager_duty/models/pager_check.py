@@ -184,6 +184,7 @@ class PagerCheck(models.Model):
 
     @api.model
     @distributed_cache()
+    # [@ANCHOR: pager_duty:get_check_id_by_uuid]
     def _get_check_id_by_uuid(self, hb_uuid, override_svc_uid=None):
         if not hb_uuid:
             return False
@@ -198,21 +199,25 @@ class PagerCheck(models.Model):
         return check.id if check else False
 
     @api.model_create_multi
+    # [@ANCHOR: pager_duty:pager_check_create]
     def create(self, vals_list):
         records = super(PagerCheck, self).create(vals_list)
         notify_model_invalidation(self.env, self._name)
         return records
 
+    # [@ANCHOR: pager_duty:pager_check_write]
     def write(self, vals):
         res = super(PagerCheck, self).write(vals)
         notify_model_invalidation(self.env, self._name)
         return res
 
+    # [@ANCHOR: pager_duty:pager_check_unlink]
     def unlink(self):
         notify_model_invalidation(self.env, self._name)
         return super(PagerCheck, self).unlink()
 
     @api.model
+    # [@ANCHOR: pager_duty:pager_check_valid_field_parameter]
     def _valid_field_parameter(self, field, name):
         return name == "password" or super()._valid_field_parameter(field, name)
 
@@ -283,6 +288,7 @@ class PagerCheck(models.Model):
             return {"status": "error", "message": _("Internal server error.")}
 
     @api.model
+    # [@ANCHOR: pager_duty:check_heartbeat_rpc]
     def check_heartbeat_rpc(self, hb_uuid, interval_sec):
         check_id = self._get_check_id_by_uuid(hb_uuid)
         if not check_id:
@@ -310,6 +316,7 @@ class PagerCheck(models.Model):
         )
         return os.path.join(base_dir, "pager_config.json")
 
+    # [@ANCHOR: pager_duty:action_pull_from_json]
     def action_pull_from_json(self):
         path = self._get_config_path()
         if not os.path.exists(path):
@@ -530,6 +537,7 @@ class PagerCheck(models.Model):
         }
 
     @api.model
+    # [@ANCHOR: pager_duty:run_autodiscovery]
     def _run_autodiscovery(self):
         """Scans the host OS and systemd to build an optimal monitoring baseline."""
         checks = []
@@ -708,6 +716,7 @@ class PagerCheck(models.Model):
         # Always synchronize the JSON file after an autodiscovery run
         self.action_push_to_json()
 
+    # [@ANCHOR: pager_duty:action_autodiscover]
     def action_autodiscover(self):
         self._run_autodiscovery()
         return {
@@ -723,6 +732,7 @@ class PagerCheck(models.Model):
             },
         }
 
+    # [@ANCHOR: pager_duty:action_trigger_check]
     def action_trigger_check(self):
         return {
             "type": "ir.actions.client",
@@ -738,6 +748,7 @@ class PagerCheck(models.Model):
         }
 
     @api.model
+    # [@ANCHOR: pager_duty:update_lets_encrypt_domains]
     def update_lets_encrypt_domains(self, domains):
         """
         Updates the target of the 'certbot' pager checks to monitor the provided domains.
@@ -784,6 +795,7 @@ class PagerCheck(models.Model):
         self.action_push_to_json()
 
     @api.constrains("parent_check_id")
+    # [@ANCHOR: pager_duty:check_parent_check_id]
     def _check_parent_check_id(self):
         if self._has_cycle("parent_check_id"):
             raise ValidationError(_("You cannot create recursive parent checks."))

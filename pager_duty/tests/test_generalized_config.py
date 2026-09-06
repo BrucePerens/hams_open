@@ -44,6 +44,10 @@ class TestGeneralizedConfig(HamsTransactionCase):
         Then it MUST successfully parse the JSON and create the corresponding pager.check records.
         """
         # Tests [@ANCHOR: generalized_pager_config]
+
+        # Tests [@ANCHOR: pager_duty:action_pull_from_json]
+
+        # Tests [@ANCHOR: pager_duty:pager_check_create]
         check_model = self.env["pager.check"].with_user(self.admin)
 
         # Mock the file read to supply our JSON payload
@@ -75,6 +79,9 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertEqual(bash_check.ignored_services, "ignored.service")
 
     def test_02_autodiscovery(self):
+        # Tests [@ANCHOR: pager_duty:action_autodiscover]
+
+        # Tests [@ANCHOR: pager_duty:run_autodiscovery]
         """Verify the autodiscover action builds checks safely without crashing."""
         mock_push = self.safe_patch_object(
             type(self.env["pager.check"]),
@@ -98,6 +105,8 @@ class TestGeneralizedConfig(HamsTransactionCase):
     def test_03_views_render(self):
         """Verify the new graphical configuration views render successfully."""
         # Tests [@ANCHOR: test_pager_view]
+
+        # Tests [@ANCHOR: pager_duty:pager_check_valid_field_parameter]
         v1 = self.env["pager.check"].get_view(view_type="form")
         v2 = self.env["pager.check"].get_view(view_type="list")
         self.assertIn("arch", v1)

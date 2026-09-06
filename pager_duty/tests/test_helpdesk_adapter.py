@@ -35,6 +35,8 @@ class TestHelpdeskAdapter(HamsTransactionCase):
     def test_01_adapter_creates_ticket_and_event(self):
         """Verify the adapter successfully creates a ticket and a calendar event when an incident fires."""
         # Tests [@ANCHOR: pd_helpdesk_adapter]
+
+        # Tests [@ANCHOR: pager_duty:incident_ticket_adapter_create]
         # Ensure the parameter is set to a valid model
         self.env["ir.config_parameter"].set_param(
             "pager_duty.helpdesk_model", "hams_helpdesk.ticket"
@@ -81,6 +83,7 @@ class TestHelpdeskAdapter(HamsTransactionCase):
         )
 
     def test_02_smtp_fallback_on_missing_model(self):
+        # Tests [@ANCHOR: pager_duty:execute_smtp_fallback]
         """Verify that a missing target model triggers the emergency SMTP fallback page."""
         # Set to an invalid/uninstalled model using safe_patch to avoid ormcache test leakage
         self.safe_patch_object(

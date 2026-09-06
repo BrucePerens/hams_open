@@ -27,3 +27,17 @@ Alice wakes up to the alert. She logs into the NOC Dashboard [@ANCHOR: pager_boa
 
 ## AI Triage Assist
 Before Alice even wakes up, an on-call AI triage assistant (running as an MCP client against this module's own MCP server) has already looked at the incident. It calls three genuinely non-destructive tools [@ANCHOR: pager_mcp_triage_tools] -- listing open incidents, reading one incident's full detail, and adding a triage note to it -- all backed by a narrowly-scoped, read-only-on-`pager.incident` service account rather than raw ORM access, so the assistant can gather context and leave Alice a head start without ever being able to acknowledge, resolve, or otherwise mutate an incident itself.
+
+### How the MCP Server Bridges the Assistant to Odoo
+
+The MCP server (`daemon/pager_mcp_server.py`) is a thin, stateless adapter process the AI assistant's own MCP client talks to -- it holds no incident logic of its own, only translates three tool calls into RPCs against the real `pager.incident` model methods.
+
+1.  **Getting a Client:** `_get_client()` [@ANCHOR: mcp_get_client] reads the server's own API key from its environment and fails loudly (a `RuntimeError`, not a silent no-op) if that key is missing, rather than letting a misconfigured deployment quietly serve unauthenticated requests.
+
+2.  **The JSON-2 Transport:** Just like `generalized_monitor.py`'s own client, but under a deliberately separate credential scope, `OdooClient.__init__` [@ANCHOR: mcp_odoo_client_init] and `OdooClient.execute()` [@ANCHOR: mcp_odoo_client_execute] POST to Odoo's `/json/2/<model>/<method>` endpoint and parse the response -- the MCP server's own credentials are narrower than the monitor daemon's, since this process only ever needs to touch `pager.incident`.
+
+3.  **Listing Incidents:** The `list_incidents` tool [@ANCHOR: mcp_list_incidents_tool] forwards the assistant's status/severity filters straight through to `mcp_list_incidents()` on the model.
+
+4.  **Reading One Incident:** The `get_incident` tool [@ANCHOR: mcp_get_incident_tool] forwards to `mcp_get_incident_detail()`, giving the assistant the full chatter history for one incident by id.
+
+5.  **Leaving a Note:** The `add_incident_note` tool [@ANCHOR: mcp_add_incident_note_tool] forwards to `mcp_add_note()` -- and, deliberately, there is no fourth tool that would let the assistant change an incident's status; that boundary is enforced by the tool registry itself, not just by convention.

@@ -82,6 +82,7 @@ class PagerIncident(models.Model):
     )
 
     @api.depends("time_acknowledged", "create_date")
+    # [@ANCHOR: pager_duty:compute_mtta]
     def _compute_mtta(self):
         for rec in self:
             if rec.time_acknowledged and rec.create_date:
@@ -90,6 +91,7 @@ class PagerIncident(models.Model):
                 rec.mtta = 0.0
 
     @api.depends("time_resolved", "create_date")
+    # [@ANCHOR: pager_duty:compute_mttr]
     def _compute_mttr(self):
         for rec in self:
             if rec.time_resolved and rec.create_date:
@@ -162,6 +164,7 @@ class PagerIncident(models.Model):
         "fired for this burst.",
     )
 
+    # [@ANCHOR: pager_duty:incident_write]
     def write(self, vals):
         now = fields.Datetime.now()
         if vals.get("status") == "acknowledged":
@@ -229,6 +232,7 @@ class PagerIncident(models.Model):
                 body=msg_body, partner_ids=partners.ids)   # fmt: skip
         incidents.write({"is_escalated": True})
 
+    # [@ANCHOR: pager_duty:notify_on_duty]
     def _notify_on_duty(self, incident, website_id, msg_body):
         """
         Posts a chatter notification to whoever is on-duty for website_id,
@@ -446,6 +450,7 @@ class PagerIncident(models.Model):
         return True
 
     @api.model_create_multi
+    # [@ANCHOR: pager_duty:incident_create]
     def create(self, vals_list):
         records = super(PagerIncident, self.with_context(mail_notrack=True)).create(
             vals_list
@@ -489,6 +494,7 @@ class PagerIncident(models.Model):
     # its own explicit go/no-go before it's ever built.
 
     @api.model
+    # [@ANCHOR: pager_duty:mcp_list_incidents]
     def mcp_list_incidents(self, status=None, severity=None, limit=50):
         """Read-only summary list for the MCP triage server's list_incidents
         tool. Callable directly under the narrowly-scoped
@@ -515,6 +521,7 @@ class PagerIncident(models.Model):
             for inc in incidents
         ]
 
+    # [@ANCHOR: pager_duty:mcp_get_incident_detail]
     def mcp_get_incident_detail(self):
         """Full detail for the MCP triage server's get_incident tool --
         source/severity/description/status plus a simplified chatter
@@ -558,6 +565,7 @@ class PagerIncident(models.Model):
             ],
         }
 
+    # [@ANCHOR: pager_duty:mcp_add_note]
     def mcp_add_note(self, text):
         """Posts `text` to this incident's own chatter for the MCP triage
         server's add_incident_note tool, tagged so it's visually

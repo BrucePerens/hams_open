@@ -12,6 +12,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
     _inherit = "pager.incident"
 
     @api.model_create_multi
+    # [@ANCHOR: pager_duty:incident_ticket_adapter_create]
     def create(self, vals_list):
         records = super().create(vals_list)
         records.action_generate_helpdesk_ticket()
@@ -88,6 +89,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                     })
                 self.env["calendar.event"].with_user(pd_uid).create(calendar_payloads)
 
+    # [@ANCHOR: pager_duty:execute_smtp_fallback]
     def _execute_smtp_fallback(self, incident, error_msg, assignee_id=False):
         """
         Executes a direct SMTP page if the Helpdesk integration fails or is unreachable.

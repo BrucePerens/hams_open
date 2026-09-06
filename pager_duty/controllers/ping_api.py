@@ -11,6 +11,7 @@ class PagerPingAPI(http.Controller):
     @http.route(
         "/api/v1/pager/ping", type="http", auth="public", methods=["GET"], csrf=False
     )
+    # [@ANCHOR: pager_duty:ping]
     def ping(self, **kw):
         return http.Response(
             json.dumps({"status": "ok"}), content_type="application/json"
@@ -23,6 +24,7 @@ class PagerPingAPI(http.Controller):
         methods=["POST", "GET"],
         csrf=False,
     )
+    # [@ANCHOR: pager_duty:heartbeat]
     def heartbeat(self, hb_uuid, **kw):
 
         svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(

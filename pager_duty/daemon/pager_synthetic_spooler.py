@@ -14,7 +14,11 @@ import shlex
 import logging
 
 logger = logging.getLogger(__name__)
-SPOOL_FILE = "/var/log/pager_synthetic_spool.json"
+# Overridable so a test doesn't have to write into the real, hardcoded
+# system path -- matching check_cloudflare_token_expiry.py's/
+# pager_smart_spooler.py's own established HAMS_*_PATH override
+# convention.
+SPOOL_FILE = os.environ.get("HAMS_SYNTHETIC_SPOOL_PATH") or "/var/log/pager_synthetic_spool.json"  # burn-ignore-env
 
 
 def execute_check(check):
@@ -221,6 +225,7 @@ def execute_check(check):
     return name, res
 
 
+# [@ANCHOR: pager_duty:synthetic_spooler_main]
 def main():
     config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
     if not os.path.exists(config_path):

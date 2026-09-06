@@ -5,6 +5,7 @@
 import asyncio
 import json
 import unittest
+from unittest.mock import MagicMock
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
@@ -64,7 +65,7 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
         )
 
     def test_01_mcp_list_incidents_filters_by_status_and_severity(self):
-        # Tests [@ANCHOR: pager_mcp_triage_tools]
+        # Tests [@ANCHOR: pager_duty:mcp_list_incidents] [@ANCHOR: pager_mcp_triage_tools]
         other = (
             self.env["pager.incident"]
             .with_user(self.admin)
@@ -78,7 +79,7 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
         self.assertNotIn(other.id, ids)
 
     def test_02_mcp_get_incident_detail_includes_chatter(self):
-        # Tests [@ANCHOR: pager_mcp_triage_tools]
+        # Tests [@ANCHOR: pager_duty:mcp_get_incident_detail] [@ANCHOR: pager_mcp_triage_tools]
         self.incident.with_user(self.mcp_svc_uid).mcp_add_note("first note")
         detail = self.incident.with_user(self.mcp_svc_uid).mcp_get_incident_detail()
         self.assertEqual(detail["id"], self.incident.id)
@@ -88,7 +89,7 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
         self.assertIn("first note", bodies)
 
     def test_03_mcp_add_note_tags_the_message_as_ai_authored(self):
-        # Tests [@ANCHOR: pager_mcp_triage_tools]
+        # Tests [@ANCHOR: pager_duty:mcp_add_note] [@ANCHOR: pager_mcp_triage_tools]
         # Sorted by id, not date: mail.message.date is second-resolution
         # (same class of gotcha as pager.incident.last_occurred elsewhere
         # in this module -- see test_incident.py's own test_10), so the
@@ -156,6 +157,10 @@ class TestPagerMcpServerModule(HamsTransactionCase):
 
     def test_06_list_incidents_calls_the_model_method_with_filters(self):
         # Tests [@ANCHOR: pager_mcp_triage_tools]
+
+        # Tests [@ANCHOR: pager_duty:mcp_list_incidents_tool]
+
+        # Tests [@ANCHOR: pager_duty:mcp_get_client]
         mock_execute = self.safe_patch(
             "odoo.addons.pager_duty.daemon.pager_mcp_server.OdooClient.execute",
             return_value=[{"id": 1}],
@@ -172,6 +177,8 @@ class TestPagerMcpServerModule(HamsTransactionCase):
 
     def test_07_get_incident_calls_the_model_method_with_ids(self):
         # Tests [@ANCHOR: pager_mcp_triage_tools]
+
+        # Tests [@ANCHOR: pager_duty:mcp_get_incident_tool]
         mock_execute = self.safe_patch(
             "odoo.addons.pager_duty.daemon.pager_mcp_server.OdooClient.execute",
             return_value={"id": 42},
@@ -188,6 +195,8 @@ class TestPagerMcpServerModule(HamsTransactionCase):
 
     def test_08_add_incident_note_calls_the_model_method_with_ids_and_text(self):
         # Tests [@ANCHOR: pager_mcp_triage_tools]
+
+        # Tests [@ANCHOR: pager_duty:mcp_add_incident_note_tool]
         mock_execute = self.safe_patch(
             "odoo.addons.pager_duty.daemon.pager_mcp_server.OdooClient.execute",
             return_value=True,
@@ -209,3 +218,26 @@ class TestPagerMcpServerModule(HamsTransactionCase):
         )
         with self.assertRaises(RuntimeError):
             pager_mcp_server._get_client()
+
+    def test_10_odoo_client_execute_posts_json2_and_parses_the_response(self):
+        # Tests [@ANCHOR: pager_duty:mcp_odoo_client_init]
+
+        # Tests [@ANCHOR: pager_duty:mcp_odoo_client_execute]
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({"id": 7}).encode("utf-8")
+        mock_urlopen = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_mcp_server.urllib.request.urlopen"
+        )
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        client = pager_mcp_server.OdooClient("http://odoo:8069/", "test_db", "mcp-key")
+        self.assertEqual(client.url, "http://odoo:8069")
+        self.assertEqual(client.headers["Authorization"], "bearer mcp-key")
+
+        result = client.execute("pager.incident", "mcp_get_incident_detail", ids=[7])
+        self.assertEqual(result, {"id": 7})
+        called_req = mock_urlopen.call_args[0][0]
+        self.assertEqual(
+            called_req.full_url,
+            "http://odoo:8069/json/2/pager.incident/mcp_get_incident_detail",
+        )

@@ -70,6 +70,7 @@ class PagerLogSearchJob(models.TransientModel):
     result_payload = fields.Text(string="Result JSON")
 
     @api.model
+    # [@ANCHOR: pager_duty:log_search_rpc_update_state]
     def rpc_update_state(self, uuid, state, result_payload):
         # Adversarial security review, 2026-09-03: no caller-identity
         # check at all -- being @api.model, directly RPC-reachable by

@@ -50,6 +50,7 @@ REDIS_PASS = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
 
 
 class OdooClient:
+    # [@ANCHOR: pager_duty:odoo_client_init]
     def __init__(self, url, db, user, password):
         self.url = url.rstrip("/")
         self.db = db
@@ -60,6 +61,7 @@ class OdooClient:
             "User-Agent": "Pager-Daemon/1.0",
         }
 
+    # [@ANCHOR: pager_duty:odoo_client_execute]
     def execute(self, model, method, **kwargs):
         req = urllib.request.Request(
             f"{self.url}/json/2/{model}/{method}",
@@ -75,6 +77,7 @@ class OdooClient:
             raise Exception(f"JSON-2 API Error {e.code}: {err_body}")
 
 
+# [@ANCHOR: pager_duty:get_odoo_client]
 def get_odoo_client(logger, config):
     url = (os.environ.get("ODOO_URL") or "http://odoo:8069").rstrip("/")
     db = config.get("odoo_database") or os.environ.get("ODOO_DB")
@@ -117,12 +120,14 @@ logging.basicConfig(
 logger = logging.getLogger("generalized_monitor")
 
 
+# [@ANCHOR: pager_duty:parse_env]
 def parse_env(val):
     if isinstance(val, str) and val.startswith("ENV:"):
         return os.environ.get(val[4:]) or ""
     return val
 
 
+# [@ANCHOR: pager_duty:ensure_executable]
 def ensure_executable(cmd_name):
     path = shutil.which(cmd_name)
     if path:
@@ -212,6 +217,7 @@ THREAD_TIMEOUTS = {}
 FAILING_CHECKS = set()
 
 
+# [@ANCHOR: pager_duty:is_in_maintenance]
 def is_in_maintenance(check):
     maint_start_str = check.get("maint_start")
     maint_end_str = check.get("maint_end")
@@ -231,6 +237,7 @@ def is_in_maintenance(check):
     return False
 
 
+# [@ANCHOR: pager_duty:fallback_notify]
 def fallback_notify(source, msg, severity):
     fallback_email = os.environ.get("PAGER_FALLBACK_EMAIL")  # burn-ignore-env
     smtp_host = os.environ.get("SMTP_HOST")  # burn-ignore-env
@@ -303,6 +310,7 @@ def report(client, source, msg, severity="high", website_id=False):
         fallback_notify(source, msg, severity)
 
 
+# [@ANCHOR: pager_duty:auto_resolve]
 def auto_resolve(client, source, website_id=False):
     try:
         client.execute(
@@ -1300,6 +1308,7 @@ def execute_check(check, client=None):
     return False, "Unknown check type"
 
 
+# [@ANCHOR: pager_duty:polling_thread]
 def polling_thread(client, check):
     name = check.get("name", "Unknown")
     check_id = check.get("id")
@@ -1401,6 +1410,7 @@ def polling_thread(client, check):
         time.sleep(interval)  # audit-ignore-sleep
 
 
+# [@ANCHOR: pager_duty:log_tail_thread]
 def log_tail_thread(client, check):
     name = check.get("name", "Log Monitor")
     website_id = check.get("website_id")

@@ -56,6 +56,8 @@ class TestPagerIncidentStandard(HamsTransactionCase):
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
 
+        # Tests [@ANCHOR: pager_duty:notify_on_duty]
+
         # Tests [@ANCHOR: test_pager_notification]
         vals = {
             "source": "test_daemon_2",
@@ -86,6 +88,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertEqual(incident.status, "resolved")
 
     def test_03_bus_notification_on_create_standard(self):
+        # Tests [@ANCHOR: pager_duty:incident_create]
         mock_sendone = self.safe_patch_object(type(self.env["bus.bus"]), "_sendone")
         incident = self.incident_model.create(
             {"source": "manual", "severity": "low", "description": "Bus test"}
@@ -110,6 +113,11 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         )
 
     def test_05_mtta_mttr_calculation(self):
+        # Tests [@ANCHOR: pager_duty:compute_mtta]
+
+        # Tests [@ANCHOR: pager_duty:compute_mttr]
+
+        # Tests [@ANCHOR: pager_duty:incident_write]
         # Prove MTTA/MTTR computation
         incident = self.incident_model.create(
             {"source": "analytics_test", "severity": "low", "description": "desc"}

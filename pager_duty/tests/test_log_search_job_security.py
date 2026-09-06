@@ -77,6 +77,7 @@ class TestLogSearchJobSecurity(HamsTransactionCase):
         )
 
     def test_rpc_update_state_rejects_a_non_service_caller(self):
+        # Tests [@ANCHOR: pager_duty:log_search_rpc_update_state]
         with self.assertRaises(
             AccessError,
             msg="[!] DIAGNOSTIC FOR AI: a non-service caller must not be "

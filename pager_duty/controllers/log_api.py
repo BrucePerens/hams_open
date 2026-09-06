@@ -63,6 +63,7 @@ class PagerLogAPI(http.Controller):
             return {"error": _("Protocol Error: Failed to parse response.")}
 
     @http.route("/api/v1/pager/logs/search_poll", type="jsonrpc", auth="user")
+    # [@ANCHOR: pager_duty:search_logs_poll]
     def search_logs_poll(self, job_id):
         if not request.env.user.has_group("pager_duty.group_pager_admin"):
             raise AccessError(_("Access Denied."))

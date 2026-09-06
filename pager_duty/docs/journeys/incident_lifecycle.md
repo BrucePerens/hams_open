@@ -69,3 +69,27 @@ This journey tracks the technical state transitions of an incident from initial 
 
 ## 5. Performance Optimization
 - **Data Retrieval:** High-performance dashboard retrieval is handled via the `pager_get_board_data` Postgres procedure. [@ANCHOR: pager_duty_postgres_procedures]
+
+## 6. Metric Computation and Write-Time Guards
+
+- **create() / write():** Both `create()` [@ANCHOR: incident_create] and `write()` [@ANCHOR: incident_write] on `pager.incident` are where the bus notification (`update_board`) and, on `write`, the timestamp bookkeeping for status transitions actually happen -- every state change described in sections 3 and 4 above routes through one of these two methods rather than the NOC Dashboard polling for changes itself.
+
+- **On-Duty Notification:** `_notify_on_duty()` [@ANCHOR: notify_on_duty] is the method that performs the calendar lookup and chatter post described in section 2 -- it only actually runs for `high`/`critical` severity per the trend-detection gate in section 1b, so a `low`/`medium` occurrence never triggers a real notification by itself.
+
+- **MTTA:** `_compute_mtta()` [@ANCHOR: compute_mtta] is the stored computed field backing the "Metric Computation" step in section 3 -- the delta between `create_date` and `time_acknowledged`.
+
+- **MTTR:** `_compute_mttr()` [@ANCHOR: compute_mttr] is the equivalent computed field for section 4's resolution metric -- the delta between `create_date` and `time_resolved`.
+
+## 7. Helpdesk Ticket Escalation
+
+- **Ticket Creation:** When an incident is configured to also open a support ticket (Bob's "Helpdesk Integration" toggle from `docs/stories/automated_monitoring_setup.md`), the adapter's own `create()` override [@ANCHOR: incident_ticket_adapter_create] is what actually creates the linked `helpdesk.ticket` record and the event tying it back to the originating incident.
+
+- **SMTP Fallback:** If the configured helpdesk model itself can't be resolved (a misconfigured system parameter, or the Helpdesk module not installed), `_execute_smtp_fallback()` [@ANCHOR: execute_smtp_fallback] sends the ticket content as a plain email instead of silently dropping it -- the same "warn and degrade, don't go silent" philosophy as the daemon's own SMTP fallback in section 3's monitoring loop.
+
+## 8. AI Triage Assist
+
+- **Listing:** An on-call AI triage assistant calls `mcp_list_incidents()` [@ANCHOR: mcp_list_incidents] to find open incidents, backed by the narrowly-scoped, read-only MCP triage service account described in `docs/stories/on_call_alerting.md`.
+
+- **Reading:** The assistant calls `mcp_get_incident_detail()` [@ANCHOR: mcp_get_incident_detail] to read one incident's full chatter history.
+
+- **Leaving Notes:** `mcp_add_note()` [@ANCHOR: mcp_add_note] is the one write the assistant is allowed to make -- posting a triage note to the incident's chatter, tagged as AI-authored, without ever being able to acknowledge, resolve, or otherwise mutate the incident's own state.

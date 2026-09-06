@@ -53,6 +53,7 @@ DEFAULT_WARN_DAYS = 30
 DEFAULT_ACCOUNT_ID = "a279ea641ad18fd1c87fa1cc77d3e10b"
 
 
+# [@ANCHOR: pager_duty:read_token]
 def _read_token(credentials_path):
     """
     `cloudflare.ini` is certbot's own `dns_cloudflare_credentials` format:
@@ -66,6 +67,7 @@ def _read_token(credentials_path):
     return parser.get("dns_cloudflare", "dns_cloudflare_api_token").strip()
 
 
+# [@ANCHOR: pager_duty:fetch_token_expiry]
 def _fetch_token_expiry(token, account_id):
     """
     Calls Cloudflare's account-scoped `/accounts/{account_id}/tokens/verify`,
@@ -94,6 +96,7 @@ def _fetch_token_expiry(token, account_id):
     return result.get("expires_on")
 
 
+# [@ANCHOR: pager_duty:cloudflare_token_expiry_main]
 def main():
     credentials_path = os.environ.get(
         "HAMS_CLOUDFLARE_CREDENTIALS_PATH", DEFAULT_CREDENTIALS_PATH

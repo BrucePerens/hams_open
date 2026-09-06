@@ -28,89 +28,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("pager_log_analyzer")
 
-# --- 1. Pre-Chroot Initialization ---
-config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
-if not os.path.exists(config_path):
-    logger.critical("pager_config.json not found.")
-    sys.exit(1)
-
-try:
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
-except (OSError, json.JSONDecodeError) as e:
-    logger.critical(f"Failed to parse JSON config: {e}")
-    sys.exit(1)
-
-log_config = config.get("log_analyzer", {})
-target_files = log_config.get("files", [])
-patterns = log_config.get("patterns", [])
-
-# Provide default safety patterns if config is empty
-if not patterns:
-    patterns.append(
-        {
-            "name": "Kernel Filesystem Corruption",
-            "regex": "(?i)(ext4|xfs|btrfs|fs error|corrupt)",
-            "severity": "critical",
-        }
-    )
-
-redis_host = os.getenv("REDIS_HOST") or "redis"
-redis_port = int(os.getenv("REDIS_PORT") or "6379")
-# Real fix, found by an adversarial security review: this used to
-# connect with no password at all, regardless of whether one is
-# configured -- see generalized_monitor.py's own REDIS_PASS comment for
-# the full reasoning (this daemon's log_search_req/log_search_res/
-# log_anomalies channels are the other end of that same trust boundary).
-redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
-
-try:
-    r_client = redis.Redis(
-        host=redis_host, port=redis_port, db=0, password=redis_password, decode_responses=True
-    )
-    r_client.ping()
-    logger.info("Connected to Redis successfully.")
-except redis.RedisError as e:
-    logger.critical(f"Redis connection failed: {e}")
-    sys.exit(1)
-
-# --- 2. Isolation & Privilege Dropping ---
-if os.geteuid() == 0:
-    logger.info("Executing isolation sequence...")
-
-    # Resolve UID/GID before chrooting because /etc/passwd won't be accessible
-    uid = pwd.getpwnam("nobody").pw_uid
-    gid = grp.getgrnam("adm").gr_gid
-
-    # A. Chroot to /var/log
-    # Assume POSIX environment with os.chroot available
-    if not os.path.exists("/var/log"):
-        logger.critical("/var/log missing. Cannot chroot.")
-        sys.exit(1)
-    os.chdir("/var/log")
-    os.chroot("/var/log")
-    logger.info("Successfully chrooted to /var/log")
-
-    # B. Drop Kernel Capabilities (PR_CAPBSET_DROP = 24)
-    try:
-        libc = ctypes.CDLL("libc.so.6")
-        for cap in range(40):
-            libc.prctl(24, cap, 0, 0, 0)
-        logger.info("All kernel bounding capabilities successfully dropped.")
-    except OSError as e:
-        logger.warning(f"Could not drop bounding capabilities: {e}")
-
-    # C. Drop to nobody:adm
-    try:
-        os.setgroups([])
-        os.setresgid(gid, gid, gid)
-        os.setresuid(uid, uid, uid)
-        logger.info("Privileges successfully de-escalated to nobody:adm")
-    except OSError as e:
-        logger.warning(f"Could not setuid to nobody:adm: {e}")
-
 
 # --- 3. Translation Layer ---
+# [@ANCHOR: pager_duty:translate_path]
 def translate_path(fp):
     """Maps absolute paths to the chrooted filesystem view."""
     # Because we chrooted to /var/log, /var/log/syslog is now just /syslog
@@ -118,7 +38,8 @@ def translate_path(fp):
 
 
 # --- 4. Tailing Engine ---
-def tail_file(fp, compiled_patterns):
+# [@ANCHOR: pager_duty:tail_file]
+def tail_file(r_client, fp, compiled_patterns):
     chroot_path = translate_path(fp)
     if not chroot_path.startswith("/"):
         chroot_path = "/" + chroot_path
@@ -184,7 +105,8 @@ def tail_file(fp, compiled_patterns):
 
 
 # --- 5. Interactive Splunk UI Listener ---
-def redis_search_listener():
+# [@ANCHOR: pager_duty:redis_search_listener]
+def redis_search_listener(r_client):
     pubsub = r_client.pubsub()
     pubsub.subscribe("log_search_req")
     logger.info("Interactive search listener ready.")
@@ -215,7 +137,7 @@ def redis_search_listener():
                         for line in f:
                             if len(c_reg.findall(line)) > 0:
                                 matches_deque.append(line.strip())
-                
+
                 matches = list(matches_deque)
 
                 # Push results back to queue for Asynchronous Bastion Pattern
@@ -226,7 +148,100 @@ def redis_search_listener():
 
 
 # --- 6. Execution ---
-if __name__ == "__main__":
+# Sections 1 (config load) and 2 (Redis connect + chroot/privilege-drop) used
+# to run unconditionally at *module import time* -- a real, previously-
+# undiscovered hazard found while closing this module's own Stage 1 test-
+# anchor gaps: merely `import`ing this file for any reason at all (a linter,
+# a REPL, a future test) connected to a real Redis server, chrooted the
+# calling process to /var/log, and dropped its privileges to nobody:adm,
+# none of which is reversible within the same process. Moved into main(),
+# guarded by __name__ == "__main__" below, matching generalized_monitor.py's
+# own convention of doing real work only when actually run as a script.
+# tail_file()/redis_search_listener() now take r_client as an explicit
+# parameter instead of reading a module-global connection, which is what
+# makes them callable against a real *test* Redis double at all.
+# [@ANCHOR: pager_duty:log_analyzer_main]
+def main():
+    config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
+    if not os.path.exists(config_path):
+        logger.critical("pager_config.json not found.")
+        sys.exit(1)
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.critical(f"Failed to parse JSON config: {e}")
+        sys.exit(1)
+
+    log_config = config.get("log_analyzer", {})
+    target_files = log_config.get("files", [])
+    patterns = log_config.get("patterns", [])
+
+    # Provide default safety patterns if config is empty
+    if not patterns:
+        patterns.append(
+            {
+                "name": "Kernel Filesystem Corruption",
+                "regex": "(?i)(ext4|xfs|btrfs|fs error|corrupt)",
+                "severity": "critical",
+            }
+        )
+
+    redis_host = os.getenv("REDIS_HOST") or "redis"
+    redis_port = int(os.getenv("REDIS_PORT") or "6379")
+    # Real fix, found by an adversarial security review: this used to
+    # connect with no password at all, regardless of whether one is
+    # configured -- see generalized_monitor.py's own REDIS_PASS comment for
+    # the full reasoning (this daemon's log_search_req/log_search_res/
+    # log_anomalies channels are the other end of that same trust boundary).
+    redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
+
+    try:
+        r_client = redis.Redis(
+            host=redis_host, port=redis_port, db=0, password=redis_password, decode_responses=True
+        )
+        r_client.ping()
+        logger.info("Connected to Redis successfully.")
+    except redis.RedisError as e:
+        logger.critical(f"Redis connection failed: {e}")
+        sys.exit(1)
+
+    # --- 2. Isolation & Privilege Dropping ---
+    if os.geteuid() == 0:
+        logger.info("Executing isolation sequence...")
+
+        # Resolve UID/GID before chrooting because /etc/passwd won't be accessible
+        uid = pwd.getpwnam("nobody").pw_uid
+        gid = grp.getgrnam("adm").gr_gid
+
+        # A. Chroot to /var/log
+        # Assume POSIX environment with os.chroot available
+        if not os.path.exists("/var/log"):
+            logger.critical("/var/log missing. Cannot chroot.")
+            sys.exit(1)
+        os.chdir("/var/log")
+        os.chroot("/var/log")
+        logger.info("Successfully chrooted to /var/log")
+
+        # B. Drop Kernel Capabilities (PR_CAPBSET_DROP = 24)
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            for cap in range(40):
+                libc.prctl(24, cap, 0, 0, 0)
+            logger.info("All kernel bounding capabilities successfully dropped.")
+        except OSError as e:
+            logger.warning(f"Could not drop bounding capabilities: {e}")
+
+        # C. Drop to nobody:adm
+        try:
+            os.setgroups([])
+            os.setresgid(gid, gid, gid)
+            os.setresuid(uid, uid, uid)
+            logger.info("Privileges successfully de-escalated to nobody:adm")
+        except OSError as e:
+            logger.warning(f"Could not setuid to nobody:adm: {e}")
+
     if not target_files:
         logger.info("No files configured for log analysis. Exiting.")
         sys.exit(0)
@@ -249,7 +264,11 @@ if __name__ == "__main__":
     # Start Tailers
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(target_files) + 1)
     for fp in target_files:
-        executor.submit(tail_file, fp, compiled)
+        executor.submit(tail_file, r_client, fp, compiled)
 
     # Start Splunk Listener (Blocks main thread)
-    redis_search_listener()
+    redis_search_listener(r_client)
+
+
+if __name__ == "__main__":
+    main()

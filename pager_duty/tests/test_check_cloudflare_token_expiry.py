@@ -46,6 +46,11 @@ class TestCloudflareTokenExpiryCheck(HamsTransactionCase):
         self.addCleanup(lambda: os.environ.clear() or os.environ.update(self.orig_env))
 
     def test_01_healthy_token_far_from_expiry_exits_zero(self):
+        # Tests [@ANCHOR: pager_duty:cloudflare_token_expiry_main]
+
+        # Tests [@ANCHOR: pager_duty:read_token]
+
+        # Tests [@ANCHOR: pager_duty:fetch_token_expiry]
         _write_credentials(self.cred_path)
         os.environ["HAMS_CLOUDFLARE_CREDENTIALS_PATH"] = self.cred_path
 

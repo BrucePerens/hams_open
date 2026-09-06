@@ -26,6 +26,8 @@ class TestMonitorExhaustive(HamsTransactionCase):
     @mute_logger("generalized_monitor")
     def test_01_smtp_fallback(self):
         # Tests [@ANCHOR: daemon_report_incident]
+
+        # Tests [@ANCHOR: pager_duty:fallback_notify]
         """Verify that if the Odoo client crashes, the report gracefully triggers the SMTP fallback."""
         mock_smtp = self.safe_patch(
             "odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP"
@@ -61,6 +63,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
             os.environ.update(orig_env)
 
     def test_02_parse_env_util(self):
+        # Tests [@ANCHOR: pager_duty:parse_env]
         """Verify environment variable injection from YAML configs."""
         orig_env = dict(os.environ)
         os.environ["TEST_DB_NAME"] = "test_db_123"
@@ -299,6 +302,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertIn("expires in", msg)
 
     def test_09_process_wrappers(self):
+        # Tests [@ANCHOR: pager_duty:ensure_executable]
         """Verify synthetic journey scripts, logrotate, nginx syntax, and cloudflared tunnel checks."""
         mock_which = self.safe_patch(
             "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
@@ -740,3 +744,135 @@ class TestMonitorExhaustive(HamsTransactionCase):
         )
         self.assertFalse(success)
         self.assertIn("stale", msg)
+
+    def test_16_is_in_maintenance(self):
+        # Tests [@ANCHOR: pager_duty:is_in_maintenance]
+        now = datetime.datetime.utcnow()
+        past = (now - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+        future = (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+        self.assertTrue(
+            generalized_monitor.is_in_maintenance(
+                {"maint_start": past, "maint_end": future}
+            ),
+            "A check whose maintenance window brackets 'now' must be suppressed.",
+        )
+        self.assertFalse(
+            generalized_monitor.is_in_maintenance({"maint_start": past, "maint_end": past}),
+            "An already-lapsed maintenance window must not suppress the check.",
+        )
+        self.assertFalse(
+            generalized_monitor.is_in_maintenance({}),
+            "No maintenance window configured at all must not suppress the check.",
+        )
+        self.assertFalse(
+            generalized_monitor.is_in_maintenance({"maint_start": "not-a-date", "maint_end": future}),
+            "[!] DIAGNOSTIC FOR AI: an unparseable maintenance timestamp must fail safe (not suppressed), not crash.",
+        )
+
+    def test_17_auto_resolve_calls_the_rpc_and_survives_a_failure(self):
+        # Tests [@ANCHOR: pager_duty:auto_resolve]
+        mock_client = MagicMock()
+        generalized_monitor.auto_resolve(mock_client, "My Check", website_id=5)
+        mock_client.execute.assert_called_once_with(
+            "pager.incident",
+            "auto_resolve_incidents",
+            source="My Check",
+            context={"website_id": 5},
+        )
+
+        # Must not raise even when the RPC itself fails.
+        mock_client.execute.side_effect = Exception("RPC down")
+        generalized_monitor.auto_resolve(mock_client, "My Check")
+
+    def test_18_odoo_client_execute_posts_json2_and_parses_the_response(self):
+        # Tests [@ANCHOR: pager_duty:odoo_client_init]
+
+        # Tests [@ANCHOR: pager_duty:odoo_client_execute]
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({"result": 42}).encode("utf-8")
+        mock_urlopen = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen"
+        )
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        client = generalized_monitor.OdooClient(
+            "http://odoo:8069/", "test_db", "pager_service_internal", "secret-pass"
+        )
+        self.assertEqual(client.url, "http://odoo:8069")
+        self.assertEqual(client.headers["Authorization"], "bearer secret-pass")
+        self.assertEqual(client.headers["X-Odoo-Database"], "test_db")
+
+        result = client.execute("pager.check", "check_heartbeat_rpc", hb_uuid="x", interval_sec=60)
+        self.assertEqual(result, {"result": 42})
+        called_req = mock_urlopen.call_args[0][0]
+        self.assertEqual(
+            called_req.full_url, "http://odoo:8069/json/2/pager.check/check_heartbeat_rpc"
+        )
+
+    def test_19_get_odoo_client_reads_env_and_falls_back_to_odoo_db(self):
+        # Tests [@ANCHOR: pager_duty:get_odoo_client]
+        orig_env = dict(os.environ)
+        os.environ.update(
+            {
+                "ODOO_URL": "http://odoo-test:8069",
+                "ODOO_DB": "my_test_db",
+                "ODOO_USER": "test_user",
+                "ODOO_PASSWORD": "test_pass",
+            }
+        )
+        try:
+            client = generalized_monitor.get_odoo_client(generalized_monitor.logger, {})
+            self.assertIsNotNone(client)
+            self.assertEqual(client.url, "http://odoo-test:8069")
+            self.assertEqual(client.db, "my_test_db")
+        finally:
+            os.environ.clear()
+            os.environ.update(orig_env)
+
+    def test_20_polling_thread_runs_one_real_cycle_then_exits(self):
+        # Tests [@ANCHOR: pager_duty:polling_thread]
+
+        class _StopLoop(Exception):
+            pass
+
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.time.sleep",
+            side_effect=_StopLoop,
+        )
+        mock_client = MagicMock()
+        mock_client.execute.return_value = True
+        check = {
+            "id": 99,
+            "name": "Polling Thread Test Check",
+            "type": "system",
+            "target": "memory",
+            "interval": 1,
+        }
+        with self.assertRaises(_StopLoop):
+            generalized_monitor.polling_thread(mock_client, check)
+        # The startup jitter sleep is the very first call to time.sleep()
+        # this function makes -- reaching it proves the real first-pass
+        # execute_check()/status-report logic above it already ran.
+        self.assertIn("Polling Thread Test Check", generalized_monitor.THREAD_HEARTBEATS)
+
+    def test_21_log_tail_thread_runs_one_real_cycle_then_exits(self):
+        # Tests [@ANCHOR: pager_duty:log_tail_thread]
+
+        class _StopLoop(Exception):
+            pass
+
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.time.sleep",
+            side_effect=_StopLoop,
+        )
+        mock_client = MagicMock()
+        check = {
+            "name": "Log Tail Test Check",
+            "type": "log",
+            "target": "/var/log/does-not-exist-log-tail-test.log",
+            "regex": "ERROR",
+            "interval": 1,
+        }
+        with self.assertRaises(_StopLoop):
+            generalized_monitor.log_tail_thread(mock_client, check)
+        self.assertIn("Log Tail Test Check", generalized_monitor.THREAD_TIMEOUTS)

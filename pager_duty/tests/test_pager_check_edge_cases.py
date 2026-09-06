@@ -20,6 +20,7 @@ class TestPagerCheckEdgeCases(HamsTransactionCase):
     """
 
     def test_01_self_referential_parent_check_id_is_rejected(self):
+        # Tests [@ANCHOR: pager_duty:check_parent_check_id]
         check = self.env["pager.check"].create(
             {"name": "Self Ref Check", "check_type": "system"}
         )
@@ -65,3 +66,35 @@ class TestPagerCheckEdgeCases(HamsTransactionCase):
         self.assertEqual(grandchild.parent_check_id, child)
         self.assertEqual(child.parent_check_id, root)
         self.assertFalse(root.parent_check_id)
+
+    def test_04_create_write_unlink_all_trigger_cache_invalidation(self):
+        # Tests [@ANCHOR: pager_duty:pager_check_create]
+
+        # Tests [@ANCHOR: pager_duty:pager_check_write]
+
+        # Tests [@ANCHOR: pager_duty:pager_check_unlink]
+        mock_notify = self.safe_patch(
+            "odoo.addons.pager_duty.models.pager_check.notify_model_invalidation"
+        )
+
+        check = self.env["pager.check"].create(
+            {"name": "Invalidation Test Check", "check_type": "system"}
+        )
+        self.assertTrue(mock_notify.called, "create() must trigger cache invalidation.")
+
+        mock_notify.reset_mock()
+        check.write({"interval": 120})
+        self.assertTrue(mock_notify.called, "write() must trigger cache invalidation.")
+
+        mock_notify.reset_mock()
+        check.unlink()
+        self.assertTrue(mock_notify.called, "unlink() must trigger cache invalidation.")
+
+    def test_05_action_trigger_check_returns_a_client_notification(self):
+        # Tests [@ANCHOR: pager_duty:action_trigger_check]
+        check = self.env["pager.check"].create(
+            {"name": "Trigger Test Check", "check_type": "system"}
+        )
+        action = check.action_trigger_check()
+        self.assertEqual(action["type"], "ir.actions.client")
+        self.assertEqual(action["tag"], "display_notification")

@@ -54,6 +54,7 @@ class OdooClient:
     convention generalized_monitor.py's own `write`/`rpc_ensure_executable`
     calls already use; an `@api.model` call omits it."""
 
+    # [@ANCHOR: pager_duty:mcp_odoo_client_init]
     def __init__(self, url, db, api_key):
         self.url = url.rstrip("/")
         self.db = db
@@ -64,6 +65,7 @@ class OdooClient:
             "User-Agent": "Pager-MCP-Triage/1.0",
         }
 
+    # [@ANCHOR: pager_duty:mcp_odoo_client_execute]
     def execute(self, model, method, **kwargs):
         req = urllib.request.Request(
             f"{self.url}/json/2/{model}/{method}",
@@ -81,6 +83,7 @@ class OdooClient:
             )
 
 
+# [@ANCHOR: pager_duty:mcp_get_client]
 def _get_client():
     url = os.environ.get("ODOO_URL") or "http://odoo:8069"
     db = os.environ.get("ODOO_DB") or "odoo"
@@ -100,6 +103,7 @@ def _get_client():
 
 
 @mcp.tool()
+# [@ANCHOR: pager_duty:mcp_list_incidents_tool]
 def list_incidents(status: str = None, severity: str = None, limit: int = 50) -> str:
     """List pager.incident records, optionally filtered by status
     (open/acknowledged/resolved) and/or severity (low/medium/high/critical),
@@ -116,6 +120,7 @@ def list_incidents(status: str = None, severity: str = None, limit: int = 50) ->
 
 
 @mcp.tool()
+# [@ANCHOR: pager_duty:mcp_get_incident_tool]
 def get_incident(incident_id: int) -> str:
     """Full detail for one pager.incident: source, severity, description,
     status, occurrence_count, and its chatter history (prior notes/advice
@@ -128,6 +133,7 @@ def get_incident(incident_id: int) -> str:
 
 
 @mcp.tool()
+# [@ANCHOR: pager_duty:mcp_add_incident_note_tool]
 def add_incident_note(incident_id: int, text: str) -> str:
     """Posts `text` to an incident's own chatter, tagged as AI-authored
     ("🤖 AI Triage: ..."). Cannot change the incident's own status or any
