@@ -8,6 +8,7 @@ class CalendarEvent(models.Model):
 
     helpdesk_ticket_ids = fields.One2many("hams_helpdesk.ticket", "calendar_event_id", string="Helpdesk Tickets")
 
+    # [@ANCHOR: hams_helpdesk:COMM_get_current_on_duty_admin]
     def get_current_on_duty_admin(self):
         """
         Base implementation for on-duty admin resolution.
@@ -15,5 +16,6 @@ class CalendarEvent(models.Model):
         """
         return False
 
+    # [@ANCHOR: hams_helpdesk:COMM_get_upcoming_duty_shifts]
     def get_upcoming_duty_shifts(self):
         return self.env["calendar.event"].browse()

@@ -84,6 +84,7 @@ class HelpdeskTicket(models.Model):
         default=lambda self: self.env.company,
     )
 
+    # [@ANCHOR: hams_helpdesk:COMM_onchange_partner_id]
     @api.onchange("partner_id")
     def _onchange_partner_id(self):
         if self.partner_id and self.partner_id.callsign:
@@ -135,6 +136,7 @@ class HelpdeskTicket(models.Model):
 
         return tickets
 
+    # [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
     def _automated_routing_and_notification(self):
         """
         Internal automation handler for ticket assignment and notifications.

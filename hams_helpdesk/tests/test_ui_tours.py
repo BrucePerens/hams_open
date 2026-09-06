@@ -84,6 +84,8 @@ class TestHelpdeskTours(HamsHttpCase):
     def test_portal_close_ticket(self):
         """Test portal user closing their own ticket."""
         # Tests [@ANCHOR: helpdesk_portal_close]
+
+        # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_close]
         ticket = self.env["hams_helpdesk.ticket"].create(
             {
                 "name": "Portal Close Test",
@@ -106,6 +108,40 @@ class TestHelpdeskTours(HamsHttpCase):
         self.assertEqual(
             ticket.stage, "closed", "Ticket should be closed after portal action."
         )
+
+    def test_portal_ticket_detail_shows_own_ticket_and_denies_others(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_detail]
+        own_ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Portal Detail Own Ticket",
+                "partner_id": self.portal_user.partner_id.id,
+            }
+        )
+        other_user = self.env["res.users"].create(
+            {
+                "name": "Other Portal Customer",
+                "login": "other_portal_cust_tour",
+                "password": "password",
+                "email": "other_portal_tour@example.com",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        other_ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Portal Detail Other Ticket",
+                "partner_id": other_user.partner_id.id,
+            }
+        )
+
+        self.authenticate("portal_cust_tour", "password")
+
+        res = self.url_open(f"/my/ticket/{own_ticket.id}")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Portal Detail Own Ticket", res.content)
+
+        res_other = self.url_open(f"/my/ticket/{other_ticket.id}", allow_redirects=False)
+        self.assertIn(res_other.status_code, (301, 302, 303))
+        self.assertIn("/my", res_other.headers.get("Location", ""))
 
     def test_helpdesk_operator_tour(self):
         """Test operator backend ticket lifecycle and handoff via JS tour."""
@@ -140,6 +176,7 @@ class TestHelpdeskTours(HamsHttpCase):
         )
 
     def test_portal_ticket_new_renders_without_callsign(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
         # Found live 2026-08-29 as a Prospective Ham/SWL persona (a real
         # signup option for users studying for their license, i.e. by
         # definition without a callsign yet): /my/tickets/new used to raise
@@ -180,6 +217,7 @@ class TestHelpdeskTours(HamsHttpCase):
         self.assertEqual(res.status_code, 200)
 
     def test_tickets_card_visible_on_my_account_with_zero_tickets(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_prepare_home_portal_values]
         # Found live 2026-08-29 as a Prospective Ham persona looking for
         # support: portal.portal_docs_entry hides a counter-gated card
         # until the session's cached portal_counters already has a nonzero

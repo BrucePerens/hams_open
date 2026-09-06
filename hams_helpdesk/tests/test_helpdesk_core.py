@@ -51,6 +51,12 @@ class TestHelpdeskCore(HamsTransactionCase):
 
         # Tests [@ANCHOR: helpdesk_ticket_lifecycle]
 
+        # Tests [@ANCHOR: hams_helpdesk:COMM_get_current_on_duty_admin]
+
+        # Tests [@ANCHOR: hams_helpdesk:COMM_get_upcoming_duty_shifts]
+
+        # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
+
         manager = self.manager_user
 
         if 'is_pager_duty' in self.env["calendar.event"]._fields:
@@ -242,6 +248,7 @@ class TestHelpdeskCore(HamsTransactionCase):
         self.assertIn("Updated description by portal user", ticket.description)
 
     def test_06_callsign_population(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_onchange_partner_id]
         """Verify the callsign field is automatically populated from the partner."""
         # Use a partner with a callsign
         self.portal_partner.write({"callsign": "K1AAA"})

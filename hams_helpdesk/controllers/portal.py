@@ -8,6 +8,7 @@ from odoo.addons.portal.controllers.portal import CustomerPortal, pager as porta
 
 class HelpdeskPortal(CustomerPortal):
 
+    # [@ANCHOR: hams_helpdesk:COMM_prepare_home_portal_values]
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
         if "ticket_count" in counters:
@@ -70,6 +71,7 @@ class HelpdeskPortal(CustomerPortal):
         )
         return request.render("hams_helpdesk.portal_my_tickets", values)
 
+    # [@ANCHOR: hams_helpdesk:COMM_portal_ticket_detail]
     @http.route(["/my/ticket/<int:ticket_id>"], type="http", auth="user", website=True)
     def portal_ticket_detail(self, ticket_id, **kw):
         utils = request.env["zero_sudo.security.utils"]
@@ -111,6 +113,7 @@ class HelpdeskPortal(CustomerPortal):
         website=True,
         csrf=True,
     )
+    # [@ANCHOR: hams_helpdesk:COMM_portal_ticket_close]
     def portal_ticket_close(self, ticket_id, **kw):
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
@@ -134,6 +137,7 @@ class HelpdeskPortal(CustomerPortal):
         return request.redirect("/my/ticket/%s" % ticket_id)
 
     @http.route(["/my/tickets/new"], type="http", auth="user", website=True)
+    # [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
     def portal_ticket_new(self, **kw):
         # Found live 2026-08-29 as a Prospective Ham/SWL persona (a real,
         # site-offered signup option specifically for users studying for
