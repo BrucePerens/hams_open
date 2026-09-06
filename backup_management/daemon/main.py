@@ -35,6 +35,7 @@ RMQ_USER = os.environ.get("RMQ_USER")
 RMQ_PASS = os.environ.get("RMQ_PASS")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 
+# [@ANCHOR: backup_management:COMM_require_rabbitmq_credentials]
 def _require_rabbitmq_credentials():
     # This daemon executes backup and restore commands with real filesystem
     # access -- it must never silently connect to RabbitMQ as the
@@ -53,6 +54,7 @@ class OdooAPIError(Exception):
     """Custom exception for Odoo JSON-2 API failures."""
 
 
+# [@ANCHOR: backup_management:COMM_json2_call]
 def _json2_call(model, method_name, svc_uid=None, **kwargs):
     payload_str = json.dumps(kwargs)
 
@@ -86,6 +88,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
         raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}")
 
 
+# [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 def execute_job(ch, method, properties, body):
     try:
         try:

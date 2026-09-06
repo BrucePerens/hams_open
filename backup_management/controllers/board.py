@@ -8,6 +8,7 @@ from odoo.http import request
 class BackupBoard(http.Controller):
     @http.route("/backup/board", type="http", auth="user", website=True)
     def backup_board(self):
+        # [@ANCHOR: backup_management:COMM_backup_board]
         action = request.env.ref(
             "backup_management.action_backup_board_client", raise_if_not_found=False
         )

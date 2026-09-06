@@ -104,6 +104,7 @@ class BackupConfig(models.Model):
             return None
         return Fernet(key.encode("utf-8"))
 
+    # [@ANCHOR: backup_management:COMM_crypt_field]
     def _crypt_field(self, value, decrypt=False):
         f = self._get_fernet()
         if not f or not value:
@@ -117,28 +118,35 @@ class BackupConfig(models.Model):
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
             return "***ERROR***" if decrypt else False
 
+    # [@ANCHOR: backup_management:COMM_compute_encrypted_field]
     def _compute_encrypted_field(self, plain_field, crypt_field):
         for rec in self:
             setattr(rec, plain_field, rec._crypt_field(getattr(rec, crypt_field), decrypt=True))
 
+    # [@ANCHOR: backup_management:COMM_inverse_encrypted_field]
     def _inverse_encrypted_field(self, plain_field, crypt_field):
         for rec in self:
             setattr(rec, crypt_field, rec._crypt_field(getattr(rec, plain_field)))
 
+    # [@ANCHOR: backup_management:COMM_compute_kopia_password]
     @api.depends("kopia_password_crypt")
     def _compute_kopia_password(self):
         self._compute_encrypted_field("kopia_password", "kopia_password_crypt")
 
+    # [@ANCHOR: backup_management:COMM_inverse_kopia_password]
     def _inverse_kopia_password(self):
         self._inverse_encrypted_field("kopia_password", "kopia_password_crypt")
 
+    # [@ANCHOR: backup_management:COMM_compute_secret_key]
     @api.depends("secret_key_crypt")
     def _compute_secret_key(self):
         self._compute_encrypted_field("secret_key", "secret_key_crypt")
 
+    # [@ANCHOR: backup_management:COMM_inverse_secret_key]
     def _inverse_secret_key(self):
         self._inverse_encrypted_field("secret_key", "secret_key_crypt")
 
+    # [@ANCHOR: backup_management:COMM_check_security_paths]
     @api.constrains("target_path", "restore_drill_script", "engine", "storage_type")
     def _check_security_paths(self):
         for rec in self:
@@ -201,6 +209,7 @@ class BackupConfig(models.Model):
 
         raise UserError(_("Unknown engine: %s") % engine)
 
+    # [@ANCHOR: backup_management:COMM_publish_to_worker]
     def _publish_to_worker(self, engine, payload_extra=None):
         """
         Internal helper to offload tasks to the RabbitMQ Bastion.
@@ -355,9 +364,10 @@ class BackupConfig(models.Model):
             rec._publish_to_worker("sync_snapshots")
         return True
 
+    # [@ANCHOR: backup_management:COMM_execute_restore_drill]
     def _execute_restore_drill(self):
         """
-        Pushes a restore_drill job to RabbitMQ. 
+        Pushes a restore_drill job to RabbitMQ.
         """
         self.ensure_one()
         if self.restore_drill_script:

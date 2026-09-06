@@ -180,6 +180,7 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(job.state, "pending")
 
     def test_08c_restore_drill_triggered(self):
+        # Tests [@ANCHOR: backup_management:COMM_execute_restore_drill]
         self.config_kopia.restore_drill_script = "/opt/hams/backup/test_restore.sh"
         self.config_kopia.last_drill_time = fields.Datetime.now() - datetime.timedelta(
             days=8

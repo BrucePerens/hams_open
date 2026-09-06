@@ -19,6 +19,7 @@ class TestBackupManagementHooks(HamsTransactionCase):
     module upgrade."""
 
     def test_post_init_hook_registers_the_backup_worker_daemon(self):
+        # Tests [@ANCHOR: backup_management:COMM_post_init_hook]
         self.env.ref("backup_management.user_backup_service_internal")
 
         post_init_hook(self.env)

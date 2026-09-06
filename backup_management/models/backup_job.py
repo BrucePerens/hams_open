@@ -38,6 +38,7 @@ class BackupJob(models.Model):
     )
     output_log = fields.Text(string="Live Output Log")
 
+    # [@ANCHOR: backup_management:COMM_append_log]
     def append_log(self, text_chunk):
         """Append text delta to the output_log to prevent resending large buffers."""
         for record in self:
@@ -70,6 +71,7 @@ class BackupJob(models.Model):
                 }
             )
 
+    # [@ANCHOR: backup_management:COMM_action_refresh_status]
     def action_refresh_status(self):
         """
         Manually trigger a status refresh.

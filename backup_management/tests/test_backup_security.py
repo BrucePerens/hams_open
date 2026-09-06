@@ -47,6 +47,8 @@ class TestBackupSecurity(RealTransactionCase):
 
         # Tests [@ANCHOR: backup_management:COMM_backup_path_validation]
 
+        # Tests [@ANCHOR: backup_management:COMM_check_security_paths]
+
         forbidden_paths = [
             "/etc/passwd",
             "/root/.ssh/id_rsa",
@@ -219,6 +221,7 @@ class TestBackupSecurity(RealTransactionCase):
             self.env.flush_all()
 
     def test_access_restriction(self):
+        # Tests [@ANCHOR: backup_management:COMM_publish_to_worker]
         # Ensure non-admins cannot trigger backups or restores
         with self.assertRaises(AccessError):
             self.config.with_user(self.user_no_group.id).action_trigger_backup()

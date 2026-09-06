@@ -7,6 +7,7 @@ def post_init_hook(env):
     """
     Register daemon keys upon installation.
     """
+    # [@ANCHOR: backup_management:COMM_post_init_hook]
     # Register Backup Worker for Automated Key Vault Provisioning
     svc_uid = env["zero_sudo.security.utils"]._get_service_uid(
         "backup_management.user_backup_service_internal"

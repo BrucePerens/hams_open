@@ -26,6 +26,10 @@ class TestRealBackupWorker(RealTransactionCase):
 
     def test_real_backup_worker_rabbitmq(self):
         # Tests [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+
+        # Tests [@ANCHOR: backup_management:COMM_json2_call]
+
+        # Tests [@ANCHOR: backup_management:COMM_require_rabbitmq_credentials]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         daemon_script = os.path.join(base_dir, "daemon", "main.py")
 
