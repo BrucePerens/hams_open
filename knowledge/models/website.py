@@ -7,6 +7,7 @@ from odoo import models
 class Website(models.Model):
     _inherit = "website"
 
+    # [@ANCHOR: knowledge:COMM_website_search_get_details]
     def _search_get_details(self, search_type, order, options):
         result = super()._search_get_details(search_type, order, options)
         if search_type in ("knowledge_articles", "all"):

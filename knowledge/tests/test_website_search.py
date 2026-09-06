@@ -51,6 +51,9 @@ class TestKnowledgeArticleWebsiteSearch(HamsHttpCase):
         )
 
     def test_01_search_finds_a_published_article_by_title(self):
+        # Tests [@ANCHOR: knowledge:COMM_search_get_detail]
+
+        # Tests [@ANCHOR: knowledge:COMM_website_search_get_details]
         # Found live 2026-08-29 across three separate hams_com usability-audit
         # personas: the site's own search never covered knowledge articles at
         # all, only products/blog/pages -- a genuinely public, published

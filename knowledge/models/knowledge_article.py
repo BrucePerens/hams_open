@@ -100,6 +100,7 @@ class KnowledgeArticle(models.Model):
     )
 
     # --- Compute Methods ---
+    # [@ANCHOR: knowledge:COMM_compute_author_id]
     @api.depends("create_uid", "write_uid")
     def _compute_author_id(self):
         for article in self:
@@ -149,6 +150,7 @@ class KnowledgeArticle(models.Model):
                 breadcrumbs.reverse()
                 article.breadcrumb_article_ids = [(6, 0, breadcrumbs)]
 
+    # [@ANCHOR: knowledge:COMM_compute_body_snippet]
     @api.depends("body")
     def _compute_body_snippet(self):
         for article in self:
@@ -184,6 +186,7 @@ class KnowledgeArticle(models.Model):
             # # Verified by [@ANCHOR: test_manual_check_hierarchy]
             raise ValidationError(_("You cannot create recursive articles."))
 
+    # [@ANCHOR: knowledge:COMM_copy]
     def copy(self, default=None):
         """Override copy to ensure hierarchy is maintained but names are distinct."""
         default = default or {}
@@ -213,6 +216,7 @@ class KnowledgeArticle(models.Model):
                 article.website_url = ""
 
     # --- Website Search ---
+    # [@ANCHOR: knowledge:COMM_search_get_detail]
     def _search_get_detail(self, website, order, options):
         # Found live 2026-08-29: three separate hams_com usability-audit
         # personas independently confirmed the site's own search never

@@ -254,6 +254,7 @@ class ManualLibraryController(http.Controller):
             },
         )
 
+    # [@ANCHOR: knowledge:COMM_knowledge_home_alias]
     @http.route(["/knowledge/home"], type="http", auth="public", website=True)
     def knowledge_home_alias(self, search="", **kwargs):
         """
@@ -299,6 +300,7 @@ class ManualLibraryController(http.Controller):
                 )
         return self.manual_search(search=search, **kwargs)
 
+    # [@ANCHOR: knowledge:COMM_manual_article_by_name]
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")

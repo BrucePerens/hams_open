@@ -179,6 +179,9 @@ class TestManualControllers(HamsHttpCase):
         self.url_open("/manual")
 
     def test_07_knowledge_home_alias_exact_match_redirects_straight_to_the_article(self):
+        # Tests [@ANCHOR: knowledge:COMM_knowledge_home_alias]
+
+        # Tests [@ANCHOR: knowledge:COMM_manual_article_by_name]
         # Found live 2026-08-28: roughly a dozen "Help" links across other modules were
         # written assuming Odoo's real Knowledge module's /knowledge/home?search=...
         # URL shape, but this module -- a deliberate from-scratch work-alike, not a

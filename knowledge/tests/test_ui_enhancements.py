@@ -43,8 +43,26 @@ class TestManualUIEnhancements(HamsTransactionCase):
             "[!] DIAGNOSTIC FOR AI: Reading time for empty body should be 0 minutes.",
         )
 
+    def test_01b_body_snippet_is_a_truncated_plain_text_preview(self):
+        # Tests [@ANCHOR: knowledge:COMM_compute_body_snippet]
+        long_word_run = "word " * 100
+        article = self.env["knowledge.article"].create(
+            {
+                "name": "Body Snippet Test",
+                "body": f"<p>{long_word_run}</p>",
+            }
+        )
+        self.assertNotIn("<", article.body_snippet)
+        self.assertLessEqual(len(article.body_snippet), 300)
+        self.assertTrue(article.body_snippet.startswith("word word word"))
+
+        article.body = False
+        self.assertEqual(article.body_snippet, "")
+
     def test_02_ui_enhancements_rendering(self):
         # [@ANCHOR: test_manual_ui_rendering]
+
+        # Tests [@ANCHOR: knowledge:COMM_compute_author_id]
         """Verify that the new UI elements are present in the rendered template."""
         article = self.env["knowledge.article"].create(
             {
@@ -62,6 +80,7 @@ class TestManualUIEnhancements(HamsTransactionCase):
         self.assertEqual(article.author_id, self.env.user)
 
     def test_03_copy_article(self):
+        # Tests [@ANCHOR: knowledge:COMM_copy]
         """Verify that copying an article preserves hierarchy and updates name."""
         parent = self.env["knowledge.article"].create({"name": "Parent"})
         child = self.env["knowledge.article"].create(
