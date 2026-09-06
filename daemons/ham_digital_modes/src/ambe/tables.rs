@@ -66,6 +66,85 @@ pub fn block_lengths_for_l(l: u32) -> Option<[u32; 6]> {
     Some(BLOCK_LENGTHS[(l - 9) as usize])
 }
 
+/// Annex F ("Bit Allocation and Step Size for Transformed Gain Vector"): for a given `L` (9..=56)
+/// and gain-vector element index `m` (2..=6), returns `(bits, step_size)` -- the number of bits
+/// `B_hat_m` and the uniform quantizer step size `Delta_hat_m` Eq. 62 needs to quantize `G_hat_m`.
+/// Returns `None` outside the spec's own tabulated ranges, same "give up, don't guess" discipline as
+/// [`block_lengths_for_l`].
+///
+/// **A real parsing complication, resolved by cross-checking rather than guessed past**: four of the
+/// 48 rows (L=10, 11, 16, 17) have one entry's own `G_m`/`b_index` text label missing from the raw
+/// extracted text -- confirmed directly (not assumed) to be a real PDF text-layer artifact where the
+/// diagonal "Limited Use Only" watermark's own text objects interleave with and appear to have
+/// displaced that one label per affected row, while the label's own adjacent numeric data (bit count,
+/// step size) survives intact in the right column position. Recovered by elimination: since every
+/// real row has exactly one entry for each `m` in 2..=6, the specific missing `m` for each of these
+/// four rows is unambiguous (whichever of 2..=6 doesn't already have an entry from that same row's
+/// other four, unambiguously-labeled columns), not guessed. Checked afterward against two real
+/// structural invariants that hold across the entire table, not just the four recovered entries:
+/// `bits` (`B_hat_m`) is non-increasing as `L` grows for fixed `m` (more harmonics to encode leaves
+/// less bit budget per coefficient), and `step_size` is non-decreasing as `L` grows for fixed `m` --
+/// both properties hold for all 48 rows and all 5 values of `m` (see the tests below), which the four
+/// recovered entries would have been very unlikely to satisfy by coincidence if the elimination logic
+/// had picked the wrong `m`.
+pub fn gain_bit_allocation(l: u32, m: u32) -> Option<(u8, f64)> {
+    if !(9..=56).contains(&l) || !(2..=6).contains(&m) {
+        return None;
+    }
+    Some(GAIN_BIT_ALLOCATION[(l - 9) as usize][(m - 2) as usize])
+}
+
+const GAIN_BIT_ALLOCATION: [[(u8, f64); 5]; 48] = [
+    [(10, 0.0031), (9, 0.00402), (9, 0.00336), (9, 0.0029), (9, 0.00264)], // L=9
+    [(9, 0.0062), (9, 0.00402), (8, 0.00672), (8, 0.0058), (8, 0.00528)], // L=10
+    [(8, 0.0124), (8, 0.00804), (8, 0.00672), (7, 0.0116), (7, 0.01056)], // L=11
+    [(8, 0.0124), (7, 0.01608), (7, 0.01344), (7, 0.0116), (7, 0.01056)], // L=12
+    [(7, 0.0248), (7, 0.01608), (7, 0.01344), (6, 0.02175), (6, 0.0198)], // L=13
+    [(7, 0.0248), (6, 0.03015), (6, 0.0252), (6, 0.02175), (6, 0.0198)], // L=14
+    [(7, 0.0248), (6, 0.03015), (6, 0.0252), (6, 0.02175), (5, 0.03696)], // L=15
+    [(6, 0.0465), (6, 0.03015), (6, 0.0252), (5, 0.0406), (5, 0.03696)], // L=16
+    [(6, 0.0465), (6, 0.03015), (5, 0.04704), (5, 0.0406), (5, 0.03696)], // L=17
+    [(6, 0.0465), (5, 0.05628), (5, 0.04704), (5, 0.0406), (5, 0.03696)], // L=18
+    [(6, 0.0465), (5, 0.05628), (5, 0.04704), (4, 0.058), (4, 0.0528)], // L=19
+    [(6, 0.0465), (5, 0.05628), (5, 0.04704), (4, 0.058), (4, 0.0528)], // L=20
+    [(5, 0.0868), (5, 0.05628), (5, 0.04704), (4, 0.058), (4, 0.0528)], // L=21
+    [(5, 0.0868), (5, 0.05628), (4, 0.0672), (4, 0.058), (4, 0.0528)], // L=22
+    [(5, 0.0868), (4, 0.0804), (4, 0.0672), (4, 0.058), (4, 0.0528)], // L=23
+    [(5, 0.0868), (4, 0.0804), (4, 0.0672), (4, 0.058), (4, 0.0528)], // L=24
+    [(5, 0.0868), (4, 0.0804), (4, 0.0672), (4, 0.058), (3, 0.0858)], // L=25
+    [(5, 0.0868), (4, 0.0804), (4, 0.0672), (3, 0.09425), (3, 0.0858)], // L=26
+    [(5, 0.0868), (4, 0.0804), (4, 0.0672), (3, 0.09425), (3, 0.0858)], // L=27
+    [(4, 0.124), (4, 0.0804), (4, 0.0672), (3, 0.09425), (3, 0.0858)], // L=28
+    [(4, 0.124), (4, 0.0804), (4, 0.0672), (3, 0.09425), (3, 0.0858)], // L=29
+    [(4, 0.124), (4, 0.0804), (4, 0.0672), (3, 0.09425), (3, 0.0858)], // L=30
+    [(4, 0.124), (4, 0.0804), (3, 0.1092), (3, 0.09425), (3, 0.0858)], // L=31
+    [(4, 0.124), (4, 0.0804), (3, 0.1092), (3, 0.09425), (3, 0.0858)], // L=32
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)], // L=33
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)], // L=34
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)], // L=35
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)], // L=36
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (2, 0.1122)], // L=37
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (2, 0.1122)], // L=38
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (2, 0.1122)], // L=39
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (2, 0.1122)], // L=40
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=41
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=42
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=43
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=44
+    [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=45
+    [(3, 0.2015), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=46
+    [(3, 0.2015), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=47
+    [(3, 0.2015), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=48
+    [(3, 0.2015), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=49
+    [(3, 0.2015), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=50
+    [(3, 0.2015), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)], // L=51
+    [(3, 0.2015), (3, 0.13065), (2, 0.1428), (2, 0.12325), (2, 0.1122)], // L=52
+    [(3, 0.2015), (3, 0.13065), (2, 0.1428), (2, 0.12325), (2, 0.1122)], // L=53
+    [(3, 0.2015), (3, 0.13065), (2, 0.1428), (2, 0.12325), (2, 0.1122)], // L=54
+    [(3, 0.2015), (3, 0.13065), (2, 0.1428), (2, 0.12325), (2, 0.1122)], // L=55
+    [(3, 0.2015), (3, 0.13065), (2, 0.1428), (2, 0.12325), (2, 0.1122)], // L=56
+];
+
 const BLOCK_LENGTHS: [[u32; 6]; 48] = [
     [1, 1, 1, 2, 2, 2], // L=9
     [1, 1, 2, 2, 2, 2], // L=10
@@ -177,5 +256,41 @@ mod tests {
     fn block_lengths_for_l_refuses_out_of_range_values_rather_than_guessing() {
         assert_eq!(block_lengths_for_l(8), None);
         assert_eq!(block_lengths_for_l(57), None);
+    }
+
+    #[test]
+    fn gain_bit_allocation_bits_are_non_increasing_as_l_grows_for_each_fixed_m() {
+        // The real, independent structural check that recovered this table's own four
+        // watermark-displaced entries (L=10,11,16,17) by elimination rather than guessing --
+        // see gain_bit_allocation's own doc comment. More harmonics (higher L) leaves less bit
+        // budget per gain-vector coefficient, so bits must never increase as L grows.
+        for m in 2..=6u32 {
+            let mut prev = gain_bit_allocation(9, m).unwrap().0;
+            for l in 10..=56u32 {
+                let bits = gain_bit_allocation(l, m).unwrap().0;
+                assert!(bits <= prev, "m={m}, L={l}: bits {bits} > previous {prev}");
+                prev = bits;
+            }
+        }
+    }
+
+    #[test]
+    fn gain_bit_allocation_step_size_is_non_decreasing_as_l_grows_for_each_fixed_m() {
+        for m in 2..=6u32 {
+            let mut prev = gain_bit_allocation(9, m).unwrap().1;
+            for l in 10..=56u32 {
+                let step = gain_bit_allocation(l, m).unwrap().1;
+                assert!(step >= prev - 1e-9, "m={m}, L={l}: step {step} < previous {prev}");
+                prev = step;
+            }
+        }
+    }
+
+    #[test]
+    fn gain_bit_allocation_refuses_out_of_range_values_rather_than_guessing() {
+        assert_eq!(gain_bit_allocation(8, 3), None);
+        assert_eq!(gain_bit_allocation(57, 3), None);
+        assert_eq!(gain_bit_allocation(20, 1), None);
+        assert_eq!(gain_bit_allocation(20, 7), None);
     }
 }
