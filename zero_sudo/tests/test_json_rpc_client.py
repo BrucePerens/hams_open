@@ -37,6 +37,9 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
             super().tearDown()
 
     def test_call_success(self):
+        # Tests [@ANCHOR: zero_sudo:json_rpc_client_init]
+
+        # Tests [@ANCHOR: zero_sudo:json_rpc_client_load_credentials]
         # We need to mock requests.Session
         mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
         mock_session = MagicMock()

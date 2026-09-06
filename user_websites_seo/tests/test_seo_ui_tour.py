@@ -34,6 +34,13 @@ class TestSEOUI(RealTransactionCase):
         self.env.cr.commit()
 
     def test_01_seo_widget_tour(self):
+        # Tests [@ANCHOR: zero_sudo:patched_browser_js]
+        # (RealTransactionCase extends HttpCase directly, not
+        # HamsHttpCase, so it has no own browser_js() override -- calling
+        # start_tour() here falls through to core Odoo's HttpCase.
+        # start_tour(), which calls self.browser_js(), which resolves to
+        # the module-level monkeypatch zero_sudo/tests/common.py applies
+        # directly to HttpCase.browser_js at import time.)
         # [@ANCHOR: COMM_test_seo_widget_tour]
         """Execute the SEO Optimization UI Tour as the admin user to edit the portal user."""
         self.start_tour("/odoo?debug=1", "user_websites_seo_tour", login="admin")

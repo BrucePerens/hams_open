@@ -19,5 +19,9 @@ The documentation injection logic in `zero_sudo` dynamically checks for the pres
 
 ## The Process
 1. **Module Loading**: Odoo completes its registry load phase.
-2. **Hook Execution**: `_register_hook fires and calls `_bootstrap_knowledge_docs`.
-3. **Injection**: The utility safely installs all module docs defined in their `knowledge_docs` manifest arrays.
+
+2. **Hook Execution** `[@ANCHOR: zero_sudo:ir_module_register_hook]`: `_register_hook` fires and calls `_bootstrap_knowledge_docs`.
+
+3. **Injection** `[@ANCHOR: zero_sudo:bootstrap_knowledge_docs]`: The utility safely installs all module docs defined in their `knowledge_docs` manifest arrays.
+
+4. **Per-Doc Install** `[@ANCHOR: zero_sudo:install_single_doc]`: Each individual entry in a module's `knowledge_docs` array is installed (or updated, if its content hash changed) as its own `knowledge.article`, defaulting to unpublished (internal-only) unless the manifest entry explicitly opts into `"public": True`.

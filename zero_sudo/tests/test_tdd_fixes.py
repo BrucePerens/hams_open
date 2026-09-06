@@ -17,6 +17,16 @@ from odoo.tools import file_open
 @tagged("post_install", "-at_install")
 class TestZeroSudoFixes(common.HamsTransactionCase):
     def test_short_circuit_res_users(self):
+        # Tests [@ANCHOR: zero_sudo:hams_transaction_case_setup]
+
+        # Tests [@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]
+
+        # Tests [@ANCHOR: zero_sudo:patched_basecase_teardown]
+        # (setUp() runs before this and every other test in this class;
+        # tearDownClass() runs once after the whole class finishes;
+        # _patched_basecase_teardown replaces BaseCase.tearDown globally,
+        # so it fires on every single test's teardown in the whole
+        # process, this one included)
         regular = self.env["res.users"].create({
             "name": "Regular User",
             "login": "regular_user_test@example.com",
@@ -35,7 +45,65 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.assertEqual(regular.name, "Updated Name")
         self.assertEqual(service.name, "Updated Name")
 
+    def test_write_splits_a_mixed_batch_so_service_accounts_never_get_the_given_password(self):
+        # Tests [@ANCHOR: zero_sudo:res_users_write]
+        # write()'s own real purpose (unlike test_short_circuit_res_users
+        # above, which only exercises its trivial neither-branch fall-
+        # through with a plain name write): a batch write that sets
+        # "password" across a MIXED recordset must never let that
+        # password reach a service account -- only the regular accounts
+        # in the batch get it, service accounts keep getting their own
+        # forced-random one.
+        regular = self.env["res.users"].create(
+            {"name": "Regular Batch User", "login": "regular_batch_test@example.com", "lang": "en_US"}
+        )
+        service = self.env["res.users"].create(
+            {"name": "Service Batch User", "login": "service_batch_test@example.com", "is_service_account": True, "lang": "en_US"}
+        )
+        (regular | service).write({"password": "attacker_supplied_password"})
+        self.env.cr.flush()
+
+        credential = {
+            "login": "regular_batch_test@example.com",
+            "password": "attacker_supplied_password",
+            "type": "password",
+        }
+        auth_info = self.env["res.users"].authenticate(credential, {"interactive": False})
+        self.assertEqual(auth_info["uid"], regular.id)
+
+        with self.assertRaises(Exception):
+            bad_credential = dict(credential, login="service_batch_test@example.com")
+            self.env["res.users"].authenticate(bad_credential, {"interactive": False})
+
+    def test_get_callsign_generates_unique_cached_synthetic_callsigns(self):
+        # Tests [@ANCHOR: zero_sudo:get_callsign]
+
+        # Tests [@ANCHOR: zero_sudo:generate_test_callsign]
+        # get_callsign()/generate_test_callsign() are used constantly by
+        # hams_com's own ham-radio test suites (get_callsign() dozens of
+        # times per module) but never directly by anything in hams_open
+        # itself -- a real, direct test of their own mechanism, not just
+        # trusting cross-repo usage this repo's own verify_anchors.py
+        # can't see anyway.
+        first = self.get_callsign("test_key_a")
+        second = self.get_callsign("test_key_b")
+        self.assertNotEqual(first, second, "Different keys must get different callsigns.")
+        self.assertEqual(
+            self.get_callsign("test_key_a"),
+            first,
+            "The same key must return the SAME cached callsign on a repeat call.",
+        )
+        self.assertRegex(first, r"^T\d{4}X$")
+
     def test_ir_module_module_access_error(self):
+        # Tests [@ANCHOR: zero_sudo:bootstrap_knowledge_docs]
+
+        # Tests [@ANCHOR: zero_sudo:ir_module_register_hook]
+        # _register_hook() itself is trivially proven by every real module
+        # install this whole test process performs (it's a core Odoo
+        # registry-build lifecycle hook, always run) -- if it crashed, no
+        # test in this run would ever start at all. This test is the
+        # closest direct exercise of the method it calls.
         utils = self.env["zero_sudo.security.utils"]
         
         def mock_get_service_uid(self_inst, xmlid, raise_if_not_found=True):
@@ -49,6 +117,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.env["ir.module.module"]._bootstrap_knowledge_docs()
 
     def test_bootstrap_knowledge_docs_default_unpublished(self):
+        # Tests [@ANCHOR: zero_sudo:install_single_doc]
         # Regression test: module-authored knowledge_docs (architecture notes,
         # security internals, runbooks, developer/story/journey guides) must
         # default to is_published=False. A prior bug forced every ingested doc
@@ -139,6 +208,8 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_security_log_autovacuum(self):
         # [@ANCHOR: zero_sudo:COMM_test_security_log_autovacuum]
+
+        # Tests [@ANCHOR: zero_sudo:security_log_autovacuum]
         log = self.env["zero_sudo.security.log"].create({
             "reason": "cache_invalidation"
         })

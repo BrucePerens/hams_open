@@ -36,3 +36,12 @@ Only officially designated service accounts are allowed to proceed.
 svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('my_module.my_service_user')
 self.env['my.model'].with_user(svc_uid).create({'name': 'Secure Record'})
 ```
+
+## A Whole Environment, Not Just a UID
+Some callers need more than a bare uid -- `_get_service_env` `[@ANCHOR: zero_sudo:get_service_env]` returns a full `Environment` already running as the named service account, with `mail_notrack` forced on so background service-account writes don't spam chatter/followers the way an interactive user's own writes would.
+
+## Fetching an Executable as a Service Account
+`_ensure_executable` `[@ANCHOR: zero_sudo:ensure_executable]` resolves a system binary a daemon needs (e.g. `kopia` for backups): if it's already on `PATH`, use it directly; if not, fall back to a service-account-scoped binary-manifest downloader rather than failing outright or silently degrading.
+
+## Declared Cross-Module Dependencies, Without a Hard `depends`
+Some modules need to call into another module's own code only when that OTHER module happens to be installed, without adding a hard manifest dependency that would close a real dependency cycle (see each such module's own `depends_cycle` manifest key). `_resolve_dependency_cycle` `[@ANCHOR: zero_sudo:resolve_dependency_cycle]` checks that the CALLING module's own manifest actually declares this relationship (resolved from the real Python call stack via `_caller_module_name` `[@ANCHOR: zero_sudo:caller_module_name]`, not a caller-supplied string that could be used to probe an arbitrary undeclared module) before reporting whether the target module is installed -- raising if `required=True` and it isn't.

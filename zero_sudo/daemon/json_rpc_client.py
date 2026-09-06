@@ -23,6 +23,7 @@ class SecureJSONRPCClient:
     Implements self-healing retry logic upon key rotation.
     """
 
+    # [@ANCHOR: zero_sudo:json_rpc_client_init]
     def __init__(self, env_path, base_url, db_name="hams"):
         self.env_path = env_path
         self.base_url = base_url.rstrip("/")
@@ -33,6 +34,7 @@ class SecureJSONRPCClient:
         self.session = requests.Session()
         self._load_credentials()
 
+    # [@ANCHOR: zero_sudo:json_rpc_client_load_credentials]
     def _load_credentials(self):
         if not os.path.exists(self.env_path):
             err_msg = f"""

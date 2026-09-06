@@ -18,6 +18,7 @@ class IrHttp(models.AbstractModel):
         return bool(res and res[0])
 
     @classmethod
+    # [@ANCHOR: zero_sudo:ir_http_authenticate]
     def _authenticate(cls, endpoint):
         super()._authenticate(endpoint)
         if request.session.uid:

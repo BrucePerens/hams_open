@@ -53,6 +53,7 @@ class TestUIPersonas(HamsHttpCase):
         )
 
     def test_01_anonymous_persona(self):
+        # Tests [@ANCHOR: zero_sudo:hams_http_case_navigate_and_screenshot]
         # Visit the home page as anonymous
         self.navigate_and_screenshot("/", prefix="persona_anonymous_home_")
 

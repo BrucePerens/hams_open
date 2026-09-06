@@ -24,6 +24,11 @@ class TestRealCacheManager(RealTransactionCase):
         self.daemon_proc = None
 
     def tearDown(self):
+        # Tests [@ANCHOR: zero_sudo:stop_daemon_process]
+
+        # Tests [@ANCHOR: zero_sudo:wait_for_werkzeug_threads]
+        # (fires via RealTransactionCase._real_teardown()'s own addCleanup
+        # chain, automatically, for every test in this class)
         if self.daemon_proc:
             try:
                 self.env["zero_sudo.daemon.utils"]._stop_daemon_process(self.daemon_proc)

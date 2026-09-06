@@ -90,6 +90,9 @@ class TestSecurityUtils(HamsTransactionCase):
         wrong answer instead of an error. Prove the round trip actually
         carries the real value, not just that it doesn't crash.
         """
+        # Tests [@ANCHOR: zero_sudo:get_param_read_whitelist]
+
+        # Tests [@ANCHOR: zero_sudo:get_param_write_whitelist]
         utils = self.env["zero_sudo.security.utils"]
         # Not in ir_config_parameter.py's _SERVICE_ALLOWED_KEYS and doesn't
         # start with "ham" -- exactly the class of key this bug hit.
@@ -354,6 +357,16 @@ class TestSecurityUtils(HamsTransactionCase):
         )
 
     def test_08_get_crypto_secret(self):
+        # Tests [@ANCHOR: zero_sudo:safe_patch]
+
+        # Tests [@ANCHOR: zero_sudo:safe_patch_object]
+
+        # Tests [@ANCHOR: zero_sudo:diagnostic_mock_init]
+
+        # Tests [@ANCHOR: zero_sudo:diagnostic_mock_call]
+        # (safe_patch()/safe_patch_object() default to DiagnosticMock as
+        # new_callable whenever the caller doesn't pass an explicit
+        # new=/new_callable= -- both branches used by this exact test.)
         # [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_get_crypto_secret]
@@ -430,6 +443,7 @@ class TestSecurityUtils(HamsTransactionCase):
             os.environ.update(original_env)  # burn-ignore-env
 
     def test_10_get_service_env(self):
+        # Tests [@ANCHOR: zero_sudo:get_service_env]
         """Verify _get_service_env correctly disables tracking and prefetching."""
         utils = self.env["zero_sudo.security.utils"]
         svc_xml_id = "zero_sudo.mail_service_internal"
@@ -445,6 +459,7 @@ class TestSecurityUtils(HamsTransactionCase):
         self.assertTrue(env_svc.context.get("mail_notrack"))
 
     def test_11_ensure_executable(self):
+        # Tests [@ANCHOR: zero_sudo:ensure_executable]
         """Verify the fallback system for auto-installing binary manifests."""
         mock_which = self.safe_patch("shutil.which")
         utils = self.env["zero_sudo.security.utils"]
@@ -485,6 +500,8 @@ class TestSecurityUtils(HamsTransactionCase):
             patcher.stop()
 
     def test_12_kv_store(self):
+        # Tests [@ANCHOR: zero_sudo:get_kv]
+        # ---
         # [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_set_kv_procedure]
@@ -673,7 +690,19 @@ class TestSecurityUtils(HamsTransactionCase):
         utils.with_user(test_user)._invalidate_model_cache("res.partner")
         self.assertEqual(mock_clear_cache.call_count, count_before + 1)
 
+    def test_17b_caller_module_name_walks_the_real_stack(self):
+        # Tests [@ANCHOR: zero_sudo:caller_module_name]
+        # Every _resolve_dependency_cycle test below mocks this method
+        # out entirely -- none of them exercise its own real
+        # stack-walking/__manifest__.py-discovery logic. Called for real,
+        # unmocked, directly from this test method (itself a file inside
+        # zero_sudo/tests/, one directory below zero_sudo/__manifest__.py),
+        # it must resolve to "zero_sudo".
+        utils = self.env["zero_sudo.security.utils"]
+        self.assertEqual(utils._caller_module_name(), "zero_sudo")
+
     def test_18_resolve_dependency_cycle_declared_and_installed(self):
+        # Tests [@ANCHOR: zero_sudo:resolve_dependency_cycle]
         """
         _resolve_dependency_cycle() is how a module handles depending on
         another module it can't hard-depend on without closing a manifest
@@ -783,6 +812,7 @@ class TestSecurityUtils(HamsTransactionCase):
         return user
 
     def test_23_erase_via_service_account_raises_when_visibility_is_restricted(self):
+        # Tests [@ANCHOR: zero_sudo:ground_truth_ids]
         # Reproduces the exact bug class found live in ham_relay_bridge: a
         # service account has real ir.model.access.csv rights on the model,
         # but its own group membership ALSO matches an unrelated, restrictive
@@ -826,6 +856,7 @@ class TestSecurityUtils(HamsTransactionCase):
         self.assertTrue(partner.exists())
 
     def test_24_erase_via_service_account_deletes_when_visibility_matches(self):
+        # Tests [@ANCHOR: zero_sudo:erase_via_service_account]
         utils = self.env["zero_sudo.security.utils"]
         group = self.env["res.groups"].create({"name": "Erasure Test Group 24"})
         self.env["ir.model.access"].create(
@@ -860,6 +891,7 @@ class TestSecurityUtils(HamsTransactionCase):
         self.assertFalse(self.env["res.partner"].search([("id", "=", partner_id)]))
 
     def test_25_anonymize_via_service_account_raises_when_visibility_is_restricted(self):
+        # Tests [@ANCHOR: zero_sudo:anonymize_via_service_account]
         # Write-based sibling of test_23 -- same restricted-visibility shape, but
         # for _anonymize_via_service_account's reassign-ownership path instead of
         # a delete.
@@ -906,6 +938,7 @@ class TestSecurityUtils(HamsTransactionCase):
         self.assertEqual(partner.user_id.id, original_owner.id)
 
     def test_27_is_test_mode_true_inside_a_transaction_case(self):
+        # Tests [@ANCHOR: zero_sudo:is_test_mode]
         """
         This test (HamsTransactionCase, i.e. plain TransactionCase) runs
         against an ordinary cursor whose `.commit` Odoo's own test

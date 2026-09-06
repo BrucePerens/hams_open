@@ -11,6 +11,7 @@ PORT = 1234
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    # [@ANCHOR: zero_sudo:dummy_daemon_do_head]
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()

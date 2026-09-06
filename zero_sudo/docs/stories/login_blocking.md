@@ -25,6 +25,8 @@ The interceptor runs before the session is fully established, preventing any una
 6. **Session Destruction**: If the user is a service account, the system immediately destroys the session and redirects the user back to the login page with an error message.
 7. **Security Logging**: The system records the blocked attempt in a centralized audit log (`zero_sudo.security.log`) for review by administrators `[@ANCHOR: zero_sudo:COMM_zero_sudo_security_log_global]`.
 
+8. **Request-Level Guard**: Even if a service account somehow already has a live session (not obtained via `/web/login` itself -- e.g. a forged or otherwise-issued session cookie), `_authenticate()` `[@ANCHOR: zero_sudo:ir_http_authenticate]` re-checks `is_service_account` on every single authenticated request dispatch, not just at login time, and raises an `AccessError` for any request outside `/jsonrpc`/`/xmlrpc`.
+
 ## Security Benefit
 This prevents an attacker who might have compromised a service account's credentials (e.g., from a config file) from using those credentials to access the Odoo backend UI.
 

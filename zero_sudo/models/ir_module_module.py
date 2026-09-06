@@ -18,12 +18,14 @@ class Module(models.Model):
     _inherit = "ir.module.module"
 
     @api.model
+    # [@ANCHOR: zero_sudo:ir_module_register_hook]
     def _register_hook(self):
         super()._register_hook()
         # Always run on register_hook to ensure new modules get their docs
         self._bootstrap_knowledge_docs()
 
     @api.model
+    # [@ANCHOR: zero_sudo:bootstrap_knowledge_docs]
     def _bootstrap_knowledge_docs(self):
         # Dependencies formally guarantee knowledge.article
         article_model_name = "knowledge.article"
@@ -113,6 +115,7 @@ class Module(models.Model):
             self._install_single_doc(utils, Article, mod_name, doc_info, existing_hashes, article_by_name)
 
     @api.model
+    # [@ANCHOR: zero_sudo:install_single_doc]
     def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, article_by_name=None):
         path = doc_info.get("path")
         if not path or ".." in path.split(os.path.sep):

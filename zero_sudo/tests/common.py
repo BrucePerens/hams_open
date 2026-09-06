@@ -38,6 +38,7 @@ from odoo import fields
 
 _test_callsign_counter = itertools.count(1)
 
+# [@ANCHOR: zero_sudo:generate_test_callsign]
 def generate_test_callsign(prefix="T"):
     """
     Generates a unique callsign for tests to prevent database UniqueViolation leaks.
@@ -49,6 +50,7 @@ def generate_test_callsign(prefix="T"):
 original_basecase_teardown = BaseCase.tearDown
 
 
+# [@ANCHOR: zero_sudo:patched_basecase_teardown]
 def _patched_basecase_teardown(self, *args, **kwargs):
     try:
 
@@ -73,6 +75,7 @@ _original_handle_request_paused = odoo.tests.common.ChromeBrowser._handle_reques
 odoo.tests.common.HttpCase.fetch_proxy = None
 
 
+# [@ANCHOR: zero_sudo:patched_handle_request_paused]
 def _patched_handle_request_paused(self, *args, **kwargs):
     params = kwargs if kwargs else (args[0] if args else {})
     url = params.get("request", {}).get("url", "")
@@ -101,6 +104,7 @@ odoo.tests.common.ChromeBrowser._handle_request_paused = _patched_handle_request
 _original_preexec = getattr(odoo.tests.common, "_preexec", None)  # burn-ignore-introspection
 
 
+# [@ANCHOR: zero_sudo:patched_preexec]
 def _patched_preexec(*args, **kwargs):
     if _original_preexec:
         _original_preexec()
@@ -116,6 +120,7 @@ if _original_preexec:
 _original_spawn_chrome = odoo.tests.common.ChromeBrowser._spawn_chrome
 
 
+# [@ANCHOR: zero_sudo:patched_spawn_chrome]
 def _patched_spawn_chrome(self, *args, **kwargs):
     # 1. Kill any existing headless chrome processes owned by the user
     my_uid = os.getuid()
@@ -202,6 +207,7 @@ _original_process_request_thread = (
 )
 
 
+# [@ANCHOR: zero_sudo:patched_process_request_thread]
 def _patched_process_request_thread(self, request, client_address, *args, **kwargs):
     t = threading.current_thread()
     _active_werkzeug_threads.add(t)
@@ -218,6 +224,7 @@ werkzeug.serving.ThreadedWSGIServer.process_request_thread = (
 )
 
 
+# [@ANCHOR: zero_sudo:wait_for_werkzeug_threads]
 def wait_for_werkzeug_threads(timeout=5.0):
     """Wait for all tracked background Werkzeug request threads to finish. Kill if they time out."""
     start_time = time.time()
@@ -266,6 +273,7 @@ def wait_for_werkzeug_threads(timeout=5.0):
 original_save_test_file = odoo.tests.common.save_test_file
 
 
+# [@ANCHOR: zero_sudo:patched_save_test_file]
 def _patched_save_test_file(
     test_name,
     content,
@@ -346,6 +354,7 @@ odoo.tests.common.save_test_file = _patched_save_test_file
 _original_opener_init = odoo.tests.common.Opener.__init__
 
 
+# [@ANCHOR: zero_sudo:patched_opener_init]
 def _patched_opener_init(self, *args, **kwargs):
     _original_opener_init(self, *args, **kwargs)
     self.verify = False
@@ -357,6 +366,7 @@ odoo.tests.common.Opener.__init__ = _patched_opener_init
 original_chrome_init = ChromeBrowser.__init__
 
 
+# [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":  # burn-ignore-env
         self.__class__.remote_debugging_port = 9222
@@ -384,6 +394,7 @@ ChromeBrowser.__init__ = _patched_chrome_init
 original_chrome_stop = ChromeBrowser.stop
 
 
+# [@ANCHOR: zero_sudo:patched_chrome_stop]
 def _patched_chrome_stop(self, *args, **kwargs):
 
     proc = getattr(self, "_process", None) or getattr(self, "chrome_process", None)  # burn-ignore-introspection
@@ -408,6 +419,7 @@ ChromeBrowser.stop = _patched_chrome_stop
 original_wait_ready = ChromeBrowser._wait_ready
 
 
+# [@ANCHOR: zero_sudo:patched_wait_ready]
 def _patched_wait_ready(self, ready_code=None, timeout=60, *args, **kwargs):
     original_info = self._logger.info
 
@@ -435,6 +447,7 @@ original_chrome_start = ChromeBrowser._chrome_start
 
 
 @contextlib.contextmanager
+# [@ANCHOR: zero_sudo:patched_chrome_start]
 def _patched_chrome_start(self, *args, **kwargs):
     proc_obj = None
     children_to_kill = []
@@ -507,6 +520,7 @@ ChromeBrowser._chrome_start = _patched_chrome_start
 original_browser_js = HttpCase.browser_js
 
 
+# [@ANCHOR: zero_sudo:patched_browser_js]
 def _patched_browser_js(self, *args, **kwargs):
     try:
         return original_browser_js(self, *args, **kwargs)
@@ -525,12 +539,14 @@ HttpCase.browser_js = _patched_browser_js
 
 
 class DiagnosticMock(MagicMock):
+    # [@ANCHOR: zero_sudo:diagnostic_mock_init]
     def __init__(self, *args, **kwargs):
         max_depth = kwargs.pop("max_recursion_depth", 5)
         super().__init__(*args, **kwargs)
         self._max_depth = max_depth
         self._current_depth = 0
 
+    # [@ANCHOR: zero_sudo:diagnostic_mock_call]
     def __call__(self, *args, **kwargs):
         self._current_depth += 1
         if self._current_depth > self._max_depth:
@@ -545,6 +561,7 @@ class DiagnosticMock(MagicMock):
 
 
 class SafePatchMixin:
+    # [@ANCHOR: zero_sudo:safe_patch]
     def safe_patch(self, target, *args, **kwargs):
         if not args and "new" not in kwargs and "new_callable" not in kwargs:
             kwargs["new_callable"] = DiagnosticMock
@@ -553,6 +570,7 @@ class SafePatchMixin:
         self.addCleanup(patcher.stop)
         return mock_obj
 
+    # [@ANCHOR: zero_sudo:safe_patch_object]
     def safe_patch_object(self, target, attribute, *args, **kwargs):
         if "Cursor" in type(target).__name__:
             raise RuntimeError(
@@ -576,6 +594,7 @@ class SafePatchMixin:
         return mock_obj
 
     @classmethod
+    # [@ANCHOR: zero_sudo:get_callsign]
     def get_callsign(cls, key="W1AW"):
         if not hasattr(cls, "_callsign_map"):  # burn-ignore-introspection
             cls._callsign_map = {}
@@ -626,6 +645,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         invalidate_model_cache(cls.env, "zero_sudo.security.utils")
 
     @classmethod
+    # [@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]
     def tearDownClass(cls):
         cls._crypto_patcher.stop()
         cls._crypto_patcher_res_users.stop()
@@ -661,6 +681,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         cls._active_daemons.clear()
         super().tearDownClass()
 
+    # [@ANCHOR: zero_sudo:hams_transaction_case_setup]
     def setUp(self):
         super().setUp()
         r = get_redis_connection(self.env)
@@ -709,6 +730,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     browser = None
     _socat_proc = None
 
+    # [@ANCHOR: zero_sudo:hams_http_case_url_open]
     def url_open(
         self,
         url,
@@ -909,6 +931,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             finally:
                 fcntl.flock(lockfile, fcntl.LOCK_UN)
 
+    # [@ANCHOR: zero_sudo:hams_http_case_setup]
     def setUp(self):
         super().setUp()
         self.opener.verify = False
@@ -917,6 +940,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         # Start Chrome
         self.start_hams_browser()
 
+    # [@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]
     def start_hams_browser(self):
         if not self.browser:
             self.browser = ChromeBrowser(
@@ -924,6 +948,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             )
         return self.browser
 
+    # [@ANCHOR: zero_sudo:hams_http_case_navigate_and_screenshot]
     def navigate_and_screenshot(self, url_path, prefix="screenshot_"):
         """Navigate to a URL and take a screenshot, ensuring test_cursor is set so it doesn't fail."""
         url = self.base_url() + url_path
@@ -942,6 +967,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 _logger.warning("Failed to take screenshot for %s: %s", url_path, e)
 
     @classmethod
+    # [@ANCHOR: zero_sudo:hams_http_case_teardown_class]
     def tearDownClass(cls):
         cls._crypto_patcher.stop()
         cls._crypto_patcher_res_users.stop()
@@ -1072,6 +1098,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
             finally:
                 fcntl.flock(lockfile, fcntl.LOCK_UN)
 
+    # [@ANCHOR: zero_sudo:hams_http_case_teardown]
     def tearDown(self):
         _logger.info("TRACING: Entering HamsHttpCase.tearDown")
 
@@ -1158,6 +1185,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
 
 
+    # [@ANCHOR: zero_sudo:hams_http_case_browser_js]
     def browser_js(self, *args, **kwargs):
         _logger.info("TRACING: Entering browser_js wrapper.")
         try:
@@ -1395,6 +1423,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         finally:
             _logger.info("TRACING: Exiting browser_js wrapper.")
 
+    # [@ANCHOR: zero_sudo:hams_http_case_start_tour]
     def start_tour(self, *args, **kwargs):
         args_list = list(args)
 

@@ -47,6 +47,7 @@ class ResUsersZeroSudo(models.Model):
                 vals["password"] = secrets.token_hex(32)
         return super().create(vals_list)
 
+    # [@ANCHOR: zero_sudo:res_users_write]
     def write(self, vals):
         if vals.get("is_service_account"):
             vals["password"] = secrets.token_hex(32)

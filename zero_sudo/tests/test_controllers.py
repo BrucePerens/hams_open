@@ -30,6 +30,8 @@ class TestZeroSudoControllers(RealTransactionCase):
         # Tests [@ANCHOR: zero_sudo:COMM_journey_service_account_lifecycle]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_zero_sudo_security_log_global]
+        # ---
+        # Tests [@ANCHOR: zero_sudo:hams_http_case_url_open]
         """Verify that service accounts cannot log into the web interface."""
         # [@ANCHOR: zero_sudo:COMM_test_is_service_account_field]
         # ---
@@ -94,6 +96,11 @@ class TestZeroSudoControllers(RealTransactionCase):
         )
 
         # 4. Verify security log entry
+        # RealTransactionCase: the log entry was created by the HTTP
+        # worker's own connection -- commit() (not just invalidate_all(),
+        # which only clears the ORM cache) is what lets this cursor see
+        # it in a fresh transaction.
+        self.env.cr.commit()
         self.env.invalidate_all()
         log_entry = self.env["zero_sudo.security.log"].search(
             [("user_id", "=", user.id), ("reason", "=", "service_account_blocked")],
@@ -102,4 +109,43 @@ class TestZeroSudoControllers(RealTransactionCase):
         self.assertTrue(
             log_entry,
             msg="[!] DIAGNOSTIC FOR AI: Security log entry was not created for blocked login.",
+        )
+
+    def test_02_service_account_session_blocked_from_interactive_web_ui(self):
+        # Tests [@ANCHOR: zero_sudo:ir_http_authenticate]
+        """The /web/login form interceptor above blocks a service account
+        from ever obtaining a session that way -- but _authenticate() is
+        the deeper, request-dispatch-level guard for a service account
+        that already HAS a session by some other means (this test forges
+        one directly via self.authenticate(), the same way a stolen or
+        otherwise-issued session cookie would), catching any real request
+        to an ordinary web page, not just the login form itself."""
+        login = "test_service_session_block"
+        password = "test_password"
+        user = self.env["res.users"].create(
+            {
+                "name": "Test Service Session Block",
+                "login": login,
+                "password": password,
+                "is_service_account": False,
+                "active": True,
+                "lang": "en_US",
+            }
+        )
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:ir_http_authenticate] # fmt: skip
+            "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
+        )
+        self.env.cr.commit()
+
+        self.authenticate(login, password)
+        response = self.url_open("/odoo", allow_redirects=False)
+        # AccessError raised from _authenticate() is mapped to a real 403
+        # Forbidden by Odoo's own request-dispatch error handling (not the
+        # generic 500 an uncaught exception elsewhere would produce).
+        self.assertEqual(
+            response.status_code,
+            403,
+            "[!] DIAGNOSTIC FOR AI: a service account session hitting an "
+            "ordinary web route must be rejected by _authenticate()'s own "
+            "AccessError, not served like a normal user's session.",
         )

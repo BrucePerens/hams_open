@@ -49,6 +49,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         return process
 
     @api.model
+    # [@ANCHOR: zero_sudo:stop_daemon_process]
     def _stop_daemon_process(self, process):
         """Safely terminates a daemon process."""
         if process and process.poll() is None:

@@ -42,6 +42,7 @@ class SecurityLog(models.Model):
     create_date = fields.Datetime(index=True)
 
     @api.model
+    # [@ANCHOR: zero_sudo:security_log_autovacuum]
     def autovacuum(self):
         ninety_days_ago = fields.Datetime.now() - datetime.timedelta(days=90)
         self.env.cr.execute(

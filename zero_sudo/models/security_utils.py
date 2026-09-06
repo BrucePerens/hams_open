@@ -73,6 +73,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return uid
 
     @api.model
+    # [@ANCHOR: zero_sudo:get_service_env]
     def _get_service_env(self, xml_id, context=None):
         """
         Returns a new Environment running strictly under the context of the specified
@@ -88,6 +89,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return env
 
     @api.model
+    # [@ANCHOR: zero_sudo:ground_truth_ids]
     def _ground_truth_ids(self, model_name, domain):
         """
         Returns the literal set of ids matching `domain` on `model_name`,
@@ -115,6 +117,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return set(self.env[model_name]._search(domain, bypass_access=True).get_result_ids())
 
     @api.model
+    # [@ANCHOR: zero_sudo:erase_via_service_account]
     def _erase_via_service_account(self, model_name, domain, service_xml_id):
         """
         Hard-deletes every record matching `domain` on `model_name`, acting as the
@@ -189,6 +192,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return sorted(real_ids)
 
     @api.model
+    # [@ANCHOR: zero_sudo:anonymize_via_service_account]
     def _anonymize_via_service_account(self, model_name, domain, owner_field, service_xml_id):
         """
         Reassigns `owner_field` to the shared "orphaned record owner" account
@@ -258,6 +262,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return sorted(real_ids)
 
     @api.model
+    # [@ANCHOR: zero_sudo:ensure_executable]
     def _ensure_executable(self, cmd_name, svc_xml_id=None, pkg_name=None):
         """
         Resolves an executable in the system PATH.
@@ -282,6 +287,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         )
 
     @api.model
+    # [@ANCHOR: zero_sudo:resolve_dependency_cycle]
     def _resolve_dependency_cycle(self, dependency_module, required=False):
         """
         Verifies `dependency_module` is actually installed, for a caller
@@ -347,6 +353,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
         return installed
 
+    # [@ANCHOR: zero_sudo:caller_module_name]
     def _caller_module_name(self):
         """
         The technical module name that owns the Python file of whichever
@@ -371,6 +378,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         return None
 
     @api.model
+    # [@ANCHOR: zero_sudo:is_test_mode]
     def _is_test_mode(self):
         """
         Whether env.cr.commit() would be unsafe or meaningless right
@@ -499,6 +507,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
 
     @api.model
+    # [@ANCHOR: zero_sudo:get_param_read_whitelist]
     def _get_param_read_whitelist(self):
         """Returns the list of system parameters allowed to be read via Zero-Sudo."""
         return [
@@ -598,6 +607,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         ]
 
     @api.model
+    # [@ANCHOR: zero_sudo:get_param_write_whitelist]
     def _get_param_write_whitelist(self):
         """Returns the list of system parameters allowed to be written via Zero-Sudo."""
         return [
@@ -711,6 +721,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
     @api.model
     @distributed_cache()
+    # [@ANCHOR: zero_sudo:get_kv]
     def _get_kv(self, key):
         env_svc = self._get_service_env("zero_sudo.odoo_facility_service_internal")
         record = env_svc["zero_sudo.kv"].search([("key", "=", key)], limit=1)
