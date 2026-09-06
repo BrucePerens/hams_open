@@ -25,6 +25,7 @@ class TestGetRecordByDomain(HamsTransactionCase):
         cls.Domain = cls.env["edge.routing.domain"]
 
     def test_a_domain_resolves_through_its_slug_to_the_matching_records_id(self):
+        # Tests [@ANCHOR: edge_routing:COMM_get_record_by_domain]
         user = self.User.create(
             {"name": "Domain Routed User", "login": "domain_routed@example.com"}
         )

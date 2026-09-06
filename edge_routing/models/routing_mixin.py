@@ -33,6 +33,7 @@ class EdgeRoutingMixin(models.AbstractModel):
 
     _website_slug_format = models.Constraint("CHECK(website_slug IS NULL OR website_slug = '' OR website_slug ~ '^[a-z0-9\\-]+$')", 'The Website Slug can only contain lowercase letters, numbers, and hyphens.')
 
+    # [@ANCHOR: edge_routing:COMM_check_reserved_slugs]
     @api.constrains("website_slug")
     def _check_reserved_slugs(self):
         for record in self:
@@ -41,6 +42,7 @@ class EdgeRoutingMixin(models.AbstractModel):
                     _("The slug '%s' is reserved and cannot be used.")
                 )
 
+    # [@ANCHOR: edge_routing:COMM_get_routing_models]
     @api.model
     def _get_routing_models(self):
         """Returns the list of models that share the global vanity URL namespace."""
@@ -50,6 +52,7 @@ class EdgeRoutingMixin(models.AbstractModel):
                 models.append(model_name)
         return models
 
+    # [@ANCHOR: edge_routing:COMM_check_slug_collision]
     def _check_slug_collision(self, slug, existing_slugs):
         """Extracted as its own method so slug-exhaustion tests can force a
         permanent collision by mocking this instead of the DB-backed
@@ -164,6 +167,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         )
         return record.id if record else False
 
+    # [@ANCHOR: edge_routing:COMM_get_record_by_domain]
     @api.model
     def get_record_by_domain(self, domain, override_svc_uid=None):
         """
@@ -180,6 +184,7 @@ class EdgeRoutingMixin(models.AbstractModel):
 
         return self.get_record_by_slug(slug, override_svc_uid=override_svc_uid)
 
+    # [@ANCHOR: edge_routing:COMM_mixin_create]
     @api.model_create_multi
     def create(self, vals_list):
         assigned_slugs = set()
@@ -256,6 +261,7 @@ class EdgeRoutingMixin(models.AbstractModel):
 
         return res
 
+    # [@ANCHOR: edge_routing:COMM_mixin_unlink]
     def unlink(self):
         slugs = [s for s in self.mapped("website_slug") if s]
         res = super().unlink()

@@ -21,6 +21,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         cls.User = cls.env['res.users']
 
     def test_auto_generate_slug_on_create(self):
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_create]
         user = self.User.create({
             'name': 'Test User Mixin 1',
             'login': 'test_user_mixin_1@example.com',
@@ -28,6 +29,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.assertEqual(user.website_slug, 'test-user-mixin-1')
 
     def test_auto_generate_slug_collision(self):
+        # Tests [@ANCHOR: edge_routing:COMM_check_slug_collision]
         user1 = self.User.create({
             'name': 'Test User Mixin 2',
             'login': 'test_user_mixin_2@example.com',
@@ -82,8 +84,36 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.assertFalse(user2.website_slug)
 
     def test_get_routing_models_dynamic(self):
+        # Tests [@ANCHOR: edge_routing:COMM_get_routing_models]
         models = self.env['edge.routing.mixin']._get_routing_models()
         self.assertIn('res.users', models)
+
+    def test_unlink_notifies_cache_invalidation_for_the_freed_slug(self):
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_unlink]
+        # unlink() had zero direct test coverage -- confirm the record is
+        # actually gone and its slug becomes resolvable again by a new
+        # record (proving the old slug's cache entry was really cleared,
+        # not just that unlink() didn't raise).
+        user = self.User.create({
+            'name': 'Unlink Slug User',
+            'login': 'unlink_slug_user@example.com',
+        })
+        freed_slug = user.website_slug
+        self.assertTrue(freed_slug)
+        user_id = user.id
+        user.unlink()
+        self.assertFalse(self.User.browse(user_id).exists())
+
+        user2 = self.User.create({
+            'name': 'Unlink Slug User',
+            'login': 'unlink_slug_user_2@example.com',
+        })
+        self.assertEqual(
+            user2.website_slug,
+            freed_slug,
+            "The freed slug should be available for reuse once the owning "
+            "record is gone and its cache entry invalidated.",
+        )
 
     def test_get_record_by_slug_cache_removal(self):
         # res.users get_record_by_slug should not be decorated with @distributed_cache
@@ -101,6 +131,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.env.cr.fetchall() # Should not raise
 
     def test_directly_setting_a_reserved_slug_is_rejected_on_write(self):
+        # Tests [@ANCHOR: edge_routing:COMM_check_reserved_slugs]
         # _check_reserved_slugs had zero direct test coverage -- confirm
         # a user can't hand-set website_slug to a reserved route name
         # (auto-generation already avoids these via RESERVED_SLUGS

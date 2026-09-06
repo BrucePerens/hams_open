@@ -27,6 +27,7 @@ class EdgeRoutingDomain(models.Model):
 
     _name_uniq = models.Constraint("UNIQUE(name)", "This domain is already mapped!")
 
+    # [@ANCHOR: edge_routing:COMM_domain_check_name]
     @api.constrains("name", "target_slug")
     def _check_name(self):
         for record in self:
@@ -97,6 +98,7 @@ class EdgeRoutingDomain(models.Model):
         except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.warning("Failed to sync domains to PagerDuty: %s", e)
 
+    # [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
     def _invalidate_cache(self, names):
         valid_names = [n for n in names if n]
         if valid_names:
@@ -115,6 +117,7 @@ class EdgeRoutingDomain(models.Model):
         except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             _logger.warning("Failed to trigger PagerDuty sync cron: %s", e)
 
+    # [@ANCHOR: edge_routing:COMM_domain_create]
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -125,6 +128,7 @@ class EdgeRoutingDomain(models.Model):
         self._invalidate_cache([r.name for r in records])
         return records
 
+    # [@ANCHOR: edge_routing:COMM_domain_write]
     def write(self, vals):
         if "name" in vals and vals["name"]:
             vals["name"] = vals["name"].lower().strip()
@@ -135,6 +139,7 @@ class EdgeRoutingDomain(models.Model):
         self._invalidate_cache(old_names + [r.name for r in self])
         return res
 
+    # [@ANCHOR: edge_routing:COMM_domain_unlink]
     def unlink(self):
         names = [r.name for r in self]
         res = super(EdgeRoutingDomain, self).unlink()

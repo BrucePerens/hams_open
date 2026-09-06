@@ -45,6 +45,13 @@ class TestCustomDomains(HamsTransactionCase):
             )
 
     def test_01_domain_crud_and_resolution(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_create]
+
+        # Tests [@ANCHOR: edge_routing:COMM_domain_write]
+
+        # Tests [@ANCHOR: edge_routing:COMM_domain_unlink]
+
+        # Tests [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
         domain = self.domain_model.create(
             {"name": "WWW.TESTCLUB.ORG ", "target_slug": "testclub"}
         )
@@ -66,6 +73,7 @@ class TestCustomDomains(HamsTransactionCase):
         self.assertFalse(resolved_slug)
 
     def test_02_domain_without_a_dot_is_rejected(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_check_name]
         """_check_name's FQDN rule (domain.py) had zero test coverage --
         a bare hostname with no dot must be rejected, not silently
         accepted as a routable custom domain."""
