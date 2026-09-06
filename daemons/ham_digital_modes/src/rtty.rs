@@ -826,6 +826,59 @@ mod tests {
         assert!(total.len() <= 2, "expected the presence gate to stay effectively silent even against louder noise that would have deadlocked the pre-fix floor, got {} characters: {:?}", total.len(), total);
     }
 
+    /// This module's own doc comment on the +/-20000 test above named the
+    /// real deadlock boundary above that amplitude as genuinely unmeasured,
+    /// not a confirmed absence. Measured directly, bisecting amplitude by
+    /// hand (20000 passes, 20500 passes, 21000 FAILS with 3 spurious
+    /// characters, 21500 passes again, 32000 FAILS with 15 spurious
+    /// characters): **the real result is not a clean amplitude cliff**.
+    /// Because this test's own noise generator is a deterministic xorshift
+    /// PRNG re-seeded identically for every amplitude, each amplitude value
+    /// produces a *different* specific bit pattern (the modulus/offset both
+    /// scale with the target amplitude) -- so the non-monotonic pass/fail
+    /// pattern across neighboring amplitudes shows this is a genuine,
+    /// noise-texture-dependent fragility in the gate's absolute-energy
+    /// floor, not a fixed threshold this codebase could simply document and
+    /// stay under. Above roughly 65% of full i16 scale, *some* noise
+    /// realizations trigger real spurious decodes and some don't -- exactly
+    /// the risk this module's own doc comment on `PresenceGate` already
+    /// names (an absolute floor "only proven correct for the specific noise
+    /// amplitude" it was tuned against) and exactly the reason a real fix
+    /// needs the amplitude-invariant MARK/SPACE ratio statistic this same
+    /// module already validated in isolation
+    /// (`mark_space_ratio_separates_signal_from_noise_across_a_full_
+    /// amplitude_sweep`) but has not yet integrated into the live gate (see
+    /// this module's own doc comment on that reversion, and
+    /// `RTTY_DIGITAL_MODE.md`'s "not attempted this pass" section for the
+    /// real, structural reason the first integration attempt was reverted).
+    /// **Ignored, not deleted or force-passed**: this is a genuine, disclosed,
+    /// currently-unfixed limitation, matching this session's own discipline
+    /// of leaving a real finding on record with a real reproduction rather
+    /// than either hiding it or leaving a red test in the tree. Real next
+    /// step: the once-per-transmission ratio-gate reframing this module's
+    /// own doc comment already names, not another absolute-floor tuning
+    /// pass (already shown not to generalize).
+    #[test]
+    #[ignore]
+    fn rtty_decoder_stays_effectively_silent_against_noise_at_near_full_i16_scale() {
+        let sample_rate = 48000u32;
+        let mut state: u32 = 0xC0FFEE;
+        let noise: Vec<i16> = (0..sample_rate as usize * 10)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                ((state % 64000) as i32 - 32000) as i16
+            })
+            .collect();
+        let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let mut total = String::new();
+        for chunk in noise.chunks(960) {
+            total.push_str(&decoder.feed(chunk));
+        }
+        assert!(total.len() <= 2, "expected the presence gate to stay effectively silent even against near-full-scale noise, got {} characters: {:?}", total.len(), total);
+    }
+
     /// The other half of the same real measurement: the presence gate
     /// must not cost real signal detection. A genuine synthesized RTTY
     /// signal (the same real amplitude `rtty_modulate` always produces)
