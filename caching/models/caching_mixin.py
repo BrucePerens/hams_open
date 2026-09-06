@@ -102,6 +102,7 @@ class CachingMixin(models.AbstractModel):
 
         return (str(int(max_mtime)), str(dynamic_max_size))
 
+    # [@ANCHOR: caching:COMM_force_invalidate_cache]
     @api.model
     def force_invalidate_cache(self):
         invalidate_model_cache(self.env, self._name)

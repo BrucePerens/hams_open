@@ -27,6 +27,7 @@ class ResConfigSettings(models.TransientModel):
     caching_pwa_theme_color = fields.Char(related="website_id.caching_pwa_theme_color", readonly=False)
     caching_pwa_background_color = fields.Char(related="website_id.caching_pwa_background_color", readonly=False)
 
+    # [@ANCHOR: caching:COMM_settings_get_values]
     @api.model
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
@@ -52,11 +53,13 @@ class ResConfigSettings(models.TransientModel):
         )
         return res
 
+    # [@ANCHOR: caching:COMM_settings_set_values]
     def set_values(self):
         super(ResConfigSettings, self).set_values()
         if self.website_id:
             self.website_id.caching_safe_quota_mb = self.caching_safe_quota_mb
 
+    # [@ANCHOR: caching:COMM_settings_force_cache_invalidation]
     def action_force_cache_invalidation(self):
         """Increments the cache version for the current website."""
         self.ensure_one()

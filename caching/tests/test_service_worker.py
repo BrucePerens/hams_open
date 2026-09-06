@@ -54,6 +54,8 @@ class TestServiceWorker(HamsHttpCase):
 
     def test_02_offline_fallback_page_renders(self):
         # Tests [@ANCHOR: COMM_test_caching_pwa_offline_view]
+
+        # Tests [@ANCHOR: caching:COMM_pwa_offline_route]
         response = self.url_open("/offline")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"You are offline", response.content)

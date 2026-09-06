@@ -118,6 +118,7 @@ class TestSettingsAndCache(RealTransactionCase):
         )
 
     def test_02_force_invalidation(self):
+        # Tests [@ANCHOR: COMM_settings_force_cache_invalidation]
         """
         Verify that action_force_cache_invalidation updates the version.
         """
@@ -185,3 +186,53 @@ class TestSettingsAndCache(RealTransactionCase):
             arch_str,
             "The Caching settings block must be injected into " "the compiled layout.",
         )
+
+    def test_08_get_values_reads_from_current_website(self):
+        # Tests [@ANCHOR: caching:COMM_settings_get_values]
+        website = self.env["website"].get_current_website()
+        website.caching_safe_quota_mb = 77
+        website.caching_invalidation_version = 3
+
+        values = self.env["res.config.settings"].with_context(
+            website_id=website.id
+        ).get_values()
+
+        self.assertEqual(values["caching_safe_quota_mb"], 77)
+        self.assertEqual(values["caching_invalidation_version"], 3)
+
+    def test_09_set_values_writes_back_to_website(self):
+        # Tests [@ANCHOR: caching:COMM_settings_set_values]
+        website = self.env["website"].get_current_website()
+        website.caching_safe_quota_mb = 10
+
+        settings = self.env["res.config.settings"].create(
+            {"website_id": website.id, "caching_safe_quota_mb": 99}
+        )
+        settings.set_values()
+
+        self.assertEqual(website.caching_safe_quota_mb, 99)
+
+    def test_10_force_invalidate_cache_calls_the_real_redis_invalidation(self):
+        # Tests [@ANCHOR: caching:COMM_force_invalidate_cache]
+        mock_invalidate = self.safe_patch(
+            "odoo.addons.caching.models.caching_mixin.invalidate_model_cache"
+        )
+        self.env["caching.mixin"].force_invalidate_cache()
+        mock_invalidate.assert_called_once_with(self.env, "caching.mixin")
+
+    def test_11_manifest_json_reflects_the_current_website(self):
+        # Tests [@ANCHOR: caching:COMM_pwa_manifest]
+        website = self.env["website"].get_current_website()
+        website.write(
+            {
+                "caching_pwa_theme_color": "#123456",
+                "caching_pwa_background_color": "#abcdef",
+            }
+        )
+        self.env.cr.commit()
+        response = self.url_open("/manifest.json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["name"], website.name)
+        self.assertEqual(data["theme_color"], "#123456")
+        self.assertEqual(data["background_color"], "#abcdef")

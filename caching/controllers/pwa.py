@@ -7,6 +7,7 @@ from odoo.http import request
 
 class PWAController(http.Controller):
 
+    # [@ANCHOR: caching:COMM_pwa_manifest]
     @http.route('/manifest.json', type='http', auth='public', website=True, sitemap=False)
     def manifest(self):
         website = request.website or request.env['website'].get_current_website()
@@ -30,6 +31,7 @@ class PWAController(http.Controller):
         headers = [('Content-Type', 'application/json')]
         return request.make_response(json.dumps(manifest_data), headers=headers)
 
+    # [@ANCHOR: caching:COMM_pwa_offline_route]
     @http.route('/offline', type='http', auth='public', website=True, sitemap=False)
     def offline(self):
         return request.render('caching.pwa_offline_template')
