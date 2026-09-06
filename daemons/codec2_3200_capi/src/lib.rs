@@ -17,13 +17,13 @@
 //! (or only ever decode) on a given handle pays for the unused half's
 //! state, the same real tradeoff the reference makes.
 
-use ham_digital_modes::codec2_3200::{Decoder, Encoder, BYTES_PER_FRAME, SAMPLES_PER_FRAME};
+use ham_digital_modes::codec2_3200::{Decoder, EncoderFixed, BYTES_PER_FRAME, SAMPLES_PER_FRAME};
 use std::os::raw::c_int;
 
 const CODEC2_MODE_3200: c_int = 0;
 
 pub struct CODEC2 {
-    encoder: Encoder,
+    encoder: EncoderFixed,
     decoder: Decoder,
 }
 
@@ -41,7 +41,7 @@ pub extern "C" fn codec2_create(mode: c_int) -> *mut CODEC2 {
         return std::ptr::null_mut();
     }
     Box::into_raw(Box::new(CODEC2 {
-        encoder: Encoder::new(),
+        encoder: EncoderFixed::new(),
         decoder: Decoder::new(),
     }))
 }
