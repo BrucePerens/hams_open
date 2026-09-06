@@ -31,6 +31,7 @@ LRU_LOCK = threading.Lock()
 _warned_missing_crypto_secret = False
 
 
+# [@ANCHOR: distributed_redis_cache:COMM_raw_crypto_secret]
 def _raw_crypto_secret():
     # Deliberately NOT env["zero_sudo.security.utils"]._get_crypto_secret():
     # that method is itself @distributed_cache()-decorated, so calling it
@@ -68,6 +69,7 @@ def _raw_crypto_secret():
     return secret
 
 
+# [@ANCHOR: distributed_redis_cache:COMM_cache_hmac_key]
 def _cache_hmac_key():
     # [!] SECURITY: Redis holds arbitrary-code-execution risk via
     # pickle.loads() -- anyone who can write to a key matching our
@@ -93,11 +95,13 @@ def _cache_hmac_key():
     return hashlib.sha256(f"{secret}:distributed_redis_cache_hmac".encode()).digest()
 
 
+# [@ANCHOR: distributed_redis_cache:COMM_sign_payload]
 def _sign_payload(key, payload_bytes):
     signature = hmac.new(key, payload_bytes, hashlib.sha256).hexdigest()
     return f"{signature}:{payload_bytes.hex()}"
 
 
+# [@ANCHOR: distributed_redis_cache:COMM_verify_and_unwrap_payload]
 def _verify_and_unwrap_payload(key, stored):
     signature, _, hex_payload = stored.partition(":")
     if not hex_payload:

@@ -118,6 +118,7 @@ async def broadcast_to_redis(payload):
 
 _background_tasks = set()
 
+# [@ANCHOR: distributed_redis_cache:COMM_postgres_notify_handler]
 def postgres_notify_handler(connection, pid, channel, payload):
     """
     Synchronous callback fired by asyncpg when a NOTIFY arrives.

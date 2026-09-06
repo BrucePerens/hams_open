@@ -35,6 +35,7 @@ _custom_pools = {}
 # Registry to cache DB configs to avoid repeated queries
 _db_configs: dict[str, tuple[str, int, str | None]] = {}
 
+# [@ANCHOR: distributed_redis_cache:COMM_get_redis_connection]
 def get_redis_connection(env=None):
     """
     Returns a Redis client using settings from the environment if available,

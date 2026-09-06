@@ -52,6 +52,11 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         self.assertEqual(len(_local_cache), 2, "Should have 2 different cache keys for different ids.")
 
     def test_serialization(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_sign_payload]
+
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_cache_hmac_key]
+
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_raw_crypto_secret]
         """Test that datetime objects can be serialized."""
         model = DummyModel(ids=[1])
 
@@ -70,6 +75,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
             self.fail(f"Serialization failed with TypeError: {e}")
 
     def test_forged_pickle_payload_is_rejected_not_deserialized(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_verify_and_unwrap_payload]
         """
         [!] SECURITY: cache values are HMAC-signed before being written to
         Redis specifically so that a payload no attacker without our
@@ -139,6 +145,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         self.assertTrue(mock_lock.__enter__.called, "LRU_LOCK was not used")
 
     def test_thread_safety_redis_pool(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_get_redis_connection]
         """Test that redis pool initialization is thread safe."""
         _custom_pools.clear()
 
@@ -248,6 +255,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
             self.fail('Redis pipeline was not executed')
 
     def test_cache_manager_strong_reference(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_postgres_notify_handler]
         """Test that postgres_notify_handler stores task in _background_tasks."""
 
         if not hasattr(cm, '_background_tasks'):  # burn-ignore-introspection

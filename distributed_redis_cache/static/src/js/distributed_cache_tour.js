@@ -5,22 +5,21 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 registry.category("web_tour.tours").add("distributed_cache_admin_tour", {
-    url: "/odoo?debug=1",
+    // menu_distributed_cache_root is parented under base.menu_custom, which
+    // does not render as a tile in the .o_navbar_apps_menu grid that button
+    // opens (that grid is application roots only) -- clicking through it and
+    // waiting for this menu's own data-menu-xmlid never found the element,
+    // confirmed via two real, consistent test-suite failures, not a one-off
+    // flake. Every other tour in this codebase already deep-links straight
+    // into its own action instead of navigating the Apps menu by hand; doing
+    // the same here sidesteps the whole question of where base.menu_custom
+    // items render.
+    url: "/odoo?debug=1&action=distributed_redis_cache.action_distributed_cache_config",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
         {
             trigger: '.o_main_navbar',
             content: "Wait for navbar",
-        },
-        {
-            trigger: '.o_navbar_apps_menu button',
-            content: "Open Apps Menu",
-            run: "click",
-        },
-        {
-            trigger: '[data-menu-xmlid="distributed_redis_cache.menu_distributed_cache_root"]',
-            content: "Open Distributed Cache Manager",
-            run: "click",
         },
         {
             trigger: 'button[name="check_redis_status"]',

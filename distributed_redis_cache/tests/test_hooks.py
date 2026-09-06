@@ -21,6 +21,7 @@ class TestDistributedRedisCacheHooks(HamsTransactionCase):
     hams_s3.tests.test_hooks) copy of it."""
 
     def test_post_init_hook_registers_the_cache_manager_daemon(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_post_init_hook]
         self.env.ref("distributed_redis_cache.cache_manager_service_internal")
 
         post_init_hook(self.env)
