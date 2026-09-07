@@ -126,6 +126,7 @@ pub fn decode_energy_fixed(index: u32) -> i64 {
 /// and clamped. `pub(crate)` so `fixed_point.rs`'s LUT-based energy
 /// quantizer can reuse the exact same clamp/rounding logic rather than
 /// duplicating it.
+// [@ANCHOR: quantize_linear]
 pub(crate) fn quantize_linear(value: f32, min: f32, max: f32, bits: u32) -> u32 {
     let levels = 1u32 << bits;
     let norm = (value - min) / (max - min);
@@ -133,6 +134,7 @@ pub(crate) fn quantize_linear(value: f32, min: f32, max: f32, bits: u32) -> u32 
     index.clamp(0, levels as i32 - 1) as u32
 }
 
+// [@ANCHOR: dequantize_linear]
 pub(crate) fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f32 {
     let levels = 1u32 << bits;
     let step = (max - min) / levels as f32;
@@ -170,6 +172,7 @@ pub(crate) const LSP_DIMS: [LspDim; LPC_ORD] = {
 
 pub(crate) const LSP_LEVELS: u32 = 32;
 
+// [@ANCHOR: lsp_dim_value_hz]
 pub(crate) fn lsp_dim_value_hz(dim: &LspDim, level: u32) -> f32 {
     if level < dim.breakpoint {
         dim.step1 * (level + 1) as f32
@@ -178,6 +181,7 @@ pub(crate) fn lsp_dim_value_hz(dim: &LspDim, level: u32) -> f32 {
     }
 }
 
+// [@ANCHOR: decode_lsps_delta_scalar]
 pub fn decode_lsps_delta_scalar(indexes: &[u32; LPC_ORD]) -> [f32; LPC_ORD] {
     const RAD_PER_HZ: f32 = std::f32::consts::PI / 4000.0;
     let mut lsp = [0.0f32; LPC_ORD];
@@ -235,6 +239,7 @@ fn hz_per_rad_q16() -> i64 {
     })
 }
 
+// [@ANCHOR: lsp_dim_value_hz_q16]
 fn lsp_dim_value_hz_q16(dim: &LspDimQ16, level: u32) -> i64 {
     if level < dim.breakpoint {
         dim.step1_q16 * (level + 1) as i64
@@ -251,6 +256,7 @@ fn lsp_dim_value_hz_q16(dim: &LspDimQ16, level: u32) -> i64 {
 /// version (integer subtraction has no rounding noise to break a tie by
 /// accident), so this comparison's direction is genuinely load-bearing,
 /// not incidental.
+// [@ANCHOR: lsp_dim_nearest_level_q16]
 fn lsp_dim_nearest_level_q16(dim: &LspDimQ16, target_q16: i64) -> u32 {
     let mut best_level = 0u32;
     let mut best_dist = i64::MAX;
@@ -272,6 +278,7 @@ fn lsp_dim_nearest_level_q16(dim: &LspDimQ16, target_q16: i64) -> u32 {
 /// never had one), so the only float operation left is the one
 /// boundary conversion per dimension (`f32_to_q_exact_round`, exact bit
 /// extraction, not a float multiply).
+// [@ANCHOR: encode_lsps_delta_scalar_fixed]
 pub fn encode_lsps_delta_scalar_fixed(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
     let mut indexes = [0u32; LPC_ORD];
     let mut last_q_hz_q16 = 0i64;
@@ -317,6 +324,7 @@ fn rad_per_hz_q23() -> i64 {
 /// built), converting to Q23 radians (`lpc::COEF_FRAC_BITS`'s own
 /// format -- what `lsp_to_lpc`'s upcoming fixed-point cos LUT will
 /// want) only once per dimension, not per intermediate Hz value.
+// [@ANCHOR: decode_lsps_delta_scalar_fixed]
 pub fn decode_lsps_delta_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD] {
     let mut lsp_q23 = [0i64; LPC_ORD];
     let mut lsp_hz_q16 = 0i64;
@@ -370,6 +378,8 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: quantize_linear]
+    // Tests [@ANCHOR: dequantize_linear]
     fn wo_quantizer_round_trips_within_one_step() {
         let step = (W0_MAX - W0_MIN) / (1 << WO_BITS) as f32;
         for i in 0..200 {
@@ -463,6 +473,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: lsp_dim_value_hz_q16]
     fn lsp_dim_nearest_level_q16_keeps_the_lower_index_on_an_exact_tie() {
         // The float version's own doc comment records a real bug: an
         // epsilon meant to nudge only exact ties toward the lower index
@@ -485,6 +496,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: lsp_dim_nearest_level_q16]
     fn lsp_dim_nearest_level_q16_matches_the_float_version_across_a_dense_sweep() {
         use crate::codec2_3200::floating_reference::quantise::lsp_dim_nearest_level;
         let mut mismatches = 0;
@@ -508,6 +520,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: decode_lsps_delta_scalar]
+    // Tests [@ANCHOR: decode_lsps_delta_scalar_fixed]
+    // Tests [@ANCHOR: encode_lsps_delta_scalar_fixed]
+    // Tests [@ANCHOR: lsp_dim_value_hz]
     fn decode_lsps_delta_scalar_fixed_matches_the_float_version_within_quantization_noise_on_real_captured_indices(
     ) {
         // Real transmitted indices, derived the same way a real decoder

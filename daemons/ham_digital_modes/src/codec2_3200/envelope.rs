@@ -71,6 +71,7 @@ const SPEC_BINS: usize = FFT_ENC / 2 + 1;
 /// forward` before this swap (max diff ~6e-5 across a real 512-point
 /// comparison) -- see `Cargo.toml`'s own comment on the `microfft`
 /// dependency for the full verification.
+// [@ANCHOR: lpc_spectrum]
 fn lpc_spectrum(ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
     let mut buf = [Complex32::new(0.0, 0.0); FFT_ENC];
     for (i, &a) in ak.iter().enumerate() {
@@ -85,6 +86,7 @@ fn lpc_spectrum(ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
 /// alongside it, since `synthesis.rs`'s own phase reconstruction needs
 /// that same spectrum (`H[m] = conj(Aw[bin])`, the synthesis filter
 /// being the LPC analysis filter's own phase response, reversed).
+// [@ANCHOR: compute_harmonic_amplitudes]
 pub fn compute_harmonic_amplitudes(
     ak: &[f32; LPC_ORD + 1],
     e: f32,
@@ -153,6 +155,7 @@ pub fn compute_harmonic_amplitudes(
 /// documented low-pitch quality reason) is a specific tuned value, but
 /// applying *some* correction here is a design choice available either
 /// way.
+// [@ANCHOR: apply_first_harmonic_correction]
 pub fn apply_first_harmonic_correction(model: &mut Model) {
     if model.wo < (std::f32::consts::PI * 150.0 / 4000.0) {
         model.a[1] *= 0.032;
@@ -162,6 +165,7 @@ pub fn apply_first_harmonic_correction(model: &mut Model) {
 /// `H[m] = conj(Aw[bin])` for each harmonic `m` -- the synthesis
 /// filter's phase response at each harmonic, opposite phase to the
 /// analysis filter (`Aw`) it's derived from.
+// [@ANCHOR: sample_filter_phase]
 pub fn sample_filter_phase(aw: &[Complex32], model: &Model) -> [Complex32; MAX_AMP + 1] {
     let mut h = [Complex32::new(0.0, 0.0); MAX_AMP + 1];
     let fft_r = std::f32::consts::TAU / FFT_ENC as f32;
@@ -224,6 +228,7 @@ fn mag_sq_q23(c: ComplexQ23) -> i64 {
 /// buffer, forward `fixed_fft::fft_fixed` (phase-correct, verified
 /// against `rustfft`'s own forward convention -- see that module's own
 /// doc comment), first `SPEC_BINS` bins returned as `ComplexQ23`.
+// [@ANCHOR: lpc_spectrum_fixed]
 fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1]) -> [ComplexQ23; SPEC_BINS] {
     let mut re = [0i64; FFT_ENC];
     let mut im = [0i64; FFT_ENC];
@@ -308,6 +313,7 @@ pub(crate) fn synth_k_q23(wo_q23: i64) -> i64 {
 /// linear-domain sums, not a single power-law term) rather than a third
 /// log-domain round trip, since the values are already in hand as plain
 /// Q23 sums.
+// [@ANCHOR: compute_harmonic_amplitudes_fixed]
 pub(crate) fn compute_harmonic_amplitudes_fixed(
     ak_q23: &[i64; LPC_ORD + 1],
     e_q23: i64,
@@ -384,6 +390,7 @@ fn first_harmonic_correction_q23() -> i64 {
     *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(0.032, FRAC_BITS))
 }
 
+// [@ANCHOR: apply_first_harmonic_correction_fixed]
 pub(crate) fn apply_first_harmonic_correction_fixed(model: &mut ModelFixed) {
     if model.wo < first_harmonic_wo_threshold_q23() {
         model.a[1] = rshift_round_i128(
@@ -395,6 +402,7 @@ pub(crate) fn apply_first_harmonic_correction_fixed(model: &mut ModelFixed) {
 
 /// Fixed-point `sample_filter_phase`: `aw` (this same `compute_harmonic_
 /// amplitudes_fixed` call's own return value) in, `ComplexQ23` out.
+// [@ANCHOR: sample_filter_phase_fixed]
 pub(crate) fn sample_filter_phase_fixed(
     aw: &[ComplexQ23],
     model: &ModelFixed,
@@ -467,6 +475,10 @@ mod tests {
     /// any shape-only comparison and only surface later as wrong RMS,
     /// far from its actual cause.
     #[test]
+    // Tests [@ANCHOR: compute_harmonic_amplitudes]
+    // Tests [@ANCHOR: compute_harmonic_amplitudes_fixed]
+    // Tests [@ANCHOR: lpc_spectrum]
+    // Tests [@ANCHOR: lpc_spectrum_fixed]
     fn compute_harmonic_amplitudes_fixed_matches_the_float_version_on_real_captured_data() {
         let lsp_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -549,6 +561,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: apply_first_harmonic_correction]
+    // Tests [@ANCHOR: apply_first_harmonic_correction_fixed]
     fn apply_first_harmonic_correction_fixed_matches_the_float_version_on_both_sides_of_the_threshold(
     ) {
         let low_wo = super::super::W0_MIN; // below threshold -- correction applies
@@ -573,6 +587,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: sample_filter_phase]
+    // Tests [@ANCHOR: sample_filter_phase_fixed]
     fn sample_filter_phase_fixed_matches_the_float_version_on_a_synthetic_spectrum() {
         // A synthetic Aw spectrum (not real captured data -- this
         // function is pure bin-index arithmetic plus a conjugate, no

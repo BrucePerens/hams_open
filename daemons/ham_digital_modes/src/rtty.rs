@@ -82,6 +82,7 @@ const CODE_FIGS_SHIFT: u8 = 0b11011;
 /// (letters=false, figures=true) it requires, or `None` if the character
 /// has no Baudot representation at all (anything outside this table --
 /// real RTTY text is 5-bit-limited by design, not an oversight here).
+// [@ANCHOR: char_to_baudot]
 fn char_to_baudot(c: char) -> Option<(u8, bool)> {
     let upper = c.to_ascii_uppercase();
     if let Some(code) = LTRS_CHARS.iter().position(|&ch| ch != '\0' && ch == upper) {
@@ -101,6 +102,7 @@ fn char_to_baudot(c: char) -> Option<(u8, bool)> {
 /// works -- instead returns the framed bit sequence as `bool` (true =
 /// MARK, false = SPACE) at one bit per Baudot bit-period, ready for
 /// `rtty_modulate`'s own tone synthesis.
+// [@ANCHOR: text_to_framed_bits]
 fn text_to_framed_bits(text: &str) -> Vec<bool> {
     let mut bits: Vec<bool> = Vec::new();
     let mut current_figs = false;
@@ -127,6 +129,7 @@ fn text_to_framed_bits(text: &str) -> Vec<bool> {
 /// final stop bit's own tone duration to the real 1.5-unit length, since
 /// a fractional bit period doesn't fit this `bool`-per-bit-period
 /// representation cleanly).
+// [@ANCHOR: push_framed_char]
 fn push_framed_char(bits: &mut Vec<bool>, code: u8) {
     bits.push(false); // start bit: SPACE
     for i in 0..5 {
@@ -141,6 +144,7 @@ fn push_framed_char(bits: &mut Vec<bool>, code: u8) {
 /// envelope rather than a hard amplitude step: an abrupt phase jump would
 /// splatter energy across the band well outside the intended 170Hz
 /// shift.
+// [@ANCHOR: rtty_modulate]
 pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16> {
     let space_hz = mark_hz + RTTY_DEFAULT_SHIFT_HZ;
     let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
@@ -201,6 +205,7 @@ fn window_is_mark(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32
 /// (see its doc comment) needs the two energies separately, since their
 /// *ratio* -- not either one alone -- is what stays invariant to input
 /// amplitude.
+// [@ANCHOR: window_mark_space_energy]
 fn window_mark_space_energy(
     samples: &[i16],
     mark_hz: f64,
@@ -399,6 +404,7 @@ impl PresenceGate {
     /// "only track non-edge windows" restriction was itself a real bug,
     /// and why the outlier-rejection check below is what actually
     /// protects the floor now instead.
+    // [@ANCHOR: PresenceGate::observe]
     fn observe(&mut self, energy: f64) {
         let energy_db = Self::energy_to_db(energy);
         if energy_db < self.floor_db + PRESENCE_MARGIN_DB {
@@ -446,6 +452,7 @@ impl Default for ScanState {
 /// committing to an under-buffered candidate, instead, means the next
 /// `feed()` call (with more buffered audio) retries that exact edge
 /// from scratch.
+// [@ANCHOR: rtty_scan]
 fn rtty_scan(
     samples: &[i16],
     mark_hz: f64,
@@ -662,6 +669,7 @@ impl RttyDecoder {
 
     /// Feeds newly-arrived audio samples in; returns any characters
     /// that completed decoding as a result.
+    // [@ANCHOR: RttyDecoder::feed]
     pub fn feed(&mut self, samples: &[i16]) -> String {
         self.pending_samples.extend_from_slice(samples);
         let out = rtty_scan(
@@ -695,6 +703,13 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: char_to_baudot]
+    // Tests [@ANCHOR: text_to_framed_bits]
+    // Tests [@ANCHOR: push_framed_char]
+    // Tests [@ANCHOR: rtty_modulate]
+    // Tests [@ANCHOR: window_mark_space_energy]
+    // Tests [@ANCHOR: PresenceGate::observe]
+    // Tests [@ANCHOR: rtty_scan]
     fn round_trips_a_real_cq_call_through_letters_and_figures_shifts() {
         let text = "CQ CQ DE K6BP K6BP 599 599 PSE K";
         let sample_rate = 48000u32;
@@ -769,6 +784,7 @@ mod tests {
     /// `pure_noise_does_not_panic_or_hang` (a looser, pre-gate,
     /// whole-buffer sanity bound) still tolerates.
     #[test]
+    // Tests [@ANCHOR: RttyDecoder::feed]
     fn rtty_decoder_stays_effectively_silent_against_10_seconds_of_real_noise_in_real_pipeline_chunks(
     ) {
         let sample_rate = 48000u32;
