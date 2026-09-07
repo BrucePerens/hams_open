@@ -55,6 +55,7 @@ impl Ft8Decoder {
     /// `f_min`/`f_max` bound the analysis frequency range in Hz within
     /// the audio passband -- 200.0/3000.0 matches WSJT-X's own default
     /// FT8 analysis window.
+    // [@ANCHOR: Ft8Decoder::new]
     pub fn new(sample_rate: u32, f_min: f32, f_max: f32) -> Option<Self> {
         let session = unsafe { ffi::ft8_session_new(sample_rate as i32, f_min, f_max) };
         if session.is_null() {
@@ -72,6 +73,7 @@ impl Ft8Decoder {
     /// into ft8_lib's waterfall as enough samples arrive. Does not
     /// itself attempt to decode -- call `decode()` at the end of a
     /// ~15s FT8 slot.
+    // [@ANCHOR: Ft8Decoder::feed]
     pub fn feed(&mut self, samples: &[f32]) {
         self.pending.extend_from_slice(samples);
         let mut offset = 0;
@@ -99,6 +101,7 @@ impl Ft8Decoder {
     /// surfaces that number through the FFI instead of discarding it.
     /// Does not clear the waterfall -- call `reset()` before the next
     /// slot's audio.
+    // [@ANCHOR: Ft8Decoder::decode]
     pub fn decode(&mut self) -> Vec<(String, i32, f32)> {
         const MAX_MESSAGES: usize = 50;
         let mut out_messages =
@@ -144,6 +147,7 @@ impl Ft8Decoder {
 /// FT8 message (see `ftx_message_rc_t` in message.h -- e.g. an invalid
 /// callsign). Does not produce audio; pass the result to
 /// `synthesize_waveform()` for that.
+// [@ANCHOR: encode_message]
 pub fn encode_message(text: &str) -> Option<[u8; ffi::FT8_NN]> {
     let c_text = std::ffi::CString::new(text).ok()?;
     let mut tones = [0u8; ffi::FT8_NN];
@@ -171,6 +175,7 @@ const FT8_MODULATION_INDEX: f64 = 1.0;
 /// docs/references/FT8_FT4_GFSK_WAVEFORM_SPEC.md:
 ///   p(t) = (1/2T) * [erf(kBT(t/T + 0.5)) - erf(kBT(t/T - 0.5))]
 /// with k = pi*sqrt(2/ln2).
+// [@ANCHOR: gfsk_pulse]
 fn gfsk_pulse(t_over_symbol_period: f64, symbol_period_s: f64) -> f64 {
     // k = pi * sqrt(2 / ln 2) = 5.336... (matches the paper's own stated
     // value exactly -- computed directly, not a hardcoded literal, so it
@@ -210,6 +215,7 @@ pub fn synthesize_waveform(
 /// unfiltered rectangular pulse for a real spectral-purity comparison
 /// against the production `gfsk_pulse`, without duplicating the phase
 /// integration/ramp logic.
+// [@ANCHOR: synthesize_waveform_with_pulse]
 fn synthesize_waveform_with_pulse(
     tones: &[u8; ffi::FT8_NN],
     sample_rate: u32,
@@ -315,6 +321,10 @@ mod tests {
     /// stronger check than "the math matches the paper's equations on
     /// paper," which this test makes unnecessary to trust blindly.
     #[test]
+    // Tests [@ANCHOR: Ft8Decoder::new]
+    // Tests [@ANCHOR: Ft8Decoder::feed]
+    // Tests [@ANCHOR: Ft8Decoder::decode]
+    // Tests [@ANCHOR: encode_message]
     fn synthesized_waveform_round_trips_through_the_real_decoder_at_12khz() {
         let message = "K1ABC W9XYZ EN37";
         let tones = encode_message(message).expect("a valid standard-format message must encode");
@@ -502,6 +512,8 @@ mod tests {
     /// no real filtering effect) fails this, where the round-trip tests
     /// would not.
     #[test]
+    // Tests [@ANCHOR: gfsk_pulse]
+    // Tests [@ANCHOR: synthesize_waveform_with_pulse]
     fn gfsk_pulse_shaping_suppresses_out_of_band_energy_more_than_an_unfiltered_pulse() {
         let tones = encode_message("K1ABC W9XYZ EN37").unwrap();
         let sample_rate = 12000u32;
