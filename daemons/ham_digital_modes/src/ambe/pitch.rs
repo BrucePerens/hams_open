@@ -64,6 +64,33 @@ const LOWPASS_FILTER_TAPS_HALF: [f64; 11] = [
     -0.002831, -0.002898,
 ];
 
+/// Annex C: the 221-sample window used for pitch refinement (and also spectral amplitude estimation
+/// and V/UV determination, per section 5.1's own text), `w_R(n)`. Only the non-negative half (`n =
+/// 0..=110`) is stored; `w_R(n) == w_R(-n)`, confirmed exactly for all 110 pairs, and `w_R(0) == 1.0`
+/// (the real center peak a window function should have). Unlike Annex B, the spec states no explicit
+/// sum-of-squares normalization constraint for this window, so completeness and symmetry are the
+/// real checks available here -- both confirmed during extraction.
+const PITCH_REFINEMENT_WINDOW_HALF: [f64; 111] = [
+    1.000000, 0.999774, 0.999095, 0.997966, 0.996386, 0.994358, 0.991884, 0.988967, 0.985610,
+    0.981817, 0.977592, 0.972940, 0.967866, 0.962377, 0.956477, 0.950174, 0.943474, 0.936386,
+    0.928916, 0.921074, 0.912868, 0.904307, 0.895400, 0.886157, 0.876589, 0.866705, 0.856516,
+    0.846033, 0.835267, 0.824231, 0.812935, 0.801391, 0.789612, 0.777610, 0.765397, 0.752986,
+    0.740390, 0.727620, 0.714692, 0.701616, 0.688406, 0.675076, 0.661638, 0.648105, 0.634490,
+    0.620807, 0.607067, 0.593284, 0.579470, 0.565639, 0.551802, 0.537971, 0.524160, 0.510379,
+    0.496640, 0.482955, 0.469336, 0.455793, 0.442337, 0.428978, 0.415727, 0.402594, 0.389588,
+    0.376718, 0.363994, 0.351425, 0.339018, 0.326782, 0.314724, 0.302851, 0.291171, 0.279689,
+    0.268413, 0.257347, 0.246497, 0.235869, 0.225466, 0.215294, 0.205355, 0.195653, 0.186192,
+    0.176974, 0.168001, 0.159276, 0.150799, 0.142572, 0.134596, 0.126872, 0.119398, 0.112176,
+    0.105205, 0.098483, 0.092009, 0.085782, 0.079801, 0.074062, 0.068563, 0.063303, 0.058277,
+    0.053482, 0.048915, 0.044573, 0.040451, 0.036546, 0.032852, 0.029365, 0.026081, 0.022995,
+    0.020102, 0.017397, 0.014873,
+];
+
+/// `w_R(n)` per Annex C, for `n` in `-110..=110`.
+pub fn pitch_refinement_window(n: i32) -> f64 {
+    PITCH_REFINEMENT_WINDOW_HALF[n.unsigned_abs() as usize]
+}
+
 /// `h_LPF(n)` per Annex D, for `n` in `-10..=10`.
 pub fn lowpass_filter_tap(n: i32) -> f64 {
     LOWPASS_FILTER_TAPS_HALF[n.unsigned_abs() as usize]
@@ -507,5 +534,23 @@ mod tests {
             (dc_gain - 1.0).abs() < 0.01,
             "expected DC gain near 1.0, got {dc_gain}"
         );
+    }
+
+    #[test]
+    fn pitch_refinement_window_is_symmetric_and_peaks_at_one_in_the_center() {
+        for n in 1..=110 {
+            assert_eq!(
+                pitch_refinement_window(n),
+                pitch_refinement_window(-n),
+                "n={n}"
+            );
+        }
+        assert_eq!(pitch_refinement_window(0), 1.0);
+        for n in 0..110 {
+            assert!(
+                pitch_refinement_window(n) >= pitch_refinement_window(n + 1),
+                "window should taper monotonically from the center, failed at n={n}"
+            );
+        }
     }
 }
