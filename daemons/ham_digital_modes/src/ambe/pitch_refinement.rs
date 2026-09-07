@@ -22,7 +22,7 @@ use std::f64::consts::PI;
 use super::pitch::pitch_refinement_window;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Complex {
+pub(crate) struct Complex {
     re: f64,
     im: f64,
 }
@@ -42,11 +42,11 @@ impl Complex {
         Self::new(self.re + other.re, self.im + other.im)
     }
 
-    fn sub(self, other: Self) -> Self {
+    pub(crate) fn sub(self, other: Self) -> Self {
         Self::new(self.re - other.re, self.im - other.im)
     }
 
-    fn norm_sqr(self) -> f64 {
+    pub(crate) fn norm_sqr(self) -> f64 {
         self.re * self.re + self.im * self.im
     }
 }
@@ -58,7 +58,7 @@ impl Complex {
 /// Real-valued (see this module's own doc comment on why): only the cosine term is computed: the
 /// sine term's own contribution exactly cancels for a real, even-symmetric sequence like `w_R(n)`, a
 /// direct consequence of the same fact the spec states explicitly, not a separate approximation.
-fn window_dft_16384(m: i32) -> f64 {
+pub(crate) fn window_dft_16384(m: i32) -> f64 {
     let mut acc = 0.0;
     for n in -110i32..=110 {
         let theta = -2.0 * PI * (m as f64) * (n as f64) / 16384.0;
@@ -100,7 +100,7 @@ impl RefinementFrame {
     /// bin index a hair outside this range for a candidate near the edge of the spec's own pitch
     /// range -- treated as "no real spectral content there" rather than panicking, matching this
     /// module's overall "give up gracefully on an edge candidate, don't crash" posture).
-    fn sw_at(&self, m: i32) -> Complex {
+    pub(crate) fn sw_at(&self, m: i32) -> Complex {
         if (-127..=128).contains(&m) {
             self.sw[(m + 127) as usize]
         } else {
@@ -137,7 +137,12 @@ fn harmonic_amplitude(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
 
 /// The synthetic spectrum `S_w(m, omega0)` (Eq. 25): for the DFT bin `m`, finds which harmonic band
 /// (if any, per Eq. 26-27) `m` falls into and returns that harmonic's own estimated contribution.
-fn synthetic_spectrum(frame: &RefinementFrame, m: i32, omega0: f64, max_l: u32) -> Complex {
+pub(crate) fn synthetic_spectrum(
+    frame: &RefinementFrame,
+    m: i32,
+    omega0: f64,
+    max_l: u32,
+) -> Complex {
     for l in 0..=max_l {
         let a_l = (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0;
         let b_l = (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0;

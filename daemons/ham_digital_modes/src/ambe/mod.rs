@@ -35,7 +35,10 @@
 //! control)
 //!
 //! 1. **Pitch estimation and voicing decision** produce the fundamental frequency and a per-band
-//!    voiced/unvoiced decision across up to `MAX_HARMONICS` spectral bands.
+//!    voiced/unvoiced decision across up to `MAX_HARMONICS` spectral bands -- section 5.1's pitch
+//!    estimation (initial estimate, look-back/look-ahead tracking, quarter-sample refinement) and
+//!    section 5.2's voiced/unvoiced determination (Eq. 31-42) are both implemented, in [`pitch`],
+//!    [`pitch_refinement`], and [`vuv`].
 //! 2. **Spectral amplitude encoding**: the `L` harmonic amplitudes are DCT-transformed in six blocks
 //!    whose lengths vary with `L` (Fig. 17), forming a six-element "gain vector" via a second, 6-point
 //!    DCT across each block's own DC coefficient (Fig. 18, Eq. 60-61) -- see [`gain_vector_dct`] below,
@@ -56,6 +59,7 @@ pub mod fec;
 pub mod pitch;
 pub mod pitch_refinement;
 pub mod tables;
+pub mod vuv;
 
 /// 7.2kbps frame rate: 144 bits every 20ms, per TIA-102.BABA section 7.3 ("At 7.2 kbps with a 20 ms
 /// frame size, 144 bits per frame are available for voice coding").
@@ -106,9 +110,16 @@ mod tests {
         // transform implementation before trusting it against anything harder.
         let r_hat = [2.0; 6];
         let g_hat = gain_vector_dct(&r_hat);
-        assert!((g_hat[0] - 2.0).abs() < 1e-9, "expected the DC term to equal the constant input, got {}", g_hat[0]);
+        assert!(
+            (g_hat[0] - 2.0).abs() < 1e-9,
+            "expected the DC term to equal the constant input, got {}",
+            g_hat[0]
+        );
         for (m, &g) in g_hat.iter().enumerate().skip(1) {
-            assert!(g.abs() < 1e-9, "expected higher-order term {m} to vanish for constant input, got {g}");
+            assert!(
+                g.abs() < 1e-9,
+                "expected higher-order term {m} to vanish for constant input, got {g}"
+            );
         }
     }
 
@@ -124,7 +135,10 @@ mod tests {
         // G_hat_m = (1/6) * cos(pi*(m-1)*0.5/6) for each m.
         for (m, &g) in g_hat.iter().enumerate() {
             let expected = (std::f64::consts::PI * m as f64 * 0.5 / 6.0).cos() / 6.0;
-            assert!((g - expected).abs() < 1e-9, "m={m}: expected {expected}, got {g}");
+            assert!(
+                (g - expected).abs() < 1e-9,
+                "m={m}: expected {expected}, got {g}"
+            );
         }
     }
 }
