@@ -39,6 +39,7 @@ pub(crate) const LPF_TAPS: usize = 25;
 /// Windowed-sinc low-pass FIR, unity DC gain, cutoff at `cutoff` cycles
 /// per original-rate sample (`0.5 / NLP_DEC` for anti-aliasing ahead of
 /// decimation by `NLP_DEC`).
+// [@ANCHOR: design_lowpass]
 fn design_lowpass(taps: usize, cutoff: f32) -> [f32; LPF_TAPS] {
     let mut h = [0.0f32; LPF_TAPS];
     let center = (taps - 1) as f32 / 2.0;
@@ -62,6 +63,7 @@ fn design_lowpass(taps: usize, cutoff: f32) -> [f32; LPF_TAPS] {
 
 /// `pub(crate)`: `floating_reference::nlp`'s own `decimate` needs this
 /// too (its float twin of `decimate_fixed` below).
+// [@ANCHOR: lowpass_coeffs]
 pub(crate) fn lowpass_coeffs() -> &'static [f32; LPF_TAPS] {
     use std::sync::OnceLock;
     static COEFFS: OnceLock<[f32; LPF_TAPS]> = OnceLock::new();
@@ -279,6 +281,7 @@ impl NlpStateFixed {
 /// widening: `a` is bounded by `2^23` and `mem_y` by a real squared
 /// `i16` sample's own range (up to ~1.07e9), so the product is
 /// comfortably under `i64::MAX`.
+// [@ANCHOR: dc_notch_fixed]
 fn dc_notch_fixed(x: i64, mem_x: &mut i64, mem_y: &mut i64) -> i64 {
     let a = notch_a_q23();
     let ay = rshift_round(a * *mem_y, NLP_FRAC_BITS);
@@ -294,6 +297,7 @@ fn dc_notch_fixed(x: i64, mem_x: &mut i64, mem_y: &mut i64) -> i64 {
 /// is still two orders of magnitude under `i64::MAX`, but `i128` costs
 /// nothing here and matches this crate's own established
 /// multiply-accumulate convention).
+// [@ANCHOR: decimate_fixed]
 fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
     let h = lowpass_coeffs_q23();
     let half = (LPF_TAPS as isize - 1) / 2;
@@ -321,6 +325,7 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
 /// (16- or 32-bit) fixed-point FFT would need is simply unnecessary at
 /// `i64`/`i128` width, and skipping it avoids the extra rounding error
 /// per-stage rescaling would otherwise cost.
+// [@ANCHOR: fft_fixed]
 fn fft_fixed(re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
     let bitrev = fft_bit_reverse_table();
     for (i, &j) in bitrev.iter().enumerate() {
@@ -371,6 +376,7 @@ fn fft_fixed(re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
 /// usize` truncation agree exactly (checked directly across the real
 /// range, see
 /// `sub_multiple_bounds_match_the_float_formula_across_the_real_bin_range`).
+// [@ANCHOR: correct_sub_multiples_fixed]
 fn correct_sub_multiples_fixed(
     power: &[i128],
     gmax: i128,
@@ -427,6 +433,7 @@ fn correct_sub_multiples_fixed(
 /// core, float boundary" pattern already established throughout this
 /// crate's fixed-point migration), so `f0_to_wo`/`quantise::encode_wo`
 /// downstream need no changes at all.
+// [@ANCHOR: nlp_fixed]
 pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32 {
     let start = M_PITCH - N_SAMP;
     for (sn_i, sq_i) in sn[start..].iter().zip(state.sq_fixed[start..].iter_mut()) {
@@ -537,6 +544,7 @@ mod tests {
     /// `nlp`'s own float estimate) so a bug shared by both
     /// implementations wouldn't hide behind mutual agreement.
     #[test]
+    // Tests [@ANCHOR: nlp_fixed]
     fn nlp_fixed_finds_the_fundamental_of_a_synthetic_voiced_like_signal_across_the_valid_pitch_range(
     ) {
         for &f0 in &[70.0f32, 110.0, 150.0, 200.0, 250.0, 320.0] {
@@ -661,6 +669,7 @@ mod tests {
     /// itself can compound any of their error. Per this crate's own
     /// established "front-end first, then the FFT" migration order.
     #[test]
+    // Tests [@ANCHOR: dc_notch_fixed]
     fn dc_notch_fixed_matches_the_float_dc_notch_on_realistic_amplitude_input() {
         let mut mem_x = 0.0f32;
         let mut mem_y = 0.0f32;
@@ -698,6 +707,9 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: decimate_fixed]
+    // Tests [@ANCHOR: design_lowpass]
+    // Tests [@ANCHOR: lowpass_coeffs]
     fn decimate_fixed_matches_the_float_decimate_on_realistic_amplitude_input() {
         let mut seed = 7u32;
         let mut sq = [0.0f32; M_PITCH];
@@ -732,6 +744,7 @@ mod tests {
     /// case is pinned elsewhere in this crate, rather than leaving it as
     /// an unstated assumption.
     #[test]
+    // Tests [@ANCHOR: correct_sub_multiples_fixed]
     fn correct_sub_multiples_fixed_matches_correct_sub_multiples_away_from_exact_ties() {
         let true_bin = 40usize;
         let lo = 16usize;
@@ -812,6 +825,7 @@ mod tests {
     /// design, not real/imaginary parts directly, which depend on a sign
     /// convention this module deliberately leaves unfixed).
     #[test]
+    // Tests [@ANCHOR: fft_fixed]
     fn fft_fixed_power_spectrum_matches_a_float_fft_on_a_multi_tone_input() {
         // Tones at exact bin frequencies of this *same* `PE_FFT_SIZE`-
         // point transform (not a shorter, zero-padded block) so both

@@ -121,6 +121,7 @@ pub const FFT_ENC_SB: usize = 2 * FFT_ENC;
 /// already capped at `MAX_AMP`).
 pub const MAX_AMP_SB: usize = 2 * MAX_AMP;
 
+// [@ANCHOR: make_synthesis_window_sb]
 fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME_SB];
     let n0 = N_SAMP_SB / 2;
@@ -169,6 +170,7 @@ fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
 /// unvoiced content in this v1 rather than guessed; a real, separate
 /// noise-texture treatment for that case is a genuine follow-on, not
 /// attempted here.
+// [@ANCHOR: extrapolate_amplitudes]
 pub fn extrapolate_amplitudes(model: &Model, enabled: bool) -> ([f32; MAX_AMP_SB + 1], usize) {
     let l = model.l;
     let mut a_ext = [0.0f32; MAX_AMP_SB + 1];
@@ -267,6 +269,7 @@ impl SpectralBridgeState {
     /// Synthesizes one 10ms (`N_SAMP_SB`-sample) sub-frame at
     /// `SAMPLE_RATE_SB`, given the *already-decoded* base `model`
     /// (unchanged, same object the normal 8kHz decode produced).
+    // [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb]
     pub fn synthesize_subframe_sb(&mut self, model: &Model) -> [i16; N_SAMP_SB] {
         let (a_ext, l2) = extrapolate_amplitudes(model, self.enabled);
 
@@ -342,6 +345,7 @@ fn hz_per_rad_q23() -> i64 {
 /// and keeping it a small plain integer (at most `SAMPLE_RATE_SB/2`)
 /// rather than Q23-scaled keeps every accumulator (`sum_xx` most of
 /// all) comfortably within `i64` with no widening needed there.
+// [@ANCHOR: freq_hz_fixed]
 fn freq_hz_fixed(m: usize, wo_q23: i64) -> i64 {
     let mw_q23 = m as i64 * wo_q23;
     let freq_hz_q23 = rshift_round_i128(mw_q23 as i128 * hz_per_rad_q23() as i128, FRAC_BITS);
@@ -356,6 +360,7 @@ fn freq_hz_fixed(m: usize, wo_q23: i64) -> i64 {
 /// `d` is always positive here: an OLS `denom` is a variance sum
 /// (`n*sum_xx - sum_x^2 >= 0` by Cauchy-Schwarz) and `n` is a plain
 /// positive harmonic count.
+// [@ANCHOR: div_round_i128]
 fn div_round_i128(n: i128, d: i128) -> i64 {
     debug_assert!(d > 0, "div_round_i128: divisor must be positive, got {d}");
     let half = d / 2;
@@ -374,6 +379,7 @@ fn div_round_i128(n: i128, d: i128) -> i64 {
 /// rescale to get a Q23 result, and neither does adding it to `alpha`
 /// (also Q23) -- unlike a Q23*Q23 product, there's no `FRAC_BITS`
 /// shift anywhere in this function.
+// [@ANCHOR: extrapolate_amplitudes_fixed]
 pub(crate) fn extrapolate_amplitudes_fixed(
     model: &ModelFixed,
     enabled: bool,
@@ -479,6 +485,7 @@ impl SpectralBridgeStateFixed {
     /// `FFT_ENC_SB` -- see this module's own doc comment on why the bin
     /// formula stays anchored to the original constant), just no longer
     /// clamped to `FFT_ENC/2`.
+    // [@ANCHOR: SpectralBridgeStateFixed::synthesize_subframe_sb_fixed]
     pub(crate) fn synthesize_subframe_sb_fixed(&mut self, model: &ModelFixed) -> [i16; N_SAMP_SB] {
         let (a_ext, l2) = extrapolate_amplitudes_fixed(model, self.enabled);
 
@@ -592,6 +599,10 @@ mod tests {
     /// uses (measure the real max error, then set the tolerance with
     /// real margin, never guessed).
     #[test]
+    // Tests [@ANCHOR: extrapolate_amplitudes]
+    // Tests [@ANCHOR: extrapolate_amplitudes_fixed]
+    // Tests [@ANCHOR: freq_hz_fixed]
+    // Tests [@ANCHOR: div_round_i128]
     fn extrapolate_amplitudes_fixed_matches_the_float_version_within_tolerance() {
         let wo = 180.0f32.to_radians().max(super::super::W0_MIN);
         let model_f = synthetic_model(wo, true, 9.0);
@@ -720,6 +731,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb]
+    // Tests [@ANCHOR: make_synthesis_window_sb]
     fn synthesize_subframe_sb_produces_finite_reasonably_scaled_audio_enabled_and_disabled() {
         for enabled in [true, false] {
             let mut sb = SpectralBridgeState::new();
@@ -750,6 +763,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: SpectralBridgeStateFixed::synthesize_subframe_sb_fixed]
     fn synthesize_subframe_sb_fixed_produces_finite_reasonably_scaled_audio_enabled_and_disabled() {
         for enabled in [true, false] {
             let mut sb = SpectralBridgeStateFixed::new();
