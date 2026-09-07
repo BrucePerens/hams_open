@@ -1,11 +1,19 @@
-//! Fundamental frequency and voiced/unvoiced decision encoding (TIA-102.BABA_2003.pdf sections
-//! 6.1-6.2, Eq. 45 and 49) -- the two model parameters that get their own dedicated quantizer values
-//! `b_hat_0` and `b_hat_1`, ahead of the gain vector (`b_hat_2..b_hat_7`, [`super::tables`]/
+//! Fundamental frequency and voiced/unvoiced decision encoding/decoding (TIA-102.BABA_2003.pdf
+//! sections 6.1-6.2, Eq. 45-49) -- the two model parameters that get their own dedicated quantizer
+//! values `b_hat_0` and `b_hat_1`, ahead of the gain vector (`b_hat_2..b_hat_7`, [`super::tables`]/
 //! [`super::quantize`]) and higher-order DCT coefficients (`b_hat_8..b_hat_{L+1}`, same modules).
 //!
 //! Transcribed from a 600 DPI render of TIA-102.BABA_2003.pdf pages 38-40, following the same
 //! discipline as every other body-text equation in this spec (Type3 digit font defeats
 //! `pdftotext`).
+//!
+//! `L~` (Eq. 47, the decoder's own harmonic count from the *reconstructed* `omega0_tilde`) turned out
+//! to be textually identical to [`super::vuv::harmonics_count`]'s own Eq. 31 (the encoder's harmonic
+//! count from the *estimated* `omega0_hat`) -- same `floor(0.9254 * floor(pi/omega0 + 0.25))` formula,
+//! just fed a different frequency -- so that function is reused directly rather than duplicated here.
+//! Likewise `K~` (Eq. 48) is textually identical to [`super::vuv::frequency_bands_count`]'s own
+//! Eq. 34 (`floor((L+2)/3)` for `L<=36`, else `12` -- the same identity as that function's own
+//! `div_ceil(3)`, checked when Eq. 34 was first transcribed).
 
 use std::f64::consts::PI;
 
@@ -22,6 +30,23 @@ pub const FUNDAMENTAL_FREQUENCY_BITS: u32 = 8;
 /// ([`super::pitch::candidate_pitches`]), not merely asserted.
 pub fn quantize_fundamental_frequency(omega0_hat: f64) -> u32 {
     ((4.0 * PI / omega0_hat) - 39.0).floor() as u32
+}
+
+/// `omega0_tilde` (Eq. 46): reconstructs the fundamental frequency from the received quantizer value
+/// `b_hat_0` -- bin-center dequantization (`+39.5`, half a step above the encoder's own `-39` floor
+/// offset in Eq. 45), matching this codebase's own established bin-center convention elsewhere (e.g.
+/// [`super::reconstruct::dequantize_uniform`]'s own `+0.5`).
+pub fn dequantize_fundamental_frequency(b0_tilde: u32) -> f64 {
+    4.0 * PI / (b0_tilde as f64 + 39.5)
+}
+
+/// `v_bar_k` (the decoder-side counterpart of Eq. 49, section 6.2's own decoding half): unpacks
+/// `b_hat_1`'s own `k_hat` bits back into per-band voiced/unvoiced decisions, MSB-first, the exact
+/// inverse of [`encode_voicing_decisions`].
+pub fn decode_voicing_decisions(b1_tilde: u32, k_hat: u32) -> Vec<bool> {
+    (1..=k_hat)
+        .map(|k| (b1_tilde >> (k_hat - k)) & 1 == 1)
+        .collect()
 }
 
 /// `b_hat_1` (Eq. 49): packs the `K_hat` per-band voiced/unvoiced decisions (from
@@ -104,6 +129,45 @@ mod tests {
             let omega0_hat = 2.0 * PI / p;
             let b0 = quantize_fundamental_frequency(omega0_hat);
             assert!(b0 < (1u32 << FUNDAMENTAL_FREQUENCY_BITS));
+        }
+    }
+
+    /// The encoder's own `-39` (Eq. 45) and the decoder's own `+39.5` (Eq. 46) are not an obviously
+    /// matched inverse pair -- the `.5` is bin-center dequantization for the half-sample grid the
+    /// 8-bit budget forces `b_hat_0` onto, not a typo. Checked algebraically (`b0 = floor(2P-39)`,
+    /// `P_tilde = (b0+39.5)/2` gives `|P_tilde - P|` strictly within a quarter-sample for any real
+    /// `P`) and then empirically here across the same real pitch-period range this codec's own
+    /// pitch estimator can actually produce, rather than trusted from the algebra alone.
+    #[test]
+    fn dequantize_fundamental_frequency_recovers_the_period_within_a_half_sample() {
+        for p in real_refined_pitch_range() {
+            let omega0_hat = 2.0 * PI / p;
+            let b0 = quantize_fundamental_frequency(omega0_hat);
+            let omega0_tilde = dequantize_fundamental_frequency(b0);
+            let p_tilde = 2.0 * PI / omega0_tilde;
+            assert!(
+                (p_tilde - p).abs() < 0.5,
+                "P={p}: round-tripped to P~={p_tilde} via b0={b0}, off by {}",
+                (p_tilde - p).abs()
+            );
+        }
+    }
+
+    #[test]
+    fn decode_voicing_decisions_is_the_exact_inverse_of_encode_voicing_decisions() {
+        for k_hat in 1u32..=12 {
+            // Exercise every real bit pattern for small k_hat, and a handful of representative
+            // patterns for larger k_hat (2^12 is cheap enough to do fully too, but no need).
+            let patterns: Vec<u32> = if k_hat <= 8 {
+                (0..(1u32 << k_hat)).collect()
+            } else {
+                vec![0, 1, (1 << k_hat) - 1, 0b1010_1010_1010 & ((1 << k_hat) - 1)]
+            };
+            for b1 in patterns {
+                let voiced = decode_voicing_decisions(b1, k_hat);
+                assert_eq!(voiced.len(), k_hat as usize);
+                assert_eq!(encode_voicing_decisions(&voiced), b1, "k_hat={k_hat}, b1={b1}");
+            }
         }
     }
 
