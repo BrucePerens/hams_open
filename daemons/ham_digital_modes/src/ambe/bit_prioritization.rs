@@ -140,6 +140,125 @@ pub fn prioritize_bits(
     Some(u)
 }
 
+/// The exact inverse of [`raster_scan_bits`]: given the flat scanned bit sequence and the same
+/// column widths used to produce it, recovers each column's own value. Mirrors
+/// [`raster_scan_bits`]'s own traversal order exactly (same level-by-level, column-by-column walk),
+/// so it consumes `bits` in the same order they were produced. Returns `None` if `bits` has the
+/// wrong length for `widths` (too few to fill every real cell, or leftover bits after every cell is
+/// filled) -- a real internal-consistency check, not a spec-defined error case.
+fn raster_unscan_bits(bits: &[bool], widths: &[u8]) -> Option<Vec<u32>> {
+    let max_width = widths.iter().copied().max().unwrap_or(0);
+    let mut values = vec![0u32; widths.len()];
+    let mut idx = 0;
+    for level in (0..max_width).rev() {
+        for (col, &width) in widths.iter().enumerate() {
+            if width > level {
+                let bit = *bits.get(idx)?;
+                idx += 1;
+                if bit {
+                    values[col] |= 1 << level;
+                }
+            }
+        }
+    }
+    if idx != bits.len() {
+        return None;
+    }
+    Some(values)
+}
+
+/// Reads the next `n` bits from `bits[*idx..]` MSB-first as an unsigned integer, advancing `*idx`.
+/// Returns `None` (leaving `*idx` at the point of failure) if fewer than `n` bits remain.
+fn read_bits(bits: &[bool], idx: &mut usize, n: usize) -> Option<u32> {
+    let mut value = 0u32;
+    for _ in 0..n {
+        let bit = *bits.get(*idx)?;
+        *idx += 1;
+        value = (value << 1) | (bit as u32);
+    }
+    Some(value)
+}
+
+/// [`deprioritize_bits`]'s own decoded parameters, one field per quantizer value
+/// [`prioritize_bits`] originally packed together.
+#[derive(Debug, PartialEq)]
+pub struct DeprioritizedBits {
+    pub b0: u32,
+    pub b1: u32,
+    pub b2: u32,
+    pub gain_vector: [(u32, u8); 5],
+    pub higher_order: Vec<(u32, u8)>,
+    pub sync_bit: bool,
+}
+
+/// The exact inverse of [`prioritize_bits`]: recovers every original quantizer value from the eight
+/// received (and by this point, FEC-decoded) prioritized bit vectors `u_hat_0..u_hat_7`.
+/// `gain_widths`/`higher_widths` must be the *same* bit-width columns the original frame was
+/// prioritized with (from [`super::tables::gain_bit_allocation`]/
+/// [`super::tables::higher_order_bit_allocation`], keyed off this frame's own decoded `L~`) -- an
+/// external precondition this function can't check for itself, exactly like [`prioritize_bits`]'s
+/// own caller-supplied `gain_vector`/`higher_order` widths. Returns `None` on any internal length
+/// mismatch (a corrupted `k_hat`/width mismatch this deep would mean upstream decoding already went
+/// wrong, not a case this function can meaningfully recover from).
+pub fn deprioritize_bits(
+    u: [u32; 8],
+    k_hat: u32,
+    gain_widths: [u8; 5],
+    higher_widths: &[u8],
+) -> Option<DeprioritizedBits> {
+    const LENGTHS: [usize; 8] = [12, 12, 12, 12, 11, 11, 11, 7];
+    let mut bits: Vec<bool> = Vec::with_capacity(88);
+    for (&value, &len) in u.iter().zip(LENGTHS.iter()) {
+        for i in (0..len).rev() {
+            bits.push((value >> i) & 1 == 1);
+        }
+    }
+
+    let total_scan_len = gain_widths.iter().map(|&w| w as usize).sum::<usize>()
+        + higher_widths.iter().map(|&w| w as usize).sum::<usize>();
+    let first_scan_len = total_scan_len.min(39);
+    let rest_len = total_scan_len - first_scan_len;
+
+    let mut idx = 0usize;
+    let b0_top = read_bits(&bits, &mut idx, 6)?;
+    let b2_top = read_bits(&bits, &mut idx, 3)?;
+    let mut scan: Vec<bool> = bits.get(idx..idx.checked_add(first_scan_len)?)?.to_vec();
+    idx += first_scan_len;
+    let b1 = read_bits(&bits, &mut idx, k_hat as usize)?;
+    let b2_mid = read_bits(&bits, &mut idx, 2)?;
+    scan.extend_from_slice(bits.get(idx..idx.checked_add(rest_len)?)?);
+    idx += rest_len;
+    let b2_lsb = read_bits(&bits, &mut idx, 1)?;
+    let b0_bottom = read_bits(&bits, &mut idx, 2)?;
+    let sync_bit = *bits.get(idx)?;
+    idx += 1;
+    if idx != 88 {
+        return None;
+    }
+
+    let mut widths_all: Vec<u8> = gain_widths.to_vec();
+    widths_all.extend_from_slice(higher_widths);
+    let values = raster_unscan_bits(&scan, &widths_all)?;
+
+    let b0 = (b0_top << 2) | b0_bottom;
+    let b2 = (b2_top << 3) | (b2_mid << 1) | b2_lsb;
+    let gain_vector: [(u32, u8); 5] = std::array::from_fn(|i| (values[i], gain_widths[i]));
+    let higher_order: Vec<(u32, u8)> = higher_widths
+        .iter()
+        .zip(values[5..].iter())
+        .map(|(&w, &v)| (v, w))
+        .collect();
+
+    Some(DeprioritizedBits {
+        b0,
+        b1,
+        b2,
+        gain_vector,
+        higher_order,
+        sync_bit,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,5 +426,74 @@ mod tests {
             prioritize_bits(0, 0, 3, 0, gain_vector, &higher_order, false),
             None
         );
+    }
+
+    /// The real risk this module's own inverse carries, per the advisor's own review: unlike
+    /// `interleave.rs`'s table permutation or `modulation.rs`'s self-inverse XOR, this composition
+    /// (raster scan, two split segments, several distinct sub-fields) has no structural guarantee of
+    /// correctness -- so this checks a real round trip with actual varied, nonzero, non-symmetric
+    /// values in every field (not the all-zero/single-bit placeholders the tests above use), which
+    /// would catch a swapped field order or an off-by-one in the scan split that single-bit probes
+    /// could miss.
+    #[test]
+    fn deprioritize_bits_is_the_exact_inverse_of_prioritize_bits_for_real_varied_values() {
+        let (gain, higher) = l16_widths();
+        let b0 = 0b1011_0110u32; // 8 real bits, not a single-bit probe.
+        let k_hat = 6u32;
+        let b1 = 0b10_1101u32; // 6 real bits (k_hat), MSB set and mixed pattern.
+        let b2 = 0b11_0010u32; // 6 real bits.
+        let gain_vector: [(u32, u8); 5] =
+            std::array::from_fn(|i| (((i as u32 + 1) * 7) & ((1 << gain[i]) - 1), gain[i]));
+        let higher_order: Vec<(u32, u8)> = higher
+            .iter()
+            .enumerate()
+            .map(|(i, &w)| (((i as u32 + 3) * 5) & ((1 << w) - 1), w))
+            .collect();
+        let sync_bit = true;
+
+        let u = prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, sync_bit).unwrap();
+        let out = deprioritize_bits(u, k_hat, gain, &higher).unwrap();
+
+        assert_eq!(out.b0, b0, "b0 round trip");
+        assert_eq!(out.b1, b1, "b1 round trip");
+        assert_eq!(out.b2, b2, "b2 round trip");
+        assert_eq!(out.gain_vector, gain_vector, "gain_vector round trip");
+        assert_eq!(out.higher_order, higher_order, "higher_order round trip");
+        assert_eq!(out.sync_bit, sync_bit, "sync_bit round trip");
+    }
+
+    /// The same round trip, but for a small `L_hat` (`L_hat = 9`, the spec's own stated minimum,
+    /// section 5.2's own text quoted in `vuv.rs`) -- exercises a real, different total scan length
+    /// (well under the 39-bit first-segment split, unlike the `L_hat = 16` case above where the scan
+    /// is 67 bits and spans both segments) so the `first_scan_len < 39` boundary path is checked too.
+    #[test]
+    fn deprioritize_bits_is_the_exact_inverse_of_prioritize_bits_for_a_small_l_hat() {
+        let l_hat = 9u32;
+        let k_hat = crate::ambe::vuv::frequency_bands_count(l_hat);
+        let gain: [u8; 5] =
+            std::array::from_fn(|i| tables::gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
+        let higher = tables::higher_order_bit_allocation(l_hat).unwrap().to_vec();
+
+        let b0 = 0b0110_1001u32;
+        let b1 = ((1u32 << k_hat) - 1) & 0b0101_0101; // mixed pattern within k_hat bits.
+        let b2 = 0b10_1100u32;
+        let gain_vector: [(u32, u8); 5] =
+            std::array::from_fn(|i| (((i as u32 + 2) * 3) & ((1 << gain[i]) - 1), gain[i]));
+        let higher_order: Vec<(u32, u8)> = higher
+            .iter()
+            .enumerate()
+            .map(|(i, &w)| (((i as u32 + 1) * 5) & ((1 << w) - 1), w))
+            .collect();
+        let sync_bit = false;
+
+        let u = prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, sync_bit).unwrap();
+        let out = deprioritize_bits(u, k_hat, gain, &higher).unwrap();
+
+        assert_eq!(out.b0, b0, "b0 round trip (small L_hat)");
+        assert_eq!(out.b1, b1, "b1 round trip (small L_hat)");
+        assert_eq!(out.b2, b2, "b2 round trip (small L_hat)");
+        assert_eq!(out.gain_vector, gain_vector, "gain_vector round trip (small L_hat)");
+        assert_eq!(out.higher_order, higher_order, "higher_order round trip (small L_hat)");
+        assert_eq!(out.sync_bit, sync_bit, "sync_bit round trip (small L_hat)");
     }
 }
