@@ -112,6 +112,7 @@ pub mod prediction;
 pub mod quantize;
 pub mod reconstruct;
 pub mod spectral_amplitude;
+pub mod synthesis;
 pub mod tables;
 pub mod unvoiced_synthesis;
 pub mod voiced_synthesis;
