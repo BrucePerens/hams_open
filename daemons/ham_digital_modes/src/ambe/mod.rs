@@ -59,6 +59,7 @@
 //!    (88 voice bits + 56 FEC bits, per the spec's own section 7.3).
 
 pub mod fec;
+pub mod parameter_encoding;
 pub mod pitch;
 pub mod pitch_refinement;
 pub mod prediction;

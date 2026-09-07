@@ -202,7 +202,7 @@ impl PitchAnalysisFrame {
 /// The half-sample-spaced candidate pitch set `{21, 21.5, ..., 121.5, 122}` Eq. 11/13/15 all name
 /// (203 values). Every candidate pitch this module ever selects -- `P_hat_B`, `P_hat_1`, `P_hat_2`,
 /// `P_hat_0` -- is a member of exactly this set.
-fn candidate_pitches() -> impl Iterator<Item = f64> {
+pub(crate) fn candidate_pitches() -> impl Iterator<Item = f64> {
     (0..=202).map(|i| 21.0 + 0.5 * i as f64)
 }
 
