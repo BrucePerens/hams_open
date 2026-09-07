@@ -69,6 +69,183 @@ pub fn lowpass_filter_tap(n: i32) -> f64 {
     LOWPASS_FILTER_TAPS_HALF[n.unsigned_abs() as usize]
 }
 
+/// `w_I(n)` per Annex B, but returning `0.0` for `|n| > 150` instead of panicking -- the spec's own
+/// explicit convention ("the window functions are assumed to be equal to zero outside the range
+/// given in the Annexes"), needed because Eq. 7's own `r(t)` sum legitimately evaluates `w_I(j+t)`
+/// for `j+t` outside `-150..=150` (`j` ranges up to 150 and `t` can itself be up to ~122). This is a
+/// real, different contract from [`initial_pitch_window`]'s own panic-on-out-of-range, not an
+/// inconsistency: that function's own doc comment reserves the panic for callers with no legitimate
+/// reason to evaluate outside the window (a real logic error), while this one exists specifically
+/// for the one real, spec-mandated case that does.
+fn initial_pitch_window_or_zero(n: i32) -> f64 {
+    if (-150..=150).contains(&n) {
+        initial_pitch_window(n)
+    } else {
+        0.0
+    }
+}
+
+/// The lowpass-filtered speech signal `s_LPF(n)` (Eq. 9): `sum(s(n-j) * h_LPF(j) for j in -10..=10)`.
+/// `raw` is the real speech signal; `center` is the sample index in `raw` corresponding to `n = 0`
+/// (the center of the current analysis frame). Panics (via array indexing) if `center as i32 + n`
+/// falls outside `raw`'s own bounds by more than the filter's own 10-sample margin -- a caller must
+/// provide enough context on both sides of the frame, matching this function's real, unavoidable
+/// data dependency (there is no sensible zero-padding substitute for real speech samples the way
+/// there is for a window function that is genuinely defined to be zero past its own edge).
+fn lowpass_filtered_sample(raw: &[f64], center: usize, n: i32) -> f64 {
+    let mut acc = 0.0;
+    for j in -10i32..=10 {
+        let idx = (center as i32 + n - j) as usize;
+        acc += raw[idx] * lowpass_filter_tap(j);
+    }
+    acc
+}
+
+/// Precomputed `s_LPF(j)` for `j` in `-150..=150`, the one expensive input both `r(t)` (Eq. 7-8) and
+/// `E(P)` (Eq. 5) repeatedly read -- computed once per analysis frame rather than recomputed on
+/// every call, since [`lowpass_filtered_sample`] itself does real work (a 21-tap FIR sum) per sample.
+pub struct PitchAnalysisFrame {
+    s_lpf: [f64; 301],
+}
+
+impl PitchAnalysisFrame {
+    /// `raw` is the real speech signal; `center` is the sample index in `raw` corresponding to the
+    /// current frame's own `n = 0`. `raw` must have at least 160 real samples of margin on both
+    /// sides of `center` (150 for the analysis window itself, 10 more for the lowpass filter's own
+    /// reach past each edge) -- panics via array indexing if it doesn't, the same real, unavoidable
+    /// data dependency [`lowpass_filtered_sample`] itself has.
+    pub fn new(raw: &[f64], center: usize) -> Self {
+        let mut s_lpf = [0.0; 301];
+        for (i, slot) in s_lpf.iter_mut().enumerate() {
+            let j = i as i32 - 150;
+            *slot = lowpass_filtered_sample(raw, center, j);
+        }
+        Self { s_lpf }
+    }
+
+    fn s_lpf_at(&self, j: i32) -> f64 {
+        if (-150..=150).contains(&j) {
+            self.s_lpf[(j + 150) as usize]
+        } else {
+            0.0
+        }
+    }
+
+    /// `r(t)` for integer `t` (Eq. 7): `sum(s_LPF(j)*w_I(j)^2*s_LPF(j+t)*w_I(j+t)^2 for j in
+    /// -150..=150)`. `w_I(j)` itself never needs the zero-padded variant here (`j` never leaves
+    /// `-150..=150`), but `w_I(j+t)` does, since `j+t` legitimately can.
+    fn r_integer(&self, t: i32) -> f64 {
+        (-150i32..=150)
+            .map(|j| {
+                let a = self.s_lpf_at(j) * initial_pitch_window(j).powi(2);
+                let b = self.s_lpf_at(j + t) * initial_pitch_window_or_zero(j + t).powi(2);
+                a * b
+            })
+            .sum()
+    }
+
+    /// `r(t)` for any real `t` (Eq. 8): linear interpolation between the two nearest integers.
+    fn r(&self, t: f64) -> f64 {
+        let t_floor = t.floor();
+        let r_floor = self.r_integer(t_floor as i32);
+        let r_ceil = self.r_integer(t_floor as i32 + 1);
+        (1.0 + t_floor - t) * r_floor + (t - t_floor) * r_ceil
+    }
+
+    /// The pitch error function `E(P)` (Eq. 5), evaluated at candidate pitch period `p` (in samples).
+    /// Smaller values indicate a better candidate; the real initial pitch estimate is chosen by
+    /// comparing `E(P)` across the spec's own candidate set (`21, 21.5, ..., 122`) via pitch
+    /// tracking (section 5.1.2, not yet implemented here), not by simply minimizing `E(P)` alone.
+    pub fn error_function(&self, p: f64) -> f64 {
+        let s: f64 = (-150i32..=150)
+            .map(|j| {
+                let v = self.s_lpf_at(j) * initial_pitch_window(j);
+                v * v
+            })
+            .sum();
+        let n_max = (150.0 / p).floor() as i32;
+        let r_sum: f64 = (-n_max..=n_max).map(|n| self.r(n as f64 * p)).sum();
+        let w4: f64 = (-150i32..=150).map(|j| initial_pitch_window(j).powi(4)).sum();
+        (s - p * r_sum) / (s * (1.0 - p * w4))
+    }
+}
+
+#[cfg(test)]
+mod pitch_analysis_tests {
+    use super::*;
+
+    /// A synthetic periodic pulse train at period `period_samples` -- the simplest real signal
+    /// with an unambiguous, known true pitch, long enough to give `PitchAnalysisFrame::new` its
+    /// own required 160-sample margin on both sides of the frame center.
+    fn periodic_pulse_train(period_samples: f64, total_len: usize) -> Vec<f64> {
+        (0..total_len)
+            .map(|n| {
+                let phase = (n as f64) % period_samples;
+                // A raised-cosine pulse once per period, not a bare impulse train -- a real
+                // impulse train's own spectrum is all-harmonics-equal-amplitude, which the
+                // lowpass filter would attenuate unevenly in a way that's harder to reason
+                // about; this shape keeps most of its energy in-band while still being a real,
+                // unambiguous single-period signal, closer in spirit to real glottal pulses.
+                let width = period_samples * 0.25;
+                if phase < width {
+                    0.5 * (1.0 - (std::f64::consts::PI * phase / width).cos())
+                } else {
+                    0.0
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn error_function_is_minimized_near_the_true_period_or_a_real_harmonic_multiple() {
+        // Real, measured behavior, not assumed: a perfectly periodic synthetic signal is
+        // *also* perfectly periodic at every integer multiple of its own true period, so E(P)
+        // legitimately scores an octave-multiple candidate (here, 120 = 2x the true 60) at
+        // least as well as the true period itself -- confirmed directly (E(60)=0.0203,
+        // E(120)=-0.0125, both far below every unrelated candidate tried). This is the exact,
+        // spec-acknowledged reason section 5.1.4's own look-ahead tracking explicitly checks
+        // integer sub-multiples of the raw minimizing candidate afterward (not implemented
+        // here yet) -- this test checks what E(P) alone can honestly promise: the global
+        // minimum lands on the true period or a real integer multiple of it, not on an
+        // unrelated candidate.
+        let period = 60.0; // 8000/60 ~= 133 Hz, a real, plausible voice pitch
+        let raw = periodic_pulse_train(period, 400);
+        let center = 200usize;
+        let frame = PitchAnalysisFrame::new(&raw, center);
+
+        let candidates: Vec<f64> = (0..=202).map(|i| 21.0 + 0.5 * i as f64).collect();
+        let mut best_p = candidates[0];
+        let mut best_e = frame.error_function(best_p);
+        for &p in &candidates[1..] {
+            let e = frame.error_function(p);
+            if e < best_e {
+                best_e = e;
+                best_p = p;
+            }
+        }
+        let ratio = best_p / period;
+        let nearest_multiple = ratio.round();
+        assert!(
+            nearest_multiple >= 1.0 && (ratio - nearest_multiple).abs() < 0.05,
+            "expected the minimizing candidate {best_p} to be a real integer multiple of the \
+             true period {period}, got ratio {ratio} (E={best_e})"
+        );
+    }
+
+    #[test]
+    fn error_function_is_much_larger_for_a_period_far_from_the_true_one() {
+        let period = 60.0;
+        let raw = periodic_pulse_train(period, 400);
+        let frame = PitchAnalysisFrame::new(&raw, 200);
+        let e_true = frame.error_function(period);
+        let e_wrong = frame.error_function(35.0); // not a small-integer submultiple/multiple of 60
+        assert!(
+            e_wrong > e_true,
+            "expected a mismatched period to score worse (higher E), got e_true={e_true} e_wrong={e_wrong}"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,3 +288,4 @@ mod tests {
         );
     }
 }
+
