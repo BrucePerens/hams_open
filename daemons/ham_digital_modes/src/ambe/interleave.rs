@@ -25,14 +25,21 @@
 //! **A real, verified-not-assumed oddity in that exact quote, disclosed rather than silently
 //! "corrected"**: "ending with symbol 1" reads as if it should say "symbol 71" (there are 72 symbols,
 //! numbered 0 through 71, and "beginning with symbol 0" pairs naturally with "ending with" the last
-//! one) -- but re-rendered at 600 DPI and zoomed in specifically to rule out the usual Type3
-//! digit-glyph conflation, the source genuinely prints a single, unambiguous `1` glyph there (not a
-//! `7` merged into or dropped before it; compare the identical single-digit spacing around "symbol 0"
-//! two words earlier in the same sentence). This looks like a real error or ambiguity in the source
-//! document itself, not a transcription artifact -- but since the sentence explicitly defers "more
-//! completely" to a separate document this codebase doesn't have, and doesn't affect anything this
-//! module actually computes (the 72-symbol interleaving above is unaffected either way), it's
-//! recorded here rather than silently resolved in either direction.
+//! one). Checked three independent ways before concluding it's real, not an artifact: `pdftotext`'s
+//! own text layer, a 600 DPI pixel render zoomed in on exactly that word, and -- deepest, and the one
+//! that actually settles it -- PyMuPDF's raw per-character extraction (`page.get_text("rawdict")`),
+//! which reports the exact character code and x-position PDF places at that spot independent of both
+//! `pdftotext`'s broken cmap and the rasterizer. That extraction shows a single glyph, character code
+//! `0x01`, at one x-position, with nothing else nearby -- and per this document's own established
+//! convention (literal ASCII `'0'` for zero, control codes `0x01`-`0x09` for digits 1-9, confirmed
+//! independently across every other table this session transcribed), `0x01` unambiguously means `1`.
+//! "symbol 0" two words earlier in the same sentence uses the literal `'0'` character, for direct
+//! comparison. This rules out a dropped or merged `7` glyph at every level checkable from the PDF
+//! itself: the source document's own author genuinely wrote "symbol 1," not "symbol 71" -- a real
+//! error or unclear phrasing in the underlying text, not a rendering or extraction artifact. Since
+//! the sentence explicitly defers "more completely" to a separate document this codebase doesn't
+//! have, and doesn't affect anything this module actually computes (the 72-symbol interleaving above
+//! is unaffected either way), it's recorded here rather than silently resolved in either direction.
 //!
 //! **Verified against a real structural invariant before being trusted, not just visually
 //! re-checked**: the 72 symbols' own Bit1/Bit0 fields, taken together, are a real bijection over all
