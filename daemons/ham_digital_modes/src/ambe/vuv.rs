@@ -42,12 +42,12 @@ pub fn harmonics_count(omega0_hat: f64) -> u32 {
 }
 
 /// `a_hat_l` (Eq. 32): the lower DFT-bin edge of harmonic `l`'s own frequency band, for `l >= 1`.
-fn a_hat(l: u32, omega0_hat: f64) -> f64 {
+pub(crate) fn a_hat(l: u32, omega0_hat: f64) -> f64 {
     (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0_hat
 }
 
 /// `b_hat_l` (Eq. 33): the upper DFT-bin edge of harmonic `l`'s own frequency band, for `l >= 1`.
-fn b_hat(l: u32, omega0_hat: f64) -> f64 {
+pub(crate) fn b_hat(l: u32, omega0_hat: f64) -> f64 {
     (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0_hat
 }
 

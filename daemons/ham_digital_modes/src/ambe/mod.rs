@@ -39,10 +39,13 @@
 //!    estimation (initial estimate, look-back/look-ahead tracking, quarter-sample refinement) and
 //!    section 5.2's voiced/unvoiced determination (Eq. 31-42) are both implemented, in [`pitch`],
 //!    [`pitch_refinement`], and [`vuv`].
-//! 2. **Spectral amplitude encoding**: the `L` harmonic amplitudes are DCT-transformed in six blocks
-//!    whose lengths vary with `L` (Fig. 17), forming a six-element "gain vector" via a second, 6-point
-//!    DCT across each block's own DC coefficient (Fig. 18, Eq. 60-61) -- see [`gain_vector_dct`] below,
-//!    one of the pieces safe to implement now since it's a plain, unambiguous formula, not a table.
+//! 2. **Spectral amplitude estimation and encoding**: each harmonic's own magnitude `M_hat_l` is
+//!    estimated per section 5.3 (Eq. 43-44, implemented in [`spectral_amplitude`], using the V/UV
+//!    decision from [`vuv`] to pick a voiced or unvoiced estimator). Those `L` amplitudes are then
+//!    DCT-transformed in six blocks whose lengths vary with `L` (Fig. 17), forming a six-element
+//!    "gain vector" via a second, 6-point DCT across each block's own DC coefficient (Fig. 18,
+//!    Eq. 60-61) -- see [`gain_vector_dct`] below, one of the pieces safe to implement now since it's
+//!    a plain, unambiguous formula, not a table.
 //! 3. **Quantization**: the gain vector's first element (overall level) uses a 6-bit non-uniform
 //!    quantizer (Annex E's own table -- not yet transcribed); the remaining gain elements and the
 //!    higher-order DCT coefficients use uniform quantizers whose bit allocation and step size depend on
@@ -58,6 +61,7 @@
 pub mod fec;
 pub mod pitch;
 pub mod pitch_refinement;
+pub mod spectral_amplitude;
 pub mod tables;
 pub mod vuv;
 
