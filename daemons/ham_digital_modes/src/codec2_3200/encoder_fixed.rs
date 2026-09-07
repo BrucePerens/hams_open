@@ -188,6 +188,7 @@ mod tests {
     /// rather than discovered later.
     #[test]
     // Tests [@ANCHOR: EncoderFixed::encode]
+    // Tests [@ANCHOR: levinson_durbin_fixed_from_integer_r]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = EncoderFixed::new();
         let mut decoder = Decoder::new();

@@ -73,6 +73,7 @@ const WN_FRAC_BITS: u32 = 23;
 /// `i64::MAX` is ~9.2e18, over 17 bits of real margin even at this
 /// deliberately pessimistic (every sample simultaneously at its own real
 /// measured peak) bound.
+// [@ANCHOR: autocorrelate_fixed]
 pub fn autocorrelate_fixed(wn_q: &[i32]) -> [i64; LPC_ORD + 1] {
     let mut r_q = [0i64; LPC_ORD + 1];
     for (j, r_j) in r_q.iter_mut().enumerate() {
@@ -320,6 +321,7 @@ pub fn levinson_durbin_fixed(r: &Autocorr) -> LpcCoeffs {
 /// built to distinguish "expected clamp-boundary divergence" from "a
 /// real bug in this port's own arithmetic." Switching every shift to
 /// round-to-nearest closed that gap.
+// [@ANCHOR: rshift_round]
 fn rshift_round(x: i64, n: u32) -> i64 {
     if n == 0 {
         return x;
@@ -333,6 +335,7 @@ fn rshift_round(x: i64, n: u32) -> i64 {
 /// `i128`) is always positive by construction (`e` starts positive and
 /// is only ever multiplied by `(1 - k^2) >= 0` since `k` is clamped to
 /// `[-1, 1]`).
+// [@ANCHOR: div_round_i128]
 fn div_round_i128(n: i128, d: i128) -> i64 {
     debug_assert!(d > 0, "div_round_i128: divisor must be positive, got {d}");
     let half = d / 2;
@@ -349,6 +352,7 @@ fn div_round_i128(n: i128, d: i128) -> i64 {
 /// wider type; narrowed back to `i64` after the shift since every
 /// quantity in this recursion fits Q8.40 by construction (`a[]`'s own
 /// measured real bound, ~77 max, is far under `i64`'s own Q8.40 range).
+// [@ANCHOR: q_mul]
 fn q_mul(a: i64, b: i64) -> i64 {
     let product = a as i128 * b as i128;
     let half = 1i128 << (LEVINSON_FRAC_BITS - 1);
@@ -374,6 +378,7 @@ fn q_mul(a: i64, b: i64) -> i64 {
 /// bespoke format-conversion shift: same-format add is a plain `+`,
 /// same-format multiply is `q_mul`, and the one true division folds its
 /// own format bookkeeping into a single shift width.
+// [@ANCHOR: levinson_durbin_fixed_core]
 fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1]) {
     let r0 = r[0];
     debug_assert!(r0 > 0.0, "levinson_durbin_fixed: r[0] must be positive (matches the float reference's own implicit assumption -- real captured speech never measured r[0] <= 0)");
@@ -392,6 +397,7 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
 /// a single shared body means the two entry points can never drift out
 /// of sync with each other on anything but the one real difference
 /// between them (how `r_norm_q` itself gets computed).
+// [@ANCHOR: levinson_durbin_fixed_core_from_r_norm]
 fn levinson_durbin_fixed_core_from_r_norm(
     r_norm_q: &[i64; LPC_ORD + 1],
 ) -> (LpcCoeffsQ, [bool; LPC_ORD + 1]) {
@@ -477,6 +483,7 @@ fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
 /// itself has integer `R[]` (e.g. to feed `lpc_energy_fixed`) needs the
 /// latter to stay fixed-point end to end; a caller that doesn't can
 /// simply ignore the second element.
+// [@ANCHOR: levinson_durbin_fixed_from_integer_r]
 pub fn levinson_durbin_fixed_from_integer_r(
     r_q: &[i64; LPC_ORD + 1],
 ) -> (LpcCoeffs, [i64; LPC_ORD + 1]) {
@@ -578,6 +585,7 @@ fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i32 {
 /// rather than once per candidate `x` (`find_next_root`'s coarse sweep
 /// alone tries up to ~200 values of `x` against the *same* `coef`) is a
 /// real, if secondary, efficiency win this split also happens to enable.
+// [@ANCHOR: cheb_poly_eval_fixed_core]
 fn cheb_poly_eval_fixed_core(coef_q: &[i32; 6], x: f32) -> i32 {
     let x_q: i32 = f32_to_q(x, CHEB_FRAC_BITS);
 
@@ -620,6 +628,7 @@ const LSP_BISECTIONS: u32 = 6;
 /// accounts for this construction's own real growth from that starting
 /// bound, not a fresh, unchecked assumption). `*= 2` is an exact left
 /// shift, not a lossy float multiply.
+// [@ANCHOR: build_p_q_fixed]
 fn build_p_q_fixed(a_q23: &[i64; LPC_ORD + 1]) -> ([i32; 6], [i32; 6]) {
     let m = LPC_ORD / 2;
     let mut p = [0i64; 6];
@@ -646,6 +655,7 @@ fn build_p_q_fixed(a_q23: &[i64; LPC_ORD + 1]) -> ([i32; 6], [i32; 6]) {
 /// that already has `poly` in Q8.23 (`build_p_q_fixed`'s own output).
 /// `pub(crate)`: that float-facing wrapper lives in a different module
 /// now.
+// [@ANCHOR: find_next_root_from_q23]
 pub(crate) fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option<f32> {
     let mut xl = x_start;
     let mut p_l = cheb_poly_eval_fixed_core(poly_q, xl);
@@ -744,6 +754,7 @@ pub(crate) fn pi_q23() -> i64 {
 /// `.abs()`/sign test (a bit-level operation in spirit, not a real
 /// float op) and the final `result_q23 as f32 / 2^23` boundary
 /// conversion.
+// [@ANCHOR: acos_lut_fixed]
 fn acos_lut_fixed(x: f32) -> f32 {
     debug_assert!(
         (-1.0..=1.0).contains(&x),
@@ -814,6 +825,7 @@ fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE] {
 /// target has integer division in hardware or a cheap library routine,
 /// unlike floating point), just not the free bit-shift `acos_lut_fixed`
 /// got to use.
+// [@ANCHOR: cos_q23]
 pub(crate) fn cos_q23(angle_q23: i64) -> i64 {
     let clamped = angle_q23.clamp(0, pi_q23());
     let levels = 1i64 << COS_LUT_BITS;
@@ -835,6 +847,7 @@ pub(crate) fn cos_q23(angle_q23: i64) -> i64 {
 /// established "integer core, float boundary" pattern -- there's
 /// nothing further along the pipeline yet to hand a fixed-point angle
 /// to, but the conversion itself is no longer the boundary).
+// [@ANCHOR: lpc_to_lsp_from_integer_ak]
 pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LPC_ORD]> {
     let (p, q) = build_p_q_fixed(a_q23);
     let mut search_from = 1.0f32;
@@ -860,6 +873,7 @@ const HALF_POLY_LEN: usize = LPC_ORD + 2;
 /// allocation -- `lsp_to_lpc` runs on a real-time codec's per-frame hot
 /// path, and `HALF_POLY_LEN` is a small compile-time constant, so a
 /// stack buffer is both simpler and cheaper than a `Vec` here.
+// [@ANCHOR: poly_mul_fixed]
 fn poly_mul_fixed(
     a: &[f32; HALF_POLY_LEN],
     a_len: usize,
@@ -880,6 +894,7 @@ fn poly_mul_fixed(
 /// a degree-2 factor `1 - 2*cos(lsp_i)*z^-1 + z^-2` per LSP at indices
 /// `start_offset, start_offset+2, ...`, then multiplies by the boundary
 /// factor `1 + boundary_sign*z^-1`.
+// [@ANCHOR: build_half_poly]
 fn build_half_poly(
     cos_lsp: &[f32; LPC_ORD],
     start_offset: usize,
@@ -913,6 +928,7 @@ fn build_half_poly(
 /// formulation, just written as plain (allocation-free) polynomial
 /// convolution rather than optimized for a fixed small buffer the way
 /// the reference's own version is.
+// [@ANCHOR: lsp_to_lpc]
 pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
     let cos_lsp: [f32; LPC_ORD] = std::array::from_fn(|i| lsp[i].cos());
     let (p, _) = build_half_poly(&cos_lsp, 0, 1.0);
@@ -932,6 +948,7 @@ pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
 /// product too wide for `i64`) then shifts right by `COEF_FRAC_BITS`
 /// immediately, the same accumulate-then-narrow pattern `lpc_energy_
 /// fixed` already established.
+// [@ANCHOR: poly_mul_q23]
 fn poly_mul_q23(
     a: &[i64; HALF_POLY_LEN],
     a_len: usize,
@@ -953,6 +970,7 @@ fn poly_mul_q23(
 /// times a plain integer constant (not another Q8.23 value), so it
 /// stays Q8.23 with no rescale needed, unlike `poly_mul_q23`'s own
 /// per-term products.
+// [@ANCHOR: build_half_poly_q23]
 fn build_half_poly_q23(
     cos_lsp_q23: &[i64; LPC_ORD],
     start_offset: usize,
@@ -981,6 +999,7 @@ fn build_half_poly_q23(
 /// float polynomial convolution, and the final `0.5*(p+q)` becomes a
 /// plain arithmetic right shift (matching this port's established
 /// midpoint convention elsewhere, e.g. `interp::interpolate_lsp_fixed`).
+// [@ANCHOR: lsp_to_lpc_fixed]
 pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1] {
     let cos_lsp_q23: [i64; LPC_ORD] = std::array::from_fn(|i| cos_q23(lsp_q23[i]));
     let one_q23 = 1i64 << COEF_FRAC_BITS;
@@ -1008,6 +1027,7 @@ pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1] {
 /// within `i64` for any realistic frame (real measured `\|ak\|` <= 77.17,
 /// real measured `\|R[j]\|` <= `R[0]` by the Cauchy-Schwarz bound already
 /// established elsewhere in this file).
+// [@ANCHOR: lpc_energy_fixed]
 pub fn lpc_energy_fixed(a_q23: &[i64; LPC_ORD + 1], r_q: &[i64; LPC_ORD + 1]) -> f32 {
     let mut sum: i64 = 0;
     for i in 0..=LPC_ORD {
@@ -1039,6 +1059,7 @@ const BW_GAMMA_Q23: [i64; LPC_ORD + 1] = [
 /// negative energies) -- callers that need both (e.g. `EncoderFixed`)
 /// should keep a separate copy of `a_q23` for `lpc_energy_fixed` if they
 /// need the pre-expansion coefficients for anything else afterward.
+// [@ANCHOR: apply_bw_gamma_fixed]
 pub fn apply_bw_gamma_fixed(a_q23: &mut [i64; LPC_ORD + 1]) {
     for (a, &g) in a_q23.iter_mut().zip(BW_GAMMA_Q23.iter()) {
         *a = (*a * g) >> COEF_FRAC_BITS;
@@ -1108,6 +1129,8 @@ pub(crate) mod tests {
     /// transmitted" reasoning `lpc_energy_fixed`/`apply_bw_gamma_fixed`
     /// already established.
     #[test]
+    // Tests [@ANCHOR: lpc_to_lsp_from_integer_ak]
+    // Tests [@ANCHOR: find_next_root_from_q23]
     fn lpc_to_lsp_from_integer_ak_matches_the_real_reference_on_real_captured_ak_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let lsp_path = fixture!("codec2_lsp_dump.txt");
@@ -1155,6 +1178,7 @@ pub(crate) mod tests {
     const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
 
     #[test]
+    // Tests [@ANCHOR: acos_lut_fixed]
     fn acos_lut_fixed_matches_plain_float_acos_on_a_dense_sweep() {
         // Direct comparison across the whole domain, not just the
         // corpus's own real root values -- the corpus test above
@@ -1186,6 +1210,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: cos_q23]
     fn cos_q23_matches_plain_float_cos_on_a_dense_sweep_of_its_whole_domain() {
         // cos_q23's whole real domain is [0, pi] (an LSP angle's own
         // real range) -- dense sweep across it, same "direct comparison
@@ -1248,6 +1273,7 @@ pub(crate) mod tests {
     /// Same real captured `ak[]`/`P[]`/`Q[]` corpus, fixed-point path
     /// (`apply_bw_gamma_fixed` + `build_p_q_fixed`) instead of float.
     #[test]
+    // Tests [@ANCHOR: build_p_q_fixed]
     fn build_p_q_fixed_matches_the_real_reference_p_q_on_real_captured_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let pq_path = fixture!("codec2_pq_dump.txt");
@@ -1301,6 +1327,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: cheb_poly_eval_fixed_core]
     fn cheb_poly_eval_fixed_matches_the_plain_float_sign_on_a_dense_sweep_of_real_captured_p_q_coefficients(
     ) {
         // Same validation shape CODEC2_MOD_FIXED_POINT_PLAN.md used for
@@ -1471,6 +1498,9 @@ pub(crate) mod tests {
     /// reference `lsp_to_lpc` output is needed at all, since the round
     /// trip is self-verifying).
     #[test]
+    // Tests [@ANCHOR: lsp_to_lpc]
+    // Tests [@ANCHOR: poly_mul_fixed]
+    // Tests [@ANCHOR: build_half_poly]
     fn lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data() {
         use crate::codec2_3200::floating_reference::lpc::lpc_to_lsp;
         let ak_path = fixture!("codec2_ak_dump.txt");
@@ -1511,6 +1541,9 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: lsp_to_lpc_fixed]
+    // Tests [@ANCHOR: poly_mul_q23]
+    // Tests [@ANCHOR: build_half_poly_q23]
     fn lsp_to_lpc_fixed_matches_lsp_to_lpc_on_real_captured_lsp_data() {
         // Real captured LSP values (codec2_lsp_dump.txt), not this
         // crate's own lpc_to_lsp output -- same "don't validate against
@@ -1568,6 +1601,7 @@ pub(crate) mod tests {
     /// unbiased truncation per term averaged over many terms) that the
     /// plain-`f32` version doesn't have.
     #[test]
+    // Tests [@ANCHOR: autocorrelate_fixed]
     fn autocorrelate_fixed_matches_the_real_reference_r_within_real_quantization_noise() {
         let wn_path = fixture!("synthetic_codec2_wn_dump.txt");
         let r_path = fixture!("synthetic_codec2_r_dump.txt");
@@ -1632,6 +1666,7 @@ pub(crate) mod tests {
     /// decision...with_zero_index_mismatches`) -- check the decision that
     /// actually matters, not an arbitrary tolerance on the raw value.
     #[test]
+    // Tests [@ANCHOR: lpc_energy_fixed]
     fn lpc_energy_fixed_and_lpc_energy_produce_the_same_real_quantizer_index() {
         use crate::codec2_3200::floating_reference::lpc::lpc_energy;
         let ak_path = fixture!("codec2_ak_dump.txt");
@@ -1703,6 +1738,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: apply_bw_gamma_fixed]
     fn apply_bw_gamma_fixed_matches_the_real_float_bw_gamma_on_real_captured_ak_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
@@ -1765,6 +1801,11 @@ mod levinson_durbin_fixed_tests {
     /// -- not just that the correction changes something, but that it
     /// changes it the intended direction, by a real, checkable margin.
     #[test]
+    // Tests [@ANCHOR: levinson_durbin_fixed_core]
+    // Tests [@ANCHOR: levinson_durbin_fixed_core_from_r_norm]
+    // Tests [@ANCHOR: rshift_round]
+    // Tests [@ANCHOR: div_round_i128]
+    // Tests [@ANCHOR: q_mul]
     fn white_noise_correction_measurably_improves_the_worst_case_amplification_margin() {
         let r_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
