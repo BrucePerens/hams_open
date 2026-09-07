@@ -36,6 +36,7 @@ pub struct CODEC2 {
 /// Callable from C with any `mode` value; allocates and returns an
 /// owned pointer the caller must eventually pass to `codec2_destroy`.
 #[no_mangle]
+// [@ANCHOR: codec2_create]
 pub extern "C" fn codec2_create(mode: c_int) -> *mut CODEC2 {
     if mode != CODEC2_MODE_3200 {
         return std::ptr::null_mut();
@@ -66,6 +67,7 @@ pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
 /// `int16_t`s; `bytes` must point to at least `codec2_bytes_per_frame`
 /// writable bytes.
 #[no_mangle]
+// [@ANCHOR: codec2_encode]
 pub unsafe extern "C" fn codec2_encode(
     codec2_state: *mut CODEC2,
     bytes: *mut u8,
@@ -105,6 +107,7 @@ pub unsafe extern "C" fn codec2_decode(
 /// # Safety
 /// Same pointer/length contract as `codec2_decode`.
 #[no_mangle]
+// [@ANCHOR: codec2_decode_ber]
 pub unsafe extern "C" fn codec2_decode_ber(
     codec2_state: *mut CODEC2,
     speech_out: *mut i16,
@@ -161,6 +164,9 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: codec2_create]
+    // Tests [@ANCHOR: codec2_encode]
+    // Tests [@ANCHOR: codec2_decode_ber]
     fn create_encode_decode_destroy_round_trip_over_the_c_abi_matches_direct_rust_use() {
         // Exercises the exact same call sequence a C caller makes,
         // through the actual `extern "C"` entry points (not the

@@ -29,6 +29,7 @@ use super::vuv::{a_hat, b_hat};
 /// own real spectral energy and the analysis window's own spectral energy over the same bins --
 /// effectively "how much of this harmonic band's energy exceeds what the window alone would
 /// produce," which is what makes this a magnitude estimate rather than a raw energy figure.
+// [@ANCHOR: voiced_amplitude]
 pub fn voiced_amplitude(frame: &RefinementFrame, l: u32, omega0_hat: f64) -> f64 {
     let m_lo = a_hat(l, omega0_hat).ceil() as i32;
     let m_hi = b_hat(l, omega0_hat).ceil() as i32; // exclusive
@@ -59,6 +60,7 @@ fn window_tap_sum() -> f64 {
 /// (real signal energy per bin, not compared against the window at all), normalized by the window's
 /// total tap sum -- unvoiced harmonics get a flat noise-like amplitude rather than the voiced
 /// estimator's per-bin comparison against the window's own shape.
+// [@ANCHOR: unvoiced_amplitude]
 pub fn unvoiced_amplitude(frame: &RefinementFrame, l: u32, omega0_hat: f64) -> f64 {
     let m_lo = a_hat(l, omega0_hat).ceil() as i32;
     let m_hi = b_hat(l, omega0_hat).ceil() as i32; // exclusive
@@ -75,6 +77,7 @@ pub fn unvoiced_amplitude(frame: &RefinementFrame, l: u32, omega0_hat: f64) -> f
 /// which per section 5.2's own text may hold more or fewer than three harmonics), and uses
 /// [`voiced_amplitude`] or [`unvoiced_amplitude`] according to that band's own decision in `voiced`
 /// (as returned by `vuv::determine_voicing`).
+// [@ANCHOR: estimate_spectral_amplitudes]
 pub fn estimate_spectral_amplitudes(
     frame: &RefinementFrame,
     l_hat: u32,
@@ -121,6 +124,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: voiced_amplitude]
     fn voiced_amplitude_scales_linearly_with_signal_amplitude() {
         // Eq. 43 is a square root of an energy ratio; doubling a signal's own amplitude quadruples
         // its energy, so the estimate itself should double -- a real, checkable linearity property
@@ -148,6 +152,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: unvoiced_amplitude]
     fn unvoiced_amplitude_is_positive_for_a_real_signal() {
         let sample_rate = 8000.0;
         let period = 80.0;
@@ -164,6 +169,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: estimate_spectral_amplitudes]
     fn estimate_spectral_amplitudes_routes_each_harmonic_to_its_own_bands_decision() {
         let sample_rate = 8000.0;
         let period = 80.0;

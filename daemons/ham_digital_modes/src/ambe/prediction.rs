@@ -28,6 +28,7 @@ pub const INITIAL_L_HAT_PREV: u32 = 30;
 /// has. A sparser harmonic set (fewer, lower-frequency harmonics, small `l_hat_curr`) gets weaker
 /// prediction; a fuller one gets strong prediction, on the presumption that harmonic-rich frames
 /// change more smoothly frame to frame.
+// [@ANCHOR: prediction_coefficient]
 pub fn prediction_coefficient(l_hat_curr: u32) -> f64 {
     if l_hat_curr <= 15 {
         0.4
@@ -60,6 +61,7 @@ fn fractional_part(k_hat_l: f64) -> f64 {
 ///
 /// `previous_m` holds `M_tilde_j(-1)` for `j = 1..=l_hat_prev`, one-indexed (`previous_m[0]` is
 /// `M_tilde_1(-1)`).
+// [@ANCHOR: previous_log2_amplitude]
 fn previous_log2_amplitude(previous_m: &[f64], l_hat_prev: u32, j: u32) -> f64 {
     if j == 0 {
         0.0
@@ -75,6 +77,7 @@ fn previous_log2_amplitude(previous_m: &[f64], l_hat_prev: u32, j: u32) -> f64 {
 /// (encoder subtracts the prediction and adds the bias back; decoder does the reverse to invert
 /// it), so this is computed once and shared rather than kept as two separately-maintained copies
 /// that could silently drift apart.
+// [@ANCHOR: predicted_and_bias_correction]
 fn predicted_and_bias_correction(
     l: u32,
     l_hat_curr: u32,
@@ -148,6 +151,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: prediction_coefficient]
     fn prediction_coefficient_matches_eq55_in_all_three_branches() {
         assert!((prediction_coefficient(15) - 0.4).abs() < 1e-12);
         assert!((prediction_coefficient(16) - (0.03 * 16.0 - 0.05)).abs() < 1e-12);
@@ -156,6 +160,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: previous_log2_amplitude]
     fn previous_log2_amplitude_applies_both_spec_boundary_assumptions() {
         let previous_m = [2.0, 4.0, 8.0]; // M_tilde_1..3(-1), l_hat_prev = 3
                                           // Eq. 56: index 0 always reads as log2(1.0) = 0.0, regardless of previous_m's own contents.
@@ -173,6 +178,7 @@ mod tests {
     /// spec's own stated intent that only the *shape change* (not the previous frame's overall
     /// level) gets transmitted.
     #[test]
+    // Tests [@ANCHOR: predicted_and_bias_correction]
     fn a_constant_previous_frame_level_cancels_out_of_the_residual() {
         let l_hat_curr = 20;
         let l_hat_prev = 20;
