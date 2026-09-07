@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
-from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+import logging
+
+from odoo import models, fields, api
 from odoo.addons.cloudflare.utils import cloudflare_api as cf_utils
+
+_logger = logging.getLogger(__name__)
 
 
 class CloudflareRoutingDomain(models.Model):
@@ -69,11 +72,27 @@ class CloudflareRoutingDomain(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_create_custom_hostname_batch]
     def _create_cloudflare_custom_hostname_batch(self):
+        # Found live: edge.routing.domain is a generic domain->slug->record
+        # mapping edge_routing itself uses for ANY routing_mixin model, not
+        # just website (e.g. mapping a custom domain straight to a
+        # res.users record) -- hard-failing the whole create() here made
+        # ordinary domain creation for a non-website target impossible,
+        # and there is no later reconciliation pass that would ever revisit
+        # a domain created before its matching website (this is the only
+        # call site). A matching website not existing YET (or ever, for a
+        # domain that isn't website-routed) is a real, normal case to skip
+        # custom-hostname provisioning for, not a reason to block the
+        # record's own creation.
         website_map = self._get_website_mapping()
         for record in self:
             website = website_map.get(record.name)
             if not website:
-                raise UserError(_("No website found matching domain %s") % record.name)
+                _logger.info(
+                    "Skipping Cloudflare custom-hostname provisioning for %s: "
+                    "no matching website record.",
+                    record.name,
+                )
+                continue
             token, zone_id = website._get_cloudflare_credentials()
             if token and zone_id:
                 success, result = cf_utils.create_custom_hostname(record.name, token, zone_id)
