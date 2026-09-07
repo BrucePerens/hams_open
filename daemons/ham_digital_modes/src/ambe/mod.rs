@@ -58,6 +58,7 @@
 //! 6. **Random bit modulation and interleaving** produce the final 144-bit, 20ms transmitted frame
 //!    (88 voice bits + 56 FEC bits, per the spec's own section 7.3).
 
+pub mod bit_prioritization;
 pub mod fec;
 pub mod parameter_encoding;
 pub mod pitch;
