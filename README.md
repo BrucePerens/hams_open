@@ -1,6 +1,6 @@
 # Open Source Community Modules for Odoo 19
 
-Welcome to a comprehensive suite of open-source modules designed for **Odoo 19 Community**. This repository provides tools for scaling horizontally, defending against automated attacks, and building decentralized user communities, all while maintaining rigorous security and developer ergonomics.
+Welcome to a comprehensive suite of open-source modules designed for **Odoo 19 Community**. This repository provides tools for scaling horizontally, defending against automated attacks, and building decentralized user communities, all while maintaining rigorous security and developer ergonomics. It also carries a second, independent codebase in the same repo: `daemons/ham_digital_modes`, an LGPL-3.0-or-later suite of amateur radio digital-mode and voice-codec implementations (AMBE/IMBE, Codec2, WSPR, PSK31, RTTY, FT8) that has nothing to do with Odoo at all -- see the section below.
 
 **License:** mostly AGPL-3.0-or-later, but not uniformly -- see [`LICENSING.md`](LICENSING.md) for the real breakdown (a few directories are GPL-3.0-or-later or LGPL-3.0-or-later, one is AGPL-3.0-or-later, and some files carry no header yet) before assuming a license for any specific file.
 
