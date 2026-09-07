@@ -6,35 +6,30 @@
 //! `AMBE_PLUS_2_NOTES.md` in this same directory for what's known about that generation, kept as
 //! documentation only.
 //!
-//! # Real, current state: scaffold plus several verified pieces, not a working codec yet
+//! # Real, current state: scaffold plus every Annex table, not a working codec yet
 //!
 //! This module is a real starting point, not a placeholder pretending to be more than it is. What
 //! exists: the frame structure and pipeline stage documentation below, `fec.rs`'s Golay/Hamming FEC
 //! (generator matrices independently verified two ways -- against each code's own published weight
 //! distribution, and against the PDF's own separate vector-text layer, see that module's doc comment),
-//! and `tables.rs`'s Annex E (gain quantizer levels), Annex F (gain-vector bit allocation/step size),
-//! and Annex J (prediction-residual block lengths) -- each parsed programmatically from the real
-//! extracted PDF text (confirmed real text, not a raster, via `pdfimages -list` finding zero embedded
-//! images on any of these pages) and checked against a real structural invariant (monotonicity, or
-//! summing to `L`) before being trusted, not read digit-by-digit by eye. `tables.rs`'s own doc
-//! comments cover a real complication found and resolved this way: a handful of table entries had
-//! their own text label dropped from the extracted text, confirmed to be the diagonal "Limited Use
-//! Only" watermark's own text objects colliding with that one label per affected row -- recovered by
-//! elimination (each affected row was missing exactly one entry) and confirmed correct against the
-//! same structural invariant holding across the whole table.
+//! and `tables.rs`'s Annexes E, F, G, and J (gain quantizer levels, gain-vector bit allocation/step
+//! size, higher-order DCT coefficient bit allocation, and prediction-residual block lengths) --
+//! parsed programmatically from the real PDF (confirmed real vector text throughout, not a raster,
+//! via `pdfimages -list` finding zero embedded images on any of these pages) and checked against real
+//! structural invariants before being trusted, never read digit-by-digit by eye and taken on faith.
 //!
-//! **Annex G (bit allocation for higher-order DCT coefficients) deliberately NOT attempted yet,
-//! genuinely harder than the other three**: the same watermark-collision artifact affects 31 of its
-//! 48 rows (not a handful), and unlike Annex F's four affected rows (each missing exactly one entry,
-//! recoverable by elimination), many of Annex G's affected rows are missing two or three entries
-//! simultaneously -- checked directly, not assumed: the orphaned numeric fragments left behind carry
-//! only `(L, bit_count)`, not which of several missing bit-index slots each one belongs to, so
-//! elimination doesn't resolve them unambiguously the way it did for Annex F. Forcing a guess through
-//! here would silently reintroduce exactly the risk this whole methodology exists to avoid. Real next
-//! step: either a higher-fidelity extraction of just the affected rows (matching the FEC matrices' own
-//! 400 DPI re-render, cropped tightly enough to separate the watermark from the real text), or finding
-//! a second independent source for this specific annex, before transcribing it the same confident way
-//! as Annexes E, F, and J.
+//! **Annex G was the hard one, and needed a materially different technique than E/F/J**: `pdftotext`
+//! garbles or drops entries on 31 of its 48 rows (a much bigger watermark-collision problem than
+//! Annex F's 4 affected rows, and often 2-3 entries missing per row rather than 1, which defeated
+//! Annex F's simpler "recover by elimination" fix). Resolved instead by extracting the PDF's raw
+//! per-character glyph stream directly (bypassing `pdftotext`'s line-reconstruction heuristic
+//! entirely) and reading each entry's actual coefficient-index label rather than inferring position
+//! from layout -- see `tables.rs`'s own `higher_order_bit_allocation` doc comment for the full
+//! methodology and its three-way independent verification (zero mismatches against all 1207 values
+//! `pdftotext` DID get right; the real, per-block non-increasing bit-allocation invariant holding
+//! with zero exceptions across all 288 blocks; and exact `L-6` entry counts with no gaps or
+//! duplicates for all 48 `L` values). All four Annex tables are now real, verified, and available for
+//! whatever encoder/decoder logic gets built against them next.
 //!
 //! # The encode pipeline, per TIA-102.BABA section 6-7 (spectral amplitude/pitch encoding, error
 //! control)
