@@ -90,6 +90,7 @@ pub struct DecoderState {
 }
 
 impl DecoderState {
+    // [@ANCHOR: ambe:decoder_state_new]
     pub fn new() -> Self {
         let l_hat_prev = INITIAL_L_HAT_PREV;
         Self {
@@ -106,6 +107,7 @@ impl DecoderState {
     /// `b2`, gain/higher-order bits, per-harmonic voicing) rather than only on synthesized PCM, which
     /// -- because Annex F/G's own bit budgets total 88 bits for *every* valid `(L, K)` pair -- stays
     /// `Some` and "looks fine" even when decode derived the wrong `L~`/`K~` for the frame.
+    // [@ANCHOR: ambe:decode_parameters]
     pub fn decode_parameters(&mut self, c: [u32; 8]) -> Option<FrameOutcome> {
         let (u0, epsilon_0) = golay_decode(c[0]);
         let nu = modulate_code_vectors(c, u0 as u32);
@@ -180,6 +182,7 @@ impl DecoderState {
     /// stream itself needs a repeat, and there is no real previous frame for
     /// [`SynthesisState::synthesize_repeated_frame`] to reuse (the honest "no comfort noise yet
     /// either" answer, not a silent zero-fill).
+    // [@ANCHOR: ambe:decode_frame]
     pub fn decode_frame(&mut self, c: [u32; 8]) -> Option<[f64; N]> {
         match self.decode_parameters(c)? {
             FrameOutcome::Repeat => self.synthesis.synthesize_repeated_frame(),
@@ -201,6 +204,7 @@ impl DecoderState {
 }
 
 impl Default for DecoderState {
+    // [@ANCHOR: ambe:decoder_state_default]
     fn default() -> Self {
         Self::new()
     }
@@ -272,6 +276,9 @@ mod tests {
     /// `build_synthetic_voiced_frame` above). `b0`/`b1`/`b2`/the gain vector/the higher-order
     /// coefficients are all recoverable exactly through this path -- no quantization loss between
     /// `prioritize_bits` and `deprioritize_bits` -- so this checks `assert_eq!`, not a tolerance.
+    // Tests [@ANCHOR: ambe:decoder_state_new]
+    // Tests [@ANCHOR: ambe:decode_parameters]
+    // Tests [@ANCHOR: ambe:decode_frame]
     #[test]
     fn decode_frame_round_trips_a_real_synthetic_voiced_frame() {
         let frame = build_synthetic_voiced_frame();
@@ -317,5 +324,19 @@ mod tests {
         // that decode_frame never panics on a first-frame edge case, whichever branch it takes.
         let c = [0u32, 0, 0, 0, 0, 0, 0, 0];
         let _ = decoder.decode_frame(c);
+    }
+
+    /// `Default::default()` is a trivial one-line delegation to `Self::new()` -- checked for real
+    /// rather than left implicitly covered by `new()`'s own tests above, since a future edit could
+    /// make the two diverge without either test noticing on its own.
+    // Tests [@ANCHOR: ambe:decoder_state_default]
+    #[test]
+    fn default_produces_the_same_initial_state_as_new() {
+        let frame = build_synthetic_voiced_frame();
+        let mut via_default = DecoderState::default();
+        let mut via_new = DecoderState::new();
+        let pcm_default = via_default.decode_frame(frame.c).unwrap();
+        let pcm_new = via_new.decode_frame(frame.c).unwrap();
+        assert_eq!(pcm_default, pcm_new);
     }
 }
