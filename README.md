@@ -46,10 +46,13 @@ against the code itself rather than assumed:
 Our platform is built to seamlessly integrate Large Language Models (LLMs) into a precise DevSecOps pipeline. To prevent AI context loss, hallucination, and architectural drift, we govern agents using a strict suite of guidance files and structural memory systems.
 
 ### The AI Instruction Suite & Memory
-We don't rely on basic system prompts; we govern AI agents using a rigorous hierarchy of operational mandates:
+We don't rely on basic system prompts; we govern AI agents using a rigorous hierarchy of operational mandates. What used to be four standalone `docs/LLM_*.md` files has since moved: the universal, always-applicable rules live in `AGENTS.md` itself, and the rest moved into Claude Code's own on-demand [skills](agents/skills/) -- activated automatically when their trigger condition matches, rather than loaded into every session unconditionally.
 * **The Agent Persona ([`AGENTS.md`](AGENTS.md)):** The primary entry point defining the AI's boundaries, tone, universal technical standards, and the pre-flight/final-verification protocol every change goes through.
-* **The Burn List ([`tools/check_burn_list.py`](tools/check_burn_list.py)):** An exhaustive, unforgiving AST-based list of banned patterns, evasion tactics, and deprecated APIs that our custom CI/CD linters actively block -- read its own module docstring first if this linter fails your code.
+* **The Burn List / Anti-Evasion Reference ([`agents/skills/linter-compliance/`](agents/skills/linter-compliance/SKILL.md)):** An exhaustive, unforgiving AST-based list of banned patterns, evasion tactics, and deprecated APIs that our custom CI/CD linters (`tools/check_burn_list.py`, `tools/verify_anchors.py`) actively block -- activated whenever the AI is writing code.
+* **Odoo 19+ Mandates ([`agents/skills/odoo-development/`](agents/skills/odoo-development/SKILL.md)):** Odoo-specific architectural directives (dynamic SQL safety, `psycopg2` parameterization, and more), activated when working on an Odoo module.
+* **The AI's own Experience Log ([`agents/skills/project-experience/`](agents/skills/project-experience/SKILL.md)):** A persistent, cross-session memory bank the AI itself curates -- hard-learned lessons and edge cases it chooses to record, consulted when it hits a persistent error or something that looks like a repeat of a past one.
 * **Architecture Decision Records ([`docs/adrs/`](docs/adrs/)):** A formal repository of all major structural choices. This acts as the project's long-term memory, ensuring the AI deeply understands the *why* behind our security and performance paradigms.
+* The full skill catalog ([`agents/skills/`](agents/skills/)) goes well beyond these four -- Odoo test-harness selection, UI-tour debugging, headless-browser testing, multi-agent codebase review, and more.
 
 ### The Semantic Anchor System
 To prevent AI "amnesia" and ensure code, tests, and documentation remain permanently synchronized, the platform utilizes a bidirectional **Semantic Anchor System** (`[@ANCHOR: unique_name]`).
