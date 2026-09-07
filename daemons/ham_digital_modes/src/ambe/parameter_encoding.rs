@@ -49,6 +49,34 @@ pub fn decode_voicing_decisions(b1_tilde: u32, k_hat: u32) -> Vec<bool> {
         .collect()
 }
 
+/// `v_tilde_l` (Eq. 50-51, section 6.2's own decoding half): expands the `k_hat` per-band voicing
+/// decisions (from [`decode_voicing_decisions`]) into `l_hat` per-harmonic decisions -- the real
+/// conversion the decoder needs that the encoder never had to make (the encoder works in bands the
+/// whole time; only the decoder needs a decision "for each spectral amplitude," per the spec's own
+/// text explaining this is "a departure from the V/UV convention used by the encoder").
+///
+/// Two real reuse discoveries made while transcribing this, not assumed: **Eq. 50's own `kappa_l`**
+/// (harmonic `l`'s own band index, `floor((l+2)/3)` for `l<=36`, else `12`) is textually identical to
+/// Eq. 48's own `K~` formula ([`super::vuv::frequency_bands_count`]) -- same formula, just fed a
+/// harmonic index instead of a harmonic *count* -- so that function is reused directly here instead
+/// of a duplicate. **Eq. 51 itself** (`floor(b1/2^(K-kappa_l)) - 2*floor(b1/2^(K+1-kappa_l))`) is
+/// exactly a single-bit extraction of `b1`'s own bit `(K_hat - kappa_l)`, which is precisely what
+/// [`decode_voicing_decisions`] already computes for band `kappa_l` -- so `v_tilde_l` reduces to
+/// "look up band `kappa_l`'s own decision," not a separate bit-extraction formula.
+///
+/// `kappa_l` is always `<= k_hat` for every `l` in `1..=l_hat` (both Eq. 48 and Eq. 50 are the same
+/// non-decreasing step function of their own input, and `l <= l_hat` always here), so the per-band
+/// lookup never panics -- checked directly by the test below, not just argued.
+pub fn decode_voicing_decisions_per_harmonic(b1_tilde: u32, k_hat: u32, l_hat: u32) -> Vec<bool> {
+    let per_band = decode_voicing_decisions(b1_tilde, k_hat);
+    (1..=l_hat)
+        .map(|l| {
+            let kappa_l = super::vuv::frequency_bands_count(l);
+            per_band[(kappa_l - 1) as usize]
+        })
+        .collect()
+}
+
 /// `b_hat_1` (Eq. 49): packs the `K_hat` per-band voiced/unvoiced decisions (from
 /// [`super::vuv::determine_voicing`]) into a single unsigned integer, MSB-first (`v_hat_1` is the
 /// most significant of the `K_hat` bits used to represent this value, `v_hat_{K_hat}` the least).
@@ -168,6 +196,48 @@ mod tests {
                 assert_eq!(voiced.len(), k_hat as usize);
                 assert_eq!(encode_voicing_decisions(&voiced), b1, "k_hat={k_hat}, b1={b1}");
             }
+        }
+    }
+
+    /// `kappa_l` (Eq. 50) must always index a real band -- checked directly across every real
+    /// `(l_hat, l)` pair the codec can actually produce (`l_hat` in the spec's own stated `9..=56`
+    /// range, `l` in `1..=l_hat`), not just argued from the two formulas' shared shape.
+    #[test]
+    fn kappa_l_never_exceeds_k_hat_for_any_real_l_hat_and_l() {
+        for l_hat in 9u32..=56 {
+            let k_hat = super::super::vuv::frequency_bands_count(l_hat);
+            for l in 1..=l_hat {
+                let kappa_l = super::super::vuv::frequency_bands_count(l);
+                assert!(
+                    kappa_l >= 1 && kappa_l <= k_hat,
+                    "l_hat={l_hat}, l={l}: kappa_l={kappa_l} out of range 1..={k_hat}"
+                );
+            }
+        }
+    }
+
+    /// Eq. 51 itself, hand-computed directly from its own literal formula (not via
+    /// `decode_voicing_decisions`, which is what [`decode_voicing_decisions_per_harmonic`] actually
+    /// uses internally) -- an independent check that the "reduces to a bit lookup" claim in this
+    /// function's own doc comment is really an identity, not just a plausible-looking shortcut.
+    #[test]
+    fn decode_voicing_decisions_per_harmonic_matches_eq51s_own_literal_formula() {
+        let b1 = 0b10_1101u32; // k_hat = 6.
+        let k_hat = 6u32;
+        let l_hat = 16u32;
+        let per_harmonic = decode_voicing_decisions_per_harmonic(b1, k_hat, l_hat);
+        assert_eq!(per_harmonic.len(), l_hat as usize);
+
+        for l in 1..=l_hat {
+            let kappa_l = super::super::vuv::frequency_bands_count(l);
+            // Eq. 51, transcribed literally rather than reusing decode_voicing_decisions.
+            let expected = (b1 as i64 / 2i64.pow(k_hat - kappa_l))
+                - 2 * (b1 as i64 / 2i64.pow(k_hat + 1 - kappa_l));
+            assert_eq!(
+                per_harmonic[(l - 1) as usize],
+                expected == 1,
+                "l={l}, kappa_l={kappa_l}: expected {expected}"
+            );
         }
     }
 
