@@ -6,7 +6,20 @@
 //! `AMBE_PLUS_2_NOTES.md` in this same directory for what's known about that generation, kept as
 //! documentation only.
 //!
-//! # Real, current state: every encode stage is implemented and now wired together end to end
+//! # Real, current state, corrected 2026-09-07: both encode AND decode are now implemented, tested, and wired end to end
+//!
+//! **Stale as of this correction**: this section used to say "What remains: the entire decoder side
+//! proper... remains genuinely unstarted." That was true when written but hadn't been updated since
+//! -- the decoder side is real, complete, and tested: [`decode::DecoderState::decode_frame`] is the
+//! real inverse of [`encode_frame`], covering frame-repeat robustness (section 7.7, Eq. 97-104),
+//! mute/comfort-noise generation (section 7.8, real uniform-on-`[-5,5]` noise per the spec's own
+//! literal text), spectral enhancement ([`enhancement`], sections 8-9), and the actual synthesis
+//! filterbank ([`synthesis`], [`voiced_synthesis`], [`unvoiced_synthesis`]) that turns reconstructed
+//! parameters back into real 20ms PCM. [`interleave::deinterleave_from_dibit_symbols`] is verified,
+//! end to end, as the real inverse of [`interleave::interleave_to_dibit_symbols`] feeding straight
+//! into `decode_parameters` -- not just checked in isolation against the raw bit-position math, per
+//! `decode.rs`'s own `decode_parameters_agrees_whether_fed_c_directly_or_via_a_real_interleave_
+//! deinterleave_round_trip` test.
 //!
 //! Every stage of section 5-7's own encode pipeline is implemented and tested (see the pipeline
 //! list below), and [`encode_frame`] composes all eight of them into one real function that takes
@@ -15,11 +28,8 @@
 //! gap an earlier version of this module disclosed as still open: `encode_frame` now runs its own
 //! quantizer values back through [`reconstruct::reconstruct_spectral_amplitudes`] (dequantization
 //! and the inverse DCTs, section 6.4) to produce real decoder-equivalent history for the *next*
-//! frame's own prediction, rather than reusing this frame's own unquantized estimate. What remains:
-//! the entire decoder side proper (frame-repeat/mute robustness, spectral enhancement, and the
-//! actual synthesis filterbank that turns reconstructed parameters back into audio -- reconstructing
-//! spectral amplitudes for the *next frame's prediction* is not the same as decoding real audio).
-//! What already exists: the frame structure and pipeline stage documentation below, `fec.rs`'s
+//! frame's own prediction, rather than reusing this frame's own unquantized estimate. What already
+//! exists: the frame structure and pipeline stage documentation below, `fec.rs`'s
 //! Golay/Hamming FEC
 //! (generator matrices independently verified two ways -- against each code's own published weight
 //! distribution, and against the PDF's own separate vector-text layer, see that module's doc comment),
@@ -96,8 +106,20 @@
 //! "inserted into the Project 25 frame format beginning with symbol 0," which is placement, not
 //! reordering. `c_hat_0..c_hat_7` (144 bits total: `4*23 + 3*15 + 7`, matching `FRAME_BITS`) and
 //! their own interleaved-symbol form are both this codec's own real, complete output; only the actual
-//! channel-frame placement remains a separate protocol layer's concern. The entire decoder side
-//! (synthesis, frame-repeat/mute robustness, spectral enhancement) remains genuinely unstarted.
+//! channel-frame placement remains a separate protocol layer's concern. The decoder side (synthesis,
+//! frame-repeat/mute robustness, spectral enhancement) is complete too -- see this doc comment's own
+//! "Real, current state" section above.
+//!
+//! # What's left, honestly: D-STAR's own framing, not this codec's core algorithm
+//!
+//! What this module does NOT cover, and what `AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md`'s own
+//! "Real next steps" still names as open: D-STAR's own protocol-level framing around this codec (its
+//! header/slow-data structure, radio-ID fields, and wherever D-STAR's own channel format differs from
+//! the Project 25 CAI this module's own `interleave` doc comment discusses) -- the same "core codec
+//! vs. channel-frame placement" scope boundary already drawn above for P25, not yet drawn for D-STAR
+//! specifically. Also open: real AMBE-chip bit-exact validation once Bruce's own hardware arrives
+//! (the proposal's own item 3), and the 2009 AMBE+2 addendum, deliberately out of scope pending patent
+//! clearance (this doc comment's own opening paragraph).
 
 pub mod bit_prioritization;
 pub mod decode;
