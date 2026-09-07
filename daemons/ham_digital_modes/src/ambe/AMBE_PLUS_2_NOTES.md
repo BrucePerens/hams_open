@@ -235,14 +235,15 @@ Strictly increasing, confirmed during extraction.
 
 512 entries (`b3` 0-511, 9-bit index), each a 3-dimensional codeword -- a real vector quantizer, not
 a scalar table (see "real structural differences" above). Full 512x3 data (1536 numbers) is too large
-for this notes file to stay readable inline; extracted to `hams_com/reference/ambe/
-half_rate_prba24_b3.csv` (header: `b3,G2,G3,G4`), completeness-checked (all 512 indices present
-exactly once) before being trusted.
+for this notes file to stay readable inline; extracted to `ambe/half_rate_reference/
+half_rate_prba24_b3.csv` (header: `b3,G2,G3,G4`, with its own leading `#`-comment header naming its
+source/structure), completeness-checked (all 512 indices present exactly once) before being trusted.
 
 ### Annex F: PRBA58 Vector Quantizer Levels (`b4` -> 4-dim vector `G5,G6,G7,G8`)
 
 128 entries (`b4` 0-127, 7-bit index), each a 4-dimensional codeword. Extracted to
-`hams_com/reference/ambe/half_rate_prba58_b4.csv` (header: `b4,G5,G6,G7,G8`), same completeness check.
+`ambe/half_rate_reference/half_rate_prba58_b4.csv` (header: `b4,G5,G6,G7,G8`), same completeness
+check.
 
 ### Annex G: Quantization Tables for Higher Order Coefficients (`b5`..`b8` -> 4-dim vectors)
 
@@ -250,13 +251,17 @@ Four separate vector-quantizer sub-tables, one per higher-order coefficient grou
 
 | Index | Entries | Bits | Dims | CSV |
 |---|---|---|---|---|
-| `b5` | 32 | 5 | `H1,1..H1,4` | `half_rate_higher_order_b5.csv` |
-| `b6` | 16 | 4 | `H2,1..H2,4` | `half_rate_higher_order_b6.csv` |
-| `b7` | 16 | 4 | `H3,1..H3,4` | `half_rate_higher_order_b7.csv` |
-| `b8` | 8  | 3 | `H4,1..H4,4` | `half_rate_higher_order_b8.csv` |
+| `b5` | 32 | 5 | `H1,1..H1,4` | `half_rate_reference/half_rate_higher_order_b5.csv` |
+| `b6` | 16 | 4 | `H2,1..H2,4` | `half_rate_reference/half_rate_higher_order_b6.csv` |
+| `b7` | 16 | 4 | `H3,1..H3,4` | `half_rate_reference/half_rate_higher_order_b7.csv` |
+| `b8` | 8  | 3 | `H4,1..H4,4` | `half_rate_reference/half_rate_higher_order_b8.csv` |
 
-All four in `hams_com/reference/ambe/`, same completeness check (all indices present exactly once,
-per table) applied before being trusted.
+All four in `ambe/half_rate_reference/` (alongside this notes file's own directory, not in
+`hams_com`'s `reference/` -- moved there so the real codec code and its own reference data for the
+generation it describes live in the same repository), same completeness check (all indices present
+exactly once, per table) applied before being trusted. Each CSV carries its own leading `#`-comment
+header naming its annex, structure, and the standing "not implemented, pending patent clearance"
+scope, so a reader opening one directly (not via this notes file) still gets the same context.
 
 ### Annex H: Bit Frame Format (`symbol` -> codeword bit sources for Bit 1 / Bit 0)
 
