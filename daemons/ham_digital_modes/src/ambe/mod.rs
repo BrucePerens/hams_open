@@ -100,6 +100,7 @@
 //! (synthesis, frame-repeat/mute robustness, spectral enhancement) remains genuinely unstarted.
 
 pub mod bit_prioritization;
+pub mod decode;
 pub mod enhancement;
 pub mod error_estimation;
 pub mod fec;

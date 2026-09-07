@@ -181,6 +181,34 @@ mod tests {
         }
     }
 
+    /// The real interop property `decode.rs`'s own round-trip test depends on: the decoder never
+    /// learns `L~` from the encoder's own `omega0_hat` directly, only from `omega0_tilde =
+    /// dequantize(quantize(omega0_hat))` (a lossy round trip through the 8-bit `b_hat_0`). If that
+    /// round trip ever pushed `harmonics_count`'s own floor across a boundary relative to the
+    /// encoder's `L_hat = harmonics_count(omega0_hat)`, the two sides would disagree on Annex F/G's
+    /// own bit-column widths for the frame -- and because every valid `(L, K)` pair in Annex F/G
+    /// totals exactly 88 bits, that disagreement parses "successfully" into entirely wrong parameter
+    /// values rather than failing loudly. Checked across every real pitch this codec's own estimator
+    /// can produce, not assumed from the quarter-sample bound above.
+    #[test]
+    fn harmonics_count_agrees_with_itself_across_the_full_quantize_dequantize_round_trip() {
+        use crate::ambe::vuv::harmonics_count;
+
+        for p in real_refined_pitch_range() {
+            let omega0_hat = 2.0 * PI / p;
+            let l_hat_encoder = harmonics_count(omega0_hat);
+            let b0 = quantize_fundamental_frequency(omega0_hat);
+            let omega0_tilde = dequantize_fundamental_frequency(b0);
+            let l_hat_decoder = harmonics_count(omega0_tilde);
+            assert_eq!(
+                l_hat_encoder, l_hat_decoder,
+                "P={p}: encoder derived L_hat={l_hat_encoder} from omega0_hat={omega0_hat}, but \
+                 decoder would derive L~={l_hat_decoder} from the round-tripped omega0_tilde={omega0_tilde} \
+                 (via b0={b0}) -- frame layout disagreement"
+            );
+        }
+    }
+
     #[test]
     fn decode_voicing_decisions_is_the_exact_inverse_of_encode_voicing_decisions() {
         for k_hat in 1u32..=12 {
