@@ -369,3 +369,57 @@ Do not report this punch list as closed without re-reading this table against th
 code -- per this project's own standing "keep-working-until-actually-done" discipline, a status
 header can go stale; re-derive from `grep`ing the real function signatures, not from this file's own
 prose, before trusting it.
+
+## Real audit against Bruce's own actual question, 2026-09-07: "make sure the implementation is
+## actually fit, end-to-end, to install on a device that does not provide floating-point"
+
+Every entry above validates that individual arithmetic *stages* need no `f32` -- a different, narrower
+claim than "this can actually be built and installed on a genuinely FPU-less device." Checked that
+narrower, harder claim directly rather than re-asserting the stage-level one.
+
+**Found and fixed: `fixed_fft.rs`'s twiddle/bit-reversal tables were built lazily via `Vec` behind a
+`std::sync::OnceLock`.** Real, significant defect this pass's own predecessors never checked for:
+`Vec`/heap allocation needs `std` (or `alloc` + a global allocator), unavailable on most genuinely
+FPU-less MCU targets, and directly contrary to the real C reference this whole port is modeled on --
+Codec2-mod's own README, quoted in `CODEC2_MOD_FIXED_POINT_PLAN.md`, states "fully static memory
+allocation... no malloc anywhere." `DecoderFixed`, `envelope.rs`, and `SpectralBridgeStateFixed` all
+route through this function, so this wasn't a cold path. Fixed: the bit-reversal table (pure integer
+bit manipulation, no float involved) is now a real `const fn`, evaluated at compile time, zero runtime
+cost. The twiddle tables (`f32::cos`/`sin`-derived, so not expressible as a `const fn` on stable Rust)
+are checked-in `const` arrays, generated once from the real `build_twiddles_q23` formula -- same
+"generated once from the function's own real output, never hand-typed or assumed frozen" discipline
+`lpc.rs`'s own `BW_GAMMA_Q23` already established -- and validated on every test run by a new test,
+`twiddle_tables_match_their_own_generating_formula`, which regenerates both tables from the live
+formula and diffs them against the checked-in constants. That test is not decorative: it caught a real
+transcription error in the first draft of the 1024-point table (a data-entry mismatch from copying
+generator output across two separate `cargo test` invocations, not a formula bug -- re-derived from a
+single compiled binary's own live output once the drift was caught, closing the loop the same way this
+project's "keep-working-until-actually-done" discipline expects). Also closed, same pass: the one
+remaining `f32` arithmetic in the per-sample decode hot path -- `synthesis.rs`'s and
+`spectral_bridge.rs`'s own final Q23->i16 PCM conversion divided by `(1i64 << FRAC_BITS) as f32`, which
+is a division by a power of two and therefore exactly an integer rounding right shift
+(`fixed_fft::rshift_round_i128`), not a float divide at all. Committed hams_open `bd8a7638`; 144/144
+codec2 tests, 360/360 full crate, clippy-clean.
+
+**Real, confirmed, NOT fixed this pass: the crate as a whole still cannot compile for a genuine
+no-FPU/`no_std` target.** Tried directly, not assumed: `cargo build --release --target
+thumbv7m-none-eabi` (a real Cortex-M3, no FPU at all -- unlike the codegen-check tool's own
+`thumbv7em-none-eabihf`, whose trailing `hf` means that target *has* an FPU, so that earlier check
+never actually tested the no-FPU case it was named for). Fails immediately, before `ham_digital_modes`'
+own source is even reached: `rustfft`'s own dependency `num-traits` does `extern crate std;`
+unconditionally (`error[E0463]: can't find crate for std`) because `rustfft` is a plain, unconditional
+`[dependencies]` entry in `Cargo.toml`, needed by `floating_reference`, `wspr_sync.rs`, and this
+crate's own production (not just test) top-level code in `synthesis.rs`/`envelope.rs`
+(`Arc<dyn Fft<f32>>` fields on the *float* `Decoder`/`SynthesisState` -- confirmed these are never
+called by `DecoderFixed`/`EncoderFixed`, which use `fixed_fft::fft_fixed` instead, but the dependency
+still gets linked into every build of this crate regardless). This is a real, whole-crate architecture
+question -- does `codec2_3200`/`codec2_1600`'s fixed-point code move into its own `no_std` crate, does
+`floating_reference` get feature-gated out, does the daemon depend on the new crate -- with genuine
+tradeoffs on where the boundary goes, not a numeric or implementation defect. Per this session's own
+standing discipline (leave real architecture decisions to Bruce, don't build a `no_std` feature variant
+or attempt the crate split unilaterally), this is left as a **named, real, open item**, not attempted:
+extracting the fixed-point encode/decode path into its own `no_std`-compatible crate (or workspace
+member) with no unconditional `rustfft`/`floating_reference` dependency is the concrete next step
+before this port can actually be installed on a device with no floating-point unit, as distinct from
+"contains no numerically-necessary floating-point arithmetic," which -- as of this pass's own fix
+above -- is now genuinely, checkably true.
