@@ -62,6 +62,7 @@ pub mod fec;
 pub mod pitch;
 pub mod pitch_refinement;
 pub mod prediction;
+pub mod quantize;
 pub mod spectral_amplitude;
 pub mod tables;
 pub mod vuv;

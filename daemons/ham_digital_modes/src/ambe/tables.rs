@@ -522,6 +522,46 @@ pub fn higher_order_bit_allocation(l: u32) -> Option<&'static [u8]> {
     Some(HIGHER_ORDER_BIT_ALLOCATION[(l - 9) as usize])
 }
 
+/// Table 3 ("Uniform Quantizer Step Size for Higher Order DCT Coefficients", TIA-102.BABA_2003.pdf
+/// section 6.3.2): the step-size multiplier for a given bit allocation `bits` (1..=10), to be scaled
+/// by the coefficient's own standard deviation ([`higher_order_coefficient_sigma`]) per the spec's own
+/// worked example ("if 4 bits are allocated... the step size, Delta, equals .40 sigma"). This is a
+/// small, universal, `L`-independent table -- distinct from Annex F's per-`L` gain-vector step sizes.
+///
+/// A coefficient with `bits == 0` (a real, observed value in [`HIGHER_ORDER_BIT_ALLOCATION`], not a
+/// hypothetical) has no entry here and returns `None`: zero bits means that coefficient isn't
+/// transmitted at all, so no step size is ever needed for it.
+pub fn higher_order_step_multiplier(bits: u8) -> Option<f64> {
+    if !(1..=10).contains(&bits) {
+        return None;
+    }
+    Some(HIGHER_ORDER_STEP_MULTIPLIER[(bits - 1) as usize])
+}
+
+const HIGHER_ORDER_STEP_MULTIPLIER: [f64; 10] =
+    [1.2, 0.85, 0.65, 0.40, 0.28, 0.15, 0.08, 0.04, 0.02, 0.01];
+
+/// Table 4 ("Standard Deviation of Higher Order DCT Coefficients", TIA-102.BABA_2003.pdf section
+/// 6.3.2): the standard deviation `sigma` of the `k`'th DCT coefficient position within *any* block
+/// (the spec's own text: "if this was the third DCT coefficient from any block (i.e. `C_i,3`), then
+/// `sigma = .241`" -- notably independent of the block number `i`, only the position `k` within it).
+/// `k` ranges 2..=10 (position 1 is each block's own DC term, already split off into the gain vector
+/// and quantized separately via Annex E/F, never through this table).
+///
+/// Returns `None` for `k` outside 2..=10 -- the spec's own table doesn't go further because no block
+/// length this codec ever produces (Annex J, [`block_lengths_for_l`]) exceeds 10 (checked directly:
+/// every one of the 288 real block lengths across all 48 `L` values is 10 or less).
+pub fn higher_order_coefficient_sigma(k: u32) -> Option<f64> {
+    if !(2..=10).contains(&k) {
+        return None;
+    }
+    Some(HIGHER_ORDER_COEFFICIENT_SIGMA[(k - 2) as usize])
+}
+
+const HIGHER_ORDER_COEFFICIENT_SIGMA: [f64; 9] = [
+    0.307, 0.241, 0.207, 0.190, 0.179, 0.173, 0.165, 0.170, 0.170,
+];
+
 const HIGHER_ORDER_BIT_ALLOCATION: [&[u8]; 48] = [
     &[9, 8, 7],                                                    // L=9
     &[9, 7, 6, 5],                                                 // L=10
@@ -808,5 +848,45 @@ mod tests {
     fn higher_order_bit_allocation_refuses_out_of_range_values_rather_than_guessing() {
         assert_eq!(higher_order_bit_allocation(8), None);
         assert_eq!(higher_order_bit_allocation(57), None);
+    }
+
+    #[test]
+    fn higher_order_step_multiplier_matches_table_3_and_refuses_out_of_range_bits() {
+        assert!((higher_order_step_multiplier(1).unwrap() - 1.2).abs() < 1e-12);
+        assert!((higher_order_step_multiplier(4).unwrap() - 0.40).abs() < 1e-12);
+        assert!((higher_order_step_multiplier(10).unwrap() - 0.01).abs() < 1e-12);
+        assert_eq!(
+            higher_order_step_multiplier(0),
+            None,
+            "zero bits means not transmitted"
+        );
+        assert_eq!(higher_order_step_multiplier(11), None);
+    }
+
+    #[test]
+    fn higher_order_coefficient_sigma_matches_table_4_and_refuses_out_of_range_k() {
+        assert!((higher_order_coefficient_sigma(2).unwrap() - 0.307).abs() < 1e-12);
+        assert!((higher_order_coefficient_sigma(3).unwrap() - 0.241).abs() < 1e-12);
+        assert!((higher_order_coefficient_sigma(10).unwrap() - 0.170).abs() < 1e-12);
+        assert_eq!(
+            higher_order_coefficient_sigma(1),
+            None,
+            "k=1 is the block's own DC term"
+        );
+        assert_eq!(higher_order_coefficient_sigma(11), None);
+    }
+
+    #[test]
+    fn table_3_worked_example_from_the_spec_matches_exactly() {
+        // The spec's own worked example (section 6.3.2): "if 4 bits are allocated... the step
+        // size, Delta, equals .40 sigma. If this was the third DCT coefficient from any block
+        // (i.e. C_i,3), then sigma = .241... this multiplication gives a step size of .0964."
+        let multiplier = higher_order_step_multiplier(4).unwrap();
+        let sigma = higher_order_coefficient_sigma(3).unwrap();
+        let step_size = multiplier * sigma;
+        assert!(
+            (step_size - 0.0964).abs() < 1e-9,
+            "expected the spec's own worked example to reproduce 0.0964, got {step_size}"
+        );
     }
 }
