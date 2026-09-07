@@ -6,10 +6,14 @@
 //! `AMBE_PLUS_2_NOTES.md` in this same directory for what's known about that generation, kept as
 //! documentation only.
 //!
-//! # Real, current state: scaffold plus every Annex table, not a working codec yet
+//! # Real, current state: the full encoder is implemented; the decoder is not
 //!
-//! This module is a real starting point, not a placeholder pretending to be more than it is. What
-//! exists: the frame structure and pipeline stage documentation below, `fec.rs`'s Golay/Hamming FEC
+//! Every stage of section 5-7's own encode pipeline is implemented and tested (see the pipeline
+//! list below) -- this is a real, working AMBE *encoder*, not a scaffold. What remains: the entire
+//! decoder side, and closing the one disclosed gap in `prediction.rs` (it takes the previous frame's
+//! reconstructed spectral amplitudes as an external input rather than computing them itself, since
+//! that requires a decoder-side reconstruction loop). What already exists: the frame structure and
+//! pipeline stage documentation below, `fec.rs`'s Golay/Hamming FEC
 //! (generator matrices independently verified two ways -- against each code's own published weight
 //! distribution, and against the PDF's own separate vector-text layer, see that module's doc comment),
 //! and `tables.rs`'s Annexes E, F, G, and J (gain quantizer levels, gain-vector bit allocation/step
@@ -31,32 +35,39 @@
 //! duplicates for all 48 `L` values). All four Annex tables are now real, verified, and available for
 //! whatever encoder/decoder logic gets built against them next.
 //!
-//! # The encode pipeline, per TIA-102.BABA section 6-7 (spectral amplitude/pitch encoding, error
-//! control)
+//! # The encode pipeline, per TIA-102.BABA sections 5-7 -- now fully implemented
 //!
-//! 1. **Pitch estimation and voicing decision** produce the fundamental frequency and a per-band
-//!    voiced/unvoiced decision across up to `MAX_HARMONICS` spectral bands -- section 5.1's pitch
-//!    estimation (initial estimate, look-back/look-ahead tracking, quarter-sample refinement) and
-//!    section 5.2's voiced/unvoiced determination (Eq. 31-42) are both implemented, in [`pitch`],
-//!    [`pitch_refinement`], and [`vuv`].
-//! 2. **Spectral amplitude estimation and encoding**: each harmonic's own magnitude `M_hat_l` is
-//!    estimated per section 5.3 (Eq. 43-44, implemented in [`spectral_amplitude`], using the V/UV
-//!    decision from [`vuv`] to pick a voiced or unvoiced estimator). Those `L` amplitudes are then
-//!    DCT-transformed in six blocks whose lengths vary with `L` (Fig. 17), forming a six-element
-//!    "gain vector" via a second, 6-point DCT across each block's own DC coefficient (Fig. 18,
-//!    Eq. 60-61) -- see [`gain_vector_dct`] below, one of the pieces safe to implement now since it's
-//!    a plain, unambiguous formula, not a table.
-//! 3. **Quantization**: the gain vector's first element (overall level) uses a 6-bit non-uniform
-//!    quantizer (Annex E's own table -- not yet transcribed); the remaining gain elements and the
-//!    higher-order DCT coefficients use uniform quantizers whose bit allocation and step size depend on
-//!    `L` (Annexes F and G -- not yet transcribed, per Eq. 62).
-//! 4. **Bit prioritization**: the quantized bits `b_0..b_(L+2)` are reordered by importance (Fig. 22's
-//!    own "priority scanning") into eight bit vectors `u_0..u_7` before FEC.
-//! 5. **Forward error correction**: `u_0..u_3` each get a `[23,12]` Golay code, `u_4..u_6` each get a
-//!    `[15,11]` Hamming code, `u_7` is left unprotected (Eq. 81-83) -- implemented and verified in
-//!    [`fec`].
-//! 6. **Random bit modulation and interleaving** produce the final 144-bit, 20ms transmitted frame
-//!    (88 voice bits + 56 FEC bits, per the spec's own section 7.3).
+//! 1. **Pitch estimation and voicing decision** (section 5.1, [`pitch`]/[`pitch_refinement`]; section
+//!    5.2, Eq. 31-42, [`vuv`]): the fundamental frequency and a per-band voiced/unvoiced decision.
+//! 2. **Spectral amplitude estimation** (section 5.3, Eq. 43-44, [`spectral_amplitude`]): each
+//!    harmonic's own magnitude `M_hat_l`, voiced or unvoiced per [`vuv`]'s own decision.
+//! 3. **Fundamental frequency and V/UV bit encoding** (section 6.1-6.2, Eq. 45/49,
+//!    [`parameter_encoding`]): `b_hat_0` and `b_hat_1`.
+//! 4. **Prediction residual** (section 6.2, Eq. 52-57, [`prediction`]): the log2-domain differential
+//!    encoding of the spectral amplitudes against the previous frame's own reconstructed history (a
+//!    real, disclosed scope boundary: that history is taken as an external input, since it depends on
+//!    a decoder-reconstruction loop this module doesn't build -- see `prediction`'s own doc comment).
+//! 5. **Block DCT and quantization** (section 6.3, Eq. 58-63, [`quantize`], using [`tables`]'s
+//!    Annexes E/F/G/J and [`gain_vector_dct`] below): the gain vector's first element (`b_hat_2`) via
+//!    Annex E's 6-bit non-uniform quantizer, the remaining gain elements and higher-order DCT
+//!    coefficients via uniform quantizers whose bit allocation and step size depend on `L_hat`
+//!    (Annexes F and G, plus the small in-body Tables 3-4 for the higher-order step sizes).
+//! 6. **Bit prioritization** (Fig. 22, [`bit_prioritization`]): `b_hat_0..b_hat_{L+2}` reordered by
+//!    importance into eight bit vectors `u_hat_0..u_hat_7`.
+//! 7. **Forward error correction** (Eq. 81-83, [`fec`]): `u_hat_0..u_hat_3` each get a `[23,12]`
+//!    Golay code, `u_hat_4..u_hat_6` each get a `[15,11]` Hamming code, `u_hat_7` is left unprotected.
+//! 8. **Bit modulation** (Eq. 84-94, [`modulation`]): each FEC code vector XORed with a data-dependent
+//!    pseudo-random sequence, producing the final modulated code vectors `c_hat_0..c_hat_7` --
+//!    [`encode_code_vectors`] below wires steps 6-8 together into one call.
+//!
+//! **A real scope boundary found while implementing step 8, not assumed going in**: this document
+//! never defines a bit-interleaving permutation of its own. Annex K's own flow chart states the
+//! modulated code vectors are simply "interleaved ... into Project 25 Frame Structure", and the
+//! encryption section explicitly refers the reader to "the Project 25 Common Air Interface" for
+//! anything past this point. That means `c_hat_0..c_hat_7` (144 bits total: `4*23 + 3*15 + 7`,
+//! matching `FRAME_BITS`) is this codec's own real final output -- mapping those bits into an actual
+//! over-the-air D-STAR frame is a separate protocol layer's concern, not unfinished work in this
+//! module. The entire decoder side remains genuinely unstarted.
 
 pub mod bit_prioritization;
 pub mod fec;
@@ -106,6 +117,30 @@ pub fn gain_vector_dct(r_hat: &[f64; 6]) -> [f64; 6] {
     g_hat
 }
 
+/// Wires bit prioritization ([`bit_prioritization::prioritize_bits`]), forward error correction
+/// ([`fec`]), and bit modulation ([`modulation::modulate_code_vectors`]) together: takes the eight
+/// prioritized bit vectors `u_hat_0..u_hat_7` and produces the final modulated code vectors
+/// `c_hat_0..c_hat_7` -- this codec's own real final output (see this module's own doc comment on
+/// why bit-interleaving into an actual channel frame is a separate protocol layer's concern, not
+/// unfinished work here).
+///
+/// `u` must already be [`bit_prioritization::prioritize_bits`]'s own output: `u[0..=3]` fit in 12
+/// bits, `u[4..=6]` in 11 bits, `u[7]` in 7 bits (this function doesn't re-check that, matching
+/// [`fec::golay_encode`]/[`fec::hamming_encode`]'s own "trust the caller's own bit width" contract).
+pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
+    let nu = [
+        fec::golay_encode(u[0] as u16),
+        fec::golay_encode(u[1] as u16),
+        fec::golay_encode(u[2] as u16),
+        fec::golay_encode(u[3] as u16),
+        fec::hamming_encode(u[4] as u16) as u32,
+        fec::hamming_encode(u[5] as u16) as u32,
+        fec::hamming_encode(u[6] as u16) as u32,
+        u[7],
+    ];
+    modulation::modulate_code_vectors(nu, u[0])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,5 +184,38 @@ mod tests {
                 "m={m}: expected {expected}, got {g}"
             );
         }
+    }
+
+    #[test]
+    fn encode_code_vectors_produces_exactly_frame_bits_across_all_eight_vectors() {
+        let u = [
+            0b101010101010u32,
+            0xABC,
+            0x123,
+            0x555,
+            0x321,
+            0x654,
+            0x2AA,
+            0b1011010,
+        ];
+        let c = encode_code_vectors(u);
+        let widths = [23u32, 23, 23, 23, 15, 15, 15, 7];
+        assert_eq!(widths.iter().sum::<u32>() as usize, FRAME_BITS);
+        for (&value, &width) in c.iter().zip(widths.iter()) {
+            assert!(
+                value < (1 << width),
+                "value {value} doesn't fit in {width} bits"
+            );
+        }
+    }
+
+    #[test]
+    fn encode_code_vectors_leaves_c0_and_c7_unmodulated() {
+        // m_hat_0 and m_hat_7 are always all-zero (modulation.rs), so c0 is exactly u0's own
+        // Golay codeword and c7 is exactly u7 itself, unmodified by modulation.
+        let u = [0xABC, 0, 0, 0, 0, 0, 0, 0b1010101];
+        let c = encode_code_vectors(u);
+        assert_eq!(c[0], fec::golay_encode(u[0] as u16));
+        assert_eq!(c[7], u[7]);
     }
 }
