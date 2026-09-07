@@ -282,7 +282,7 @@ impl SynthesisState {
 }
 
 use super::envelope::{synth_k_q23, ModelFixed};
-use super::fixed_fft::{fft_fixed, ComplexQ23};
+use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::trig_fixed::sin_cos_q23;
 
@@ -554,9 +554,13 @@ impl SynthesisStateFixed {
         let mut out: [i64; N_SAMP] = std::array::from_fn(|i| self.sn_[i]);
         ear_protection_fixed(&mut out);
 
+        // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
+        // exact rounding right shift, not a float divide -- the last `f32`
+        // this genuinely-fixed-point decode path used to touch on its way
+        // to a PCM sample, removed once it was noticed the division here
+        // was by a power of two the whole time.
         std::array::from_fn(|i| {
-            let sample_f = out[i] as f32 / (1i64 << FRAC_BITS) as f32;
-            sample_f.clamp(-32767.0, 32767.0) as i16
+            rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
         })
     }
 }

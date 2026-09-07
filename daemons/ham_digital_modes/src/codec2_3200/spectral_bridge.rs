@@ -510,9 +510,11 @@ impl SpectralBridgeStateFixed {
         let mut out: [i64; N_SAMP_SB] = std::array::from_fn(|i| self.sn_[i]);
         ear_protection_fixed(&mut out);
 
+        // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
+        // exact rounding right shift, not a float divide -- see
+        // `synthesis.rs`'s own identical fix for the same reasoning.
         std::array::from_fn(|i| {
-            let sample_f = out[i] as f32 / (1i64 << FRAC_BITS) as f32;
-            sample_f.clamp(-32767.0, 32767.0) as i16
+            rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
         })
     }
 }
