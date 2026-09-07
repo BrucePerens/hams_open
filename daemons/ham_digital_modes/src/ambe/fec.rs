@@ -90,6 +90,45 @@ pub fn hamming_encode(data: u16) -> u16 {
     (data << 4) | (parity as u16)
 }
 
+/// Decodes a received (possibly bit-corrupted) 23-bit Golay codeword to its nearest valid codeword
+/// -- minimum-distance decoding: brute-force search over all 4096 real codewords (cheap at this
+/// size, and mathematically exact for any linear block code, not an approximation), returning the
+/// recovered 12-bit data and the Hamming distance to that nearest codeword (the number of bit errors
+/// corrected). The `[23,12,7]` Golay code guarantees a *unique* nearest codeword -- and therefore
+/// exact recovery -- for any received word with 3 or fewer bit errors (its own real minimum distance
+/// of 7 means `floor((7-1)/2) = 3`); beyond that the "nearest codeword" is still well-defined but no
+/// longer guaranteed to be the one that was actually sent, which section 7.6's own error-estimation
+/// text (this is what feeds it) exists specifically to detect.
+pub fn golay_decode(received: u32) -> (u16, u32) {
+    let received = received & 0x7F_FFFF;
+    let mut best_data = 0u16;
+    let mut best_distance = u32::MAX;
+    for data in 0u16..4096 {
+        let distance = (golay_encode(data) ^ received).count_ones();
+        if distance < best_distance {
+            best_distance = distance;
+            best_data = data;
+        }
+    }
+    (best_data, best_distance)
+}
+
+/// The same minimum-distance decoding as [`golay_decode`], for the `[15,11,3]` Hamming code (unique
+/// nearest codeword, and therefore exact recovery, guaranteed for 1 or fewer bit errors).
+pub fn hamming_decode(received: u16) -> (u16, u32) {
+    let received = received & 0x7FFF;
+    let mut best_data = 0u16;
+    let mut best_distance = u32::MAX;
+    for data in 0u16..2048 {
+        let distance = (hamming_encode(data) ^ received).count_ones() as u32;
+        if distance < best_distance {
+            best_distance = distance;
+            best_data = data;
+        }
+    }
+    (best_data, best_distance)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +233,81 @@ mod tests {
         let data: u16 = 0b101_1100_1101;
         let codeword = hamming_encode(data);
         assert_eq!((codeword >> 4) & 0x07FF, data);
+    }
+
+    #[test]
+    fn golay_decode_of_an_uncorrupted_codeword_recovers_it_with_zero_distance() {
+        for &data in &[0u16, 0xFFF, 0b1010_1100_1101] {
+            let (recovered, distance) = golay_decode(golay_encode(data));
+            assert_eq!(recovered, data);
+            assert_eq!(distance, 0);
+        }
+    }
+
+    /// The real guarantee a `[23,12,7]` code makes: every received word within 3 bit flips of a real
+    /// codeword has that codeword as its *unique* nearest neighbor, so minimum-distance decoding
+    /// recovers the original data exactly and reports exactly the number of errors injected. Checked
+    /// for every single/double/triple-bit error pattern (`23 + C(23,2) + C(23,3) = 23 + 253 + 1771 =
+    /// 2047` patterns) against a handful of representative data values, not just one -- an exhaustive
+    /// sweep across all 4096 data values times all 2047 error patterns times an O(4096) decode would
+    /// be needlessly slow for a property this small a sample already demonstrates conclusively (a
+    /// wrong parity bit anywhere in `GOLAY_PARITY` would break this for essentially every data value,
+    /// not just a rare one).
+    #[test]
+    fn golay_decode_recovers_the_original_from_up_to_three_bit_errors() {
+        let representative_data: [u16; 4] = [0, 0xFFF, 0b1010_1100_1101, 0b0000_1111_0000];
+        for &data in &representative_data {
+            let codeword = golay_encode(data);
+            for p0 in 0..23u32 {
+                let corrupted = codeword ^ (1 << p0);
+                let (recovered, distance) = golay_decode(corrupted);
+                assert_eq!(recovered, data, "data {data}, flip {{{p0}}}");
+                assert_eq!(distance, 1);
+            }
+            for p0 in 0..23u32 {
+                for p1 in (p0 + 1)..23u32 {
+                    let corrupted = codeword ^ (1 << p0) ^ (1 << p1);
+                    let (recovered, distance) = golay_decode(corrupted);
+                    assert_eq!(recovered, data, "data {data}, flip {{{p0},{p1}}}");
+                    assert_eq!(distance, 2);
+                }
+            }
+            for p0 in 0..23u32 {
+                for p1 in (p0 + 1)..23u32 {
+                    for p2 in (p1 + 1)..23u32 {
+                        let corrupted = codeword ^ (1 << p0) ^ (1 << p1) ^ (1 << p2);
+                        let (recovered, distance) = golay_decode(corrupted);
+                        assert_eq!(recovered, data, "data {data}, flip {{{p0},{p1},{p2}}}");
+                        assert_eq!(distance, 3);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hamming_decode_of_an_uncorrupted_codeword_recovers_it_with_zero_distance() {
+        for &data in &[0u16, 0x7FF, 0b101_1100_1101] {
+            let (recovered, distance) = hamming_decode(hamming_encode(data));
+            assert_eq!(recovered, data);
+            assert_eq!(distance, 0);
+        }
+    }
+
+    /// The `[15,11,3]` Hamming code's own real guarantee: a unique nearest codeword (and therefore
+    /// exact recovery) for any single bit error -- checked for every one of the 15 possible single-bit
+    /// flips against a handful of representative data values.
+    #[test]
+    fn hamming_decode_recovers_the_original_from_a_single_bit_error() {
+        let representative_data: [u16; 4] = [0, 0x7FF, 0b101_1100_1101, 0b000_1111_0000];
+        for &data in &representative_data {
+            let codeword = hamming_encode(data);
+            for p0 in 0..15u16 {
+                let corrupted = codeword ^ (1 << p0);
+                let (recovered, distance) = hamming_decode(corrupted);
+                assert_eq!(recovered, data, "data {data}, flip {{{p0}}}");
+                assert_eq!(distance, 1);
+            }
+        }
     }
 }
