@@ -943,9 +943,27 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     # [@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]
     def start_hams_browser(self):
         if not self.browser:
-            self.browser = ChromeBrowser(
-                self, headless=not os.environ.get("HAMS_PAUSE_ON_FAIL")  # burn-ignore-env
-            )
+            # Real bug found and fixed 2026-09-07, chasing an unrelated tour
+            # failure: this used to launch non-headless (`headless=not
+            # HAMS_PAUSE_ON_FAIL`) specifically so --pause-on-fail could
+            # freeze a *visible* browser -- but the debugging_with_antigravity
+            # skill's own docs describe the intended workflow as attaching
+            # DevTools to "a frozen, headless Chrome instance", and the
+            # freeze logic (_patched_browser_js) and fixed CDP port
+            # (_patched_chrome_init, port 9222) are both already independent
+            # of headless/non-headless. Non-headless needs a real display
+            # server to render into; this dev box moved from X11 (which
+            # test.py's own DISPLAY-forwarding comment was written for) to
+            # Wayland at some point since, and the `odoo` service account
+            # this test runs as has no access to the interactive user's own
+            # live Wayland session -- confirmed directly: 3/3 launch retries
+            # failed with "Failed to connect to Wayland display: Permission
+            # denied" and "Failed to connect to the bus: Permission denied",
+            # before ever reaching a tour or the freeze-on-fail logic at all.
+            # Headless mode needs no display server, sidesteps this
+            # structurally, and CDP -- the only thing --pause-on-fail is
+            # actually for -- works identically either way.
+            self.browser = ChromeBrowser(self, headless=True)
         return self.browser
 
     # [@ANCHOR: zero_sudo:hams_http_case_navigate_and_screenshot]
