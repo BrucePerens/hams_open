@@ -32,3 +32,6 @@ task_workspace_*/
 *.patch
 *.bak
 *.tmp
+
+# Stage 2 coverage instrumentation output (ADR 0090 / ANCHOR_COVERAGE_AND_REMEDIATION_PLAN.md)
+coverage_report/
