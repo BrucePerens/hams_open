@@ -261,42 +261,39 @@ fn time_domain_at(samples: &[f64; 256], n: i32) -> f64 {
     }
 }
 
-/// Persistent unvoiced-synthesis state: the noise generator plus the previous frame's own
-/// time-domain unvoiced signal (`u~_w(n, -1)`), both needed by [`Self::synthesize`]'s own Eq. 126
-/// overlap-add.
+/// Persistent unvoiced-synthesis state: just the previous frame's own time-domain unvoiced signal
+/// (`u~_w(n, -1)`), needed by [`Self::synthesize`]'s own Eq. 126 overlap-add. The noise generator
+/// itself ([`NoiseState`]) is owned by the caller, not by this struct: Eq. 141's own `rho_l(0)` (used
+/// by voiced synthesis, `super::voiced_synthesis`) reads `u(l)` from this *same* current-frame noise
+/// window ("the shifted noise sequence for the current frame, described in Section 11.2" -- the
+/// spec's own words), not an independent one, so a single [`NoiseState`] must be shared between both
+/// halves of synthesis rather than each owning its own.
 pub struct UnvoicedState {
-    noise: NoiseState,
     previous_time_domain: [f64; 256],
-    first_frame: bool,
 }
 
 impl UnvoicedState {
     pub fn new() -> Self {
         Self {
-            noise: NoiseState::new(),
             previous_time_domain: [0.0; 256], // Eq. 126's own "zero outside the defined range" [p64].
-            first_frame: true,
         }
     }
 
     /// Synthesizes the current frame's own unvoiced speech component `s_uv(n)` (Eq. 117-126),
-    /// advancing the noise generator and the overlap-add history for the *next* call. `voiced` and
-    /// `spectral_amplitudes` are the current frame's own enhanced, 1-indexed-by-harmonic V/UV
-    /// decisions and amplitudes; returns `None` on a length mismatch between the two.
+    /// advancing the overlap-add history for the *next* call. `noise` must already reflect the
+    /// current frame (i.e. the caller has already called [`NoiseState::advance_frame`] for every
+    /// frame after the first). `voiced` and `spectral_amplitudes` are the current frame's own
+    /// enhanced, 1-indexed-by-harmonic V/UV decisions and amplitudes; returns `None` on a length
+    /// mismatch between the two.
     pub fn synthesize(
         &mut self,
+        noise: &NoiseState,
         omega0_tilde: f64,
         voiced: &[bool],
         spectral_amplitudes: &[f64],
     ) -> Option<[f64; N]> {
-        if !self.first_frame {
-            self.noise.advance_frame();
-        }
-        self.first_frame = false;
-
         let gamma_w = unvoiced_scaling_coefficient();
-        let spectrum =
-            unvoiced_spectrum(&self.noise, omega0_tilde, voiced, spectral_amplitudes, gamma_w)?;
+        let spectrum = unvoiced_spectrum(noise, omega0_tilde, voiced, spectral_amplitudes, gamma_w)?;
         let current_time_domain = unvoiced_time_domain(&spectrum);
 
         let mut s_uv = [0.0; N];
@@ -429,12 +426,18 @@ mod tests {
     #[test]
     fn synthesize_produces_a_full_finite_frame_across_several_calls() {
         let mut state = UnvoicedState::new();
+        let mut noise = NoiseState::new();
         let omega0_tilde = 2.0 * PI / 100.0;
         let voiced = vec![false; 16];
         let amplitudes = vec![500.0; 16];
 
-        for _ in 0..3 {
-            let frame = state.synthesize(omega0_tilde, &voiced, &amplitudes).unwrap();
+        for i in 0..3 {
+            if i > 0 {
+                noise.advance_frame();
+            }
+            let frame = state
+                .synthesize(&noise, omega0_tilde, &voiced, &amplitudes)
+                .unwrap();
             assert_eq!(frame.len(), N);
             for &sample in &frame {
                 assert!(sample.is_finite(), "non-finite unvoiced sample: {sample}");
@@ -445,8 +448,9 @@ mod tests {
     #[test]
     fn synthesize_rejects_a_length_mismatch() {
         let mut state = UnvoicedState::new();
+        let noise = NoiseState::new();
         let voiced = vec![false; 5];
         let amplitudes = vec![100.0; 6];
-        assert!(state.synthesize(0.1, &voiced, &amplitudes).is_none());
+        assert!(state.synthesize(&noise, 0.1, &voiced, &amplitudes).is_none());
     }
 }
