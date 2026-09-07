@@ -40,6 +40,11 @@ pub struct SynthesisState {
     s_e: f64,
     tau_m: f64,
     first_frame: bool,
+    /// This frame's own final synthesis inputs (post-enhancement, post-V/UV-forcing,
+    /// post-gamma_M), kept around specifically for [`Self::synthesize_repeated_frame`]'s own
+    /// Eq. 104 (`M_bar_l(0) = M_bar_l(-1)`) and the accompanying "reuse everything" reading of
+    /// Eq. 99-104 -- `None` until the first real (non-repeated) frame has run.
+    last_final_amplitudes: Option<(f64, Vec<bool>, Vec<f64>)>,
 }
 
 impl SynthesisState {
@@ -51,22 +56,21 @@ impl SynthesisState {
             s_e: 75000.0,
             tau_m: 20480.0,
             first_frame: true,
+            last_final_amplitudes: None,
         }
     }
 
-    /// Synthesizes one 20 ms PCM frame (Eq. 142) from this frame's own *unenhanced* reconstructed
-    /// spectral amplitudes (`reconstruct::reconstruct_spectral_amplitudes`'s own output), fundamental
-    /// frequency, decoded V/UV decisions, and FEC error statistics
-    /// (`error_estimation::estimate_errors`'s own output) -- exactly the pieces this codebase's own
-    /// decoder-side pipeline has already built up through section 7. Returns `None` on a length
-    /// mismatch between `reconstructed_amplitudes` and `decoded_voiced`.
-    pub fn synthesize_frame(
+    /// Section 8-9 (Eq. 105-116): reconstruct's own *unenhanced* amplitudes through enhancement,
+    /// Eq. 113's V/UV forcing, and Eq. 116's amplitude smoothing scale, producing the actual
+    /// `(voiced, M_bar_l(0))` pair synthesis consumes -- and remembering it as `last_final_amplitudes`
+    /// for a future repeated frame's own Eq. 104. Returns `None` on a length mismatch.
+    fn finalize_parameters(
         &mut self,
         reconstructed_amplitudes: &[f64],
         omega0_tilde: f64,
         decoded_voiced: &[bool],
         errors: &FrameErrors,
-    ) -> Option<[f64; N]> {
+    ) -> Option<(Vec<bool>, Vec<f64>)> {
         if reconstructed_amplitudes.len() != decoded_voiced.len() {
             return None;
         }
@@ -92,28 +96,72 @@ impl SynthesisState {
         let gamma_m = amplitude_smoothing_scale(self.tau_m, a_m);
         let final_amplitudes: Vec<f64> = enhanced.iter().map(|&m| m * gamma_m).collect();
 
-        // The noise generator is a single continuous sequence shared by both synthesis halves;
-        // advanced exactly once per frame, here, not inside either half.
+        self.last_final_amplitudes =
+            Some((omega0_tilde, smoothed_voiced.clone(), final_amplitudes.clone()));
+        Some((smoothed_voiced, final_amplitudes))
+    }
+
+    /// Section 11 (Eq. 117-142): advances the shared noise generator exactly once per frame (not
+    /// inside either synthesis half, since Eq. 141's own `rho_l(0)` needs the *same* current-frame
+    /// window unvoiced synthesis uses), then synthesizes and sums both halves. Takes already-final
+    /// `(voiced, M_bar_l(0))` -- the common core both a normal frame ([`Self::synthesize_frame`],
+    /// after [`Self::finalize_parameters`]) and a repeated frame
+    /// ([`Self::synthesize_repeated_frame`], skipping it entirely per Eq. 104) both funnel into.
+    fn synthesize_core(
+        &mut self,
+        omega0_tilde: f64,
+        voiced: &[bool],
+        final_amplitudes: &[f64],
+    ) -> Option<[f64; N]> {
         if !self.first_frame {
             self.noise.advance_frame();
         }
         self.first_frame = false;
 
-        let s_uv = self.unvoiced.synthesize(
-            &self.noise,
-            omega0_tilde,
-            &smoothed_voiced,
-            &final_amplitudes,
-        )?;
-        let s_v =
-            self.voiced
-                .synthesize(&self.noise, omega0_tilde, &smoothed_voiced, &final_amplitudes)?;
+        let s_uv = self
+            .unvoiced
+            .synthesize(&self.noise, omega0_tilde, voiced, final_amplitudes)?;
+        let s_v = self
+            .voiced
+            .synthesize(&self.noise, omega0_tilde, voiced, final_amplitudes)?;
 
         let mut s = [0.0; N];
         for i in 0..N {
             s[i] = s_uv[i] + s_v[i]; // Eq. 142.
         }
         Some(s)
+    }
+
+    /// Synthesizes one 20 ms PCM frame (Eq. 142) from this frame's own *unenhanced* reconstructed
+    /// spectral amplitudes (`reconstruct::reconstruct_spectral_amplitudes`'s own output), fundamental
+    /// frequency, decoded V/UV decisions, and FEC error statistics
+    /// (`error_estimation::estimate_errors`'s own output) -- exactly the pieces this codebase's own
+    /// decoder-side pipeline has already built up through section 7. Returns `None` on a length
+    /// mismatch between `reconstructed_amplitudes` and `decoded_voiced`.
+    pub fn synthesize_frame(
+        &mut self,
+        reconstructed_amplitudes: &[f64],
+        omega0_tilde: f64,
+        decoded_voiced: &[bool],
+        errors: &FrameErrors,
+    ) -> Option<[f64; N]> {
+        let (voiced, final_amplitudes) =
+            self.finalize_parameters(reconstructed_amplitudes, omega0_tilde, decoded_voiced, errors)?;
+        self.synthesize_core(omega0_tilde, &voiced, &final_amplitudes)
+    }
+
+    /// Synthesizes a *repeated* frame (section 7.7, Eq. 99-104): when the decoder's own frame-repeat
+    /// check fires (an invalid `b_hat_0` or `error_estimation::should_repeat_frame`), every IMBE
+    /// model parameter for the current frame is set equal to the previous frame's own -- crucially,
+    /// including `M_bar_l(0) = M_bar_l(-1)` (Eq. 104), the *enhanced* amplitude directly, not the
+    /// unenhanced one re-run through enhancement. This is why [`Self::synthesize_core`] exists
+    /// separately from [`Self::finalize_parameters`]: a repeat skips enhancement (and its own
+    /// `S_E`/`tau_M` state updates) entirely and reuses the exact `(voiced, M_bar_l(0))` pair the
+    /// last real frame already computed. Returns `None` if no real frame has run yet (the spec gives
+    /// no meaningful "previous frame" for a stream's own very first frame to repeat).
+    pub fn synthesize_repeated_frame(&mut self) -> Option<[f64; N]> {
+        let (omega0_tilde, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
+        self.synthesize_core(omega0_tilde, &voiced, &final_amplitudes)
     }
 }
 
@@ -134,6 +182,45 @@ mod tests {
             golay_init: 0,
             hamming_init: 0,
         }
+    }
+
+    #[test]
+    fn synthesize_repeated_frame_returns_none_before_any_real_frame_has_run() {
+        let mut state = SynthesisState::new();
+        assert!(state.synthesize_repeated_frame().is_none());
+    }
+
+    /// The real point of Eq. 99-104: a repeated frame must reuse the exact same
+    /// `(voiced, M_bar_l(0))` pair a real frame already finalized, not re-derive it. Checked by
+    /// setting up a real frame with a decoded voicing pattern the adaptive threshold would normally
+    /// force differently, then confirming the repeated frame's own synthesized output is finite and
+    /// that calling it repeatedly doesn't panic or drift into nonsense -- the stronger, structural
+    /// guarantee (same voiced/amplitudes reused) is enforced by construction in
+    /// synthesize_repeated_frame's own implementation (it never recomputes enhancement), not just
+    /// spot-checked here.
+    #[test]
+    fn synthesize_repeated_frame_reuses_the_last_real_frames_own_final_parameters() {
+        let mut state = SynthesisState::new();
+        let omega0 = 2.0 * std::f64::consts::PI / 100.0;
+        let voiced = vec![true; 16];
+        let amplitudes = vec![500.0; 16];
+        let errors = zero_errors();
+
+        state.synthesize_frame(&amplitudes, omega0, &voiced, &errors).unwrap();
+        let s_e_after_real_frame = state.s_e;
+        let tau_m_after_real_frame = state.tau_m;
+
+        for _ in 0..3 {
+            let frame = state.synthesize_repeated_frame().unwrap();
+            for &sample in &frame {
+                assert!(sample.is_finite(), "non-finite repeated-frame sample: {sample}");
+            }
+        }
+
+        // A repeated frame must not touch S_E/tau_M -- both are enhancement-stage state, and
+        // Eq. 99-104 skip enhancement entirely on a repeat.
+        assert_eq!(state.s_e, s_e_after_real_frame);
+        assert_eq!(state.tau_m, tau_m_after_real_frame);
     }
 
     #[test]
