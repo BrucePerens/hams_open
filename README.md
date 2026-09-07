@@ -6,18 +6,50 @@ Welcome to a comprehensive suite of open-source modules designed for **Odoo 19 C
 
 ---
 
+## 📡 Amateur Radio Digital Modes & Vocoders
+
+`daemons/ham_digital_modes` is a from-scratch (except where noted) suite of amateur radio digital
+mode and voice-codec implementations, kept in its own LGPL-3.0-or-later crate specifically so its
+decode paths can depend on GPL-3.0 reference code (an LGPL project may incorporate a GPL
+dependency; the AGPL/proprietary code elsewhere in this ecosystem cannot). Current state, verified
+against the code itself rather than assumed:
+
+* **AMBE/IMBE vocoder** (`ambe/`): the P25/D-STAR generation of the algorithm, implemented directly
+  from TIA-102.BABA. Both encode and decode are complete, tested, and wired end to end, including
+  frame-repeat robustness and spec-accurate comfort-noise generation. The later AMBE+2 generation
+  (DMR, Yaesu System Fusion) is deliberately out of scope -- its 2009 addendum names specific
+  patents; see `AMBE_PLUS_2_NOTES.md` in the same directory.
+* **Codec2** (`codec2_3200/`, `codec2_1600/`): independently-authored Rust ports of Codec2's
+  3200bps and 1600bps modes, built to interoperate with real upstream Codec2/Codec2-mod
+  bitstreams without being a derivative of Codec2-mod's own LGPL-2.1-only source. The 1600bps mode
+  is the speech half of M17's own "Voice + Data" stream type; M17's own framing/FEC/sync layer is
+  tracked separately (see `docs/proposals/blocked/M17_IMPLEMENTATION_PLAN.md` in `hams_com`) and is
+  not yet built. A no-`std`, no-alloc FFT (`microfft`, replacing an earlier `rustfft` dependency
+  that pulled in `std`) keeps both modes cross-compilable to bare-metal/no-FPU targets.
+  `daemons/codec2_3200_capi` additionally exposes the 3200bps port through the real upstream
+  `codec2.h` C ABI, a link-compatible drop-in for `-lcodec2` for callers (such as an M17 stack)
+  that only need that function subset.
+* **WSPR** (`wspr.rs`, `wspr_decode.rs`, `wspr_sync.rs`): message encode, audio synthesis, and a
+  100%-original sequential (stack-algorithm) decoder for the K=32 rate-1/2 convolutional code --
+  written from scratch rather than vendored, since every public WSPR decoder traces back to the
+  same GPLv3-licensed K1JT/K9AN reference lineage.
+* **PSK31** (`psk31.rs`) and **RTTY** (`rtty.rs`): pure Rust, no vendored third-party code, both
+  directions implemented for each.
+* **FT8** (`ft8.rs`): decode built on vendored `ft8_lib` (Kārlis Goba, MIT-licensed) via a thin C
+  shim, verified end to end against real K1JT reference tools (`wsjtx`) across a swept SNR range,
+  not just a single clean case.
+
+---
+
 ## 🤖 Deterministic AI Management & Tooling
 
 Our platform is built to seamlessly integrate Large Language Models (LLMs) into a precise DevSecOps pipeline. To prevent AI context loss, hallucination, and architectural drift, we govern agents using a strict suite of guidance files and structural memory systems.
 
 ### The AI Instruction Suite & Memory
 We don't rely on basic system prompts; we govern AI agents using a rigorous hierarchy of operational mandates:
-* **The Agent Persona ([`AGENTS.md`](AGENTS.md)):** The primary entry point defining the AI's boundaries, tone, and the Exactness Guarantee for file patching.
-* **Universal Standards ([`docs/LLM_GENERAL_REQUIREMENTS.md`](docs/LLM_GENERAL_REQUIREMENTS.md)):** Core rules covering code formatting (Black), security patterns, and multi-step execution logic.
-* **Odoo 19 Mandates ([`docs/LLM_ODOO_REQUIREMENTS.md`](docs/LLM_ODOO_REQUIREMENTS.md)):** Odoo-specific architectural directives, actively preventing the AI from falling back on legacy Odoo 14-17 training data.
-* **The Burn List ([`docs/LLM_LINTER_GUIDE.md`](docs/LLM_LINTER_GUIDE.md)):** An exhaustive, unforgiving list of banned AST structures, evasion tactics, and deprecated APIs that our custom CI/CD linters actively block.
+* **The Agent Persona ([`AGENTS.md`](AGENTS.md)):** The primary entry point defining the AI's boundaries, tone, universal technical standards, and the pre-flight/final-verification protocol every change goes through.
+* **The Burn List ([`tools/check_burn_list.py`](tools/check_burn_list.py)):** An exhaustive, unforgiving AST-based list of banned patterns, evasion tactics, and deprecated APIs that our custom CI/CD linters actively block -- read its own module docstring first if this linter fails your code.
 * **Architecture Decision Records ([`docs/adrs/`](docs/adrs/)):** A formal repository of all major structural choices. This acts as the project's long-term memory, ensuring the AI deeply understands the *why* behind our security and performance paradigms.
-* **The AI's own Experience File** ([`docs/LLM_EXPERIENCE.md`](docs/LLM_EXPERIENCE.md)): ** The AI's own notes to itself, it chooses what goes in this file. Sometimes, experience will be promoted to more formal documents.
 
 ### The Semantic Anchor System
 To prevent AI "amnesia" and ensure code, tests, and documentation remain permanently synchronized, the platform utilizes a bidirectional **Semantic Anchor System** (`[@ANCHOR: unique_name]`).
@@ -27,10 +59,7 @@ To prevent AI "amnesia" and ensure code, tests, and documentation remain permane
 * Our CI/CD pipeline ([`tools/verify_anchors.py`](tools/verify_anchors.py)) continuously scans the repository. If an AI modifies the code without updating the linked test or documentation, the build mathematically fails, ensuring total architectural traceability.
 
 ### Execution & Extraction
-* **[Isolated Task Workspaces](tools/create_task_workspace.py):** Surgically partition tasks to prevent LLM cognitive overload and context drift.
-* **[MIME-Like Parcel Transport](docs/LLM_GENERAL_REQUIREMENTS.md):** Code modifications are delivered with absolute precision using a secure, multi-block transport schema (requiring strict 4-backtick encapsulation to protect AST formatters).
-* **[Semantic Token Matching](tools/parcel_extract.py):** A patching engine that ignores superficial whitespace and formatting, ensuring AI-generated search-and-replace blocks dock perfectly with the source code.
-* **[True Environment Parity](test_real_transaction/README.md) (`test_real_transaction`):** A testing facility that bypasses Odoo's test cursor wrapper for true database commits and cross-worker behavior testing.
+* **True Environment Parity** ([`zero_sudo/tests/real_transaction.py`](zero_sudo/tests/real_transaction.py), `RealTransactionCase`): A testing facility that bypasses Odoo's test cursor wrapper for true database commits and cross-worker behavior testing.
 
 ---
 
