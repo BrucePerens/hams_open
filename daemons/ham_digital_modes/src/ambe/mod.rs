@@ -67,26 +67,41 @@
 //!    pseudo-random sequence, producing the final modulated code vectors `c_hat_0..c_hat_7` --
 //!    [`encode_code_vectors`] below wires steps 6-8 together into one call.
 //!
-//! 9. **Spectral amplitude reconstruction** (section 6.4, Eq. 67-79, [`reconstruct`]): the decoder-
-//!    side inverse of stage 5 -- dequantization, inverse DCTs, and Eq. 75-79's own log2 reassembly --
-//!    that produces real decoder-equivalent history for stage 4's *next* frame prediction, closing
-//!    the loop a real closed-loop predictive coder needs (Fig. 16's own "Reconstruct" feedback
-//!    block).
-//! 10. **End-to-end composition** ([`encode_frame`]): wires all nine stages above into one call,
-//!     carrying the per-frame state ([`FrameState`]) that Eq. 41's energy tracker and Eq. 54's
-//!     prediction residual both genuinely need from the previous frame.
+//! 9. **Intra-frame bit interleaving** (section 7.5, Annex H, [`interleave`]): rearranges
+//!    `c_hat_0..c_hat_7`'s own 144 bits into 72 two-bit dibit symbols, spreading short error bursts
+//!    across several different error-correction code words -- see this module's own "real scope
+//!    boundary" note below for exactly what this does and doesn't cover.
+//! 10. **Spectral amplitude reconstruction** (section 6.4, Eq. 67-79, [`reconstruct`]): the decoder-
+//!     side inverse of stage 5 -- dequantization, inverse DCTs, and Eq. 75-79's own log2 reassembly --
+//!     that produces real decoder-equivalent history for stage 4's *next* frame prediction, closing
+//!     the loop a real closed-loop predictive coder needs (Fig. 16's own "Reconstruct" feedback
+//!     block).
+//! 11. **End-to-end composition** ([`encode_frame`]): wires stages 1-8 and 10 together into one call
+//!     (stage 9's own interleaving is a separate, optional final step over `encode_frame`'s own
+//!     output -- see [`interleave::interleave_to_dibit_symbols`]), carrying the per-frame state
+//!     ([`FrameState`]) that Eq. 41's energy tracker and Eq. 54's prediction residual both genuinely
+//!     need from the previous frame.
 //!
-//! **A real scope boundary found while implementing step 8, not assumed going in**: this document
-//! never defines a bit-interleaving permutation of its own. Annex K's own flow chart states the
-//! modulated code vectors are simply "interleaved ... into Project 25 Frame Structure", and the
-//! encryption section explicitly refers the reader to "the Project 25 Common Air Interface" for
-//! anything past this point. That means `c_hat_0..c_hat_7` (144 bits total: `4*23 + 3*15 + 7`,
-//! matching `FRAME_BITS`) is this codec's own real final output -- mapping those bits into an actual
-//! over-the-air D-STAR frame is a separate protocol layer's concern, not unfinished work in this
-//! module. The entire decoder side remains genuinely unstarted.
+//! **A real scope boundary, corrected once during this build rather than left wrong**: an earlier
+//! version of this doc comment claimed "this document never defines a bit-interleaving permutation
+//! of its own," reasoning from Annex K's own flow chart ("interleaved ... into Project 25 Frame
+//! Structure") and the encryption section's own deferral to "the Project 25 Common Air Interface."
+//! That claim was too broad -- section 7.5 and Annex H ("Bit Frame Format") DO fully define a real
+//! intra-frame interleaving: the 144 bits across `c_hat_0..c_hat_7` rearranged into 72 two-bit dibit
+//! symbols ([`interleave::interleave_to_dibit_symbols`]), verified as a real bijection over all 144
+//! bit positions before being trusted (see that module's own doc comment). What section 7.5 actually
+//! defers to the Project 25 Common Air Interface is narrower than "interleaving" as a whole: only
+//! *where* those 72 already-interleaved symbols land inside an actual transmitted channel frame
+//! (timing, sync patterns, other channel overhead) -- its own text says the symbols should be
+//! "inserted into the Project 25 frame format beginning with symbol 0," which is placement, not
+//! reordering. `c_hat_0..c_hat_7` (144 bits total: `4*23 + 3*15 + 7`, matching `FRAME_BITS`) and
+//! their own interleaved-symbol form are both this codec's own real, complete output; only the actual
+//! channel-frame placement remains a separate protocol layer's concern. The entire decoder side
+//! (synthesis, frame-repeat/mute robustness, spectral enhancement) remains genuinely unstarted.
 
 pub mod bit_prioritization;
 pub mod fec;
+pub mod interleave;
 pub mod modulation;
 pub mod parameter_encoding;
 pub mod pitch;
