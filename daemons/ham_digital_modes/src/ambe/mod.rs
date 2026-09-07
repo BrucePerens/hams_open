@@ -54,6 +54,7 @@
 
 pub mod fec;
 pub mod pitch;
+pub mod pitch_refinement;
 pub mod tables;
 
 /// 7.2kbps frame rate: 144 bits every 20ms, per TIA-102.BABA section 7.3 ("At 7.2 kbps with a 20 ms
