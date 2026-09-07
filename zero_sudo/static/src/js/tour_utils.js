@@ -39,6 +39,18 @@ export const TourUtils = {
                 // rediscovered on ham_propagation's and ham_testing's own
                 // tours, which had no cookies-bar handling at all.
                 document.querySelector('#website_cookies_bar')?.remove();
+                // Removing the modal node directly (rather than Bootstrap's own
+                // hide()) skips Bootstrap's body-level cleanup, leaving `body`
+                // stuck with a phantom `modal-open` class (and any backdrop it
+                // added) -- confirmed live during the OFFLINE_HAM_OPERATION.md
+                // investigation. Every other modal-dismissing tour helper in
+                // this codebase already does this same cleanup explicitly
+                // (knowledge/manual_basic_browsing_tour.js,
+                // ham_onboarding/onboarding_tour_utils.js,
+                // ham_satellite/satellite_tour.js) -- this was the one place
+                // that didn't.
+                document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove());
+                document.body.classList.remove('modal-open');
 
                 // The above alone is NOT sufficient: #website_cookies_bar's
                 // *actual* Bootstrap modal is a nested, id-less
@@ -65,6 +77,8 @@ export const TourUtils = {
                                 node.classList?.contains('o_cookies_discrete')
                             ) {
                                 node.remove();
+                                document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove());
+                                document.body.classList.remove('modal-open');
                             }
                         }
                     }
