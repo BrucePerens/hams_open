@@ -104,6 +104,7 @@ pub fn lowpass_filter_tap(n: i32) -> f64 {
 /// inconsistency: that function's own doc comment reserves the panic for callers with no legitimate
 /// reason to evaluate outside the window (a real logic error), while this one exists specifically
 /// for the one real, spec-mandated case that does.
+// [@ANCHOR: initial_pitch_window_or_zero]
 fn initial_pitch_window_or_zero(n: i32) -> f64 {
     if (-150..=150).contains(&n) {
         initial_pitch_window(n)
@@ -119,6 +120,7 @@ fn initial_pitch_window_or_zero(n: i32) -> f64 {
 /// provide enough context on both sides of the frame, matching this function's real, unavoidable
 /// data dependency (there is no sensible zero-padding substitute for real speech samples the way
 /// there is for a window function that is genuinely defined to be zero past its own edge).
+// [@ANCHOR: lowpass_filtered_sample]
 fn lowpass_filtered_sample(raw: &[f64], center: usize, n: i32) -> f64 {
     let mut acc = 0.0;
     for j in -10i32..=10 {
@@ -141,6 +143,7 @@ impl PitchAnalysisFrame {
     /// sides of `center` (150 for the analysis window itself, 10 more for the lowpass filter's own
     /// reach past each edge) -- panics via array indexing if it doesn't, the same real, unavoidable
     /// data dependency [`lowpass_filtered_sample`] itself has.
+    // [@ANCHOR: PitchAnalysisFrame::new]
     pub fn new(raw: &[f64], center: usize) -> Self {
         let mut s_lpf = [0.0; 301];
         for (i, slot) in s_lpf.iter_mut().enumerate() {
@@ -150,6 +153,7 @@ impl PitchAnalysisFrame {
         Self { s_lpf }
     }
 
+    // [@ANCHOR: PitchAnalysisFrame::s_lpf_at]
     fn s_lpf_at(&self, j: i32) -> f64 {
         if (-150..=150).contains(&j) {
             self.s_lpf[(j + 150) as usize]
@@ -172,6 +176,7 @@ impl PitchAnalysisFrame {
     }
 
     /// `r(t)` for any real `t` (Eq. 8): linear interpolation between the two nearest integers.
+    // [@ANCHOR: PitchAnalysisFrame::r]
     fn r(&self, t: f64) -> f64 {
         let t_floor = t.floor();
         let r_floor = self.r_integer(t_floor as i32);
@@ -183,6 +188,7 @@ impl PitchAnalysisFrame {
     /// Smaller values indicate a better candidate; the real initial pitch estimate is chosen by
     /// comparing `E(P)` across the spec's own candidate set (`21, 21.5, ..., 122`) via pitch
     /// tracking (section 5.1.2, not yet implemented here), not by simply minimizing `E(P)` alone.
+    // [@ANCHOR: PitchAnalysisFrame::error_function]
     pub fn error_function(&self, p: f64) -> f64 {
         let s: f64 = (-150i32..=150)
             .map(|j| {
@@ -221,6 +227,7 @@ fn nearest_candidate_pitch(p: f64) -> f64 {
 /// frame with no real history yet should pass `(100.0, 0.0)` for both (its own stated default:
 /// "Upon initialization the error functions E_-1(P) and E_-2(P) are assumed to be equal to zero, and
 /// P_hat_-1 and P_hat_-2 are assumed to be equal to 100").
+// [@ANCHOR: look_back_pitch_tracking]
 pub fn look_back_pitch_tracking(
     error_fn: impl Fn(f64) -> f64,
     prev1: (f64, f64),
@@ -247,6 +254,7 @@ pub fn look_back_pitch_tracking(
 /// `future2_error_fn` are the two *future* frames' own `E(P)` (already computable from their own real
 /// speech data, per the spec's own text: "the pitch has not been determined for these future frames"
 /// -- only their pitch choice is undetermined, not their error function).
+// [@ANCHOR: look_ahead_pitch_tracking]
 pub fn look_ahead_pitch_tracking(
     error_fn: impl Fn(f64) -> f64,
     future1_error_fn: impl Fn(f64) -> f64,
@@ -317,6 +325,7 @@ pub fn look_ahead_pitch_tracking(
 /// that this is two separate rules from the spec, not one; kept as written, matching Eq. 21-23
 /// directly, with the lint silenced for exactly this reason rather than restructured to satisfy it.
 #[allow(clippy::if_same_then_else)]
+// [@ANCHOR: choose_initial_pitch_estimate]
 pub fn choose_initial_pitch_estimate(p_hat_b: f64, ce_b: f64, p_hat_f: f64, ce_f: f64) -> f64 {
     if ce_b <= 0.48 {
         p_hat_b
@@ -354,6 +363,12 @@ mod pitch_analysis_tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: PitchAnalysisFrame::new]
+    // Tests [@ANCHOR: PitchAnalysisFrame::error_function]
+    // Tests [@ANCHOR: PitchAnalysisFrame::s_lpf_at]
+    // Tests [@ANCHOR: PitchAnalysisFrame::r]
+    // Tests [@ANCHOR: initial_pitch_window_or_zero]
+    // Tests [@ANCHOR: lowpass_filtered_sample]
     fn error_function_is_minimized_near_the_true_period_or_a_real_harmonic_multiple() {
         // Real, measured behavior, not assumed: a perfectly periodic synthetic signal is
         // *also* perfectly periodic at every integer multiple of its own true period, so E(P)
@@ -403,6 +418,7 @@ mod pitch_analysis_tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: look_back_pitch_tracking]
     fn look_back_tracking_resolves_the_octave_ambiguity_using_real_pitch_continuity() {
         // The real point of this whole module: `error_function_is_minimized_near_the_true_period_
         // or_a_real_harmonic_multiple` above already proved E(P) alone can't tell 60 from 120 for a
@@ -443,6 +459,7 @@ mod pitch_analysis_tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: choose_initial_pitch_estimate]
     fn choose_initial_pitch_estimate_prefers_backward_when_its_error_is_confidently_low() {
         // Eq. 21: CE_B <= 0.48 alone is enough to pick the backward estimate, regardless of CE_F.
         assert_eq!(choose_initial_pitch_estimate(60.0, 0.1, 90.0, 0.01), 60.0);
@@ -456,6 +473,7 @@ mod pitch_analysis_tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: look_ahead_pitch_tracking]
     fn look_ahead_tracking_lands_on_the_true_period_or_a_valid_submultiple() {
         // Same real octave-ambiguity risk as look-back's own test, resolved differently: look-ahead
         // has no *previous*-frame continuity to lean on (by construction -- it looks forward), so

@@ -148,6 +148,7 @@ impl Default for Encoder {
 /// the second pass's own LSPs (the first pass's LSPs are computed only
 /// because `e` falls out of the same analysis, matching the
 /// reference's own `speech_to_uq_lsps` call for that purpose).
+// [@ANCHOR: analyse_lsps_and_energy]
 fn analyse_lsps_and_energy(
     sn: &[f32; M_PITCH],
     analysis_window: &[f32; M_PITCH],
@@ -177,6 +178,7 @@ impl Encoder {
         Self::default()
     }
 
+    // [@ANCHOR: Encoder::shift_in]
     fn shift_in(&mut self, new_samples: &[i16]) {
         self.sn.copy_within(N_SAMP.., 0);
         for (dst, &s) in self.sn[M_PITCH - N_SAMP..].iter_mut().zip(new_samples) {
@@ -188,6 +190,7 @@ impl Encoder {
     /// `BYTES_PER_FRAME` real-format bytes. Matches
     /// `codec2_encode_1600`'s own real structure exactly (see this
     /// module's own doc comment).
+    // [@ANCHOR: Encoder::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[0..N_SAMP]);
         fnlp::nlp(&mut self.nlp_state, &self.sn);
@@ -273,6 +276,7 @@ impl Decoder {
     /// (`SAMPLES_PER_FRAME`-sample) frame of audio. Matches
     /// `codec2_decode_1600`'s own real structure exactly (see this
     /// module's own doc comment).
+    // [@ANCHOR: Decoder::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
         let fields = bits::unpack_frame_1600(bytes);
         let wo_a = quantise::decode_wo(fields.wo_index_a);
@@ -353,6 +357,7 @@ impl Decoder {
     /// whichever call runs second. Use two separate `Decoder`s (as this
     /// module's own tests do) if both rates are ever needed from the
     /// same stream.
+    // [@ANCHOR: Decoder::decode_16k]
     pub fn decode_16k(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],
@@ -479,6 +484,7 @@ impl Default for EncoderFixed {
 /// `codec2_3200::EncoderFixed::encode` already validated, factored out
 /// here for the same reason its float sibling was (1600bps runs it
 /// twice per 40ms, quantizing only the second pass's own LSPs).
+// [@ANCHOR: analyse_lsps_and_energy_fixed]
 fn analyse_lsps_and_energy_fixed(
     sn: &[i16; M_PITCH],
     window_fixed: &[i32; M_PITCH],
@@ -510,6 +516,7 @@ impl EncoderFixed {
     /// Same real frame structure as `Encoder::encode` (see this
     /// module's own doc comment) -- this is `EncoderFixed`'s own
     /// mirror.
+    // [@ANCHOR: EncoderFixed::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[0..N_SAMP]);
         nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
@@ -586,6 +593,7 @@ impl DecoderFixed {
     /// Same real frame structure as `Decoder::decode` (see this
     /// module's own doc comment) -- this is `DecoderFixed`'s own
     /// mirror, genuinely fixed-point end to end.
+    // [@ANCHOR: DecoderFixed::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
         let fields = bits::unpack_frame_1600(bytes);
         let wo_a = quantise::decode_wo_fixed(fields.wo_index_a);
@@ -655,6 +663,7 @@ impl DecoderFixed {
     /// float version) -- see that method's own doc comment for the
     /// design and the same warning about not interleaving
     /// `decode()`/`decode_16k_fixed()` on one instance.
+    // [@ANCHOR: DecoderFixed::decode_16k_fixed]
     pub fn decode_16k_fixed(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],
@@ -746,6 +755,10 @@ mod tests {
     /// same basic sanity bar `codec2_3200`'s own equivalent test uses:
     /// finite, reasonably-scaled, non-degenerate audio, no panics.
     #[test]
+    // Tests [@ANCHOR: Encoder::encode]
+    // Tests [@ANCHOR: Encoder::shift_in]
+    // Tests [@ANCHOR: Decoder::decode]
+    // Tests [@ANCHOR: analyse_lsps_and_energy]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = Encoder::new();
         let mut decoder = Decoder::new();
@@ -773,6 +786,9 @@ mod tests {
 
     /// Same round-trip sanity bar, fully fixed-point path.
     #[test]
+    // Tests [@ANCHOR: EncoderFixed::encode]
+    // Tests [@ANCHOR: DecoderFixed::decode]
+    // Tests [@ANCHOR: analyse_lsps_and_energy_fixed]
     fn fixed_encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = EncoderFixed::new();
         let mut decoder = DecoderFixed::new();
@@ -1044,6 +1060,7 @@ mod tests {
     /// `codec2_3200`'s own version of this test -- this is the same
     /// `SpectralBridgeState` synthesis, so the same offset applies here.
     #[test]
+    // Tests [@ANCHOR: Decoder::decode_16k]
     fn decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated() {
         let bits_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1172,6 +1189,7 @@ mod tests {
     /// Fixed-point sibling of
     /// `decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated`.
     #[test]
+    // Tests [@ANCHOR: DecoderFixed::decode_16k_fixed]
     fn decode_16k_fixed_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated()
     {
         let bits_path = concat!(

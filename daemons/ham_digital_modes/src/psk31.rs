@@ -159,6 +159,7 @@ const VARICODE: [(u16, u8); 128] = [
     (0b1110110101, 10),
 ];
 
+// [@ANCHOR: char_to_code]
 fn char_to_code(c: u8) -> Option<(u16, u8)> {
     if c < 128 {
         Some(VARICODE[c as usize])
@@ -176,6 +177,7 @@ fn code_to_char(code: u16, bitcount: u8) -> Option<u8> {
 /// Encodes text into a Varicode bitstream: each character's code
 /// (MSB-first), followed by a "00" gap. Non-ASCII bytes are skipped
 /// rather than guessed at.
+// [@ANCHOR: psk31_encode_bits]
 pub fn psk31_encode_bits(text: &str) -> Vec<bool> {
     let mut bits = Vec::new();
     for &byte in text.as_bytes() {
@@ -198,6 +200,7 @@ pub fn psk31_encode_bits(text: &str) -> Vec<bool> {
 /// first zero after a codeword's own final 1 bit is unambiguously the
 /// start of the inter-character gap, never a genuine trailing bit that
 /// would make "how many zeros is the gap" ambiguous.
+// [@ANCHOR: psk31_decode_bits]
 pub fn psk31_decode_bits(bits: &[bool]) -> String {
     let mut out = String::new();
     let mut acc: u16 = 0;
@@ -244,6 +247,7 @@ pub fn psk31_decode_bits(bits: &[bool]) -> String {
 /// (~31 Hz) spectral occupancy, rather than an abrupt phase jump that
 /// would splatter across the band. Per the spec: bit 0 = 180-degree
 /// phase reversal, bit 1 = steady carrier (no reversal).
+// [@ANCHOR: psk31_modulate]
 pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i16> {
     let samples_per_symbol = (sample_rate as f64 / PSK31_BAUD).round() as usize;
     let mut out = Vec::with_capacity(bits.len() * samples_per_symbol);
@@ -297,6 +301,7 @@ pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i
 /// not a re-derived approximation, so it needs the same numbers the
 /// demodulator itself decides bits from, not a separate computation that
 /// could silently drift from what's actually being decoded.
+// [@ANCHOR: correlate_symbol_iq]
 fn correlate_symbol_iq(
     chunk: &[i16],
     carrier_hz: f64,
@@ -339,6 +344,7 @@ fn correlate_symbol_phase(
 /// Differentially compares a symbol's phase against the previous one to
 /// recover its bit, per BPSK31's own convention (0 = phase reversal,
 /// 1 = steady carrier).
+// [@ANCHOR: phase_to_bit]
 fn phase_to_bit(phase: f64, prev_phase: Option<f64>) -> bool {
     match prev_phase {
         // No prior symbol to differentially compare the very first one
@@ -363,6 +369,7 @@ fn phase_to_bit(phase: f64, prev_phase: Option<f64>) -> bool {
     }
 }
 
+// [@ANCHOR: psk31_demodulate]
 pub fn psk31_demodulate(samples: &[i16], carrier_hz: f64, sample_rate: u32) -> Vec<bool> {
     let samples_per_symbol = (sample_rate as f64 / PSK31_BAUD).round() as usize;
     if samples_per_symbol == 0 {
@@ -405,6 +412,7 @@ impl VaricodeAccumulator {
     /// Pushes one bit; returns a decoded character if this bit completed
     /// one (see psk31_decode_bits's own doc for why the boundary logic
     /// is safe/unambiguous).
+    // [@ANCHOR: VaricodeAccumulator::push_bit]
     fn push_bit(&mut self, bit: bool) -> Option<char> {
         if !bit && self.prev_was_zero {
             if self.count > 0 {
@@ -479,6 +487,7 @@ impl Psk31Decoder {
     /// audio-chunk cadence, since one symbol is ~32ms at 48kHz/31.25 baud
     /// and audio chunks arrive faster than that -- never assume exactly
     /// one.
+    // [@ANCHOR: Psk31Decoder::feed_with_iq]
     pub fn feed_with_iq(&mut self, samples: &[i16]) -> (String, Vec<(f64, f64)>) {
         self.pending_samples.extend_from_slice(samples);
         let mut out = String::new();
@@ -522,6 +531,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: char_to_code]
     fn varicode_matches_the_arrl_spec_sample_entries() {
         // Direct spot-check against the ARRL's own published examples
         // (arrl.org/psk31-spec), not just internal self-consistency.
@@ -580,6 +590,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: psk31_encode_bits]
+    // Tests [@ANCHOR: psk31_decode_bits]
     fn encode_decode_bits_round_trips_real_text() {
         for msg in [
             "CQ CQ CQ DE K6BP K6BP",
@@ -593,6 +605,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: psk31_modulate]
+    // Tests [@ANCHOR: psk31_demodulate]
+    // Tests [@ANCHOR: correlate_symbol_iq]
+    // Tests [@ANCHOR: phase_to_bit]
     fn full_modem_round_trips_through_synthesized_audio() {
         // The real end-to-end test: text -> bits -> audio -> bits -> text,
         // through the actual modulate/demodulate DSP, not just the
@@ -660,6 +676,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: Psk31Decoder::feed_with_iq]
+    // Tests [@ANCHOR: VaricodeAccumulator::push_bit]
     fn feed_with_iq_decodes_identically_to_feed() {
         // feed() is a thin wrapper over feed_with_iq() -- prove they
         // produce exactly the same text for the same input, not just
