@@ -205,6 +205,7 @@ pub fn decimate_4x_box_average(samples: &[i16]) -> Vec<i16> {
 /// it down, rather than this function re-planning (and `FftPlanner`
 /// re-searching for a fast factorization of the block size) on every
 /// single call, the one real per-candidate cost in the whole search.
+// [@ANCHOR: spectrum_matrix]
 fn spectrum_matrix(
     samples: &[i16],
     sample_rate: u32,
@@ -239,6 +240,7 @@ fn spectrum_matrix(
     Some(mat)
 }
 
+// [@ANCHOR: tone_magnitudes_from_matrix]
 fn tone_magnitudes_from_matrix(
     mat: &[Vec<f64>],
     bin_lo: usize,
@@ -256,6 +258,7 @@ fn tone_magnitudes_from_matrix(
 
 /// `SYNC_VECTOR` remapped to ±1, the target this module's own sync
 /// statistic gets correlated against.
+// [@ANCHOR: sync_pattern]
 fn sync_pattern() -> [f64; WSPR_NUM_SYMBOLS] {
     let mut p = [0.0f64; WSPR_NUM_SYMBOLS];
     for i in 0..WSPR_NUM_SYMBOLS {
@@ -270,6 +273,7 @@ fn sync_pattern() -> [f64; WSPR_NUM_SYMBOLS] {
 /// analysis window is correctly aligned. See `cosine_score()` below for
 /// how this gets turned into a comparable, bounded score across
 /// candidates.
+// [@ANCHOR: sync_statistic]
 fn sync_statistic(tone_mags: &[[f64; 4]; WSPR_NUM_SYMBOLS]) -> [f64; WSPR_NUM_SYMBOLS] {
     let mut tt = [0.0f64; WSPR_NUM_SYMBOLS];
     for i in 0..WSPR_NUM_SYMBOLS {
@@ -308,6 +312,7 @@ fn sync_statistic(tone_mags: &[[f64; 4]; WSPR_NUM_SYMBOLS]) -> [f64; WSPR_NUM_SY
 /// -- see `find_sync_score_on_pure_noise_is_far_below_a_real_signals_
 /// score` (renamed from this bug's own original diagnostic test) for
 /// the real, measured separation this version achieves.
+// [@ANCHOR: cosine_score]
 fn cosine_score(tt: &[f64; WSPR_NUM_SYMBOLS], pattern: &[f64; WSPR_NUM_SYMBOLS]) -> f64 {
     let dot: f64 = tt.iter().zip(pattern.iter()).map(|(a, b)| a * b).sum();
     let tt_norm: f64 = tt.iter().map(|v| v * v).sum::<f64>().sqrt();
@@ -382,6 +387,7 @@ pub struct SyncResult {
 /// is a real, bounded (`[-1, 1]`) correlation coefficient, not a
 /// raw/unbounded statistic -- see `cosine_score()`'s own doc comment for
 /// why that distinction is load-bearing, not cosmetic.
+// [@ANCHOR: find_sync]
 pub fn find_sync(
     samples: &[i16],
     sample_rate: u32,
@@ -464,6 +470,7 @@ pub fn find_sync(
 /// `interleave_permutation()` target-array indexing), NOT yet
 /// de-interleaved into the decoder's encoder-order convention -- see
 /// `evidence_to_symbol_values()` below for that step.
+// [@ANCHOR: extract_symbol_evidence]
 pub fn extract_symbol_evidence(
     samples: &[i16],
     sample_rate: u32,
@@ -490,6 +497,7 @@ pub fn extract_symbol_evidence(
 /// reference at each symbol position, uncontaminated by the winner/loser
 /// max/min selection bias `evidence_to_symbol_values()`'s own calibration
 /// has -- see `diagnostic_clean_noise_reference_from_impossible_tones`.
+// [@ANCHOR: extract_all_four_tone_magnitudes]
 fn extract_all_four_tone_magnitudes(
     samples: &[i16],
     sample_rate: u32,
@@ -643,6 +651,7 @@ pub fn evidence_to_symbol_values(
 /// rather than only through the fixed public constant -- see `docs/
 /// proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s own K-tuning writeup
 /// for the sweep this was measured against.
+// [@ANCHOR: evidence_to_symbol_values_windowed]
 fn evidence_to_symbol_values_windowed(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
     window_half_width: usize,
@@ -762,6 +771,7 @@ fn evidence_to_symbol_values_windowed_clean_reference(
 /// confidence-gated decoder -- the function real callers (a future
 /// `digital_decoder.rs` integration included) should actually use to go
 /// from raw per-symbol evidence to a decode attempt.
+// [@ANCHOR: decode_from_symbol_evidence]
 pub fn decode_from_symbol_evidence(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
     max_cycles: u64,
@@ -805,6 +815,7 @@ pub fn decode_from_symbol_evidence(
 /// on a decode failure (`Err`), since a caller may still want to know
 /// where a low-confidence signal was found.
 #[allow(clippy::too_many_arguments)] // Each parameter is an independent, real search/decode tuning knob -- see the doc comments on find_sync()/decode_from_symbol_evidence() for what each one means; bundling them into a struct would just move the same count, not reduce it.
+// [@ANCHOR: sync_search_and_decode]
 pub fn sync_search_and_decode(
     samples: &[i16],
     sample_rate: u32,
@@ -846,6 +857,7 @@ pub enum WsprMessageError {
 }
 
 impl From<ConfidenceGateError> for WsprMessageError {
+    // [@ANCHOR: WsprMessageError::from]
     fn from(e: ConfidenceGateError) -> Self {
         match e {
             ConfidenceGateError::GaveUp { cycles } => WsprMessageError::GaveUp { cycles },
@@ -866,6 +878,7 @@ impl From<ConfidenceGateError> for WsprMessageError {
 /// it's surfaced (`AUTO_TUNE_AND_MODE_DETECTION.md`'s real tuning-
 /// correction use).
 #[allow(clippy::too_many_arguments)] // Same reasoning as sync_search_and_decode()'s own allow -- see its doc comment.
+// [@ANCHOR: sync_search_and_decode_message]
 pub fn sync_search_and_decode_message(
     samples: &[i16],
     sample_rate: u32,
@@ -945,6 +958,13 @@ mod tests {
     /// `SYNC_VECTOR`, and that the extracted (v0, v1) evidence recovers
     /// every real transmitted data bit exactly.
     #[test]
+    // Tests [@ANCHOR: spectrum_matrix]
+    // Tests [@ANCHOR: tone_magnitudes_from_matrix]
+    // Tests [@ANCHOR: sync_statistic]
+    // Tests [@ANCHOR: sync_pattern]
+    // Tests [@ANCHOR: cosine_score]
+    // Tests [@ANCHOR: extract_symbol_evidence]
+    // Tests [@ANCHOR: extract_all_four_tone_magnitudes]
     fn sync_statistic_and_tone_evidence_are_correct_at_a_known_clean_alignment() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let bin_hz = WSPR_SYMBOL_RATE_HZ;
@@ -1035,6 +1055,7 @@ mod tests {
     /// a full window at the real, empirically-chosen
     /// `CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH=20`.
     #[test]
+    // Tests [@ANCHOR: evidence_to_symbol_values_windowed]
     fn windowed_noise_estimate_detects_and_localizes_a_deliberate_noise_burst() {
         const BURST_START: usize = 50;
         const BURST_END: usize = 110; // inclusive
@@ -1116,6 +1137,7 @@ mod tests {
     /// range), across a real multi-bin/multi-offset grid -- confirms
     /// the search itself (not just the mapping) finds the right answer.
     #[test]
+    // Tests [@ANCHOR: find_sync]
     fn find_sync_recovers_the_real_frequency_and_start_offset() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let sample_rate = 12000u32;
@@ -1203,6 +1225,7 @@ mod tests {
     /// gate, the full decode pipeline must not return a confident
     /// `Ok(..)` for it either -- two independent layers, not one.
     #[test]
+    // Tests [@ANCHOR: WsprMessageError::from]
     fn find_sync_and_decode_correctly_reject_genuinely_independent_noise() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let sample_rate = 12000u32;
@@ -1321,6 +1344,8 @@ mod tests {
     /// -- the actual goal of this module, not just its own internal
     /// pieces in isolation.
     #[test]
+    // Tests [@ANCHOR: sync_search_and_decode]
+    // Tests [@ANCHOR: decode_from_symbol_evidence]
     fn sync_search_and_decode_recovers_the_exact_message_on_a_clean_signal() {
         let symbols = wspr_encode_symbols("K1ABC", "EM10", 23).unwrap();
         let sample_rate = 12000u32;
@@ -1399,6 +1424,7 @@ mod tests {
     /// readable message out -- not just the raw bitset the two tests
     /// above stop at.
     #[test]
+    // Tests [@ANCHOR: sync_search_and_decode_message]
     fn sync_search_and_decode_message_recovers_the_exact_original_text() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let sample_rate = 12000u32;

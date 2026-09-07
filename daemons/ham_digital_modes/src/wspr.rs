@@ -64,6 +64,7 @@ pub(crate) const SYNC_VECTOR: [u8; 162] = [
     0,0,
 ];
 
+// [@ANCHOR: callsign_char_code]
 fn callsign_char_code(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
@@ -73,6 +74,7 @@ fn callsign_char_code(c: u8) -> Option<u8> {
     }
 }
 
+// [@ANCHOR: grid_char_code]
 fn grid_char_code(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
@@ -90,6 +92,7 @@ fn grid_char_code(c: u8) -> Option<u8> {
 /// "K6BP", "W1AW", a 1-letter prefix) get an implicit leading space --
 /// both real, standard formats, not a simplification of one at the
 /// expense of the other.
+// [@ANCHOR: pack_call]
 pub(crate) fn pack_call(callsign: &str) -> Option<u32> {
     let callsign = callsign.to_ascii_uppercase();
     let bytes = callsign.as_bytes();
@@ -123,6 +126,7 @@ pub(crate) fn pack_call(callsign: &str) -> Option<u32> {
 
 /// Packs a 4-character grid locator and a power level in dBm into
 /// WSPR's 22-bit `m` field.
+// [@ANCHOR: pack_grid4_power]
 pub(crate) fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
     let bytes = grid4.to_ascii_uppercase();
     let bytes = bytes.as_bytes();
@@ -153,6 +157,7 @@ pub(crate) fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
 /// the way back out, which it does the same way `pack_call()` does:
 /// by checking for the pad space `pack_call()` would have inserted at
 /// position 0, not by re-guessing from the digit's own position.
+// [@ANCHOR: unpack_call]
 pub(crate) fn unpack_call(n: u32) -> Option<String> {
     let mut n = n as i64;
     let c5 = (n % 27) as u32 + 10;
@@ -207,6 +212,7 @@ pub(crate) fn unpack_call(n: u32) -> Option<String> {
 /// produced, since it's the fail-fast boundary for a possibly-wrong
 /// decode (`ZZ99`-shaped input packs fine; its own packed output
 /// correctly fails to unpack).
+// [@ANCHOR: unpack_grid4_power]
 pub(crate) fn unpack_grid4_power(m: u32) -> Option<(String, i32)> {
     let m = m as i64;
     let power_dbm = (m % 128) - 64;
@@ -254,6 +260,7 @@ pub(crate) fn unpack_grid4_power(m: u32) -> Option<(String, i32)> {
 /// real entry point step 3's sync search wires into (see `wspr_sync.
 /// rs`'s own doc comment for the full decode path this is the last
 /// step of).
+// [@ANCHOR: unpack_wspr_message]
 pub fn unpack_wspr_message(decoded_bits: u128) -> Option<(String, String, i32)> {
     let mut n: u32 = 0;
     for i in 0..28 {
@@ -276,6 +283,7 @@ pub fn unpack_wspr_message(decoded_bits: u128) -> Option<(String, String, i32)> 
 /// documented independently of any one implementation; `u8::reverse_bits`
 /// is Rust's own standard-library primitive for it, not a
 /// reimplementation of any specific reference's bit-twiddling).
+// [@ANCHOR: interleave_permutation]
 pub(crate) fn interleave_permutation() -> [usize; WSPR_NUM_SYMBOLS] {
     let mut perm = [0usize; WSPR_NUM_SYMBOLS];
     let mut p = 0;
@@ -298,6 +306,7 @@ pub(crate) fn parity(x: u32) -> u8 {
 /// (the 50 real payload bits plus 31 zero tail bits already packed in,
 /// matching WSPR's own fixed frame size), producing 176 output bits
 /// (2 per input bit): the first from POLY1, the second from POLY2.
+// [@ANCHOR: convolutional_encode]
 pub(crate) fn convolutional_encode(data: &[u8; 11]) -> [u8; 176] {
     let mut out = [0u8; 176];
     let mut state: u32 = 0;
@@ -319,6 +328,7 @@ pub(crate) fn convolutional_encode(data: &[u8; 11]) -> [u8; 176] {
 /// Returns None for a callsign/grid this function's own documented
 /// scope doesn't cover (Type 2/3 messages, malformed input) rather than
 /// guessing at a result.
+// [@ANCHOR: wspr_encode_symbols]
 pub fn wspr_encode_symbols(
     callsign: &str,
     grid4: &str,
@@ -359,6 +369,7 @@ pub fn wspr_encode_symbols(
 /// integrated continuously across symbol boundaries (no phase reset --
 /// what "continuous-phase" FSK means, and what keeps WSPR's own
 /// emission narrow and clean rather than clicking at every tone change).
+// [@ANCHOR: wspr_modulate]
 pub fn wspr_modulate(symbols: &[u8], base_hz: f64, sample_rate: u32) -> Vec<i16> {
     let samples_per_symbol = (sample_rate as f64 / WSPR_SYMBOL_RATE_HZ).round() as usize;
     let mut out = Vec::with_capacity(symbols.len() * samples_per_symbol);
@@ -400,6 +411,7 @@ pub fn wspr_encode_audio(
 /// extension fields) -- the same minimal shape
 /// `digital_decoder.rs`'s own `read_wav_mono_i16()` test helper already
 /// expects (`data` chunk literally at byte offset 36).
+// [@ANCHOR: wrap_mono_i16_as_wav]
 fn wrap_mono_i16_as_wav(samples: &[i16], sample_rate: u32) -> Vec<u8> {
     let data_bytes = samples.len() * 2;
     let byte_rate = sample_rate * 2; // mono, 16-bit: 1 channel * 2 bytes/sample
@@ -470,6 +482,7 @@ pub fn wspr_encode_wav_bytes(
 struct SplitMix64(u64);
 
 impl SplitMix64 {
+    // [@ANCHOR: SplitMix64::next_u64]
     fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E3779B97F4A7C15);
         let mut z = self.0;
@@ -486,6 +499,7 @@ impl SplitMix64 {
     }
 
     /// Standard normal (mean 0, stddev 1) via the Box-Muller transform.
+    // [@ANCHOR: SplitMix64::next_gaussian]
     fn next_gaussian(&mut self) -> f64 {
         let u1 = self.next_open01();
         let u2 = self.next_open01();
@@ -506,6 +520,7 @@ impl SplitMix64 {
 /// results for the real correspondence). Deterministic given `seed` --
 /// two calls with the same seed produce byte-identical noise, so a
 /// fixture (and any regression that depends on it) is reproducible.
+// [@ANCHOR: add_awgn]
 pub fn add_awgn(samples: &[i16], snr_db: f64, seed: u64) -> Vec<i16> {
     let signal_power: f64 =
         samples.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / samples.len() as f64;
@@ -532,6 +547,7 @@ pub fn add_awgn(samples: &[i16], snr_db: f64, seed: u64) -> Vec<i16> {
 /// the sync search can be built or validated against anything real --
 /// `wspr_encode_wav_bytes()`'s own clean output alone proves nothing
 /// about low-SNR robustness, which is the actual hard part of WSPR decode.
+// [@ANCHOR: wspr_encode_wav_bytes_with_noise]
 pub fn wspr_encode_wav_bytes_with_noise(
     callsign: &str,
     grid4: &str,
@@ -557,6 +573,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: pack_call]
+    // Tests [@ANCHOR: pack_grid4_power]
+    // Tests [@ANCHOR: callsign_char_code]
+    // Tests [@ANCHOR: grid_char_code]
     fn pack_call_matches_independently_computed_expected_values() {
         // "K9AN EN50 33" is the exact worked example used in the
         // reference implementation's own type-detection comment
@@ -572,6 +592,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: unpack_call]
+    // Tests [@ANCHOR: unpack_grid4_power]
     fn unpack_call_and_unpack_grid4_power_recover_the_real_reference_verified_values() {
         // Not just a self-consistent pack/unpack round trip -- inverts
         // the exact reference-implementation-verified integers the test
@@ -609,6 +631,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: unpack_wspr_message]
     fn unpack_wspr_message_recovers_the_original_message_from_a_real_encoded_bitset() {
         // Builds the exact bitset sequential_decode_with_confidence_
         // gate() would hand unpack_wspr_message() for a real, correctly
@@ -643,6 +666,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: wspr_encode_symbols]
     fn matches_the_real_k1jt_reference_encoder_end_to_end() {
         // Not an independently-computed cross-check like the test above
         // -- this is the actual reference implementation itself.
@@ -694,6 +718,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: interleave_permutation]
     fn interleave_permutation_is_a_true_bijection_over_162_symbols() {
         let perm = interleave_permutation();
         let mut seen = [false; WSPR_NUM_SYMBOLS];
@@ -713,6 +738,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: convolutional_encode]
     fn convolutional_encoder_is_deterministic_and_all_zero_tail_still_moves_state() {
         // A basic sanity/regression check: the same input always
         // produces the same output (no hidden global state), and the
@@ -783,6 +809,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: wrap_mono_i16_as_wav]
     fn wav_fixture_round_trips_to_the_exact_same_pcm_samples_modulate_produced() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let sample_rate = 12000u32;
@@ -851,6 +878,9 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: add_awgn]
+    // Tests [@ANCHOR: SplitMix64::next_u64]
+    // Tests [@ANCHOR: SplitMix64::next_gaussian]
     fn add_awgn_is_deterministic_given_the_same_seed() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let clean = wspr_modulate(&symbols, 1500.0, 12000);
@@ -904,6 +934,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: wspr_encode_wav_bytes_with_noise]
     fn wav_fixture_with_noise_round_trips_and_returns_none_for_out_of_scope_messages() {
         let sample_rate = 12000u32;
         let wav_bytes =
@@ -933,6 +964,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: wspr_modulate]
     fn modulate_produces_the_documented_audio_length_and_stays_in_range() {
         let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
         let sample_rate = 12000u32;
