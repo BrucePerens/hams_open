@@ -37,11 +37,17 @@
 //!    uniform-on-`[-5,5]` comfort noise per the spec's own literal Section 7.8 text, transcribed
 //!    from a 600 DPI render of TIA-102.BABA_2003.pdf page 63.
 
-use super::bit_prioritization::{deprioritize_bits, extract_fundamental_frequency_quantizer, DeprioritizedBits};
-use super::error_estimation::{estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors};
+use super::bit_prioritization::{
+    deprioritize_bits, extract_fundamental_frequency_quantizer, DeprioritizedBits,
+};
+use super::error_estimation::{
+    estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
+};
 use super::fec::{golay_decode, hamming_decode};
 use super::modulation::modulate_code_vectors;
-use super::parameter_encoding::{decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency};
+use super::parameter_encoding::{
+    decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
+};
 use super::prediction::INITIAL_L_HAT_PREV;
 use super::reconstruct::reconstruct_spectral_amplitudes;
 use super::synthesis::SynthesisState;
@@ -333,6 +339,72 @@ mod tests {
         );
     }
 
+    /// The real P25 CAI-level integration gap this module's own doc comment already claims is
+    /// closed ("the 72 interleaved dibit symbols an actual P25 channel decoder hands over --
+    /// `deinterleave_from_dibit_symbols` is the bridge between the two") but that, until this test,
+    /// had never actually been exercised end to end: `deinterleave_from_dibit_symbols` was only ever
+    /// unit-tested against its own interleave step in isolation (`interleave.rs`'s own
+    /// `deinterleave_is_the_exact_inverse_of_interleave_for_several_real_bit_patterns`), never
+    /// against a genuine encoded frame flowing all the way through `decode_parameters`. This proves
+    /// the whole chain: a real encoded frame's `c` vectors, interleaved into the 72 dibit symbols a
+    /// real P25 channel decoder would actually deliver, deinterleaved back, and decoded -- produces
+    /// byte-identical results to decoding `c` directly, so the interleave/deinterleave round trip is
+    /// genuinely transparent to the parameter decoder on a clean channel (no bit errors), not just to
+    /// the raw bit-position bijection `interleave.rs` already checked in isolation.
+    // Tests [@ANCHOR: ambe:decode_parameters]
+    #[test]
+    fn decode_parameters_agrees_whether_fed_c_directly_or_via_a_real_interleave_deinterleave_round_trip(
+    ) {
+        let frame = build_synthetic_voiced_frame();
+
+        let symbols = crate::ambe::interleave::interleave_to_dibit_symbols(frame.c);
+        let recovered_c = crate::ambe::interleave::deinterleave_from_dibit_symbols(symbols);
+        assert_eq!(
+            recovered_c, frame.c,
+            "a clean interleave/deinterleave round trip must recover the exact code vectors"
+        );
+
+        let mut direct_decoder = DecoderState::new();
+        let direct_params = match direct_decoder.decode_parameters(frame.c).unwrap() {
+            FrameOutcome::Decoded(params) => params,
+            FrameOutcome::Repeat => {
+                panic!("expected a real decode of the direct frame, got a repeat")
+            }
+            FrameOutcome::Mute => panic!("expected a real decode of the direct frame, got a mute"),
+        };
+
+        let mut via_channel_decoder = DecoderState::new();
+        let via_channel_params = match via_channel_decoder.decode_parameters(recovered_c).unwrap() {
+            FrameOutcome::Decoded(params) => params,
+            FrameOutcome::Repeat => {
+                panic!("expected a real decode of the channel-round-tripped frame, got a repeat")
+            }
+            FrameOutcome::Mute => {
+                panic!("expected a real decode of the channel-round-tripped frame, got a mute")
+            }
+        };
+
+        assert_eq!(direct_params.bits.b0, via_channel_params.bits.b0);
+        assert_eq!(direct_params.bits.b1, via_channel_params.bits.b1);
+        assert_eq!(direct_params.bits.b2, via_channel_params.bits.b2);
+        assert_eq!(
+            direct_params.bits.gain_vector,
+            via_channel_params.bits.gain_vector
+        );
+        assert_eq!(
+            direct_params.bits.higher_order,
+            via_channel_params.bits.higher_order
+        );
+        assert_eq!(direct_params.omega0_tilde, via_channel_params.omega0_tilde);
+        assert_eq!(direct_params.l_hat, via_channel_params.l_hat);
+        assert_eq!(direct_params.k_hat, via_channel_params.k_hat);
+        assert_eq!(direct_params.voiced, via_channel_params.voiced);
+        assert_eq!(
+            direct_params.reconstructed_amplitudes,
+            via_channel_params.reconstructed_amplitudes
+        );
+    }
+
     #[test]
     fn decode_frame_does_not_panic_on_an_all_zero_first_frame() {
         let mut decoder = DecoderState::new();
@@ -360,7 +432,7 @@ mod tests {
             l_hat_prev: INITIAL_L_HAT_PREV,
             spectral_amplitudes_prev: vec![1.0; INITIAL_L_HAT_PREV as usize],
             error_rate_prev: 0.2, // 0.95*0.2 = 0.19, comfortably over the 0.0875 threshold
-                                   // regardless of this frame's own corrected error count.
+                                  // regardless of this frame's own corrected error count.
         };
         let c = [0u32, 0, 0, 0, 0, 0, 0, 0];
         let pcm = decoder
