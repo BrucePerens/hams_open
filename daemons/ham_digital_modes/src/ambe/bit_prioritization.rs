@@ -140,6 +140,28 @@ pub fn prioritize_bits(
     Some(u)
 }
 
+/// Extracts `b_hat_0` (Eq. 45) directly from the FEC-decoded prioritized vectors `u_hat_0`/`u_hat_7`
+/// alone -- **without** needing `k_hat` or any Annex F/G width table, breaking a real bootstrapping
+/// problem [`deprioritize_bits`] on its own can't solve: that function needs `k_hat` and the gain/
+/// higher-order column widths just to know where the raster scan splits, but `k_hat` and those widths
+/// are only knowable *after* decoding `b_hat_0` into `omega0_tilde`/`L~`/`K~`. The fix is this
+/// function: `b_hat_0`'s own top 6 bits are always `prioritize_bits`'s own very first field (fixed at
+/// `u_hat_0`'s own top 6 of 12 bits, `step 1`, before anything parameter-dependent is ever inserted),
+/// and its own bottom 2 bits are always within the very last 4 bits of the entire 88-bit stream
+/// (`step 8`, immediately before the final sync bit, `step 9`) -- and since every real `(L~, K~)` pair
+/// sums to exactly 88 bits by construction (this module's own doc comment), the last 4 fields
+/// (`b_hat_2`'s own LSB, `b_hat_0`'s own two bottom bits, the sync bit) always land in the *same*
+/// fixed positions within `u_hat_7`'s own 7 bits (bits 3, 2, 1, 0 respectively) regardless of `k_hat`
+/// or the scan length -- only `u_hat_7`'s own upper 3 bits (4, 5, 6) vary with where the
+/// parameter-dependent split actually falls. Verified as a real, parameter-independent property by
+/// the test below (checked across several different `(L~, K~)` configurations with the same `b0`,
+/// not just argued from the bit-position algebra above).
+pub fn extract_fundamental_frequency_quantizer(u: &[u32; 8]) -> u32 {
+    let top6 = (u[0] >> 6) & 0b11_1111;
+    let bottom2 = (u[7] >> 1) & 0b11;
+    (top6 << 2) | bottom2
+}
+
 /// The exact inverse of [`raster_scan_bits`]: given the flat scanned bit sequence and the same
 /// column widths used to produce it, recovers each column's own value. Mirrors
 /// [`raster_scan_bits`]'s own traversal order exactly (same level-by-level, column-by-column walk),
@@ -435,6 +457,40 @@ mod tests {
     /// values in every field (not the all-zero/single-bit placeholders the tests above use), which
     /// would catch a swapped field order or an off-by-one in the scan split that single-bit probes
     /// could miss.
+    /// The real property [`extract_fundamental_frequency_quantizer`] depends on: `b_hat_0` is
+    /// recoverable from `u_hat_0`/`u_hat_7` alone, for the *same* `b0` value, across several
+    /// genuinely different `(L_hat, K_hat)` configurations (different scan lengths, different
+    /// `k_hat`) -- proving independence from everything else in the frame, not just checking one
+    /// configuration works.
+    #[test]
+    fn extract_fundamental_frequency_quantizer_is_independent_of_l_hat_and_k_hat() {
+        let b0 = 0b1011_0110u32;
+        for l_hat in [9u32, 16, 30, 56] {
+            let k_hat = crate::ambe::vuv::frequency_bands_count(l_hat);
+            let gain: [u8; 5] = std::array::from_fn(|i| {
+                tables::gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0
+            });
+            let higher = tables::higher_order_bit_allocation(l_hat).unwrap().to_vec();
+            let gain_vector: [(u32, u8); 5] =
+                std::array::from_fn(|i| (((i as u32 + 1) * 3) & ((1 << gain[i]) - 1), gain[i]));
+            let higher_order: Vec<(u32, u8)> = higher
+                .iter()
+                .enumerate()
+                .map(|(i, &w)| (((i as u32 + 2) * 5) & ((1 << w) - 1), w))
+                .collect();
+            let b1 = ((1u32 << k_hat) - 1) & 0b0110_1001;
+            let b2 = 0b10_1101u32;
+
+            let u =
+                prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, true).unwrap();
+            assert_eq!(
+                extract_fundamental_frequency_quantizer(&u),
+                b0,
+                "l_hat={l_hat}, k_hat={k_hat}"
+            );
+        }
+    }
+
     #[test]
     fn deprioritize_bits_is_the_exact_inverse_of_prioritize_bits_for_real_varied_values() {
         let (gain, higher) = l16_widths();
