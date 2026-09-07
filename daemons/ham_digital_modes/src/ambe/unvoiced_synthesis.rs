@@ -66,6 +66,7 @@ impl Complex {
 /// flat at `1.0` for `|n| <= 55`, ramping linearly to `0.0` by `|n| == 105`), so a formula is used
 /// here instead of a lookup table. Returns `0.0` outside `-105..=105`, the spec's own stated
 /// convention for window functions.
+// [@ANCHOR: synthesis_window]
 pub fn synthesis_window(n: i32) -> f64 {
     let abs_n = n.unsigned_abs() as i64;
     if abs_n > 105 {
@@ -99,6 +100,7 @@ pub struct NoiseState {
 }
 
 impl NoiseState {
+    // [@ANCHOR: NoiseState::new]
     pub fn new() -> Self {
         let mut state = Self {
             last: 3147,
@@ -110,6 +112,7 @@ impl NoiseState {
         state
     }
 
+    // [@ANCHOR: NoiseState::step]
     fn step(&mut self) {
         self.last = advance_noise(self.last);
         if self.window.len() == 209 {
@@ -118,6 +121,7 @@ impl NoiseState {
         self.window.push_back(self.last);
     }
 
+    // [@ANCHOR: NoiseState::advance_frame]
     pub fn advance_frame(&mut self) {
         for _ in 0..N {
             self.step();
@@ -129,6 +133,7 @@ impl NoiseState {
     /// [`unvoiced_dft`] and by Eq. 141's own `rho_l(0)`, which indexes this same current-frame window
     /// by harmonic number) rather than a panic, since a caller mis-deriving an index is a real risk
     /// worth catching explicitly.
+    // [@ANCHOR: NoiseState::at]
     pub fn at(&self, relative: i32) -> Option<i64> {
         if !(-104..=104).contains(&relative) {
             return None;
@@ -147,6 +152,7 @@ impl Default for NoiseState {
 /// `u(n)*w_S(n)`, for `m` in `-128..=127`. Note this range is offset by one bin from
 /// `pitch_refinement::RefinementFrame`'s own `S_w(m)` (`-127..=128`) -- a real difference between the
 /// spec's own Eq. 29 and Eq. 118, not a copy-paste slip (each checked independently at 600 DPI).
+// [@ANCHOR: unvoiced_dft]
 fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256] {
     let mut uw = [Complex::ZERO; 256];
     for (i, slot) in uw.iter_mut().enumerate() {
@@ -184,6 +190,7 @@ fn band_edge_b(l: u32, omega0_tilde: f64) -> f64 {
 /// `kchmck/imbe.rs`'s own hardcoded `SCALING_COEF` (`146.6432708443356`) to full `f64` precision (see
 /// the test below), a strong independent confirmation of both this formula and the two window
 /// transcriptions it depends on.
+// [@ANCHOR: unvoiced_scaling_coefficient]
 pub fn unvoiced_scaling_coefficient() -> f64 {
     let sum_w_r: f64 = (-110..=110).map(pitch_refinement_window).sum();
     let sum_w_s_sq: f64 = (-104..=104).map(|n| synthesis_window(n).powi(2)).sum();
@@ -200,6 +207,7 @@ pub fn unvoiced_scaling_coefficient() -> f64 {
 /// match that harmonic's own enhanced spectral amplitude. `voiced`/`spectral_amplitudes` are both
 /// 1-indexed by harmonic (`voiced[0]` is harmonic 1, i.e. `v_bar_1`/`M_bar_1(0)`) and must be the same
 /// length; returns `None` on a length mismatch.
+// [@ANCHOR: unvoiced_spectrum]
 fn unvoiced_spectrum(
     noise: &NoiseState,
     omega0_tilde: f64,
@@ -243,6 +251,7 @@ fn unvoiced_spectrum(
 /// `+m`/`-m` pair by the same real scalar, which preserves that conjugate symmetry) -- verified
 /// against that guarantee in the test below (asserting the discarded imaginary part is negligible)
 /// rather than merely assumed.
+// [@ANCHOR: unvoiced_time_domain]
 fn unvoiced_time_domain(spectrum: &[Complex; 256]) -> [f64; 256] {
     let mut out = [0.0; 256];
     for (i, slot) in out.iter_mut().enumerate() {
@@ -258,6 +267,7 @@ fn unvoiced_time_domain(spectrum: &[Complex; 256]) -> [f64; 256] {
     out
 }
 
+// [@ANCHOR: time_domain_at]
 fn time_domain_at(samples: &[f64; 256], n: i32) -> f64 {
     if (-128..=127).contains(&n) {
         samples[(n + 128) as usize]
@@ -290,6 +300,7 @@ impl UnvoicedState {
     /// frame after the first). `voiced` and `spectral_amplitudes` are the current frame's own
     /// enhanced, 1-indexed-by-harmonic V/UV decisions and amplitudes; returns `None` on a length
     /// mismatch between the two.
+    // [@ANCHOR: UnvoicedState::synthesize]
     pub fn synthesize(
         &mut self,
         noise: &NoiseState,
@@ -329,6 +340,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: synthesis_window]
     fn synthesis_window_matches_the_transcribed_annex_i_table_at_every_spot_checked_value() {
         // Spot-checked directly against the 600 DPI render during transcription (both the up-ramp,
         // the flat plateau, and the down-ramp to zero, plus both symmetric halves).
@@ -382,6 +394,9 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: NoiseState::new]
+    // Tests [@ANCHOR: NoiseState::step]
+    // Tests [@ANCHOR: NoiseState::at]
     fn noise_state_new_fills_the_first_frames_window_starting_from_the_real_seed() {
         let state = NoiseState::new();
         // u(-104) is the first value generated from the seed u(-105) = 3147.
@@ -392,6 +407,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: unvoiced_scaling_coefficient]
     fn unvoiced_scaling_coefficient_matches_imbe_rs_own_hardcoded_constant() {
         // kchmck/imbe.rs's own unvoiced.rs hardcodes SCALING_COEF = 146.6432708443356, computed from
         // the same two window definitions (Annex C's w_R, Annex I's w_S) via Eq. 121.
@@ -403,6 +419,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: unvoiced_dft]
+    // Tests [@ANCHOR: unvoiced_spectrum]
     fn unvoiced_time_domain_is_real_for_a_real_conjugate_symmetric_spectrum() {
         let noise = NoiseState::new();
         let omega0_tilde = 2.0 * PI / 100.0;
@@ -438,6 +456,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: UnvoicedState::synthesize]
+    // Tests [@ANCHOR: unvoiced_time_domain]
+    // Tests [@ANCHOR: time_domain_at]
+    // Tests [@ANCHOR: NoiseState::advance_frame]
     fn synthesize_produces_a_full_finite_frame_across_several_calls() {
         let mut state = UnvoicedState::new();
         let mut noise = NoiseState::new();
