@@ -63,6 +63,7 @@ impl ComplexQ23 {
 
     /// Complex multiply, `i128`-widened then rescaled back to Q23 --
     /// same accumulate-then-narrow pattern this port uses throughout.
+    // [@ANCHOR: ComplexQ23::mul]
     pub(crate) fn mul(self, other: ComplexQ23) -> ComplexQ23 {
         let re = rshift_round_i128(
             self.re as i128 * other.re as i128 - self.im as i128 * other.im as i128,
@@ -915,6 +916,7 @@ const TWIDDLES_1024_Q23: [(i64, i64); 512] = [
 /// this is computed for real at compile time as a `const fn`, not
 /// generated offline and checked in: there's no drift risk to guard a
 /// test against, and no runtime cost or heap allocation either way.
+// [@ANCHOR: build_bit_reverse_table]
 const fn build_bit_reverse_table<const N: usize>() -> [usize; N] {
     let bits = (N as u32).trailing_zeros();
     let mut table = [0usize; N];
@@ -938,6 +940,7 @@ const BIT_REVERSE_1024: [usize; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_
 /// existing) may not have at all; a size this function hasn't been
 /// built a table for is a programming error, not a runtime condition
 /// to handle gracefully.
+// [@ANCHOR: fft_twiddles_q23]
 fn fft_twiddles_q23(n: usize) -> &'static [(i64, i64)] {
     match n {
         FFT_ENC => &TWIDDLES_512_Q23,
@@ -946,6 +949,7 @@ fn fft_twiddles_q23(n: usize) -> &'static [(i64, i64)] {
     }
 }
 
+// [@ANCHOR: fft_bit_reverse_table]
 fn fft_bit_reverse_table(n: usize) -> &'static [usize] {
     match n {
         FFT_ENC => &BIT_REVERSE_512,
@@ -976,6 +980,7 @@ fn fft_bit_reverse_table(n: usize) -> &'static [usize] {
 /// it serves a *different* consumer with different phase-correctness
 /// needs, not merely a different size (see this module's own doc
 /// comment above).
+// [@ANCHOR: fft_fixed]
 pub(crate) fn fft_fixed(re: &mut [i64], im: &mut [i64], forward: bool) {
     let n = re.len();
     debug_assert!(
@@ -1073,6 +1078,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: fft_fixed]
+    // Tests [@ANCHOR: fft_bit_reverse_table]
+    // Tests [@ANCHOR: fft_twiddles_q23]
+    // Tests [@ANCHOR: build_bit_reverse_table]
     fn forward_fft_fixed_matches_rustfft_plan_fft_forward_on_complex_output_directly() {
         // Direct complex-value comparison (re AND im separately), not
         // just power -- this is the whole point of this module existing

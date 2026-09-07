@@ -710,6 +710,7 @@ mod tests {
     // Tests [@ANCHOR: decimate_fixed]
     // Tests [@ANCHOR: design_lowpass]
     // Tests [@ANCHOR: lowpass_coeffs]
+    // Tests [@ANCHOR: decimate]
     fn decimate_fixed_matches_the_float_decimate_on_realistic_amplitude_input() {
         let mut seed = 7u32;
         let mut sq = [0.0f32; M_PITCH];

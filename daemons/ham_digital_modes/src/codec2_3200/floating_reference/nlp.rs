@@ -62,6 +62,7 @@ pub struct NlpState {
 }
 
 impl Default for NlpState {
+    // [@ANCHOR: NlpState::default]
     fn default() -> Self {
         let mut planner = FftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(PE_FFT_SIZE);
@@ -89,6 +90,7 @@ impl NlpState {
 /// the window's edges. `pub(crate)`: `codec2_3200::nlp`'s own
 /// cross-validation tests (`decimate_fixed_matches_the_float_decimate_
 /// on_realistic_amplitude_input`) call this directly.
+// [@ANCHOR: decimate]
 pub(crate) fn decimate(sq: &[f32; M_PITCH]) -> [f32; NDEC] {
     let h = lowpass_coeffs();
     let half = (LPF_TAPS as isize - 1) / 2;
@@ -115,6 +117,7 @@ pub(crate) fn decimate(sq: &[f32; M_PITCH]) -> [f32; NDEC] {
 /// real fundamental. `pub(crate)`: `codec2_3200::nlp`'s own
 /// cross-validation tests call this directly against
 /// `correct_sub_multiples_fixed`.
+// [@ANCHOR: correct_sub_multiples]
 pub(crate) fn correct_sub_multiples(
     power: &[f32],
     gmax: f32,
@@ -164,6 +167,7 @@ pub(crate) fn correct_sub_multiples(
 /// squared signal gets rejected, regardless of its magnitude.
 /// `pub(crate)`: `codec2_3200::nlp`'s own cross-validation test calls
 /// this directly against `dc_notch_fixed`.
+// [@ANCHOR: dc_notch]
 pub(crate) fn dc_notch(x: f32, mem_x: &mut f32, mem_y: &mut f32) -> f32 {
     let y = x - *mem_x + NOTCH_A * *mem_y;
     *mem_x = x;
@@ -178,6 +182,7 @@ pub(crate) fn dc_notch(x: f32, mem_x: &mut f32, mem_y: &mut f32) -> f32 {
 /// history). Updates `state` for the next call's pitch-tracking bias.
 /// `pub(crate)`: `codec2_3200::nlp`'s own cross-validation tests call
 /// this directly against `nlp_fixed`.
+// [@ANCHOR: nlp]
 pub(crate) fn nlp(state: &mut NlpState, sn: &[f32; M_PITCH]) -> f32 {
     let start = M_PITCH - N_SAMP;
     for (sn_i, sq_i) in sn[start..].iter().zip(state.sq[start..].iter_mut()) {
@@ -283,6 +288,8 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: NlpState::default]
+    // Tests [@ANCHOR: nlp]
     fn finds_the_fundamental_of_a_synthetic_voiced_like_signal_across_the_valid_pitch_range() {
         for &f0 in &[70.0f32, 110.0, 150.0, 200.0, 250.0, 320.0] {
             let amps = [1.0, 0.6, 0.3, 0.15];
@@ -303,6 +310,7 @@ pub(crate) mod tests {
     /// from "dominant Nth harmonic" to "dominant Nx bin") to land the
     /// raw global peak exactly where a real octave error would need it.
     #[test]
+    // Tests [@ANCHOR: correct_sub_multiples]
     fn correct_sub_multiples_prefers_a_genuine_local_peak_at_a_sub_multiple_bin() {
         let true_bin = 40usize;
         let lo = 16usize;
@@ -337,6 +345,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: dc_notch]
     fn dc_notch_rejects_a_large_constant_offset_regardless_of_magnitude() {
         // A first-order DC blocker's steady-state response to ANY
         // constant input is 0 (x[n]-x[n-1] becomes 0 the instant the

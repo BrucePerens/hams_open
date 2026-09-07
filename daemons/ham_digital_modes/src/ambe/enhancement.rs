@@ -48,6 +48,7 @@ pub fn scaled_energy(spectral_amplitudes: &[f64], omega0_hat: f64) -> f64 {
 /// sum re-weighted by `cos(omega0*l) in [-1, 1]`): hitting zero would require `|r_m1|` to equal `r_m0`
 /// at exact float precision, which needs every harmonic's own phase term to align perfectly -- not
 /// reachable by any real input this codec produces.
+// [@ANCHOR: weight]
 fn weight(m_l: f64, l: f64, omega0_hat: f64, r_m0: f64, r_m1: f64) -> f64 {
     let numerator =
         0.96 * PI * (r_m0 * r_m0 + r_m1 * r_m1 - 2.0 * r_m0 * r_m1 * (omega0_hat * l).cos());
@@ -60,6 +61,7 @@ fn weight(m_l: f64, l: f64, omega0_hat: f64, r_m0: f64, r_m1: f64) -> f64 {
 /// are scaled by [`weight`], clamped to `[0.5, 1.2]`), then rescales the whole result (Eq. 109-110)
 /// so its own total energy exactly matches the unenhanced input's `R_M0` -- a real, checkable
 /// invariant (see the test below), not just a plausible-sounding normalization.
+// [@ANCHOR: enhance_spectral_amplitudes]
 pub fn enhance_spectral_amplitudes(spectral_amplitudes: &[f64], omega0_hat: f64) -> Vec<f64> {
     let l_hat = spectral_amplitudes.len() as u32;
     let r_m0 = energy(spectral_amplitudes);
@@ -109,6 +111,7 @@ pub fn update_local_energy(previous_s_e: f64, r_m0: f64) -> f64 {
 /// `V_M` (Eq. 112): the adaptive V/UV-forcing threshold used by [`smooth_voicing_decision`]. Uses
 /// `f64::INFINITY` for the first branch (the spec's own literal infinity symbol), so no amplitude
 /// can ever exceed it in that regime.
+// [@ANCHOR: adaptive_voicing_threshold]
 pub fn adaptive_voicing_threshold(errors: &FrameErrors, s_e: f64) -> f64 {
     if errors.rate <= 0.005 && errors.total <= 4 {
         f64::INFINITY
@@ -133,6 +136,7 @@ pub fn amplitude_sum(enhanced: &[f64]) -> f64 {
 }
 
 /// `tau_M(0)` (Eq. 115): the amplitude-smoothing threshold, carried forward frame to frame.
+// [@ANCHOR: update_amplitude_threshold]
 pub fn update_amplitude_threshold(errors: &FrameErrors, previous_tau_m: f64) -> f64 {
     if errors.rate <= 0.005 && errors.total <= 6 {
         20480.0
@@ -144,6 +148,7 @@ pub fn update_amplitude_threshold(errors: &FrameErrors, previous_tau_m: f64) -> 
 /// `gamma_M` (Eq. 116): the final smoothing scale factor, applied by the caller to each enhanced
 /// spectral amplitude (Fig. 25's own "Spectral Amplitude Smoothing" stage, after enhancement and
 /// V/UV smoothing have both already run).
+// [@ANCHOR: amplitude_smoothing_scale]
 pub fn amplitude_smoothing_scale(tau_m: f64, a_m: f64) -> f64 {
     if tau_m > a_m {
         1.0
@@ -172,6 +177,7 @@ mod tests {
     /// per-harmonic weighting changed the shape -- the spec's own stated purpose ("remove any energy
     /// difference between the enhanced and unenhanced amplitudes").
     #[test]
+    // Tests [@ANCHOR: enhance_spectral_amplitudes]
     fn enhance_spectral_amplitudes_preserves_total_energy() {
         let amplitudes: Vec<f64> = (1..=20)
             .map(|l| 1.0 + (l as f64 * 0.37).sin().abs())
@@ -189,6 +195,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: weight]
     fn enhance_spectral_amplitudes_leaves_low_harmonics_unweighted_before_rescaling() {
         // For L_hat=8, only l=1 satisfies 8*l <= 8 -- every harmonic 2..=8 gets weighted. Checked
         // indirectly: a uniform input (all amplitudes equal) makes R_M1 == R_M0 * cos(omega0*l)
@@ -262,6 +269,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: adaptive_voicing_threshold]
     fn adaptive_voicing_threshold_matches_eq112_in_all_three_branches() {
         assert_eq!(
             adaptive_voicing_threshold(&errors_with(4, 0.005, 0), 12345.0),
@@ -295,6 +303,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: update_amplitude_threshold]
     fn update_amplitude_threshold_matches_eq115_in_both_branches() {
         assert_eq!(
             update_amplitude_threshold(&errors_with(6, 0.005, 0), 999.0),
@@ -307,6 +316,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: amplitude_smoothing_scale]
     fn amplitude_smoothing_scale_matches_eq116_in_both_branches() {
         assert_eq!(amplitude_smoothing_scale(100.0, 50.0), 1.0);
         assert!((amplitude_smoothing_scale(50.0, 100.0) - 0.5).abs() < 1e-9);

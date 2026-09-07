@@ -144,6 +144,7 @@ fn log2_lut_generic(x: f32, bits: u32, table: &[f32]) -> f32 {
 /// no float touches this until the final `exponent + interp` sum at
 /// the very end, which is the genuine float/fixed boundary (`exponent`
 /// itself came from an integer bit-shift, not a float op).
+// [@ANCHOR: log2_lut_generic_fixed]
 fn log2_lut_generic_fixed(x: f32, bits: u32, table_q23: &[i32]) -> f32 {
     debug_assert!(
         x > 0.0,
@@ -220,6 +221,7 @@ fn exp2_lut_table_frac_q23() -> &'static [i32; LOG2_LUT_SIZE] {
 /// before shifting), never a genuine floating-point operation.
 /// `pub(crate)`: also reused by `lpc.rs`'s `acos_lut_fixed`, the same
 /// general "quantize an arbitrary non-IEEE754-structured value" need.
+// [@ANCHOR: f32_to_q_exact_round]
 pub(crate) fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64 {
     if y == 0.0 {
         return 0;
@@ -269,6 +271,7 @@ pub(crate) fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64 {
 /// `2f32.powi()` -- the exact mirror image of `log2_lut_generic_
 /// fixed`'s own bit *extraction*, this time *reconstructing* the
 /// pattern instead. Genuinely integer, boundary to boundary.
+// [@ANCHOR: exp2_lut_generic_fixed]
 fn exp2_lut_generic_fixed(y: f32, bits: u32, table_frac_q23: &[i32]) -> f32 {
     let extra_bits = EXP2_Y_FRAC_BITS - bits;
     let y_q = f32_to_q_exact_round(y, EXP2_Y_FRAC_BITS);
@@ -328,6 +331,7 @@ pub(crate) fn exp2_lut(y: f32) -> f32 {
 /// value renormalized into `[2^23, 2^24)` (i.e. `[1.0, 2.0)` in Q23) by
 /// counting `x_q23`'s own leading zero bits, exactly the fixed-point
 /// analogue of an IEEE754 exponent extraction.
+// [@ANCHOR: log2_q23]
 pub(crate) fn log2_q23(x_q23: i64) -> i64 {
     debug_assert!(x_q23 > 0, "log2_q23: x_q23 must be positive, got {x_q23}");
     let bits = 63 - x_q23.leading_zeros() as i32; // position of the top set bit
@@ -358,6 +362,7 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
 /// internally) and returns the Q23 mantissa shifted by `floor(y)`
 /// directly as an integer -- no IEEE754 bit pattern involved on either
 /// end.
+// [@ANCHOR: exp2_q23]
 pub(crate) fn exp2_q23(y_q23: i64) -> i64 {
     let y_q = y_q23 << (EXP2_Y_FRAC_BITS - 23); // rescale Q23 -> Q(EXP2_Y_FRAC_BITS)
     let floor_y = y_q >> EXP2_Y_FRAC_BITS;
@@ -540,6 +545,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: log2_lut_generic_fixed]
     fn log2_lut_generic_fixeds_integer_interpolation_matches_the_float_interpolation_directly() {
         // The corpus-based tests above only check quantizer-index
         // agreement -- coarse enough to hide a real sign or off-by-one
@@ -599,6 +605,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: exp2_lut_generic_fixed]
     fn exp2_lut_generic_fixeds_integer_interpolation_matches_the_float_interpolation_directly() {
         // Same rationale as log2's own direct-comparison test above:
         // dense, across a real range for y (matching E_MIN_DB..E_MAX_DB
@@ -782,6 +789,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: log2_q23]
+    // Tests [@ANCHOR: f32_to_q_exact_round]
     fn log2_q23_matches_log2_lut_across_a_wide_dynamic_range() {
         // log2_q23 is DecoderFixed's own no-FPU entry point (Q23 in, Q23
         // out, no f32 touches it at all) -- this checks it against
@@ -838,6 +847,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: exp2_q23]
     fn exp2_q23_matches_exp2_lut_across_a_wide_range() {
         // Range bound is -8..16, not the full +-20 log2_lut/exp2_lut's
         // own round-trip test sweeps: at very negative y, 2^y is only a

@@ -16,6 +16,7 @@ fn binary_to_gray(x: u32) -> u32 {
     x ^ (x >> 1)
 }
 
+// [@ANCHOR: gray_to_binary]
 fn gray_to_binary(g: u32) -> u32 {
     let mut g = g;
     g ^= g >> 16;
@@ -39,6 +40,7 @@ impl<'a> BitWriter<'a> {
         BitWriter { bits, bit_index: 0 }
     }
 
+    // [@ANCHOR: BitWriter::write]
     pub fn write(&mut self, field: u32, width: u32) {
         // `field` is bounded to `width` bits by construction (an N-bit
         // Gray code of an N-bit value is still N bits), so
@@ -78,6 +80,7 @@ impl<'a> BitReader<'a> {
         BitReader { bits, bit_index: 0 }
     }
 
+    // [@ANCHOR: BitReader::read]
     pub fn read(&mut self, width: u32) -> u32 {
         let mut field = 0u32;
         let mut remaining = width;
@@ -115,6 +118,7 @@ pub struct FrameFields {
 /// Packs one frame's fields into `BYTES_PER_FRAME` bytes, in the real
 /// format's own field order: voiced0(1), voiced1(1), Wo(`WO_BITS`),
 /// energy(`E_BITS`), then `LPC_ORD` LSP delta indices (5 bits each).
+// [@ANCHOR: pack_frame]
 pub fn pack_frame(fields: &FrameFields, wo_bits: u32, e_bits: u32) -> [u8; super::BYTES_PER_FRAME] {
     let mut bytes = [0u8; super::BYTES_PER_FRAME];
     let mut w = BitWriter::new(&mut bytes);
@@ -129,6 +133,7 @@ pub fn pack_frame(fields: &FrameFields, wo_bits: u32, e_bits: u32) -> [u8; super
 }
 
 /// Inverse of `pack_frame`.
+// [@ANCHOR: unpack_frame]
 pub fn unpack_frame(
     bytes: &[u8; super::BYTES_PER_FRAME],
     wo_bits: u32,
@@ -167,6 +172,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: gray_to_binary]
     fn gray_code_round_trips_over_every_value_up_to_10_bits() {
         for x in 0..1024u32 {
             assert_eq!(gray_to_binary(binary_to_gray(x)), x, "x={x}");
@@ -188,6 +194,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: BitWriter::write]
+    // Tests [@ANCHOR: BitReader::read]
     fn bit_writer_reader_round_trip_arbitrary_field_widths() {
         let mut bytes = [0u8; 8];
         let fields: [(u32, u32); 12] = [
@@ -226,6 +234,8 @@ mod tests {
     /// wrong field order silently producing a plausible-looking but
     /// undecodable bitstream.
     #[test]
+    // Tests [@ANCHOR: pack_frame]
+    // Tests [@ANCHOR: unpack_frame]
     fn pack_frame_matches_the_real_reference_bits_on_real_captured_field_values() {
         let path = fixture!("codec2_bits_dump.txt");
         let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));

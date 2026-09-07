@@ -923,6 +923,7 @@ mod tests {
     /// check and only show up as implausibly loud or quiet audio.
     #[test]
     // Tests [@ANCHOR: DecoderFixed::decode]
+    // Tests [@ANCHOR: ComplexQ23::mul]
     fn decoder_fixed_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream(
     ) {
         let bits_path = concat!(
