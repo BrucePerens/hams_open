@@ -5,18 +5,19 @@
 //! Transcribed from a 600 DPI render of TIA-102.BABA_2003.pdf pages 42, following the same
 //! discipline as every other body-text equation in this spec (Type3 digit font defeats `pdftotext`).
 //!
-//! # A genuine, disclosed scope boundary: this module does not decode
+//! # `previous_m` must be real reconstructed history, not an unquantized estimate
 //!
 //! Eq. 54's own bias-corrected prediction needs `M_tilde_j(-1)`: the previous frame's *quantized and
-//! reconstructed* spectral amplitudes, not this encoder's own unquantized estimate of them (that's
-//! the whole point of a closed-loop predictive coder -- the encoder must predict from what the
-//! decoder will actually have, which means simulating the decoder). Building that reconstruction path
-//! (dequantizing the gain vector and higher-order DCT coefficients, inverse DCT, Eq. 45's log2
-//! addition, per Fig. 16's own "Reconstruct" feedback block) is real, separate, not-yet-built work.
-//! [`prediction_residual`] below takes `previous_m` as a plain input parameter instead of computing
-//! it internally -- callers must supply real reconstructed history (or the spec's own literal
-//! initialization values, [`INITIAL_L_HAT_PREV`] and an all-`1.0` amplitude array, for the very first
-//! frame of a stream) rather than this module quietly assuming zero history.
+//! reconstructed* spectral amplitudes, not an encoder's own unquantized estimate of them (that's the
+//! whole point of a closed-loop predictive coder -- the encoder must predict from what the decoder
+//! will actually have, which means simulating the decoder's own reconstruction). Neither
+//! [`prediction_residual`] nor [`reconstruct_log2_amplitude`] below computes that reconstruction
+//! itself -- both take `previous_m` as a plain input parameter, supplied by [`super::reconstruct`]
+//! (dequantization, inverse DCT, and Eq. 75-79's own log2 reassembly) via `mod.rs`'s own
+//! `encode_frame`, which is where the real reconstruction loop lives. Callers must supply real
+//! reconstructed history (or the spec's own literal initialization values, [`INITIAL_L_HAT_PREV`] and
+//! an all-`1.0` amplitude array, for the very first frame of a stream) rather than this module
+//! quietly assuming zero history.
 
 /// The number of harmonics assumed for the previous frame before any real previous frame exists
 /// (the spec's own stated initialization value, not zero): "upon initialization ... `L_hat(-1) = 30`".
@@ -68,20 +69,18 @@ fn previous_log2_amplitude(previous_m: &[f64], l_hat_prev: u32, j: u32) -> f64 {
     }
 }
 
-/// The prediction residual `T_hat_l` (Eq. 54) for harmonic `l`: this frame's own unquantized
-/// spectral amplitude estimate `M_hat_l(0)` (from [`super::spectral_amplitude`]), minus a
-/// pitch-interpolated prediction from the previous frame's reconstructed amplitudes, plus a
-/// frame-wide bias correction (the sum over every current-frame harmonic's own prediction) that
-/// removes the previous frame's overall level so only the *shape change* is transmitted -- see this
-/// module's own doc comment on why `previous_m` must be real reconstructed history, not this
-/// encoder's own unquantized estimate of it.
-pub fn prediction_residual(
+/// The pitch-interpolated prediction term and the frame-wide bias correction that both
+/// [`prediction_residual`] (Eq. 54, encoder side) and [`reconstruct_log2_amplitude`] (Eq. 77,
+/// decoder side) need identically -- the two equations are the same terms with opposite sign
+/// (encoder subtracts the prediction and adds the bias back; decoder does the reverse to invert
+/// it), so this is computed once and shared rather than kept as two separately-maintained copies
+/// that could silently drift apart.
+fn predicted_and_bias_correction(
     l: u32,
-    unquantized_m_l: f64,
     l_hat_curr: u32,
     l_hat_prev: u32,
     previous_m: &[f64],
-) -> f64 {
+) -> (f64, f64) {
     let rho = prediction_coefficient(l_hat_curr);
 
     let k_hat_l = harmonic_index_ratio(l, l_hat_prev, l_hat_curr);
@@ -102,7 +101,46 @@ pub fn prediction_residual(
         .sum();
     let bias_correction = (rho / l_hat_curr as f64) * bias;
 
+    (predicted, bias_correction)
+}
+
+/// The prediction residual `T_hat_l` (Eq. 54) for harmonic `l`: this frame's own unquantized
+/// spectral amplitude estimate `M_hat_l(0)` (from [`super::spectral_amplitude`]), minus a
+/// pitch-interpolated prediction from the previous frame's reconstructed amplitudes, plus a
+/// frame-wide bias correction (the sum over every current-frame harmonic's own prediction) that
+/// removes the previous frame's overall level so only the *shape change* is transmitted -- see this
+/// module's own doc comment on why `previous_m` must be real reconstructed history, not this
+/// encoder's own unquantized estimate of it.
+pub fn prediction_residual(
+    l: u32,
+    unquantized_m_l: f64,
+    l_hat_curr: u32,
+    l_hat_prev: u32,
+    previous_m: &[f64],
+) -> f64 {
+    let (predicted, bias_correction) =
+        predicted_and_bias_correction(l, l_hat_curr, l_hat_prev, previous_m);
     unquantized_m_l.log2() - predicted + bias_correction
+}
+
+/// The decoder-side inverse of [`prediction_residual`] (Eq. 75-77): reconstructs
+/// `log2(M_tilde_l(0))`, harmonic `l`'s own log2 spectral amplitude for the *current* frame, from
+/// its transmitted residual `t_hat_l` (the dequantized, inverse-DCT'd prediction residual, i.e.
+/// `T_tilde_l` per this module's own doc comment) and the same previous-frame history
+/// [`prediction_residual`] used to produce that residual in the first place. Exactly reverses
+/// Eq. 54's own rearrangement: `log2(M) = T_hat_l + predicted - bias_correction`, using the
+/// identical `predicted`/`bias_correction` terms (see [`predicted_and_bias_correction`]'s own doc
+/// comment on why the two equations must share one implementation rather than risk drifting apart).
+pub fn reconstruct_log2_amplitude(
+    l: u32,
+    t_hat_l: f64,
+    l_hat_curr: u32,
+    l_hat_prev: u32,
+    previous_m: &[f64],
+) -> f64 {
+    let (predicted, bias_correction) =
+        predicted_and_bias_correction(l, l_hat_curr, l_hat_prev, previous_m);
+    t_hat_l + predicted - bias_correction
 }
 
 #[cfg(test)]
@@ -172,6 +210,32 @@ mod tests {
             assert!(
                 (residual - expected).abs() < 1e-9,
                 "harmonic {l}: expected cancellation under a pitch change too, expected {expected}, got {residual}"
+            );
+        }
+    }
+
+    /// `reconstruct_log2_amplitude` must be the exact inverse of `prediction_residual` -- the real
+    /// property closing the decoder-side loop depends on: given the residual `prediction_residual`
+    /// produced for a real, varying (not constant, unlike the tests above) unquantized amplitude,
+    /// feeding it back through `reconstruct_log2_amplitude` with the same history must reproduce
+    /// `log2(unquantized_m_l)` exactly (up to floating-point roundoff) -- not merely a plausible
+    /// value.
+    #[test]
+    fn reconstruct_log2_amplitude_is_the_exact_inverse_of_prediction_residual() {
+        let l_hat_curr = 18;
+        let l_hat_prev = 22;
+        let previous_m: Vec<f64> = (1..=l_hat_prev).map(|j| 1.0 + j as f64 * 0.3).collect();
+
+        for l in 1..=l_hat_curr {
+            let unquantized_m_l = 0.5 + l as f64 * 0.2;
+            let residual =
+                prediction_residual(l, unquantized_m_l, l_hat_curr, l_hat_prev, &previous_m);
+            let reconstructed =
+                reconstruct_log2_amplitude(l, residual, l_hat_curr, l_hat_prev, &previous_m);
+            let expected = unquantized_m_l.log2();
+            assert!(
+                (reconstructed - expected).abs() < 1e-9,
+                "harmonic {l}: expected the round trip to reproduce {expected}, got {reconstructed}"
             );
         }
     }

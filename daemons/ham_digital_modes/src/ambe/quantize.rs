@@ -109,7 +109,7 @@ pub fn quantize_gain_vector(g_hat: &[f64; 6], l: u32) -> Option<[(u32, u8); 5]> 
 /// The `(block_index, position)` pairs, `1 <= block_index <= 6` and `2 <= position <= J_i`, in the
 /// same flat order Annex G's own bit-allocation table uses (the spec's own stated convention:
 /// `[b_hat_8, ..., b_hat_{L+1}]` correspond to `[C_1,2, ..., C_1,J1, ..., C_6,2, ..., C_6,J6]`).
-fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, usize)>> {
+pub(crate) fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, usize)>> {
     let lengths = tables::block_lengths_for_l(l)?;
     let mut positions = Vec::new();
     for (idx, &j_i) in lengths.iter().enumerate() {

@@ -9,15 +9,18 @@
 //! # Real, current state: every encode stage is implemented and now wired together end to end
 //!
 //! Every stage of section 5-7's own encode pipeline is implemented and tested (see the pipeline
-//! list below), and [`encode_frame`] now composes all eight of them into one real function that
-//! takes an analysis frame and estimated pitch in and returns the final 144-bit modulated code
-//! vectors -- not just independently-tested pieces left for a caller to assemble correctly. What
-//! remains: the entire decoder side, and closing the one disclosed gap [`encode_frame`] still
-//! carries forward rather than hides (it feeds `prediction::prediction_residual` this *encoder's*
-//! own unquantized spectral amplitude estimate as "previous frame" history, as a deliberate
-//! placeholder, where the spec actually wants the *decoder's* reconstructed history -- closing that
-//! for real requires a decoder-reconstruction loop this module doesn't build yet). What already
-//! exists: the frame structure and pipeline stage documentation below, `fec.rs`'s Golay/Hamming FEC
+//! list below), and [`encode_frame`] composes all eight of them into one real function that takes
+//! an analysis frame and estimated pitch in and returns the final 144-bit modulated code vectors --
+//! not just independently-tested pieces left for a caller to assemble correctly. It also closes the
+//! gap an earlier version of this module disclosed as still open: `encode_frame` now runs its own
+//! quantizer values back through [`reconstruct::reconstruct_spectral_amplitudes`] (dequantization
+//! and the inverse DCTs, section 6.4) to produce real decoder-equivalent history for the *next*
+//! frame's own prediction, rather than reusing this frame's own unquantized estimate. What remains:
+//! the entire decoder side proper (frame-repeat/mute robustness, spectral enhancement, and the
+//! actual synthesis filterbank that turns reconstructed parameters back into audio -- reconstructing
+//! spectral amplitudes for the *next frame's prediction* is not the same as decoding real audio).
+//! What already exists: the frame structure and pipeline stage documentation below, `fec.rs`'s
+//! Golay/Hamming FEC
 //! (generator matrices independently verified two ways -- against each code's own published weight
 //! distribution, and against the PDF's own separate vector-text layer, see that module's doc comment),
 //! and `tables.rs`'s Annexes E, F, G, and J (gain quantizer levels, gain-vector bit allocation/step
@@ -64,9 +67,14 @@
 //!    pseudo-random sequence, producing the final modulated code vectors `c_hat_0..c_hat_7` --
 //!    [`encode_code_vectors`] below wires steps 6-8 together into one call.
 //!
-//! 9. **End-to-end composition** ([`encode_frame`]): wires all eight stages above into one call,
-//!    carrying the per-frame state ([`FrameState`]) that Eq. 41's energy tracker and Eq. 54's
-//!    prediction residual both genuinely need from the previous frame.
+//! 9. **Spectral amplitude reconstruction** (section 6.4, Eq. 67-79, [`reconstruct`]): the decoder-
+//!    side inverse of stage 5 -- dequantization, inverse DCTs, and Eq. 75-79's own log2 reassembly --
+//!    that produces real decoder-equivalent history for stage 4's *next* frame prediction, closing
+//!    the loop a real closed-loop predictive coder needs (Fig. 16's own "Reconstruct" feedback
+//!    block).
+//! 10. **End-to-end composition** ([`encode_frame`]): wires all nine stages above into one call,
+//!     carrying the per-frame state ([`FrameState`]) that Eq. 41's energy tracker and Eq. 54's
+//!     prediction residual both genuinely need from the previous frame.
 //!
 //! **A real scope boundary found while implementing step 8, not assumed going in**: this document
 //! never defines a bit-interleaving permutation of its own. Annex K's own flow chart states the
@@ -85,6 +93,7 @@ pub mod pitch;
 pub mod pitch_refinement;
 pub mod prediction;
 pub mod quantize;
+pub mod reconstruct;
 pub mod spectral_amplitude;
 pub mod tables;
 pub mod vuv;
@@ -151,8 +160,11 @@ pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
 
 /// The per-frame state that carries forward into the *next* call to [`encode_frame`] -- Eq. 41's
 /// energy tracker (`xi_max`) and Eq. 54's prediction residual (`l_hat`, `voiced`, and each
-/// harmonic's own spectral amplitude estimate) are all genuinely stateful across frames, unlike
-/// every other stage in this pipeline.
+/// harmonic's own spectral amplitude) are all genuinely stateful across frames, unlike every other
+/// stage in this pipeline. `spectral_amplitudes` here is real reconstructed history (via
+/// [`reconstruct::reconstruct_spectral_amplitudes`]) for every frame after [`Self::initial`]'s own
+/// frame-0 placeholder -- not the current frame's own unquantized estimate, which `encode_frame`
+/// only ever uses locally to compute *this* frame's own residual, never stores.
 ///
 /// [`Self::initial`] gives this module's own reasoned frame-0 initialization (see its doc comment
 /// for exactly which pieces the spec itself dictates and which are our own low-stakes choice);
@@ -207,11 +219,13 @@ impl FrameState {
 /// fails -- both real preconditions this function doesn't re-validate itself, just propagates from
 /// the stages that already do.
 ///
-/// **Carries forward, not hides, the one real gap disclosed in `prediction`'s own doc comment**:
-/// `previous_m` (Eq. 54's own "previous frame's reconstructed spectral amplitudes") is fed *this*
-/// encoder's own unquantized estimate from `previous_state`, not real decoder-reconstructed history
-/// -- there is no decoder-reconstruction loop yet to produce that. Every other stage here uses real,
-/// already-verified logic; this one substitution is a deliberate, disclosed placeholder.
+/// **Closes the gap `prediction`'s own doc comment used to disclose as still open**: the
+/// `FrameState` this returns carries [`reconstruct::reconstruct_spectral_amplitudes`]'s own real
+/// output -- this frame's quantizer values run back through dequantization and the inverse DCTs, the
+/// same "what the decoder will actually have" history Eq. 54 needs -- not this encoder's own
+/// unquantized estimate. The *next* call's `previous_state.spectral_amplitudes` is therefore real
+/// reconstructed history, matching the spec's own closed-loop predictive design (Fig. 16's own
+/// "Reconstruct" feedback block) rather than a placeholder.
 pub fn encode_frame(
     frame: &pitch_refinement::RefinementFrame,
     omega0_hat: f64,
@@ -255,7 +269,7 @@ pub fn encode_frame(
 
     let b0 = parameter_encoding::quantize_fundamental_frequency(omega0_hat);
     let b1 = parameter_encoding::encode_voicing_decisions(&voiced);
-    let b2 = tables::quantize_gain_index(g_hat[0]) as u32;
+    let b2 = tables::quantize_gain_index(g_hat[0]);
     let gain_vector = quantize::quantize_gain_vector(&g_hat, l_hat)?;
     let higher_order = quantize::quantize_higher_order_coefficients(&dct_blocks, l_hat)?;
 
@@ -263,7 +277,7 @@ pub fn encode_frame(
         b0,
         b1,
         k_hat,
-        b2,
+        b2 as u32,
         gain_vector,
         &higher_order,
         sync_bit,
@@ -271,13 +285,27 @@ pub fn encode_frame(
 
     let c = encode_code_vectors(u);
 
+    // Real reconstructed history for the *next* frame's own prediction (Eq. 54 needs "what the
+    // decoder will have," not this frame's own unquantized estimate above) -- reruns this frame's
+    // own quantizer values back through dequantization and the inverse DCTs.
+    let gain_values: [u32; 5] = std::array::from_fn(|i| gain_vector[i].0);
+    let higher_order_values: Vec<u32> = higher_order.iter().map(|&(v, _)| v).collect();
+    let reconstructed_spectral_amplitudes = reconstruct::reconstruct_spectral_amplitudes(
+        b2,
+        gain_values,
+        &higher_order_values,
+        l_hat,
+        previous_state.l_hat,
+        &previous_state.spectral_amplitudes,
+    )?;
+
     Some((
         c,
         FrameState {
             xi_max,
             l_hat,
             voiced,
-            spectral_amplitudes,
+            spectral_amplitudes: reconstructed_spectral_amplitudes,
         },
     ))
 }
