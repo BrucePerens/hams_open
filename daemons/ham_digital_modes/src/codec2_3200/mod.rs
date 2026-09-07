@@ -533,6 +533,10 @@ mod tests {
     // Tests [@ANCHOR: Encoder::encode]
     // Tests [@ANCHOR: Encoder::shift_in]
     // Tests [@ANCHOR: Decoder::decode]
+    // Tests [@ANCHOR: SynthesisState::synthesize_subframe]
+    // Tests [@ANCHOR: synthesize_phase]
+    // Tests [@ANCHOR: postfilter]
+    // Tests [@ANCHOR: ear_protection]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = Encoder::new();
         let mut decoder = Decoder::new();
@@ -924,6 +928,12 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: DecoderFixed::decode]
     // Tests [@ANCHOR: ComplexQ23::mul]
+    // Tests [@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]
+    // Tests [@ANCHOR: synthesize_phase_fixed]
+    // Tests [@ANCHOR: postfilter_fixed]
+    // Tests [@ANCHOR: ear_protection_fixed]
+    // Tests [@ANCHOR: next_rand_fixed]
+    // Tests [@ANCHOR: phase_increment_q32]
     fn decoder_fixed_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream(
     ) {
         let bits_path = concat!(

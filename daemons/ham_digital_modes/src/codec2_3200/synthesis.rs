@@ -20,6 +20,7 @@ use super::envelope::Model;
 use super::{BG_BETA, BG_MARGIN, BG_THRESH, FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER_FRAME, TW};
 use rustfft::num_complex::Complex32;
 
+// [@ANCHOR: make_synthesis_window]
 fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME];
     let n0 = N_SAMP / 2;
@@ -50,6 +51,7 @@ fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
 /// Simple xorshift PRNG for unvoiced-excitation and postfilter phase
 /// randomization -- doesn't need to match the reference's own generator
 /// (purely a synthesis-quality detail, not transmitted).
+// [@ANCHOR: next_rand]
 pub(crate) fn next_rand(state: &mut u32) -> f32 {
     *state ^= *state << 13;
     *state ^= *state >> 17;
@@ -62,6 +64,7 @@ pub(crate) fn next_rand(state: &mut u32) -> f32 {
 /// `envelope::sample_filter_phase`) -- voiced harmonics phase-lock to a
 /// single tracked fundamental phase (zero-order-hold pitch synthesis);
 /// unvoiced harmonics get independent random phase.
+// [@ANCHOR: synthesize_phase]
 fn synthesize_phase(
     model: &mut Model,
     h: &[Complex32; MAX_AMP + 1],
@@ -112,6 +115,7 @@ fn synthesize_phase(
 /// harmonics `1..=l` should get their phase randomized (unvoiced
 /// frames return an all-`false` array -- there's nothing to randomize
 /// on that branch, only `bg_est` updates).
+// [@ANCHOR: postfilter_step]
 pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(
     voiced: bool,
     l: usize,
@@ -145,6 +149,7 @@ pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(
 /// frames' own average energy otherwise. See `postfilter_step`'s own
 /// doc comment for the log-domain LUT this calls into and how it's
 /// validated.
+// [@ANCHOR: postfilter]
 fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
     let (new_bg_est, decisions) = postfilter_step(
         model.voiced,
@@ -173,6 +178,7 @@ fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
 /// Attenuates a whole frame if any sample would exceed a safe int16
 /// level -- a defensive measure against bit-error-induced amplitude
 /// spikes reaching real ears/speakers, not a normal-operation limiter.
+// [@ANCHOR: ear_protection]
 pub(crate) fn ear_protection(samples: &mut [f32]) {
     let max_abs = samples.iter().fold(0.0f32, |m, &s| m.max(s.abs()));
     if max_abs <= 30000.0 {
@@ -231,6 +237,7 @@ impl SynthesisState {
     /// (its amplitudes/phases already filled in by `envelope.rs`) and
     /// `h` (the LPC synthesis filter's own phase response, for voiced
     /// excitation phase tracking).
+    // [@ANCHOR: SynthesisState::synthesize_subframe]
     pub fn synthesize_subframe(&mut self, model: &mut Model, aw: &[Complex32]) -> [i16; N_SAMP] {
         let h = super::envelope::sample_filter_phase(aw, model);
         synthesize_phase(model, &h, &mut self.ex_phase, &mut self.rng);
@@ -298,6 +305,7 @@ const FRAC_BITS: u32 = 23;
 /// division; the final cast to `u32` keeps only the fractional-turn
 /// part (the whole-turn count is discarded, correctly, since only the
 /// angle mod one turn ever matters downstream).
+// [@ANCHOR: phase_increment_q32]
 pub(crate) fn phase_increment_q32(wo_q23: i64) -> u32 {
     let tau_q23 = 2 * super::lpc::pi_q23();
     let scaled = (wo_q23 as i128 * N_SAMP as i128) << 32;
@@ -315,6 +323,7 @@ pub(crate) fn phase_increment_q32(wo_q23: i64) -> u32 {
 /// scaling needed at all, unlike the float version's own `radians`
 /// conversion, since a raw xorshift word is already uniform over its
 /// full range.
+// [@ANCHOR: next_rand_fixed]
 fn next_rand_fixed(state: &mut u32) -> u32 {
     *state ^= *state << 13;
     *state ^= *state >> 17;
@@ -328,6 +337,7 @@ fn next_rand_fixed(state: &mut u32) -> u32 {
 /// `1/sqrt(mag_sq)` (`exp2(-0.5*log2(mag_sq))`) rather than a fixed-
 /// point square root primitive -- same log-domain-reciprocal-sqrt
 /// trick `envelope.rs`'s own gain normalization uses.
+// [@ANCHOR: synthesize_phase_fixed]
 fn synthesize_phase_fixed(
     model: &mut ModelFixed,
     h: &[ComplexQ23; MAX_AMP + 1],
@@ -395,6 +405,7 @@ fn log2_10_over_20_q23() -> i64 {
 /// `log2_q23`/`exp2_q23` used directly (no parameterization -- unlike
 /// the float version, there's no equivalent "plain float in the same
 /// shape" comparison to make against a genuinely-integer function).
+// [@ANCHOR: postfilter_step_fixed]
 pub(crate) fn postfilter_step_fixed(
     voiced: bool,
     l: usize,
@@ -428,6 +439,7 @@ pub(crate) fn postfilter_step_fixed(
     (new_bg_est, decisions)
 }
 
+// [@ANCHOR: postfilter_fixed]
 fn postfilter_fixed(model: &mut ModelFixed, bg_est: &mut i64, rng: &mut u32) {
     let (new_bg_est, decisions) = postfilter_step_fixed(model.voiced, model.l, &model.a, *bg_est);
     *bg_est = new_bg_est;
@@ -453,6 +465,7 @@ fn ear_protection_thresh_q23() -> i64 {
 /// spend extra LUT-interpolation error (same reasoning `envelope.rs`'s
 /// own `gain_q23` uses division instead of a third log-domain
 /// composition).
+// [@ANCHOR: ear_protection_fixed]
 pub(crate) fn ear_protection_fixed(samples: &mut [i64]) {
     let max_abs = samples.iter().fold(0i64, |m, &s| m.max(s.abs()));
     let thresh = ear_protection_thresh_q23();
@@ -510,6 +523,7 @@ impl SynthesisStateFixed {
 
     /// Fixed-point `synthesize_subframe`. `aw`/`model` from `envelope::
     /// compute_harmonic_amplitudes_fixed`/`ModelFixed`.
+    // [@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]
     pub(crate) fn synthesize_subframe_fixed(
         &mut self,
         model: &mut ModelFixed,
@@ -577,6 +591,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: make_synthesis_window]
     fn synthesis_window_peaks_at_1_in_the_middle_and_tapers_toward_0_at_both_ends() {
         let pn = make_synthesis_window();
         assert!(
@@ -600,6 +615,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: next_rand]
     fn next_rand_produces_values_spread_across_the_full_tau_range() {
         let mut state = 12345u32;
         let mut min = f32::MAX;
@@ -627,6 +643,8 @@ mod tests {
     /// rescale bug in the EMA update itself, only a real multi-frame
     /// replay comparing its own drift can.
     #[test]
+    // Tests [@ANCHOR: postfilter_step]
+    // Tests [@ANCHOR: postfilter_step_fixed]
     fn postfilter_step_fixed_matches_postfilter_step_across_a_real_temporal_replay() {
         use crate::codec2_3200::envelope::{
             apply_first_harmonic_correction, apply_first_harmonic_correction_fixed,
