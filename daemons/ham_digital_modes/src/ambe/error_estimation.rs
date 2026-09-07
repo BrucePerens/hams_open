@@ -22,11 +22,13 @@
 /// in this spec, not shared logic); `golay_init` is `epsilon_0`, the error count for `u_hat_0`
 /// specifically (the one code vector bit modulation never touches, per `modulation.rs`'s own doc
 /// comment, so its own error count is a meaningful signal on its own, not just folded into the
-/// total).
+/// total); `hamming_init` is `epsilon_4`, the error count for `u_hat_4` (the first Hamming-coded
+/// vector) -- used by `super::enhancement`'s own Eq. 112 threshold, not by anything in this module.
 pub struct FrameErrors {
     pub total: u32,
     pub rate: f64,
     pub golay_init: u32,
+    pub hamming_init: u32,
 }
 
 /// Computes this frame's own [`FrameErrors`] (Eq. 95-96) from the seven corrected-error counts
@@ -40,6 +42,7 @@ pub fn estimate_errors(corrected_error_counts: &[u32; 7], previous_rate: f64) ->
         total,
         rate,
         golay_init: corrected_error_counts[0],
+        hamming_init: corrected_error_counts[4],
     }
 }
 
@@ -72,7 +75,7 @@ mod tests {
     #[test]
     fn estimate_errors_matches_eq95_96_at_a_hand_computed_value() {
         // Cross-checked against kchmck/imbe.rs's own test_errors: EnhanceErrors::new(&[1,2,3,4,5,6,7],
-        // 0.5) -> total=28, rate ~ 0.48522, golay_init=1.
+        // 0.5) -> total=28, rate ~ 0.48522, golay_init=1, hamming_init=5.
         let counts = [1u32, 2, 3, 4, 5, 6, 7];
         let errors = estimate_errors(&counts, 0.5);
         assert_eq!(errors.total, 28);
@@ -82,6 +85,7 @@ mod tests {
             errors.rate
         );
         assert_eq!(errors.golay_init, 1);
+        assert_eq!(errors.hamming_init, 5);
     }
 
     #[test]
@@ -90,6 +94,7 @@ mod tests {
         assert_eq!(errors.total, 0);
         assert_eq!(errors.rate, 0.0);
         assert_eq!(errors.golay_init, 0);
+        assert_eq!(errors.hamming_init, 0);
     }
 
     #[test]
@@ -99,6 +104,7 @@ mod tests {
             total: 1000,
             rate: 10.0,
             golay_init: 1,
+            hamming_init: 0,
         };
         assert!(!should_repeat_frame(&errors));
 
@@ -107,6 +113,7 @@ mod tests {
             total: 5,
             rate: 0.0,
             golay_init: 2,
+            hamming_init: 0,
         };
         assert!(!should_repeat_frame(&errors));
 
@@ -115,6 +122,7 @@ mod tests {
             total: 10,
             rate: 0.0,
             golay_init: 2,
+            hamming_init: 0,
         };
         assert!(should_repeat_frame(&errors));
     }
@@ -125,11 +133,13 @@ mod tests {
             total: 0,
             rate: 0.0875,
             golay_init: 0,
+            hamming_init: 0,
         }));
         assert!(should_mute_frame(&FrameErrors {
             total: 0,
             rate: 0.0876,
             golay_init: 0,
+            hamming_init: 0,
         }));
     }
 }
