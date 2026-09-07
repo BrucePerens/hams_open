@@ -72,11 +72,20 @@ fn saturating_uniform_quantize(value: f64, bits: u8, step_size: f64) -> u32 {
     }
 }
 
-/// Quantizes one element of the gain vector's own remaining five elements (Eq. 62): `gain_vector_m`
-/// is `G_hat_{m-1}` for the spec's own `m` in `3..=7` (i.e. `G_hat_2..G_hat_6`, the five non-DC gain
-/// vector elements from [`super::gain_vector_dct`]); `l` and `element` (`2..=6`) select the bit
-/// allocation and step size from Annex F. Returns `None` for an out-of-range `l`/`element` (matching
-/// [`tables::gain_bit_allocation`]'s own range).
+/// Quantizes one element of the gain vector's own remaining five elements (Eq. 62): `gain_value` is
+/// `G_hat_element` for `element` in `2..=6` (the five non-DC gain vector elements from
+/// [`super::gain_vector_dct`]).
+///
+/// **A real, worth-recording index-convention check**: Eq. 62's own formula subscripts its bits/step
+/// parameters as `B_hat_m`/`Delta_hat_m` for `m` in `3..=7`, quantizing `G_hat_{m-1}`; it would be
+/// easy to assume Annex F's table is indexed the same way and pass `m` (not `m-1`) here. It isn't --
+/// confirmed directly against Annex F's own worked example (Table 6, `L_hat=16`): that table's own
+/// `m` column runs `2..=6` and lists `G_hat_m` directly (not `G_hat_{m-1}`), and its five rows match
+/// [`tables::gain_bit_allocation`]'s stored data for `L=16` exactly, entry for entry. So Annex F's
+/// table -- and this function's own `element` parameter -- already use the gain-vector element index
+/// directly, not Eq. 62's shifted `b_hat` output index; no off-by-one translation is needed here.
+/// `l` and `element` (`2..=6`) select the bit allocation and step size from Annex F. Returns `None`
+/// for an out-of-range `l`/`element` (matching [`tables::gain_bit_allocation`]'s own range).
 pub fn quantize_gain_vector_element(gain_value: f64, l: u32, element: u32) -> Option<u32> {
     let (bits, step_size) = tables::gain_bit_allocation(l, element)?;
     Some(saturating_uniform_quantize(gain_value, bits, step_size))
@@ -97,13 +106,15 @@ fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, usize)>> {
 }
 
 /// Quantizes every higher-order DCT coefficient across all six blocks (Eq. 63), given each block's
-/// own DCT output (`blocks[i][k-1] == C_{i+1,k}`, 0-indexed per [`block_dct`]'s own return
-/// convention) and `l`. Coefficients with a `0`-bit allocation (a real, observed value in Annex G,
-/// not hypothetical) are skipped entirely -- a real, disclosed reading of the spec's own text:
-/// "zero bits" means that coefficient is never transmitted, so it contributes no entry to the
-/// returned vector, in the same flat `[C_1,2, ..., C_6,J6]` order [`higher_order_coefficient_positions`]
-/// produces. Returns `None` for an out-of-range `l`.
-pub fn quantize_higher_order_coefficients(blocks: &[Vec<f64>; 6], l: u32) -> Option<Vec<u32>> {
+/// own [`block_dct`] output (`dct_blocks[i][k-1] == C_{i+1,k}`, 0-indexed per that function's own
+/// return convention -- named `dct_blocks`, not `blocks`, precisely so it can't be confused with
+/// [`partition_into_blocks`]'s own same-shaped `[Vec<f64>; 6]` of raw residuals, which this function
+/// must never be called with directly) and `l`. Coefficients with a `0`-bit allocation (a real,
+/// observed value in Annex G, not hypothetical) are skipped entirely -- a real, disclosed reading of
+/// the spec's own text: "zero bits" means that coefficient is never transmitted, so it contributes no
+/// entry to the returned vector, in the same flat `[C_1,2, ..., C_6,J6]` order
+/// [`higher_order_coefficient_positions`] produces. Returns `None` for an out-of-range `l`.
+pub fn quantize_higher_order_coefficients(dct_blocks: &[Vec<f64>; 6], l: u32) -> Option<Vec<u32>> {
     let bit_allocation = tables::higher_order_bit_allocation(l)?;
     let positions = higher_order_coefficient_positions(l)?;
     if bit_allocation.len() != positions.len() {
@@ -120,7 +131,7 @@ pub fn quantize_higher_order_coefficients(blocks: &[Vec<f64>; 6], l: u32) -> Opt
                 let sigma = tables::higher_order_coefficient_sigma(k as u32)?;
                 let multiplier = tables::higher_order_step_multiplier(bits)?;
                 let step_size = multiplier * sigma;
-                let c_ik = *blocks[block_idx].get(k - 1)?;
+                let c_ik = *dct_blocks[block_idx].get(k - 1)?;
                 Some(saturating_uniform_quantize(c_ik, bits, step_size))
             })
             .collect(),
@@ -207,7 +218,7 @@ mod tests {
         let zero_bit_count = bit_allocation.iter().filter(|&&b| b == 0).count();
         assert!(
             zero_bit_count > 0,
-            "test assumes L=16 has a real 0-bit entry to skip"
+            "test assumes L=32 has a real 0-bit entry to skip"
         );
 
         let quantized = quantize_higher_order_coefficients(&blocks, l).unwrap();
@@ -220,6 +231,76 @@ mod tests {
             assert!(
                 idx < (1u32 << bits),
                 "index {idx} doesn't fit in {bits} bits"
+            );
+        }
+    }
+
+    /// The composition none of the per-function tests above can catch: wires the whole encoder
+    /// parameter pipeline together end to end (`partition_into_blocks` -> `block_dct` per block ->
+    /// extract each block's own DC term into `R_i` -> [`crate::ambe::gain_vector_dct`] -> both
+    /// quantizers), using a constant residual input specifically because it produces a fully
+    /// checkable expectation at every stage: a constant block's own DCT is zero except its DC term
+    /// (already proven per-block above), so every higher-order coefficient and every non-DC
+    /// gain-vector element should quantize to the uniform quantizer's own "zero" bin
+    /// (`2^(bits-1)`, the zero-offset middle index) -- a real, structural check, not merely "runs
+    /// without panicking".
+    #[test]
+    fn end_to_end_pipeline_with_a_constant_residual_input_quantizes_to_the_zero_bin() {
+        let l = 20;
+        let constant = 3.0;
+        let residuals = vec![constant; l as usize];
+
+        let blocks = partition_into_blocks(&residuals, l).unwrap();
+        let dct_blocks: [Vec<f64>; 6] = std::array::from_fn(|i| block_dct(&blocks[i]));
+
+        let r_hat: [f64; 6] = std::array::from_fn(|i| dct_blocks[i][0]);
+        for &r in &r_hat {
+            assert!(
+                (r - constant).abs() < 1e-9,
+                "expected each block's own DC term to equal the constant input, got {r}"
+            );
+        }
+
+        let g_hat = crate::ambe::gain_vector_dct(&r_hat);
+        assert!((g_hat[0] - constant).abs() < 1e-9);
+        for &g in &g_hat[1..] {
+            assert!(
+                g.abs() < 1e-9,
+                "expected every higher gain-vector term to vanish for a constant R_i, got {g}"
+            );
+        }
+
+        // Real, found while writing this test, not hypothetical: `gain_vector_dct`'s own cosine
+        // sum leaves values that are mathematically exactly zero as a tiny nonzero float (e.g.
+        // -3e-16), well under the `1e-9` tolerance checked above -- but `saturating_uniform_
+        // quantize`'s own `floor()` is exquisitely sensitive to that sign right at a bin boundary
+        // (`floor(-1e-14)` is `-1`, not `0`), so the quantized index can land one bin below the
+        // idealized "exact zero" bin depending on which way the roundoff fell. That's a real,
+        // inherent property of floor-based uniform quantization at an exact bin boundary, not a
+        // bug in the quantizer -- so this checks "at or one bin below the zero bin", not exact
+        // equality.
+        for element in 2..=6u32 {
+            let (bits, _) = tables::gain_bit_allocation(l, element).unwrap();
+            let zero_bin = 1u32 << (bits - 1);
+            let idx =
+                quantize_gain_vector_element(g_hat[(element - 1) as usize], l, element).unwrap();
+            assert!(
+                idx == zero_bin || idx == zero_bin - 1,
+                "element {element}: expected the zero bin ({zero_bin}) or one below it, got {idx}"
+            );
+        }
+
+        let bit_allocation = tables::higher_order_bit_allocation(l).unwrap();
+        let quantized = quantize_higher_order_coefficients(&dct_blocks, l).unwrap();
+        for (&bits, &idx) in bit_allocation
+            .iter()
+            .filter(|&&b| b > 0)
+            .zip(quantized.iter())
+        {
+            let zero_bin = 1u32 << (bits - 1);
+            assert!(
+                idx == zero_bin || idx == zero_bin - 1,
+                "expected the zero bin ({zero_bin}) or one below it for a zero-valued coefficient, got {idx}"
             );
         }
     }
