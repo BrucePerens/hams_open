@@ -65,6 +65,7 @@ const HAMMING_PARITY: [u8; 11] = [
 /// convention -- bit 11 is the first/most-significant data bit) into a 23-bit Golay codeword (systematic:
 /// the same 12 data bits, followed by 11 parity bits, matching `v_i = u_i . g_G` for `g_G = [I_12 | P]`).
 /// The returned value's low 23 bits are meaningful, MSB-first.
+// [@ANCHOR: golay_encode]
 pub fn golay_encode(data: u16) -> u32 {
     let data = data & 0x0FFF;
     let mut parity: u16 = 0;
@@ -79,6 +80,7 @@ pub fn golay_encode(data: u16) -> u32 {
 
 /// Encodes 11 data bits (low 11 bits of `data`, MSB-first) into a 15-bit Hamming codeword, the same
 /// systematic construction as [`golay_encode`].
+// [@ANCHOR: hamming_encode]
 pub fn hamming_encode(data: u16) -> u16 {
     let data = data & 0x07FF;
     let mut parity: u8 = 0;
@@ -99,6 +101,7 @@ pub fn hamming_encode(data: u16) -> u16 {
 /// of 7 means `floor((7-1)/2) = 3`); beyond that the "nearest codeword" is still well-defined but no
 /// longer guaranteed to be the one that was actually sent, which section 7.6's own error-estimation
 /// text (this is what feeds it) exists specifically to detect.
+// [@ANCHOR: golay_decode]
 pub fn golay_decode(received: u32) -> (u16, u32) {
     let received = received & 0x7F_FFFF;
     let mut best_data = 0u16;
@@ -115,6 +118,7 @@ pub fn golay_decode(received: u32) -> (u16, u32) {
 
 /// The same minimum-distance decoding as [`golay_decode`], for the `[15,11,3]` Hamming code (unique
 /// nearest codeword, and therefore exact recovery, guaranteed for 1 or fewer bit errors).
+// [@ANCHOR: hamming_decode]
 pub fn hamming_decode(received: u16) -> (u16, u32) {
     let received = received & 0x7FFF;
     let mut best_data = 0u16;
@@ -162,6 +166,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: golay_encode]
     fn golay_weight_distribution_matches_the_known_enumerator() {
         // The real, independent correctness check this module's own doc comment describes: the
         // binary Golay [23,12] code's weight distribution is a published, spec-external fact
@@ -191,6 +196,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: hamming_encode]
     fn hamming_weight_distribution_matches_the_known_enumerator() {
         // Same real, independent check as the Golay test above, against the [15,11] Hamming code's
         // own published weight enumerator.
@@ -254,6 +260,7 @@ mod tests {
     /// wrong parity bit anywhere in `GOLAY_PARITY` would break this for essentially every data value,
     /// not just a rare one).
     #[test]
+    // Tests [@ANCHOR: golay_decode]
     fn golay_decode_recovers_the_original_from_up_to_three_bit_errors() {
         let representative_data: [u16; 4] = [0, 0xFFF, 0b1010_1100_1101, 0b0000_1111_0000];
         for &data in &representative_data {
@@ -298,6 +305,7 @@ mod tests {
     /// exact recovery) for any single bit error -- checked for every one of the 15 possible single-bit
     /// flips against a handful of representative data values.
     #[test]
+    // Tests [@ANCHOR: hamming_decode]
     fn hamming_decode_recovers_the_original_from_a_single_bit_error() {
         let representative_data: [u16; 4] = [0, 0x7FF, 0b101_1100_1101, 0b000_1111_0000];
         for &data in &representative_data {

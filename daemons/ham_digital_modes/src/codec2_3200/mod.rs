@@ -263,6 +263,7 @@ impl Decoder {
     /// the first (earlier) sub-frame's parameters from the previous
     /// frame's own decoded state, then run LSP-to-LPC, spectral-envelope
     /// reconstruction, and sinusoidal synthesis once per sub-frame.
+    // [@ANCHOR: Decoder::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
         let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
         let wo1 = quantise::decode_wo(fields.wo_index);
@@ -321,6 +322,7 @@ impl Decoder {
     /// whichever call runs second. Use two separate `Decoder`s (as this
     /// module's own tests do) if both rates are ever needed from the
     /// same stream.
+    // [@ANCHOR: Decoder::decode_16k]
     pub fn decode_16k(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],
@@ -417,6 +419,7 @@ impl DecoderFixed {
     /// Same real frame structure as `Decoder::decode` (see that
     /// function's own doc comment) -- this is `DecoderFixed`'s own
     /// mirror, genuinely fixed-point end to end.
+    // [@ANCHOR: DecoderFixed::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
         let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
         let wo1 = quantise::decode_wo_fixed(fields.wo_index);
@@ -459,6 +462,7 @@ impl DecoderFixed {
     /// `decode()` above untouched) and its warning about not
     /// interleaving `decode()`/`decode_16k_fixed()` on one instance
     /// (same shared inter-frame state here too).
+    // [@ANCHOR: DecoderFixed::decode_16k_fixed]
     pub fn decode_16k_fixed(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],
@@ -528,6 +532,7 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: Encoder::encode]
     // Tests [@ANCHOR: Encoder::shift_in]
+    // Tests [@ANCHOR: Decoder::decode]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = Encoder::new();
         let mut decoder = Decoder::new();
@@ -571,6 +576,7 @@ mod tests {
     /// between the two overlap-add buffers' own "carried tail" vs "new"
     /// halves, not a defect in either decoder's own output.
     #[test]
+    // Tests [@ANCHOR: Decoder::decode_16k]
     fn decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated() {
         let bits_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -704,6 +710,7 @@ mod tests {
     /// overlap-add geometry is identical between float and fixed, so
     /// the same one-sample offset applies).
     #[test]
+    // Tests [@ANCHOR: DecoderFixed::decode_16k_fixed]
     fn decode_16k_fixed_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated()
     {
         let bits_path = concat!(
@@ -915,6 +922,7 @@ mod tests {
     /// in the fixed-point synthesis chain) would pass a correlation-only
     /// check and only show up as implausibly loud or quiet audio.
     #[test]
+    // Tests [@ANCHOR: DecoderFixed::decode]
     fn decoder_fixed_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream(
     ) {
         let bits_path = concat!(

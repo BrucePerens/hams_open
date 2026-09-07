@@ -19,6 +19,7 @@ use crate::codec2_3200::LPC_ORD;
 /// loop reproduces that with an explicit index rather than "fixing" it,
 /// since it's the real reference's own real behavior, not a bug to
 /// correct.
+// [@ANCHOR: check_lsp_order]
 pub fn check_lsp_order(lsp: &mut [f32; LPC_ORD]) -> usize {
     let mut swaps = 0usize;
     let mut i = 1usize;
@@ -42,6 +43,7 @@ const HZ_TO_RAD: f32 = std::f32::consts::PI / 4000.0;
 /// less than the given Hz margin -- LSP quantization errors under
 /// ~12.5Hz are inaudible, so this is the real reference's own minimum
 /// separation floor, not a tunable choice made here.
+// [@ANCHOR: bw_expand_lsps]
 pub fn bw_expand_lsps(lsp: &mut [f32; LPC_ORD], min_sep_low: f32, min_sep_high: f32) {
     for i in 1..4 {
         if (lsp[i] - lsp[i - 1]) < min_sep_low * HZ_TO_RAD {
@@ -80,6 +82,7 @@ fn swap_nudge_q23() -> i64 {
 /// Fixed-point sibling of `check_lsp_order`: identical logic (including
 /// the same real reference restart-index quirk), entirely in `i64` Q23
 /// arithmetic.
+// [@ANCHOR: check_lsp_order_fixed]
 pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize {
     let mut swaps = 0usize;
     let mut i = 1usize;
@@ -117,6 +120,7 @@ pub fn min_sep_high_q23() -> i64 {
 /// Fixed-point sibling of `bw_expand_lsps`, entirely in `i64` Q23
 /// arithmetic. `min_sep_low_q23`/`min_sep_high_q23` come from
 /// `min_sep_low_q23()`/`min_sep_high_q23()` above.
+// [@ANCHOR: bw_expand_lsps_fixed]
 pub fn bw_expand_lsps_fixed(lsp: &mut [i64; LPC_ORD], min_sep_low_q23: i64, min_sep_high_q23: i64) {
     for i in 1..4 {
         if (lsp[i] - lsp[i - 1]) < min_sep_low_q23 {
@@ -162,6 +166,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: check_lsp_order]
     fn check_lsp_order_fixes_a_single_out_of_order_pair() {
         let mut lsp: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
         lsp.swap(3, 4);
@@ -172,6 +177,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: bw_expand_lsps]
     fn bw_expand_lsps_separates_two_lsps_that_start_too_close() {
         let mut lsp = [0.0f32; super::LPC_ORD];
         for (i, v) in lsp.iter_mut().enumerate() {
@@ -210,6 +216,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: check_lsp_order_fixed]
     fn check_lsp_order_fixed_matches_the_float_version_on_an_out_of_order_pair() {
         let mut lsp: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
         lsp.swap(3, 4);
@@ -229,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: bw_expand_lsps_fixed]
     fn bw_expand_lsps_fixed_matches_the_float_version() {
         let mut lsp = [0.0f32; super::LPC_ORD];
         for (i, v) in lsp.iter_mut().enumerate() {

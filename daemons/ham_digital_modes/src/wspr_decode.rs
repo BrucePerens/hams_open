@@ -131,6 +131,7 @@ impl Ord for StackNode {
 /// and therefore P(r) identically, so it cancels exactly in the
 /// P(r|hyp_bit)/P(r) ratio this function computes and never needs to be
 /// evaluated.
+// [@ANCHOR: fano_bit_metric]
 fn fano_bit_metric(r: f64, hyp_bit: bool, amplitude: f64, noise_stddev: f64) -> f64 {
     const RATE_BITS_PER_CHANNEL_BIT: f64 = 0.5;
     let gaussian_shape = |x: f64, mean: f64| -> f64 {
@@ -168,6 +169,7 @@ fn fano_bit_metric(r: f64, hyp_bit: bool, amplitude: f64, noise_stddev: f64) -> 
 /// callers that need a confidence gate, not just a raw completion,
 /// should compare this value against that threshold themselves (or use
 /// `sequential_decode_with_confidence_gate()` below, which already does).
+// [@ANCHOR: sequential_decode]
 pub fn sequential_decode(
     channel_bit_values: &[f64; WSPR_NUM_SYMBOLS],
     amplitude: &[f64; WSPR_NUM_SYMBOLS],
@@ -313,6 +315,7 @@ pub enum ConfidenceGateError {
 /// threshold depends on the caller's own false-accept tolerance, not on
 /// this function's. Pass `MIN_ACCEPTABLE_METRIC` for the documented,
 /// information-theoretically-motivated default.
+// [@ANCHOR: sequential_decode_with_confidence_gate]
 pub fn sequential_decode_with_confidence_gate(
     channel_bit_values: &[f64; WSPR_NUM_SYMBOLS],
     amplitude: &[f64; WSPR_NUM_SYMBOLS],
@@ -336,6 +339,7 @@ pub fn sequential_decode_with_confidence_gate(
 /// `symbol_values` are indexed by symbol position (what a real receiver
 /// observes per WSPR symbol -- the DATA bit's soft value, NOT the sync
 /// bit, which this decoder doesn't consume at all).
+// [@ANCHOR: deinterleave_symbol_values]
 pub fn deinterleave_symbol_values(
     symbol_values: &[f64; WSPR_NUM_SYMBOLS],
 ) -> [f64; WSPR_NUM_SYMBOLS] {
@@ -438,6 +442,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: deinterleave_symbol_values]
+    // Tests [@ANCHOR: sequential_decode]
     fn genie_test_zero_noise_recovers_the_exact_bits_in_very_few_cycles() {
         // The first diagnostic advisor() called for: at (near-)zero
         // noise with a correct metric, the decoder should walk almost
@@ -570,6 +576,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: sequential_decode_with_confidence_gate]
     fn confidence_gate_meaningfully_reduces_the_wrong_decode_rate() {
         // Direct, real test of the effect MIN_ACCEPTABLE_METRIC's own
         // doc comment claims -- not just an assertion that the gate
@@ -849,6 +856,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: fano_bit_metric]
     fn fano_bit_metric_favors_the_hypothesis_matching_the_received_sign() {
         // A basic sanity check on the metric's own direction, isolated
         // from the search algorithm entirely: a strongly positive

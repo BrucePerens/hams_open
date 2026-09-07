@@ -39,6 +39,7 @@ use crate::codec2_3200::LPC_ORD;
 /// tests don't call this directly today, but it's exported the same way
 /// every other moved function here is, for consistency and any future
 /// cross-validation test.
+// [@ANCHOR: autocorrelate]
 pub(crate) fn autocorrelate(wn: &[f32]) -> Autocorr {
     let mut r = [0.0f32; LPC_ORD + 1];
     for (j, r_j) in r.iter_mut().enumerate() {
@@ -167,6 +168,7 @@ pub(crate) fn apply_white_noise_correction(r: &mut Autocorr) {
 /// superseded fixed-point candidates kept for their own historical
 /// clamp-divergence study, not production code checked against this
 /// function), but it's exported for consistency and any future use.
+// [@ANCHOR: levinson_durbin]
 pub(crate) fn levinson_durbin(r: &Autocorr) -> LpcCoeffs {
     let mut a = [0.0f32; LPC_ORD + 1];
     let mut a_prev = [0.0f32; LPC_ORD + 1];
@@ -201,6 +203,7 @@ pub(crate) fn levinson_durbin(r: &Autocorr) -> LpcCoeffs {
 /// own build_p_q_fixed cross-validation stays independent (see that
 /// function's own doc comment), so nothing there calls this today, but
 /// it's exported for consistency.
+// [@ANCHOR: build_p_q]
 pub(crate) fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
     let m = LPC_ORD / 2;
     let mut p = [0.0f32; 6];
@@ -241,6 +244,7 @@ pub(crate) fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
 /// strictly increasing). Returns `None` if fewer than `LPC_ORD` roots
 /// were found in `[-1, 1]` (a real, if rare, LPC analysis failure mode
 /// on pathological input -- callers substitute benign fallback LSPs).
+// [@ANCHOR: lpc_to_lsp]
 pub(crate) fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
     let (p, q) = build_p_q(ak);
     let mut search_from = 1.0f32;
@@ -277,6 +281,7 @@ mod tests {
     /// implementation against the real reference's own real output, not
     /// just internal self-consistency.
     #[test]
+    // Tests [@ANCHOR: levinson_durbin]
     fn levinson_durbin_matches_the_real_reference_on_real_captured_speech_data() {
         let r_path = fixture!("codec2_r_dump.txt");
         let ak_path = fixture!("codec2_ak_dump.txt");
@@ -344,6 +349,7 @@ mod tests {
     /// extra, uncounted halving beyond the reference's real 6) through
     /// silently, since the wrong root value still counted as "found".
     #[test]
+    // Tests [@ANCHOR: lpc_to_lsp]
     fn lpc_to_lsp_matches_the_real_reference_on_real_captured_ak_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let lsp_path = fixture!("codec2_lsp_dump.txt");
@@ -402,6 +408,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: build_p_q]
     fn build_p_q_matches_the_real_reference_p_q_on_real_captured_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let pq_path = fixture!("codec2_pq_dump.txt");
@@ -448,6 +455,7 @@ mod tests {
     /// though `lpc_energy` (which feeds `encode_energy` directly into the
     /// bitstream) is scale-dependent.
     #[test]
+    // Tests [@ANCHOR: autocorrelate]
     fn autocorrelate_matches_the_real_reference_r_on_a_synthetic_signals_real_captured_wn_data() {
         let wn_path = fixture!("synthetic_codec2_wn_dump.txt");
         let r_path = fixture!("synthetic_codec2_r_dump.txt");
