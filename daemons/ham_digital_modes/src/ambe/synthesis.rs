@@ -22,7 +22,7 @@ use super::enhancement::{
     update_local_energy,
 };
 use super::error_estimation::FrameErrors;
-use super::unvoiced_synthesis::{NoiseState, UnvoicedState, N};
+use super::unvoiced_synthesis::{advance_noise, NoiseState, UnvoicedState, N};
 use super::voiced_synthesis::VoicedState;
 
 /// Persistent decoder-side synthesis state: the shared noise generator (see
@@ -45,6 +45,15 @@ pub struct SynthesisState {
     /// Eq. 104 (`M_bar_l(0) = M_bar_l(-1)`) and the accompanying "reuse everything" reading of
     /// Eq. 99-104 -- `None` until the first real (non-repeated) frame has run.
     last_final_amplitudes: Option<(f64, Vec<bool>, Vec<f64>)>,
+    /// Section 7.8's own comfort-noise generator state: an independent instance of the *same*
+    /// Eq. 117 recurrence [`NoiseState`] uses (same Annex A seed, `u(-105) = 3147` -- the spec
+    /// defines exactly one such recurrence, and 7.8 doesn't name a second one, so reusing it is
+    /// the spec-faithful reading, not an invented generator), but deliberately NOT sharing
+    /// `noise`'s own state: a muted frame's own 160 raw comfort-noise draws would otherwise
+    /// advance `NoiseState`'s shared window an amount unrelated to its own per-frame contract
+    /// (`advance_frame`'s single step), desynchronizing the noise sequence real unvoiced/voiced
+    /// synthesis depends on for every frame *after* the muted one.
+    comfort_noise_seed: i64,
 }
 
 impl SynthesisState {
@@ -57,7 +66,27 @@ impl SynthesisState {
             tau_m: 20480.0,
             first_frame: true,
             last_final_amplitudes: None,
+            comfort_noise_seed: 3147,
         }
+    }
+
+    /// Section 7.8 (Frame Muting), transcribed from a 600 DPI render of page 63: "set the
+    /// synthetic speech signal, s~(n), to random noise which is uniformly distributed over the
+    /// interval [-5, 5]" -- a real, literal spec requirement, not a design choice like
+    /// [`Self::synthesize_repeated_frame`]'s own "reasonable degradation" framing. Each raw
+    /// `advance_noise` draw (uniform over `0..53125`) is linearly rescaled to `[-5.0, 5.0)`;
+    /// excluding the exact upper endpoint is immaterial for a continuous uniform distribution.
+    /// Callers still owe the frame-repeat "step (2) update equations" section 7.8's own text
+    /// requires *before* calling this (this codebase's own `should_mute_frame` doc comment
+    /// already establishes that `decode.rs` runs the same repeat bookkeeping for a muted frame as
+    /// for an ordinary repeat) -- this function is only the "bypass speech synthesis, emit noise
+    /// instead" half.
+    // [@ANCHOR: ambe:synthesize_comfort_frame]
+    pub fn synthesize_comfort_frame(&mut self) -> [f64; N] {
+        std::array::from_fn(|_| {
+            self.comfort_noise_seed = advance_noise(self.comfort_noise_seed);
+            -5.0 + 10.0 * (self.comfort_noise_seed as f64) / 53125.0
+        })
     }
 
     /// Section 8-9 (Eq. 105-116): reconstruct's own *unenhanced* amplitudes through enhancement,
@@ -221,6 +250,60 @@ mod tests {
         // Eq. 99-104 skip enhancement entirely on a repeat.
         assert_eq!(state.s_e, s_e_after_real_frame);
         assert_eq!(state.tau_m, tau_m_after_real_frame);
+    }
+
+    /// Real, direct check of section 7.8's own literal requirement: every sample lands in
+    /// `[-5.0, 5.0)`, and the frame isn't degenerate (not every sample identical) -- a real check
+    /// on the actual distribution, not just "it's finite" the way a synthesis smoke test would be.
+    // Tests [@ANCHOR: ambe:synthesize_comfort_frame]
+    #[test]
+    fn synthesize_comfort_frame_produces_bounded_non_degenerate_noise() {
+        let mut state = SynthesisState::new();
+        let frame = state.synthesize_comfort_frame();
+        assert_eq!(frame.len(), N);
+        for &sample in &frame {
+            assert!(
+                (-5.0..5.0).contains(&sample),
+                "comfort-noise sample {sample} outside the spec's own [-5, 5) interval"
+            );
+        }
+        assert!(
+            frame.iter().any(|&s| s != frame[0]),
+            "expected real noise, not a degenerate constant frame"
+        );
+    }
+
+    /// `advance_noise`'s own recurrence is deterministic given the same seed -- two fresh
+    /// `SynthesisState`s (same Annex A seed) must produce byte-identical comfort-noise frames,
+    /// the same reproducibility bar this codec's every other deterministic component gets.
+    #[test]
+    fn synthesize_comfort_frame_is_deterministic_from_the_same_seed() {
+        let mut a = SynthesisState::new();
+        let mut b = SynthesisState::new();
+        assert_eq!(a.synthesize_comfort_frame(), b.synthesize_comfort_frame());
+    }
+
+    /// The real reason `comfort_noise_seed` is a separate field from `noise: NoiseState`: pulling
+    /// 160 comfort-noise draws per muted frame must not perturb the shared noise window real
+    /// unvoiced/voiced synthesis depends on for every subsequent real frame.
+    #[test]
+    fn synthesize_comfort_frame_does_not_perturb_the_shared_noise_state() {
+        let mut with_comfort = SynthesisState::new();
+        let mut without_comfort = SynthesisState::new();
+
+        with_comfort.synthesize_comfort_frame();
+
+        let omega0 = 2.0 * std::f64::consts::PI / 100.0;
+        let voiced = vec![true; 16];
+        let amplitudes = vec![500.0; 16];
+        let errors = zero_errors();
+        let frame_after_comfort = with_comfort
+            .synthesize_frame(&amplitudes, omega0, &voiced, &errors)
+            .unwrap();
+        let frame_without_comfort = without_comfort
+            .synthesize_frame(&amplitudes, omega0, &voiced, &errors)
+            .unwrap();
+        assert_eq!(frame_after_comfort, frame_without_comfort);
     }
 
     #[test]

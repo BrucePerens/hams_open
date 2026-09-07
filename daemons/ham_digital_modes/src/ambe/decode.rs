@@ -18,9 +18,11 @@
 //!    chicken-and-egg problem [`super::bit_prioritization::deprioritize_bits`] can't solve on its own:
 //!    that function needs `k_hat` and the Annex F/G column widths just to know where the bitstream
 //!    splits, but `k_hat`/`L~` are only knowable *after* decoding `b_hat_0`.
-//! 5. **Check for a frame repeat** (section 7.7, Eq. 97-98 plus an out-of-range `b_hat_0`) before
-//!    doing any further, parameter-dependent decoding at all.
-//! 6. If not repeating: dequantize `b_hat_0` into `omega0_tilde`/`L~`/`K~`, run the full
+//! 5. **Check for a mute or a frame repeat** -- section 7.8's own `epsilon_R > .0875` threshold
+//!    first (checked independently and first, since it's a real, separate, stricter requirement:
+//!    "the decoder is required to mute," not merely a worse repeat), then section 7.7 (Eq. 97-98
+//!    plus an out-of-range `b_hat_0`) -- before doing any further, parameter-dependent decoding.
+//! 6. If neither: dequantize `b_hat_0` into `omega0_tilde`/`L~`/`K~`, run the full
 //!    [`super::bit_prioritization::deprioritize_bits`] now that `k_hat`/widths are known, decode the
 //!    per-band V/UV bits into per-harmonic ones (Eq. 50-51), reconstruct the spectral amplitudes
 //!    (section 6.4), and hand everything to [`super::synthesis::SynthesisState::synthesize_frame`].
@@ -28,12 +30,12 @@
 //!    [`super::synthesis::SynthesisState::synthesize_repeated_frame`] (Eq. 99-104), and leave this
 //!    decoder's own `l_hat_prev`/`spectral_amplitudes_prev` untouched (Eq. 100/103's own
 //!    "current = previous" reduces to "don't reassign them" here).
-//!
-//! **What this module does not (yet) do**: section 7.8's own comfort-noise generation for a
-//! persistently high error rate (`error_estimation::should_mute_frame`) is not yet implemented as its
-//! own real synthesis path -- for now, a muted frame is treated the same as a repeated one (a
-//! reasonable, documented degradation, not the spec's own literal comfort-noise algorithm). This is
-//! recorded as still-open work, not silently presented as the real thing.
+//! 8. If muted: the same "don't reassign them" reasoning satisfies 7.8's own required "step (2)"
+//!    parameter-copy update (confirmed directly from the spec's own text: 7.8 requires exactly the
+//!    frame-repeat process's step (2), Eq. 99-104), but the actual output bypasses speech synthesis
+//!    entirely -- [`super::synthesis::SynthesisState::synthesize_comfort_frame`] emits real,
+//!    uniform-on-`[-5,5]` comfort noise per the spec's own literal Section 7.8 text, transcribed
+//!    from a 600 DPI render of TIA-102.BABA_2003.pdf page 63.
 
 use super::bit_prioritization::{deprioritize_bits, extract_fundamental_frequency_quantizer, DeprioritizedBits};
 use super::error_estimation::{estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors};
@@ -61,10 +63,16 @@ pub struct DecodedParameters {
     pub errors: FrameErrors,
 }
 
-/// The two things a received frame can resolve to before synthesis: a genuine decode, or a repeat
-/// (section 7.7/7.8) with no new parameters of its own.
+/// The three things a received frame can resolve to before synthesis: a genuine decode, a section
+/// 7.7 repeat, or a section 7.8 mute -- the latter two share the *same* "step (2)" parameter-copy
+/// update (Eq. 99-104, confirmed directly: 7.8's own text says "first compute the update equations
+/// as listed in step (2) of the frame repeat process"), but diverge on what gets synthesized: a
+/// repeat reuses the last real frame's own final parameters for actual speech synthesis; a mute
+/// bypasses speech synthesis entirely and emits real comfort noise instead
+/// ([`SynthesisState::synthesize_comfort_frame`]).
 pub enum FrameOutcome {
     Repeat,
+    Mute,
     Decoded(DecodedParameters),
 }
 
@@ -130,11 +138,17 @@ impl DecoderState {
         self.error_rate_prev = errors.rate;
 
         let b0 = extract_fundamental_frequency_quantizer(&u_vectors);
-        let mute = should_mute_frame(&errors); // See this module's own doc comment: treated as a
-                                                // repeat for now, pending real comfort noise (7.8).
-        let repeat = b0 > MAX_VALID_B0 || should_repeat_frame(&errors) || mute;
 
-        if repeat {
+        // Section 7.8's own threshold (`epsilon_R > .0875`) is checked first and independently of
+        // section 7.7's repeat conditions -- a real error rate severe enough to mute is also, in
+        // practice, severe enough that `should_repeat_frame` would often also fire, but 7.8 is a
+        // real, separate, stricter requirement ("the decoder is required to mute"), not merely a
+        // more severe repeat.
+        if should_mute_frame(&errors) {
+            return Some(FrameOutcome::Mute);
+        }
+
+        if b0 > MAX_VALID_B0 || should_repeat_frame(&errors) {
             return Some(FrameOutcome::Repeat);
         }
 
@@ -178,14 +192,16 @@ impl DecoderState {
 
     /// Decodes and synthesizes one received frame's own eight modulated code vectors
     /// `c_hat_0..c_hat_7` (from [`super::interleave::deinterleave_from_dibit_symbols`]) into a 20 ms
-    /// PCM frame. Returns `None` only for a genuinely unrecoverable case: the very first frame of a
-    /// stream itself needs a repeat, and there is no real previous frame for
-    /// [`SynthesisState::synthesize_repeated_frame`] to reuse (the honest "no comfort noise yet
-    /// either" answer, not a silent zero-fill).
+    /// PCM frame. Returns `None` only for a genuinely unrecoverable repeat case: the very first
+    /// frame of a stream itself needs a repeat, and there is no real previous frame for
+    /// [`SynthesisState::synthesize_repeated_frame`] to reuse. A mute has no such limitation --
+    /// [`SynthesisState::synthesize_comfort_frame`] needs no previous frame at all, so a muted
+    /// first frame still produces real output.
     // [@ANCHOR: ambe:decode_frame]
     pub fn decode_frame(&mut self, c: [u32; 8]) -> Option<[f64; N]> {
         match self.decode_parameters(c)? {
             FrameOutcome::Repeat => self.synthesis.synthesize_repeated_frame(),
+            FrameOutcome::Mute => Some(self.synthesis.synthesize_comfort_frame()),
             FrameOutcome::Decoded(params) => {
                 let pcm = self.synthesis.synthesize_frame(
                     &params.reconstructed_amplitudes,
@@ -289,6 +305,9 @@ mod tests {
             FrameOutcome::Repeat => {
                 panic!("expected a real decode for this synthetic frame, got a repeat")
             }
+            FrameOutcome::Mute => {
+                panic!("expected a real decode for this synthetic frame, got a mute")
+            }
         };
 
         assert_eq!(params.bits.b0, frame.b0);
@@ -324,6 +343,36 @@ mod tests {
         // that decode_frame never panics on a first-frame edge case, whichever branch it takes.
         let c = [0u32, 0, 0, 0, 0, 0, 0, 0];
         let _ = decoder.decode_frame(c);
+    }
+
+    /// Real, direct test of section 7.8's own mute requirement: a persistently high running error
+    /// rate (`error_rate_prev` seeded above the `.0875` threshold -- `should_mute_frame` is checked
+    /// before anything about `b0`/`l_hat_prev`, so the specific bitstream content doesn't matter
+    /// here) must produce real, bounded comfort noise, not a repeat and not `None` -- confirming the
+    /// real improvement this fix makes over the old "mute treated as repeat" placeholder: a muted
+    /// *first* frame (no real previous frame at all) still produces output, since
+    /// `synthesize_comfort_frame` has no such dependency the way `synthesize_repeated_frame` does.
+    #[test]
+    fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_even_on_the_first_frame(
+    ) {
+        let mut decoder = DecoderState {
+            synthesis: SynthesisState::new(),
+            l_hat_prev: INITIAL_L_HAT_PREV,
+            spectral_amplitudes_prev: vec![1.0; INITIAL_L_HAT_PREV as usize],
+            error_rate_prev: 0.2, // 0.95*0.2 = 0.19, comfortably over the 0.0875 threshold
+                                   // regardless of this frame's own corrected error count.
+        };
+        let c = [0u32, 0, 0, 0, 0, 0, 0, 0];
+        let pcm = decoder
+            .decode_frame(c)
+            .expect("a mute must still produce real output, even on the first frame");
+        assert_eq!(pcm.len(), N);
+        for &sample in &pcm {
+            assert!(
+                (-5.0..5.0).contains(&sample),
+                "comfort-noise sample {sample} outside the spec's own [-5, 5) interval"
+            );
+        }
     }
 
     /// `Default::default()` is a trivial one-line delegation to `Self::new()` -- checked for real

@@ -79,8 +79,11 @@ pub fn synthesis_window(n: i32) -> f64 {
 /// 53125*floor((171*u(n)+11213)/53125)` is exactly Euclidean remainder for a positive modulus
 /// (`a - b*floor(a/b) == a.rem_euclid(b)` whenever `b > 0`, a real algebraic identity, not an
 /// approximation), so `i64::rem_euclid` is used directly rather than transcribing the floor/subtract
-/// form literally.
-fn advance_noise(u: i64) -> i64 {
+/// form literally. `pub(crate)`, not private: `synthesis.rs`'s own section 7.8 comfort-noise
+/// generator reuses this exact recurrence, seeded independently of [`NoiseState`]'s own shared
+/// window so muting a frame never perturbs the noise sequence real unvoiced/voiced synthesis
+/// depends on.
+pub(crate) fn advance_noise(u: i64) -> i64 {
     (171 * u + 11213).rem_euclid(53125)
 }
 
