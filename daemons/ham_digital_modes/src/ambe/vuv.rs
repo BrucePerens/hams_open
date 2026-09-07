@@ -53,6 +53,7 @@ pub(crate) fn b_hat(l: u32, omega0_hat: f64) -> f64 {
 
 /// `K_hat` (Eq. 34): the number of V/UV frequency bands, each (except possibly the last) spanning
 /// three harmonics.
+// [@ANCHOR: frequency_bands_count]
 pub fn frequency_bands_count(l_hat: u32) -> u32 {
     if l_hat <= 36 {
         l_hat.div_ceil(3)
@@ -68,6 +69,7 @@ pub fn frequency_bands_count(l_hat: u32) -> u32 {
 ///
 /// `is_highest_band` selects Eq. 36's own upper bound (`ceil(b_hat(l_hat)) - 1`, since the highest
 /// band may hold more or fewer than three harmonics) instead of Eq. 35's `ceil(b_hat(3*k)) - 1`.
+// [@ANCHOR: voicing_measure]
 pub fn voicing_measure(
     frame: &RefinementFrame,
     k: u32,
@@ -120,6 +122,7 @@ pub fn xi_0(xi_lf: f64, xi_hf: f64) -> f64 {
 /// [`energy_dependent_function`] to normalize the V/UV threshold against how loud speech has recently
 /// been -- clamped to a floor of 20000 so a long stretch of near-silence doesn't drive the threshold
 /// toward zero.
+// [@ANCHOR: update_xi_max]
 pub fn update_xi_max(xi_max_prev: f64, xi_0: f64) -> f64 {
     if xi_0 > xi_max_prev {
         0.5 * xi_max_prev + 0.5 * xi_0
@@ -136,6 +139,7 @@ pub fn update_xi_max(xi_max_prev: f64, xi_0: f64) -> f64 {
 /// `M(xi)` (Eq. 42): an energy-dependent scaling function used by [`voicing_threshold`], comparing
 /// the current frame's own energy (`xi_0`) against its recent running maximum (`xi_max`), with an
 /// extra low-frequency-dominance correction when the spectrum isn't clearly low-frequency-heavy.
+// [@ANCHOR: energy_dependent_function]
 pub fn energy_dependent_function(xi_max: f64, xi_0: f64, xi_lf: f64, xi_hf: f64) -> f64 {
     let base = (0.0025 * xi_max + xi_0) / (0.01 * xi_max + xi_0);
     if xi_lf >= 5.0 * xi_hf {
@@ -153,6 +157,7 @@ pub fn energy_dependent_function(xi_max: f64, xi_0: f64, xi_lf: f64, xi_hf: f64)
 /// function value from `pitch::PitchAnalysisFrame::error_function` -- a large value there means the
 /// initial pitch estimate itself was unreliable, in which case every band but the first is forced
 /// unvoiced outright (the spec's own first case below).
+// [@ANCHOR: voicing_threshold]
 pub fn voicing_threshold(
     k: u32,
     omega0_hat: f64,
@@ -177,6 +182,7 @@ pub fn voicing_threshold(
 /// all, at stream start) is read as "not voiced" for any band index it doesn't cover -- the spec's
 /// own text doesn't address a change in `K_hat` between frames, so this is this implementation's own
 /// reasonable default, not a transcribed rule.
+// [@ANCHOR: determine_voicing]
 pub fn determine_voicing(
     frame: &RefinementFrame,
     omega0_hat: f64,
@@ -229,6 +235,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: frequency_bands_count]
     fn frequency_bands_count_matches_eq34_including_the_l_le_36_boundary() {
         assert_eq!(frequency_bands_count(9), 9u32.div_ceil(3)); // = 3
         assert_eq!(frequency_bands_count(36), 36u32.div_ceil(3)); // = 12, still the "L<=36" branch
@@ -237,6 +244,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: energy_dependent_function]
     fn energy_dependent_function_matches_eq42_in_both_branches() {
         // Branch 1: xi_LF >= 5*xi_HF.
         let m = energy_dependent_function(20000.0, 20000.0, 100.0, 10.0);
@@ -250,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: update_xi_max]
     fn update_xi_max_matches_eq41_in_all_three_branches() {
         // Branch 1: xi_0 exceeds the previous max.
         assert!((update_xi_max(20000.0, 30000.0) - 25000.0).abs() < 1e-9);
@@ -287,6 +296,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: voicing_measure]
     fn voicing_measure_is_near_zero_for_the_first_band_of_a_real_harmonic_signal() {
         let sample_rate = 8000.0;
         let period = 80.0;
@@ -305,6 +315,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: determine_voicing]
+    // Tests [@ANCHOR: voicing_threshold]
     fn determine_voicing_declares_a_real_harmonic_signals_low_bands_voiced() {
         let sample_rate = 8000.0;
         let period = 80.0;

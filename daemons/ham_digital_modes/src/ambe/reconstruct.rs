@@ -28,6 +28,7 @@ use super::{prediction, quantize, tables};
 /// [`super::quantize`]'s own private `saturating_uniform_quantize`: `0.0` if `bits == 0` (never
 /// transmitted, so nothing to reconstruct), otherwise `step_size * (quantizer_value - 2^(bits-1) +
 /// 0.5)`.
+// [@ANCHOR: dequantize_uniform]
 fn dequantize_uniform(quantizer_value: u32, bits: u8, step_size: f64) -> f64 {
     if bits == 0 {
         return 0.0;
@@ -42,6 +43,7 @@ fn dequantize_uniform(quantizer_value: u32, bits: u8, step_size: f64) -> f64 {
 /// same Annex F bit allocation/step size [`super::quantize::quantize_gain_vector`] used to quantize
 /// them in the first place, so the two stay in lockstep by construction. Returns `None` for an
 /// out-of-range `b2`/`l`.
+// [@ANCHOR: reconstruct_gain_vector]
 pub fn reconstruct_gain_vector(b2: u8, gain_values: [u32; 5], l: u32) -> Option<[f64; 6]> {
     let g1 = *tables::GAIN_QUANTIZER_LEVELS.get(b2 as usize)?;
     let mut g_hat = [0.0f64; 6];
@@ -56,6 +58,7 @@ pub fn reconstruct_gain_vector(b2: u8, gain_values: [u32; 5], l: u32) -> Option<
 /// The inverse gain-vector DCT (Eq. 69-70): reconstructs the six per-block DC coefficients
 /// `R_hat_1..R_hat_6` from the transformed gain vector `G_hat_1..G_hat_6` -- the real, numerically
 /// verified inverse of [`super::gain_vector_dct`] (see this module's own doc comment).
+// [@ANCHOR: inverse_gain_vector_dct]
 pub fn inverse_gain_vector_dct(g_hat: &[f64; 6]) -> [f64; 6] {
     let mut r_hat = [0.0f64; 6];
     for (i, slot) in r_hat.iter_mut().enumerate() {
@@ -75,6 +78,7 @@ pub fn inverse_gain_vector_dct(g_hat: &[f64; 6]) -> [f64; 6] {
 /// [`super::quantize::block_dct`]'s own 0-indexed return convention) -- the real, numerically
 /// verified inverse of that function (see this module's own doc comment), for an arbitrary block
 /// length rather than the fixed `N=6` [`inverse_gain_vector_dct`] uses.
+// [@ANCHOR: inverse_block_dct]
 pub fn inverse_block_dct(dct_coeffs: &[f64]) -> Vec<f64> {
     let j = dct_coeffs.len();
     if j == 0 {
@@ -103,6 +107,7 @@ pub fn inverse_block_dct(dct_coeffs: &[f64]) -> Vec<f64> {
 /// Returns `None` for an out-of-range `l`, or if `quantized_values` doesn't have exactly one entry
 /// per real (`bits > 0`) Annex G position -- a real mismatch, not a silently-tolerated one, given how
 /// easily a caller could otherwise pass a value list one short or one long.
+// [@ANCHOR: reconstruct_higher_order_coefficients]
 pub fn reconstruct_higher_order_coefficients(
     quantized_values: &[u32],
     l: u32,
@@ -141,6 +146,7 @@ pub fn reconstruct_higher_order_coefficients(
 /// have" history the *next* frame's own prediction needs (see [`prediction`]'s own doc comment).
 /// Returns `None` for an out-of-range `b2`/`l_hat_curr`, or a `higher_order_quantized_values` that
 /// doesn't match `l_hat_curr`'s own real Annex G shape.
+// [@ANCHOR: reconstruct_spectral_amplitudes]
 pub fn reconstruct_spectral_amplitudes(
     b2: u8,
     gain_values: [u32; 5],
@@ -187,6 +193,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: dequantize_uniform]
     fn dequantize_uniform_matches_eq68_71_and_treats_zero_bits_as_zero() {
         let bits = 4u8;
         let step = 0.1;
@@ -201,6 +208,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: inverse_gain_vector_dct]
     fn gain_vector_dct_and_its_inverse_round_trip_a_real_asymmetric_input() {
         let r_hat = [1.0, -0.5, 0.25, 0.0, 2.0, -1.5];
         let g_hat = crate::ambe::gain_vector_dct(&r_hat);
@@ -214,6 +222,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: inverse_block_dct]
     fn block_dct_and_its_inverse_round_trip_real_asymmetric_inputs_of_varying_length() {
         for &j in &[1usize, 2, 3, 7, 10] {
             let c: Vec<f64> = (0..j).map(|i| (i as f64) * 0.7 - 1.3).collect();
@@ -230,6 +239,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: reconstruct_gain_vector]
     fn reconstruct_gain_vector_uses_annex_e_for_g1_and_annex_f_for_the_rest() {
         let l = 20;
         let b2 = 17u8; // GAIN_QUANTIZER_LEVELS[17] = 0.211495 (tables.rs's own worked value)
@@ -246,6 +256,8 @@ mod tests {
     /// own disclosed gap: it proves `reconstruct_spectral_amplitudes`'s own output is a real,
     /// bounded-error stand-in for "what the decoder will have," not merely code that runs.
     #[test]
+    // Tests [@ANCHOR: reconstruct_spectral_amplitudes]
+    // Tests [@ANCHOR: reconstruct_higher_order_coefficients]
     fn reconstruct_spectral_amplitudes_recovers_the_original_within_quantization_noise() {
         let l_hat_curr = 20;
         let l_hat_prev = 20;

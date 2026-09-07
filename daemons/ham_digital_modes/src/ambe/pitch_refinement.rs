@@ -58,6 +58,7 @@ impl Complex {
 /// Real-valued (see this module's own doc comment on why): only the cosine term is computed: the
 /// sine term's own contribution exactly cancels for a real, even-symmetric sequence like `w_R(n)`, a
 /// direct consequence of the same fact the spec states explicitly, not a separate approximation.
+// [@ANCHOR: window_dft_16384]
 pub(crate) fn window_dft_16384(m: i32) -> f64 {
     let mut acc = 0.0;
     for n in -110i32..=110 {
@@ -79,6 +80,7 @@ impl RefinementFrame {
     /// frame's own `n = 0`. `raw` must have at least 110 real samples of margin on both sides of
     /// `center` -- panics (via array indexing) otherwise, the same real, unavoidable data dependency
     /// `pitch::lowpass_filtered_sample` already has.
+    // [@ANCHOR: RefinementFrame::new]
     pub fn new(raw: &[f64], center: usize) -> Self {
         let mut sw = [Complex::ZERO; 256];
         for (i, slot) in sw.iter_mut().enumerate() {
@@ -100,6 +102,7 @@ impl RefinementFrame {
     /// bin index a hair outside this range for a candidate near the edge of the spec's own pitch
     /// range -- treated as "no real spectral content there" rather than panicking, matching this
     /// module's overall "give up gracefully on an edge candidate, don't crash" posture).
+    // [@ANCHOR: RefinementFrame::sw_at]
     pub(crate) fn sw_at(&self, m: i32) -> Complex {
         if (-127..=128).contains(&m) {
             self.sw[(m + 127) as usize]
@@ -112,6 +115,7 @@ impl RefinementFrame {
 /// The harmonic amplitude `A_l(omega0)` (Eq. 26-28): a least-squares estimate of the `l`'th
 /// harmonic's own complex amplitude, from the DFT bins in `S_w(m)` nearest that harmonic's own
 /// frequency, weighted by the window's own spectral shape `W_R`.
+// [@ANCHOR: harmonic_amplitude]
 fn harmonic_amplitude(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
     let a_l = (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0;
     let b_l = (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0;
@@ -137,6 +141,7 @@ fn harmonic_amplitude(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
 
 /// The synthetic spectrum `S_w(m, omega0)` (Eq. 25): for the DFT bin `m`, finds which harmonic band
 /// (if any, per Eq. 26-27) `m` falls into and returns that harmonic's own estimated contribution.
+// [@ANCHOR: synthetic_spectrum]
 pub(crate) fn synthetic_spectrum(
     frame: &RefinementFrame,
     m: i32,
@@ -161,6 +166,7 @@ pub(crate) fn synthetic_spectrum(
 /// The pitch refinement error function `E_R(omega0)` (Eq. 24): sums the squared magnitude difference
 /// between the real spectrum `S_w(m)` and the synthetic spectrum `S_w(m, omega0)` over the DFT bins
 /// covered by the harmonics a candidate `omega0` implies.
+// [@ANCHOR: refinement_error]
 pub fn refinement_error(frame: &RefinementFrame, omega0: f64) -> f64 {
     let l_estimate = (0.9254 * PI / omega0 - 0.5).floor();
     let upper_m = (l_estimate * (256.0 / (2.0 * PI)) * omega0).floor() as i32;
@@ -242,6 +248,12 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: window_dft_16384]
+    // Tests [@ANCHOR: RefinementFrame::new]
+    // Tests [@ANCHOR: RefinementFrame::sw_at]
+    // Tests [@ANCHOR: harmonic_amplitude]
+    // Tests [@ANCHOR: synthetic_spectrum]
+    // Tests [@ANCHOR: refinement_error]
     fn refinement_error_is_minimized_at_the_true_fundamental_of_a_real_harmonic_signal() {
         // 8 kHz sample rate matches the spec's own stated domain ("P0 is measured in samples (at 8
         // kHz)"). A period of 80 samples (100 Hz) is a real, plausible low male voice pitch.

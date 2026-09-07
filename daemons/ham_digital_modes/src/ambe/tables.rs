@@ -31,6 +31,7 @@ pub const GAIN_QUANTIZER_LEVELS: [f64; 64] = [
 
 /// Finds the index of the [`GAIN_QUANTIZER_LEVELS`] entry nearest to `g_hat_1`, i.e. `b_hat_2` per
 /// the spec's own definition (section 6.3.1).
+// [@ANCHOR: quantize_gain_index]
 pub fn quantize_gain_index(g_hat_1: f64) -> u8 {
     let mut best_idx = 0usize;
     let mut best_dist = f64::INFINITY;
@@ -59,6 +60,7 @@ pub fn quantize_gain_index(g_hat_1: f64) -> u8 {
 /// rows during parsing (see `block_lengths_always_sum_to_l` below), and the six lengths are always
 /// non-decreasing left to right in every real spec row (low-frequency blocks are never longer than
 /// higher-frequency ones) -- also confirmed for all 48 rows.
+// [@ANCHOR: block_lengths_for_l]
 pub fn block_lengths_for_l(l: u32) -> Option<[u32; 6]> {
     if !(9..=56).contains(&l) {
         return None;
@@ -87,6 +89,7 @@ pub fn block_lengths_for_l(l: u32) -> Option<[u32; 6]> {
 /// both properties hold for all 48 rows and all 5 values of `m` (see the tests below), which the four
 /// recovered entries would have been very unlikely to satisfy by coincidence if the elimination logic
 /// had picked the wrong `m`.
+// [@ANCHOR: gain_bit_allocation]
 pub fn gain_bit_allocation(l: u32, m: u32) -> Option<(u8, f64)> {
     if !(9..=56).contains(&l) || !(2..=6).contains(&m) {
         return None;
@@ -515,6 +518,7 @@ const BLOCK_LENGTHS: [[u32; 6]; 48] = [
 /// module per-block non-increasing invariant (`higher_order_bit_allocation_is_non_increasing_within_
 /// each_block` below) for all 288 blocks (48 L values x 6 blocks each) with zero exceptions; (3) every
 /// `L` has exactly `L-6` entries with zero missing or duplicate-conflicting `b_idx` values.
+// [@ANCHOR: higher_order_bit_allocation]
 pub fn higher_order_bit_allocation(l: u32) -> Option<&'static [u8]> {
     if !(9..=56).contains(&l) {
         return None;
@@ -531,6 +535,7 @@ pub fn higher_order_bit_allocation(l: u32) -> Option<&'static [u8]> {
 /// A coefficient with `bits == 0` (a real, observed value in [`HIGHER_ORDER_BIT_ALLOCATION`], not a
 /// hypothetical) has no entry here and returns `None`: zero bits means that coefficient isn't
 /// transmitted at all, so no step size is ever needed for it.
+// [@ANCHOR: higher_order_step_multiplier]
 pub fn higher_order_step_multiplier(bits: u8) -> Option<f64> {
     if !(1..=10).contains(&bits) {
         return None;
@@ -551,6 +556,7 @@ const HIGHER_ORDER_STEP_MULTIPLIER: [f64; 10] =
 /// Returns `None` for `k` outside 2..=10 -- the spec's own table doesn't go further because no block
 /// length this codec ever produces (Annex J, [`block_lengths_for_l`]) exceeds 10 (checked directly:
 /// every one of the 288 real block lengths across all 48 `L` values is 10 or less).
+// [@ANCHOR: higher_order_coefficient_sigma]
 pub fn higher_order_coefficient_sigma(k: u32) -> Option<f64> {
     if !(2..=10).contains(&k) {
         return None;
@@ -711,6 +717,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: quantize_gain_index]
     fn quantize_gain_index_finds_the_real_nearest_level() {
         assert_eq!(quantize_gain_index(-2.842205), 0);
         assert_eq!(quantize_gain_index(8.695827), 63);
@@ -724,6 +731,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: block_lengths_for_l]
     fn block_lengths_always_sum_to_l() {
         for l in 9..=56u32 {
             let lengths = block_lengths_for_l(l).unwrap();
@@ -758,6 +766,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: gain_bit_allocation]
     fn gain_bit_allocation_bits_are_non_increasing_as_l_grows_for_each_fixed_m() {
         // The real, independent structural check that recovered this table's own four
         // watermark-displaced entries (L=10,11,16,17) by elimination rather than guessing --
@@ -797,6 +806,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: higher_order_bit_allocation]
     fn higher_order_bit_allocation_has_exactly_l_minus_6_entries_for_every_l() {
         for l in 9..=56u32 {
             let entries = higher_order_bit_allocation(l).unwrap();
@@ -851,6 +861,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: higher_order_step_multiplier]
     fn higher_order_step_multiplier_matches_table_3_and_refuses_out_of_range_bits() {
         assert!((higher_order_step_multiplier(1).unwrap() - 1.2).abs() < 1e-12);
         assert!((higher_order_step_multiplier(4).unwrap() - 0.40).abs() < 1e-12);
@@ -864,6 +875,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: higher_order_coefficient_sigma]
     fn higher_order_coefficient_sigma_matches_table_4_and_refuses_out_of_range_k() {
         assert!((higher_order_coefficient_sigma(2).unwrap() - 0.307).abs() < 1e-12);
         assert!((higher_order_coefficient_sigma(3).unwrap() - 0.241).abs() < 1e-12);

@@ -15,6 +15,7 @@ use super::tables;
 /// per Annex J's own lengths (Eq. 58-59: the six lengths sum to `l` and are non-decreasing
 /// low-to-high frequency). Returns `None` for an `l` outside Annex J's tabulated range, matching
 /// [`tables::block_lengths_for_l`]'s own "give up, don't guess" discipline.
+// [@ANCHOR: partition_into_blocks]
 pub fn partition_into_blocks(residuals: &[f64], l: u32) -> Option<[Vec<f64>; 6]> {
     let lengths = tables::block_lengths_for_l(l)?;
     if residuals.len() != l as usize {
@@ -35,6 +36,7 @@ pub fn partition_into_blocks(residuals: &[f64], l: u32) -> Option<[Vec<f64>; 6]>
 /// an arbitrary block length -- not shared code with it since that function's own fixed-size
 /// `[f64; 6]` signature is a real, separate, already-tested public API this module doesn't need to
 /// disturb.
+// [@ANCHOR: block_dct]
 pub fn block_dct(c: &[f64]) -> Vec<f64> {
     let j = c.len();
     if j == 0 {
@@ -60,6 +62,7 @@ pub fn block_dct(c: &[f64]) -> Vec<f64> {
 /// only the symbol names differ), so implemented once rather than twice: `0` if the value floors
 /// below `-2^(bits-1)`, `2^bits - 1` if it floors at or above `2^(bits-1)`, otherwise the floored,
 /// zero-offset index.
+// [@ANCHOR: saturating_uniform_quantize]
 fn saturating_uniform_quantize(value: f64, bits: u8, step_size: f64) -> u32 {
     let half_range = 1i64 << (bits - 1); // 2^(bits-1)
     let idx = (value / step_size).floor() as i64;
@@ -96,6 +99,7 @@ pub fn quantize_gain_vector_element(gain_value: f64, l: u32, element: u32) -> Op
 /// `gain_vector` parameter -- pairing each quantized value with its own bit width by construction
 /// (both drawn from the same [`tables::gain_bit_allocation`] call) rather than relying on a caller to
 /// independently re-derive the matching bit width and keep it in sync.
+// [@ANCHOR: quantize_gain_vector]
 pub fn quantize_gain_vector(g_hat: &[f64; 6], l: u32) -> Option<[(u32, u8); 5]> {
     let mut out = [(0u32, 0u8); 5];
     for (idx, element) in (2..=6u32).enumerate() {
@@ -109,6 +113,7 @@ pub fn quantize_gain_vector(g_hat: &[f64; 6], l: u32) -> Option<[(u32, u8); 5]> 
 /// The `(block_index, position)` pairs, `1 <= block_index <= 6` and `2 <= position <= J_i`, in the
 /// same flat order Annex G's own bit-allocation table uses (the spec's own stated convention:
 /// `[b_hat_8, ..., b_hat_{L+1}]` correspond to `[C_1,2, ..., C_1,J1, ..., C_6,2, ..., C_6,J6]`).
+// [@ANCHOR: higher_order_coefficient_positions]
 pub(crate) fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, usize)>> {
     let lengths = tables::block_lengths_for_l(l)?;
     let mut positions = Vec::new();
@@ -135,6 +140,7 @@ pub(crate) fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, u
 /// [`super::bit_prioritization::prioritize_bits`]'s own `higher_order` parameter, where a silent
 /// misalignment would produce a plausible-looking but wrong frame). Returns `None` for an
 /// out-of-range `l`.
+// [@ANCHOR: quantize_higher_order_coefficients]
 pub fn quantize_higher_order_coefficients(
     dct_blocks: &[Vec<f64>; 6],
     l: u32,
@@ -167,6 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: partition_into_blocks]
     fn partition_into_blocks_matches_annex_j_lengths_and_covers_every_residual() {
         let l = 20;
         let residuals: Vec<f64> = (0..l).map(|i| i as f64).collect();
@@ -188,6 +195,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: block_dct]
     fn block_dct_of_a_constant_block_is_zero_except_the_first_coefficient() {
         // The same real, checkable DC-only property mod.rs's own gain_vector_dct test already
         // leans on, here for an arbitrary block length instead of the fixed J=6 case.
@@ -206,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: saturating_uniform_quantize]
     fn saturating_uniform_quantize_matches_eq62_63_in_all_three_branches() {
         let bits = 4u8;
         let step = 0.1;
@@ -234,6 +243,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: quantize_higher_order_coefficients]
+    // Tests [@ANCHOR: higher_order_coefficient_positions]
     fn quantize_higher_order_coefficients_skips_zero_bit_entries_and_stays_in_range() {
         let l = 32; // HIGHER_ORDER_BIT_ALLOCATION for L=32 includes a real 0-bit final entry
         let lengths = tables::block_lengths_for_l(l).unwrap();
@@ -319,6 +330,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: quantize_gain_vector]
     fn quantize_gain_vector_matches_element_by_element_quantization() {
         let l = 20;
         let g_hat = [1.0, 0.1, -0.2, 0.05, -0.05, 0.02];

@@ -48,6 +48,7 @@
 /// `b_hat_{L+1}`, in that order -- gain-vector columns from Annex F, then higher-order-coefficient
 /// columns from Annex G, omitting any real `0`-bit Annex G entries as those contribute nothing).
 /// Returns the flat scanned bit sequence, MSB-of-tallest-column first.
+// [@ANCHOR: raster_scan_bits]
 pub fn raster_scan_bits(columns: &[(u32, u8)]) -> Vec<bool> {
     let max_width = columns.iter().map(|&(_, w)| w).max().unwrap_or(0);
     let mut bits = Vec::new();
@@ -76,6 +77,7 @@ pub fn raster_scan_bits(columns: &[(u32, u8)]) -> Vec<bool> {
 /// - `sync_bit`: `b_hat_{L+2}`, the frame-to-frame alternating synchronization value ("Synchronization
 ///   Encoding and Decoding") -- not yet its own module, so for now this is the caller's own tracked
 ///   alternating-bit state.
+// [@ANCHOR: prioritize_bits]
 pub fn prioritize_bits(
     b0: u32,
     b1: u32,
@@ -156,6 +158,7 @@ pub fn prioritize_bits(
 /// parameter-dependent split actually falls. Verified as a real, parameter-independent property by
 /// the test below (checked across several different `(L~, K~)` configurations with the same `b0`,
 /// not just argued from the bit-position algebra above).
+// [@ANCHOR: extract_fundamental_frequency_quantizer]
 pub fn extract_fundamental_frequency_quantizer(u: &[u32; 8]) -> u32 {
     let top6 = (u[0] >> 6) & 0b11_1111;
     let bottom2 = (u[7] >> 1) & 0b11;
@@ -168,6 +171,7 @@ pub fn extract_fundamental_frequency_quantizer(u: &[u32; 8]) -> u32 {
 /// so it consumes `bits` in the same order they were produced. Returns `None` if `bits` has the
 /// wrong length for `widths` (too few to fill every real cell, or leftover bits after every cell is
 /// filled) -- a real internal-consistency check, not a spec-defined error case.
+// [@ANCHOR: raster_unscan_bits]
 fn raster_unscan_bits(bits: &[bool], widths: &[u8]) -> Option<Vec<u32>> {
     let max_width = widths.iter().copied().max().unwrap_or(0);
     let mut values = vec![0u32; widths.len()];
@@ -191,6 +195,7 @@ fn raster_unscan_bits(bits: &[bool], widths: &[u8]) -> Option<Vec<u32>> {
 
 /// Reads the next `n` bits from `bits[*idx..]` MSB-first as an unsigned integer, advancing `*idx`.
 /// Returns `None` (leaving `*idx` at the point of failure) if fewer than `n` bits remain.
+// [@ANCHOR: read_bits]
 fn read_bits(bits: &[bool], idx: &mut usize, n: usize) -> Option<u32> {
     let mut value = 0u32;
     for _ in 0..n {
@@ -222,6 +227,7 @@ pub struct DeprioritizedBits {
 /// own caller-supplied `gain_vector`/`higher_order` widths. Returns `None` on any internal length
 /// mismatch (a corrupted `k_hat`/width mismatch this deep would mean upstream decoding already went
 /// wrong, not a case this function can meaningfully recover from).
+// [@ANCHOR: deprioritize_bits]
 pub fn deprioritize_bits(
     u: [u32; 8],
     k_hat: u32,
@@ -305,6 +311,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: raster_scan_bits]
     fn raster_scan_bits_produces_exactly_67_bits_for_the_l16_example() {
         let (gain, higher) = l16_widths();
         let columns: Vec<(u32, u8)> = gain
@@ -463,6 +470,7 @@ mod tests {
     /// `k_hat`) -- proving independence from everything else in the frame, not just checking one
     /// configuration works.
     #[test]
+    // Tests [@ANCHOR: extract_fundamental_frequency_quantizer]
     fn extract_fundamental_frequency_quantizer_is_independent_of_l_hat_and_k_hat() {
         let b0 = 0b1011_0110u32;
         for l_hat in [9u32, 16, 30, 56] {
@@ -491,6 +499,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: deprioritize_bits]
+    // Tests [@ANCHOR: prioritize_bits]
+    // Tests [@ANCHOR: raster_unscan_bits]
+    // Tests [@ANCHOR: read_bits]
     fn deprioritize_bits_is_the_exact_inverse_of_prioritize_bits_for_real_varied_values() {
         let (gain, higher) = l16_widths();
         let b0 = 0b1011_0110u32; // 8 real bits, not a single-bit probe.
