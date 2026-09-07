@@ -154,25 +154,37 @@ pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
 /// harmonic's own spectral amplitude estimate) are all genuinely stateful across frames, unlike
 /// every other stage in this pipeline.
 ///
-/// [`Self::initial`] gives the spec's own literal frame-0 initialization; every later frame's state
-/// comes from the previous call's own return value.
+/// [`Self::initial`] gives this module's own reasoned frame-0 initialization (see its doc comment
+/// for exactly which pieces the spec itself dictates and which are our own low-stakes choice);
+/// every later frame's state comes from the previous call's own return value. Fields are private --
+/// [`Self::initial`] and `encode_frame`'s own returned state are the only ways to construct or
+/// advance one, so a caller can't build a `FrameState` with a `voiced`/`spectral_amplitudes` length
+/// that doesn't match its own `l_hat`.
 pub struct FrameState {
-    pub xi_max: f64,
-    pub l_hat: u32,
-    pub voiced: Vec<bool>,
-    pub spectral_amplitudes: Vec<f64>,
+    xi_max: f64,
+    l_hat: u32,
+    voiced: Vec<bool>,
+    spectral_amplitudes: Vec<f64>,
 }
 
 impl FrameState {
-    /// The spec's own stated initial state for the very first frame of a stream: no prior voicing
-    /// history (every band defaults to unvoiced per `vuv::determine_voicing`'s own
-    /// `unwrap_or(false)`), `xi_max` starting at `update_xi_max`'s own documented floor (`20000.0`;
-    /// Eq. 41 has no real frame `-1` to draw an initial value from, so the floor -- not `0.0`, which
-    /// would make the very first frame's own energy-tracker update jump by 50% of the frame's real
-    /// energy per Eq. 41's first branch -- is the honest "no history yet" value), and
-    /// `l_hat`/`spectral_amplitudes` from [`prediction::INITIAL_L_HAT_PREV`] (the spec's own literal
-    /// initialization value) with a flat, silent amplitude history (`log2(1.0) == 0.0`, i.e. no
-    /// energy) since there is no real previous frame yet.
+    /// The initial state for the very first frame of a stream: no prior voicing history (every band
+    /// defaults to unvoiced per `vuv::determine_voicing`'s own `unwrap_or(false)`), `xi_max` starting
+    /// at `update_xi_max`'s own documented floor (`20000.0`; Eq. 41 has no real frame `-1` to draw an
+    /// initial value from, so the floor -- not `0.0`, which would make the very first frame's own
+    /// energy-tracker update jump by 50% of the frame's real energy per Eq. 41's first branch -- is
+    /// the honest "no history yet" value), and `l_hat` from [`prediction::INITIAL_L_HAT_PREV`] (the
+    /// spec's own literal initialization value for `L_hat_prev`).
+    ///
+    /// **`spectral_amplitudes`'s own initial value is our own choice, not a spec-stated one, and
+    /// worth being precise about rather than mislabeling**: the spec initializes `L_hat_prev`
+    /// explicitly but names no accompanying initial amplitude or log-amplitude history. `log2(1.0)
+    /// == 0.0` is a flat *unity-amplitude* history (0 in the log2 domain means "unchanged," not
+    /// "silent" -- true silence would be `-inf`), chosen specifically because it's a *constant*
+    /// value: `prediction.rs`'s own `a_constant_previous_frame_level_cancels_out_of_the_residual`
+    /// test already proves the bias-correction term exactly cancels any constant previous-frame
+    /// level, so frame 0's residual is provably insensitive to which constant is picked here -- a
+    /// genuinely low-stakes choice, not an arbitrary unverified one.
     pub fn initial() -> Self {
         let l_hat = prediction::INITIAL_L_HAT_PREV;
         FrameState {
