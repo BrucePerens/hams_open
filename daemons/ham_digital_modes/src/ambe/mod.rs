@@ -60,6 +60,7 @@
 
 pub mod bit_prioritization;
 pub mod fec;
+pub mod modulation;
 pub mod parameter_encoding;
 pub mod pitch;
 pub mod pitch_refinement;
