@@ -21,7 +21,8 @@ fn main() {
     let mut out = Vec::new();
     let n_frames = samples.len() / SAMPLES_PER_FRAME;
     for f in 0..n_frames {
-        let frame: [i16; SAMPLES_PER_FRAME] = samples[f * SAMPLES_PER_FRAME..(f + 1) * SAMPLES_PER_FRAME]
+        let frame: [i16; SAMPLES_PER_FRAME] = samples
+            [f * SAMPLES_PER_FRAME..(f + 1) * SAMPLES_PER_FRAME]
             .try_into()
             .unwrap();
         out.extend_from_slice(&encoder.encode(&frame));

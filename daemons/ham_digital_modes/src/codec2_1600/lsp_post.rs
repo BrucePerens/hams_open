@@ -141,7 +141,10 @@ pub fn interpolate_lsp_ver2_fixed(
     next: &[i64; LPC_ORD],
     quarters: i64,
 ) -> [i64; LPC_ORD] {
-    debug_assert!((1..=3).contains(&quarters), "quarters must be 1, 2, or 3 (0.25/0.5/0.75)");
+    debug_assert!(
+        (1..=3).contains(&quarters),
+        "quarters must be 1, 2, or 3 (0.25/0.5/0.75)"
+    );
     std::array::from_fn(|i| ((4 - quarters) * prev[i] + quarters * next[i] + 2) >> 2)
 }
 
@@ -151,8 +154,7 @@ mod tests {
 
     #[test]
     fn check_lsp_order_leaves_an_already_ordered_vector_unchanged() {
-        let mut lsp: [f32; super::LPC_ORD] =
-            std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
+        let mut lsp: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
         let original = lsp;
         let swaps = check_lsp_order(&mut lsp);
         assert_eq!(swaps, 0);
@@ -161,8 +163,7 @@ mod tests {
 
     #[test]
     fn check_lsp_order_fixes_a_single_out_of_order_pair() {
-        let mut lsp: [f32; super::LPC_ORD] =
-            std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
+        let mut lsp: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.2 * i as f32);
         lsp.swap(3, 4);
         check_lsp_order(&mut lsp);
         for i in 1..lsp.len() {

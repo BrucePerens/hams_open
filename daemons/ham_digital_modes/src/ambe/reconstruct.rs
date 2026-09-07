@@ -152,7 +152,8 @@ pub fn reconstruct_spectral_amplitudes(
     let g_hat = reconstruct_gain_vector(b2, gain_values, l_hat_curr)?;
     let r_hat = inverse_gain_vector_dct(&g_hat);
 
-    let mut blocks = reconstruct_higher_order_coefficients(higher_order_quantized_values, l_hat_curr)?;
+    let mut blocks =
+        reconstruct_higher_order_coefficients(higher_order_quantized_values, l_hat_curr)?;
     for (i, block) in blocks.iter_mut().enumerate() {
         block[0] = r_hat[i];
     }
@@ -192,7 +193,11 @@ mod tests {
         // idx = 10 -> value = 0.1 * (10 - 8 + 0.5) = 0.25, the exact inverse of the encoder-side
         // saturating_uniform_quantize's own worked example (quantize.rs's own test).
         assert!((dequantize_uniform(10, bits, step) - 0.25).abs() < 1e-12);
-        assert_eq!(dequantize_uniform(999, 0, step), 0.0, "zero bits means never transmitted");
+        assert_eq!(
+            dequantize_uniform(999, 0, step),
+            0.0,
+            "zero bits means never transmitted"
+        );
     }
 
     #[test]

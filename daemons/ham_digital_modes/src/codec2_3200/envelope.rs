@@ -202,14 +202,20 @@ impl ModelFixed {
             wo: wo_q23,
             l,
             a: [0; MAX_AMP + 1],
-            phi: [ComplexQ23 { re: 1i64 << FRAC_BITS, im: 0 }; MAX_AMP + 1],
+            phi: [ComplexQ23 {
+                re: 1i64 << FRAC_BITS,
+                im: 0,
+            }; MAX_AMP + 1],
             voiced,
         }
     }
 }
 
 fn mag_sq_q23(c: ComplexQ23) -> i64 {
-    rshift_round_i128(c.re as i128 * c.re as i128 + c.im as i128 * c.im as i128, FRAC_BITS)
+    rshift_round_i128(
+        c.re as i128 * c.re as i128 + c.im as i128 * c.im as i128,
+        FRAC_BITS,
+    )
 }
 
 /// Fixed-point `lpc_spectrum`: `ak_q23` zero-padded into an `FFT_ENC`
@@ -221,7 +227,10 @@ fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1]) -> [ComplexQ23; SPEC_BINS] {
     let mut im = [0i64; FFT_ENC];
     re[..=LPC_ORD].copy_from_slice(ak_q23);
     fft_fixed(&mut re, &mut im, true);
-    std::array::from_fn(|i| ComplexQ23 { re: re[i], im: im[i] })
+    std::array::from_fn(|i| ComplexQ23 {
+        re: re[i],
+        im: im[i],
+    })
 }
 
 /// `1e-6` in Q23 -- the same tiny floor `compute_harmonic_amplitudes`'s
@@ -325,8 +334,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
         e_before_q23 += exp2_q23(-log2_a2);
         e_after_q23 += ratio_pow_term_q23(log2_a2g, log2_a2);
     }
-    let gain_q23 =
-        ((e_q23 as i128 * e_before_q23 as i128) / e_after_q23.max(1) as i128) as i64;
+    let gain_q23 = ((e_q23 as i128 * e_before_q23 as i128) / e_after_q23.max(1) as i128) as i64;
 
     let k_q23 = synth_k_q23(model.wo);
     #[allow(clippy::needless_range_loop)]
@@ -366,10 +374,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
 fn first_harmonic_wo_threshold_q23() -> i64 {
     static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(
-            std::f32::consts::PI * 150.0 / 4000.0,
-            FRAC_BITS,
-        )
+        super::fixed_point::f32_to_q_exact_round(std::f32::consts::PI * 150.0 / 4000.0, FRAC_BITS)
     })
 }
 fn first_harmonic_correction_q23() -> i64 {
@@ -483,7 +488,10 @@ mod tests {
         let lsp_rows = read_rows(lsp_path, CRATE_LPC_ORD + 1);
         let e_rows = read_rows(e_path, 1);
         let n = lsp_rows.len().min(e_rows.len());
-        assert!(n > 300, "expected the real captured fixture corpus, got {n} rows");
+        assert!(
+            n > 300,
+            "expected the real captured fixture corpus, got {n} rows"
+        );
 
         let mut planner = rustfft::FftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(FFT_ENC);
@@ -542,7 +550,8 @@ mod tests {
     }
 
     #[test]
-    fn apply_first_harmonic_correction_fixed_matches_the_float_version_on_both_sides_of_the_threshold() {
+    fn apply_first_harmonic_correction_fixed_matches_the_float_version_on_both_sides_of_the_threshold(
+    ) {
         let low_wo = super::super::W0_MIN; // below threshold -- correction applies
         let high_wo = super::super::W0_MAX; // above threshold -- no correction
         for &wo in &[low_wo, high_wo] {

@@ -240,7 +240,16 @@ mod tests {
         let patterns: [[u32; 8]; 4] = [
             [0; 8],
             std::array::from_fn(|i| (1u32 << widths[i]) - 1), // all real bits set
-            [0b101_0101_0101_0101_0101_0101, 0x2AAAAA, 0x555555, 0x2AAAAA, 0x5555, 0x2AAA, 0x5555, 0x55],
+            [
+                0b101_0101_0101_0101_0101_0101,
+                0x2AAAAA,
+                0x555555,
+                0x2AAAAA,
+                0x5555,
+                0x2AAA,
+                0x5555,
+                0x55,
+            ],
             [1, 2, 4, 8, 1, 2, 4, 1],
         ];
         for c in patterns {

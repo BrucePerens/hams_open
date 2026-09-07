@@ -217,12 +217,21 @@ mod tests {
             let patterns: Vec<u32> = if k_hat <= 8 {
                 (0..(1u32 << k_hat)).collect()
             } else {
-                vec![0, 1, (1 << k_hat) - 1, 0b1010_1010_1010 & ((1 << k_hat) - 1)]
+                vec![
+                    0,
+                    1,
+                    (1 << k_hat) - 1,
+                    0b1010_1010_1010 & ((1 << k_hat) - 1),
+                ]
             };
             for b1 in patterns {
                 let voiced = decode_voicing_decisions(b1, k_hat);
                 assert_eq!(voiced.len(), k_hat as usize);
-                assert_eq!(encode_voicing_decisions(&voiced), b1, "k_hat={k_hat}, b1={b1}");
+                assert_eq!(
+                    encode_voicing_decisions(&voiced),
+                    b1,
+                    "k_hat={k_hat}, b1={b1}"
+                );
             }
         }
     }

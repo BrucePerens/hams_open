@@ -259,8 +259,7 @@ impl Default for NlpStateFixed {
             // itself uses (`prev_f0 / bin_to_hz`) -- keeps the two
             // implementations' first-frame continuity bias aligned
             // instead of silently starting from bin 0.
-            prev_f0_bin_fixed: (100.0
-                / (SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32))
+            prev_f0_bin_fixed: (100.0 / (SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32))
                 as usize,
         }
     }
@@ -451,9 +450,8 @@ pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32 {
     fft_fixed(&mut re, &mut im);
 
     const HALF: usize = PE_FFT_SIZE / 2 + 1;
-    let power: [i128; HALF] = std::array::from_fn(|i| {
-        re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128
-    });
+    let power: [i128; HALF] =
+        std::array::from_fn(|i| re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128);
 
     let bin_to_hz = SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32;
     let lo = (PE_FFT_SIZE * NLP_DEC / P_MAX).max(1);
@@ -482,7 +480,9 @@ mod tests {
     use crate::codec2_3200::floating_reference::nlp::tests::{
         estimate_synthetic_pitch, estimate_synthetic_pitch_at_amp, REALISTIC_AMP,
     };
-    use crate::codec2_3200::floating_reference::nlp::{correct_sub_multiples, dc_notch, decimate, nlp, NlpState};
+    use crate::codec2_3200::floating_reference::nlp::{
+        correct_sub_multiples, dc_notch, decimate, nlp, NlpState,
+    };
     use crate::codec2_3200::{W0_MAX, W0_MIN};
     use rustfft::num_complex::Complex32;
     use rustfft::FftPlanner;
@@ -520,7 +520,9 @@ mod tests {
                 for (h, &amp) in harmonic_amps.iter().enumerate() {
                     v += amp * (phase * (h + 1) as f32).sin();
                 }
-                *s = (v * amp_scale).round().clamp(i16::MIN as f32, i16::MAX as f32) as i16;
+                *s = (v * amp_scale)
+                    .round()
+                    .clamp(i16::MIN as f32, i16::MAX as f32) as i16;
                 phase += std::f32::consts::TAU * f0_hz / SAMPLE_RATE as f32;
             }
             last_f0 = nlp_fixed(&mut state, &history);
@@ -643,7 +645,10 @@ mod tests {
             last_f = nlp(&mut state_f, &silence_f);
             last_i = nlp_fixed(&mut state_i, &silence_i);
         }
-        assert!(last_f.is_finite(), "nlp produced a non-finite f0 on silence");
+        assert!(
+            last_f.is_finite(),
+            "nlp produced a non-finite f0 on silence"
+        );
         assert!(
             last_i.is_finite(),
             "nlp_fixed produced a non-finite f0 on silence"
@@ -869,8 +874,14 @@ mod tests {
                 .max_by(|&a, &b| power_float[a].partial_cmp(&power_float[b]).unwrap())
                 .unwrap();
             let local_fixed = window.clone().max_by_key(|&b| power_fixed[b]).unwrap();
-            assert_eq!(local_float, bin, "float FFT's tone at bin {bin} was off-peak");
-            assert_eq!(local_fixed, bin, "fft_fixed's tone at bin {bin} was off-peak");
+            assert_eq!(
+                local_float, bin,
+                "float FFT's tone at bin {bin} was off-peak"
+            );
+            assert_eq!(
+                local_fixed, bin,
+                "fft_fixed's tone at bin {bin} was off-peak"
+            );
         }
     }
 

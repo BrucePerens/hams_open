@@ -913,8 +913,11 @@ mod tests {
             let gain_bits: u32 = (2..=6u32)
                 .map(|m| gain_bit_allocation(l, m).unwrap().0 as u32)
                 .sum();
-            let higher_order_bits: u32 =
-                higher_order_bit_allocation(l).unwrap().iter().map(|&b| b as u32).sum();
+            let higher_order_bits: u32 = higher_order_bit_allocation(l)
+                .unwrap()
+                .iter()
+                .map(|&b| b as u32)
+                .sum();
 
             let total = gain_bits + higher_order_bits;
             let expected = 73 - k_hat;

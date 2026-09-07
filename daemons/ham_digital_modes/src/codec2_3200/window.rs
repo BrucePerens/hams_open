@@ -52,9 +52,7 @@ const WINDOW_FRAC_BITS: u32 = 30;
 /// that boundary work lands.
 pub fn make_analysis_window_fixed() -> [i32; M_PITCH] {
     let w = make_analysis_window();
-    std::array::from_fn(|i| {
-        (w[i] as f64 * (1i64 << WINDOW_FRAC_BITS) as f64).round() as i32
-    })
+    std::array::from_fn(|i| (w[i] as f64 * (1i64 << WINDOW_FRAC_BITS) as f64).round() as i32)
 }
 
 #[cfg(test)]

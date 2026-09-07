@@ -148,9 +148,16 @@ impl Default for Encoder {
 /// the second pass's own LSPs (the first pass's LSPs are computed only
 /// because `e` falls out of the same analysis, matching the
 /// reference's own `speech_to_uq_lsps` call for that purpose).
-fn analyse_lsps_and_energy(sn: &[f32; M_PITCH], analysis_window: &[f32; M_PITCH]) -> ([f32; LPC_ORD], f32) {
+fn analyse_lsps_and_energy(
+    sn: &[f32; M_PITCH],
+    analysis_window: &[f32; M_PITCH],
+) -> ([f32; LPC_ORD], f32) {
     let mut windowed = [0.0f32; M_PITCH];
-    for ((w, &s), &win) in windowed.iter_mut().zip(sn.iter()).zip(analysis_window.iter()) {
+    for ((w, &s), &win) in windowed
+        .iter_mut()
+        .zip(sn.iter())
+        .zip(analysis_window.iter())
+    {
         *w = s * win;
     }
     let r = flpc::autocorrelate(&windowed);
@@ -424,14 +431,18 @@ const FRAC_BITS: u32 = 23;
 
 fn w0_min_q23() -> i64 {
     static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| crate::codec2_3200::fixed_point::f32_to_q_exact_round(codec2_3200::W0_MIN, FRAC_BITS))
+    *V.get_or_init(|| {
+        crate::codec2_3200::fixed_point::f32_to_q_exact_round(codec2_3200::W0_MIN, FRAC_BITS)
+    })
 }
 
 fn initial_lsps_q23() -> [i64; LPC_ORD] {
     static V: std::sync::OnceLock<[i64; LPC_ORD]> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
         let lsps = initial_lsps();
-        std::array::from_fn(|i| crate::codec2_3200::fixed_point::f32_to_q_exact_round(lsps[i], FRAC_BITS))
+        std::array::from_fn(|i| {
+            crate::codec2_3200::fixed_point::f32_to_q_exact_round(lsps[i], FRAC_BITS)
+        })
     })
 }
 
@@ -471,7 +482,10 @@ impl Default for EncoderFixed {
 /// `codec2_3200::EncoderFixed::encode` already validated, factored out
 /// here for the same reason its float sibling was (1600bps runs it
 /// twice per 40ms, quantizing only the second pass's own LSPs).
-fn analyse_lsps_and_energy_fixed(sn: &[i16; M_PITCH], window_fixed: &[i32; M_PITCH]) -> ([f32; LPC_ORD], f32) {
+fn analyse_lsps_and_energy_fixed(
+    sn: &[i16; M_PITCH],
+    window_fixed: &[i32; M_PITCH],
+) -> ([f32; LPC_ORD], f32) {
     let mut wn_q = [0i32; M_PITCH];
     for ((w, &s), &win) in wn_q.iter_mut().zip(sn.iter()).zip(window_fixed.iter()) {
         *w = ((s as i64 * win as i64) >> 7) as i32;
@@ -502,22 +516,26 @@ impl EncoderFixed {
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[0..N_SAMP]);
         nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
-        let voiced0 = voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+        let voiced0 =
+            voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         self.shift_in(&speech[N_SAMP..2 * N_SAMP]);
         let f0_a = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
-        let voiced1 = voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+        let voiced1 =
+            voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
         let wo_index_a = quantise::encode_wo(nlp::f0_to_wo(f0_a));
         let (_lsp_a_unused, e_a) = analyse_lsps_and_energy_fixed(&self.sn, &self.window_fixed);
         let e_index_a = quantise::encode_energy(e_a);
 
         self.shift_in(&speech[2 * N_SAMP..3 * N_SAMP]);
         nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
-        let voiced2 = voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+        let voiced2 =
+            voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         self.shift_in(&speech[3 * N_SAMP..4 * N_SAMP]);
         let f0_b = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
-        let voiced3 = voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+        let voiced3 =
+            voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
         let wo_index_b = quantise::encode_wo(nlp::f0_to_wo(f0_b));
         let (lsp_b, e_b) = analyse_lsps_and_energy_fixed(&self.sn, &self.window_fixed);
         let e_index_b = quantise::encode_energy(e_b);
@@ -580,7 +598,11 @@ impl DecoderFixed {
 
         let mut lsps3 = lsp_quantiser::decode_lsps_scalar_fixed(&fields.lsp_indexes);
         lsp_post::check_lsp_order_fixed(&mut lsps3);
-        lsp_post::bw_expand_lsps_fixed(&mut lsps3, lsp_post::min_sep_low_q23(), lsp_post::min_sep_high_q23());
+        lsp_post::bw_expand_lsps_fixed(
+            &mut lsps3,
+            lsp_post::min_sep_low_q23(),
+            lsp_post::min_sep_high_q23(),
+        );
 
         let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
         let wo0 = interp::interp_wo_fixed(
@@ -648,7 +670,11 @@ impl DecoderFixed {
 
         let mut lsps3 = lsp_quantiser::decode_lsps_scalar_fixed(&fields.lsp_indexes);
         lsp_post::check_lsp_order_fixed(&mut lsps3);
-        lsp_post::bw_expand_lsps_fixed(&mut lsps3, lsp_post::min_sep_low_q23(), lsp_post::min_sep_high_q23());
+        lsp_post::bw_expand_lsps_fixed(
+            &mut lsps3,
+            lsp_post::min_sep_low_q23(),
+            lsp_post::min_sep_high_q23(),
+        );
 
         let voiced0 = interp::interp_voiced(fields.voiced0, self.prev_voiced, fields.voiced1);
         let wo0 = interp::interp_wo_fixed(
@@ -792,12 +818,16 @@ mod tests {
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let pcm_data = std::fs::read(pcm_path).unwrap_or_else(|e| panic!("{pcm_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder = DecoderFixed::new();
         let mut fixed_pcm: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] = bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
                 .try_into()
                 .unwrap();
             fixed_pcm.extend_from_slice(&decoder.decode(&frame));
@@ -903,7 +933,8 @@ mod tests {
         let mut decoder = Decoder::new();
         let mut rust_pcm: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] = bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
                 .try_into()
                 .unwrap();
             rust_pcm.extend_from_slice(&decoder.decode(&frame));
@@ -1023,7 +1054,10 @@ mod tests {
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 50, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 50,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_8k = Decoder::new();
         let mut decoder_16k = Decoder::new();
@@ -1032,8 +1066,10 @@ mod tests {
         let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
             let out_16k = decoder_16k.decode_16k(&frame);
             pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
@@ -1076,16 +1112,24 @@ mod tests {
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 50, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 50,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_16k = Decoder::new();
-        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+        assert!(
+            decoder_16k.spectral_bridge.enabled,
+            "Spectral Bridge should be on by default"
+        );
 
         let mut pcm_16k: Vec<f32> =
             Vec::with_capacity(n_frames * 4 * codec2_3200::spectral_bridge::N_SAMP_SB);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             let out_16k = decoder_16k.decode_16k(&frame);
             pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
         }
@@ -1097,8 +1141,10 @@ mod tests {
         let mut high_energy = 0.0f64;
         let mut windows = 0usize;
         for chunk in pcm_16k.chunks_exact(WIN) {
-            let mut buf: Vec<rustfft::num_complex::Complex32> =
-                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            let mut buf: Vec<rustfft::num_complex::Complex32> = chunk
+                .iter()
+                .map(|&s| rustfft::num_complex::Complex32::new(s, 0.0))
+                .collect();
             fft.process(&mut buf);
             for (k, c) in buf.iter().enumerate().take(WIN / 2) {
                 let e = (c.norm() as f64).powi(2);
@@ -1110,7 +1156,10 @@ mod tests {
             }
             windows += 1;
         }
-        assert!(windows > 10, "expected enough 1024-sample windows to be meaningful, got {windows}");
+        assert!(
+            windows > 10,
+            "expected enough 1024-sample windows to be meaningful, got {windows}"
+        );
 
         println!("codec2_1600 decode_16k (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
         assert!(
@@ -1134,7 +1183,10 @@ mod tests {
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 50, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 50,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_8k = DecoderFixed::new();
         let mut decoder_16k = DecoderFixed::new();
@@ -1143,8 +1195,10 @@ mod tests {
         let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
             let out_16k = decoder_16k.decode_16k_fixed(&frame);
             pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
@@ -1165,7 +1219,9 @@ mod tests {
             var_b += db * db;
         }
         let corr = cov / (var_a * var_b).sqrt();
-        println!("codec2_1600 decode_16k_fixed (disabled, decimated) vs decode(): correlation={corr}");
+        println!(
+            "codec2_1600 decode_16k_fixed (disabled, decimated) vs decode(): correlation={corr}"
+        );
         assert!(
             corr > 0.99,
             "decode_16k_fixed's own reused-harmonics content diverged from the base fixed decoder: correlation={corr} (expected > 0.99)"
@@ -1175,24 +1231,32 @@ mod tests {
     /// Fixed-point sibling of
     /// `decode_16k_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band`.
     #[test]
-    fn decode_16k_fixed_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band()
-    {
+    fn decode_16k_fixed_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band(
+    ) {
         let bits_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/codec2_1600/synthetic_voiced_c_encoded_bits.bin"
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 50, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 50,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_16k = DecoderFixed::new();
-        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+        assert!(
+            decoder_16k.spectral_bridge.enabled,
+            "Spectral Bridge should be on by default"
+        );
 
         let mut pcm_16k: Vec<f32> =
             Vec::with_capacity(n_frames * 4 * codec2_3200::spectral_bridge::N_SAMP_SB);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             let out_16k = decoder_16k.decode_16k_fixed(&frame);
             pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
         }
@@ -1204,8 +1268,10 @@ mod tests {
         let mut high_energy = 0.0f64;
         let mut windows = 0usize;
         for chunk in pcm_16k.chunks_exact(WIN) {
-            let mut buf: Vec<rustfft::num_complex::Complex32> =
-                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            let mut buf: Vec<rustfft::num_complex::Complex32> = chunk
+                .iter()
+                .map(|&s| rustfft::num_complex::Complex32::new(s, 0.0))
+                .collect();
             fft.process(&mut buf);
             for (k, c) in buf.iter().enumerate().take(WIN / 2) {
                 let e = (c.norm() as f64).powi(2);
@@ -1217,7 +1283,10 @@ mod tests {
             }
             windows += 1;
         }
-        assert!(windows > 10, "expected enough 1024-sample windows to be meaningful, got {windows}");
+        assert!(
+            windows > 10,
+            "expected enough 1024-sample windows to be meaningful, got {windows}"
+        );
 
         println!("codec2_1600 decode_16k_fixed (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
         assert!(

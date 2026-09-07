@@ -162,9 +162,8 @@ mod tests {
         let omega0_hat = 0.1;
         assert!((energy(&amplitudes) - 29.0).abs() < 1e-9); // 4+9+16
 
-        let expected_scaled: f64 = 4.0 * (0.1f64 * 1.0).cos()
-            + 9.0 * (0.1f64 * 2.0).cos()
-            + 16.0 * (0.1f64 * 3.0).cos();
+        let expected_scaled: f64 =
+            4.0 * (0.1f64 * 1.0).cos() + 9.0 * (0.1f64 * 2.0).cos() + 16.0 * (0.1f64 * 3.0).cos();
         assert!((scaled_energy(&amplitudes, omega0_hat) - expected_scaled).abs() < 1e-9);
     }
 
@@ -174,7 +173,9 @@ mod tests {
     /// difference between the enhanced and unenhanced amplitudes").
     #[test]
     fn enhance_spectral_amplitudes_preserves_total_energy() {
-        let amplitudes: Vec<f64> = (1..=20).map(|l| 1.0 + (l as f64 * 0.37).sin().abs()).collect();
+        let amplitudes: Vec<f64> = (1..=20)
+            .map(|l| 1.0 + (l as f64 * 0.37).sin().abs())
+            .collect();
         let omega0_hat = 2.0 * PI / 80.0;
         let original_energy = energy(&amplitudes);
 
@@ -295,7 +296,10 @@ mod tests {
 
     #[test]
     fn update_amplitude_threshold_matches_eq115_in_both_branches() {
-        assert_eq!(update_amplitude_threshold(&errors_with(6, 0.005, 0), 999.0), 20480.0);
+        assert_eq!(
+            update_amplitude_threshold(&errors_with(6, 0.005, 0), 999.0),
+            20480.0
+        );
         let e = errors_with(10, 0.006, 0);
         assert!(
             (update_amplitude_threshold(&e, 500.0) - (6000.0 - 300.0 * 10.0 + 500.0)).abs() < 1e-9

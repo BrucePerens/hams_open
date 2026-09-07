@@ -187,7 +187,9 @@ fn band_edge_b(l: u32, omega0_tilde: f64) -> f64 {
 pub fn unvoiced_scaling_coefficient() -> f64 {
     let sum_w_r: f64 = (-110..=110).map(pitch_refinement_window).sum();
     let sum_w_s_sq: f64 = (-104..=104).map(|n| synthesis_window(n).powi(2)).sum();
-    let sum_w_r_sq: f64 = (-110..=110).map(|n| pitch_refinement_window(n).powi(2)).sum();
+    let sum_w_r_sq: f64 = (-110..=110)
+        .map(|n| pitch_refinement_window(n).powi(2))
+        .sum();
     sum_w_r * (sum_w_s_sq / sum_w_r_sq).sqrt()
 }
 
@@ -296,7 +298,8 @@ impl UnvoicedState {
         spectral_amplitudes: &[f64],
     ) -> Option<[f64; N]> {
         let gamma_w = unvoiced_scaling_coefficient();
-        let spectrum = unvoiced_spectrum(noise, omega0_tilde, voiced, spectral_amplitudes, gamma_w)?;
+        let spectrum =
+            unvoiced_spectrum(noise, omega0_tilde, voiced, spectral_amplitudes, gamma_w)?;
         let current_time_domain = unvoiced_time_domain(&spectrum);
 
         let mut s_uv = [0.0; N];
@@ -346,7 +349,10 @@ mod tests {
         ];
         for (n, want) in expected {
             let got = synthesis_window(n);
-            assert!((got - want).abs() < 1e-9, "w_S({n}) = {got}, expected {want}");
+            assert!(
+                (got - want).abs() < 1e-9,
+                "w_S({n}) = {got}, expected {want}"
+            );
         }
         assert_eq!(synthesis_window(106), 0.0);
         assert_eq!(synthesis_window(-106), 0.0);
@@ -365,7 +371,9 @@ mod tests {
         // Independently computed in Python from u(-105) = 3147 via Eq. 117's own literal formula
         // (not rem_euclid), to check the rem_euclid simplification against the spec's own literal
         // floor/subtract form, not just against itself.
-        let expected = [18100, 25063, 46986, 23944, 15012, 28265, 10153, 47376, 37509, 50252];
+        let expected = [
+            18100, 25063, 46986, 23944, 15012, 28265, 10153, 47376, 37509, 50252,
+        ];
         let mut u = 3147i64;
         for &want in &expected {
             u = advance_noise(u);
@@ -414,7 +422,10 @@ mod tests {
                 acc = acc.add(bin.mul(Complex::new(theta.cos(), theta.sin())));
             }
             let im = acc.scale(1.0 / 256.0).im;
-            assert!(im.abs() < 1e-6, "imaginary part at n={n} was {im}, expected ~0");
+            assert!(
+                im.abs() < 1e-6,
+                "imaginary part at n={n} was {im}, expected ~0"
+            );
         }
     }
 
@@ -454,6 +465,8 @@ mod tests {
         let noise = NoiseState::new();
         let voiced = vec![false; 5];
         let amplitudes = vec![100.0; 6];
-        assert!(state.synthesize(&noise, 0.1, &voiced, &amplitudes).is_none());
+        assert!(state
+            .synthesize(&noise, 0.1, &voiced, &amplitudes)
+            .is_none());
     }
 }

@@ -125,8 +125,11 @@ impl SynthesisState {
         let gamma_m = amplitude_smoothing_scale(self.tau_m, a_m);
         let final_amplitudes: Vec<f64> = enhanced.iter().map(|&m| m * gamma_m).collect();
 
-        self.last_final_amplitudes =
-            Some((omega0_tilde, smoothed_voiced.clone(), final_amplitudes.clone()));
+        self.last_final_amplitudes = Some((
+            omega0_tilde,
+            smoothed_voiced.clone(),
+            final_amplitudes.clone(),
+        ));
         Some((smoothed_voiced, final_amplitudes))
     }
 
@@ -174,8 +177,12 @@ impl SynthesisState {
         decoded_voiced: &[bool],
         errors: &FrameErrors,
     ) -> Option<[f64; N]> {
-        let (voiced, final_amplitudes) =
-            self.finalize_parameters(reconstructed_amplitudes, omega0_tilde, decoded_voiced, errors)?;
+        let (voiced, final_amplitudes) = self.finalize_parameters(
+            reconstructed_amplitudes,
+            omega0_tilde,
+            decoded_voiced,
+            errors,
+        )?;
         self.synthesize_core(omega0_tilde, &voiced, &final_amplitudes)
     }
 
@@ -235,14 +242,19 @@ mod tests {
         let amplitudes = vec![500.0; 16];
         let errors = zero_errors();
 
-        state.synthesize_frame(&amplitudes, omega0, &voiced, &errors).unwrap();
+        state
+            .synthesize_frame(&amplitudes, omega0, &voiced, &errors)
+            .unwrap();
         let s_e_after_real_frame = state.s_e;
         let tau_m_after_real_frame = state.tau_m;
 
         for _ in 0..3 {
             let frame = state.synthesize_repeated_frame().unwrap();
             for &sample in &frame {
-                assert!(sample.is_finite(), "non-finite repeated-frame sample: {sample}");
+                assert!(
+                    sample.is_finite(),
+                    "non-finite repeated-frame sample: {sample}"
+                );
             }
         }
 

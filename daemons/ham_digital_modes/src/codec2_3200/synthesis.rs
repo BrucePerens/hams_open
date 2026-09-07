@@ -402,9 +402,8 @@ pub(crate) fn postfilter_step_fixed(
         e_q23 += ((av as i128 * av as i128) >> FRAC_BITS) as i64;
     }
     let e_over_l_q23 = (e_q23 + l as i64 / 2) / l as i64;
-    let e_db_q23 =
-        ((log2_q23(e_over_l_q23.max(1)) as i128 * ten_over_log2_10_q23() as i128) >> FRAC_BITS)
-            as i64;
+    let e_db_q23 = ((log2_q23(e_over_l_q23.max(1)) as i128 * ten_over_log2_10_q23() as i128)
+        >> FRAC_BITS) as i64;
 
     let mut decisions = [false; MAX_AMP + 1];
     let mut new_bg_est = bg_est;
@@ -415,7 +414,8 @@ pub(crate) fn postfilter_step_fixed(
                 >> FRAC_BITS) as i64;
         }
     } else {
-        let y_q23 = (((bg_est + bg_margin_q23()) as i128 * log2_10_over_20_q23() as i128) >> FRAC_BITS) as i64;
+        let y_q23 = (((bg_est + bg_margin_q23()) as i128 * log2_10_over_20_q23() as i128)
+            >> FRAC_BITS) as i64;
         let thresh = exp2_q23(y_q23);
         for (m, &am) in a.iter().enumerate().take(l + 1).skip(1) {
             decisions[m] = am < thresh;
@@ -526,7 +526,10 @@ impl SynthesisStateFixed {
         for l in 1..=model.l {
             let raw = l as i64 * k_q23;
             let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC / 2 - 1);
-            let bin = model.phi[l].mul(ComplexQ23 { re: model.a[l], im: 0 });
+            let bin = model.phi[l].mul(ComplexQ23 {
+                re: model.a[l],
+                im: 0,
+            });
             self.ifft_re[b] = bin.re;
             self.ifft_im[b] = bin.im;
         }
@@ -641,15 +644,24 @@ mod tests {
                 .collect()
         };
         let lsp_rows = read_rows(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/codec2_lsp_dump.txt"),
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/codec2_lsp_dump.txt"
+            ),
             LPC_ORD + 1,
         );
         let e_rows = read_rows(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/codec2_3200/codec2_enc_e_dump.txt"),
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/codec2_3200/codec2_enc_e_dump.txt"
+            ),
             1,
         );
         let n = lsp_rows.len().min(e_rows.len());
-        assert!(n > 300, "expected the real captured fixture corpus, got {n} rows");
+        assert!(
+            n > 300,
+            "expected the real captured fixture corpus, got {n} rows"
+        );
 
         let mut planner = rustfft::FftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(FFT_ENC);
@@ -685,10 +697,20 @@ mod tests {
             let _aw_fixed = compute_harmonic_amplitudes_fixed(&ak_q23, e_q23, &mut model_fixed);
             apply_first_harmonic_correction_fixed(&mut model_fixed);
 
-            let (new_plain_bg, plain_decisions) =
-                postfilter_step(model.voiced, model.l, &model.a, plain_bg, super::super::fixed_point::log2_lut, super::super::fixed_point::exp2_lut);
-            let (new_fixed_bg_q23, fixed_decisions) =
-                postfilter_step_fixed(model_fixed.voiced, model_fixed.l, &model_fixed.a, fixed_bg_q23);
+            let (new_plain_bg, plain_decisions) = postfilter_step(
+                model.voiced,
+                model.l,
+                &model.a,
+                plain_bg,
+                super::super::fixed_point::log2_lut,
+                super::super::fixed_point::exp2_lut,
+            );
+            let (new_fixed_bg_q23, fixed_decisions) = postfilter_step_fixed(
+                model_fixed.voiced,
+                model_fixed.l,
+                &model_fixed.a,
+                fixed_bg_q23,
+            );
 
             let fixed_bg_db = new_fixed_bg_q23 as f32 / (1i64 << FRAC_BITS) as f32;
             max_bg_drift_db = max_bg_drift_db.max((new_plain_bg - fixed_bg_db).abs());
@@ -707,7 +729,10 @@ mod tests {
         }
 
         println!("postfilter_step_fixed: {decision_mismatches}/{decisions_checked} decision mismatches, max bg_est drift {max_bg_drift_db}dB");
-        assert!(decisions_checked > 1000, "expected a real number of per-harmonic decisions checked, got {decisions_checked}");
+        assert!(
+            decisions_checked > 1000,
+            "expected a real number of per-harmonic decisions checked, got {decisions_checked}"
+        );
         assert!(
             (decision_mismatches as f64 / decisions_checked as f64) < 0.01,
             "{decision_mismatches}/{decisions_checked} real per-harmonic postfilter decisions diverged between fixed and float across the temporal replay"

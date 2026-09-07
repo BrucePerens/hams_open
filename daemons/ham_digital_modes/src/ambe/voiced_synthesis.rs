@@ -50,15 +50,21 @@ fn psi_update(psi_prev: f64, omega0_prev: f64, omega0_curr: f64, l: u32) -> f64 
 /// testability).
 fn delta_omega(phi_prev: f64, phi_curr: f64, omega0_prev: f64, omega0_curr: f64, l: u32) -> f64 {
     let l_f = l as f64;
-    let delta_phi =
-        phi_curr - phi_prev - (omega0_prev + omega0_curr) * l_f * N as f64 / 2.0; // Eq. 137.
+    let delta_phi = phi_curr - phi_prev - (omega0_prev + omega0_curr) * l_f * N as f64 / 2.0; // Eq. 137.
     let wrapped = delta_phi - 2.0 * PI * ((delta_phi + PI) / (2.0 * PI)).floor();
     wrapped / N as f64 // Eq. 138.
 }
 
 /// `theta_l(n)` (Eq. 136): the continuous-phase ramp used by the Eq. 134 branch, given this
 /// harmonic's own [`delta_omega`] (computed once, not per sample).
-fn theta(n: f64, phi_prev: f64, omega0_prev: f64, omega0_curr: f64, delta_omega: f64, l: u32) -> f64 {
+fn theta(
+    n: f64,
+    phi_prev: f64,
+    omega0_prev: f64,
+    omega0_curr: f64,
+    delta_omega: f64,
+    l: u32,
+) -> f64 {
     let l_f = l as f64;
     phi_prev
         + (omega0_prev * l_f + delta_omega) * n
@@ -163,12 +169,21 @@ impl VoicedState {
             let was_voiced = self.voiced_prev[idx];
             let was_amp = self.amplitudes_prev[idx];
             let is_voiced = l <= l_hat_curr && voiced[idx];
-            let is_amp = if l <= l_hat_curr { spectral_amplitudes[idx] } else { 0.0 };
+            let is_amp = if l <= l_hat_curr {
+                spectral_amplitudes[idx]
+            } else {
+                0.0
+            };
             let l_f = l as f64;
             // Only meaningful (and only computed) for the Eq. 134 branch below, but cheap enough to
             // compute unconditionally here rather than duplicating the was_voiced/is_voiced match.
-            let delta_omega_l =
-                delta_omega(phi_prev[idx], phi_curr[idx], self.omega0_prev, omega0_curr, l);
+            let delta_omega_l = delta_omega(
+                phi_prev[idx],
+                phi_curr[idx],
+                self.omega0_prev,
+                omega0_curr,
+                l,
+            );
 
             for (n, slot) in s_v.iter_mut().enumerate() {
                 let n = n as f64;
@@ -178,22 +193,26 @@ impl VoicedState {
                     (false, false) => 0.0, // Eq. 130.
                     (true, false) => {
                         // Eq. 131.
-                        synthesis_window(n as i32) * was_amp
+                        synthesis_window(n as i32)
+                            * was_amp
                             * (self.omega0_prev * n * l_f + phi_prev[idx]).cos()
                     }
                     (false, true) => {
                         // Eq. 132.
-                        synthesis_window(n_shifted as i32) * is_amp
+                        synthesis_window(n_shifted as i32)
+                            * is_amp
                             * (omega0_curr * n_shifted * l_f + phi_curr[idx]).cos()
                     }
                     (true, true) => {
-                        let big_jump = l >= 8
-                            || (omega0_curr - self.omega0_prev).abs() >= 0.1 * omega0_curr;
+                        let big_jump =
+                            l >= 8 || (omega0_curr - self.omega0_prev).abs() >= 0.1 * omega0_curr;
                         if big_jump {
                             // Eq. 133: both halves synthesized independently and summed.
-                            synthesis_window(n as i32) * was_amp
+                            synthesis_window(n as i32)
+                                * was_amp
                                 * (self.omega0_prev * n * l_f + phi_prev[idx]).cos()
-                                + synthesis_window(n_shifted as i32) * is_amp
+                                + synthesis_window(n_shifted as i32)
+                                    * is_amp
                                     * (omega0_curr * n_shifted * l_f + phi_curr[idx]).cos()
                         } else {
                             // Eq. 134-135: continuous-phase interpolation (delta_omega_l hoisted
@@ -222,7 +241,11 @@ impl VoicedState {
         for l in 1..=MAX_HARMONICS as u32 {
             let idx = (l - 1) as usize;
             self.voiced_prev[idx] = l <= l_hat_curr && voiced[idx];
-            self.amplitudes_prev[idx] = if l <= l_hat_curr { spectral_amplitudes[idx] } else { 0.0 };
+            self.amplitudes_prev[idx] = if l <= l_hat_curr {
+                spectral_amplitudes[idx]
+            } else {
+                0.0
+            };
         }
 
         Some(s_v)
@@ -274,11 +297,20 @@ mod tests {
     fn psi_update_matches_imbe_rs_own_test_phase_base_oracle() {
         let omega0_prev = 0.0937765407;
         let omega0_curr = 0.17575344;
-        let expected = [22.562_398_456, 45.124_796_912, 67.687_195_368, 90.249_593_824, 112.811_992_28];
+        let expected = [
+            22.562_398_456,
+            45.124_796_912,
+            67.687_195_368,
+            90.249_593_824,
+            112.811_992_28,
+        ];
         for (i, &want) in expected.iter().enumerate() {
             let l = (i + 1) as u32;
             let got = psi_update(l as f64, omega0_prev, omega0_curr, l);
-            assert!((got - want).abs() < 1e-3, "psi_update l={l}: got {got}, want {want}");
+            assert!(
+                (got - want).abs() < 1e-3,
+                "psi_update l={l}: got {got}, want {want}"
+            );
         }
     }
 
@@ -320,7 +352,10 @@ mod tests {
         let l = 3u32;
         let d_omega = delta_omega(phi_prev, phi_curr, omega0_prev, omega0_curr, l);
         let theta_0 = theta(0.0, phi_prev, omega0_prev, omega0_curr, d_omega, l);
-        assert!((theta_0 - phi_prev).abs() < 1e-12, "theta_l(0) = {theta_0}, expected {phi_prev}");
+        assert!(
+            (theta_0 - phi_prev).abs() < 1e-12,
+            "theta_l(0) = {theta_0}, expected {phi_prev}"
+        );
 
         let was_amp = 321.0;
         let is_amp = 654.0;
@@ -344,7 +379,9 @@ mod tests {
             if i > 0 {
                 noise.advance_frame();
             }
-            let frame = state.synthesize(&noise, omega0, &voiced, &amplitudes).unwrap();
+            let frame = state
+                .synthesize(&noise, omega0, &voiced, &amplitudes)
+                .unwrap();
             for &sample in &frame {
                 assert!(sample.is_finite(), "non-finite voiced sample: {sample}");
             }
@@ -359,7 +396,9 @@ mod tests {
         let noise = NoiseState::new();
         let voiced = vec![false; 16];
         let amplitudes = vec![0.0; 16];
-        let frame = state.synthesize(&noise, 2.0 * PI / 100.0, &voiced, &amplitudes).unwrap();
+        let frame = state
+            .synthesize(&noise, 2.0 * PI / 100.0, &voiced, &amplitudes)
+            .unwrap();
         for &sample in &frame {
             assert_eq!(sample, 0.0);
         }
@@ -381,8 +420,13 @@ mod tests {
         noise.advance_frame();
         let voiced = vec![true; 16];
         let amplitudes = vec![500.0; 16];
-        let frame = state.synthesize(&noise, omega0, &voiced, &amplitudes).unwrap();
-        assert!(frame.iter().any(|&s| s != 0.0), "expected real voiced energy after transition-in");
+        let frame = state
+            .synthesize(&noise, omega0, &voiced, &amplitudes)
+            .unwrap();
+        assert!(
+            frame.iter().any(|&s| s != 0.0),
+            "expected real voiced energy after transition-in"
+        );
         for &sample in &frame {
             assert!(sample.is_finite());
         }
@@ -396,13 +440,18 @@ mod tests {
 
         let voiced = vec![true; 16];
         let amplitudes = vec![500.0; 16];
-        state.synthesize(&noise, omega0, &voiced, &amplitudes).unwrap();
+        state
+            .synthesize(&noise, omega0, &voiced, &amplitudes)
+            .unwrap();
 
         noise.advance_frame();
         let silent = vec![false; 16];
         let zero = vec![0.0; 16];
         let frame = state.synthesize(&noise, omega0, &silent, &zero).unwrap();
-        assert!(frame.iter().any(|&s| s != 0.0), "expected residual energy fading out (Eq. 131)");
+        assert!(
+            frame.iter().any(|&s| s != 0.0),
+            "expected residual energy fading out (Eq. 131)"
+        );
         for &sample in &frame {
             assert!(sample.is_finite());
         }
@@ -414,11 +463,15 @@ mod tests {
         let mut noise = NoiseState::new();
         let voiced = vec![true; 16];
         let amplitudes = vec![500.0; 16];
-        state.synthesize(&noise, 2.0 * PI / 100.0, &voiced, &amplitudes).unwrap();
+        state
+            .synthesize(&noise, 2.0 * PI / 100.0, &voiced, &amplitudes)
+            .unwrap();
 
         noise.advance_frame();
         // A pitch jump far exceeding the 10% threshold.
-        let frame = state.synthesize(&noise, 2.0 * PI / 40.0, &voiced, &amplitudes).unwrap();
+        let frame = state
+            .synthesize(&noise, 2.0 * PI / 40.0, &voiced, &amplitudes)
+            .unwrap();
         for &sample in &frame {
             assert!(sample.is_finite());
         }
@@ -430,7 +483,9 @@ mod tests {
         let noise = NoiseState::new();
         let voiced = vec![true; 5];
         let amplitudes = vec![100.0; 6];
-        assert!(state.synthesize(&noise, 0.1, &voiced, &amplitudes).is_none());
+        assert!(state
+            .synthesize(&noise, 0.1, &voiced, &amplitudes)
+            .is_none());
     }
 
     #[test]
@@ -439,6 +494,8 @@ mod tests {
         let noise = NoiseState::new();
         let voiced = vec![true; MAX_HARMONICS + 1];
         let amplitudes = vec![100.0; MAX_HARMONICS + 1];
-        assert!(state.synthesize(&noise, 0.1, &voiced, &amplitudes).is_none());
+        assert!(state
+            .synthesize(&noise, 0.1, &voiced, &amplitudes)
+            .is_none());
     }
 }

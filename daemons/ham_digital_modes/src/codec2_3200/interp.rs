@@ -173,14 +173,26 @@ mod tests {
     #[test]
     fn wo_interpolation_fixed_borrows_the_voiced_neighbor_when_only_one_is_voiced() {
         assert!(
-            (from_q23(interp_wo_fixed(true, to_q23(1.0), false, to_q23(2.0), true, to_q23(0.1)))
-                - 2.0)
+            (from_q23(interp_wo_fixed(
+                true,
+                to_q23(1.0),
+                false,
+                to_q23(2.0),
+                true,
+                to_q23(0.1)
+            )) - 2.0)
                 .abs()
                 < 1e-5
         );
         assert!(
-            (from_q23(interp_wo_fixed(true, to_q23(1.0), true, to_q23(2.0), false, to_q23(0.1)))
-                - 1.0)
+            (from_q23(interp_wo_fixed(
+                true,
+                to_q23(1.0),
+                true,
+                to_q23(2.0),
+                false,
+                to_q23(0.1)
+            )) - 1.0)
                 .abs()
                 < 1e-5
         );
@@ -189,8 +201,14 @@ mod tests {
     #[test]
     fn wo_interpolation_fixed_falls_back_to_the_floor_when_unvoiced() {
         assert!(
-            (from_q23(interp_wo_fixed(false, to_q23(1.0), true, to_q23(2.0), true, to_q23(0.1)))
-                - 0.1)
+            (from_q23(interp_wo_fixed(
+                false,
+                to_q23(1.0),
+                true,
+                to_q23(2.0),
+                true,
+                to_q23(0.1)
+            )) - 0.1)
                 .abs()
                 < 1e-5
         );
@@ -221,7 +239,11 @@ mod tests {
             .lines()
             .map(|l| l.trim().parse().unwrap())
             .collect();
-        assert!(es.len() > 300, "expected the real captured fixture corpus, got {} rows", es.len());
+        assert!(
+            es.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            es.len()
+        );
 
         let mut max_rel_err = 0.0f32;
         for pair in es.chunks(2) {

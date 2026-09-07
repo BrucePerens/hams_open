@@ -30,16 +30,66 @@ struct LspDim {
 
 /// The ten real per-dimension codebooks, `lsp1.txt` .. `lsp10.txt`.
 const LSP_CB: [LspDim; super::LPC_ORD] = [
-    LspDim { start_hz: 225.0, step_hz: 25.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 325.0, step_hz: 25.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 500.0, step_hz: 50.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 700.0, step_hz: 100.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 950.0, step_hz: 100.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 1100.0, step_hz: 100.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 1500.0, step_hz: 100.0, levels: 16, log2m: 4 },
-    LspDim { start_hz: 2300.0, step_hz: 100.0, levels: 8, log2m: 3 },
-    LspDim { start_hz: 2500.0, step_hz: 100.0, levels: 8, log2m: 3 },
-    LspDim { start_hz: 2900.0, step_hz: 200.0, levels: 4, log2m: 2 },
+    LspDim {
+        start_hz: 225.0,
+        step_hz: 25.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 325.0,
+        step_hz: 25.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 500.0,
+        step_hz: 50.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 700.0,
+        step_hz: 100.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 950.0,
+        step_hz: 100.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 1100.0,
+        step_hz: 100.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 1500.0,
+        step_hz: 100.0,
+        levels: 16,
+        log2m: 4,
+    },
+    LspDim {
+        start_hz: 2300.0,
+        step_hz: 100.0,
+        levels: 8,
+        log2m: 3,
+    },
+    LspDim {
+        start_hz: 2500.0,
+        step_hz: 100.0,
+        levels: 8,
+        log2m: 3,
+    },
+    LspDim {
+        start_hz: 2900.0,
+        step_hz: 200.0,
+        levels: 4,
+        log2m: 2,
+    },
 ];
 
 const RAD_PER_HZ: f32 = std::f32::consts::PI / 4000.0;
@@ -93,7 +143,14 @@ const FRAC_BITS: u32 = 23;
 /// looks -- see `envelope.rs`'s own `BOOST_RATIO_Q23` lesson).
 fn lsp_cb_q23() -> &'static [(i64, i64); super::LPC_ORD] {
     static V: OnceLock<[(i64, i64); super::LPC_ORD]> = OnceLock::new();
-    V.get_or_init(|| std::array::from_fn(|i| (f32_to_q_exact_round(LSP_CB[i].start_hz, FRAC_BITS), f32_to_q_exact_round(LSP_CB[i].step_hz, FRAC_BITS))))
+    V.get_or_init(|| {
+        std::array::from_fn(|i| {
+            (
+                f32_to_q_exact_round(LSP_CB[i].start_hz, FRAC_BITS),
+                f32_to_q_exact_round(LSP_CB[i].step_hz, FRAC_BITS),
+            )
+        })
+    })
 }
 
 fn hz_per_rad_q23() -> i64 {
@@ -158,7 +215,10 @@ mod tests {
     #[test]
     fn lsp_bits_sums_to_36_total_bits() {
         let total: u32 = (0..super::super::LPC_ORD).map(lsp_bits).sum();
-        assert_eq!(total, 36, "1600bps LSP field is documented as 36 bits total");
+        assert_eq!(
+            total, 36,
+            "1600bps LSP field is documented as 36 bits total"
+        );
     }
 
     #[test]
@@ -166,13 +226,8 @@ mod tests {
         for i in 0..super::super::LPC_ORD {
             let dim = &LSP_CB[i];
             for level in 0..dim.levels {
-                let indexes: [u32; super::super::LPC_ORD] = std::array::from_fn(|j| {
-                    if j == i {
-                        level
-                    } else {
-                        0
-                    }
-                });
+                let indexes: [u32; super::super::LPC_ORD] =
+                    std::array::from_fn(|j| if j == i { level } else { 0 });
                 let decoded = decode_lsps_scalar(&indexes);
                 let re_encoded = encode_lsps_scalar(&decoded);
                 assert_eq!(

@@ -481,8 +481,7 @@ mod tests {
             let b1 = ((1u32 << k_hat) - 1) & 0b0110_1001;
             let b2 = 0b10_1101u32;
 
-            let u =
-                prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, true).unwrap();
+            let u = prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, true).unwrap();
             assert_eq!(
                 extract_fundamental_frequency_quantizer(&u),
                 b0,
@@ -548,8 +547,14 @@ mod tests {
         assert_eq!(out.b0, b0, "b0 round trip (small L_hat)");
         assert_eq!(out.b1, b1, "b1 round trip (small L_hat)");
         assert_eq!(out.b2, b2, "b2 round trip (small L_hat)");
-        assert_eq!(out.gain_vector, gain_vector, "gain_vector round trip (small L_hat)");
-        assert_eq!(out.higher_order, higher_order, "higher_order round trip (small L_hat)");
+        assert_eq!(
+            out.gain_vector, gain_vector,
+            "gain_vector round trip (small L_hat)"
+        );
+        assert_eq!(
+            out.higher_order, higher_order,
+            "higher_order round trip (small L_hat)"
+        );
         assert_eq!(out.sync_bit, sync_bit, "sync_bit round trip (small L_hat)");
     }
 }

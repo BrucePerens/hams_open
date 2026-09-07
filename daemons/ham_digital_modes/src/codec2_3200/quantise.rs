@@ -94,10 +94,7 @@ pub fn decode_energy(index: u32) -> f32 {
 fn energy_y_min_q23() -> i64 {
     static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(
-            E_MIN_DB / 10.0 * std::f32::consts::LOG2_10,
-            23,
-        )
+        super::fixed_point::f32_to_q_exact_round(E_MIN_DB / 10.0 * std::f32::consts::LOG2_10, 23)
     })
 }
 
@@ -422,7 +419,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn encode_lsps_delta_scalar_fixed_matches_the_float_version_exactly_on_real_captured_lsp_data() {
+    fn encode_lsps_delta_scalar_fixed_matches_the_float_version_exactly_on_real_captured_lsp_data()
+    {
         use crate::codec2_3200::floating_reference::quantise::encode_lsps_delta_scalar;
         // The real acceptance bar for a quantizer is index agreement,
         // not a tolerance: encode_lsps_delta_scalar (already validated
@@ -510,7 +508,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn decode_lsps_delta_scalar_fixed_matches_the_float_version_within_quantization_noise_on_real_captured_indices() {
+    fn decode_lsps_delta_scalar_fixed_matches_the_float_version_within_quantization_noise_on_real_captured_indices(
+    ) {
         // Real transmitted indices, derived the same way a real decoder
         // would see them: `encode_lsps_delta_scalar_fixed` (already
         // verified byte-identical to the float encoder above) on real
@@ -549,7 +548,8 @@ pub(crate) mod tests {
             let float_back = decode_lsps_delta_scalar(&indexes);
             let fixed_back_q23 = decode_lsps_delta_scalar_fixed(&indexes);
             for i in 0..LPC_ORD {
-                let fixed_back = fixed_back_q23[i] as f32 / (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32;
+                let fixed_back =
+                    fixed_back_q23[i] as f32 / (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32;
                 max_err_hz = max_err_hz.max((fixed_back - float_back[i]).abs() * HZ_PER_RAD);
             }
             n_checked += 1;
@@ -566,7 +566,8 @@ pub(crate) mod tests {
         let mut max_abs_err = 0.0f32;
         for index in 0..(1u32 << super::super::WO_BITS) {
             let float_wo = decode_wo(index);
-            let fixed_wo = decode_wo_fixed(index) as f32 / (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32;
+            let fixed_wo =
+                decode_wo_fixed(index) as f32 / (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32;
             max_abs_err = max_abs_err.max((fixed_wo - float_wo).abs());
         }
         assert!(

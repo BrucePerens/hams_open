@@ -37,8 +37,8 @@
 //! stale the moment the next stage lands and this comment isn't updated
 //! to match.
 
-use super::{fallback_lsp, lpc, nlp, quantise, voicing, window};
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
+use super::{fallback_lsp, lpc, nlp, quantise, voicing, window};
 
 pub struct EncoderFixed {
     /// Raw sample history, `i16`-native -- no `f32` conversion happens
@@ -87,17 +87,13 @@ impl EncoderFixed {
         nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
         // voicing::is_voiced_fixed: migrated, real i16 in, no
         // conversion at all.
-        let voiced0 = voicing::is_voiced_fixed(
-            &mut self.voicing_state,
-            &self.sn[M_PITCH - N_SAMP..],
-        );
+        let voiced0 =
+            voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         self.shift_in(&speech[N_SAMP..]);
         let f0 = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
-        let voiced1 = voicing::is_voiced_fixed(
-            &mut self.voicing_state,
-            &self.sn[M_PITCH - N_SAMP..],
-        );
+        let voiced1 =
+            voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         // quantise::encode_wo takes the one f32 boundary value nlp_fixed
         // itself produces (its own final Hz->bin conversion) -- see

@@ -145,13 +145,16 @@ fn log2_lut_generic(x: f32, bits: u32, table: &[f32]) -> f32 {
 /// the very end, which is the genuine float/fixed boundary (`exponent`
 /// itself came from an integer bit-shift, not a float op).
 fn log2_lut_generic_fixed(x: f32, bits: u32, table_q23: &[i32]) -> f32 {
-    debug_assert!(x > 0.0, "log2_lut_generic_fixed: x must be positive, got {x}");
+    debug_assert!(
+        x > 0.0,
+        "log2_lut_generic_fixed: x must be positive, got {x}"
+    );
     let levels = 1u32 << bits;
     let raw = x.to_bits();
     let exponent = ((raw >> 23) & 0xFF) as i32 - 127;
     let mantissa_frac_q23 = raw & 0x007F_FFFF; // exact, [0, 2^23)
-    // scaled_full == scaled (as in log2_lut_generic) * 2^23, exactly --
-    // an integer widen-multiply, no rounding introduced here at all.
+                                               // scaled_full == scaled (as in log2_lut_generic) * 2^23, exactly --
+                                               // an integer widen-multiply, no rounding introduced here at all.
     let scaled_full = mantissa_frac_q23 as u64 * levels as u64;
     let idx = ((scaled_full >> 23) as usize).min(levels as usize - 1);
     let frac_q23 = (scaled_full - ((idx as u64) << 23)) as i64; // [0, 2^23)
@@ -576,7 +579,10 @@ mod tests {
                 (got - want).abs() < 1e-5,
                 "power-of-two x={x} (2^{exp}): fixed={got} float={want}"
             );
-            assert_eq!(want, exp as f32, "power-of-two log2 should be exact: {want} vs {exp}");
+            assert_eq!(
+                want, exp as f32,
+                "power-of-two log2 should be exact: {want} vs {exp}"
+            );
         }
 
         // Just below a power of two: mantissa_frac bits are all one
@@ -630,7 +636,11 @@ mod tests {
                 (got - want).abs() / want.abs() < 1e-5,
                 "integer y={y}: fixed={got} float={want}"
             );
-            assert_eq!(want, 2.0f32.powi(exp), "exp2 of an exact integer should be exact: {want}");
+            assert_eq!(
+                want,
+                2.0f32.powi(exp),
+                "exp2 of an exact integer should be exact: {want}"
+            );
         }
 
         // Just below a negative integer boundary (e.g. -0.0001), where

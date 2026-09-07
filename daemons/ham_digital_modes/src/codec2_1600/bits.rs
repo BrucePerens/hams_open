@@ -108,7 +108,14 @@ mod tests {
 
     #[test]
     fn frame_uses_exactly_64_bits() {
-        let total = 1 + 1 + WO_BITS + E_BITS + 1 + 1 + WO_BITS + E_BITS
+        let total = 1
+            + 1
+            + WO_BITS
+            + E_BITS
+            + 1
+            + 1
+            + WO_BITS
+            + E_BITS
             + (0..LPC_ORD).map(lsp_bits).sum::<u32>();
         assert_eq!(total, 64, "1600bps frame must be exactly 64 bits");
     }

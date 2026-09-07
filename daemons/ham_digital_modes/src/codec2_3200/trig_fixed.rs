@@ -128,7 +128,10 @@ mod tests {
         // should be extremely close to (1.0, 0.0), not just "close
         // enough within the table's own ordinary interpolation error"
         // but specifically not showing a discontinuity at the seam.
-        assert!((at_zero.re - (1i64 << 23)).abs() < 10, "cos(0) should be ~1.0 in Q23");
+        assert!(
+            (at_zero.re - (1i64 << 23)).abs() < 10,
+            "cos(0) should be ~1.0 in Q23"
+        );
         assert!(at_zero.im.abs() < 10, "sin(0) should be ~0.0 in Q23");
         let near_wrap_cos = near_wrap.re as f32 / (1i64 << 23) as f32;
         let near_wrap_sin = near_wrap.im as f32 / (1i64 << 23) as f32;

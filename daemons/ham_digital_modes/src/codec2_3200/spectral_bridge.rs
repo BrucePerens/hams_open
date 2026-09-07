@@ -135,7 +135,11 @@ fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
     {
         *v = (i as f32 - (n0 - TW_SB) as f32) * inv_2tw;
     }
-    for v in pn.iter_mut().take(n1.saturating_sub(TW_SB)).skip(n0 + TW_SB) {
+    for v in pn
+        .iter_mut()
+        .take(n1.saturating_sub(TW_SB))
+        .skip(n0 + TW_SB)
+    {
         *v = 1.0;
     }
     for (i, v) in pn
@@ -171,7 +175,11 @@ pub fn extrapolate_amplitudes(model: &Model, enabled: bool) -> ([f32; MAX_AMP_SB
     let mut a_ext = [0.0f32; MAX_AMP_SB + 1];
     a_ext[1..=l].copy_from_slice(&model.a[1..=l]);
 
-    let l2 = if enabled && model.voiced { (2 * l).min(MAX_AMP_SB) } else { l };
+    let l2 = if enabled && model.voiced {
+        (2 * l).min(MAX_AMP_SB)
+    } else {
+        l
+    };
     if l2 <= l {
         return (a_ext, l);
     }
@@ -286,7 +294,10 @@ impl SpectralBridgeState {
                 // phase exists above 4kHz, only the deterministic
                 // voiced excitation phase (same formula as the base
                 // path's own synthesize_phase).
-                debug_assert!(model.voiced, "extrapolated harmonics require a voiced model");
+                debug_assert!(
+                    model.voiced,
+                    "extrapolated harmonics require a voiced model"
+                );
                 let (s, c) = (phi0 * m as f32).sin_cos();
                 Complex32::new(c, s) * a_ext[m]
             };
@@ -344,7 +355,11 @@ fn freq_hz_fixed(m: usize, wo_q23: i64) -> i64 {
 fn div_round_i128(n: i128, d: i128) -> i64 {
     debug_assert!(d > 0, "div_round_i128: divisor must be positive, got {d}");
     let half = d / 2;
-    (if n >= 0 { (n + half) / d } else { (n - half) / d }) as i64
+    (if n >= 0 {
+        (n + half) / d
+    } else {
+        (n - half) / d
+    }) as i64
 }
 
 /// Fixed-point sibling of `extrapolate_amplitudes` -- see this module's
@@ -363,7 +378,11 @@ pub(crate) fn extrapolate_amplitudes_fixed(
     let mut a_ext = [0i64; MAX_AMP_SB + 1];
     a_ext[1..=l].copy_from_slice(&model.a[1..=l]);
 
-    let l2 = if enabled && model.voiced { (2 * l).min(MAX_AMP_SB) } else { l };
+    let l2 = if enabled && model.voiced {
+        (2 * l).min(MAX_AMP_SB)
+    } else {
+        l
+    };
     if l2 <= l {
         return (a_ext, l);
     }
@@ -477,11 +496,20 @@ impl SpectralBridgeStateFixed {
             let raw = m as i64 * k_q23;
             let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC_SB / 2 - 1);
             let bin = if m <= model.l {
-                model.phi[m].mul(ComplexQ23 { re: model.a[m], im: 0 })
+                model.phi[m].mul(ComplexQ23 {
+                    re: model.a[m],
+                    im: 0,
+                })
             } else {
-                debug_assert!(model.voiced, "extrapolated harmonics require a voiced model");
+                debug_assert!(
+                    model.voiced,
+                    "extrapolated harmonics require a voiced model"
+                );
                 let angle_m_q32 = ((phi0_q32 as u64 * m as u64) & 0xFFFF_FFFF) as u32;
-                sin_cos_q23(angle_m_q32).mul(ComplexQ23 { re: a_ext[m], im: 0 })
+                sin_cos_q23(angle_m_q32).mul(ComplexQ23 {
+                    re: a_ext[m],
+                    im: 0,
+                })
             };
             self.ifft_re[b] = bin.re;
             self.ifft_im[b] = bin.im;
@@ -546,7 +574,10 @@ mod tests {
             let db = -tilt_db_per_khz * (freq_hz(m) / 1000.0);
             let amp = 1000.0 * 10f32.powf(db / 20.0);
             model.a[m] = f32_to_q_exact_round(amp, FRAC_BITS);
-            model.phi[m] = ComplexQ23 { re: 1i64 << FRAC_BITS, im: 0 };
+            model.phi[m] = ComplexQ23 {
+                re: 1i64 << FRAC_BITS,
+                im: 0,
+            };
         }
         model
     }
@@ -561,7 +592,10 @@ mod tests {
         let wo = 180.0f32.to_radians().max(super::super::W0_MIN);
         let model_f = synthetic_model(wo, true, 9.0);
         let model_x = synthetic_model_fixed(wo, true, 9.0);
-        assert_eq!(model_f.l, model_x.l, "float/fixed Model::new disagree on l for this wo");
+        assert_eq!(
+            model_f.l, model_x.l,
+            "float/fixed Model::new disagree on l for this wo"
+        );
 
         let (a_ext_f, l2_f) = extrapolate_amplitudes(&model_f, true);
         let (a_ext_x, l2_x) = extrapolate_amplitudes_fixed(&model_x, true);
@@ -585,7 +619,11 @@ mod tests {
     fn extrapolated_amplitudes_continue_a_declining_trend_without_exceeding_the_known_top() {
         let model = synthetic_model(super::super::W0_MIN, true, 12.0);
         let (a_ext, l2) = extrapolate_amplitudes(&model, true);
-        assert!(l2 > model.l, "expected extrapolation to add harmonics, l={}, l2={l2}", model.l);
+        assert!(
+            l2 > model.l,
+            "expected extrapolation to add harmonics, l={}, l2={l2}",
+            model.l
+        );
         assert_eq!(l2, (2 * model.l).min(MAX_AMP_SB));
         // A real declining trend should extrapolate to a value no
         // louder than the last known harmonic, and never negative/NaN.
@@ -593,7 +631,10 @@ mod tests {
         #[allow(clippy::needless_range_loop)]
         for m in (model.l + 1)..=l2 {
             assert!(a_ext[m] >= 0.0, "negative extrapolated amplitude at m={m}");
-            assert!(a_ext[m].is_finite(), "non-finite extrapolated amplitude at m={m}");
+            assert!(
+                a_ext[m].is_finite(),
+                "non-finite extrapolated amplitude at m={m}"
+            );
             assert!(
                 a_ext[m] <= last_known * 1.01,
                 "extrapolated amplitude at m={m} ({}) exceeds the last known harmonic ({last_known}) -- a declining trend should never get louder",
@@ -629,7 +670,10 @@ mod tests {
         let mut model = ModelFixed::new(wo_q23, true);
         model.l = MAX_AMP;
         let (_a_ext, l2) = extrapolate_amplitudes_fixed(&model, true);
-        assert_eq!(l2, MAX_AMP_SB, "expected extrapolation to reach exactly MAX_AMP_SB at l=MAX_AMP");
+        assert_eq!(
+            l2, MAX_AMP_SB,
+            "expected extrapolation to reach exactly MAX_AMP_SB at l=MAX_AMP"
+        );
         assert!(l2 <= MAX_AMP_SB, "l2={l2} exceeds MAX_AMP_SB={MAX_AMP_SB}");
     }
 
@@ -655,14 +699,20 @@ mod tests {
     fn disabled_spectral_bridge_leaves_l2_at_the_original_harmonic_count() {
         let model = synthetic_model(200.0f32.to_radians().max(super::super::W0_MIN), true, 6.0);
         let (_a_ext, l2) = extrapolate_amplitudes(&model, false);
-        assert_eq!(l2, model.l, "disabled Spectral Bridge should not add any harmonics");
+        assert_eq!(
+            l2, model.l,
+            "disabled Spectral Bridge should not add any harmonics"
+        );
     }
 
     #[test]
     fn unvoiced_subframes_never_extrapolate_even_when_enabled() {
         let model = synthetic_model(200.0f32.to_radians().max(super::super::W0_MIN), false, 6.0);
         let (_a_ext, l2) = extrapolate_amplitudes(&model, true);
-        assert_eq!(l2, model.l, "unvoiced sub-frames must not extrapolate, even when enabled=true");
+        assert_eq!(
+            l2, model.l,
+            "unvoiced sub-frames must not extrapolate, even when enabled=true"
+        );
     }
 
     #[test]
@@ -684,8 +734,14 @@ mod tests {
                 }
             }
             let rms = (sumsq / n_samples as f64).sqrt();
-            assert!(rms.is_finite() && rms >= 0.0, "enabled={enabled}: non-finite/negative RMS={rms}");
-            assert!(max_abs < 32768, "enabled={enabled}: clipped at the i16 boundary");
+            assert!(
+                rms.is_finite() && rms >= 0.0,
+                "enabled={enabled}: non-finite/negative RMS={rms}"
+            );
+            assert!(
+                max_abs < 32768,
+                "enabled={enabled}: clipped at the i16 boundary"
+            );
         }
     }
 
@@ -708,8 +764,14 @@ mod tests {
                 }
             }
             let rms = (sumsq / n_samples as f64).sqrt();
-            assert!(rms.is_finite() && rms >= 0.0, "enabled={enabled}: non-finite/negative RMS={rms}");
-            assert!(max_abs < 32768, "enabled={enabled}: clipped at the i16 boundary");
+            assert!(
+                rms.is_finite() && rms >= 0.0,
+                "enabled={enabled}: non-finite/negative RMS={rms}"
+            );
+            assert!(
+                max_abs < 32768,
+                "enabled={enabled}: clipped at the i16 boundary"
+            );
         }
     }
 
@@ -727,7 +789,10 @@ mod tests {
         assert_eq!(l2, model.l);
         #[allow(clippy::needless_range_loop)]
         for m in 1..=model.l {
-            assert_eq!(a_ext[m], model.a[m], "harmonic {m} was altered when extrapolation is disabled");
+            assert_eq!(
+                a_ext[m], model.a[m],
+                "harmonic {m} was altered when extrapolation is disabled"
+            );
         }
     }
 }

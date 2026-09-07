@@ -455,7 +455,10 @@ fn levinson_durbin_fixed_core_from_r_norm(
 /// normalization's behavior without it.
 fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
     let r0_q = r_q[0];
-    debug_assert!(r0_q > 0, "r0_normalize_fixed: r0_q must be positive, got {r0_q}");
+    debug_assert!(
+        r0_q > 0,
+        "r0_normalize_fixed: r0_q must be positive, got {r0_q}"
+    );
     std::array::from_fn(|j| div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128))
 }
 
@@ -748,7 +751,8 @@ fn acos_lut_fixed(x: f32) -> f32 {
     );
     let ax = x.abs();
     let levels = 1i64 << ACOS_LUT_BITS;
-    let ax_q23 = fixed_point::f32_to_q_exact_round(ax, COEF_FRAC_BITS).clamp(0, 1i64 << COEF_FRAC_BITS);
+    let ax_q23 =
+        fixed_point::f32_to_q_exact_round(ax, COEF_FRAC_BITS).clamp(0, 1i64 << COEF_FRAC_BITS);
     let scaled_full = (ax_q23 as u64) * (levels as u64);
     let idx = ((scaled_full >> COEF_FRAC_BITS) as usize).min(levels as usize - 1);
     let frac_q23 = (scaled_full - ((idx as u64) << COEF_FRAC_BITS)) as i64;
@@ -783,7 +787,10 @@ fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE] {
     TABLE.get_or_init(|| {
         let levels = 1u32 << COS_LUT_BITS;
         std::array::from_fn(|i| {
-            f32_to_q((i as f32 / levels as f32 * std::f32::consts::PI).cos(), COEF_FRAC_BITS)
+            f32_to_q(
+                (i as f32 / levels as f32 * std::f32::consts::PI).cos(),
+                COEF_FRAC_BITS,
+            )
         })
     })
 }
@@ -1107,7 +1114,11 @@ pub(crate) mod tests {
         let aks = read_dump(ak_path, LPC_ORD + 1);
         let lsps = read_dump(lsp_path, LPC_ORD + 1);
         assert_eq!(aks.len(), lsps.len());
-        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+        assert!(
+            aks.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            aks.len()
+        );
 
         let mut roots_found_count = 0;
         let mut max_abs_err = 0.0f32;
@@ -1121,7 +1132,9 @@ pub(crate) mod tests {
             let mut a_q23: [i64; LPC_ORD + 1] =
                 std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
             apply_bw_gamma_fixed(&mut a_q23);
-            let Some(lsp) = lpc_to_lsp_from_integer_ak(&a_q23) else { continue };
+            let Some(lsp) = lpc_to_lsp_from_integer_ak(&a_q23) else {
+                continue;
+            };
             roots_found_count += 1;
             for i in 0..LPC_ORD {
                 max_abs_err = max_abs_err.max((lsp[i] - lsp_row[1 + i]).abs());
@@ -1201,7 +1214,10 @@ pub(crate) mod tests {
         // Exact endpoints: acos(1) == 0, acos(-1) == pi -- idx == levels
         // (the table's own last valid entry) at x=1, and the sign
         // branch (pi - interp) at x=-1.
-        assert!((acos_lut_fixed(1.0) - 0.0).abs() < 1e-5, "acos_lut_fixed(1.0) should be ~0");
+        assert!(
+            (acos_lut_fixed(1.0) - 0.0).abs() < 1e-5,
+            "acos_lut_fixed(1.0) should be ~0"
+        );
         assert!(
             (acos_lut_fixed(-1.0) - std::f32::consts::PI).abs() < 1e-5,
             "acos_lut_fixed(-1.0) should be ~pi"
@@ -1254,7 +1270,9 @@ pub(crate) mod tests {
                 max_err = max_err.max((q_dequantized - pq_row[6 + i] as f64).abs() as f32);
             }
         }
-        println!("build_p_q_fixed: max absolute P[]/Q[] error vs real captured reference = {max_err}");
+        println!(
+            "build_p_q_fixed: max absolute P[]/Q[] error vs real captured reference = {max_err}"
+        );
         assert!(
             max_err < 1e-3,
             "build_p_q_fixed diverged from the real captured reference by more than ordinary Q8.23 quantization noise should allow: {max_err}"
@@ -1405,8 +1423,7 @@ pub(crate) mod tests {
             p.copy_from_slice(&pq_row[0..6]);
             q.copy_from_slice(&pq_row[6..12]);
             for poly in [&p, &q] {
-                let coef_q: [i32; 6] =
-                    std::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
+                let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
                 let mut x = -1.0f32;
                 while x <= 1.0 {
                     let x_q = f32_to_q(x, CHEB_FRAC_BITS) as i64;
@@ -1557,21 +1574,23 @@ pub(crate) mod tests {
         let wns = read_dump(wn_path, M_PITCH);
         let rs = read_dump(r_path, LPC_ORD + 1);
         assert_eq!(wns.len(), rs.len());
-        assert!(wns.len() > 150, "expected the synthetic-signal fixture corpus, got {} rows", wns.len());
+        assert!(
+            wns.len() > 150,
+            "expected the synthetic-signal fixture corpus, got {} rows",
+            wns.len()
+        );
 
         let mut max_rel_err = 0.0f32;
         let mut max_abs_wn_q = 0i32;
         for (wn_row, r_row) in wns.iter().zip(rs.iter()) {
-            let wn_q: Vec<i32> = wn_row
-                .iter()
-                .map(|&w| f32_to_q(w, WN_FRAC_BITS))
-                .collect();
+            let wn_q: Vec<i32> = wn_row.iter().map(|&w| f32_to_q(w, WN_FRAC_BITS)).collect();
             max_abs_wn_q = max_abs_wn_q.max(wn_q.iter().map(|&w| w.abs()).max().unwrap_or(0));
             let r_q = autocorrelate_fixed(&wn_q);
             for i in 0..=LPC_ORD {
                 let r_dequantized = r_q[i] as f64 / (1i64 << WN_FRAC_BITS) as f64;
                 let denom = (r_row[i] as f64).abs().max(1e-6);
-                max_rel_err = max_rel_err.max(((r_dequantized - r_row[i] as f64) / denom).abs() as f32);
+                max_rel_err =
+                    max_rel_err.max(((r_dequantized - r_row[i] as f64) / denom).abs() as f32);
             }
         }
         println!("autocorrelate_fixed: max relative R[] error = {max_rel_err}, max real |wn_q| = {max_abs_wn_q} (i32::MAX={})", i32::MAX);
@@ -1620,7 +1639,11 @@ pub(crate) mod tests {
         let aks = read_dump(ak_path, LPC_ORD + 1);
         let rs = read_dump(r_path, LPC_ORD + 1);
         assert_eq!(aks.len(), rs.len());
-        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+        assert!(
+            aks.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            aks.len()
+        );
 
         let mut index_mismatches = 0u64;
         for (ak_row, r_row) in aks.iter().zip(rs.iter()) {
@@ -1632,8 +1655,9 @@ pub(crate) mod tests {
             let e_float = lpc_energy(&ak, &r);
             let a_q23: [i64; LPC_ORD + 1] =
                 std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
-            let r_q: [i64; LPC_ORD + 1] =
-                std::array::from_fn(|i| (r[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i64);
+            let r_q: [i64; LPC_ORD + 1] = std::array::from_fn(|i| {
+                (r[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i64
+            });
             let e_fixed = lpc_energy_fixed(&a_q23, &r_q);
 
             if crate::codec2_3200::quantise::encode_energy(e_float)
@@ -1642,7 +1666,10 @@ pub(crate) mod tests {
                 index_mismatches += 1;
             }
         }
-        println!("lpc_energy_fixed: {index_mismatches}/{} real quantizer-index mismatches vs lpc_energy", aks.len());
+        println!(
+            "lpc_energy_fixed: {index_mismatches}/{} real quantizer-index mismatches vs lpc_energy",
+            aks.len()
+        );
         assert_eq!(
             index_mismatches, 0,
             "lpc_energy_fixed produced a different real transmitted energy index than lpc_energy on {index_mismatches} real frame(s) -- a genuine regression, not just raw-value noise"
@@ -1679,7 +1706,11 @@ pub(crate) mod tests {
     fn apply_bw_gamma_fixed_matches_the_real_float_bw_gamma_on_real_captured_ak_data() {
         let ak_path = fixture!("codec2_ak_dump.txt");
         let aks = read_dump(ak_path, LPC_ORD + 1);
-        assert!(aks.len() > 300, "expected the real captured fixture corpus, got {} rows", aks.len());
+        assert!(
+            aks.len() > 300,
+            "expected the real captured fixture corpus, got {} rows",
+            aks.len()
+        );
 
         // Absolute error, not relative -- this is a plain elementwise
         // scale-by-a-factor-near-1, not a sum with cancellation
@@ -1742,7 +1773,11 @@ mod levinson_durbin_fixed_tests {
         let rows: Vec<Vec<f32>> = std::fs::read_to_string(r_path)
             .unwrap()
             .lines()
-            .map(|line| line.split_whitespace().map(|s| s.parse().unwrap()).collect())
+            .map(|line| {
+                line.split_whitespace()
+                    .map(|s| s.parse().unwrap())
+                    .collect()
+            })
             .collect();
         assert!(
             rows.len() > 300,
@@ -2027,7 +2062,9 @@ mod levinson_durbin_fixed_tests {
         // super::*` above, not redefined, so this test and the real
         // production code can never drift out of sync with each other.
 
-        fn levinson_durbin_fixed_point_normalized(r: &Autocorr) -> (LpcCoeffs, [bool; LPC_ORD + 1]) {
+        fn levinson_durbin_fixed_point_normalized(
+            r: &Autocorr,
+        ) -> (LpcCoeffs, [bool; LPC_ORD + 1]) {
             let r_q = quantize_r(r);
             let r_norm_q = r0_normalize_fixed(&r_q);
             let (a_q23, fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);

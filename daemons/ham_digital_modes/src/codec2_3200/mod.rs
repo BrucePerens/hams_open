@@ -577,7 +577,10 @@ mod tests {
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_8k = Decoder::new();
         let mut decoder_16k = Decoder::new();
@@ -586,8 +589,10 @@ mod tests {
         let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
             let out_16k = decoder_16k.decode_16k(&frame);
             pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
@@ -630,15 +635,23 @@ mod tests {
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_16k = Decoder::new();
-        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+        assert!(
+            decoder_16k.spectral_bridge.enabled,
+            "Spectral Bridge should be on by default"
+        );
 
         let mut pcm_16k: Vec<f32> = Vec::with_capacity(n_frames * 2 * spectral_bridge::N_SAMP_SB);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             let out_16k = decoder_16k.decode_16k(&frame);
             pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
         }
@@ -653,8 +666,10 @@ mod tests {
         let mut high_energy = 0.0f64;
         let mut windows = 0usize;
         for chunk in pcm_16k.chunks_exact(WIN) {
-            let mut buf: Vec<rustfft::num_complex::Complex32> =
-                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            let mut buf: Vec<rustfft::num_complex::Complex32> = chunk
+                .iter()
+                .map(|&s| rustfft::num_complex::Complex32::new(s, 0.0))
+                .collect();
             fft.process(&mut buf);
             for (k, c) in buf.iter().enumerate().take(WIN / 2) {
                 let e = (c.norm() as f64).powi(2);
@@ -666,7 +681,10 @@ mod tests {
             }
             windows += 1;
         }
-        assert!(windows > 50, "expected enough 1024-sample windows to be meaningful, got {windows}");
+        assert!(
+            windows > 50,
+            "expected enough 1024-sample windows to be meaningful, got {windows}"
+        );
 
         println!("decode_16k (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
         assert!(
@@ -693,7 +711,10 @@ mod tests {
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_8k = DecoderFixed::new();
         let mut decoder_16k = DecoderFixed::new();
@@ -702,8 +723,10 @@ mod tests {
         let mut pcm_8k: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         let mut pcm_16k_decimated: Vec<i16> = Vec::with_capacity(n_frames * SAMPLES_PER_FRAME);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             pcm_8k.extend_from_slice(&decoder_8k.decode(&frame));
             let out_16k = decoder_16k.decode_16k_fixed(&frame);
             pcm_16k_decimated.extend(out_16k.iter().skip(1).step_by(2).copied());
@@ -737,23 +760,31 @@ mod tests {
     /// -- a large gap there would be the signal that something in the
     /// fixed-point amplitude fit is wrong, not merely imprecise.
     #[test]
-    fn decode_16k_fixed_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band()
-    {
+    fn decode_16k_fixed_with_spectral_bridge_enabled_places_bounded_energy_in_the_new_4_to_8khz_band(
+    ) {
         let bits_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin"
         );
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let n_frames = bits_data.len() / BYTES_PER_FRAME;
-        assert!(n_frames > 150, "expected the real captured fixture corpus, got {n_frames} frames");
+        assert!(
+            n_frames > 150,
+            "expected the real captured fixture corpus, got {n_frames} frames"
+        );
 
         let mut decoder_16k = DecoderFixed::new();
-        assert!(decoder_16k.spectral_bridge.enabled, "Spectral Bridge should be on by default");
+        assert!(
+            decoder_16k.spectral_bridge.enabled,
+            "Spectral Bridge should be on by default"
+        );
 
         let mut pcm_16k: Vec<f32> = Vec::with_capacity(n_frames * 2 * spectral_bridge::N_SAMP_SB);
         for f in 0..n_frames {
-            let frame: [u8; BYTES_PER_FRAME] =
-                bits_data[f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME].try_into().unwrap();
+            let frame: [u8; BYTES_PER_FRAME] = bits_data
+                [f * BYTES_PER_FRAME..(f + 1) * BYTES_PER_FRAME]
+                .try_into()
+                .unwrap();
             let out_16k = decoder_16k.decode_16k_fixed(&frame);
             pcm_16k.extend(out_16k.iter().map(|&s| s as f32));
         }
@@ -765,8 +796,10 @@ mod tests {
         let mut high_energy = 0.0f64;
         let mut windows = 0usize;
         for chunk in pcm_16k.chunks_exact(WIN) {
-            let mut buf: Vec<rustfft::num_complex::Complex32> =
-                chunk.iter().map(|&s| rustfft::num_complex::Complex32::new(s, 0.0)).collect();
+            let mut buf: Vec<rustfft::num_complex::Complex32> = chunk
+                .iter()
+                .map(|&s| rustfft::num_complex::Complex32::new(s, 0.0))
+                .collect();
             fft.process(&mut buf);
             for (k, c) in buf.iter().enumerate().take(WIN / 2) {
                 let e = (c.norm() as f64).powi(2);
@@ -778,7 +811,10 @@ mod tests {
             }
             windows += 1;
         }
-        assert!(windows > 50, "expected enough 1024-sample windows to be meaningful, got {windows}");
+        assert!(
+            windows > 50,
+            "expected enough 1024-sample windows to be meaningful, got {windows}"
+        );
 
         println!("decode_16k_fixed (enabled): low(0-4kHz) energy={low_energy:e}, high(4-8kHz) energy={high_energy:e}, ratio={:e}", high_energy / low_energy);
         assert!(

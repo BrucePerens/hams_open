@@ -31,9 +31,7 @@
 //! divergence rate rather than adding a stabilization/smoothing step
 //! that would change the algorithm).
 
-use crate::codec2_3200::lpc::{
-    find_next_root_from_q23, Autocorr, LpcCoeffs, COEF_FRAC_BITS,
-};
+use crate::codec2_3200::lpc::{find_next_root_from_q23, Autocorr, LpcCoeffs, COEF_FRAC_BITS};
 use crate::codec2_3200::LPC_ORD;
 
 /// `R[j] = sum(Wn[i] * Wn[i+j])` for `j` in `0..=LPC_ORD`, over the
@@ -234,9 +232,8 @@ pub(crate) fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
 /// that fixed-facing one both bottom out in the identical arithmetic, so
 /// there's no separate float root-search to keep in sync.
 pub(crate) fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
-    let poly_q: [i32; 6] = std::array::from_fn(|i| {
-        (poly[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i32
-    });
+    let poly_q: [i32; 6] =
+        std::array::from_fn(|i| (poly[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i32);
     find_next_root_from_q23(&poly_q, x_start)
 }
 

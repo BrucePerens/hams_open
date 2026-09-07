@@ -455,18 +455,14 @@ mod tests {
         let symbol_values = symbol_values_from_real_transmission(&symbols, 1.0, 1e-6, 1);
         let channel_bit_values = deinterleave_symbol_values(&symbol_values);
 
-        let (decoded, _metric) = sequential_decode(
-            &channel_bit_values,
-            &uniform(1.0),
-            &uniform(1e-6),
-            200,
-        )
-        .unwrap_or_else(|e| {
-            panic!(
+        let (decoded, _metric) =
+            sequential_decode(&channel_bit_values, &uniform(1.0), &uniform(1e-6), 200)
+                .unwrap_or_else(|e| {
+                    panic!(
                 "genie test gave up after {} cycles -- should have decoded almost immediately",
                 e.cycles
             )
-        });
+                });
         assert_eq!(
             decoded, expected,
             "decoded bits must exactly match the independently-computed expected data bits"
