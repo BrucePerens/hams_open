@@ -150,6 +150,7 @@ pub fn interleave_to_dibit_symbols(c: [u32; 8]) -> [(bool, bool); 72] {
 }
 
 /// Sets bit `source.1` (0 = LSB) in code vector `c[source.0]` to `value`.
+// [@ANCHOR: set_bit]
 fn set_bit(c: &mut [u32; 8], source: BitSource, value: bool) {
     if value {
         c[source.0 as usize] |= 1 << source.1;
@@ -160,6 +161,7 @@ fn set_bit(c: &mut [u32; 8], source: BitSource, value: bool) {
 /// received dibit symbols. Total by construction (every real bit position is written exactly once,
 /// per this module's own bijection check on `BIT_FRAME_FORMAT`), so it never panics and every real
 /// bit of every vector is always written -- no zero-initialization gap to worry about.
+// [@ANCHOR: deinterleave_from_dibit_symbols]
 pub fn deinterleave_from_dibit_symbols(symbols: [(bool, bool); 72]) -> [u32; 8] {
     let mut c = [0u32; 8];
     for (i, &(bit1, bit0)) in symbols.iter().enumerate() {
@@ -235,6 +237,8 @@ mod tests {
     /// deinterleaving an interleaved frame must recover it exactly, for any real bit pattern -- not
     /// just a hand-picked one.
     #[test]
+    // Tests [@ANCHOR: deinterleave_from_dibit_symbols]
+    // Tests [@ANCHOR: set_bit]
     fn deinterleave_is_the_exact_inverse_of_interleave_for_several_real_bit_patterns() {
         let widths: [u32; 8] = [23, 23, 23, 23, 15, 15, 15, 7];
         let patterns: [[u32; 8]; 4] = [

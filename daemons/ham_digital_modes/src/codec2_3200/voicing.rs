@@ -54,6 +54,7 @@ const MARGIN_RATIO_Q16: i64 = 1_038_676;
 /// no quantization error in the update rate itself).
 const NOISE_BETA_DIVISOR: i64 = 20;
 
+// [@ANCHOR: div_round_i64]
 fn div_round_i64(n: i64, d: i64) -> i64 {
     debug_assert!(d > 0, "div_round_i64: divisor must be positive, got {d}");
     let half = d / 2;
@@ -68,6 +69,7 @@ fn div_round_i64(n: i64, d: i64) -> i64 {
 /// function. `zero_crossing_rate < ZCR_THRESH` (0.15 = 3/20) is checked
 /// via cross-multiplication (`crossings*20 < 3*(n-1)`) instead of a
 /// float division, exact for the real, small `n` this always runs with.
+// [@ANCHOR: is_voiced_fixed]
 pub fn is_voiced_fixed(state: &mut VoicingStateFixed, samples: &[i16]) -> bool {
     let n = samples.len() as i64;
 
@@ -114,6 +116,8 @@ mod tests {
     /// different EMA domain still needs to produce the same real
     /// decisions on real scenarios, not just be defensible on paper).
     #[test]
+    // Tests [@ANCHOR: is_voiced_fixed]
+    // Tests [@ANCHOR: div_round_i64]
     fn is_voiced_fixed_matches_is_voiced_on_every_real_scenario_this_module_is_validated_against() {
         use crate::codec2_3200::floating_reference::voicing::tests::{synthetic_tone, white_noise};
 

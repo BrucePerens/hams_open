@@ -74,6 +74,7 @@ impl Encoder {
         Self::default()
     }
 
+    // [@ANCHOR: Encoder::shift_in]
     fn shift_in(&mut self, new_samples: &[i16]) {
         self.sn.copy_within(N_SAMP.., 0);
         for (dst, &s) in self.sn[M_PITCH - N_SAMP..].iter_mut().zip(new_samples) {
@@ -87,6 +88,7 @@ impl Encoder {
     /// advancing pitch estimation and contributing one `voiced` bit, the
     /// second also setting the transmitted `Wo`), then one LSP/energy
     /// analysis pass over the full `M_PITCH`-sample history window.
+    // [@ANCHOR: Encoder::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[..N_SAMP]);
         nlp::nlp(&mut self.nlp_state, &self.sn);

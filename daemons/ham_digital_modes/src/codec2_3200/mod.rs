@@ -526,6 +526,8 @@ mod tests {
     /// that a real multi-frame sequence produces finite, reasonably-
     /// scaled, non-degenerate audio and doesn't panic.
     #[test]
+    // Tests [@ANCHOR: Encoder::encode]
+    // Tests [@ANCHOR: Encoder::shift_in]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = Encoder::new();
         let mut decoder = Decoder::new();

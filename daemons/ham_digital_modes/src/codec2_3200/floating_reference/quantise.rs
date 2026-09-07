@@ -24,6 +24,7 @@ use crate::codec2_3200::LPC_ORD;
 /// strictly increasing, so deltas are always non-negative in practice
 /// and this delta coding concentrates most of each dimension's dynamic
 /// range where it's actually used.
+// [@ANCHOR: encode_lsps_delta_scalar]
 pub(crate) fn encode_lsps_delta_scalar(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
     const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
     let mut indexes = [0u32; LPC_ORD];
@@ -58,6 +59,7 @@ pub(crate) fn encode_lsps_delta_scalar(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
 /// `lsp_dim_nearest_level_q16_matches_the_float_version_across_a_dense_
 /// sweep`/`lsp_dim_nearest_level_matches_a_reference_binary_search_
 /// across_a_dense_sweep` tests call this directly.
+// [@ANCHOR: lsp_dim_nearest_level]
 pub(crate) fn lsp_dim_nearest_level(dim: &LspDim, target_hz: f32) -> u32 {
     // A plain linear scan over 32 levels -- this quantizer's own real
     // computational cost (see `codec2_3200::quantise`'s own doc comment:
@@ -86,6 +88,7 @@ mod tests {
     use crate::codec2_3200::quantise::LSP_LEVELS;
 
     #[test]
+    // Tests [@ANCHOR: encode_lsps_delta_scalar]
     fn lsp_delta_quantizer_matches_an_independent_reference_transcription_on_real_lsp_data() {
         // Independent transcription of the reference's own sequential
         // encode_lspds_scalar/decode_lspds_scalar delta-accumulation
@@ -202,6 +205,7 @@ mod tests {
     /// bug the derivation process itself could share with the formula
     /// being tested.
     #[test]
+    // Tests [@ANCHOR: lsp_dim_nearest_level]
     fn lsp_dim_nearest_level_matches_a_reference_binary_search_across_a_dense_sweep() {
         fn reference_binary_search(dim: &LspDim, target: f32) -> u32 {
             let cb: Vec<f32> = (0..LSP_LEVELS).map(|j| lsp_dim_value_hz(dim, j)).collect();

@@ -163,6 +163,7 @@ pub const FRAME_DURATION_MS: f64 = 20.0;
 ///
 /// `G_hat_m = (1/6) * sum_{i=1}^{6} R_hat_i * cos(pi*(m-1)*(i-0.5)/6)`, for `1 <= m <= 6`
 /// (Eq. 61, 1-indexed in the spec; `r_hat` here is 0-indexed, `r_hat[i-1] == R_hat_i`).
+// [@ANCHOR: gain_vector_dct]
 pub fn gain_vector_dct(r_hat: &[f64; 6]) -> [f64; 6] {
     let mut g_hat = [0.0f64; 6];
     for (m, slot) in g_hat.iter_mut().enumerate() {
@@ -269,6 +270,7 @@ impl FrameState {
 /// unquantized estimate. The *next* call's `previous_state.spectral_amplitudes` is therefore real
 /// reconstructed history, matching the spec's own closed-loop predictive design (Fig. 16's own
 /// "Reconstruct" feedback block) rather than a placeholder.
+// [@ANCHOR: encode_frame]
 pub fn encode_frame(
     frame: &pitch_refinement::RefinementFrame,
     omega0_hat: f64,
@@ -380,6 +382,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: gain_vector_dct]
     fn gain_vector_dct_matches_a_hand_computed_value_for_a_real_asymmetric_input() {
         // A real, non-constant input, computed independently by hand (not by calling the
         // function under test with different inputs and hoping) -- guards against a sign error
@@ -438,6 +441,7 @@ mod tests {
     /// Eq. 54's prediction against real prior history) are actually exercised, not just the
     /// degenerate `FrameState::initial()` case.
     #[test]
+    // Tests [@ANCHOR: encode_frame]
     fn encode_frame_produces_a_full_frame_from_a_real_synthetic_harmonic_signal() {
         fn harmonic_signal(
             fundamental_hz: f64,

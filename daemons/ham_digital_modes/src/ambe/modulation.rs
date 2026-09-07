@@ -10,6 +10,7 @@
 /// The pseudo-random sequence `p_r(n)` for `n` in `0..=114` (Eq. 84-85): a linear congruential
 /// generator seeded from `u_hat_0` (interpreted as a plain unsigned 12-bit number, `0..=4095`, per
 /// the spec's own stated range for that bit vector) and iterated `173*p_r(n-1) + 13849 mod 65536`.
+// [@ANCHOR: pseudo_random_sequence]
 pub fn pseudo_random_sequence(u0: u32) -> [u16; 115] {
     let mut pr = [0u16; 115];
     pr[0] = (16 * u0) as u16; // u0 <= 4095, so 16*u0 <= 65520, always fits in 16 bits
@@ -28,6 +29,7 @@ pub fn pseudo_random_sequence(u0: u32) -> [u16; 115] {
 /// length) and `m_hat_4..m_hat_6` (15 bits each, matching the `[15,11]` Hamming codeword length) are
 /// each built from their own successive, non-overlapping slice of `p_r(n)`'s own top bit
 /// (`floor(p_r(n)/32768)`, MSB-first).
+// [@ANCHOR: modulation_vectors]
 pub fn modulation_vectors(u0: u32) -> [u32; 8] {
     let pr = pseudo_random_sequence(u0);
     let top_bit = |n: usize| -> u32 {
@@ -64,6 +66,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: pseudo_random_sequence]
     fn pseudo_random_sequence_matches_eq84_85_at_hand_computed_values() {
         let pr = pseudo_random_sequence(0);
         assert_eq!(pr[0], 0, "Eq. 84: p_r(0) = 16*0 = 0");
@@ -82,6 +85,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: modulation_vectors]
     fn modulation_vectors_m0_and_m7_are_always_zero() {
         for u0 in [0u32, 1, 100, 4095] {
             let m = modulation_vectors(u0);

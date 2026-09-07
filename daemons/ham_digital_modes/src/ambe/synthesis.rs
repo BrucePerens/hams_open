@@ -93,6 +93,7 @@ impl SynthesisState {
     /// Eq. 113's V/UV forcing, and Eq. 116's amplitude smoothing scale, producing the actual
     /// `(voiced, M_bar_l(0))` pair synthesis consumes -- and remembering it as `last_final_amplitudes`
     /// for a future repeated frame's own Eq. 104. Returns `None` on a length mismatch.
+    // [@ANCHOR: SynthesisState::finalize_parameters]
     fn finalize_parameters(
         &mut self,
         reconstructed_amplitudes: &[f64],
@@ -139,6 +140,7 @@ impl SynthesisState {
     /// `(voiced, M_bar_l(0))` -- the common core both a normal frame ([`Self::synthesize_frame`],
     /// after [`Self::finalize_parameters`]) and a repeated frame
     /// ([`Self::synthesize_repeated_frame`], skipping it entirely per Eq. 104) both funnel into.
+    // [@ANCHOR: SynthesisState::synthesize_core]
     fn synthesize_core(
         &mut self,
         omega0_tilde: f64,
@@ -319,6 +321,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: SynthesisState::finalize_parameters]
+    // Tests [@ANCHOR: SynthesisState::synthesize_core]
     fn synthesize_frame_produces_a_full_finite_frame_across_several_calls() {
         let mut state = SynthesisState::new();
         let omega0 = 2.0 * std::f64::consts::PI / 100.0;

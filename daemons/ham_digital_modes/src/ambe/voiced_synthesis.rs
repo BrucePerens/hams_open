@@ -48,6 +48,7 @@ fn psi_update(psi_prev: f64, omega0_prev: f64, omega0_curr: f64, l: u32) -> f64 
 /// function of `n`, so callers should compute it once per harmonic rather than inside a per-sample
 /// loop (this used to be recomputed 160 times per harmonic; hoisted out for both performance and
 /// testability).
+// [@ANCHOR: delta_omega]
 fn delta_omega(phi_prev: f64, phi_curr: f64, omega0_prev: f64, omega0_curr: f64, l: u32) -> f64 {
     let l_f = l as f64;
     let delta_phi = phi_curr - phi_prev - (omega0_prev + omega0_curr) * l_f * N as f64 / 2.0; // Eq. 137.
@@ -120,6 +121,7 @@ impl VoicedState {
     /// 1-indexed-by-harmonic V/UV decisions and amplitudes (length `L~(0)`); returns `None` on a
     /// length mismatch between the two, or if either exceeds [`MAX_HARMONICS`] (a real, spec-violating
     /// input -- Eq. 139 only ever tracks harmonics `1..=56`).
+    // [@ANCHOR: VoicedState::synthesize]
     pub fn synthesize(
         &mut self,
         noise: &NoiseState,
@@ -269,6 +271,7 @@ mod tests {
     /// combinations, including one with a negative `Delta_phi_l(0)` (phi_curr < phi_prev) to exercise
     /// the wrap-around floor term in both directions.
     #[test]
+    // Tests [@ANCHOR: delta_omega]
     fn theta_at_n_equals_capital_n_lands_exactly_on_phi_curr_mod_2pi() {
         let cases = [
             (0.3, 4.1, 2.0 * PI / 100.0, 2.0 * PI / 105.0, 1u32),
@@ -368,6 +371,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: VoicedState::synthesize]
     fn synthesize_produces_a_full_finite_frame_across_several_calls_all_voiced() {
         let mut state = VoicedState::new();
         let mut noise = NoiseState::new();

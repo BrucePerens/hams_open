@@ -32,6 +32,7 @@ pub struct FrameFields1600 {
     pub lsp_indexes: [u32; LPC_ORD],
 }
 
+// [@ANCHOR: pack_frame_1600]
 pub fn pack_frame_1600(fields: &FrameFields1600) -> [u8; super::BYTES_PER_FRAME] {
     let mut bytes = [0u8; super::BYTES_PER_FRAME];
     let mut w = BitWriter::new(&mut bytes);
@@ -49,6 +50,7 @@ pub fn pack_frame_1600(fields: &FrameFields1600) -> [u8; super::BYTES_PER_FRAME]
     bytes
 }
 
+// [@ANCHOR: unpack_frame_1600]
 pub fn unpack_frame_1600(bytes: &[u8; super::BYTES_PER_FRAME]) -> FrameFields1600 {
     let mut r = BitReader::new(bytes);
     let voiced0 = r.read(1) != 0;
@@ -81,6 +83,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: pack_frame_1600]
+    // Tests [@ANCHOR: unpack_frame_1600]
     fn pack_unpack_round_trips_arbitrary_field_values() {
         let fields = FrameFields1600 {
             voiced0: true,

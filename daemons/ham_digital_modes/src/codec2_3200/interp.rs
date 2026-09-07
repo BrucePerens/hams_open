@@ -16,6 +16,7 @@ use super::LPC_ORD;
 /// neighbor is actually voiced, or the plain midpoint if both are; an
 /// interpolated-unvoiced sub-frame just gets `Wo` reset to its own
 /// unvoiced floor.
+// [@ANCHOR: interp_wo]
 pub fn interp_wo(
     voiced0: bool,
     prev_wo: f32,
@@ -63,6 +64,7 @@ pub fn interpolate_lsp(prev: &[f32; LPC_ORD], next: &[f32; LPC_ORD]) -> [f32; LP
 /// `prev + (next-prev)/2` -- mathematically the same value, but avoids
 /// the sign-dependent truncation-toward-zero a subtraction-based
 /// integer divide would introduce on a negative `next-prev`.
+// [@ANCHOR: interp_wo_fixed]
 pub fn interp_wo_fixed(
     voiced0: bool,
     prev_wo: i64,
@@ -106,6 +108,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: interp_wo]
     fn wo_interpolation_averages_when_both_neighbors_are_voiced() {
         let wo = interp_wo(true, 1.0, true, 2.0, true, 0.1);
         assert!((wo - 1.5).abs() < 1e-6);
@@ -165,6 +168,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: interp_wo_fixed]
     fn wo_interpolation_fixed_averages_when_both_neighbors_are_voiced() {
         let wo = interp_wo_fixed(true, to_q23(1.0), true, to_q23(2.0), true, to_q23(0.1));
         assert!((from_q23(wo) - 1.5).abs() < 1e-5);
