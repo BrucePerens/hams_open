@@ -889,4 +889,40 @@ mod tests {
             "expected the spec's own worked example to reproduce 0.0964, got {step_size}"
         );
     }
+
+    /// A real, load-bearing cross-check spanning two Annex tables transcribed by two entirely
+    /// different techniques at two different times (Annex F: recovered-by-elimination `pdftotext`;
+    /// Annex G: raw glyph-stream extraction) -- if either had a transcription error, this is far
+    /// more likely to catch it than either table's own internal invariant checks above, since it's
+    /// derived independently rather than checked against itself.
+    ///
+    /// `VOICE_BITS` (88) splits as: `b_hat_0` (8) + `b_hat_1` (`K_hat` bits) + `b_hat_2` (6) +
+    /// the five gain-vector elements (Annex F, `m=2..=6`) + every higher-order DCT coefficient
+    /// (Annex G) + `b_hat_{L+2}` (the sync bit, 1). So the gain-vector and higher-order bits alone
+    /// must sum to `88 - 8 - K_hat - 6 - 1 = 73 - K_hat` for every real `(L, K_hat)` pair -- checked
+    /// here for all 48 tabulated `L` values, not just the `L=16` worked example
+    /// `bit_prioritization.rs`'s own tests already confirm by hand. `prioritize_bits` returns `None`
+    /// whenever this doesn't hold, so any `L` failing this check is an `L` where the encoder would
+    /// silently refuse to ever produce a frame -- exactly the failure this test exists to catch
+    /// before it's discovered that way.
+    #[test]
+    fn gain_and_higher_order_bit_totals_satisfy_73_minus_k_hat_for_every_l() {
+        for l in 9..=56u32 {
+            let k_hat = super::super::vuv::frequency_bands_count(l);
+
+            let gain_bits: u32 = (2..=6u32)
+                .map(|m| gain_bit_allocation(l, m).unwrap().0 as u32)
+                .sum();
+            let higher_order_bits: u32 =
+                higher_order_bit_allocation(l).unwrap().iter().map(|&b| b as u32).sum();
+
+            let total = gain_bits + higher_order_bits;
+            let expected = 73 - k_hat;
+            assert_eq!(
+                total, expected,
+                "L={l}, K_hat={k_hat}: expected gain+higher-order bits to sum to {expected} \
+                 (73 - K_hat), got {total} (gain={gain_bits}, higher_order={higher_order_bits})"
+            );
+        }
+    }
 }

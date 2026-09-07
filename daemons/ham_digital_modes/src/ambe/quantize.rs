@@ -91,6 +91,21 @@ pub fn quantize_gain_vector_element(gain_value: f64, l: u32, element: u32) -> Op
     Some(saturating_uniform_quantize(gain_value, bits, step_size))
 }
 
+/// Quantizes all five non-DC gain vector elements (`G_hat_2..G_hat_6`, `g_hat[1..6]`) into
+/// `(value, bits)` pairs, ready for [`super::bit_prioritization::prioritize_bits`]'s own
+/// `gain_vector` parameter -- pairing each quantized value with its own bit width by construction
+/// (both drawn from the same [`tables::gain_bit_allocation`] call) rather than relying on a caller to
+/// independently re-derive the matching bit width and keep it in sync.
+pub fn quantize_gain_vector(g_hat: &[f64; 6], l: u32) -> Option<[(u32, u8); 5]> {
+    let mut out = [(0u32, 0u8); 5];
+    for (idx, element) in (2..=6u32).enumerate() {
+        let (bits, _) = tables::gain_bit_allocation(l, element)?;
+        let value = quantize_gain_vector_element(g_hat[(element - 1) as usize], l, element)?;
+        out[idx] = (value, bits);
+    }
+    Some(out)
+}
+
 /// The `(block_index, position)` pairs, `1 <= block_index <= 6` and `2 <= position <= J_i`, in the
 /// same flat order Annex G's own bit-allocation table uses (the spec's own stated convention:
 /// `[b_hat_8, ..., b_hat_{L+1}]` correspond to `[C_1,2, ..., C_1,J1, ..., C_6,2, ..., C_6,J6]`).
@@ -113,8 +128,17 @@ fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, usize)>> {
 /// observed value in Annex G, not hypothetical) are skipped entirely -- a real, disclosed reading of
 /// the spec's own text: "zero bits" means that coefficient is never transmitted, so it contributes no
 /// entry to the returned vector, in the same flat `[C_1,2, ..., C_6,J6]` order
-/// [`higher_order_coefficient_positions`] produces. Returns `None` for an out-of-range `l`.
-pub fn quantize_higher_order_coefficients(dct_blocks: &[Vec<f64>; 6], l: u32) -> Option<Vec<u32>> {
+/// [`higher_order_coefficient_positions`] produces. Each returned `(value, bits)` pair carries its own
+/// bit width alongside its quantized value -- both drawn from the same Annex G lookup here, by
+/// construction, rather than leaving a caller to independently re-filter `higher_order_bit_allocation`
+/// the same way and hope the two stay in lockstep (a real risk once this feeds
+/// [`super::bit_prioritization::prioritize_bits`]'s own `higher_order` parameter, where a silent
+/// misalignment would produce a plausible-looking but wrong frame). Returns `None` for an
+/// out-of-range `l`.
+pub fn quantize_higher_order_coefficients(
+    dct_blocks: &[Vec<f64>; 6],
+    l: u32,
+) -> Option<Vec<(u32, u8)>> {
     let bit_allocation = tables::higher_order_bit_allocation(l)?;
     let positions = higher_order_coefficient_positions(l)?;
     if bit_allocation.len() != positions.len() {
@@ -132,7 +156,7 @@ pub fn quantize_higher_order_coefficients(dct_blocks: &[Vec<f64>; 6], l: u32) ->
                 let multiplier = tables::higher_order_step_multiplier(bits)?;
                 let step_size = multiplier * sigma;
                 let c_ik = *dct_blocks[block_idx].get(k - 1)?;
-                Some(saturating_uniform_quantize(c_ik, bits, step_size))
+                Some((saturating_uniform_quantize(c_ik, bits, step_size), bits))
             })
             .collect(),
     )
@@ -223,11 +247,7 @@ mod tests {
 
         let quantized = quantize_higher_order_coefficients(&blocks, l).unwrap();
         assert_eq!(quantized.len(), bit_allocation.len() - zero_bit_count);
-        for (&bits, &idx) in bit_allocation
-            .iter()
-            .filter(|&&b| b > 0)
-            .zip(quantized.iter())
-        {
+        for &(idx, bits) in quantized.iter() {
             assert!(
                 idx < (1u32 << bits),
                 "index {idx} doesn't fit in {bits} bits"
@@ -279,29 +299,35 @@ mod tests {
         // inherent property of floor-based uniform quantization at an exact bin boundary, not a
         // bug in the quantizer -- so this checks "at or one bin below the zero bin", not exact
         // equality.
-        for element in 2..=6u32 {
-            let (bits, _) = tables::gain_bit_allocation(l, element).unwrap();
+        let gain_vector = quantize_gain_vector(&g_hat, l).unwrap();
+        for &(idx, bits) in gain_vector.iter() {
             let zero_bin = 1u32 << (bits - 1);
-            let idx =
-                quantize_gain_vector_element(g_hat[(element - 1) as usize], l, element).unwrap();
             assert!(
                 idx == zero_bin || idx == zero_bin - 1,
-                "element {element}: expected the zero bin ({zero_bin}) or one below it, got {idx}"
+                "expected the zero bin ({zero_bin}) or one below it, got {idx}"
             );
         }
 
-        let bit_allocation = tables::higher_order_bit_allocation(l).unwrap();
         let quantized = quantize_higher_order_coefficients(&dct_blocks, l).unwrap();
-        for (&bits, &idx) in bit_allocation
-            .iter()
-            .filter(|&&b| b > 0)
-            .zip(quantized.iter())
-        {
+        for &(idx, bits) in quantized.iter() {
             let zero_bin = 1u32 << (bits - 1);
             assert!(
                 idx == zero_bin || idx == zero_bin - 1,
                 "expected the zero bin ({zero_bin}) or one below it for a zero-valued coefficient, got {idx}"
             );
+        }
+    }
+
+    #[test]
+    fn quantize_gain_vector_matches_element_by_element_quantization() {
+        let l = 20;
+        let g_hat = [1.0, 0.1, -0.2, 0.05, -0.05, 0.02];
+        let pairs = quantize_gain_vector(&g_hat, l).unwrap();
+        for (idx, element) in (2..=6u32).enumerate() {
+            let (bits, _) = tables::gain_bit_allocation(l, element).unwrap();
+            let expected_value =
+                quantize_gain_vector_element(g_hat[(element - 1) as usize], l, element).unwrap();
+            assert_eq!(pairs[idx], (expected_value, bits));
         }
     }
 }

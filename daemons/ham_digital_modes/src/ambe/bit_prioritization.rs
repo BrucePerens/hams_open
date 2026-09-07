@@ -258,7 +258,7 @@ mod tests {
         let (gain, higher) = l16_widths();
         let gain_vector: [(u32, u8); 5] = std::array::from_fn(|i| (0, gain[i]));
         let higher_order: Vec<(u32, u8)> = higher.iter().map(|&w| (0u32, w)).collect();
-        let u = prioritize_bits(0, 0, 6, 0b0000_01, gain_vector, &higher_order, false).unwrap();
+        let u = prioritize_bits(0, 0, 6, 0b00_0001, gain_vector, &higher_order, false).unwrap();
         assert_eq!(u[7], 1 << 3);
     }
 

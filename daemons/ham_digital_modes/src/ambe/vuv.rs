@@ -230,8 +230,8 @@ mod tests {
 
     #[test]
     fn frequency_bands_count_matches_eq34_including_the_l_le_36_boundary() {
-        assert_eq!(frequency_bands_count(9), (9 + 2) / 3); // = 3
-        assert_eq!(frequency_bands_count(36), (36 + 2) / 3); // = 12, still the "L<=36" branch
+        assert_eq!(frequency_bands_count(9), 9u32.div_ceil(3)); // = 3
+        assert_eq!(frequency_bands_count(36), 36u32.div_ceil(3)); // = 12, still the "L<=36" branch
         assert_eq!(frequency_bands_count(37), 12); // now the "otherwise" branch, still 12
         assert_eq!(frequency_bands_count(56), 12);
     }

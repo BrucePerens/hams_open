@@ -56,14 +56,39 @@ mod tests {
         assert_eq!(quantize_fundamental_frequency(omega0_hat), 207);
     }
 
+    /// Every real quarter-sample period this codec's pitch estimator can actually hand to
+    /// [`quantize_fundamental_frequency`] -- not [`candidate_pitches`]'s own half-sample set
+    /// directly, since [`super::pitch_refinement::refine_pitch`] (the real caller, one stage later)
+    /// perturbs each candidate by one of ten quarter-sample offsets in `-9/8..=9/8`. That widens the
+    /// true domain to `19.875..=123.125`, which is exactly the spec's own stated `omega0_hat`
+    /// interval boundary (`2*19.875 - 39 = 0.75` floors to `0`; `2*123.125 - 39 = 207.25` floors to
+    /// `207`) -- deriving the test domain this way turns the spec's own quoted `0..=207` bound into
+    /// a checked consequence of the real pitch range, not a separately re-asserted fact.
+    fn real_refined_pitch_range() -> impl Iterator<Item = f64> {
+        let offsets = [
+            -9.0 / 8.0,
+            -7.0 / 8.0,
+            -5.0 / 8.0,
+            -3.0 / 8.0,
+            -1.0 / 8.0,
+            1.0 / 8.0,
+            3.0 / 8.0,
+            5.0 / 8.0,
+            7.0 / 8.0,
+            9.0 / 8.0,
+        ];
+        candidate_pitches().flat_map(move |p| offsets.into_iter().map(move |offset| p + offset))
+    }
+
     #[test]
     fn quantize_fundamental_frequency_stays_within_the_specs_own_0_to_207_range_across_the_real_pitch_range(
     ) {
         // The spec's own stated valid range (section 6.1: "the value of b_hat_0 ... is limited
         // to the range 0 <= b_hat_0 <= 207"), checked against every omega0_hat this codec's own
-        // pitch estimator can actually produce (pitch.rs's candidate_pitches, P in 21.0..=122.0,
-        // converted to omega0 = 2*pi/P per Eq. 4) rather than merely asserted from the spec text.
-        for p in candidate_pitches() {
+        // pitch estimator can actually produce end to end (candidate_pitches, further refined by
+        // refine_pitch's own quarter-sample offsets -- see real_refined_pitch_range above) rather
+        // than merely asserted from the spec text.
+        for p in real_refined_pitch_range() {
             let omega0_hat = 2.0 * PI / p;
             let b0 = quantize_fundamental_frequency(omega0_hat);
             assert!(
@@ -75,7 +100,7 @@ mod tests {
 
     #[test]
     fn quantize_fundamental_frequency_fits_in_8_bits() {
-        for p in candidate_pitches() {
+        for p in real_refined_pitch_range() {
             let omega0_hat = 2.0 * PI / p;
             let b0 = quantize_fundamental_frequency(omega0_hat);
             assert!(b0 < (1u32 << FUNDAMENTAL_FREQUENCY_BITS));

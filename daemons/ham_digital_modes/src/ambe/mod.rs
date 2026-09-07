@@ -6,14 +6,18 @@
 //! `AMBE_PLUS_2_NOTES.md` in this same directory for what's known about that generation, kept as
 //! documentation only.
 //!
-//! # Real, current state: the full encoder is implemented; the decoder is not
+//! # Real, current state: every encode stage is implemented and now wired together end to end
 //!
 //! Every stage of section 5-7's own encode pipeline is implemented and tested (see the pipeline
-//! list below) -- this is a real, working AMBE *encoder*, not a scaffold. What remains: the entire
-//! decoder side, and closing the one disclosed gap in `prediction.rs` (it takes the previous frame's
-//! reconstructed spectral amplitudes as an external input rather than computing them itself, since
-//! that requires a decoder-side reconstruction loop). What already exists: the frame structure and
-//! pipeline stage documentation below, `fec.rs`'s Golay/Hamming FEC
+//! list below), and [`encode_frame`] now composes all eight of them into one real function that
+//! takes an analysis frame and estimated pitch in and returns the final 144-bit modulated code
+//! vectors -- not just independently-tested pieces left for a caller to assemble correctly. What
+//! remains: the entire decoder side, and closing the one disclosed gap [`encode_frame`] still
+//! carries forward rather than hides (it feeds `prediction::prediction_residual` this *encoder's*
+//! own unquantized spectral amplitude estimate as "previous frame" history, as a deliberate
+//! placeholder, where the spec actually wants the *decoder's* reconstructed history -- closing that
+//! for real requires a decoder-reconstruction loop this module doesn't build yet). What already
+//! exists: the frame structure and pipeline stage documentation below, `fec.rs`'s Golay/Hamming FEC
 //! (generator matrices independently verified two ways -- against each code's own published weight
 //! distribution, and against the PDF's own separate vector-text layer, see that module's doc comment),
 //! and `tables.rs`'s Annexes E, F, G, and J (gain quantizer levels, gain-vector bit allocation/step
@@ -59,6 +63,10 @@
 //! 8. **Bit modulation** (Eq. 84-94, [`modulation`]): each FEC code vector XORed with a data-dependent
 //!    pseudo-random sequence, producing the final modulated code vectors `c_hat_0..c_hat_7` --
 //!    [`encode_code_vectors`] below wires steps 6-8 together into one call.
+//!
+//! 9. **End-to-end composition** ([`encode_frame`]): wires all eight stages above into one call,
+//!    carrying the per-frame state ([`FrameState`]) that Eq. 41's energy tracker and Eq. 54's
+//!    prediction residual both genuinely need from the previous frame.
 //!
 //! **A real scope boundary found while implementing step 8, not assumed going in**: this document
 //! never defines a bit-interleaving permutation of its own. Annex K's own flow chart states the
@@ -141,6 +149,127 @@ pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
     modulation::modulate_code_vectors(nu, u[0])
 }
 
+/// The per-frame state that carries forward into the *next* call to [`encode_frame`] -- Eq. 41's
+/// energy tracker (`xi_max`) and Eq. 54's prediction residual (`l_hat`, `voiced`, and each
+/// harmonic's own spectral amplitude estimate) are all genuinely stateful across frames, unlike
+/// every other stage in this pipeline.
+///
+/// [`Self::initial`] gives the spec's own literal frame-0 initialization; every later frame's state
+/// comes from the previous call's own return value.
+pub struct FrameState {
+    pub xi_max: f64,
+    pub l_hat: u32,
+    pub voiced: Vec<bool>,
+    pub spectral_amplitudes: Vec<f64>,
+}
+
+impl FrameState {
+    /// The spec's own stated initial state for the very first frame of a stream: no prior voicing
+    /// history (every band defaults to unvoiced per `vuv::determine_voicing`'s own
+    /// `unwrap_or(false)`), `xi_max` starting at `update_xi_max`'s own documented floor (`20000.0`;
+    /// Eq. 41 has no real frame `-1` to draw an initial value from, so the floor -- not `0.0`, which
+    /// would make the very first frame's own energy-tracker update jump by 50% of the frame's real
+    /// energy per Eq. 41's first branch -- is the honest "no history yet" value), and
+    /// `l_hat`/`spectral_amplitudes` from [`prediction::INITIAL_L_HAT_PREV`] (the spec's own literal
+    /// initialization value) with a flat, silent amplitude history (`log2(1.0) == 0.0`, i.e. no
+    /// energy) since there is no real previous frame yet.
+    pub fn initial() -> Self {
+        let l_hat = prediction::INITIAL_L_HAT_PREV;
+        FrameState {
+            xi_max: 20000.0,
+            l_hat,
+            voiced: Vec::new(),
+            spectral_amplitudes: vec![1.0; l_hat as usize],
+        }
+    }
+}
+
+/// Encodes one 20ms frame end to end (sections 5-7's own full pipeline, steps 1-8 in this module's
+/// own doc comment above): from an analysis frame and its already-estimated fundamental frequency,
+/// through voicing decision, spectral amplitude estimation, prediction, block DCT, quantization, bit
+/// prioritization, FEC, and modulation, to the final 144-bit modulated code vectors
+/// `c_hat_0..c_hat_7`.
+///
+/// Returns `None` if `l_hat` (derived from `omega0_hat` via `vuv::harmonics_count`) falls outside
+/// Annex F/G/J's own tabulated `9..=56` range, or if bit prioritization's own total-bit-count check
+/// fails -- both real preconditions this function doesn't re-validate itself, just propagates from
+/// the stages that already do.
+///
+/// **Carries forward, not hides, the one real gap disclosed in `prediction`'s own doc comment**:
+/// `previous_m` (Eq. 54's own "previous frame's reconstructed spectral amplitudes") is fed *this*
+/// encoder's own unquantized estimate from `previous_state`, not real decoder-reconstructed history
+/// -- there is no decoder-reconstruction loop yet to produce that. Every other stage here uses real,
+/// already-verified logic; this one substitution is a deliberate, disclosed placeholder.
+pub fn encode_frame(
+    frame: &pitch_refinement::RefinementFrame,
+    omega0_hat: f64,
+    initial_pitch_error: f64,
+    previous_state: &FrameState,
+    sync_bit: bool,
+) -> Option<([u32; 8], FrameState)> {
+    let l_hat = vuv::harmonics_count(omega0_hat);
+    let k_hat = vuv::frequency_bands_count(l_hat);
+
+    let (voiced, xi_max) = vuv::determine_voicing(
+        frame,
+        omega0_hat,
+        initial_pitch_error,
+        previous_state.xi_max,
+        &previous_state.voiced,
+    );
+
+    let spectral_amplitudes =
+        spectral_amplitude::estimate_spectral_amplitudes(frame, l_hat, k_hat, omega0_hat, &voiced);
+
+    let residuals: Vec<f64> = (1..=l_hat)
+        .map(|l| {
+            prediction::prediction_residual(
+                l,
+                spectral_amplitudes[(l - 1) as usize],
+                l_hat,
+                previous_state.l_hat,
+                &previous_state.spectral_amplitudes,
+            )
+        })
+        .collect();
+
+    let blocks = quantize::partition_into_blocks(&residuals, l_hat)?;
+    let dct_blocks: [Vec<f64>; 6] = std::array::from_fn(|i| quantize::block_dct(&blocks[i]));
+    // Each block's own DC term (Eq. 60's k=1 output) feeds the second-stage gain-vector DCT
+    // (Eq. 61, Fig. 18) -- R_hat_i == dct_blocks[i][0], never empty since every real Annex J block
+    // length is >= 1 (checked against tables::BLOCK_LENGTHS directly, not merely assumed).
+    let r_hat: [f64; 6] = std::array::from_fn(|i| dct_blocks[i][0]);
+    let g_hat = gain_vector_dct(&r_hat);
+
+    let b0 = parameter_encoding::quantize_fundamental_frequency(omega0_hat);
+    let b1 = parameter_encoding::encode_voicing_decisions(&voiced);
+    let b2 = tables::quantize_gain_index(g_hat[0]) as u32;
+    let gain_vector = quantize::quantize_gain_vector(&g_hat, l_hat)?;
+    let higher_order = quantize::quantize_higher_order_coefficients(&dct_blocks, l_hat)?;
+
+    let u = bit_prioritization::prioritize_bits(
+        b0,
+        b1,
+        k_hat,
+        b2,
+        gain_vector,
+        &higher_order,
+        sync_bit,
+    )?;
+
+    let c = encode_code_vectors(u);
+
+    Some((
+        c,
+        FrameState {
+            xi_max,
+            l_hat,
+            voiced,
+            spectral_amplitudes,
+        },
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +346,62 @@ mod tests {
         let c = encode_code_vectors(u);
         assert_eq!(c[0], fec::golay_encode(u[0] as u16));
         assert_eq!(c[7], u[7]);
+    }
+
+    /// The real composition test the per-stage unit tests can't catch: a genuine synthetic
+    /// harmonic signal (same construction `pitch_refinement`/`vuv`/`spectral_amplitude`'s own tests
+    /// already use) run through the entire pipeline end to end, twice in a row -- the second call
+    /// using the first's own returned `FrameState`, so the stateful seams (Eq. 41's `xi_max`,
+    /// Eq. 54's prediction against real prior history) are actually exercised, not just the
+    /// degenerate `FrameState::initial()` case.
+    #[test]
+    fn encode_frame_produces_a_full_frame_from_a_real_synthetic_harmonic_signal() {
+        fn harmonic_signal(
+            fundamental_hz: f64,
+            sample_rate: f64,
+            num_harmonics: u32,
+            total_len: usize,
+        ) -> Vec<f64> {
+            (0..total_len)
+                .map(|n| {
+                    let t = n as f64 / sample_rate;
+                    (1..=num_harmonics)
+                        .map(|k| {
+                            (1.0 / k as f64)
+                                * (2.0 * std::f64::consts::PI * fundamental_hz * k as f64 * t).sin()
+                        })
+                        .sum::<f64>()
+                })
+                .collect()
+        }
+
+        let sample_rate = 8000.0;
+        let period = 80.0;
+        let fundamental_hz = sample_rate / period;
+        let omega0_hat = 2.0 * std::f64::consts::PI / period;
+
+        let raw = harmonic_signal(fundamental_hz, sample_rate, 36, 400);
+        let frame = pitch_refinement::RefinementFrame::new(&raw, 200);
+
+        let widths = [23u32, 23, 23, 23, 15, 15, 15, 7];
+
+        let initial = FrameState::initial();
+        let (c1, next_state) = encode_frame(&frame, omega0_hat, 0.01, &initial, false)
+            .expect("a real, in-range harmonic signal should produce a valid frame");
+        for (&value, &width) in c1.iter().zip(widths.iter()) {
+            assert!(
+                value < (1 << width),
+                "frame 1: value {value} doesn't fit in {width} bits"
+            );
+        }
+
+        let (c2, _) = encode_frame(&frame, omega0_hat, 0.01, &next_state, true)
+            .expect("a second frame with real prior state should also produce a valid frame");
+        for (&value, &width) in c2.iter().zip(widths.iter()) {
+            assert!(
+                value < (1 << width),
+                "frame 2: value {value} doesn't fit in {width} bits"
+            );
+        }
     }
 }
