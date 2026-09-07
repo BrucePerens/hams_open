@@ -8,6 +8,7 @@ use super::{FFT_ENC, M_PITCH, NW};
 
 /// Builds the time-domain analysis window (`M_PITCH` samples, mostly
 /// zero outside the centered `NW`-sample Hann taper).
+// [@ANCHOR: make_analysis_window]
 pub fn make_analysis_window() -> [f32; M_PITCH] {
     let mut w = [0.0f32; M_PITCH];
     let mp2 = M_PITCH / 2;
@@ -60,6 +61,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: make_analysis_window]
     fn window_is_zero_outside_its_centered_support() {
         let w = make_analysis_window();
         let mp2 = M_PITCH / 2;

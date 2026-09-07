@@ -72,6 +72,7 @@ const NOISE_BETA: f32 = 0.05;
 /// voicing`'s own cross-validation test (`is_voiced_fixed_matches_
 /// is_voiced_on_every_real_scenario_this_module_is_validated_against`)
 /// needs to reach this too.
+// [@ANCHOR: is_voiced]
 pub(crate) fn is_voiced(state: &mut VoicingState, samples: &[f32]) -> bool {
     let energy: f32 = samples.iter().map(|&s| s * s).sum::<f32>() / samples.len() as f32;
     let energy_db = 10.0 * energy.max(1e-9).log10();
@@ -107,6 +108,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: is_voiced]
     fn a_clean_low_pitched_tone_is_voiced_once_the_noise_floor_settles() {
         let mut state = VoicingState::new();
         let silence = vec![0.0f32; 80];

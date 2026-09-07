@@ -80,6 +80,7 @@ pub fn decode_voicing_decisions_per_harmonic(b1_tilde: u32, k_hat: u32, l_hat: u
 /// `b_hat_1` (Eq. 49): packs the `K_hat` per-band voiced/unvoiced decisions (from
 /// [`super::vuv::determine_voicing`]) into a single unsigned integer, MSB-first (`v_hat_1` is the
 /// most significant of the `K_hat` bits used to represent this value, `v_hat_{K_hat}` the least).
+// [@ANCHOR: encode_voicing_decisions]
 pub fn encode_voicing_decisions(voiced: &[bool]) -> u32 {
     let k_hat = voiced.len() as u32;
     voiced
@@ -279,6 +280,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: encode_voicing_decisions]
     fn encode_voicing_decisions_matches_eq49_at_a_hand_computed_value() {
         // K_hat=4, v = [1,0,1,1] -> b_hat_1 = 1*2^3 + 0*2^2 + 1*2^1 + 1*2^0 = 8+0+2+1 = 11.
         let voiced = [true, false, true, true];

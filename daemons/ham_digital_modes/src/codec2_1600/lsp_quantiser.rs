@@ -172,6 +172,7 @@ fn q_mul_q23(a: i64, b: i64) -> i64 {
 /// in Q23 `i64` arithmetic -- integer division (not a float divide) is
 /// itself a genuine no-FPU operation, same reasoning `cos_q23`'s own
 /// doc comment gives for its own one real division.
+// [@ANCHOR: quantise_dim_fixed]
 fn quantise_dim_fixed(start_q23: i64, step_q23: i64, levels: u32, target_hz_q23: i64) -> u32 {
     // Round-to-nearest integer division: add half the divisor before
     // truncating: `(target-start)/step` rounded, with `step_q23`'s own
@@ -306,6 +307,7 @@ mod tests {
     /// invariant `encode_then_decode_recovers_the_same_quantised_value_
     /// for_every_real_index` checks for the float version.
     #[test]
+    // Tests [@ANCHOR: quantise_dim_fixed]
     fn encode_then_decode_recovers_the_same_quantised_value_for_every_real_index_fixed() {
         for i in 0..super::super::LPC_ORD {
             for level in 0..LSP_CB[i].levels {

@@ -80,6 +80,7 @@ impl EncoderFixed {
     /// stages sit side by side, so it doubles as the punch list's own
     /// real, checkable status: every `as f32` conversion below marks a
     /// stage still delegating to the float reference.
+    // [@ANCHOR: EncoderFixed::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[..N_SAMP]);
 
@@ -186,6 +187,7 @@ mod tests {
     /// here as each stage migrates so a regression is caught immediately
     /// rather than discovered later.
     #[test]
+    // Tests [@ANCHOR: EncoderFixed::encode]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = EncoderFixed::new();
         let mut decoder = Decoder::new();

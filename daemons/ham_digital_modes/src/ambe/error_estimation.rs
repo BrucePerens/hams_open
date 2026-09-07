@@ -35,6 +35,7 @@ pub struct FrameErrors {
 /// `epsilon_0..epsilon_6` (`fec::golay_decode`/`fec::hamming_decode`'s own second return value, one
 /// per FEC-protected code vector `u_hat_0..u_hat_6`, in order) and the previous frame's own
 /// `epsilon_R(-1)`.
+// [@ANCHOR: estimate_errors]
 pub fn estimate_errors(corrected_error_counts: &[u32; 7], previous_rate: f64) -> FrameErrors {
     let total: u32 = corrected_error_counts.iter().sum();
     let rate = 0.95 * previous_rate + 0.000365 * total as f64;
@@ -73,6 +74,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: estimate_errors]
     fn estimate_errors_matches_eq95_96_at_a_hand_computed_value() {
         // Cross-checked against kchmck/imbe.rs's own test_errors: EnhanceErrors::new(&[1,2,3,4,5,6,7],
         // 0.5) -> total=28, rate ~ 0.48522, golay_init=1, hamming_init=5.

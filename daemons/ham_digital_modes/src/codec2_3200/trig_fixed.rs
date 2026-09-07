@@ -69,6 +69,7 @@ fn sin_table_q23() -> &'static [i32; TRIG_LUT_SIZE] {
 /// with); the remaining low bits are the interpolation weight,
 /// rescaled to Q23 by an exact left shift (adding zero bits, not an
 /// approximation).
+// [@ANCHOR: sin_cos_q23]
 pub(crate) fn sin_cos_q23(angle_q32: u32) -> ComplexQ23 {
     const FRAC_BITS_OF_ANGLE: u32 = 32 - TRIG_LUT_BITS;
     let idx = (angle_q32 >> FRAC_BITS_OF_ANGLE) as usize;
@@ -95,6 +96,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: sin_cos_q23]
     fn sin_cos_q23_matches_plain_float_sin_cos_across_the_full_turns_range() {
         let mut max_abs_err = 0.0f32;
         // Dense but not exhaustive over u32's full range -- a large
