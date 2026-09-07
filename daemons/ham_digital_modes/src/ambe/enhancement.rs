@@ -41,7 +41,13 @@ pub fn scaled_energy(spectral_amplitudes: &[f64], omega0_hat: f64) -> f64 {
 }
 
 /// `W_l` (Eq. 107): the raw enhancement weight for harmonic `l` (1-indexed), before the Eq. 108
-/// clamp/cutoff is applied.
+/// clamp/cutoff is applied. Callers must ensure `r_m0 != 0.0` (this module's own
+/// [`enhance_spectral_amplitudes`] guarantees that by returning early on a silent frame before ever
+/// calling this function). The denominator's own `r_m0^2 - r_m1^2` factor is otherwise never zero in
+/// practice even though `|r_m1| <= r_m0` always holds (Cauchy-Schwarz, since `r_m1` is `r_m0`'s own
+/// sum re-weighted by `cos(omega0*l) in [-1, 1]`): hitting zero would require `|r_m1|` to equal `r_m0`
+/// at exact float precision, which needs every harmonic's own phase term to align perfectly -- not
+/// reachable by any real input this codec produces.
 fn weight(m_l: f64, l: f64, omega0_hat: f64, r_m0: f64, r_m1: f64) -> f64 {
     let numerator =
         0.96 * PI * (r_m0 * r_m0 + r_m1 * r_m1 - 2.0 * r_m0 * r_m1 * (omega0_hat * l).cos());
