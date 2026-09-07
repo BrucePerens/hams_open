@@ -19,7 +19,6 @@
 
 use super::{FFT_ENC, LPCPF_BETA, LPCPF_GAMMA, LPCPF_TWO_BETA, LPC_ORD, MAX_AMP, SAMPLE_RATE};
 use rustfft::num_complex::Complex32;
-use rustfft::Fft;
 
 /// Sinusoidal-synthesis model parameters for one 10ms sub-frame: pitch
 /// (`wo`, normalized angular frequency), harmonic count (`l`), per
@@ -67,14 +66,18 @@ const SPEC_BINS: usize = FFT_ENC / 2 + 1;
 /// returning the complex spectrum's first `SPEC_BINS` bins. Fixed-size
 /// stack buffers throughout (`FFT_ENC` is a compile-time constant) --
 /// this runs twice per 10ms sub-frame on a real-time codec's decode
-/// path, so no heap allocation here.
-fn lpc_spectrum(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
+/// path, so no heap allocation here. `microfft::complex::cfft_512`'s own
+/// forward convention was verified directly against `rustfft::plan_fft_
+/// forward` before this swap (max diff ~6e-5 across a real 512-point
+/// comparison) -- see `Cargo.toml`'s own comment on the `microfft`
+/// dependency for the full verification.
+fn lpc_spectrum(ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
     let mut buf = [Complex32::new(0.0, 0.0); FFT_ENC];
     for (i, &a) in ak.iter().enumerate() {
         buf[i] = Complex32::new(a, 0.0);
     }
-    fft.process(&mut buf);
-    std::array::from_fn(|i| buf[i])
+    let out = microfft::complex::cfft_512(&mut buf);
+    std::array::from_fn(|i| out[i])
 }
 
 /// Computes `model.a[1..=model.l]` from `ak`/`e` (the real LPC energy),
@@ -83,12 +86,11 @@ fn lpc_spectrum(fft: &dyn Fft<f32>, ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC
 /// that same spectrum (`H[m] = conj(Aw[bin])`, the synthesis filter
 /// being the LPC analysis filter's own phase response, reversed).
 pub fn compute_harmonic_amplitudes(
-    fft: &dyn Fft<f32>,
     ak: &[f32; LPC_ORD + 1],
     e: f32,
     model: &mut Model,
 ) -> [Complex32; SPEC_BINS] {
-    let aw = lpc_spectrum(fft, ak);
+    let aw = lpc_spectrum(ak);
     let a2: [f32; SPEC_BINS] =
         std::array::from_fn(|i| aw[i].re * aw[i].re + aw[i].im * aw[i].im + 1e-6);
 
@@ -99,7 +101,7 @@ pub fn compute_harmonic_amplitudes(
         ak_gamma[i] = ak[i] * g;
         g *= LPCPF_GAMMA;
     }
-    let awg = lpc_spectrum(fft, &ak_gamma);
+    let awg = lpc_spectrum(&ak_gamma);
     let a2g: [f32; SPEC_BINS] =
         std::array::from_fn(|i| awg[i].re * awg[i].re + awg[i].im * awg[i].im + 1e-6);
 
@@ -493,9 +495,6 @@ mod tests {
             "expected the real captured fixture corpus, got {n} rows"
         );
 
-        let mut planner = rustfft::FftPlanner::<f32>::new();
-        let fft = planner.plan_fft_forward(FFT_ENC);
-
         // Synthetic Wo/voiced, same reasoning fixed_point.rs's own
         // postfilter replay test uses: not transmitted, purely a test-
         // harness choice, so a representative fixed value is fine --
@@ -518,7 +517,7 @@ mod tests {
 
             let ak = lsp_to_lpc(&lsp);
             let mut model = Model::new(wo, true);
-            let _aw = compute_harmonic_amplitudes(fft.as_ref(), &ak, e, &mut model);
+            let _aw = compute_harmonic_amplitudes(&ak, e, &mut model);
 
             let lsp_q23: [i64; LPC_ORD] =
                 std::array::from_fn(|j| f32_to_q_exact_round(lsp[j], COEF_FRAC_BITS));

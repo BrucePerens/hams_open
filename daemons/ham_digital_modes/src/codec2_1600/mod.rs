@@ -248,20 +248,17 @@ pub struct Decoder {
     prev_lsps: [f32; LPC_ORD],
     prev_e: f32,
     synth: synthesis::SynthesisState,
-    fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
     pub spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeState,
 }
 
 impl Default for Decoder {
     fn default() -> Self {
-        let mut planner = rustfft::FftPlanner::<f32>::new();
         Decoder {
             prev_wo: codec2_3200::W0_MIN,
             prev_voiced: false,
             prev_lsps: initial_lsps(),
             prev_e: 1.0,
             synth: synthesis::SynthesisState::new(),
-            fft: planner.plan_fft_forward(codec2_3200::FFT_ENC),
             spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeState::new(),
         }
     }
@@ -323,7 +320,7 @@ impl Decoder {
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc(&lsps);
             let mut model = envelope::Model::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            let aw = envelope::compute_harmonic_amplitudes(&ak, e, &mut model);
             envelope::apply_first_harmonic_correction(&mut model);
             let sub = self.synth.synthesize_subframe(&mut model, &aw);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
@@ -406,7 +403,7 @@ impl Decoder {
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc(&lsps);
             let mut model = envelope::Model::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            let aw = envelope::compute_harmonic_amplitudes(&ak, e, &mut model);
             envelope::apply_first_harmonic_correction(&mut model);
             // Populates model.phi[1..=l] with its own final phase (the
             // spectral bridge synthesis below reuses this unchanged for

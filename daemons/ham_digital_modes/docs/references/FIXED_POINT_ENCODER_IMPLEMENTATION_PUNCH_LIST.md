@@ -423,3 +423,59 @@ member) with no unconditional `rustfft`/`floating_reference` dependency is the c
 before this port can actually be installed on a device with no floating-point unit, as distinct from
 "contains no numerically-necessary floating-point arithmetic," which -- as of this pass's own fix
 above -- is now genuinely, checkably true.
+
+## RESOLVED, 2026-09-07: rustfft replaced with a real no_std FFT for codec2_3200/codec2_1600
+
+Bruce's own direct decision on this exact named blocker: "Replace rustfft with a no_std FFT" --
+either a no_std-compatible FFT crate, or a small hand-written one specific to this codec's own
+sizes. Went with the former: `microfft` (MIT-licensed, genuinely `#![no_std]`, no-alloc, real
+crates.io crate), which supports fixed power-of-2 sizes via Cargo features -- this codebase only
+ever needs 512/1024 (`FFT_ENC`/`FFT_ENC_SB`).
+
+**Numerical convention verified directly before touching any real code**, not assumed from
+documentation: in a throwaway scratch crate, `microfft::complex::cfft_512`'s forward output matches
+`rustfft::plan_fft_forward`'s exactly (max diff ~6e-5 across a real 512-point comparison, pure float
+rounding noise -- same bin ordering, same normalization). `microfft::inverse::ifft_512` is
+normalized (divides by N); `rustfft::plan_fft_inverse` is unnormalized (matching `fixed_fft.rs`'s
+own documented convention) -- confirmed `microfft_result * N ≈ rustfft_result` (max diff ~9e-4).
+Every real call site multiplies `microfft`'s inverse result by `N` explicitly to preserve this
+codebase's existing unnormalized-IFFT convention throughout.
+
+**Real production call sites converted** (all f32/`Complex32`, the only kind `microfft` supports --
+confirmed no f64 usage anywhere in scope): `envelope.rs`'s `lpc_spectrum` (forward only, called by
+both `codec2_3200::Decoder` and `codec2_1600::Decoder`, whose own now-unnecessary `Arc<dyn Fft<f32>>`
+fields were removed entirely -- no FFT plan needs storing when `microfft`'s functions are called
+directly per-invocation), `synthesis.rs`'s `SynthesisState` (inverse, `FFT_ENC`=512), and
+`spectral_bridge.rs`'s `SpectralBridgeState` (inverse, `FFT_ENC_SB`=1024). Deliberately NOT touched:
+`wspr_sync.rs`'s own rustfft usage -- a different digital mode, `f64`-based, `microfft` doesn't
+support `f64`, and this was never part of the no_std-buildability problem this specific dependency
+solved (rustfft stays a real, valid crate dependency for that one use, unrelated to Codec2).
+
+**Verified against a real no-FPU target directly, not just "should work"**: a throwaway scratch
+crate (`#![no_std]`, `microfft` with both `size-512`/`size-1024` features enabled, real forward+
+inverse calls at both sizes) built cleanly for `thumbv7m-none-eabi` (a genuine Cortex-M3, no FPU at
+all -- the same real target the earlier rustfft-failure finding above used) -- zero errors, only
+unused-return-value warnings. This is the same target the earlier entry in this doc showed failing
+outright on `rustfft`'s own `num-traits` `extern crate std;` -- confirmed that specific failure mode
+no longer applies to the FFT dependency itself.
+
+Full daemon suite re-verified after the swap: `cargo build --release`, `cargo test --release` (366
+passed, 0 failed, 16 ignored across all four test binaries -- including every real reference-decoder
+correlation test and every `_fixed_matches_..._float_version` comparison test, confirming the swap
+is numerically transparent to the actual codec output, not just "compiles"), `cargo clippy --release
+--all-targets -- -D warnings` (clean), `cargo fmt -- --check` (clean).
+
+**What this resolves, precisely, and what it doesn't**: the specific blocker this document's own
+previous entry named -- `rustfft` pulling in `num-traits`'s unconditional `std` dependency via the
+float `Decoder`/`SynthesisState`/`SpectralBridgeState` structs -- is closed. `codec2_3200`/
+`codec2_1600`'s own code (both the `Fixed` variants, which never used `rustfft` in the first place,
+and now the float variants too) has zero remaining `rustfft`/`std`-via-FFT dependency. What this does
+NOT resolve, and was never in scope for this specific fix: `rustfft` remains a real, valid crate-
+level dependency overall (for `wspr_sync.rs`'s own unrelated use), so a blind `cargo build
+--target thumbv7m-none-eabi` against the *whole* `ham_digital_modes` crate as it stands today would
+still fail on that basis, plus whatever other non-codec2 modules (`ambe/`, `psk31.rs`, `ft8.rs`, etc.)
+have their own std dependencies never audited for this purpose. Actually installing just the codec2
+path on a real no-FPU device still needs the whole-crate module-selection question this document's
+own previous entry named (its own `no_std` crate/workspace member, or feature-gating out the other
+modes) -- a real, separate architectural decision, not attempted here, and not what Bruce's own
+direct instruction asked for this pass.

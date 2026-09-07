@@ -223,8 +223,10 @@ fn initial_lsps() -> [f32; LPC_ORD] {
 /// Persistent per-decoder state: the previous frame's own decoded
 /// `Wo`/voiced/LSPs/energy (needed for interpolating the next frame's
 /// first sub-frame), plus `synthesis::SynthesisState`'s own overlap-add
-/// memory and a forward FFT plan (`envelope.rs`'s own spectral-envelope
-/// computation). `spectral_bridge` is `pub` so a caller can toggle
+/// memory. `envelope.rs`'s own spectral-envelope computation calls
+/// `microfft::complex::cfft_512` directly (no pre-built FFT plan to
+/// store here -- see `Cargo.toml`'s own comment on the `microfft`
+/// dependency). `spectral_bridge` is `pub` so a caller can toggle
 /// `.enabled` at any time (on by default) -- see `decode_16k`'s own
 /// doc comment; it plays no part in the ordinary `decode()` path at all.
 pub struct Decoder {
@@ -233,20 +235,17 @@ pub struct Decoder {
     prev_lsps: [f32; LPC_ORD],
     prev_e: f32,
     synth: synthesis::SynthesisState,
-    fft: std::sync::Arc<dyn rustfft::Fft<f32>>,
     pub spectral_bridge: spectral_bridge::SpectralBridgeState,
 }
 
 impl Default for Decoder {
     fn default() -> Self {
-        let mut planner = rustfft::FftPlanner::<f32>::new();
         Decoder {
             prev_wo: W0_MIN,
             prev_voiced: false,
             prev_lsps: initial_lsps(),
             prev_e: 1.0,
             synth: synthesis::SynthesisState::new(),
-            fft: planner.plan_fft_forward(FFT_ENC),
             spectral_bridge: spectral_bridge::SpectralBridgeState::new(),
         }
     }
@@ -287,7 +286,7 @@ impl Decoder {
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc(&lsps);
             let mut model = envelope::Model::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            let aw = envelope::compute_harmonic_amplitudes(&ak, e, &mut model);
             envelope::apply_first_harmonic_correction(&mut model);
             let sub = self.synth.synthesize_subframe(&mut model, &aw);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
@@ -348,7 +347,7 @@ impl Decoder {
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc(&lsps);
             let mut model = envelope::Model::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes(self.fft.as_ref(), &ak, e, &mut model);
+            let aw = envelope::compute_harmonic_amplitudes(&ak, e, &mut model);
             envelope::apply_first_harmonic_correction(&mut model);
             // Populates model.phi[1..=l] with its own final phase (the
             // spectral bridge synthesis below reuses this unchanged

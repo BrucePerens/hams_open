@@ -19,8 +19,6 @@
 use super::envelope::Model;
 use super::{BG_BETA, BG_MARGIN, BG_THRESH, FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER_FRAME, TW};
 use rustfft::num_complex::Complex32;
-use rustfft::{Fft, FftPlanner};
-use std::sync::Arc;
 
 fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME];
@@ -198,23 +196,27 @@ pub struct SynthesisState {
     ex_phase: f32,
     bg_est: f32,
     rng: u32,
-    ifft: Arc<dyn Fft<f32>>,
     /// `FFT_ENC` is a compile-time constant, and this buffer is reused
     /// every call -- a fixed-size stack array, not a `Vec`, since this
     /// runs on a real-time codec's per-10ms-sub-frame decode path.
+    /// `microfft::inverse::ifft_512` (no stored FFT plan needed, unlike
+    /// `rustfft`'s trait-object planner) is normalized (divides by N);
+    /// `synthesize_subframe` below multiplies its result by `FFT_ENC`
+    /// to preserve this module's existing unnormalized-IFFT convention
+    /// -- verified directly against `rustfft::plan_fft_inverse` before
+    /// this swap (see `Cargo.toml`'s own comment on the `microfft`
+    /// dependency).
     ifft_buf: [Complex32; FFT_ENC],
 }
 
 impl Default for SynthesisState {
     fn default() -> Self {
-        let mut planner = FftPlanner::<f32>::new();
         SynthesisState {
             sn_: [0.0; SAMPLES_PER_FRAME],
             parzen: make_synthesis_window(),
             ex_phase: 0.0,
             bg_est: 0.0,
             rng: 0xC0FFEE,
-            ifft: planner.plan_fft_inverse(FFT_ENC),
             ifft_buf: [Complex32::new(0.0, 0.0); FFT_ENC],
         }
     }
@@ -256,7 +258,9 @@ impl SynthesisState {
             self.ifft_buf[FFT_ENC - k] = self.ifft_buf[k].conj();
         }
 
-        self.ifft.process(&mut self.ifft_buf);
+        for c in microfft::inverse::ifft_512(&mut self.ifft_buf) {
+            *c *= FFT_ENC as f32;
+        }
 
         // Three arrays (`sn_`, `ifft_buf`, `parzen`), each at its own
         // offset from the loop index -- not a clean fit for
@@ -663,8 +667,6 @@ mod tests {
             "expected the real captured fixture corpus, got {n} rows"
         );
 
-        let mut planner = rustfft::FftPlanner::<f32>::new();
-        let fft = planner.plan_fft_forward(FFT_ENC);
         let wo = W0_MIN + (W0_MAX - W0_MIN) * 0.3;
         let wo_q23 = f32_to_q_exact_round(wo, COEF_FRAC_BITS);
 
@@ -686,7 +688,7 @@ mod tests {
 
             let ak = lsp_to_lpc(&lsp);
             let mut model = Model::new(wo, voiced);
-            let _aw = compute_harmonic_amplitudes(fft.as_ref(), &ak, e, &mut model);
+            let _aw = compute_harmonic_amplitudes(&ak, e, &mut model);
             apply_first_harmonic_correction(&mut model);
 
             let lsp_q23: [i64; LPC_ORD] =

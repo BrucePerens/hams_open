@@ -23,6 +23,27 @@ libm = "0.2"
 # used directly for the STFT the sync search needs, rather than
 # hand-rolling a DFT.
 rustfft = "6"
+# codec2_3200/codec2_1600's own FLOAT structs (Decoder/Encoder/
+# SynthesisState/SpectralBridgeState -- distinct from the *Fixed
+# variants, which already use fixed_fft.rs's own no_std-compatible
+# integer FFT and never touched rustfft) used rustfft too, which
+# pulled in `std` via num-traits and blocked a no_std build of this
+# crate even though the fixed-point decode/encode path itself never
+# needs it. microfft is a real, no_std, no-alloc FFT crate (MIT-
+# licensed) supporting fixed power-of-2 sizes via Cargo features --
+# this codebase only ever needs 512/1024 (FFT_ENC/FFT_ENC_SB). Its
+# forward convention matches rustfft's plan_fft_forward exactly
+# (verified directly, not assumed -- max diff ~6e-5 across a real
+# 512-point comparison, pure float rounding noise); its inverse
+# module is normalized (divides by N), unlike rustfft's own
+# unnormalized plan_fft_inverse, so every inverse call site
+# multiplies the result by N explicitly to preserve this codebase's
+# existing unnormalized-IFFT convention (the same one fixed_fft.rs's
+# own integer FFT already uses). wspr_sync.rs's own rustfft usage
+# (f64, a different digital mode) is untouched -- microfft doesn't
+# support f64, and that usage was never part of the no_std-buildability
+# problem this dependency solves.
+microfft = { version = "0.6", features = ["size-512", "size-1024"] }
 
 [build-dependencies]
 cc = "1.0"

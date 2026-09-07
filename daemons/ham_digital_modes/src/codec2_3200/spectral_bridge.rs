@@ -101,8 +101,7 @@ use super::synthesis::{ear_protection, ear_protection_fixed, phase_increment_q32
 use super::trig_fixed::sin_cos_q23;
 use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLE_RATE};
 use rustfft::num_complex::Complex32;
-use rustfft::{Fft, FftPlanner};
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 const FRAC_BITS: u32 = 23;
 
@@ -239,19 +238,22 @@ pub struct SpectralBridgeState {
     sn_: [f32; SAMPLES_PER_FRAME_SB],
     parzen: [f32; SAMPLES_PER_FRAME_SB],
     ex_phase: f32,
-    ifft: Arc<dyn Fft<f32>>,
+    /// `microfft::inverse::ifft_1024` (no stored FFT plan needed) is
+    /// normalized (divides by N); `synthesize_subframe_sb` below
+    /// multiplies its result by `FFT_ENC_SB` to preserve this module's
+    /// existing unnormalized-IFFT convention -- see `synthesis.rs`'s
+    /// own identical pattern and `Cargo.toml`'s comment on the
+    /// `microfft` dependency for the verification this relies on.
     ifft_buf: [Complex32; FFT_ENC_SB],
 }
 
 impl Default for SpectralBridgeState {
     fn default() -> Self {
-        let mut planner = FftPlanner::<f32>::new();
         SpectralBridgeState {
             enabled: true,
             sn_: [0.0; SAMPLES_PER_FRAME_SB],
             parzen: make_synthesis_window_sb(),
             ex_phase: 0.0,
-            ifft: planner.plan_fft_inverse(FFT_ENC_SB),
             ifft_buf: [Complex32::new(0.0, 0.0); FFT_ENC_SB],
         }
     }
@@ -306,7 +308,9 @@ impl SpectralBridgeState {
             self.ifft_buf[FFT_ENC_SB - k] = self.ifft_buf[k].conj();
         }
 
-        self.ifft.process(&mut self.ifft_buf);
+        for c in microfft::inverse::ifft_1024(&mut self.ifft_buf) {
+            *c *= FFT_ENC_SB as f32;
+        }
 
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP_SB - 1) {

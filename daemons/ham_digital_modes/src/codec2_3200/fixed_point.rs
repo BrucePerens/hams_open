@@ -719,11 +719,6 @@ mod tests {
             "expected the real captured fixture corpus, got {n} rows"
         );
 
-        let fft = {
-            let mut planner = rustfft::FftPlanner::<f32>::new();
-            planner.plan_fft_forward(super::super::FFT_ENC)
-        };
-
         let mut plain_bg = 0.0f32;
         let mut lut_bg = 0.0f32;
         let mut decisions_checked = 0usize;
@@ -747,12 +742,7 @@ mod tests {
 
             let ak = super::super::lpc::lsp_to_lpc(&lsp);
             let mut model = super::super::envelope::Model::new(wo, voiced);
-            let _aw = super::super::envelope::compute_harmonic_amplitudes(
-                fft.as_ref(),
-                &ak,
-                e,
-                &mut model,
-            );
+            let _aw = super::super::envelope::compute_harmonic_amplitudes(&ak, e, &mut model);
             super::super::envelope::apply_first_harmonic_correction(&mut model);
 
             let (new_plain_bg, plain_decisions) = super::super::synthesis::postfilter_step(
