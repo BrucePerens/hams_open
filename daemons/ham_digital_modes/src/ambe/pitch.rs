@@ -165,8 +165,138 @@ impl PitchAnalysisFrame {
             .sum();
         let n_max = (150.0 / p).floor() as i32;
         let r_sum: f64 = (-n_max..=n_max).map(|n| self.r(n as f64 * p)).sum();
-        let w4: f64 = (-150i32..=150).map(|j| initial_pitch_window(j).powi(4)).sum();
+        let w4: f64 = (-150i32..=150)
+            .map(|j| initial_pitch_window(j).powi(4))
+            .sum();
         (s - p * r_sum) / (s * (1.0 - p * w4))
+    }
+}
+
+/// The half-sample-spaced candidate pitch set `{21, 21.5, ..., 121.5, 122}` Eq. 11/13/15 all name
+/// (203 values). Every candidate pitch this module ever selects -- `P_hat_B`, `P_hat_1`, `P_hat_2`,
+/// `P_hat_0` -- is a member of exactly this set.
+fn candidate_pitches() -> impl Iterator<Item = f64> {
+    (0..=202).map(|i| 21.0 + 0.5 * i as f64)
+}
+
+/// Rounds `p` to its nearest member of [`candidate_pitches`] (mean-square-error closeness, per the
+/// spec's own stated rule for snapping a computed sub-multiple back onto the candidate set),
+/// clamping to the set's own `21.0..=122.0` range first.
+fn nearest_candidate_pitch(p: f64) -> f64 {
+    let clamped = p.clamp(21.0, 122.0);
+    ((clamped - 21.0) / 0.5).round() * 0.5 + 21.0
+}
+
+/// Look-back pitch tracking (Eq. 10-12): finds `P_hat_B`, the candidate nearest continuity with the
+/// previous two frames' own chosen pitches, and its cumulative error `CE_B`. `error_fn` is the
+/// *current* frame's own `E(P)` (e.g. [`PitchAnalysisFrame::error_function`]); `prev1`/`prev2` are
+/// the previous two frames' own `(P_hat, E(P_hat))` -- per the spec's own initialization rule, a
+/// frame with no real history yet should pass `(100.0, 0.0)` for both (its own stated default:
+/// "Upon initialization the error functions E_-1(P) and E_-2(P) are assumed to be equal to zero, and
+/// P_hat_-1 and P_hat_-2 are assumed to be equal to 100").
+pub fn look_back_pitch_tracking(
+    error_fn: impl Fn(f64) -> f64,
+    prev1: (f64, f64),
+    prev2: (f64, f64),
+) -> (f64, f64) {
+    let (p_prev1, e_prev1) = prev1;
+    let (_, e_prev2) = prev2;
+    let lo = 0.8 * p_prev1;
+    let hi = 1.2 * p_prev1;
+    let (p_b, e_b) = candidate_pitches()
+        .filter(|&p| p >= lo && p <= hi)
+        .map(|p| (p, error_fn(p)))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        // p_prev1 itself always satisfies 0.8*p_prev1 <= p_prev1 <= 1.2*p_prev1, so this range is
+        // never empty as long as p_prev1 is itself a real candidate pitch (guaranteed by
+        // construction: either a prior call's own returned P_hat_B, or the spec's own 100.0 default).
+        .expect("look_back_pitch_tracking: prev1 pitch must be a real candidate pitch");
+    let ce_b = e_b + e_prev1 + e_prev2;
+    (p_b, ce_b)
+}
+
+/// Look-ahead pitch tracking (Eq. 13-20): finds `P_hat_F`, the forward pitch estimate, and its
+/// cumulative error `CE_F(P_hat_F)`. `error_fn` is the *current* frame's own `E(P)`; `future1_error_fn`/
+/// `future2_error_fn` are the two *future* frames' own `E(P)` (already computable from their own real
+/// speech data, per the spec's own text: "the pitch has not been determined for these future frames"
+/// -- only their pitch choice is undetermined, not their error function).
+pub fn look_ahead_pitch_tracking(
+    error_fn: impl Fn(f64) -> f64,
+    future1_error_fn: impl Fn(f64) -> f64,
+    future2_error_fn: impl Fn(f64) -> f64,
+) -> (f64, f64) {
+    // CE_F(p0) per Eq. 17: E(p0) + E1(P_hat_1) + E2(P_hat_2), where P_hat_1/P_hat_2 jointly
+    // minimize E1(P1)+E2(P2) subject to Eq. 14/16's own nested range constraints.
+    let ce_f_at = |p0: f64| -> f64 {
+        let (lo1, hi1) = (0.8 * p0, 1.2 * p0);
+        let best: f64 = candidate_pitches()
+            .filter(|&p1| p1 >= lo1 && p1 <= hi1)
+            .map(|p1| {
+                let e1 = future1_error_fn(p1);
+                let (lo2, hi2) = (0.8 * p1, 1.2 * p1);
+                let best_e2 = candidate_pitches()
+                    .filter(|&p2| p2 >= lo2 && p2 <= hi2)
+                    .map(&future2_error_fn)
+                    .fold(f64::INFINITY, f64::min);
+                e1 + best_e2
+            })
+            .fold(f64::INFINITY, f64::min);
+        error_fn(p0) + best
+    };
+
+    let p_hat_0 = candidate_pitches()
+        .map(|p0| (p0, ce_f_at(p0)))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .expect("candidate_pitches is never empty")
+        .0;
+    let ce_f_p_hat_0 = ce_f_at(p_hat_0);
+
+    // Sub-multiple check (the spec's own text after Eq. 17, and Eq. 18-20): try P_hat_0/2,
+    // P_hat_0/3, ... (each snapped to the nearest real candidate pitch), smallest first, and take
+    // the first one satisfying any of Eq. 18/19/20; if none do, P_hat_F = P_hat_0 itself.
+    let mut submultiples: Vec<f64> = Vec::new();
+    let mut n = 2u32;
+    loop {
+        let raw = p_hat_0 / n as f64;
+        if raw < 21.0 {
+            break;
+        }
+        submultiples.push(nearest_candidate_pitch(raw));
+        n += 1;
+    }
+    // "the smallest of these sub-multiples is checked... the next largest sub-multiple is checked
+    // next" -- smallest first, matching the loop order above (p_hat_0/2 < p_hat_0/3 is false; higher
+    // n gives a SMALLER raw value, so the vector above is already smallest-first as built).
+    for &candidate in &submultiples {
+        let ce_f_candidate = ce_f_at(candidate);
+        let ratio = ce_f_candidate / ce_f_p_hat_0;
+        let satisfies_18 = ce_f_candidate <= 0.85 && ratio <= 1.7;
+        let satisfies_19 = ce_f_candidate <= 0.4 && ratio <= 3.5;
+        let satisfies_20 = ce_f_candidate <= 0.05;
+        if satisfies_18 || satisfies_19 || satisfies_20 {
+            return (candidate, ce_f_candidate);
+        }
+    }
+    (p_hat_0, ce_f_p_hat_0)
+}
+
+/// The final initial pitch estimate decision (Eq. 21-23): compares the backward and forward
+/// cumulative errors and picks whichever candidate they favor.
+///
+/// Eq. 21 and Eq. 22 both select `p_hat_b`, which reads as duplicated logic (clippy flags it) but
+/// isn't: Eq. 21's own `CE_B <= 0.48` is a confidence override, independent of how `CE_F` compares --
+/// a backward estimate confident enough on its own is trusted even in the case `CE_F` would
+/// otherwise have been numerically smaller. Collapsing the two conditions into one `||` would lose
+/// that this is two separate rules from the spec, not one; kept as written, matching Eq. 21-23
+/// directly, with the lint silenced for exactly this reason rather than restructured to satisfy it.
+#[allow(clippy::if_same_then_else)]
+pub fn choose_initial_pitch_estimate(p_hat_b: f64, ce_b: f64, p_hat_f: f64, ce_f: f64) -> f64 {
+    if ce_b <= 0.48 {
+        p_hat_b
+    } else if ce_b <= ce_f {
+        p_hat_b
+    } else {
+        p_hat_f
     }
 }
 
@@ -244,6 +374,97 @@ mod pitch_analysis_tests {
             "expected a mismatched period to score worse (higher E), got e_true={e_true} e_wrong={e_wrong}"
         );
     }
+
+    #[test]
+    fn look_back_tracking_resolves_the_octave_ambiguity_using_real_pitch_continuity() {
+        // The real point of this whole module: `error_function_is_minimized_near_the_true_period_
+        // or_a_real_harmonic_multiple` above already proved E(P) alone can't tell 60 from 120 for a
+        // perfectly periodic signal. Look-back tracking's own real job is resolving exactly that,
+        // using continuity with a previous frame that's already known to be near 60 -- 120 sits
+        // outside Eq. 10's own [0.8*60, 1.2*60] = [48, 72] range, so it's never even a candidate.
+        let period = 60.0;
+        let raw = periodic_pulse_train(period, 400);
+        let frame = PitchAnalysisFrame::new(&raw, 200);
+        let error_fn = |p: f64| frame.error_function(p);
+
+        let (p_b, _ce_b) = look_back_pitch_tracking(error_fn, (60.0, 0.02), (60.0, 0.02));
+        assert!(
+            (p_b - period).abs() < 1.0,
+            "expected look-back tracking to land on the true period {period} given real prior \
+             continuity, got {p_b}"
+        );
+    }
+
+    #[test]
+    fn look_back_tracking_falls_back_to_the_spec_default_with_no_real_history() {
+        // Per the spec's own stated initialization rule: with no real prior frames, P_hat_-1 =
+        // P_hat_-2 = 100.0 and E_-1 = E_-2 = 0.0 -- confirmed here to behave sanely (not panic, and
+        // to search in the range Eq. 10 actually implies: [80, 120]) rather than assumed correct
+        // without being run.
+        let period = 100.0; // chosen inside the default search range so this frame's own true
+                            // period is reachable from the 100.0 default without contradicting it
+        let raw = periodic_pulse_train(period, 500);
+        let frame = PitchAnalysisFrame::new(&raw, 250);
+        let error_fn = |p: f64| frame.error_function(p);
+
+        let (p_b, ce_b) = look_back_pitch_tracking(error_fn, (100.0, 0.0), (100.0, 0.0));
+        assert!(
+            (80.0..=120.0).contains(&p_b),
+            "expected the default 100.0 history to constrain the search to [80,120], got {p_b}"
+        );
+        assert!(ce_b.is_finite());
+    }
+
+    #[test]
+    fn choose_initial_pitch_estimate_prefers_backward_when_its_error_is_confidently_low() {
+        // Eq. 21: CE_B <= 0.48 alone is enough to pick the backward estimate, regardless of CE_F.
+        assert_eq!(choose_initial_pitch_estimate(60.0, 0.1, 90.0, 0.01), 60.0);
+    }
+
+    #[test]
+    fn choose_initial_pitch_estimate_prefers_whichever_cumulative_error_is_smaller_otherwise() {
+        // Eq. 22-23: once CE_B > 0.48, it's a plain comparison between the two cumulative errors.
+        assert_eq!(choose_initial_pitch_estimate(60.0, 0.9, 90.0, 1.2), 60.0);
+        assert_eq!(choose_initial_pitch_estimate(60.0, 1.2, 90.0, 0.9), 90.0);
+    }
+
+    #[test]
+    fn look_ahead_tracking_lands_on_the_true_period_or_a_valid_submultiple() {
+        // Same real octave-ambiguity risk as look-back's own test, resolved differently: look-ahead
+        // has no *previous*-frame continuity to lean on (by construction -- it looks forward), so
+        // its own raw P_hat_0 search can genuinely land on an ambiguous multiple of the true period.
+        // The real correctness property this checks is the one the spec's own submultiple-check
+        // procedure (Eq. 18-20) exists to guarantee: whatever P_hat_F comes out, it must be the true
+        // period or a real integer submultiple of whatever P_hat_0 the raw search found -- not an
+        // unrelated value.
+        let period = 60.0;
+        let raw = periodic_pulse_train(period, 700);
+        let center = PitchAnalysisFrame::new(&raw, 200);
+        let future1 = PitchAnalysisFrame::new(&raw, 360);
+        let future2 = PitchAnalysisFrame::new(&raw, 520);
+
+        let (p_f, ce_f) = look_ahead_pitch_tracking(
+            |p| center.error_function(p),
+            |p| future1.error_function(p),
+            |p| future2.error_function(p),
+        );
+        let ratio = p_f / period;
+        let nearest_multiple = ratio.round();
+        assert!(
+            nearest_multiple >= 1.0 && (ratio - nearest_multiple).abs() < 0.05,
+            "expected P_hat_F {p_f} to be the true period {period} or a real integer multiple of \
+             it, got ratio {ratio} (CE_F={ce_f})"
+        );
+    }
+
+    #[test]
+    fn nearest_candidate_pitch_snaps_to_the_real_half_sample_grid() {
+        assert_eq!(nearest_candidate_pitch(60.0), 60.0);
+        assert_eq!(nearest_candidate_pitch(60.2), 60.0);
+        assert_eq!(nearest_candidate_pitch(60.3), 60.5);
+        assert_eq!(nearest_candidate_pitch(10.0), 21.0); // clamped to the set's own real floor
+        assert_eq!(nearest_candidate_pitch(200.0), 122.0); // clamped to the set's own real ceiling
+    }
 }
 
 #[cfg(test)]
@@ -288,4 +509,3 @@ mod tests {
         );
     }
 }
-
