@@ -149,6 +149,27 @@ pub fn interleave_to_dibit_symbols(c: [u32; 8]) -> [(bool, bool); 72] {
     })
 }
 
+/// Sets bit `source.1` (0 = LSB) in code vector `c[source.0]` to `value`.
+fn set_bit(c: &mut [u32; 8], source: BitSource, value: bool) {
+    if value {
+        c[source.0 as usize] |= 1 << source.1;
+    }
+}
+
+/// The exact inverse of [`interleave_to_dibit_symbols`]: reassembles the eight code vectors from 72
+/// received dibit symbols. Total by construction (every real bit position is written exactly once,
+/// per this module's own bijection check on `BIT_FRAME_FORMAT`), so it never panics and every real
+/// bit of every vector is always written -- no zero-initialization gap to worry about.
+pub fn deinterleave_from_dibit_symbols(symbols: [(bool, bool); 72]) -> [u32; 8] {
+    let mut c = [0u32; 8];
+    for (i, &(bit1, bit0)) in symbols.iter().enumerate() {
+        let (bit1_source, bit0_source) = BIT_FRAME_FORMAT[i];
+        set_bit(&mut c, bit1_source, bit1);
+        set_bit(&mut c, bit0_source, bit0);
+    }
+    c
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,5 +228,34 @@ mod tests {
         c[1] = 1 << 21;
         let symbols = interleave_to_dibit_symbols(c);
         assert_eq!(symbols[0], (true, true));
+    }
+
+    /// The real property [`deinterleave_from_dibit_symbols`] depends on: since `BIT_FRAME_FORMAT` is
+    /// a checked bijection over all 144 real bit positions (see the bijection test above),
+    /// deinterleaving an interleaved frame must recover it exactly, for any real bit pattern -- not
+    /// just a hand-picked one.
+    #[test]
+    fn deinterleave_is_the_exact_inverse_of_interleave_for_several_real_bit_patterns() {
+        let widths: [u32; 8] = [23, 23, 23, 23, 15, 15, 15, 7];
+        let patterns: [[u32; 8]; 4] = [
+            [0; 8],
+            std::array::from_fn(|i| (1u32 << widths[i]) - 1), // all real bits set
+            [0b101_0101_0101_0101_0101_0101, 0x2AAAAA, 0x555555, 0x2AAAAA, 0x5555, 0x2AAA, 0x5555, 0x55],
+            [1, 2, 4, 8, 1, 2, 4, 1],
+        ];
+        for c in patterns {
+            let symbols = interleave_to_dibit_symbols(c);
+            let recovered = deinterleave_from_dibit_symbols(symbols);
+            for i in 0..8 {
+                let mask = (1u32 << widths[i]) - 1;
+                assert_eq!(
+                    recovered[i] & mask,
+                    c[i] & mask,
+                    "vector {i}: recovered {:#x}, expected {:#x}",
+                    recovered[i] & mask,
+                    c[i] & mask
+                );
+            }
+        }
     }
 }
