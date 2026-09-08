@@ -28,7 +28,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 # means TestPagerMcpServerModule below skips cleanly instead, and starts
 # passing on its own the moment the environment is fixed, no test change
 # needed.
-try:
+try:  # burn-ignore-skiptest-soft-dependency: environment-specific mcp package conflict, see comment above
     import odoo.addons.pager_duty.daemon.pager_mcp_server as pager_mcp_server
 
     _MCP_IMPORT_ERROR = None
