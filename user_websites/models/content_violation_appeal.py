@@ -65,6 +65,7 @@ class ContentViolationAppeal(models.Model):
                     )
                 )
 
+    # [@ANCHOR: user_websites:COMM_appeal_action_approve]
     def action_approve(self):
         # Verified by [@ANCHOR: user_websites:test_tour_moderation_appeal]
         """Approves the appeal and pardons the user or group."""

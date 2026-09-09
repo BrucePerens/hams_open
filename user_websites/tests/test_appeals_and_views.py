@@ -101,6 +101,8 @@ class TestAppealsAndViews(RealTransactionCase):
 
     def test_02_submit_and_approve_appeal(self):
         # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
+
+        # Tests [@ANCHOR: user_websites:COMM_appeal_action_approve]
         """Verify a suspended user can appeal, and an admin can approve to pardon."""
         # Manually suspend the user
         self.user_public.is_suspended_from_websites = True
