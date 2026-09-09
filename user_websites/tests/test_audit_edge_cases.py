@@ -376,6 +376,108 @@ class TestAuditEdgeCases(RealTransactionCase):
         if template:
             template.send_mail(self.env.company.id, force_send=False)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]
 
+    def test_09_cron_pending_reports_ignores_out_of_scope_company(self):
+        # Tests [@ANCHOR: cron_notify_pending_reports]
+        """
+        Bug-hunt regression (2026-09-09): the cron used to iterate EVERY
+        company in the database (res.company.search([], limit=10000))
+        rather than the service account's own granted company_ids, so a
+        second, unrelated company in the DB made it call .with_company()
+        into a company the account has no access to -- raising an uncaught
+        AccessError and aborting the whole run, including base.main_company's
+        own already-processed notification. Prove the fix: a second company
+        the service account is NOT scoped to must not crash the cron, and
+        base.main_company's own pending-report notification must still fire.
+        """
+        other_company = self.env["res.company"].create({"name": "Unrelated Co"})
+        self.env["content.violation.report"].create(
+            {
+                "target_url": "/test-pending-scoped",
+                "description": "Test",
+            }
+        )
+
+        # Must not raise -- this is the regression this test guards against.
+        self.env["content.violation.report"]._cron_notify_pending_reports()
+        self.env.flush_all()
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        svc_company_ids = self.env["res.users"].browse(svc_uid).company_ids.ids
+        self.assertNotIn(
+            other_company.id,
+            svc_company_ids,
+            "Test setup assumption broken: the unrelated company must NOT be in "
+            "the service account's own company_ids, or this test isn't exercising "
+            "the out-of-scope-company path at all.",
+        )
+
+        abuse_email = (
+            self.env["zero_sudo.security.utils"]._get_system_param(
+                "user_websites.company_abuse_email"
+            )
+            or self.env.company.email
+            or "admin@example.com"
+        )
+        mail = self.env["mail.mail"].search(
+            [
+                ("email_to", "ilike", abuse_email),
+                ("subject", "ilike", "Action Required"),
+            ],
+            limit=1,
+        )
+        self.assertTrue(
+            mail,
+            "base.main_company's own notification must still fire even though "
+            "an out-of-scope company also exists in the database.",
+        )
+
+    def test_10_cron_pending_report_count_does_not_leak_across_companies(self):
+        # Tests [@ANCHOR: cron_notify_pending_reports]
+        """
+        Bug-hunt regression (2026-09-09): content_violation_report_admin_rule
+        used to grant the service account an unconditional [(1, '=', 1)]
+        domain (shared with the Administrator group), which OR-dominated
+        content_violation_report_multi_company_rule's own company_id
+        scoping. So a per-company .with_company(company) count() call meant
+        to see only THAT company's "new" reports actually counted every
+        company's reports, regardless of which one was named. Prove the
+        service account's own count is now genuinely company-scoped.
+        """
+        other_company = self.env["res.company"].create({"name": "Unrelated Co 2"})
+        self.env["content.violation.report"].sudo().create(
+            {
+                "target_url": "/test-other-company-report",
+                "description": "Belongs to a different company",
+                "company_id": other_company.id,
+            }
+        )
+        self.env["content.violation.report"].create(
+            {
+                "target_url": "/test-main-company-report",
+                "description": "Belongs to base.main_company",
+            }
+        )
+        self.env.flush_all()
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        count = (
+            self.env["content.violation.report"]
+            .with_user(svc_uid)
+            .with_company(self.env.company)
+            .search_count([("state", "=", "new")])
+        )
+        self.assertEqual(
+            count,
+            1,
+            "The service account's own per-company count must not include "
+            "another company's reports -- if this is 2, the ir.rule fix "
+            "regressed and the cross-company leak is back.",
+        )
+
     def test_async_unpublish_survives_non_psycopg2_exception(self):
         # Tests [@ANCHOR: COMM_user_websites_async_unpublish_catch_all]
         """

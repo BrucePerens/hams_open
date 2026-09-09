@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
+from odoo.exceptions import UserError
 
 
 class ContentViolationReport(models.Model):
@@ -64,21 +65,36 @@ class ContentViolationReport(models.Model):
         # Verified by [@ANCHOR: test_cron_pending_reports]
 
         # Verified by [@ANCHOR: COMM_test_cron_pending_reports]
-        companies = self.env["res.company"].search([], limit=10000)
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        # NOT converted to a single grouped _read_group() call outside
-        # this loop (the general fix for this rule): the service
-        # account's own company_ids is scoped to base.main_company only
-        # (see data/user_websites_data.xml), so .with_company(company)
-        # per iteration is what actually lets each company's records
-        # become visible at all under this module's ir.rule -- a single
-        # ungrouped call wouldn't see the other companies' reports
-        # without also widening the service account's own company
-        # membership, which is a real privilege-scoping decision, not a
-        # mechanical query rewrite. Flagged for review, not fixed blind.
-        for company in companies:
+        # Bug-hunt fix (bug class 17, 2026-09-09): this used to iterate
+        # res.company.search([], limit=10000) -- every company in the whole
+        # database, not just the ones this service account is actually
+        # scoped to. That reached toward (and crashed on, via an uncaught
+        # AccessError) every company outside the account's own company_ids
+        # (data/user_websites_data.xml scopes it to base.main_company only;
+        # this module doesn't dynamically provision per-tenant companies of
+        # its own today, so that's genuinely the account's real, intended
+        # scope, not an under-provisioning bug -- see ADR 0083). Iterating
+        # the account's own company_ids instead means an out-of-scope
+        # company is never in the loop to begin with, matching this claim's
+        # own corrected root-cause fix (see
+        # hams_com/docs/bug_hunt_interim_claims/hams_open/user_websites/
+        # claims/cron_notify_pending_reports.md): if this cron is ever meant
+        # to serve additional companies, that's a real provisioning change
+        # (grant the service account access to those companies), not a
+        # widening of what this loop iterates blindly.
+        #
+        # NOT converted to a single grouped _read_group() call outside this
+        # loop: .with_company(company) per iteration is what makes each
+        # company's own records visible at all under this module's own
+        # ir.rule -- a single ungrouped call would depend on
+        # content_violation_report_admin_rule's own unconditionally-
+        # permissive domain to see across companies at all, which is a
+        # separate, already-flagged over-permissive rule, not a safe
+        # foundation for this fix.
+        for company in self.env["res.users"].browse(svc_uid).company_ids:
             count = self.with_user(svc_uid).with_company(company).search_count([("state", "=", "new")])  # burn-ignore-company-scoped-loop
 
             if count > 0:
@@ -113,12 +129,36 @@ class ContentViolationReport(models.Model):
         )
 
     # --- Moderation Action Methods ---
+    #
+    # Server-side state guards (bug class 18): the client-rendered form's own
+    # `invisible="state != 'new'"`-style attributes were the ONLY thing
+    # preventing these from being invoked on an already-resolved report --
+    # a direct RPC, a stale concurrent admin tab, or (for
+    # action_take_action_and_strike specifically) an automated caller could
+    # re-process a report a second time with no server-side check at all.
+
     # [@ANCHOR: user_websites:COMM_action_mark_under_review]
     def action_mark_under_review(self):
+        for report in self:
+            if report.state in ("action_taken", "dismissed"):
+                raise UserError(
+                    _(
+                        "This report has already been resolved (%s) and cannot be reopened for review."
+                    )
+                    % report.state
+                )
         self.write({"state": "under_review"})
 
     # [@ANCHOR: user_websites:COMM_report_action_dismiss]
     def action_dismiss(self):
+        for report in self:
+            if report.state in ("action_taken", "dismissed"):
+                raise UserError(
+                    _(
+                        "This report has already been resolved (%s) and cannot be dismissed again."
+                    )
+                    % report.state
+                )
         self.write({"state": "dismissed"})
 
     def action_take_action_and_strike(self):
@@ -128,8 +168,19 @@ class ContentViolationReport(models.Model):
         """
         Marks the report as validated, sets state to 'action_taken',
         and increments the owner's strike count. Enforces the 3-strike rule.
+
+        No-ops (does not re-strike) for a report already in a terminal state
+        (action_taken/dismissed): the real caller in website_page.py's
+        automated SSTI/XSS-strip hook looks up an existing report by
+        (target_url, reported_by_user_id) only, and the unique constraint on
+        that pair means a second detection for the same URL/reporter reuses
+        the SAME report row -- without this guard, re-triggering the
+        sanitizer (e.g. saving the same page again) re-struck and
+        re-suspended an account that had already been fully processed.
         """
         for report in self:
+            if report.state in ("action_taken", "dismissed"):
+                continue
             report.state = "action_taken"
 
             if report.content_owner_id:

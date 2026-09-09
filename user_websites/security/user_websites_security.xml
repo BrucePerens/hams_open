@@ -141,8 +141,33 @@
         <record id="content_violation_report_admin_rule" model="ir.rule">
             <field name="name">Content Violation Report Admin Rule</field>
             <field name="model_id" ref="model_content_violation_report"/>
-            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_administrator')), (4, ref('user_websites.group_user_websites_service_account'))]"/>
+            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_administrator'))]"/>
             <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Bug-hunt fix (2026-09-09): the service account used to share the
+             Administrator's own unconditional [(1,'=',1)] rule above, which
+             OR dominates content_violation_report_multi_company_rule's own
+             company_id scoping (Odoo combines same-model group-matching rule
+             domains with OR), so _cron_notify_pending_reports's own
+             with_company(company) count() call, meant to see only that one
+             company's reports, actually saw every company's "new" reports
+             regardless of which one it was iterating. Administrator is kept
+             cross-company deliberately (a platform-wide moderation-staff
+             role, per its own static user_ids of user_root/user_admin,
+             a real product-design assumption, not re-derived from a
+             comment, flagged for Bruce to confirm); the service account
+             gets its own rule scoped exactly like an ordinary user's, so it
+             only ever sees the company its own with_company() call named. -->
+        <record id="content_violation_report_service_account_rule" model="ir.rule">
+            <field name="name">Content Violation Report Service Account Rule</field>
+            <field name="model_id" ref="model_content_violation_report"/>
+            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_service_account'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
             <field name="perm_create" eval="True"/>

@@ -6,7 +6,7 @@ import urllib.error
 import odoo.tests
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -170,3 +170,54 @@ class TestAppealsAndViews(RealTransactionCase):
         ):
             self.env["content.violation.appeal"].create({"reason": "No target"})
             self.env.flush_all()
+
+    def test_04_state_guards_block_reprocessing_a_resolved_appeal(self):
+        # Tests [@ANCHOR: user_websites:COMM_appeal_action_approve]
+
+        # Tests [@ANCHOR: user_websites:COMM_appeal_action_reject]
+        """
+        Bug-hunt regression (2026-09-09): action_approve/action_reject had
+        no server-side guard against being invoked on an already-resolved
+        appeal -- only a view's own invisible attribute. Re-approving an
+        already-approved appeal re-ran the pardon and duplicated audit
+        messages; re-rejecting an already-approved appeal overwrote state
+        back to 'rejected' and posted a message that was false the moment
+        it was made. Prove both now raise instead.
+        """
+        self.user_public.is_suspended_from_websites = True
+        self.env.cr.commit()
+
+        approved = self.env["content.violation.appeal"].create(
+            {"user_id": self.user_public.id, "reason": "Approve me once."}
+        )
+        approved.action_approve()
+        self.assertEqual(approved.state, "approved")
+        self.assertFalse(self.user_public.is_suspended_from_websites)
+
+        with self.assertRaises(UserError):
+            approved.action_approve()
+        with self.assertRaises(
+            UserError,
+            msg="Rejecting an already-approved appeal must not silently "
+            "overwrite its state or re-post a now-false message.",
+        ):
+            approved.action_reject()
+
+        other_user = self.env["res.users"].create(
+            {
+                "name": "Second Appeal Tester",
+                "login": f"appealtester2_{self.id()}",
+                "email": "appeal2@example.com",
+                "website_slug": f"appealtester2_{self.id()}",
+                "is_suspended_from_websites": True,
+            }
+        )
+        rejected = self.env["content.violation.appeal"].create(
+            {"user_id": other_user.id, "reason": "Reject me once."}
+        )
+        rejected.action_reject()
+        self.assertEqual(rejected.state, "rejected")
+        with self.assertRaises(UserError):
+            rejected.action_reject()
+        with self.assertRaises(UserError):
+            rejected.action_approve()

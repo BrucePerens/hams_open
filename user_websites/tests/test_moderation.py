@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import time
+from odoo.exceptions import UserError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -318,3 +319,77 @@ class TestModeration(RealTransactionCase):
         mock_increment.assert_any_call(
             "user_websites_group", group_report.content_group_id.id
         )
+
+    def test_06_repeat_strike_on_already_processed_report_is_a_no_op(self):
+        # Tests [@ANCHOR: action_take_action_and_strike]
+        """
+        Bug-hunt regression (2026-09-09): website_page.py's own automated
+        SSTI/XSS-strip hook looks up an existing report by
+        (target_url, reported_by_user_id) only, and the unique constraint on
+        that pair means a second detection for the same URL/reporter reuses
+        the SAME report row -- re-invoking action_take_action_and_strike()
+        on a report already in state 'action_taken' used to re-strike and
+        re-suspend every time. Prove it's now a no-op.
+        """
+        report = self.env["content.violation.report"].create(
+            {
+                "target_url": "/test/repeat",
+                "description": "Repeat detection test",
+                "content_owner_id": self.bad_user.id,
+            }
+        )
+        report.action_take_action_and_strike()
+        self.assertEqual(self.bad_user.violation_strike_count, 1)
+        self.assertEqual(report.state, "action_taken")
+
+        # Simulate the same violation being detected again on the same
+        # report (the real website_page.py caller reuses this exact row).
+        report.action_take_action_and_strike()
+        report.action_take_action_and_strike()
+
+        self.bad_user.invalidate_recordset(["violation_strike_count"])
+        self.assertEqual(
+            self.bad_user.violation_strike_count,
+            1,
+            "Re-invoking action_take_action_and_strike on an already-"
+            "action_taken report must not apply additional strikes.",
+        )
+        self.assertFalse(self.bad_user.is_suspended_from_websites)
+
+    def test_07_state_guards_block_reprocessing_a_resolved_report(self):
+        # Tests [@ANCHOR: user_websites:COMM_action_mark_under_review]
+
+        # Tests [@ANCHOR: user_websites:COMM_report_action_dismiss]
+        """
+        Bug-hunt regression (2026-09-09): action_mark_under_review and
+        action_dismiss had no server-side guard against being invoked on an
+        already-resolved report -- only a view's own invisible attribute.
+        Prove both now raise rather than silently reprocessing.
+        """
+        report = self.env["content.violation.report"].create(
+            {
+                "target_url": "/test/state-guard",
+                "description": "State guard test",
+                "content_owner_id": self.bad_user.id,
+            }
+        )
+        report.action_take_action_and_strike()
+        self.assertEqual(report.state, "action_taken")
+
+        with self.assertRaises(UserError):
+            report.action_mark_under_review()
+        with self.assertRaises(UserError):
+            report.action_dismiss()
+
+        # A fresh report may still be legitimately dismissed once.
+        fresh = self.env["content.violation.report"].create(
+            {
+                "target_url": "/test/state-guard-2",
+                "description": "State guard test 2",
+                "content_owner_id": self.bad_user.id,
+            }
+        )
+        fresh.action_dismiss()
+        self.assertEqual(fresh.state, "dismissed")
+        with self.assertRaises(UserError):
+            fresh.action_dismiss()
