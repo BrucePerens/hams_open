@@ -1416,6 +1416,56 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 if (
                     "socket is already closed" in str(current_exc)
                     or "BrokenPipeError" in type(current_exc).__name__
+                    # Real bug found and fixed this session (see
+                    # night_shift_todo.md's "browser_js()/start_tour()
+                    # Python tour tests are hanging environment-wide"
+                    # entry): the two checks above only match the LATE,
+                    # secondary symptom -- the literal
+                    # WebSocketConnectionClosedException("socket is
+                    # already closed") that Odoo core's own ChromeBrowser
+                    # cleanup raises when it later tries to use an
+                    # already-dead connection. They never matched the
+                    # actual, confirmed, environment-wide failure: a bare
+                    # `TimeoutError` raised by core's own
+                    # `_websocket_request()` (odoo/tests/common.py) when a
+                    # single CDP command -- here, the Runtime.evaluate
+                    # call evaluating this file's own jules_protections +
+                    # ready code inside `_wait_ready()` -- gets no
+                    # response at all within its allotted window. That
+                    # TimeoutError's own __context__ chain bottoms out at
+                    # a bare `concurrent.futures.TimeoutError` (message
+                    # usually empty), so the walk above found nothing to
+                    # match and fell through to `raise e from None`,
+                    # reporting a raw, uncleaned TimeoutError as a test
+                    # ERROR (not the intended clean AssertionError) --
+                    # matching the todo's own "0 failed, 1 error(s)"
+                    # observation exactly (an AssertionError would show as
+                    # a FAILURE). `_websocket_request()` raises this exact
+                    # TimeoutError type/shape (confirmed by reading its
+                    # source directly) for every CDP call it makes --
+                    # Runtime.evaluate, Page.navigate, Network.setCookie,
+                    # Page.captureScreenshot, etc. -- and ONLY for a
+                    # command that got no response in time; a merely-false
+                    # ready condition or a failing tour step surfaces via
+                    # a clean AssertionError or ChromeBrowserException
+                    # instead (see _wait_ready()/_wait_code_ok() in
+                    # odoo/tests/common.py), so treating a bare
+                    # TimeoutError here as "the browser/CDP connection
+                    # stopped responding" is precise, not overbroad.
+                    # Confirmed on this box that concurrent.futures.
+                    # TimeoutError/socket.timeout/TimeoutError are all the
+                    # same class (Python 3.13 unified them), so a plain
+                    # isinstance check catches the real exception without
+                    # a fragile string match. This does not explain WHY
+                    # the CDP connection stops answering in the first
+                    # place (that root cause is still open -- see the
+                    # todo entry and this claim's own notes on Odoo core's
+                    # `_receive()` thread as the leading suspect); it only
+                    # makes the already-intended "known watchdog failure"
+                    # handling actually fire for the failure mode that
+                    # motivated writing it, instead of being dead code for
+                    # it.
+                    or isinstance(current_exc, TimeoutError)
                 ):
                     is_watchdog = True
                     break
@@ -1434,7 +1484,10 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
             if is_watchdog:
                 raise AssertionError(
-                    "Tour failed due to severed Chrome websocket."
+                    "Tour failed due to severed/unresponsive Chrome "
+                    "websocket (root cause not yet diagnosed -- see "
+                    "night_shift_todo.md's tour-hang investigation): "
+                    f"{e!r}"
                 ) from None
             else:
                 raise e from None
