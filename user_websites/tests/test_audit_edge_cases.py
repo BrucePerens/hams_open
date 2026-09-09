@@ -446,7 +446,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         service account's own count is now genuinely company-scoped.
         """
         other_company = self.env["res.company"].create({"name": "Unrelated Co 2"})
-        self.env["content.violation.report"].sudo().create(
+        self.env["content.violation.report"].create(
             {
                 "target_url": "/test-other-company-report",
                 "description": "Belongs to a different company",
