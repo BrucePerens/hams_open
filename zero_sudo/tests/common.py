@@ -1056,6 +1056,16 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     ):
                         _logger.error("TRACING: Native teardown failed or hung: %s", e)
                 finally:
+                    # Bug-hunt finding (2026-09-09), NOT fixed here, deliberately: `cls.browser`
+                    # is always None -- `browser = None` (line ~730) is a class-level default,
+                    # and the only assignment anywhere in this file is `self.browser = ...`
+                    # (an INSTANCE attribute, in start_hams_browser/setUp). This whole block is
+                    # dead on every run. Left as-is rather than rewritten blind: whether this
+                    # class-level "catch anything tearDown() missed" backstop is even a coherent
+                    # concept (tearDown() already runs per-instance after every test, success or
+                    # failure, per unittest's own guarantee) is a real design question, not just
+                    # an attribute-name typo like the ones fixed just below -- see
+                    # night_shift_todo.md's tour-hang investigation for the fuller writeup.
                     if cls.browser:
                         try:
                             cleanup_stack = vars(cls.browser).get("cleanup")
@@ -1063,9 +1073,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                                 cleanup_stack.close()
                         except Exception as e:  # audit-ignore-catch-all
                             _logger.warning("Ignored cleanup close error: %s", e)
-                        proc = vars(cls.browser).get("_process", None) or vars(cls.browser).get(
-                            "chrome_process", None
-                        )
+                        # Bug-hunt fix (2026-09-09): this used to look up
+                        # "_process"/"chrome_process", neither of which
+                        # exists on Odoo core's own ChromeBrowser -- the
+                        # real attribute is `.chrome` (verified directly
+                        # against odoo/tests/common.py's own
+                        # ChromeBrowser.__init__). Silently found nothing
+                        # and skipped this whole force-kill block on every
+                        # run, every test, ever.
+                        proc = getattr(cls.browser, "chrome", None)
                         if proc:
                             try:
                                 parent = psutil.Process(proc.pid)
@@ -1097,8 +1113,11 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                                     repr(kill_e),
                                 )
 
-                        # Direct attribute access. Fail fast if missing.
-                        ws_thread = vars(cls.browser).get("_websocket_thread")
+                        # Bug-hunt fix (2026-09-09): the real attribute is
+                        # `._receiver` (verified against ChromeBrowser's
+                        # own __init__) -- "_websocket_thread" never
+                        # existed, so this neutering never ran.
+                        ws_thread = getattr(cls.browser, "_receiver", None)
                         if ws_thread:
                             ws_thread.join = lambda *args, **kwargs: None
 
@@ -1149,9 +1168,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         cleanup_stack.close()
                 except Exception as e:  # audit-ignore-catch-all
                     _logger.warning("Ignored cleanup close error: %s", e)
-                proc = vars(self.browser).get("_process", None) or vars(
-                    self.browser
-                ).get("chrome_process", None)
+                # Bug-hunt fix (2026-09-09): "_process"/"chrome_process"
+                # never existed on ChromeBrowser -- the real attribute is
+                # `.chrome` (verified against odoo/tests/common.py's own
+                # ChromeBrowser.__init__). This force-kill block was dead
+                # on every run before this fix.
+                proc = getattr(self.browser, "chrome", None)
                 if proc:
                     try:
                         parent = psutil.Process(proc.pid)
@@ -1183,8 +1205,10 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                             repr(kill_e),
                         )
 
-                # Direct attribute access
-                ws_thread = vars(self.browser).get("_websocket_thread")
+                # Bug-hunt fix (2026-09-09): the real attribute is
+                # `._receiver` -- "_websocket_thread" never existed, so
+                # this neutering never ran.
+                ws_thread = getattr(self.browser, "_receiver", None)
                 if ws_thread:
                     ws_thread.join = lambda *args, **kwargs: None
 
