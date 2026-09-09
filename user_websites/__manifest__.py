@@ -59,6 +59,27 @@ This module enables:
             "path": "data/documentation.html",
             "icon": "🌐",
             "category": "workspace",
+            # Bug-hunt fix (2026-09-09): this doc is the target of every
+            # "help" link scattered across the module's own end-user-facing
+            # pages (account suspension notices, GDPR export/erasure,
+            # community directory, report-violation modal, the personal-site
+            # welcome header -- see user_websites_templates.xml's own
+            # #UX_* anchors) and controllers/main.py's own /user-websites/
+            # documentation route, all reachable by ordinary portal/public
+            # users, not just internal staff. Without "public": True, this
+            # entry bootstraps as an INTERNAL-only knowledge.article
+            # (is_published=False) -- knowledge/controllers/main.py's own
+            # manual_article_view then 404s it for exactly that audience
+            # (`if not is_internal and not article.is_published: ... 404`),
+            # even though controllers/main.py's own documentation() route
+            # already found and redirected to it via a rules-respecting
+            # search(). Confirmed live and reproducible: every real request
+            # to the redirect target 404's for a non-internal test user,
+            # which is what test_08_frontend_misc_tour's own repeated,
+            # reproducible failure (waiting forever for a page that never
+            # rendered) actually was -- not a symptom of the unrelated
+            # cross-session Chrome-kill bug this was first attributed to.
+            "public": True,
         }
     ],
     "assets": {

@@ -120,9 +120,19 @@ if _original_preexec:
 _original_spawn_chrome = odoo.tests.common.ChromeBrowser._spawn_chrome
 
 
-# [@ANCHOR: zero_sudo:patched_spawn_chrome]
-def _patched_spawn_chrome(self, *args, **kwargs):
-    # 1. Kill any existing headless chrome processes owned by the user
+# [@ANCHOR: zero_sudo:kill_all_headless_chrome]
+def _kill_all_headless_chrome_for_this_uid():
+    """Unconditionally SIGKILLs every headless chrome/chromium process owned by
+    the current uid, system-wide -- not scoped to this instance's own process
+    tree. Reinstated 2026-09-09 per Bruce's own direct instruction, called both
+    before spawning a new Chrome (_patched_spawn_chrome) and at the end of every
+    test (HamsHttpCase.tearDown) so leaked memory from an incompletely-torn-down
+    tour is reclaimed as promptly as possible, not left for the next spawn to
+    clean up lazily. Safe to run this aggressively now that test.py's own
+    single-instance lock (see hams_shared/tools/test.py's main()) guarantees only
+    one test.py process runs on this box at a time -- anything still matching
+    here belongs to THIS run (a leaked prior tour) or is a genuine orphan, never
+    a concurrently-running sibling session's own in-flight tour."""
     my_uid = os.getuid()
     for p in psutil.process_iter(["pid", "name", "uids", "cmdline"]):
         try:
@@ -164,6 +174,11 @@ def _patched_spawn_chrome(self, *args, **kwargs):
             KeyError,
         ) as e:
             _logger.warning("Failed wait: %s", e)
+
+
+# [@ANCHOR: zero_sudo:patched_spawn_chrome]
+def _patched_spawn_chrome(self, *args, **kwargs):
+    _kill_all_headless_chrome_for_this_uid()
 
     cmd = args[0] if len(args) > 0 else kwargs.get("cmd")
     if cmd:
@@ -1226,6 +1241,17 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                             "TRACING: Ignored OSError truncating V8 log: %s",
                             repr(trunc_e),
                         )
+
+            # Reinstated 2026-09-09 per Bruce's own direct instruction: reap
+            # ALL headless chrome for this uid, unconditionally, at the end of
+            # every test -- not just the targeted per-instance cleanup above,
+            # and not lazily deferred to the next spawn. Safe now that
+            # test.py's own single-instance lock guarantees this is never a
+            # concurrent sibling session's own in-flight tour.
+            try:
+                _kill_all_headless_chrome_for_this_uid()
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("Ignored exception in end-of-test chrome reap: %s", e)
 
             _logger.info("TRACING: Exiting HamsHttpCase.tearDown")
 
