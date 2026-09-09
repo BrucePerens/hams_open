@@ -397,7 +397,11 @@ original_chrome_stop = ChromeBrowser.stop
 # [@ANCHOR: zero_sudo:patched_chrome_stop]
 def _patched_chrome_stop(self, *args, **kwargs):
 
-    proc = getattr(self, "_process", None) or getattr(self, "chrome_process", None)  # burn-ignore-introspection
+    # Bug-hunt fix (2026-09-09): "_process"/"chrome_process" never existed on
+    # ChromeBrowser -- the real attribute is `.chrome` (verified against
+    # odoo/tests/common.py's own ChromeBrowser.__init__). This lookup silently
+    # found nothing and skipped this whole block on every prior run.
+    proc = getattr(self, "chrome", None)
     if proc:
         try:
             parent = psutil.Process(proc.pid)
