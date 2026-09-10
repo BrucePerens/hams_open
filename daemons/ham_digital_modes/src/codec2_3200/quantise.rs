@@ -31,10 +31,12 @@
 
 use super::{E_BITS, E_MAX_DB, E_MIN_DB, LPC_ORD, W0_MAX, W0_MIN, WO_BITS};
 
+// [@ANCHOR: encode_wo]
 pub fn encode_wo(wo: f32) -> u32 {
     quantize_linear(wo, W0_MIN, W0_MAX, WO_BITS)
 }
 
+// [@ANCHOR: decode_wo]
 pub fn decode_wo(index: u32) -> f32 {
     dequantize_linear(index, W0_MIN, W0_MAX, WO_BITS)
 }
@@ -63,6 +65,7 @@ fn w0_step_q23() -> i64 {
 /// all -- `w0_min_q23() + w0_step_q23() * index` is already Q23 by
 /// construction (a Q23 value plus an integer multiple of another Q23
 /// value stays Q23).
+// [@ANCHOR: decode_wo_fixed]
 pub fn decode_wo_fixed(index: u32) -> i64 {
     w0_min_q23() + w0_step_q23() * index as i64
 }
@@ -76,6 +79,7 @@ pub fn decode_wo_fixed(index: u32) -> i64 {
 /// `fixed_point.rs`'s own tests for the real captured-data validation
 /// (zero index mismatches against a plain-float reference on 2539 real
 /// frames).
+// [@ANCHOR: encode_energy]
 pub fn encode_energy(e_linear: f32) -> u32 {
     let e_db =
         10.0 * (super::fixed_point::log2_lut(e_linear.max(1e-12)) / std::f32::consts::LOG2_10);
@@ -84,6 +88,7 @@ pub fn encode_energy(e_linear: f32) -> u32 {
 
 /// See `encode_energy`'s own doc comment for why this calls
 /// `fixed_point::exp2_lut` instead of plain `powf`.
+// [@ANCHOR: decode_energy]
 pub fn decode_energy(index: u32) -> f32 {
     let e_db = dequantize_linear(index, E_MIN_DB, E_MAX_DB, E_BITS);
     super::fixed_point::exp2_lut(e_db / 10.0 * std::f32::consts::LOG2_10)
@@ -116,6 +121,7 @@ fn energy_y_step_q23() -> i64 {
 /// `fixed_point::exp2_q23` -- `decode_energy`'s own no-FPU sibling --
 /// turns that into the actual linear energy value. No `f32` touches
 /// this function at all, not even at entry/exit.
+// [@ANCHOR: decode_energy_fixed]
 pub fn decode_energy_fixed(index: u32) -> i64 {
     let y_q23 = energy_y_min_q23() + energy_y_step_q23() * index as i64;
     super::fixed_point::exp2_q23(y_q23)
@@ -380,6 +386,8 @@ pub(crate) mod tests {
     #[test]
     // Tests [@ANCHOR: quantize_linear]
     // Tests [@ANCHOR: dequantize_linear]
+    // Tests [@ANCHOR: encode_wo]
+    // Tests [@ANCHOR: decode_wo]
     fn wo_quantizer_round_trips_within_one_step() {
         let step = (W0_MAX - W0_MIN) / (1 << WO_BITS) as f32;
         for i in 0..200 {
@@ -394,6 +402,8 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: encode_energy]
+    // Tests [@ANCHOR: decode_energy]
     fn energy_quantizer_matches_real_encoder_side_data_within_the_real_5_bit_step() {
         // Real ENCODER-side e (not decoder-side reconstruction -- this
         // session's own earlier methodology error, corrected: capture
@@ -578,6 +588,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: decode_wo_fixed]
     fn decode_wo_fixed_matches_decode_wo_on_every_valid_index() {
         let mut max_abs_err = 0.0f32;
         for index in 0..(1u32 << super::super::WO_BITS) {
@@ -593,6 +604,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: decode_energy_fixed]
     fn decode_energy_fixed_matches_decode_energy_on_every_valid_index() {
         let mut max_rel_err = 0.0f32;
         for index in 0..(1u32 << E_BITS) {
@@ -604,5 +616,94 @@ pub(crate) mod tests {
             max_rel_err < 1e-4,
             "decode_energy_fixed diverged from decode_energy by {max_rel_err} relative, more than ordinary Q23/LUT rounding noise"
         );
+    }
+
+    /// Adversarial regression test, bug-hunt pass 2026-09-10: every one of
+    /// this module's real ENCODE-side entry points, fed the exact
+    /// degenerate values a genuinely all-silent/digitally-muted audio
+    /// frame drives through the real production pipeline -- `Wo` at its
+    /// own lower search-range bound (`nlp_fixed` returning `0.0` Hz maps,
+    /// via `f0_to_wo`, to a `Wo` below `W0_MIN`; the quantizer's own
+    /// `quantize_linear` must clamp that, not produce a garbage index),
+    /// `e_linear == 0.0` exactly (real digital silence, before
+    /// `encode_energy`'s own `.max(1e-12)` floor), and an all-zero LSP
+    /// vector (`lsp[i] == 0.0` for every `i`, matching this crate's own
+    /// `mod.rs::fallback_lsp()`'s first entry exactly and bracketing every
+    /// other entry from below -- the real value `EncoderFixed::encode`
+    /// substitutes on an LPC-to-LSP conversion failure, itself a real,
+    /// already-confirmed-reachable outcome on all-silent audio per
+    /// `lpc.rs`'s own `r0_normalize_fixed` bug-hunt fix this same pass).
+    /// This crate has already been shown (this same campaign, several
+    /// sibling files) to mishandle exactly this "all-silent frame" input
+    /// class via unguarded preconditions reachable only at a value range
+    /// nothing else in the file's own test suite happens to exercise --
+    /// checked directly here rather than assumed safe from reading the
+    /// arithmetic alone.
+    #[test]
+    // Tests [@ANCHOR: quantize_linear]
+    // Tests [@ANCHOR: encode_wo]
+    // Tests [@ANCHOR: encode_energy]
+    // Tests [@ANCHOR: encode_lsps_delta_scalar_fixed]
+    // Tests [@ANCHOR: lsp_dim_nearest_level_q16]
+    fn encode_side_quantizers_do_not_panic_on_an_all_silent_degenerate_frame() {
+        // Below W0_MIN (an out-of-range Wo the real quantizer must clamp,
+        // not index out of bounds on) -- `nlp.rs::f0_to_wo(0.0)` (the real
+        // value a `f0 == 0.0` pitch estimate, itself a real return value
+        // `nlp_fixed`'s own silence test already confirms is reachable,
+        // maps to) is `TAU * 0.0 / SAMPLE_RATE == 0.0` exactly, well below
+        // `W0_MIN` -- passed directly here rather than via `f0_to_wo`
+        // itself, since `quantise.rs` has no dependency on `nlp.rs` by
+        // design and the formula's own result at `f0 == 0.0` is `0.0`
+        // regardless of `SAMPLE_RATE`.
+        let wo_idx = encode_wo(0.0);
+        assert!(
+            wo_idx < (1u32 << WO_BITS),
+            "encode_wo produced an out-of-range index {wo_idx} for a below-range Wo"
+        );
+
+        let e_idx = encode_energy(0.0);
+        assert!(
+            e_idx < (1u32 << E_BITS),
+            "encode_energy produced an out-of-range index {e_idx} for exact-zero linear energy"
+        );
+        // decode_energy(e_idx) must also stay finite -- exercises
+        // exp2_lut's own boundary at the quantizer's own minimum index.
+        assert!(
+            decode_energy(e_idx).is_finite(),
+            "decode_energy({e_idx}) produced a non-finite energy from the silence-derived index"
+        );
+
+        // All-zero LSP vector: matches `mod.rs::fallback_lsp()`'s own
+        // first entry (`i=0` gives exactly `0.0`) and is more extreme than
+        // every later entry (which only grow from there) -- the tightest
+        // real case for `encode_lsps_delta_scalar_fixed`'s own per-
+        // dimension delta accumulation, since every delta target is
+        // exactly `0.0 - last_q_hz_q16` (zero or negative throughout,
+        // never the ordinary positive-delta case every other test in this
+        // file happens to exercise).
+        let lsp = [0.0f32; LPC_ORD];
+        let indexes = encode_lsps_delta_scalar_fixed(&lsp);
+        for (i, &idx) in indexes.iter().enumerate() {
+            assert!(
+                idx < LSP_LEVELS,
+                "encode_lsps_delta_scalar_fixed produced out-of-range index {idx} at dimension {i}"
+            );
+        }
+        // Round-trip through the fixed-point decoder too -- confirms the
+        // whole chain (encode then decode) doesn't panic on this input and
+        // stays within a physically sane angle range, not just that
+        // encoding alone avoids a panic. `decode_lsps_delta_scalar_fixed`
+        // returns `i64` (always representable, no `is_finite()` to check),
+        // so the real assertion is a sane bound: every real LSP angle is
+        // in `[0, pi]` radians, generously bracketed here in Q23.
+        let lsp_back_q23 = decode_lsps_delta_scalar_fixed(&indexes);
+        let pi_q23 = (std::f32::consts::PI * (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32)
+            as i64;
+        for (i, &v) in lsp_back_q23.iter().enumerate() {
+            assert!(
+                (-pi_q23..=2 * pi_q23).contains(&v),
+                "decode_lsps_delta_scalar_fixed produced an implausible angle {v} (Q23) at dimension {i}"
+            );
+        }
     }
 }

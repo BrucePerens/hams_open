@@ -161,6 +161,10 @@ fn rshift_round(x: i64, n: u32) -> i64 {
 /// `nlp_fixed_agrees_with_the_float_reference_at_full_scale_amplitude`,
 /// which regresses on this exact bug if the narrowing version is used
 /// there again).
+// [@ANCHOR: nlp:rshift_round_i128] -- namespaced: `fixed_fft.rs` defines
+// its own same-named `rshift_round_i128` (already anchored there as
+// `fixed_fft:rshift_round_i128`), a distinct function with the same
+// narrowing-with-debug_assert shape but its own separate callers.
 fn rshift_round_i128(x: i128, n: u32) -> i64 {
     let shifted = (x + (1i128 << (n - 1))) >> n;
     debug_assert!(
@@ -176,6 +180,8 @@ fn rshift_round_i128(x: i128, n: u32) -> i64 {
 /// threshold) whose result can itself exceed `i64::MAX` at real,
 /// full-scale signal amplitudes, unlike `rshift_round_i128`'s other
 /// callers.
+// [@ANCHOR: rshift_round_i128_wide] -- unique repo-wide (grepped, no
+// sibling defines this name), bare anchor is safe.
 fn rshift_round_i128_wide(x: i128, n: u32) -> i128 {
     (x + (1i128 << (n - 1))) >> n
 }
@@ -325,7 +331,15 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
 /// (16- or 32-bit) fixed-point FFT would need is simply unnecessary at
 /// `i64`/`i128` width, and skipping it avoids the extra rounding error
 /// per-stage rescaling would otherwise cost.
-// [@ANCHOR: fft_fixed]
+// [@ANCHOR: nlp:fft_fixed] -- namespaced: `fixed_fft.rs` defines its own,
+// unrelated `fft_fixed` (a different, general-purpose, variable-size,
+// phase-correct FFT used by envelope/synthesis/spectral_bridge). A bare
+// `fft_fixed` anchor here would silently collide with that one in any
+// repo-wide anchor index (per this crate's own documented, previously-hit
+// collision class -- see `hams_com/agents/skills/bug-hunt/SKILL.md`'s
+// "same-named functions in sibling files" caveat), even though today's
+// `.py`-only `check_claims_freshness.py`/`check_claims.py` don't scan
+// `.rs` files yet and so don't currently exploit it.
 fn fft_fixed(re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
     let bitrev = fft_bit_reverse_table();
     for (i, &j) in bitrev.iter().enumerate() {
@@ -617,6 +631,8 @@ mod tests {
     /// no panic in either debug or release, undetected by every test at
     /// `REALISTIC_AMP`'s more modest scale.
     #[test]
+    // Tests [@ANCHOR: correct_sub_multiples_fixed]
+    // Tests [@ANCHOR: rshift_round_i128_wide]
     fn nlp_fixed_agrees_with_the_float_reference_at_full_scale_amplitude() {
         let full_scale = 30_000.0f32;
         for &f0 in &[90.0f32, 150.0, 250.0] {
@@ -711,6 +727,7 @@ mod tests {
     // Tests [@ANCHOR: design_lowpass]
     // Tests [@ANCHOR: lowpass_coeffs]
     // Tests [@ANCHOR: decimate]
+    // Tests [@ANCHOR: nlp:rshift_round_i128]
     fn decimate_fixed_matches_the_float_decimate_on_realistic_amplitude_input() {
         let mut seed = 7u32;
         let mut sq = [0.0f32; M_PITCH];
@@ -826,7 +843,8 @@ mod tests {
     /// design, not real/imaginary parts directly, which depend on a sign
     /// convention this module deliberately leaves unfixed).
     #[test]
-    // Tests [@ANCHOR: fft_fixed]
+    // Tests [@ANCHOR: nlp:fft_fixed]
+    // Tests [@ANCHOR: nlp:rshift_round_i128]
     fn fft_fixed_power_spectrum_matches_a_float_fft_on_a_multi_tone_input() {
         // Tones at exact bin frequencies of this *same* `PE_FFT_SIZE`-
         // point transform (not a shorter, zero-padded block) so both
