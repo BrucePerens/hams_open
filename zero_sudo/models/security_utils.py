@@ -10,6 +10,8 @@ import os
 import shutil
 import logging
 
+import psycopg2.errors
+
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
@@ -68,8 +70,37 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
 
-        self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]  # fmt: skip
-        uid = self.env.cr.fetchone()[0]
+        # Bug-hunt fix (2026-09-09): `zero_sudo_get_service_uid()` (the SQL
+        # procedure below) does a real Postgres `RAISE EXCEPTION` when the
+        # requested account genuinely doesn't exist, is disabled, or isn't
+        # a service account -- that propagates through
+        # `odoo/sql_db.py`'s `Cursor.execute()` (which logs and
+        # unconditionally re-raises) as a raw `psycopg2.errors.
+        # RaiseException`, NOT `odoo.exceptions.AccessError`. Every caller
+        # across this codebase that wraps a `_get_service_uid()` call in
+        # `except AccessError` (written to handle exactly this "service
+        # account not found/misconfigured" case) was catching the wrong
+        # type for it -- confirmed independently by this module's own
+        # `zero_sudo/tests/test_security_utils.py`, which has to catch
+        # `(AccessError, UserError, psycopg2.errors.RaiseException)` around
+        # calls into this exact helper. Fixing it here, once, means every
+        # existing `except AccessError` call site starts working correctly
+        # without touching each one individually. The `with
+        # self.env.cr.savepoint():` is load-bearing, not decorative: a raw
+        # `RAISE EXCEPTION` aborts the whole current transaction, not just
+        # this call -- without a savepoint to roll back to, the caller's
+        # own `except AccessError` would catch the re-raised exception
+        # below just fine, but its very next SQL statement (a fallback
+        # query, or anything else in the same transaction) would then
+        # raise `InFailedSqlTransaction` uncaught.
+        try:
+            with self.env.cr.savepoint():
+                self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]  # fmt: skip
+                uid = self.env.cr.fetchone()[0]
+        except psycopg2.errors.RaiseException as e:
+            raise AccessError(
+                _("Service account resolution failed for '%s': %s") % (xml_id, e)
+            ) from e
         return uid
 
     @api.model
