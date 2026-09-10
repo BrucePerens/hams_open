@@ -2,6 +2,8 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+from unittest.mock import MagicMock
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -182,3 +184,64 @@ class TestPagerControllers(HamsHttpCase):
         check = self.env["pager.check"].search([("check_type", "=", "certbot")], limit=1)
         self.assertTrue(check, "update_domains must create/find the certbot pager.check.")
         self.assertEqual(check.target, "example.com,hams.com")
+
+    def test_07_update_domains_increments_the_failed_attempt_counter_on_a_wrong_secret(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        # update_domains previously had no rate limit at all on repeated
+        # wrong-secret guesses -- same Redis-counter pattern as
+        # pager.incident.report_incident's own rate limit (see
+        # [@ANCHOR: pd_redis_rate_limit] in models/incident.py), but
+        # counting only failed attempts.
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis")
+        self.safe_patch(
+            "odoo.addons.pager_duty.controllers.domain_api.redis_pool", MagicMock()
+        )
+        mock_client = MagicMock()
+        mock_redis.Redis.return_value = mock_client
+        mock_client.get.return_value = None
+        mock_pipe = MagicMock()
+        mock_client.pipeline.return_value = mock_pipe
+
+        response = self.url_open(
+            "/api/v1/pager_duty/update_domains",
+            json={
+                "jsonrpc": "2.0",
+                "method": "call",
+                "params": {"domains": ["example.com"], "api_identity": "wrong-secret"},
+            },
+        )
+        self.assertEqual(response.json()["result"]["status"], "error")
+        mock_pipe.incr.assert_called_once()
+        mock_pipe.expire.assert_called_once()
+        mock_pipe.execute.assert_called_once()
+
+    def test_08_update_domains_rejects_further_attempts_once_the_failure_threshold_is_hit(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis")
+        self.safe_patch(
+            "odoo.addons.pager_duty.controllers.domain_api.redis_pool", MagicMock()
+        )
+        mock_client = MagicMock()
+        mock_redis.Redis.return_value = mock_client
+        mock_client.get.return_value = b"10"
+
+        response = self.url_open(
+            "/api/v1/pager_duty/update_domains",
+            json={
+                "jsonrpc": "2.0",
+                "method": "call",
+                # Even the REAL secret must be rejected once the failure
+                # threshold for this source has been reached.
+                "params": {"domains": ["example.com"], "api_identity": "the-real-secret"},
+            },
+        )
+        self.assertEqual(response.json()["result"]["status"], "error")
+        self.assertIn("Too many attempts", response.json()["result"]["message"])
+        self.assertFalse(
+            self.env["pager.check"].search([("check_type", "=", "certbot")]),
+            "A rate-limited request must not reach the certbot check update.",
+        )
