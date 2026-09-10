@@ -71,6 +71,89 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
             "replication_pass": "SecureRepPass123!"
         })
         self.safe_patch("odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable", return_value="/bin/mock")
-        
+
         with self.assertRaises(UserError):
             wizard.action_generate()
+
+    def test_tdd_pg_config_yaml_injection_via_password(self):
+        # Bug-hunt fix (2026-09-09): `replication_pass` is interpolated
+        # unescaped into the generated Patroni YAML the same way `cluster_name`
+        # is (see test_tdd_pg_config_yaml_injection above), but was never
+        # validated for characters that break YAML's plain-scalar syntax --
+        # only its length was checked. A password containing a newline could
+        # inject an arbitrary sibling key into the same mapping.
+        admin = self.env.ref("base.user_admin")
+        wizard = self.env["pg.ha.wizard"].with_user(admin).create({
+            "primary_ip": "10.0.0.1",
+            "secondary_ip": "10.0.0.2",
+            "cluster_name": "hams_cluster",
+            "superuser_user": "postgres",
+            "replication_user": "replicator",
+            "replication_pass": "goodpass\n    malicious_key: value",
+        })
+        self.safe_patch("odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable", return_value="/bin/mock")
+
+        msg = "Replication Password contains characters"
+        with self.assertRaisesRegex(UserError, msg):
+            wizard.action_generate()
+
+    def test_tdd_pg_config_yaml_injection_via_password_special_chars(self):
+        # Same fix as above, exercising the non-control-character hazards
+        # PyYAML actually mis-parses in this exact template shape (verified
+        # empirically, not assumed from the YAML spec): a leading '#' turns
+        # the whole value into a comment (parses as no password at all), and
+        # ': ' mid-value reopens a mapping context.
+        admin = self.env.ref("base.user_admin")
+        for bad_pass in ["#hashfirst123", "goodpass: withcolon", "trailingspace123 "]:
+            wizard = self.env["pg.ha.wizard"].with_user(admin).create({
+                "primary_ip": "10.0.0.1",
+                "secondary_ip": "10.0.0.2",
+                "cluster_name": "hams_cluster",
+                "superuser_user": "postgres",
+                "replication_user": "replicator",
+                "replication_pass": bad_pass,
+            })
+            self.safe_patch("odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable", return_value="/bin/mock")
+            msg = "Replication Password contains characters"
+            with self.assertRaisesRegex(UserError, msg):
+                wizard.action_generate()
+
+    def test_tdd_pg_config_yaml_injection_via_etcd_hosts(self):
+        # Bug-hunt fix (2026-09-09): `etcd_hosts` had no validation at all
+        # before this fix, despite being interpolated unescaped into the same
+        # generated YAML (`etcd: {etcd_config}`) -- the identical injection
+        # class as cluster_name/replication_pass above.
+        admin = self.env.ref("base.user_admin")
+        wizard = self.env["pg.ha.wizard"].with_user(admin).create({
+            "primary_ip": "10.0.0.1",
+            "secondary_ip": "10.0.0.2",
+            "cluster_name": "hams_cluster",
+            "superuser_user": "postgres",
+            "replication_user": "replicator",
+            "replication_pass": "SecureRepPass123!",
+            "etcd_hosts": "etcd:2379\n  malicious_key: value",
+        })
+        self.safe_patch("odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable", return_value="/bin/mock")
+
+        msg = "Invalid Etcd Hosts format"
+        with self.assertRaisesRegex(UserError, msg):
+            wizard.action_generate()
+
+    def test_tdd_pg_config_etcd_hosts_valid_multi_host(self):
+        # The legitimate documented format (comma-separated host:port pairs)
+        # must still be accepted after tightening etcd_hosts validation.
+        admin = self.env.ref("base.user_admin")
+        wizard = self.env["pg.ha.wizard"].with_user(admin).create({
+            "primary_ip": "10.0.0.1",
+            "secondary_ip": "10.0.0.2",
+            "cluster_name": "hams_cluster",
+            "superuser_user": "postgres",
+            "replication_user": "replicator",
+            "replication_pass": "SecureRepPass123!",
+            "etcd_hosts": "10.0.0.1:2379,10.0.0.2:2379",
+        })
+        self.safe_patch("odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable", return_value="/bin/mock")
+
+        wizard.action_generate()
+        self.assertEqual(wizard.state, "generated")
+        self.assertIn("hosts: [10.0.0.1:2379,10.0.0.2:2379]", wizard.patroni_primary)

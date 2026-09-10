@@ -118,6 +118,8 @@ class TestDatabaseManagement(HamsTransactionCase):
         self.assertIn("table_name", v1["arch"])
 
         # Tests [@ANCHOR: COMM_db_slow_queries]
+
+        # Tests [@ANCHOR: COMM_db_query_stat_init]
         v2 = self.env["database.query.stat"].get_view(view_type="list")
         self.assertIn("query", v2["arch"])
 
@@ -149,6 +151,7 @@ class TestDatabaseManagement(HamsTransactionCase):
         self.assertIn("query", v7["arch"])
 
     def test_05_action_install_extension_happy_path(self):
+        # Tests [@ANCHOR: COMM_db_install_extension]
         # action_install_extension had zero real test coverage -- the only anchor comment
         # referencing it (# Tested by [@ANCHOR: db_slow_queries]) turned out to point at
         # test_06_query_stats_ops below, which tests action_reset_stats(), a different method
@@ -162,6 +165,8 @@ class TestDatabaseManagement(HamsTransactionCase):
 
     def test_06_query_stats_ops(self):
         # Tests [@ANCHOR: COMM_db_slow_queries]
+
+        # Tests [@ANCHOR: COMM_db_reset_stats]
         model = self.env["database.query.stat"]
 
         mock_cr = MagicMock()

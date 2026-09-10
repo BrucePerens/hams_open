@@ -161,6 +161,7 @@ class DatabaseQueryStat(models.Model):
     mean_time = fields.Float(string="Mean Time (ms)", readonly=True)
 
     def init(self):
+        # [@ANCHOR: COMM_db_query_stat_init]
         odoo.tools.sql.drop_view_if_exists(self.env.cr, self._table)
 
         can_query = False
@@ -222,6 +223,7 @@ class DatabaseQueryStat(models.Model):
         """)
 
     def action_install_extension(self):
+        # [@ANCHOR: COMM_db_install_extension]
         try:
             self.env.cr.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
             self.env["database.query.stat"].init()
@@ -252,6 +254,7 @@ class DatabaseQueryStat(models.Model):
             )
 
     def action_reset_stats(self):
+        # [@ANCHOR: COMM_db_reset_stats]
         # micro-privilege: Use service account for stats reset
         utils = self.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env(

@@ -185,6 +185,61 @@ class PgHaWizard(models.TransientModel):
             raise UserError(
                 _("Replication Password must be at least 8 characters long.")
             )
+        # Bug-hunt fix (2026-09-09): `action_generate()` below interpolates
+        # `replication_pass` unescaped into the generated Patroni YAML (twice,
+        # under `authentication.replication.password` and
+        # `authentication.superuser.password`) via a plain f-string, exactly
+        # like `cluster_name` (validated below, and independently regression-
+        # tested against this same injection class in
+        # test_tdd_pg_config_yaml_injection). Unlike cluster_name/superuser_user/
+        # replication_user, this field was never checked for characters that
+        # can break YAML's plain-scalar syntax. The field is also rendered as
+        # a masked `password="True"` input in the form view, so a user is not
+        # expected to be visually reviewing it for stray YAML-breaking
+        # characters before it gets embedded into a config file. This also
+        # closes the gap between this module's own README ("Strict regex
+        # validation for IP addresses and complexity requirements for
+        # replication passwords") and the code, which previously ran no regex
+        # against this field at all.
+        #
+        # The exact character set below was derived empirically (PyYAML
+        # `safe_load` against the real template shape, not guessed from the
+        # spec) rather than banning every YAML "indicator" character
+        # outright: a leading '-'/'?'/':' is actually a SAFE plain scalar as
+        # long as it isn't followed by a space (confirmed -- rejecting it
+        # unconditionally would have been both wrong and dangerous here,
+        # since `secrets.token_urlsafe()` -- this field's own default
+        # generator -- can legitimately produce a value starting with '-').
+        # What's actually unsafe, confirmed the same way:
+        #   - any control character (newline/CR/NUL/tab/etc.) -- the
+        #     original key-injection vector this fix started from;
+        #   - ':' followed by whitespace or end-of-string -- reopens a
+        #     mapping ("mapping values are not allowed here");
+        #   - whitespace followed by '#' -- starts an inline comment,
+        #     silently truncating everything after it;
+        #   - trailing whitespace -- silently stripped by the YAML parser,
+        #     so the deployed password would differ from the one entered;
+        #   - a LEADING character from YAML's indicator set (excluding the
+        #     three shown safe above) -- each one misparses the whole value
+        #     (e.g. a leading '#' makes the password parse as `None`; a
+        #     leading '&' makes it a YAML anchor).
+        pw = self.replication_pass
+        yaml_unsafe_leading_chars = "`@%&*!|>'\",[{]}#"
+        if (
+            re.search(r"[\x00-\x1f\x7f]", pw)
+            or re.search(r":(\s|$)", pw)
+            or re.search(r"\s#", pw)
+            or pw != pw.rstrip()
+            or pw[0] in yaml_unsafe_leading_chars
+        ):
+            raise UserError(
+                _(
+                    "Replication Password contains characters that would break the "
+                    "generated YAML configuration (control characters, trailing "
+                    "whitespace, ': ' or ' #' sequences, or certain leading special "
+                    "characters). Please choose a different password."
+                )
+            )
 
         alnum_pattern = re.compile(r"^[a-zA-Z0-9_]+$")
         if not self.cluster_name or not alnum_pattern.match(self.cluster_name):
@@ -193,6 +248,25 @@ class PgHaWizard(models.TransientModel):
             raise UserError(_("Invalid superuser name. Must be alphanumeric."))
         if not self.replication_user or not alnum_pattern.match(self.replication_user):
             raise UserError(_("Invalid replication user name. Must be alphanumeric."))
+
+        # Bug-hunt fix (2026-09-09): `etcd_hosts` is interpolated unescaped
+        # into the same generated YAML (`etcd: {etcd_config}`) with NO
+        # validation at all prior to this fix -- the same injection class as
+        # replication_pass above, just on a field with no length/complexity
+        # check to even partially mask the gap. Restrict to the documented
+        # format (comma-separated host:port pairs, per the field's own help
+        # text) so no character that could alter the YAML structure reaches
+        # the template.
+        etcd_host_pattern = re.compile(
+            r"^[a-zA-Z0-9_.-]+:[0-9]+(,[a-zA-Z0-9_.-]+:[0-9]+)*$"
+        )
+        if not self.etcd_hosts or not etcd_host_pattern.match(self.etcd_hosts):
+            raise UserError(
+                _(
+                    "Invalid Etcd Hosts format. Expected comma-separated "
+                    "host:port pairs (e.g., 10.0.0.1:2379,10.0.0.2:2379)."
+                )
+            )
 
     def action_generate(self):
         # [@ANCHOR: COMM_pg_ha_wizard]
