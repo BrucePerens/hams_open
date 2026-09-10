@@ -181,6 +181,10 @@ class TestAuditEdgeCases(RealTransactionCase):
         # Tests [@ANCHOR: slug_cache_invalidation]
 
         # Tests [@ANCHOR: slug_cache_invalidation_unlink]
+
+        # Tests [@ANCHOR: edge_routing:COMM_res_users_get_record_by_slug]
+
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_get_record_by_slug]
         """
         BDD: Given ADR-0049 Cache Verification
         When resolving slugs repeatedly

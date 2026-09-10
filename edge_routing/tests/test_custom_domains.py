@@ -52,6 +52,8 @@ class TestCustomDomains(HamsTransactionCase):
         # Tests [@ANCHOR: edge_routing:COMM_domain_unlink]
 
         # Tests [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
+
+        # Tests [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
         domain = self.domain_model.create(
             {"name": "WWW.TESTCLUB.ORG ", "target_slug": "testclub"}
         )

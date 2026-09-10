@@ -62,6 +62,7 @@ class TestDomainPush(HamsTransactionCase):
         domain_model._invalidate_cache(["manualpush.com"])
 
     def test_push_all_to_pager_duty_batching(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
 
         domain_model = self.env["edge.routing.domain"].with_user(
             self.env.ref("base.user_admin")

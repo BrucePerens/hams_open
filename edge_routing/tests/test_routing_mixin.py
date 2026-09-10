@@ -30,6 +30,8 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
 
     def test_auto_generate_slug_collision(self):
         # Tests [@ANCHOR: edge_routing:COMM_check_slug_collision]
+
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_generate_unique_slug]
         user1 = self.User.create({
             'name': 'Test User Mixin 2',
             'login': 'test_user_mixin_2@example.com',
@@ -65,6 +67,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.assertEqual(user2.website_slug, 'newname-1')
 
     def test_write_clears_slug(self):
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_write]
         user = self.User.create({
             'name': 'Clear Slug User',
             'login': 'clear_slug@ex.com',

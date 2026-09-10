@@ -73,6 +73,8 @@ class TestLifecycleAndGroups(RealTransactionCase):
         # Tests [@ANCHOR: UX_CREATE_SITE]
 
         # Tests [@ANCHOR: controller_user_websites_home]
+
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_get_record_by_slug]
         self.test_group.write({"member_ids": [(4, self.user_a.id)]})
 
         self.authenticate(self.user_a.login, self.user_a.login)
