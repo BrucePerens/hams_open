@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! **Not production code** -- see `floating_reference/mod.rs`'s own doc
-//! comment. The original, fully-`f32` voiced/unvoiced decision (the
+//! **Not production code for 3200bps** -- see `floating_reference/
+//! mod.rs`'s own doc comment for why `Encoder` (the struct defined
+//! there) is a cross-validation reference, not what 3200bps actually
+//! ships. That framing is about the `Encoder` struct specifically, not
+//! every function in this file: `is_voiced()`/`VoicingState` here are
+//! genuine, live production code for `codec2_1600::Encoder` (imported
+//! directly as `fvoicing` in `codec2_1600/mod.rs`) -- 1600bps has no
+//! fixed-point voicing decision of its own to supersede this one the way
+//! 3200bps's `is_voiced_fixed` did. The original, fully-`f32` voiced/unvoiced decision (the
 //! classic energy + zero-crossing-rate heuristic, Rabiner & Sambur
 //! 1975's baseline endpoint/voicing detector), moved here from
 //! `codec2_3200::voicing` once `is_voiced_fixed`/`VoicingStateFixed`

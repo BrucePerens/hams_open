@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! **Not production code** -- see `floating_reference/mod.rs`'s own doc
-//! comment. The original, fully-`f32` LPC analysis functions
+//! **Not production code for 3200bps** -- see `floating_reference/
+//! mod.rs`'s own doc comment for why `Encoder` (the struct defined
+//! there) is a cross-validation reference, not what 3200bps actually
+//! ships. That framing is about the `Encoder` struct specifically, not
+//! every function in this file: `autocorrelate`/`levinson_durbin`/
+//! `lpc_energy`/`lpc_to_lsp` here are genuine, live production code for
+//! `codec2_1600::Encoder` (imported directly as `flpc` in `codec2_1600/
+//! mod.rs`'s own `analyse_lsps_and_energy`) -- 1600bps reuses this
+//! module's whole LPC analysis chain rather than porting its own
+//! fixed-point version the way 3200bps's `EncoderFixed` did. The original, fully-`f32` LPC analysis functions
 //! (autocorrelation, Levinson-Durbin, LPC-to-LSP conversion via the
 //! standard Chebyshev-polynomial root-search technique, and LPC energy),
 //! moved here from `codec2_3200::lpc` once that module's own fixed-point
@@ -167,7 +175,58 @@ pub(crate) fn apply_white_noise_correction(r: &mut Autocorr) {
 /// `levinson_durbin_fixed`/`levinson_durbin_fixed_core` are independent,
 /// superseded fixed-point candidates kept for their own historical
 /// clamp-divergence study, not production code checked against this
-/// function), but it's exported for consistency and any future use.
+/// function), but it's exported for consistency and any future use --
+/// and it's genuine, live production code for `codec2_1600::Encoder`
+/// (via `flpc::levinson_durbin` in `codec2_1600/mod.rs`'s own
+/// `analyse_lsps_and_energy`), not merely a cross-validation reference,
+/// despite this whole file's own "Not production code" header (that
+/// header is accurate for the `Encoder` *struct* in this directory's
+/// `mod.rs`, which 3200bps no longer uses in production -- it does not
+/// mean every function moved into this subdirectory is dead weight; see
+/// `codec2_1600/mod.rs`'s own doc comment, which already documents this
+/// reuse candidly).
+///
+/// IF `e` (the running prediction-residual energy, seeded from `r[0]`)
+/// is `<= 0.0` at the start of an iteration, THE system SHALL leave
+/// every remaining reflection coefficient and predictor tap at `0.0`
+/// (the identity, "no further prediction" filter) rather than compute
+/// `k = -(...)/ e`, which is `0.0/0.0 = NaN` whenever the numerator is
+/// also exactly zero -- a real, reachable case: an all-zero windowed
+/// analysis frame (genuine digital silence -- a squelched receiver, a
+/// muted mic, or comfort-noise padding, none of which this crate gates
+/// upstream) autocorrelates to an all-zero `R[]`, and `apply_white_
+/// noise_correction`'s own multiplicative-only `r[0] *= 1.0 + alpha`
+/// correction leaves an exact `0.0` exactly `0.0` (unlike its fixed-
+/// point sibling `r0_normalize_fixed`, dividing by an exact-zero `f32`
+/// denominator does not panic -- it produces `NaN`, silently, per bug
+/// class 36 in `SKILL.md`). Before this fix, that `NaN` propagated
+/// through every remaining `a[i]`/`e` value (confirmed empirically: an
+/// all-zero `Autocorr` produced `ak == [1.0, NaN, NaN, ..., NaN]`) and
+/// happened to be caught downstream only by two separate, unrelated
+/// pieces of IEEE754/cast incidental behavior it was never designed to
+/// rely on: `lpc_to_lsp`'s own `f64->i32` quantization saturates `NaN`
+/// to `0` (Rust's float-to-int cast semantics), which starves the root
+/// search of real information rather than failing cleanly on its own
+/// terms, and `encode_energy`'s `e_linear.max(1e-12)` call happens to
+/// ignore a `NaN` argument (per `f32::max`'s own documented "ignoring
+/// NaN" semantics) rather than being written to handle a `NaN` `lpc_
+/// energy` result on purpose. Both of those are real today (verified
+/// empirically, not assumed) but neither is a designed contract this
+/// function's own callers can rely on -- a future change to either one
+/// (e.g. switching `encode_energy`'s own clamp to `e_linear.clamp(1e-12,
+/// f32::MAX)`, which panics on a `NaN` low bound instead of ignoring it)
+/// would turn this same all-silence input into a live production panic
+/// with no change to this function at all. The same `e <= 0.0` guard
+/// also covers the second, subtler way `e` can hit exactly zero: a
+/// reflection coefficient landing exactly on this function's own
+/// `|k| > 1.0` clamp boundary (`k == 1.0` or `k == -1.0` precisely) zeros
+/// `e` one iteration later (`e *= 1.0 - k*k`) via the *strict* `>`
+/// comparison letting an exact `1.0`/`-1.0` through unclamped --
+/// astronomically unlikely to occur by chance in continuous
+/// `f32` arithmetic (unlike the fixed-point sibling's own analogous
+/// representable-grid-boundary case, which round-to-nearest rounding
+/// makes routine), but the guard is the same one-line fix either way,
+/// so it's covered rather than special-cased away as "can't happen."
 // [@ANCHOR: levinson_durbin]
 pub(crate) fn levinson_durbin(r: &Autocorr) -> LpcCoeffs {
     let mut a = [0.0f32; LPC_ORD + 1];
@@ -176,6 +235,14 @@ pub(crate) fn levinson_durbin(r: &Autocorr) -> LpcCoeffs {
     let mut e = r[0];
 
     for i in 1..=LPC_ORD {
+        if e <= 0.0 {
+            // No measurable prediction-residual energy left -- the
+            // identity filter (no further prediction) is the physically
+            // meaningful answer for every remaining order, not a 0/0
+            // division. `a[i..]`/`a_prev[i..]` are already `0.0` from
+            // initialization, so there's nothing left to write.
+            break;
+        }
         let mut sum = 0.0f32;
         for j in 1..i {
             sum += a_prev[j] * r[i - j];
@@ -234,6 +301,7 @@ pub(crate) fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6]) {
 /// already-quantized polynomial -- this float-facing entry point and
 /// that fixed-facing one both bottom out in the identical arithmetic, so
 /// there's no separate float root-search to keep in sync.
+// [@ANCHOR: find_next_root]
 pub(crate) fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32> {
     let poly_q: [i32; 6] =
         std::array::from_fn(|i| (poly[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i32);
@@ -264,6 +332,7 @@ pub(crate) fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]> {
 /// to `ak`, matching the real reference's own ordering (bandwidth
 /// expansion after this computation would introduce spurious negative
 /// energies).
+// [@ANCHOR: lpc_energy]
 pub(crate) fn lpc_energy(ak: &LpcCoeffs, r: &Autocorr) -> f32 {
     ak.iter().zip(r.iter()).map(|(a, r)| a * r).sum()
 }
@@ -274,6 +343,90 @@ mod tests {
     use crate::codec2_3200::bw_gamma;
     use crate::codec2_3200::lpc::tests::{fixture, read_dump};
     use crate::codec2_3200::M_PITCH;
+
+    /// Real, reachable production input (a genuinely all-silent windowed
+    /// frame -- a squelched receiver, a muted mic, or comfort-noise
+    /// padding, none of which this crate gates upstream of LPC analysis)
+    /// drove `r[0]` to exact `0.0`, which pre-fix produced `k = 0.0/0.0 =
+    /// NaN` on the very first iteration and propagated `NaN` through
+    /// every remaining `ak[i]` -- confirmed empirically before the fix
+    /// (`ak == [1.0, NaN, NaN, ..., NaN]`). This regression test pins the
+    /// post-fix, fully-finite "identity filter" answer.
+    #[test]
+    // Tests [@ANCHOR: levinson_durbin]
+    fn levinson_durbin_does_not_produce_nan_on_an_all_zero_r() {
+        let r = [0.0f32; LPC_ORD + 1];
+        let ak = levinson_durbin(&r);
+        assert_eq!(
+            ak,
+            [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "an all-zero R[] should produce the identity (no-prediction) filter, not NaN"
+        );
+    }
+
+    /// Real, end-to-end production path an all-silent frame actually
+    /// takes in both `floating_reference::Encoder::encode` (3200bps,
+    /// cross-validation) and `codec2_1600::analyse_lsps_and_energy`
+    /// (1600bps, real production): `autocorrelate` ->
+    /// `apply_white_noise_correction` -> `levinson_durbin` ->
+    /// `lpc_energy`/`lpc_to_lsp`. Before the fix this "worked" only by
+    /// accident (`lpc_to_lsp`'s own NaN-to-0 saturating cast, `f32::max`'s
+    /// own NaN-ignoring semantics in the caller's `encode_energy`) --
+    /// this test pins the real, designed-for outcome instead: a finite
+    /// energy and a real (not `None`-then-fallback) LSP set.
+    #[test]
+    fn an_all_silent_frame_produces_finite_energy_and_lsps_through_the_real_production_chain() {
+        let windowed = [0.0f32; M_PITCH];
+        let r = autocorrelate(&windowed);
+        let mut r_for_levinson = r;
+        apply_white_noise_correction(&mut r_for_levinson);
+        let ak = levinson_durbin(&r_for_levinson);
+        assert!(
+            ak.iter().all(|v| v.is_finite()),
+            "non-finite LPC coefficient from an all-silent frame: {ak:?}"
+        );
+        let e = lpc_energy(&ak, &r);
+        assert!(
+            e.is_finite(),
+            "non-finite LPC energy from an all-silent frame: {e}"
+        );
+        let lsp = lpc_to_lsp(&ak);
+        assert!(
+            lsp.is_some_and(|freqs| freqs.iter().all(|f| f.is_finite())),
+            "expected a real, finite LSP set for an all-silent frame, got {lsp:?}"
+        );
+    }
+
+    /// A reflection coefficient landing exactly on the `|k| > 1.0` clamp
+    /// boundary (`k == 1.0` precisely) zeros `e` one iteration later via
+    /// `e *= 1.0 - k*k` -- the second, subtler way this function's own
+    /// `e <= 0.0` guard earns its keep, distinct from an all-zero `r[0]`
+    /// input. Crafted directly (a real captured 362-frame corpus is too
+    /// small to happen to contain an exact `f32` tie at this boundary),
+    /// not derived from real audio -- see this function's own doc comment
+    /// for why this is nonetheless a real, not purely theoretical, case
+    /// the same one-line guard needed to cover anyway.
+    #[test]
+    fn levinson_durbin_does_not_produce_nan_when_a_reflection_coefficient_hits_the_clamp_boundary_exactly()
+     {
+        // Order 1: k = -(r[1])/r[0]. Choosing r[1] == -r[0] (both
+        // nonzero) makes k == 1.0 exactly on the very first iteration,
+        // zeroing e for iteration 2 (e *= 1.0 - 1.0*1.0 == 0.0).
+        let mut r = [0.0f32; LPC_ORD + 1];
+        r[0] = 1.0;
+        r[1] = -1.0;
+        let ak = levinson_durbin(&r);
+        assert!(
+            ak.iter().all(|v| v.is_finite()),
+            "non-finite LPC coefficient from a crafted exact-boundary R[]: {ak:?}"
+        );
+        assert_eq!(ak[1], 1.0, "the boundary-hitting reflection coefficient itself should be preserved, not clamped (only a strict > 1.0 clamps)");
+        assert_eq!(
+            &ak[2..],
+            &[0.0; LPC_ORD - 1],
+            "every order after e hits exactly zero should be the identity filter"
+        );
+    }
 
     /// Real R[] vectors and their real Levinson-Durbin ak[] outputs,
     /// captured from actual Codec2-mod real speech decoding this same
