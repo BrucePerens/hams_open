@@ -178,9 +178,21 @@ impl Encoder {
         Self::default()
     }
 
-    // [@ANCHOR: Encoder::shift_in]
+    // [@ANCHOR: codec2_1600:Encoder::shift_in]
     fn shift_in(&mut self, new_samples: &[i16]) {
         self.sn.copy_within(N_SAMP.., 0);
+        // `EncoderFixed::shift_in`'s own `copy_from_slice` already fails
+        // loudly on a length mismatch; this float sibling's `zip`-based
+        // loop wouldn't have -- it would silently truncate/pad instead
+        // (see this function's own claim in the bug-hunt store for the
+        // full trace of why that's worth guarding even though every
+        // current call site already passes exactly `N_SAMP` samples).
+        assert_eq!(
+            new_samples.len(),
+            N_SAMP,
+            "shift_in: expected exactly N_SAMP={N_SAMP} new samples, got {}",
+            new_samples.len()
+        );
         for (dst, &s) in self.sn[M_PITCH - N_SAMP..].iter_mut().zip(new_samples) {
             *dst = s as f32;
         }
@@ -190,7 +202,7 @@ impl Encoder {
     /// `BYTES_PER_FRAME` real-format bytes. Matches
     /// `codec2_encode_1600`'s own real structure exactly (see this
     /// module's own doc comment).
-    // [@ANCHOR: Encoder::encode]
+    // [@ANCHOR: codec2_1600:Encoder::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[0..N_SAMP]);
         fnlp::nlp(&mut self.nlp_state, &self.sn);
@@ -276,7 +288,7 @@ impl Decoder {
     /// (`SAMPLES_PER_FRAME`-sample) frame of audio. Matches
     /// `codec2_decode_1600`'s own real structure exactly (see this
     /// module's own doc comment).
-    // [@ANCHOR: Decoder::decode]
+    // [@ANCHOR: codec2_1600:Decoder::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
         let fields = bits::unpack_frame_1600(bytes);
         let wo_a = quantise::decode_wo(fields.wo_index_a);
@@ -357,7 +369,7 @@ impl Decoder {
     /// whichever call runs second. Use two separate `Decoder`s (as this
     /// module's own tests do) if both rates are ever needed from the
     /// same stream.
-    // [@ANCHOR: Decoder::decode_16k]
+    // [@ANCHOR: codec2_1600:Decoder::decode_16k]
     pub fn decode_16k(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],
@@ -508,6 +520,7 @@ impl EncoderFixed {
         Self::default()
     }
 
+    // [@ANCHOR: codec2_1600:EncoderFixed::shift_in]
     fn shift_in(&mut self, new_samples: &[i16]) {
         self.sn.copy_within(N_SAMP.., 0);
         self.sn[M_PITCH - N_SAMP..].copy_from_slice(new_samples);
@@ -516,7 +529,7 @@ impl EncoderFixed {
     /// Same real frame structure as `Encoder::encode` (see this
     /// module's own doc comment) -- this is `EncoderFixed`'s own
     /// mirror.
-    // [@ANCHOR: EncoderFixed::encode]
+    // [@ANCHOR: codec2_1600:EncoderFixed::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[0..N_SAMP]);
         nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
@@ -593,7 +606,7 @@ impl DecoderFixed {
     /// Same real frame structure as `Decoder::decode` (see this
     /// module's own doc comment) -- this is `DecoderFixed`'s own
     /// mirror, genuinely fixed-point end to end.
-    // [@ANCHOR: DecoderFixed::decode]
+    // [@ANCHOR: codec2_1600:DecoderFixed::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
         let fields = bits::unpack_frame_1600(bytes);
         let wo_a = quantise::decode_wo_fixed(fields.wo_index_a);
@@ -663,7 +676,7 @@ impl DecoderFixed {
     /// float version) -- see that method's own doc comment for the
     /// design and the same warning about not interleaving
     /// `decode()`/`decode_16k_fixed()` on one instance.
-    // [@ANCHOR: DecoderFixed::decode_16k_fixed]
+    // [@ANCHOR: codec2_1600:DecoderFixed::decode_16k_fixed]
     pub fn decode_16k_fixed(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],
@@ -755,9 +768,9 @@ mod tests {
     /// same basic sanity bar `codec2_3200`'s own equivalent test uses:
     /// finite, reasonably-scaled, non-degenerate audio, no panics.
     #[test]
-    // Tests [@ANCHOR: Encoder::encode]
-    // Tests [@ANCHOR: Encoder::shift_in]
-    // Tests [@ANCHOR: Decoder::decode]
+    // Tests [@ANCHOR: codec2_1600:Encoder::encode]
+    // Tests [@ANCHOR: codec2_1600:Encoder::shift_in]
+    // Tests [@ANCHOR: codec2_1600:Decoder::decode]
     // Tests [@ANCHOR: analyse_lsps_and_energy]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = Encoder::new();
@@ -786,8 +799,8 @@ mod tests {
 
     /// Same round-trip sanity bar, fully fixed-point path.
     #[test]
-    // Tests [@ANCHOR: EncoderFixed::encode]
-    // Tests [@ANCHOR: DecoderFixed::decode]
+    // Tests [@ANCHOR: codec2_1600:EncoderFixed::encode]
+    // Tests [@ANCHOR: codec2_1600:DecoderFixed::decode]
     // Tests [@ANCHOR: analyse_lsps_and_energy_fixed]
     fn fixed_encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {
         let mut encoder = EncoderFixed::new();
@@ -812,6 +825,80 @@ mod tests {
         assert!(rms > 50.0, "decoded audio looks like silence, RMS={rms}");
         assert!(rms < 20000.0, "decoded audio implausibly loud, RMS={rms}");
         assert!(max_abs > 0, "decoded audio is all zero");
+    }
+
+    /// Bug-hunt regression, 2026-09-10: `codec2_3200::lpc`'s own
+    /// `r0_normalize_fixed`/`levinson_durbin_fixed_from_integer_r` used to
+    /// panic (`attempt to divide by zero`, in BOTH debug and release
+    /// builds) on a real, all-silent `i16` frame -- a squelched receiver,
+    /// muted mic, or comfort-noise padding, not a contrived input -- since
+    /// this crate has no upstream voice-activity gate before LPC analysis.
+    /// That bug was found and fixed upstream in `codec2_3200::lpc`
+    /// (`r0_normalize_fixed.md`/`levinson_durbin_fixed_core_from_r_norm.md`
+    /// in the centralized claims store), but `analyse_lsps_and_energy_fixed`
+    /// (this module's own fixed-point LPC analysis pass) calls straight
+    /// into that exact shared function
+    /// (`lpc::levinson_durbin_fixed_from_integer_r`) -- this regression
+    /// confirms the fix actually reaches THIS mode's own call site too,
+    /// rather than assuming it does because the underlying function is
+    /// shared.
+    #[test]
+    fn fixed_encode_does_not_panic_on_an_all_silent_frame() {
+        let mut encoder = EncoderFixed::new();
+        let silence = [0i16; SAMPLES_PER_FRAME];
+        let bits = encoder.encode(&silence);
+        let mut decoder = DecoderFixed::new();
+        let out = decoder.decode(&bits);
+        assert!(
+            out.iter().all(|s| *s == 0 || s.abs() < 100),
+            "an all-silent input frame should decode to near-silent output, got {out:?}"
+        );
+    }
+
+    /// Float sibling of the above: `analyse_lsps_and_energy` calls
+    /// `codec2_3200::floating_reference::lpc`'s own `levinson_durbin`/
+    /// `lpc_to_lsp` on an all-zero windowed frame. That path's `f32`
+    /// division-by-zero degrades to `NaN` rather than panicking (IEEE754
+    /// float division never traps, unlike the fixed-point path's real
+    /// integer division), and `lpc_to_lsp`'s own root search can never
+    /// bracket a sign change against `NaN` comparisons, so it returns
+    /// `None` and `analyse_lsps_and_energy`'s own `unwrap_or_else(fallback_lsp)`
+    /// already substitutes the same "no prediction" fallback the
+    /// fixed-point path had to be taught to do explicitly -- confirmed
+    /// empirically here, not just derived, since a NaN's exact behavior
+    /// under comparison/clamping is the kind of thing worth verifying by
+    /// running it (see `floating_reference::lpc`'s own
+    /// `scratch_all_zero_r_investigation`, which investigates the same
+    /// question one level down without asserting an outcome).
+    #[test]
+    fn encode_does_not_panic_on_an_all_silent_frame() {
+        let mut encoder = Encoder::new();
+        let silence = [0i16; SAMPLES_PER_FRAME];
+        let bits = encoder.encode(&silence);
+        let mut decoder = Decoder::new();
+        let out = decoder.decode(&bits);
+        assert!(
+            out.iter().all(|s| s.unsigned_abs() < 20000),
+            "an all-silent input frame should decode without panicking or exploding, got {out:?}"
+        );
+    }
+
+    /// Bug-hunt regression, 2026-09-10, for `Encoder::shift_in`'s own
+    /// defensive length check (see this module's `mod.rs` bug-hunt claim
+    /// for the full trace): before the fix, calling `shift_in` with the
+    /// wrong number of samples would silently zip-truncate/leave stale
+    /// history in place instead of failing loudly, an asymmetry with
+    /// `EncoderFixed::shift_in`'s own `copy_from_slice`, which already
+    /// panics on any length mismatch. Not reachable from any real call
+    /// site today (`encode()` always slices exactly `N_SAMP` samples),
+    /// but a private helper silently tolerating a caller-logic bug is
+    /// itself worth failing loudly on, matching this crate's own
+    /// fail-fast convention and its own fixed-point sibling.
+    #[test]
+    #[should_panic(expected = "shift_in: expected exactly N_SAMP")]
+    fn shift_in_panics_on_a_wrong_length_slice_instead_of_silently_truncating() {
+        let mut encoder = Encoder::new();
+        encoder.shift_in(&[0i16; 3]);
     }
 
     /// Real cross-implementation check for `DecoderFixed`, same two
@@ -1060,7 +1147,7 @@ mod tests {
     /// `codec2_3200`'s own version of this test -- this is the same
     /// `SpectralBridgeState` synthesis, so the same offset applies here.
     #[test]
-    // Tests [@ANCHOR: Decoder::decode_16k]
+    // Tests [@ANCHOR: codec2_1600:Decoder::decode_16k]
     fn decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated() {
         let bits_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1189,7 +1276,7 @@ mod tests {
     /// Fixed-point sibling of
     /// `decode_16k_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated`.
     #[test]
-    // Tests [@ANCHOR: DecoderFixed::decode_16k_fixed]
+    // Tests [@ANCHOR: codec2_1600:DecoderFixed::decode_16k_fixed]
     fn decode_16k_fixed_with_spectral_bridge_disabled_matches_the_base_8khz_decoder_when_decimated()
     {
         let bits_path = concat!(
