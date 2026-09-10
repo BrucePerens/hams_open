@@ -54,6 +54,33 @@ class OdooAPIError(Exception):
     """Custom exception for Odoo JSON-2 API failures."""
 
 
+# Keys inside a job payload dict that carry live, decrypted credentials
+# (kopia_password, secret_key, access_key) -- _publish_to_worker in
+# backup_config.py puts these on the wire in plaintext for the worker to
+# consume, so they must never be written to this daemon's own log file.
+_PAYLOAD_SECRET_KEYS = ("kopia_password", "secret_key", "access_key")
+
+
+def _redact_payload(payload):
+    # [@ANCHOR: backup_management:COMM_redact_payload]
+    #
+    # Bug-hunt fix (2026-09-09, tier-1 pass): execute_job()'s "missing
+    # job_id or engine" branch used to log the raw payload dict with
+    # `logger.error(..., payload)` -- but that payload is exactly the flat
+    # dict _publish_to_worker() builds, which carries kopia_password,
+    # secret_key, and access_key in plaintext (see the "config = payload"
+    # comment above). Any malformed/incomplete message landing in this
+    # branch would write live backup-storage and repository credentials
+    # straight into this daemon's own log file. Redact before logging
+    # anything that might be this shape.
+    if not isinstance(payload, dict):
+        return payload
+    return {
+        k: ("***REDACTED***" if k in _PAYLOAD_SECRET_KEYS and v else v)
+        for k, v in payload.items()
+    }
+
+
 # [@ANCHOR: backup_management:COMM_json2_call]
 def _json2_call(model, method_name, svc_uid=None, **kwargs):
     payload_str = json.dumps(kwargs)
@@ -107,7 +134,9 @@ def execute_job(ch, method, properties, body):
         website_id = payload.get("website_id")
 
         if not job_id or not engine:
-            logger.error("Missing job_id or engine in payload: %s", payload)
+            logger.error(
+                "Missing job_id or engine in payload: %s", _redact_payload(payload)
+            )
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
 

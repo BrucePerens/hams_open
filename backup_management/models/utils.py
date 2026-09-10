@@ -29,10 +29,35 @@ def validate_backup_path(path):
         "/var/lib/odoo/backup_repo",
         "/var/backups/global",
         "/opt/hams/backup",
-        "/opt/hams/etc/keys",
         "/mnt/backup",
-        "/tmp"
+        "/tmp",
+        # Bug-hunt fix (2026-09-09, tier-1 pass): this is the ONLY base under
+        # which daemon/main.py's own, independent allowlist
+        # (BACKUP_WORKER_SCRIPTS_DIR, default
+        # "/opt/hams/daemons/backup_worker/scripts") will actually execute a
+        # restore_drill_script -- none of the bases above satisfy the
+        # daemon's own `abs_script_path.startswith(allowed_base + "/")`
+        # check. Without this entry, this Odoo-side constraint accepted
+        # restore_drill_script values (e.g. under /tmp or /opt/hams/backup)
+        # that the daemon would always refuse to run, and rejected the one
+        # path the daemon would accept -- a config that looked valid in the
+        # UI could never actually run a drill. Class 6 (cross-section
+        # self-contradiction between two independent allowlists for the same
+        # field's value).
+        "/opt/hams/daemons/backup_worker/scripts",
     ]
+    # Bug-hunt fix (2026-09-09, tier-1 pass): "/opt/hams/etc/keys" was
+    # previously in this list. No backup.config in this codebase (or its
+    # tests) ever targets that directory -- it's this daemon's OWN
+    # credential-file directory (see hooks.py's
+    # env_file_path="/opt/hams/etc/keys/backup_worker.env"), not a
+    # legitimate backup repository, restore destination, or drill-script
+    # location. Allowing it here meant a backup admin could type
+    # "/opt/hams/etc/keys" as a kopia restore_target_path and have the
+    # daemon overwrite backup_worker.env (and any other daemon's credential
+    # file living in that same directory) with the contents of a kopia
+    # snapshot -- a real credential/privilege-compromise path, not just a
+    # scoping papercut. Removed; nothing in this module needs it.
 
     if not any(abs_path == base or abs_path.startswith(base + "/") for base in allowed_bases):
         raise UserError(

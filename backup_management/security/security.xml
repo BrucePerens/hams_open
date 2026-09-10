@@ -58,5 +58,53 @@
             <field name="domain_force">[('company_id', 'in', company_ids), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
         </record>
+
+        <!-- Bug-hunt fix (2026-09-09, tier-1 pass): user_backup_service_internal
+             is a member of group_backup_admin (needed for that group's own
+             ir.model.access.csv CRUD grant), so without a rule of its own the
+             four multi-tenant rules above (which AND a strict company_id
+             match with no company_id=False bypass, unlike every other
+             service-account module in this codebase such as pager_duty)
+             applied to it too. Since the service account's own real
+             company_ids is (and always will be, for any single named
+             account) just [main_company], cron_sync_all_backups() and
+             _auto_refresh_status() (both run as this account, both search
+             with no explicit domain) silently returned only main-company,
+             website_id=False configs/jobs: every per-website or
+             non-main-company backup was skipped with no error, no log line,
+             nothing. Matches the pager_duty precedent exactly: OR in an
+             unconditionally-permissive rule scoped to the service group the
+             account is *also* a member of, so the ORed-together result is
+             permissive per ir_rule.py's own group-OR-combination semantics.
+             This does not, by itself, fix the account's real company_ids
+             membership; see the .with_company() removal in
+             backup_config.py/restore_wizard.py for that half of the bug. -->
+        <record id="rule_backup_config_multi_tenant_svc" model="ir.rule">
+            <field name="name">Backup Config Multi-Tenant Service</field>
+            <field name="model_id" ref="model_backup_config"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_service_account'))]"/>
+        </record>
+
+        <record id="rule_backup_snapshot_multi_tenant_svc" model="ir.rule">
+            <field name="name">Backup Snapshot Multi-Tenant Service</field>
+            <field name="model_id" ref="model_backup_snapshot"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_service_account'))]"/>
+        </record>
+
+        <record id="rule_backup_job_multi_tenant_svc" model="ir.rule">
+            <field name="name">Backup Job Multi-Tenant Service</field>
+            <field name="model_id" ref="model_backup_job"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_service_account'))]"/>
+        </record>
+
+        <record id="rule_backup_latest_snapshot_view_multi_tenant_svc" model="ir.rule">
+            <field name="name">Backup Latest Snapshot View Multi-Tenant Service</field>
+            <field name="model_id" ref="model_backup_latest_snapshot_view"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('backup_management.group_backup_service_account'))]"/>
+        </record>
     </data>
 </odoo>

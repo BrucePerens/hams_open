@@ -11,7 +11,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError, ValidationError
 from .utils import validate_backup_path, publish_to_rabbitmq
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 
 class BackupConfig(models.Model):
@@ -107,14 +107,46 @@ class BackupConfig(models.Model):
     # [@ANCHOR: backup_management:COMM_crypt_field]
     def _crypt_field(self, value, decrypt=False):
         f = self._get_fernet()
-        if not f or not value:
+        if not f:
+            if decrypt or not value:
+                # Reading back an existing secret with no key configured, or
+                # nothing to encrypt at all -- nothing new to warn about.
+                return False
+            # Bug-hunt fix (2026-09-09, tier-1 pass): previously fell through
+            # to the shared "not f or not value: return False" branch below,
+            # silently discarding the admin's typed plaintext (Kopia
+            # password / S3-B2 secret key) with zero indication -- the field
+            # would appear saved in the UI, but kopia_password_crypt/
+            # secret_key_crypt was actually written to False. Fail loudly
+            # instead, per this project's fail-fast philosophy: a credential
+            # that looks saved but silently wasn't is a data-durability and
+            # confidentiality risk (e.g. a Kopia repo silently created with
+            # no password), not just a UX papercut.
+            raise UserError(
+                _(
+                    "Cannot save this credential: no backup encryption key is "
+                    "configured on the server (ODOO_BACKUP_CRYPTO_KEY / "
+                    "HAMS_CRYPTO_KEY). Contact your administrator before "
+                    "entering secrets here."
+                )
+            )
+        if not value:
             return False
         try:
             if decrypt:
                 return f.decrypt(value.encode("utf-8")).decode("utf-8")
             else:
                 return f.encrypt(value.encode("utf-8")).decode("utf-8")
-        except ValueError as e:
+        except (ValueError, InvalidToken) as e:
+            # Bug-hunt fix (2026-09-09, tier-1 pass): Fernet.decrypt's real
+            # failure mode for a wrong/rotated key or corrupted ciphertext is
+            # cryptography.fernet.InvalidToken, which subclasses Exception
+            # directly, NOT ValueError -- the old `except ValueError` never
+            # actually caught it, so a bad decrypt crashed the whole record
+            # read instead of degrading to the "***ERROR***" placeholder
+            # this except clause exists to show. ValueError is kept too: a
+            # malformed (non-base64) stored value still raises binascii.Error,
+            # which does subclass ValueError.
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
             return "***ERROR***" if decrypt else False
 
@@ -230,7 +262,22 @@ class BackupConfig(models.Model):
         for rec in self:
             if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)
-            job = jobs.with_user(svc_uid).with_company(rec.company_id.id).create(
+            # Bug-hunt fix (2026-09-09, tier-1 pass): do NOT .with_company()
+            # to rec.company_id here. user_backup_service_internal's own
+            # real company_ids (security.xml) is [main_company] only, same
+            # as every other service account in this codebase -- .with_company()
+            # to any other company raises AccessError immediately from
+            # Environment.companies's own getter (odoo/orm/environments.py),
+            # before any query runs, since that check is against the acting
+            # user's REAL company membership and is completely unaffected by
+            # ir.rule permissiveness. That made every backup/restore/policy
+            # action on a non-main-company config crash outright. company_id
+            # on backup.job is a related(store=True) field computed from
+            # config_id.company_id regardless of env.company, so no
+            # .with_company() is needed to get it right; cross-tenant read
+            # access for this service account is instead granted by the
+            # new rule_backup_*_multi_tenant_svc ir.rules (security.xml).
+            job = jobs.with_user(svc_uid).create(
                 {
                     "config_id": rec.id,
                     "website_id": rec.website_id.id,
@@ -466,6 +513,27 @@ class BackupConfig(models.Model):
             c["latest_job"] = job_map.get(c["id"], False)
 
         return configs
+
+    def action_process_snapshot_data(self, data, engine):
+        # [@ANCHOR: backup_management:COMM_action_process_snapshot_data]
+        #
+        # Bug-hunt fix (2026-09-09, tier-1 pass): this public wrapper did not
+        # exist. daemon/main.py's execute_job() called
+        # backup.config.action_process_snapshot_data(...) over the JSON-2 API
+        # after every successful sync_snapshots job, but the only method
+        # that ever existed was the private _process_snapshot_data below --
+        # odoo.service.model.get_public_method() unconditionally rejects any
+        # RPC method name starting with "_" ("Private methods ... cannot be
+        # called remotely"), and the name didn't even match besides. Every
+        # real sync_snapshots job therefore failed at the ingestion step
+        # (loudly -- execute_job's outer except re-flips the job to "failed"
+        # and calls report_backup_failure), and no snapshot was EVER recorded
+        # into backup_snapshot via the normal daemon-driven flow: the board's
+        # "latest snapshot" view, the minimum-size anomaly check below, and
+        # the staleness check in cron_sync_all_backups all silently saw an
+        # empty/stale snapshot history for every config, forever.
+        self.ensure_one()
+        return self._process_snapshot_data(data, engine)
 
     def _process_snapshot_data(self, data, engine):
         # Performance: Use Postgres procedure to reduce round-trips for batch insertion
