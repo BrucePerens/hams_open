@@ -33,10 +33,33 @@ class ResUsersModeration(models.Model):
 
     # [@ANCHOR: user_websites:COMM_compute_suspended_group_ids]
     def _compute_suspended_group_ids(self):
-        groups = self.env["user.websites.group"].search(
-            [("member_ids", "in", self.ids), ("is_suspended_from_websites", "=", True)],
-            limit=1000,
-        )
+        # Paginate instead of a single capped search(limit=1000): a flat cap
+        # with no continuation silently dropped any suspended groups beyond
+        # the first 1000 matching (member_ids in self.ids AND
+        # is_suspended_from_websites=True) -- for a large batch compute (e.g.
+        # rendering an admin list view over many users) that under-reports
+        # `suspended_group_ids` for some users with no signal at all. Mirrors
+        # the keyset-pagination idiom already used elsewhere in this module
+        # (res_users.py's GDPR export/purge loops) for "must see every
+        # matching row, not just the first batch" reads.
+        groups = self.env["user.websites.group"]
+        last_id = 0
+        while True:
+            batch = self.env["user.websites.group"].search(
+                [
+                    ("id", ">", last_id),
+                    ("member_ids", "in", self.ids),
+                    ("is_suspended_from_websites", "=", True),
+                ],
+                limit=1000,
+                order="id asc",
+            )
+            if not batch:
+                break
+            groups |= batch
+            last_id = batch[-1].id
+            if len(batch) < 1000:
+                break
 
         mapping: dict[int, list[int]] = {u.id: [] for u in self}
         for g in groups:
@@ -53,8 +76,25 @@ class ResUsersModeration(models.Model):
         user_ids = self.ids
 
         db_name = self.env.cr.dbname
-        # Fire and forget safely without unbounded thread growth
-        BACKGROUND_EXECUTOR.submit(_async_unpublish_content, db_name, user_ids)
+        # Defer the submit to a postcommit callback (matches res_users.py's
+        # write()-triggered archival path for this exact same async
+        # function) rather than firing it immediately: this method's own
+        # for-loop below (setting is_suspended_from_websites and posting the
+        # audit message) can still raise -- e.g. message_post() failing for
+        # one user in a multi-user batch -- which rolls back this whole
+        # transaction, including every is_suspended_from_websites write and
+        # audit message. Firing the background unpublish immediately, before
+        # that outcome is known, let a rolled-back suspension still leave
+        # user content silently unpublished with no suspension flag and no
+        # audit trail to explain why. cr.postcommit only runs if this
+        # transaction's own commit() actually happens (Cursor.commit() calls
+        # postcommit.run() right after committing; rollback() clears the
+        # queued callbacks instead) -- see odoo/sql_db.py.
+        self.env.cr.postcommit.add(
+            lambda: BACKGROUND_EXECUTOR.submit(
+                _async_unpublish_content, db_name, user_ids
+            )
+        )
 
         for user in self:
             user.is_suspended_from_websites = True

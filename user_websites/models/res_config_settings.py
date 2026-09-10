@@ -2,7 +2,11 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import logging
+
 from odoo import models, fields, api
+
+_logger = logging.getLogger(__name__)
 
 
 class ResConfigSettings(models.TransientModel):
@@ -59,3 +63,17 @@ class ResConfigSettings(models.TransientModel):
             )
             new_ids = self.user_websites_administrators_ids.ids + [svc_uid]
             admin_group.with_user(svc_uid).write({"user_ids": [(6, 0, new_ids)]})
+        else:
+            # Unlike global_website_page_limit/company_abuse_email (plain
+            # config_parameter fields super().set_values() already persisted
+            # unconditionally above), the administrators list has no
+            # fallback storage -- if the group's own XML data hasn't loaded
+            # yet (a transient upgrade-ordering state; this group is meant
+            # to always exist once the module is installed), this branch
+            # used to silently drop the admin selection the caller just
+            # made with the Settings screen still reporting success. Log it
+            # so the gap is at least visible instead of fully silent.
+            _logger.warning(
+                "user_websites.group_user_websites_administrator not found; "
+                "administrators selection from Settings was not saved."
+            )
