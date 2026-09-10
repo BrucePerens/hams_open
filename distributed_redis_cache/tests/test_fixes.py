@@ -26,6 +26,11 @@ class DummyModel:
             def __init__(self):
                 self.cr = Cr()
                 self.context = {}
+                # bug-hunt (2026-09-09): distributed_cache()'s company-id
+                # fallback now reads self.env.companies when
+                # "allowed_company_ids" is absent from context -- this mock
+                # needs the attribute or that fallback raises AttributeError.
+                self.companies = type("companies", (), {"ids": []})()
 
         self.env = Env()
 

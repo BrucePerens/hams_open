@@ -163,11 +163,43 @@ def distributed_cache():
 
             # Multi-Tenant awareness: Include website_id and company_id in cache key
             website_id = self.env.context.get("website_id") or 0
-            
-            # Use only context to avoid triggering N+1 queries from self.env.company
-            allowed_company_ids = self.env.context.get("allowed_company_ids", [])
-            company_ids_str = ",".join(map(str, allowed_company_ids)) if allowed_company_ids else "0"
-            
+
+            # bug-hunt (2026-09-09): this used to fall back to a fixed
+            # literal "0" whenever "allowed_company_ids" was absent from
+            # context -- which it is for the overwhelming majority of
+            # calls (any backend RPC, cron job, or controller call that
+            # didn't go through the web client's own company switcher).
+            # THE REAL active company scope in that case is NOT "company
+            # 0" (no such company exists) -- Environment.companies
+            # (odoo/orm/environments.py) falls back to
+            # self.user._get_company_ids() precisely when
+            # "allowed_company_ids" isn't in context. Using a constant
+            # instead meant two different users in two different
+            # companies, both calling the same @distributed_cache()'d
+            # method with no explicit company context, got the exact
+            # same cache key suffix regardless of which company either
+            # of them actually belonged to -- silently defeating the
+            # "[!] SECURITY" comment below for any future decorated
+            # function whose own result varies by company through
+            # ambient scope alone (no company-varying argument, no
+            # company-scoped recordset in `self`). Not found to be
+            # exploitable against any CURRENT caller (every @distributed_
+            # cache()'d function reviewed either returns server-wide,
+            # non-tenant-scoped data, or already takes a
+            # website_id/record whose own ids disambiguate the arg_hash) --
+            # but the security invariant this comment states should be
+            # true regardless of what happens to call it today. Derive
+            # the real fallback from Environment.companies (sorted, so
+            # [1,2] and [2,1] hash identically) instead of a dummy
+            # constant; also sort the explicit-context path for the same
+            # reason (unsorted, [1,2] and [2,1] context values previously
+            # produced two different cache keys for the same real scope).
+            allowed_company_ids = self.env.context.get("allowed_company_ids")
+            if allowed_company_ids:
+                company_ids_str = ",".join(map(str, sorted(allowed_company_ids)))
+            else:
+                company_ids_str = ",".join(map(str, sorted(self.env.companies.ids))) or "0"
+
             # [!] SECURITY: Multi-tenant isolation is enforced via website_id and company_id in the cache key.
             website_suffix = f":w{website_id}"
             company_suffix = f":c{company_ids_str}"

@@ -49,8 +49,8 @@ Because this is a standalone Open Source module that spawns external Python daem
 This module implements a strict CQRS (Command Query Responsibility Segregation) pattern to bypass Odoo's single-threaded limitations:
 1. When an Odoo worker invalidates the registry (e.g., changing a View or installing a module), it calls `self.env.cr.execute("NOTIFY distributed_cache_invalidation, ...")`.
 2. The standalone `cache_manager.py` daemon, utilizing `asyncpg`, instantly catches the PostgreSQL notification.
-3. The daemon broadcasts the invalidation payload to the central Redis Pub/Sub bus.
-4. All active Odoo WSGI workers are subscribed to this Redis bus and immediately flush their local in-memory LRU caches upon receiving the broadcast, guaranteeing all web workers serve the exact same synchronized code and view state.
+3. The daemon publishes the invalidation payload to a Redis Pub/Sub bus AND increments a single global Redis counter key, in the same pipeline.
+4. **Corrected 2026-09-09**: no Odoo WSGI worker actually subscribes to that Pub/Sub bus (it exists only so the daemon's own test suite can verify the publish side against a real subscriber) -- there is no background listener thread anywhere in this module. What every worker actually does is poll the global counter with a synchronous Redis `GET` at the start of each HTTP request (`ir.http._authenticate`); if it changed since the last request this worker handled, the worker immediately flushes its *entire* local in-memory LRU cache (every model, not only the one that changed) before continuing. This still guarantees no worker ever serves a value from before the last invalidation -- it is just a request-time poll-and-clear-all, not a push-based, per-model subscription.
 
 ## 💻 Developer & AI Usage Guide
 
