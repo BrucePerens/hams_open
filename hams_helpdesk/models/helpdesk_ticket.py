@@ -171,10 +171,20 @@ class HelpdeskTicket(models.Model):
             facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
             if ticket_service.user_id:
                 # Email Notification
+                # Bug-hunt fix (2026-09-09): this internal-only assignment
+                # notice had no subtype_xmlid, so it defaulted to the
+                # customer-visible mail.mt_comment subtype -- the same class
+                # of leak fixed in shift_handoff.py's action_confirm_handoff
+                # the same day -- and showed up in the customer's own portal
+                # ticket thread even though its only intended audience is
+                # the newly-assigned agent. The sibling "Shift CC" message
+                # a few lines below already got this right
+                # (subtype_xmlid="mail.mt_note"); this one didn't.
                 ticket_service.message_post(
                     body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id,
                     partner_ids=[ticket_service.user_id.partner_id.id],
                     subject=_("Ticket Assigned: %s") % ticket_service.name,
+                    subtype_xmlid="mail.mt_note",
                 )
                 # Bus Toast
                 facility_env["bus.bus"]._sendone(
@@ -281,6 +291,34 @@ class HelpdeskTicket(models.Model):
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
             self.with_env(hd_env).message_post(body=_("Ticket closed by customer."))
+
+    def message_new(self, msg_dict, custom_values=None):
+        """Overrides mail.thread's own default so a ticket created from an
+        inbound email (see ingest_inbound_email() below) actually gets
+        linked to the sending customer, the same way a ticket created via
+        the portal or the backend already is.
+
+        Bug-hunt fix (2026-09-09): mail.thread.message_new()'s own default
+        implementation only auto-populates a field via
+        _mail_get_primary_email_field(), and hams_helpdesk.ticket has no
+        such field (no email_from/email Char) -- so partner_id was always
+        False on an email-ingested ticket, even when message_route() had
+        already resolved the sender's address to an existing partner
+        (msg_dict['author_id']). With partner_id unset: the customer's own
+        /my/tickets never lists the ticket (portal.py's own domain filters
+        on partner_id = the logged-in user's partner), write()'s
+        stage-change mail-back never fires for it (`if ticket.partner_id:
+        ...`), and _automated_routing_and_notification()'s own
+        "ensure customer is subscribed" step silently does nothing. Setting
+        partner_id here also makes create()'s own existing
+        callsign-from-partner fallback apply for free.
+        """
+        # [@ANCHOR: COMM_helpdesk_message_new]
+        values = dict(custom_values or {})
+        author_id = msg_dict.get("author_id")
+        if author_id and not values.get("partner_id"):
+            values["partner_id"] = author_id
+        return super().message_new(msg_dict, custom_values=values)
 
     def ingest_inbound_email(self, raw_email_bytes):
         """RPC entrypoint for the SES-to-S3-to-Odoo inbound mail daemon

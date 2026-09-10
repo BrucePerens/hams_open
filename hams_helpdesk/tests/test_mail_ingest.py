@@ -71,6 +71,63 @@ class TestMailIngest(HamsTransactionCase):
     # ingest test. hams_helpdesk doesn't depend on pager_duty, so it can't
     # verify info@'s real routing target from here.
 
+    def test_04_ingest_links_existing_customer_partner(self):
+        # Tests [@ANCHOR: COMM_helpdesk_message_new]
+        # Bug-hunt regression (2026-09-09): before message_new() was
+        # overridden, an email-ingested ticket's partner_id was always
+        # False even when the sender's address matched an existing
+        # customer -- message_route() had already resolved the sender to
+        # a real partner (msg_dict['author_id']), but mail.thread's own
+        # default message_new() never used it, since hams_helpdesk.ticket
+        # has no email_from-style field for _mail_get_primary_email_field()
+        # to auto-populate. That silently orphaned every emailed-in ticket
+        # from the customer.partner_id-based portal listing
+        # (/my/tickets), the write() stage-change mail-back, and the
+        # automated "ensure customer is subscribed" step.
+        partner = self.env["res.partner"].create(
+            {"name": "Known Customer", "email": "known.customer@example.com"}
+        )
+        raw = self._raw_email(
+            "support@hams.com",
+            subject="Antenna tuner not tuning",
+            from_addr="known.customer@example.com",
+        )
+        self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+            base64.b64encode(raw).decode("ascii")
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "ilike", "Antenna tuner not tuning")], limit=1
+        )
+        self.assertTrue(ticket, "Expected the inbound email to create a ticket.")
+        self.assertEqual(
+            ticket.partner_id,
+            partner,
+            "An inbound email from a known customer's address must link the "
+            "resulting ticket to that customer's partner_id, or the customer "
+            "can never see their own ticket under /my/tickets.",
+        )
+
+    def test_05_ingest_with_unknown_sender_leaves_partner_unset(self):
+        # Tests [@ANCHOR: COMM_helpdesk_message_new]
+        # The IF/unwanted-behavior branch: an address matching no existing
+        # partner must not raise and must not fabricate a partner_id link.
+        raw = self._raw_email(
+            "support@hams.com",
+            subject="Totally unknown sender inquiry",
+            from_addr="nobody-on-file@example.com",
+        )
+        self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+            base64.b64encode(raw).decode("ascii")
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "ilike", "Totally unknown sender inquiry")], limit=1
+        )
+        self.assertTrue(ticket, "Expected the inbound email to create a ticket.")
+        self.assertFalse(
+            ticket.partner_id,
+            "An unrecognized sender must not be linked to an arbitrary partner_id.",
+        )
+
     def test_03_non_service_account_is_denied(self):
         """The real access boundary is the explicit login check inside
         ingest_inbound_email(), not ir.model.access -- prove it actually

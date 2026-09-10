@@ -272,6 +272,90 @@ class TestHelpdeskCore(HamsTransactionCase):
             ticket_new.callsign, "K1AAA", "Callsign MUST be populated via onchange."
         )
 
+    def test_07_shift_handoff_note_is_internal_not_portal_visible(self):
+        # Tests [@ANCHOR: COMM_helpdesk_handoff_execution]
+        """Bug-hunt regression (2026-09-09): action_confirm_handoff() used to
+        post the operator briefing (relinquished-by/accepted-by/handoff_notes)
+        with no subtype_xmlid, which defaults to the customer-visible
+        mail.mt_comment subtype. portal/controllers/portal_thread.py's own
+        /mail/chatter_fetch route only excludes messages whose subtype is
+        internal, so the briefing -- including any internal-only operator
+        context in handoff_notes -- was visible in the customer's own
+        /my/ticket/<id> "Communication History".
+        """
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Internal Note Leak Test",
+                "user_id": self.manager_user.id,
+                "partner_id": self.portal_user.partner_id.id,
+            }
+        )
+        new_user = self.env["res.users"].create(
+            {
+                "name": "Handoff Recipient",
+                "login": "handoff_internal_test",
+                "group_ids": [
+                    (6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_user").id])
+                ],
+            }
+        )
+        wizard = self.env["hams_helpdesk.shift_handoff"].create(
+            {
+                "ticket_id": ticket.id,
+                "old_user_id": self.manager_user.id,
+                "new_user_id": new_user.id,
+                "handoff_notes": "Internal-only: escalation contact is the NOC pager.",
+            }
+        )
+        wizard.with_company(self.env.company).action_confirm_handoff()
+
+        handoff_message = self.env["mail.message"].search(
+            [
+                ("res_id", "=", ticket.id),
+                ("model", "=", "hams_helpdesk.ticket"),
+                ("body", "like", "Official Shift Handoff Executed"),
+            ],
+            limit=1,
+        )
+        self.assertTrue(handoff_message, "Expected the handoff message to be posted.")
+        self.assertTrue(
+            handoff_message.subtype_id.internal,
+            "Shift handoff briefings contain internal-only operator context "
+            "and MUST be posted with an internal subtype (mail.mt_note), or "
+            "they leak into the customer's own portal ticket thread.",
+        )
+
+    def test_08_assignment_notice_is_internal_not_portal_visible(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
+        """Bug-hunt regression (2026-09-09): the "assigned to you" notice
+        posted by _automated_routing_and_notification() had no subtype_xmlid
+        either, and defaulted to the same customer-visible subtype -- unlike
+        its own sibling "Shift CC" message a few lines later, which already
+        used mail.mt_note correctly.
+        """
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Assignment Internal Test",
+                "partner_id": self.portal_user.partner_id.id,
+                "user_id": self.manager_user.id,
+            }
+        )
+        assign_message = self.env["mail.message"].search(
+            [
+                ("res_id", "=", ticket.id),
+                ("model", "=", "hams_helpdesk.ticket"),
+                ("body", "like", "assigned to you"),
+            ],
+            limit=1,
+        )
+        self.assertTrue(assign_message, "Expected an assignment notification message.")
+        self.assertTrue(
+            assign_message.subtype_id.internal,
+            "The internal assignment notice MUST NOT use the default "
+            "customer-visible subtype, or it leaks the ticket's internal "
+            "assignment state onto the customer's own portal thread.",
+        )
+
     def test_view_rendering(self):
         """Verify views render correctly without syntax errors."""
         # Tests [@ANCHOR: helpdesk_shift_handoff]
