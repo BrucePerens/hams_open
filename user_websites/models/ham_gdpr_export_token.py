@@ -154,6 +154,28 @@ class HamGdprExportToken(models.Model):
         updated Open Questions for why, and what re-architecting the
         generators to support real batched RPC pulls would take."""
         # # Verified by [@ANCHOR: test_gdpr_consume_and_export_payload]
+        #
+        # Hardening, 2026-09-10 (Bruce approved "harden both" after the
+        # ses_webhook/GDPR-token-handoff review): this is a public
+        # (non-underscore) @api.model method, reachable via the /json/2
+        # bearer-token RPC endpoint by ANY authenticated user holding a
+        # valid API key for hams.com, not just the gdpr_csv_export daemon's
+        # own gdpr_export_service_internal account. _consume()'s own single-
+        # use/expiry checks mean a stolen call still can't replay a token,
+        # but there's no reason this RPC surface should be reachable by an
+        # arbitrary account at all -- narrowing it to the one caller that's
+        # ever supposed to use it removes a whole class of future risk
+        # (e.g. a leaked, not-yet-consumed token combined with any other
+        # account's bearer key) for zero cost to the real daemon. Same
+        # caller-authorization-at-the-RPC-entry-point shape as cloudflare's
+        # own `_check_waf_caller_authorized()`.
+        if not (
+            self.env.user == self.env.ref("user_websites.user_gdpr_export_service")
+            or self.env.user.has_group("base.group_system")
+        ):
+            raise AccessError(
+                _("This RPC method may only be called by the GDPR export daemon's own service account.")
+            )
         user = self._consume(token)
         # Reading a user's full export data (arbitrary res.users fields,
         # website.page/blog.post content, ...) needs broader read access

@@ -279,8 +279,18 @@ class ResUsers(models.Model):
                 vals["website_slug"] = False
             with self.env.cr.savepoint():
                 result = super(ResUsers, self).write(vals)
-        except IntegrityError:
-            raise ValidationError(_("The Website Slug must be unique and valid."))
+        except IntegrityError as e:
+            # Same bug class already fixed in user_websites_groups.py's write():
+            # this used to catch every IntegrityError from the whole write(),
+            # not just website_slug ones, and always re-raised the same
+            # "slug must be unique" message -- mislabeling unrelated
+            # constraint failures (e.g. a bad FK) as a slug problem. Only
+            # relabel when the violated constraint is actually one of the
+            # website_slug constraints declared on `edge.routing.mixin`.
+            constraint_name = getattr(getattr(e, "diag", None), "constraint_name", None) or ""
+            if "website_slug" in constraint_name:
+                raise ValidationError(_("The Website Slug must be unique and valid."))
+            raise
 
         # --- Content Lifecycle Policy ---
         # Adversarial security review, 2026-09-09: this block used to run

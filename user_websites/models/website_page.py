@@ -449,6 +449,9 @@ class WebsitePage(models.Model):
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
+            )
         ):
             for vals in vals_list:
                 for arch_field in ["arch", "arch_base", "arch_db"]:
@@ -466,7 +469,29 @@ class WebsitePage(models.Model):
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
+            )
         ):
+            # Bug-hunt fix, 2026-09-10 (night_shift_todo.md's "website_page
+            # owner can opt their own page out of multi-website tenant
+            # isolation"): `website_id` used to be in this whitelist, so a
+            # non-admin caller could set/clear it directly via RPC
+            # (`write({"website_id": False})`) -- Odoo core's own
+            # `website.website_domain()` treats `website_id = False` as
+            # "visible on every website in this instance," letting an
+            # otherwise site-scoped page become resolvable under any other
+            # website hosted by the same Odoo instance. Confirmed (per
+            # Bruce directly) there is no legitimate case where a
+            # user_websites page needs to be visible across multiple
+            # websites/companies, and the only two legitimate setters of
+            # `website_id` (`controllers/main.py`'s `create_site`/
+            # `create_blog`) both call `create()`/`write()` via the
+            # `user_websites_service_account` service account's own env,
+            # which this check (see the group added above) now recognizes
+            # as admin -- so removing `website_id` here only ever affects a
+            # non-admin, non-service-account caller, who had no legitimate
+            # reason to set it in the first place.
             allowed = {
                 "name",
                 "url",
@@ -479,7 +504,6 @@ class WebsitePage(models.Model):
                 "owner_user_id",
                 "user_websites_group_id",
                 "key",
-                "website_id",
                 "view_count",
                 "mode",
                 "active",
@@ -702,7 +726,15 @@ class WebsitePage(models.Model):
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
+            )
         ):
+            # See create()'s own identical fix for the full explanation:
+            # `website_id` removed from this whitelist (night_shift_todo.md's
+            # "website_page owner can opt their own page out of multi-website
+            # tenant isolation"), and the service-account group added above
+            # so the two legitimate callers that DO set it stay unaffected.
             allowed = {
                 "name",
                 "url",
@@ -715,7 +747,6 @@ class WebsitePage(models.Model):
                 "owner_user_id",
                 "user_websites_group_id",
                 "key",
-                "website_id",
                 "view_count",
                 "mode",
                 "active",
@@ -739,6 +770,9 @@ class WebsitePage(models.Model):
             or self.env.user.has_group("base.group_system")
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
+            )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
             )
         ):
             for arch_field in ["arch", "arch_base", "arch_db"]:

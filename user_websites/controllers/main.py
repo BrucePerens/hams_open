@@ -14,6 +14,8 @@ from xml.sax.saxutils import escape as xml_escape
 
 from werkzeug.wrappers import Response
 
+from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
+
 _logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
@@ -489,7 +491,29 @@ class UserWebsitesController(http.Controller):
         # worker pool. This controller call itself is the only Odoo-worker
         # time this export costs on the redirect path.
         token = request.env["ham.gdpr.export.token"].create_for_current_user()
-        return request.redirect(f"/api/v1/gdpr_export/download?token={token}")
+        response = request.redirect("/api/v1/gdpr_export/download")
+        # Hardening, 2026-09-10 (Bruce approved "harden both" during the
+        # ses_webhook/GDPR-token-handoff review): the token used to travel
+        # in the redirect URL's own query string, where it would land in
+        # this worker's and the daemon's own HTTP access logs, the
+        # browser's history, and any Referer header sent onward from the
+        # download page. A short-lived, HttpOnly, SameSite=Strict cookie
+        # scoped to exactly the daemon's own download path crosses the same
+        # single redirect hop but never appears in a URL anywhere. `secure`
+        # tracks the request's own real scheme (https in production behind
+        # the reverse proxy, plain http in local dev/test) rather than
+        # being hardcoded True, so this doesn't silently break local
+        # testing while still being Secure wherever it actually matters.
+        response.set_cookie(
+            "gdpr_export_token",
+            token,
+            max_age=TOKEN_EXPIRY_MINUTES * 60,
+            path="/api/v1/gdpr_export/",
+            secure=request.httprequest.scheme == "https",
+            httponly=True,
+            samesite="Strict",
+        )
+        return response
 
     @http.route(
         "/my/privacy/delete_content",

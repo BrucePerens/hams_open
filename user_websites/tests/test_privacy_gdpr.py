@@ -6,6 +6,7 @@ from odoo import fields
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
+from odoo.exceptions import AccessError
 from urllib.parse import unquote
 from datetime import timedelta
 import json
@@ -112,7 +113,9 @@ class TestPrivacyGDPR(HamsHttpCase):
         # [@ANCHOR: test_gdpr_export_zip_redirect]
         """/my/privacy/export.zip mints a token and redirects to the daemon's
         own download endpoint, per docs/proposals/GDPR_CSV_EXPORT.md -- this
-        controller itself never streams the zip, it only hands off."""
+        controller itself never streams the zip, it only hands off. The
+        token itself travels via a short-lived cookie (2026-09-10
+        hardening), never in the redirect URL's own query string."""
         # Tests [@ANCHOR: gdpr_export_token]
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
         response = self.url_open(
@@ -123,9 +126,13 @@ class TestPrivacyGDPR(HamsHttpCase):
             "The export.zip route must redirect (Odoo's http redirect()), not serve the zip itself.",
         )
         location = response.headers.get("Location", "")
-        self.assertIn("/api/v1/gdpr_export/download?token=", location)
-        token = location.split("token=")[-1]
-        self.assertTrue(token, "A real, non-empty token must be present in the redirect URL.")
+        self.assertEqual(
+            location, "/api/v1/gdpr_export/download",
+            "The redirect URL must carry no token in its own query string.",
+        )
+        cookie = response.cookies.get("gdpr_export_token")
+        self.assertTrue(cookie, "A real, non-empty token must be present in the handoff cookie.")
+        token = cookie
 
         # The token this route minted must actually exist, be tied to this
         # user, and be unconsumed -- verified at the ORM level, not just
@@ -237,6 +244,30 @@ class TestPrivacyGDPR(HamsHttpCase):
 
         record = self.env["ham.gdpr.export.token"].with_user(svc_uid).search([("token", "=", token)], limit=1)
         self.assertTrue(record.consumed, "consume_and_export must consume the token as a side effect.")
+
+    def test_01f_consume_and_export_rejects_a_caller_that_is_not_the_daemon_service_account(self):
+        # Tests [@ANCHOR: test_gdpr_consume_and_export_payload]
+        """Hardening, 2026-09-10: consume_and_export is a public (non-
+        underscore) @api.model method, reachable over RPC by any
+        authenticated caller holding a valid API key -- not just the
+        gdpr_csv_export daemon's own service account. Any other caller,
+        even the token's own rightful owner calling it directly instead of
+        through the daemon, must be refused regardless of whether the
+        token itself is otherwise valid."""
+        env_as_user = self.env(user=self.user_privacy)
+        token = env_as_user["ham.gdpr.export.token"].create_for_current_user()
+
+        with self.assertRaises(AccessError):
+            env_as_user["ham.gdpr.export.token"].consume_and_export(token)
+
+        # The token must still be valid/unconsumed after the rejected
+        # attempt -- a caller that fails this authorization check must
+        # never reach _consume() at all.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
+        record = self.env["ham.gdpr.export.token"].with_user(svc_uid).search([("token", "=", token)], limit=1)
+        self.assertFalse(record.consumed, "A rejected caller must not consume the token.")
 
     def test_02_right_to_erasure(self):
         """Verify the user can permanently hard-delete their authored content and opt-out of directories."""
