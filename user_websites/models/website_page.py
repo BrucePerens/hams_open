@@ -40,6 +40,7 @@ class WebsitePage(models.Model):
 
     _url_website_uniq = models.Constraint("UNIQUE(url, website_id)", "The page URL must be unique per website!")
 
+    # [@ANCHOR: website_page_serve_page_view_counter]
     def _serve_page(self):
         # # Verified by [@ANCHOR: test_privacy_friendly_view_counter]
         response = super()._serve_page()
@@ -47,44 +48,77 @@ class WebsitePage(models.Model):
             if not self.env.user._is_admin():
                 db_name = self.env.cr.dbname
                 redis_client.incr(f"views:{db_name}:page:{self.id}")
-        except (KeyError, ValueError):  # audit-ignore-catch-all
+        # Bug-hunt fix (bug class 20, 2026-09-09): a Redis connection
+        # failure/timeout from `redis_client.incr()` raises
+        # `redis.exceptions.RedisError` (e.g. `ConnectionError`), never
+        # `KeyError`/`ValueError` -- this file's own
+        # `_flush_redis_view_counters()` already catches
+        # `redis.exceptions.RedisError` correctly for the equivalent Redis
+        # call a few hundred lines down, so the two were inconsistent with
+        # each other. With the old, too-narrow catch, a Redis outage meant
+        # every non-admin page view raised uncaught out of `_serve_page()`,
+        # turning an optional, "privacy-friendly" view counter into a hard
+        # 500 for every real visitor whenever Redis was unreachable.
+        except (KeyError, ValueError, redis.exceptions.RedisError):  # audit-ignore-catch-all
             _logger.warning("Redis view counter increment failed")
         return response
 
     # [@ANCHOR: user_websites:COMM_page_invalidate_cloudflare_cache]
     def _invalidate_cloudflare_cache(self):
         """Soft-dependency hook to purge the global Cache-Tag at the edge."""
+        # Bug-hunt fix (bug class 1, 2026-09-09): `cloudflare` is a hard
+        # `depends` entry in this module's own __manifest__.py, so
+        # `self.env["cloudflare.purge.queue"]` always resolves -- the
+        # previous `purge_queue = self.env["cloudflare.purge.queue"]` /
+        # `if purge_queue:` gate here didn't check "is this model
+        # registered", it checked "is this bare, freshly-instantiated,
+        # zero-id recordset non-empty" (`bool(recordset)` is
+        # `bool(self._ids)` per odoo/orm/models.py's own `__bool__`), which
+        # is ALWAYS False for `self.env["any.model"]` with no search/browse
+        # applied. The whole cache-purge body below was therefore
+        # unconditionally dead code: no website.page create/write/unlink
+        # ever actually purged the Cloudflare edge cache, so an
+        # unpublished/deleted/edited page could keep serving its stale,
+        # previously-cached content from the CDN edge indefinitely. A prior
+        # commit (be741fa9, 2026-08-26) already suspected this exact branch
+        # was a no-op while fixing an unrelated dead `is_test` guard here,
+        # but left the outer gate itself in place ("low-stakes... no
+        # behavior change") rather than removing it -- this makes that
+        # deferred fix real. See the `create`/`write`/`unlink` claims for
+        # confirmation that `cloudflare.user_cloudflare_purge` (the service
+        # account referenced below) and `enqueue_tags()` (a same-transaction
+        # DB insert into `cloudflare.purge.queue`, not an external HTTP
+        # call -- safe to fire unconditionally here) both exist and match
+        # this call's own usage.
         # Enforce strict architectural schema. Do not mask missing dependencies.
-        purge_queue = self.env["cloudflare.purge.queue"]
 
-        if purge_queue:
-            # ADR 0078: Pre-fetch related fields to prevent N+1 queries in the loop
-            self.mapped("owner_user_id.website_slug")
-            self.mapped("user_websites_group_id.website_slug")
+        # ADR 0078: Pre-fetch related fields to prevent N+1 queries in the loop
+        self.mapped("owner_user_id.website_slug")
+        self.mapped("user_websites_group_id.website_slug")
 
-            tags = set()
-            for rec in self:
-                if rec.owner_user_id and rec.owner_user_id.website_slug:
-                    tags.add(f"site-{rec.owner_user_id.website_slug}")
-                elif (
-                    rec.user_websites_group_id
-                    and rec.user_websites_group_id.website_slug
-                ):
-                    tags.add(f"site-{rec.user_websites_group_id.website_slug}")
-            if tags:
-                try:
-                    svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                        "cloudflare.user_cloudflare_purge"
-                    )
-                    self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
-                        list(tags)
-                    )
-                except AccessError as e:
-                    logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
-                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
-                    logging.getLogger(__name__).error(
-                        "Fatal error during Cloudflare purge: %s", e
-                    )
+        tags = set()
+        for rec in self:
+            if rec.owner_user_id and rec.owner_user_id.website_slug:
+                tags.add(f"site-{rec.owner_user_id.website_slug}")
+            elif (
+                rec.user_websites_group_id
+                and rec.user_websites_group_id.website_slug
+            ):
+                tags.add(f"site-{rec.user_websites_group_id.website_slug}")
+        if tags:
+            try:
+                svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                    "cloudflare.user_cloudflare_purge"
+                )
+                self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
+                    list(tags)
+                )
+            except AccessError as e:
+                logging.getLogger(__name__).debug("Cloudflare purge skipped: %s", e)
+            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                logging.getLogger(__name__).error(
+                    "Fatal error during Cloudflare purge: %s", e
+                )
 
     @api.model
     def _sanitize_user_arch(self, arch_content):
@@ -354,6 +388,7 @@ class WebsitePage(models.Model):
         return False
 
     @api.model_create_multi
+    # [@ANCHOR: website_page_create]
     def create(self, vals_list):
         # # Verified by [@ANCHOR: test_site_creation_performance_scaling]
         # -1. Restore stock website.page's "name defaults to the linked
@@ -376,6 +411,37 @@ class WebsitePage(models.Model):
                 if view.exists() and view.name:
                     vals["name"] = view.name
 
+        # 1. Enforce Mixin Security
+        # Bug-hunt fix (2026-09-09, new class -- "enforcement/attribution
+        # logic runs before a downstream step backfills the field it
+        # reads"): this ownership check -- which back-fills a missing
+        # `owner_user_id` to the acting user (see
+        # `_check_proxy_ownership_create`'s own ADR-0082 auto-assign) --
+        # used to run AFTER step 0's arch sanitization below. Step 0 calls
+        # `_trigger_malicious_arch_violation(vals)` (no `records` argument)
+        # the moment it strips malicious content, reading
+        # `vals.get("owner_user_id")`/`vals.get("user_websites_group_id")`
+        # directly. For the extremely common case of a caller that omits
+        # both (relying on this exact auto-assign, e.g. stock website's own
+        # "Add Page" controller), those were both still unset at that
+        # point, so the automated violation report was created with
+        # `content_owner_id=False` AND `content_group_id=False`.
+        # `ContentViolationReport.action_take_action_and_strike()` only
+        # strikes `if report.content_owner_id: ... elif
+        # report.content_group_id: ...` -- with both False, NEITHER branch
+        # runs, so a user who injects SSTI/XSS into a brand-new page they
+        # create (as opposed to editing an existing one, where `write()`
+        # already passes `records=self` and this bug doesn't occur) is
+        # never actually struck, even though the payload is correctly
+        # stripped and `reported_by_user_id` correctly names them. Running
+        # ownership enforcement (and its auto-assign backfill) before
+        # sanitization fixes the ordering with no loss of safety: nothing
+        # is persisted by either step until 3.'s `super().create()` below,
+        # and ownership validation happening first is if anything the more
+        # correct order (validate the request is legitimate before
+        # spending effort sanitizing its content).
+        self._check_proxy_ownership_create(vals_list)
+
         # 0. Sanitize arch to prevent Stored XSS
         if not (
             self.env.su
@@ -393,9 +459,6 @@ class WebsitePage(models.Model):
                         vals[arch_field] = sanitized_arch
                         if modified:
                             self._trigger_malicious_arch_violation(vals)
-
-        # 1. Enforce Mixin Security
-        self._check_proxy_ownership_create(vals_list)
 
         if not (
             self.env.su
@@ -464,9 +527,21 @@ class WebsitePage(models.Model):
                     "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
                 )
                 row = self.env.cr.fetchone()
-                svc_id = row[0] if row else 1
+                # Bug-hunt fix (2026-09-09): this fallback assigned its
+                # result to `svc_id`, but `page_counts` a few lines below
+                # (and every other reference in this block) reads `svc_uid`
+                # -- the name the `try` branch's own (never-executed-in-
+                # this-path) assignment used. Every real call into this
+                # `except` branch would have raised `UnboundLocalError`
+                # immediately, meaning this fallback has never actually run
+                # successfully; see the `create` claim for why the
+                # triggering condition (`_get_service_uid` failing with
+                # `AccessError`) doesn't match that helper's real failure
+                # mode either, which is the more likely reason this was
+                # never caught by a test.
+                svc_uid = row[0] if row else 1
                 users = (
-                    self.env["res.users"].with_user(svc_id).browse(unique_owner_ids)
+                    self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
                 )
                 user_limits = {user.id: user._get_page_limit() for user in users}
 
@@ -568,6 +643,7 @@ class WebsitePage(models.Model):
         records._invalidate_cloudflare_cache()
         return records
 
+    # [@ANCHOR: website_page_check_access]
     def check_access(self, operation):
         # # Verified by [@ANCHOR: test_acl_overhead_loop_elimination]
         """
@@ -614,6 +690,7 @@ class WebsitePage(models.Model):
                         )
         return super(WebsitePage, self).check_access(operation)
 
+    # [@ANCHOR: website_page_write]
     def write(self, vals):
         # # Verified by [@ANCHOR: test_tenant_view_isolation]
         self.check_access("write")
@@ -749,6 +826,7 @@ class WebsitePage(models.Model):
         return res
 
     @api.model
+    # [@ANCHOR: website_page_flush_redis_view_counters]
     def _flush_redis_view_counters(self):
         """
         Cron job to flush Redis view counters to the PostgreSQL database.
@@ -807,7 +885,21 @@ class WebsitePage(models.Model):
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.commit()
-            except (KeyError, ValueError):  # audit-ignore-catch-all
+            # Bug-hunt fix (bug class 20, 2026-09-09): nothing in this try
+            # block can actually raise KeyError or ValueError -- `val`'s
+            # `int(...)` parsing already happened, and already had its own
+            # dedicated `except ValueError` a few lines up, in the separate
+            # loop that builds `updates`. The two real failure modes here
+            # are `del_pipe.execute()` raising `redis.exceptions.RedisError`
+            # (a dropped Redis connection between the scan and this
+            # pipeline) and `self.env.cr.execute(...)` raising a
+            # `psycopg2.Error` (e.g. the stored procedure itself failing) --
+            # neither was ever caught by `(KeyError, ValueError)`, so the
+            # intended graceful-degradation path (log via
+            # `_logger.exception`, roll back, let the cron pick up the rest
+            # next run) never actually ran for either real scenario; the
+            # exception escaped uncaught instead.
+            except (redis.exceptions.RedisError, psycopg2.Error):  # audit-ignore-catch-all
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.rollback()
