@@ -134,19 +134,35 @@ class UserWebsitesController(http.Controller):
 
         main_object = profile_user or profile_group
 
+        is_owner = False
+        if profile_user and profile_user.id == request.env.user.id:
+            is_owner = True
+        elif profile_group and request.env.user.id in profile_group.member_ids.ids:
+            is_owner = True
+
         domain = (
             [("owner_user_id", "=", profile_user.id)]
             if profile_user
             else [("user_websites_group_id", "=", profile_group.id)]
         )
         blogs = env_svc["blog.blog"].search(domain, limit=100)
-        posts = env_svc["blog.post"].search(domain, limit=100)
-
-        is_owner = False
-        if profile_user and profile_user.id == request.env.user.id:
-            is_owner = True
-        elif profile_group and request.env.user.id in profile_group.member_ids.ids:
-            is_owner = True
+        # [!] SECURITY FIX (bug-hunt, 2026-09-09): env_svc runs as the
+        # user_websites service account, whose own blog_post_svc_rule
+        # ir.rule grants it an unconditional [(1,'=',1)] read domain (see
+        # security/user_websites_security.xml) -- it does NOT get the
+        # is_published-scoped rule that base.group_public/group_portal get.
+        # A bare `env_svc["blog.post"].search(domain, ...)` therefore
+        # returned every post (including unpublished drafts) to ANY visitor,
+        # not just the profile's own owner -- the exact class of bug this
+        # file's own user_home_fallback() already defends against for
+        # website.page (see its explicit `("website_published", "=", True)`
+        # filter a few methods below). Restore that same defense here: only
+        # the profile's own owner gets to see unpublished drafts in this
+        # listing; everyone else is scoped to published posts only, decided
+        # in the controller rather than relying on the service account's
+        # own (intentionally permissive, backend-CRUD-oriented) ir.rule.
+        post_domain = domain if is_owner else domain + [("is_published", "=", True)]
+        posts = env_svc["blog.post"].search(post_domain, limit=100)
 
         # Fallback to placeholder if no blog AND no posts exists
         if not blogs and not posts:
@@ -183,6 +199,7 @@ class UserWebsitesController(http.Controller):
     @http.route(
         ["/<string:website_slug>/home"], type="http", auth="public", website=True
     )
+    # [@ANCHOR: user_websites:COMM_user_home_fallback]
     def user_home_fallback(self, website_slug, **kwargs):
         """Fallback router for missing /home pages to serve the placeholder layout."""
         utils = request.env["zero_sudo.security.utils"]
@@ -375,6 +392,7 @@ class UserWebsitesController(http.Controller):
         return request.redirect(f"/{website_slug}/blog")
 
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
+    # [@ANCHOR: user_websites:COMM_documentation]
     def documentation(self, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_documentation_route]
         # We explicitly use request.env here instead of env_svc to ensure
@@ -398,6 +416,7 @@ class UserWebsitesController(http.Controller):
         return request.render("user_websites.documentation_page", {})
 
     @http.route("/community", type="http", auth="public", website=True)
+    # [@ANCHOR: user_websites:COMM_community_directory]
     def community_directory(self, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_tour_community_directory]
         pager = {
@@ -422,6 +441,7 @@ class UserWebsitesController(http.Controller):
         return request.render("user_websites.portal_my_privacy", {})
 
     @http.route("/my/privacy/export", type="http", auth="user", website=True)
+    # [@ANCHOR: user_websites:COMM_privacy_export]
     def privacy_export(self, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_gdpr_export_api]
         user = request.env.user
@@ -458,6 +478,7 @@ class UserWebsitesController(http.Controller):
         return Response(generate(), headers=headers)
 
     @http.route("/my/privacy/export.zip", type="http", auth="user", website=True)
+    # [@ANCHOR: user_websites:COMM_privacy_export_zip]
     def privacy_export_zip(self, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_gdpr_export_zip_redirect]
         # Mints a short-lived, single-use token (ham.gdpr.export.token) and
@@ -597,6 +618,7 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )  # burn-ignore-route  # fmt: skip
+    # [@ANCHOR: user_websites:COMM_unsubscribe]
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
