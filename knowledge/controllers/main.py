@@ -21,6 +21,7 @@ _md_cache = lru.LRU(1024)
 class ManualLibraryController(http.Controller):
 
     def _compile_markdown(self, html_body, article_id=None, write_date=None):
+        # [@ANCHOR: manual_compile_markdown]
         """
         Heuristic detection and compilation of Markdown from Odoo's HTML fields.
         Odoo's WYSIWYG editor wraps pasted text in <p> tags and <br/>.
@@ -304,9 +305,32 @@ class ManualLibraryController(http.Controller):
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
+        # Bug-hunt fix (2026-09-09): `normalized_name` is a raw,
+        # attacker/visitor-controlled URL path segment. Odoo's `=ilike`
+        # operator (unlike bare `ilike`) passes its operand to SQL `ILIKE`
+        # verbatim -- no wildcard-wrapping AND no escaping of `%`/`_`
+        # (same root cause already found and fixed this session in
+        # edge_routing/models/res_users.py and routing_mixin.py). A
+        # request for `/manual/by_name/%25` (URL-decoded to a bare "%")
+        # would match every article's `name` instead of failing to find
+        # an exact match, defeating this endpoint's whole "exact name"
+        # contract and silently redirecting a caller (including
+        # knowledge_home_alias's own exact-match lookup) to an arbitrary,
+        # unintended article. `knowledge.article.name` is free-form,
+        # user-authored text (not charset-constrained like
+        # `website_slug`), so case-insensitivity must be preserved --
+        # escaping `%`/`_` (and a literal backslash, PostgreSQL's own
+        # default ILIKE escape character) neutralizes the wildcard
+        # injection while keeping exact, case-insensitive matching for
+        # every real title.
+        escaped_name = (
+            normalized_name.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
         website_id = request.website.id if request.website else False
         domain = [
-            ("name", "=ilike", normalized_name),
+            ("name", "=ilike", escaped_name),
             ("website_id", "in", (False, website_id)),
         ]
         is_internal = request.env.user.has_group("base.group_user")

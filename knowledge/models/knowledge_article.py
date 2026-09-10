@@ -2,7 +2,7 @@
 
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.tools import html2plaintext
 import re
 import unicodedata
@@ -111,16 +111,16 @@ class KnowledgeArticle(models.Model):
         # [@ANCHOR: manual_compute_breadcrumbs]
         valid_ids = tuple(i for i in self.ids if isinstance(i, int))
         ancestor_map = {article.id: [] for article in self}
-        
+
         if valid_ids:
             query = """
                 WITH RECURSIVE ancestors AS (
                     SELECT id as base_id, parent_id, 1 as depth
                     FROM knowledge_article
                     WHERE id IN %s AND parent_id IS NOT NULL
-                    
+
                     UNION ALL
-                    
+
                     SELECT a.base_id, k.parent_id, a.depth + 1
                     FROM knowledge_article k
                     JOIN ancestors a ON k.id = a.parent_id
@@ -132,21 +132,70 @@ class KnowledgeArticle(models.Model):
                 ORDER BY base_id, depth DESC
             """
             self.env.cr.execute(query, (valid_ids,))
-            for base_id, parent_id in self.env.cr.fetchall():
-                ancestor_map[base_id].append(parent_id)
+            rows = self.env.cr.fetchall()
+            # Bug-hunt fix (2026-09-09): the recursive CTE above is raw SQL
+            # against the table directly -- it sees every ancestor row
+            # regardless of the `active` flag or any `ir.rule` the current
+            # user is actually bound by. Left unfiltered, that produced two
+            # distinct real failures once these ids were rendered as
+            # `article.name`/`website_url` in the public breadcrumb
+            # template (views/knowledge_article_templates.xml): (1) an
+            # archived-but-still-`is_published` parent (active=False) kept
+            # showing up in the breadcrumb of its still-active children --
+            # exactly the regression test_robustness.py's
+            # test_03_active_child_of_archived_parent exists to catch,
+            # since `active_test` has no bearing on this raw query at all;
+            # (2) a genuinely private/inaccessible parent (e.g. an
+            # unpublished internal root article) above a legitimately
+            # published child crashed the ENTIRE child page with an
+            # uncaught AccessError for every visitor -- reading
+            # `b_art.name` on an id outside the viewer's `ir.rule` scope
+            # raises via `BaseModel.fetch()` (see
+            # odoo/orm/models.py's `fetch()`: `forbidden = (self -
+            # fetched).exists()` -> `ir.rule._make_access_error(...)`),
+            # turning a normal, published article into a page that 403s
+            # for the entire public audience. Re-deriving the ancestor ids
+            # through a real `search()` (which transparently applies both
+            # the default `active_test` and every applicable `ir.rule`,
+            # scoped to `self.env`'s own user) instead of trusting the raw
+            # SQL's ids directly closes both: an archived or inaccessible
+            # ancestor is silently dropped from the breadcrumb instead of
+            # being rendered or crashing the page.
+            all_ancestor_ids = {parent_id for _base_id, parent_id in rows}
+            visible_ids = (
+                set(
+                    self.env["knowledge.article"]
+                    .search([("id", "in", list(all_ancestor_ids))])
+                    .ids
+                )
+                if all_ancestor_ids
+                else set()
+            )
+            for base_id, parent_id in rows:
+                if parent_id in visible_ids:
+                    ancestor_map[base_id].append(parent_id)
 
         for article in self:
             if isinstance(article.id, int):
                 article.breadcrumb_article_ids = [(6, 0, ancestor_map[article.id])]
             else:
-                # Fallback to ORM for unsaved records (NewId)
+                # Fallback to ORM for unsaved records (NewId). Traverses
+                # via normal field access (respects active/ir.rule at each
+                # hop already, unlike the raw-SQL path above), but a
+                # backend user previewing an in-progress hierarchy could
+                # still hit a private ancestor outside their own access --
+                # stop the chain there instead of raising, matching the
+                # persisted branch's own graceful-drop behavior.
                 breadcrumbs = []
                 current = article.parent_id
                 visited = set()
-                while current and current.id not in visited:
-                    breadcrumbs.append(current.id)
-                    visited.add(current.id)
-                    current = current.parent_id
+                try:
+                    while current and current.id not in visited:
+                        breadcrumbs.append(current.id)
+                        visited.add(current.id)
+                        current = current.parent_id
+                except AccessError:
+                    pass
                 breadcrumbs.reverse()
                 article.breadcrumb_article_ids = [(6, 0, breadcrumbs)]
 

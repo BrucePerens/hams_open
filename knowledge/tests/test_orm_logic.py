@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from psycopg2.errors import ForeignKeyViolation, RestrictViolation
 from odoo.tools import mute_logger
 
@@ -93,6 +93,81 @@ class TestManualORMLogic(HamsTransactionCase):
         self.assertTrue(
             raised,
             "unlink() should have raised a RestrictViolation or ForeignKeyViolation",
+        )
+
+    def test_05_breadcrumb_excludes_archived_ancestor(self):
+        # [@ANCHOR: test_manual_breadcrumb_archived_ancestor]
+
+        # Tests [@ANCHOR: manual_compute_breadcrumbs]
+        """
+        Bug-hunt regression (2026-09-09): _compute_breadcrumb_article_ids's
+        recursive ancestor lookup is raw SQL against the table directly, so
+        it saw an archived (active=False) parent regardless of the
+        `active` flag -- the compute method must re-derive which ancestor
+        ids are actually visible (active + ir.rule) via a real search()
+        before including them, or an archived parent's id (and, via the
+        template, its name) keeps showing up in its still-active
+        children's breadcrumb.
+        """
+        archived_parent = self.env["knowledge.article"].create(
+            {"name": "Archived Parent", "is_published": True, "active": False}
+        )
+        child = self.env["knowledge.article"].create(
+            {
+                "name": "Active Child Of Archived",
+                "is_published": True,
+                "parent_id": archived_parent.id,
+            }
+        )
+        self.assertNotIn(
+            archived_parent.id,
+            child.breadcrumb_article_ids.ids,
+            "An archived ancestor must not appear in the breadcrumb.",
+        )
+
+    def test_06_breadcrumb_excludes_inaccessible_ancestor(self):
+        # [@ANCHOR: test_manual_breadcrumb_inaccessible_ancestor]
+
+        # Tests [@ANCHOR: manual_compute_breadcrumbs]
+        """
+        Bug-hunt regression (2026-09-09): a published child article whose
+        parent chain includes a private, unpublished ancestor must not
+        expose (or crash on) that ancestor's id in its own
+        breadcrumb_article_ids when computed for a low-privilege viewer --
+        rendering `breadcrumb_article_ids` used to dereference every
+        ancestor id via the ORM regardless of the viewing user's own
+        ir.rule access, raising AccessError for a public/portal visitor
+        the instant an inaccessible ancestor's name was read.
+        """
+        public_user = self.env.ref("base.public_user")
+        private_parent = self.env["knowledge.article"].create(
+            {
+                "name": "Private Root Notes",
+                "is_published": False,
+                "internal_permission": "none",
+            }
+        )
+        published_child = self.env["knowledge.article"].create(
+            {
+                "name": "Published Child",
+                "is_published": True,
+                "parent_id": private_parent.id,
+            }
+        )
+        child_as_public = published_child.with_user(public_user)
+        try:
+            breadcrumb_ids = child_as_public.breadcrumb_article_ids.ids
+        except AccessError:
+            self.fail(
+                "Computing breadcrumb_article_ids must never raise for a "
+                "viewer who can read the child itself, even when an "
+                "ancestor is outside that viewer's own access."
+            )
+        self.assertNotIn(
+            private_parent.id,
+            breadcrumb_ids,
+            "A private ancestor outside the viewer's access must not "
+            "appear in the breadcrumb.",
         )
 
 

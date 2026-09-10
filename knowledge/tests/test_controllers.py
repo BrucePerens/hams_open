@@ -218,3 +218,25 @@ class TestManualControllers(HamsHttpCase):
         self.authenticate(None, None)
         response = self.url_open("/knowledge/home")
         self.assertEqual(response.status_code, 200)
+
+    def test_10_manual_article_by_name_does_not_treat_percent_as_a_wildcard(self):
+        # Tests [@ANCHOR: knowledge:COMM_manual_article_by_name]
+        # Bug-hunt regression (2026-09-09): manual_article_by_name built its
+        # domain with Odoo's `=ilike` operator directly against a raw,
+        # visitor-controlled URL path segment. `=ilike` passes its operand
+        # to SQL ILIKE verbatim -- no escaping of `%`/`_` -- so a request
+        # for a name that is just "%" matched EVERY published article
+        # instead of failing to find an exact match, silently redirecting
+        # to whichever article happened to sort first. There is no article
+        # literally named "%", so this must 404, not redirect to
+        # self.root_public (or any other published article).
+        self.authenticate(None, None)
+        response = self.url_open(
+            "/manual/by_name/%25", allow_redirects=False
+        )
+        self.assertEqual(
+            response.status_code,
+            404,
+            "A bare '%' must be treated as a literal character, not an "
+            "unescaped SQL ILIKE wildcard matching every published article.",
+        )
