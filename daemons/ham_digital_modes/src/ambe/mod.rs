@@ -188,6 +188,7 @@ pub fn gain_vector_dct(r_hat: &[f64; 6]) -> [f64; 6] {
 /// `u` must already be [`bit_prioritization::prioritize_bits`]'s own output: `u[0..=3]` fit in 12
 /// bits, `u[4..=6]` in 11 bits, `u[7]` in 7 bits (this function doesn't re-check that, matching
 /// [`fec::golay_encode`]/[`fec::hamming_encode`]'s own "trust the caller's own bit width" contract).
+// [@ANCHOR: ambe_mod:encode_code_vectors]
 pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
     let nu = [
         fec::golay_encode(u[0] as u16),
@@ -279,6 +280,18 @@ pub fn encode_frame(
     sync_bit: bool,
 ) -> Option<([u32; 8], FrameState)> {
     let l_hat = vuv::harmonics_count(omega0_hat);
+    // Reject an out-of-range `l_hat` *before* any of the l_hat-sized work below runs --
+    // `quantize::partition_into_blocks` (called further down this same function) already checks
+    // this exact 9..=56 range via `tables::block_lengths_for_l`, but only after
+    // `vuv::determine_voicing`, `spectral_amplitude::estimate_spectral_amplitudes`, and the
+    // `residuals` computation below have all already run over the full, unvalidated `l_hat`. For
+    // a degenerate `omega0_hat` (zero, or a tiny positive value a buggy upstream pitch estimator
+    // could produce), `harmonics_count`'s `as u32` cast saturates to `u32::MAX` (Rust's
+    // float-to-int casts saturate rather than panic or wrap on out-of-range/infinite input) --
+    // without this early check, `estimate_spectral_amplitudes`'s `(1..=l_hat).map(...).collect()`
+    // would attempt to build a ~34GB `Vec<f64>`, aborting the whole process on allocation failure
+    // well before the existing, correctly-bounds-checked `partition_into_blocks` call ever ran.
+    tables::block_lengths_for_l(l_hat)?;
     let k_hat = vuv::frequency_bands_count(l_hat);
 
     let (voiced, xi_max) = vuv::determine_voicing(
@@ -402,6 +415,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ambe_mod:encode_code_vectors]
     fn encode_code_vectors_produces_exactly_frame_bits_across_all_eight_vectors() {
         let u = [
             0b101010101010u32,
@@ -490,5 +504,51 @@ mod tests {
                 "frame 2: value {value} doesn't fit in {width} bits"
             );
         }
+    }
+
+    /// Regression test for a real, latent DoS: `vuv::harmonics_count(0.0)` divides by zero
+    /// (`PI / omega0_hat`), and Rust's saturating float-to-int cast turns the resulting `+inf`
+    /// into `l_hat = u32::MAX` rather than panicking -- `encode_frame` must reject this
+    /// immediately (before `estimate_spectral_amplitudes` tries to allocate a `Vec` sized by
+    /// `l_hat`), not merely eventually via `partition_into_blocks`'s own downstream check. This
+    /// test would hang or abort the whole test binary on an out-of-memory allocation if the
+    /// early `tables::block_lengths_for_l(l_hat)?` guard in `encode_frame` were ever removed.
+    #[test]
+    fn encode_frame_rejects_a_zero_pitch_before_any_l_hat_sized_allocation() {
+        assert_eq!(
+            vuv::harmonics_count(0.0),
+            u32::MAX,
+            "sanity check on the assumption this test guards against: harmonics_count(0.0) \
+             should saturate to u32::MAX via the documented saturating float-to-int cast"
+        );
+
+        let raw = vec![0.0f64; 400];
+        let frame = pitch_refinement::RefinementFrame::new(&raw, 200);
+        let initial = FrameState::initial();
+        assert!(
+            encode_frame(&frame, 0.0, 0.01, &initial, false).is_none(),
+            "a degenerate zero omega0_hat must be rejected, not drive l_hat-sized work"
+        );
+    }
+
+    /// Same guard, exercised from the other direction: a tiny positive `omega0_hat` (not exactly
+    /// zero, but small enough that `harmonics_count` still saturates past the real 9..=56 range)
+    /// must also be rejected before any l_hat-sized allocation, not just the exact `0.0` case.
+    #[test]
+    fn encode_frame_rejects_a_tiny_positive_pitch_before_any_l_hat_sized_allocation() {
+        let tiny_omega0_hat = 1e-30;
+        assert!(
+            vuv::harmonics_count(tiny_omega0_hat) > 56,
+            "sanity check: a tiny positive omega0_hat should drive l_hat past the real 9..=56 \
+             range, exercising the same guard as the exact-zero case above"
+        );
+
+        let raw = vec![0.0f64; 400];
+        let frame = pitch_refinement::RefinementFrame::new(&raw, 200);
+        let initial = FrameState::initial();
+        assert!(
+            encode_frame(&frame, tiny_omega0_hat, 0.01, &initial, false).is_none(),
+            "a degenerate tiny-positive omega0_hat must be rejected, not drive l_hat-sized work"
+        );
     }
 }
