@@ -51,6 +51,7 @@ const WINDOW_FRAC_BITS: u32 = 30;
 /// boundary redesign (the punch list's real gate) is done. Exists now,
 /// validated against the real `f32` construction, so it's ready when
 /// that boundary work lands.
+// [@ANCHOR: make_analysis_window_fixed]
 pub fn make_analysis_window_fixed() -> [i32; M_PITCH] {
     let w = make_analysis_window();
     std::array::from_fn(|i| (w[i] as f64 * (1i64 << WINDOW_FRAC_BITS) as f64).round() as i32)
@@ -113,6 +114,7 @@ mod tests {
     /// window has no division or iterative amplification the way
     /// Levinson-Durbin does).
     #[test]
+    // Tests [@ANCHOR: make_analysis_window_fixed]
     fn make_analysis_window_fixed_matches_the_real_float_window_within_quantization_noise() {
         let w_float = make_analysis_window();
         let w_fixed = make_analysis_window_fixed();

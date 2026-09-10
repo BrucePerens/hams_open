@@ -49,6 +49,7 @@ pub fn interp_voiced(voiced0: bool, prev_voiced: bool, next_voiced: bool) -> boo
 
 /// Energy is a power-domain quantity, so its natural interpolation is
 /// geometric (equal-ratio steps), not arithmetic.
+// [@ANCHOR: interp_energy]
 pub fn interp_energy(prev_e: f32, next_e: f32) -> f32 {
     (prev_e * next_e).sqrt()
 }
@@ -61,9 +62,13 @@ pub fn interpolate_lsp(prev: &[f32; LPC_ORD], next: &[f32; LPC_ORD]) -> [f32; LP
 /// (`lpc::COEF_FRAC_BITS`'s own angle-domain format -- `Wo`'s own real
 /// range, `[0.039, 0.314]`, is the same small magnitude as an LSP
 /// angle). The `(true, true)` midpoint is `(prev+next)>>1` rather than
-/// `prev + (next-prev)/2` -- mathematically the same value, but avoids
-/// the sign-dependent truncation-toward-zero a subtraction-based
-/// integer divide would introduce on a negative `next-prev`.
+/// `prev + (next-prev)/2` -- both equal `floor((prev+next)/2)` in real-
+/// number terms, but the two integer forms are NOT always bit-identical:
+/// Rust's `/` truncates toward zero while `>>1` (an arithmetic,
+/// sign-extending shift) floors toward negative infinity, so a
+/// subtraction-based divide would introduce a sign-dependent
+/// truncation-toward-zero bias on a negative `next-prev` that the shift
+/// form avoids.
 // [@ANCHOR: interp_wo_fixed]
 pub fn interp_wo_fixed(
     voiced0: bool,
@@ -91,7 +96,26 @@ pub fn interp_wo_fixed(
 /// exp2((log2(a)+log2(b))/2)` -- avoids a fixed-point square root
 /// entirely, composed from `fixed_point::log2_q23`/`exp2_q23` (already
 /// validated genuinely-integer-in/out primitives) instead.
+// [@ANCHOR: interp_energy_fixed]
 pub fn interp_energy_fixed(prev_e: i64, next_e: i64) -> i64 {
+    // `log2_q23` requires a strictly positive input (its own
+    // `debug_assert!`) -- true for every value `quantise::
+    // decode_energy_fixed` can actually produce today given
+    // `E_MIN_DB`/`E_MAX_DB`'s own real range (verified: the resulting
+    // `exp2_q23` exponent never gets remotely close to the ~-24 point
+    // where `exp2_q23` itself starts returning exactly 0), but that
+    // safety margin depends on those two constants staying where they
+    // are relative to Q23's own dynamic range, not on anything
+    // `interp_energy_fixed` enforces on its own. Asserting it here too
+    // (redundant with `log2_q23`'s own check today, but a clearer
+    // failure point if `E_MIN_DB`/`E_MAX_DB` are ever widened enough to
+    // let `decode_energy_fixed` underflow to zero) rather than relying
+    // solely on a callee two frames deep to catch it.
+    debug_assert!(
+        prev_e > 0 && next_e > 0,
+        "interp_energy_fixed: prev_e={prev_e} next_e={next_e} -- both must be strictly positive \
+         Q23 energy values (log2_q23 is undefined at zero/negative)"
+    );
     let log_sum = super::fixed_point::log2_q23(prev_e) + super::fixed_point::log2_q23(next_e);
     super::fixed_point::exp2_q23(log_sum >> 1)
 }
@@ -133,6 +157,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: interp_energy]
     fn energy_interpolation_is_geometric() {
         let e = interp_energy(4.0, 9.0);
         assert!(
@@ -219,6 +244,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: interp_energy_fixed]
     fn energy_interpolation_fixed_is_geometric() {
         let e = interp_energy_fixed(to_q23(4.0), to_q23(9.0));
         assert!(

@@ -50,6 +50,25 @@ impl<'a> BitWriter<'a> {
         // right-shift can't introduce bits beyond that bound. `field`
         // itself is never modified; only `remaining` (which bits, from
         // the top, are still unsent) changes.
+        //
+        // That bound is a real caller precondition, not just a comment:
+        // this struct only ever ORs bits in ("`bits` must already be
+        // zeroed", see `new`'s own doc comment), so a caller passing a
+        // `field` that doesn't actually fit in `width` bits doesn't just
+        // lose its own high bits -- the extra high bit(s), landing at
+        // whatever position `width` would have put them, can silently
+        // set bits belonging to an *already-written, unrelated* field
+        // sharing the same byte (verified: `write(32, 5)` immediately
+        // after `write(5, 3)` into the same byte flips a bit inside the
+        // first field's own 3-bit region, not just within the second
+        // field's own 5 bits -- see this module's own regression test).
+        // Cheap to catch in debug builds since every real caller today
+        // (this crate's own clamping quantizers) already satisfies it.
+        debug_assert!(
+            width >= 32 || field < (1u32 << width),
+            "BitWriter::write: field={field} does not fit in {width} bits -- would silently \
+             corrupt already-packed bits elsewhere in this byte (BitWriter only ORs bits in)"
+        );
         let field = if width > 1 {
             binary_to_gray(field)
         } else {
@@ -179,6 +198,33 @@ mod tests {
         }
     }
 
+    /// The exhaustive test above only covers 10 bits -- every real field
+    /// this module packs today is at most 7 bits wide (`WO_BITS`), so
+    /// that's already more than real callers ever exercise, but
+    /// `gray_to_binary`'s own signature (`u32 -> u32`) claims correctness
+    /// over the full 32-bit domain. Spot-check boundary and bit-pattern
+    /// values well outside the exhaustive range to substantiate that
+    /// wider claim rather than relying on "it's the standard formula"
+    /// alone.
+    #[test]
+    // Tests [@ANCHOR: gray_to_binary]
+    fn gray_code_round_trips_at_full_32_bit_boundary_and_pattern_values() {
+        for &x in &[
+            0u32,
+            1,
+            u32::MAX,
+            u32::MAX - 1,
+            0x8000_0000,
+            0x7FFF_FFFF,
+            0xAAAA_AAAA,
+            0x5555_5555,
+            0x1234_5678,
+            0xDEAD_BEEF,
+        ] {
+            assert_eq!(gray_to_binary(binary_to_gray(x)), x, "x={x:#010x}");
+        }
+    }
+
     #[test]
     fn adjacent_gray_codes_differ_by_exactly_one_bit() {
         for x in 0..1023u32 {
@@ -191,6 +237,39 @@ mod tests {
                 diff.count_ones()
             );
         }
+    }
+
+    /// Regression test for a real bug found and fixed this pass: an
+    /// out-of-range `field` (one that doesn't actually fit in the
+    /// declared `width`) didn't just lose its own high bits -- because
+    /// `BitWriter` only ever ORs bits in, the extra high bit(s) could
+    /// land on top of an *already-written, unrelated* field sharing the
+    /// same byte. Demonstrated directly here (pre-fix behavior,
+    /// reconstructed by hand since the fix now rejects this input via
+    /// `debug_assert!` before it can corrupt anything): `write(5, 3)`
+    /// followed by `write(32, 5)` into the same byte -- `32` needs 6 bits
+    /// (`0b100000`), one more than its declared 5-bit width, so its
+    /// gray-coded form (`binary_to_gray(32) == 48 == 0b110000`) has a bit
+    /// set at position 5, which falls inside the FIRST field's own
+    /// 3-bit region (bits 7..5 of the byte), not the second field's.
+    #[test]
+    #[should_panic(expected = "does not fit")]
+    fn bit_writer_rejects_a_field_that_does_not_fit_its_declared_width() {
+        let mut bytes = [0u8; 1];
+        let mut w = BitWriter::new(&mut bytes);
+        w.write(5, 3); // fine: 5 fits in 3 bits
+        w.write(32, 5); // NOT fine: 32 needs 6 bits, declared width is 5
+    }
+
+    /// Same check for a 1-bit field (the `width > 1` gray-coding branch
+    /// is skipped entirely for width==1, so this exercises the guard on
+    /// its own separate code path).
+    #[test]
+    #[should_panic(expected = "does not fit")]
+    fn bit_writer_rejects_a_1_bit_field_that_is_not_0_or_1() {
+        let mut bytes = [0u8; 1];
+        let mut w = BitWriter::new(&mut bytes);
+        w.write(2, 1);
     }
 
     #[test]

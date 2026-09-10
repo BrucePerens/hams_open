@@ -69,6 +69,7 @@ impl EncoderFixed {
         Self::default()
     }
 
+    // [@ANCHOR: encoder_fixed:shift_in]
     fn shift_in(&mut self, new_samples: &[i16]) {
         self.sn.copy_within(N_SAMP.., 0);
         self.sn[M_PITCH - N_SAMP..].copy_from_slice(new_samples);
@@ -177,6 +178,39 @@ mod tests {
                 + 3000.0 * (std::f32::consts::TAU * 2.0 * f0 * t).sin();
             v as i16
         })
+    }
+
+    /// Direct unit test for `shift_in`'s own sliding-window contract
+    /// (previously only exercised indirectly via `encode()`'s own
+    /// round-trip tests): drops the OLDEST `new_samples.len()` samples
+    /// and appends the new ones at the end, preserving everything in
+    /// between untouched -- not an off-by-one shift in either direction.
+    #[test]
+    // Tests [@ANCHOR: encoder_fixed:shift_in]
+    fn shift_in_drops_the_oldest_samples_and_appends_the_new_ones_at_the_end() {
+        let mut encoder = EncoderFixed::new();
+        // Seed a known, distinct value per index so any misalignment
+        // (off-by-one, wrong direction, wrong slice length) shows up as
+        // a mismatched value rather than coincidentally matching.
+        for (i, s) in encoder.sn.iter_mut().enumerate() {
+            *s = i as i16;
+        }
+        let new_samples: [i16; N_SAMP] = std::array::from_fn(|i| 1000 + i as i16);
+        encoder.shift_in(&new_samples);
+
+        // The first M_PITCH - N_SAMP samples are now what used to be at
+        // indices [N_SAMP, M_PITCH) -- i.e. sn[i] == i + N_SAMP.
+        for i in 0..(M_PITCH - N_SAMP) {
+            assert_eq!(
+                encoder.sn[i],
+                (i + N_SAMP) as i16,
+                "sn[{i}] should be the old sn[{}] (shifted left), got {}",
+                i + N_SAMP,
+                encoder.sn[i]
+            );
+        }
+        // The last N_SAMP samples are exactly new_samples, in order.
+        assert_eq!(&encoder.sn[M_PITCH - N_SAMP..], &new_samples[..]);
     }
 
     /// Not a claim of correctness -- `EncoderFixed` is still mostly the
