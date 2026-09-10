@@ -46,6 +46,7 @@ pub struct Model {
 }
 
 impl Model {
+    // [@ANCHOR: Model::new]
     pub fn new(wo: f32, voiced: bool) -> Self {
         let l = ((std::f32::consts::PI / wo) as usize).min(MAX_AMP);
         Model {
@@ -202,8 +203,22 @@ impl ModelFixed {
     /// `l = floor(pi/wo)`: `pi_q23()/wo_q23` is a plain integer division
     /// whose Q23 scaling cancels between numerator and denominator (both
     /// share it), giving the real ratio directly with no rescale needed.
+    ///
+    /// `wo_q23.max(1)` guards the division itself: `wo_q23 == 0` is never
+    /// producible by any real `decode_wo_fixed`/`interp_wo_fixed` output
+    /// (both are strictly positive by construction), but this is a
+    /// `pub(crate)` constructor with no enforced precondition on its own
+    /// `wo_q23` parameter, and a raw integer division by exactly zero
+    /// panics unconditionally in Rust (unlike the float sibling
+    /// `Model::new`, where `PI/0.0` gracefully saturates to `l ==
+    /// MAX_AMP` via IEEE754 `+inf`-to-`usize`). `wo_q23.max(1)` reaches
+    /// the identical `l == MAX_AMP` answer for `wo_q23 == 0` (dividing by
+    /// `1` instead of `0` still saturates past `MAX_AMP` under the
+    /// `.min()` below), restoring float/fixed parity at this input
+    /// rather than leaving a documented-but-unfixed asymmetry.
+    // [@ANCHOR: ModelFixed::new]
     pub(crate) fn new(wo_q23: i64, voiced: bool) -> Self {
-        let l = ((pi_q23() / wo_q23) as usize).min(MAX_AMP);
+        let l = ((pi_q23() / wo_q23.max(1)) as usize).min(MAX_AMP);
         ModelFixed {
             wo: wo_q23,
             l,
@@ -447,6 +462,8 @@ mod tests {
     /// over every real transmitted `Wo` index (only 128 of them) with a
     /// tolerance of 1, not exact equality.
     #[test]
+    // Tests [@ANCHOR: Model::new]
+    // Tests [@ANCHOR: ModelFixed::new]
     fn model_fixed_new_agrees_with_model_new_within_one_harmonic_on_every_real_wo_index() {
         for index in 0..(1u32 << WO_BITS) {
             let wo_f = decode_wo(index);
@@ -461,6 +478,37 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Bug found and fixed this pass (caught on the required self-review
+    /// round after `ModelFixed_new.md`'s own claim was first drafted
+    /// declining to fix this -- see that claim's revision history):
+    /// `ModelFixed::new` divided `pi_q23() / wo_q23` with no guard
+    /// against `wo_q23 == 0` -- an unconditional Rust integer-division
+    /// panic (confirmed via a standalone `rustc` probe with the same
+    /// literal values: `#[deny(unconditional_panic)]` catches it even
+    /// at compile time for a literal, so a runtime-computed zero
+    /// divisor panics identically). Not reachable via any real decode
+    /// path (`decode_wo_fixed`/`interp_wo_fixed` are always strictly
+    /// positive), but `Model::new`'s own float sibling already defines
+    /// the physically-correct degenerate answer at `wo == 0.0` (`l ==
+    /// MAX_AMP`, via IEEE754's saturating `+inf`-to-`usize` cast) --
+    /// fixed for parity with `wo_q23.max(1)` as the divisor, which
+    /// reaches the identical `l == MAX_AMP` answer (dividing by `1`
+    /// instead of `0` still saturates past `MAX_AMP` under the
+    /// `.min()` clamp).
+    #[test]
+    fn model_fixed_new_does_not_panic_at_wo_zero_and_matches_model_new() {
+        let float_l = Model::new(0.0, true).l;
+        let fixed_l = ModelFixed::new(0, true).l;
+        assert_eq!(
+            float_l, MAX_AMP,
+            "sanity: Model::new(0.0, ..) should saturate to MAX_AMP harmonics"
+        );
+        assert_eq!(
+            fixed_l, MAX_AMP,
+            "ModelFixed::new(0, ..) should match the float sibling's own degenerate answer at wo == 0"
+        );
     }
 
     /// Real captured LSP/energy data through both `compute_harmonic_

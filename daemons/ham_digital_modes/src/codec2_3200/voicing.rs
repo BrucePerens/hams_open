@@ -69,8 +69,19 @@ fn div_round_i64(n: i64, d: i64) -> i64 {
 /// function. `zero_crossing_rate < ZCR_THRESH` (0.15 = 3/20) is checked
 /// via cross-multiplication (`crossings*20 < 3*(n-1)`) instead of a
 /// float division, exact for the real, small `n` this always runs with.
+///
+/// `samples` empty is a real, foreseeable input for this `pub fn` (the
+/// crate's own sole caller, `EncoderFixed::encode`, always passes a
+/// fixed non-empty `M_PITCH - N_SAMP`-length window, but nothing in
+/// this function's own signature or doc comment enforces that on a
+/// future or external caller) -- an empty slice has no energy to
+/// measure and is judged unvoiced rather than panicking on the `energy
+/// = energy_acc / n` integer division below (`n == 0`).
 // [@ANCHOR: is_voiced_fixed]
 pub fn is_voiced_fixed(state: &mut VoicingStateFixed, samples: &[i16]) -> bool {
+    if samples.is_empty() {
+        return false;
+    }
     let n = samples.len() as i64;
 
     let mut crossings: i64 = 0;
@@ -107,6 +118,40 @@ mod tests {
 
     fn to_i16(samples: &[f32]) -> Vec<i16> {
         samples.iter().map(|&s| s as i16).collect()
+    }
+
+    /// Bug found and fixed this pass: `is_voiced_fixed` divided
+    /// `energy_acc / n` with no guard against `n == 0` -- an empty
+    /// `samples` slice panicked with `attempt to divide by zero` in
+    /// BOTH debug and `--release` builds (confirmed empirically before
+    /// the fix: `is_voiced_fixed(&mut state, &[])` panicked with exactly
+    /// that message). The crate's own one real caller
+    /// (`EncoderFixed::encode`) never passes an empty slice, but this is
+    /// a `pub fn` with no length precondition documented or enforced,
+    /// so an empty buffer (e.g. an end-of-stream partial read, an
+    /// off-by-one frame-size bug in a future caller) is a realistic,
+    /// not contrived, way to reach this.
+    #[test]
+    fn is_voiced_fixed_does_not_panic_on_an_empty_slice() {
+        let mut state = VoicingStateFixed::new();
+        assert!(
+            !is_voiced_fixed(&mut state, &[]),
+            "an empty (no-signal) sample slice should be judged unvoiced, not panic"
+        );
+        // State must stay usable afterward -- a real caller could call
+        // this again with real samples right after an empty one.
+        let tone = to_i16(
+            &super::super::floating_reference::voicing::tests::synthetic_tone(
+                150.0, 8000.0, 80, 8000.0,
+            ),
+        );
+        for _ in 0..10 {
+            is_voiced_fixed(&mut state, &[0i16; 80]);
+        }
+        assert!(
+            is_voiced_fixed(&mut state, &tone),
+            "state should still work normally on real samples after an empty-slice call"
+        );
     }
 
     /// `is_voiced_fixed` validated against the *same* real scenarios

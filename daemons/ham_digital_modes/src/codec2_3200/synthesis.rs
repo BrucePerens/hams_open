@@ -405,6 +405,20 @@ fn log2_10_over_20_q23() -> i64 {
 /// `log2_q23`/`exp2_q23` used directly (no parameterization -- unlike
 /// the float version, there's no equivalent "plain float in the same
 /// shape" comparison to make against a genuinely-integer function).
+///
+/// `l == 0` is not reachable through any real decode path today (both
+/// `ModelFixed::new` and its float sibling only ever produce `l >= 10`
+/// for any `wo` actually producible by `decode_wo`/`decode_wo_fixed`),
+/// but this function trusts its caller's own `l` with no guard of its
+/// own -- guarded here anyway (`.max(1)`), matching
+/// `envelope::compute_harmonic_amplitudes_fixed`'s own established
+/// `e_after_q23.max(1)` idiom for the identical shape (an integer
+/// divisor this function doesn't itself prove is nonzero). Unlike the
+/// float sibling `postfilter_step` (where `e / l as f32` at `l == 0`
+/// is a plain `f32` division, degrading to a harmless `+inf` that
+/// neither branch below acts on), the integer division here panics
+/// unconditionally -- in both debug and `--release` builds -- with no
+/// assert of any kind guarding it before this fix.
 // [@ANCHOR: postfilter_step_fixed]
 pub(crate) fn postfilter_step_fixed(
     voiced: bool,
@@ -416,7 +430,8 @@ pub(crate) fn postfilter_step_fixed(
     for &av in &a[1..=l] {
         e_q23 += ((av as i128 * av as i128) >> FRAC_BITS) as i64;
     }
-    let e_over_l_q23 = (e_q23 + l as i64 / 2) / l as i64;
+    let l_safe = l.max(1) as i64;
+    let e_over_l_q23 = (e_q23 + l_safe / 2) / l_safe;
     let e_db_q23 = ((log2_q23(e_over_l_q23.max(1)) as i128 * ten_over_log2_10_q23() as i128)
         >> FRAC_BITS) as i64;
 
@@ -612,6 +627,43 @@ mod tests {
             "expected the last sample one ramp-step above 0 ({last_step}), got {}",
             pn[SAMPLES_PER_FRAME - 1]
         );
+    }
+
+    /// Bug found and fixed this pass: `postfilter_step_fixed` computed
+    /// `e_over_l_q23 = (...) / l` with no guard against `l == 0` --
+    /// confirmed empirically (before the fix) that `postfilter_step_
+    /// fixed(false, 0, &[0i64; MAX_AMP+1], 0)` panicked with `attempt to
+    /// divide by zero`, in both debug and `--release` builds (a real
+    /// Rust integer-division panic, not UB, so this held in both
+    /// profiles identically). `l == 0` isn't reachable through any real
+    /// decode path today (`ModelFixed::new` only ever produces `l >= 10`
+    /// for any `wo` `decode_wo_fixed`/`interp_wo_fixed` can actually
+    /// produce), unlike this crate's other realistic-production-input
+    /// fixes -- but the float sibling `postfilter_step` degrades
+    /// gracefully on the identical input (a plain `f32` division by
+    /// `0.0` yields `+inf`, which neither branch below acts on), so this
+    /// was a genuine fixed-vs-float robustness asymmetry, fixed with the
+    /// same `.max(1)` idiom this file's own sibling module
+    /// (`envelope::compute_harmonic_amplitudes_fixed`'s `e_after_q23.
+    /// max(1)`) already establishes for the identical shape.
+    #[test]
+    fn postfilter_step_fixed_does_not_panic_at_l_zero() {
+        // The call itself must not panic (the actual bug: it used to,
+        // unconditionally, on the `e_over_l_q23` integer division) --
+        // `l == 0` has no real harmonic to report a decision about
+        // either way, so `decisions` staying all-false is the only
+        // behavioral claim worth making here, not a specific `bg_est`
+        // value (a zero-harmonic frame's "energy" is a degenerate,
+        // clamped-to-near-zero quantity, not a meaningful measurement).
+        let (_bg_est, decisions) = postfilter_step_fixed(false, 0, &[0i64; MAX_AMP + 1], 0);
+        assert!(
+            decisions.iter().all(|&d| !d),
+            "no harmonic to make a phase-randomization decision about"
+        );
+        // Also exercise the voiced branch at l==0 (goes through the
+        // `thresh`/decisions loop instead of the bg_est EMA branch).
+        let (_bg_est2, decisions2) = postfilter_step_fixed(true, 0, &[0i64; MAX_AMP + 1], 0);
+        assert!(decisions2.iter().all(|&d| !d));
     }
 
     #[test]
