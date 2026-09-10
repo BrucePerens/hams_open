@@ -215,8 +215,24 @@ class BinaryVersion(models.Model):
             for checksum, count in version_groups:
                 checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
 
+        # Bug-hunt fix, 2026-09-09: same batch-self-reference bug as
+        # binary.manifest.unlink() -- see its own comment for the full
+        # explanation. checksum_counts is a global, pre-deletion count that
+        # still includes every row in `self`; subtract `self`'s own
+        # per-checksum contribution so "still referenced" means referenced
+        # by something OTHER than what this very call is about to remove.
+        self_checksum_counts = {}
+        for record in self:
+            if record.checksum:
+                self_checksum_counts[record.checksum] = (
+                    self_checksum_counts.get(record.checksum, 0) + 1
+                )
+
         for record in self:
             if record.manifest_id.name and record.checksum:
-                if checksum_counts.get(record.checksum, 0) <= 1:
+                remaining_external_refs = checksum_counts.get(
+                    record.checksum, 0
+                ) - self_checksum_counts.get(record.checksum, 0)
+                if remaining_external_refs <= 0:
                     self.env["binary_downloader.mixin"].with_user(svc_uid)._unlink_binary_file(record.manifest_id.name, record.checksum)
         return super().unlink()

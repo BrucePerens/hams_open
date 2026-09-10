@@ -28,6 +28,15 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
             os.makedirs(self.bin_dir, exist_ok=True)
             os.chmod(self.bin_dir, 0o750)
 
+        # See test_binary_manifest.py's own setUp for the full explanation:
+        # _download_and_extract() now does a real DNS-based SSRF check on
+        # the download host before making any request, which this offline
+        # test suite shouldn't depend on live DNS to exercise.
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._assert_host_is_ssrf_safe",
+            return_value=None,
+        )
+
         self.test_bin = os.path.join(self.bin_dir, "kopia")
         if os.path.exists(self.test_bin):
             os.remove(self.test_bin)

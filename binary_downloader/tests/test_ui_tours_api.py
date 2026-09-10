@@ -25,6 +25,16 @@ class TestBinaryDownloaderTour(HamsHttpCase):
         # to prevent headless browser translation crashes during UI tours.
         self.env.ref("base.user_admin").lang = "en_US"
 
+        # See test_binary_manifest.py's own setUp for the full explanation:
+        # _download_and_extract() now does a real DNS-based SSRF check on
+        # the download host before making any request; the tour types a
+        # placeholder ("dummy.example.com") that this offline test suite
+        # shouldn't depend on live DNS to resolve.
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._assert_host_is_ssrf_safe",
+            return_value=None,
+        )
+
     def tearDown(self):
         super().tearDown()
         # A real, previously-undiscovered bug found live: the file this

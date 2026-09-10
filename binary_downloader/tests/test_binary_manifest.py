@@ -53,6 +53,25 @@ class TestBinaryManifest(HamsTransactionCase):
             "binary_downloader.user_binary_downloader_service"
         )
 
+        # Bug-hunt fix, 2026-09-09 (binary_utils_assert_host_is_ssrf_safe):
+        # _download_and_extract() now does a real DNS lookup (via
+        # socket.getaddrinfo) on the download URL's hostname before making
+        # any request, to reject SSRF-style targets (loopback/link-local/
+        # private-use addresses, and a redirect landing on one). Every test
+        # below that reaches the real download path uses placeholder
+        # hostnames ("example.com", "localhost", "*.internal") that either
+        # don't resolve at all or resolve to loopback -- neither of which
+        # this test suite should depend on live DNS/network access to
+        # exercise anyway, matching how urlopen()/shutil.which()/
+        # platform.*() are already mocked below rather than really called.
+        # test_ssrf_rejects_internal_redirect_target below deliberately
+        # does NOT install this mock, so the real check still gets exercised
+        # end-to-end with a synthetic literal-IP case that needs no network.
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._assert_host_is_ssrf_safe",
+            return_value=None,
+        )
+
         # Leverage the Dummy UI Tour HTTP controller to physically simulate the download process.
         # binary.manifest._check_url_scheme() requires https:// -- ODOO_URL is
         # deliberately http:// for the local test webserver (tools/test.py
@@ -676,3 +695,249 @@ class TestBinaryManifest(HamsTransactionCase):
             os.path.exists(target_bin),
             "[!] DIAGNOSTIC FOR AI: the on-disk file must actually be removed when no other record shares its checksum.",
         )
+
+    def test_21_unlink_batch_deletes_the_file_when_every_sharing_record_is_removed_together(self):
+        # Tests [@ANCHOR: binary_manifest_unlink]
+        # Bug-hunt fix, 2026-09-09: unlink()'s own reference-counting used
+        # a GLOBAL count of every manifest/version sharing a checksum,
+        # taken before any deletion -- so unlinking two records sharing a
+        # checksum in the SAME call (e.g. multi-select delete in the UI)
+        # saw count=2 for BOTH of them and skipped deletion of both,
+        # leaking their on-disk files forever even though nothing outside
+        # this exact call referenced that checksum. Two distinct names
+        # sharing a checksum still map to two distinct physical files
+        # (the filename hash mixes in cmd_name, not just checksum), so
+        # deleting both together should remove BOTH files.
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+        bin_dir = os.path.join(data_dir, "hams_bin")
+        shared_chksum = "batch_unlink_shared_hash"
+
+        manifest_a = self.env["binary.manifest"].create(
+            {
+                "name": "batch_unlink_a",
+                "url": "https://example.com/batch_unlink_a",
+                "checksum": shared_chksum,
+                "archive_type": "binary",
+            }
+        )
+        manifest_b = self.env["binary.manifest"].create(
+            {
+                "name": "batch_unlink_b",
+                "url": "https://example.com/batch_unlink_b",
+                "checksum": shared_chksum,
+                "archive_type": "binary",
+            }
+        )
+
+        target_a = os.path.join(
+            bin_dir,
+            self.env["binary_downloader.mixin"]._get_target_filename(
+                manifest_a.name, manifest_a.checksum
+            ),
+        )
+        target_b = os.path.join(
+            bin_dir,
+            self.env["binary_downloader.mixin"]._get_target_filename(
+                manifest_b.name, manifest_b.checksum
+            ),
+        )
+        with open(target_a, "wb") as f:
+            f.write(b"content a")
+        with open(target_b, "wb") as f:
+            f.write(b"content b")
+        self.assertTrue(os.path.exists(target_a))
+        self.assertTrue(os.path.exists(target_b))
+
+        (manifest_a + manifest_b).unlink()
+
+        self.assertFalse(
+            os.path.exists(target_a),
+            "[!] DIAGNOSTIC FOR AI: batch-deleting every record sharing a "
+            "checksum must remove its own on-disk file, not leak it.",
+        )
+        self.assertFalse(
+            os.path.exists(target_b),
+            "[!] DIAGNOSTIC FOR AI: batch-deleting every record sharing a "
+            "checksum must remove its own on-disk file, not leak it.",
+        )
+
+    def test_22_interrupted_archive_extraction_never_leaves_a_partial_file_at_the_final_path(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
+        # Tests [@ANCHOR: binary_utils_atomic_write_target]
+        # Bug-hunt fix, 2026-09-09: tar.gz/zip member extraction used to
+        # write straight to `open(target_bin, "wb")` -- not atomic. If the
+        # process were interrupted mid-write, a truncated file would be
+        # left sitting exactly at target_bin's own path, and
+        # _download_and_extract's own "already installed" fast path
+        # (archive_type != "binary") trusts that path's mere existence
+        # forever afterward, with no re-verification. Simulates an
+        # interruption (copyfileobj raising partway through) and asserts
+        # no file is left at target_bin at all -- proving the write is
+        # atomic (temp-then-rename), not merely "usually fine."
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
+        tar_checksum = hashlib.sha256(b"data").hexdigest()
+        manifest = self.env["binary.manifest"].create(
+            {
+                "name": "interrupted",
+                "url": "https://example.com/interrupted.tar.gz",
+                "checksum": tar_checksum,
+                "archive_type": "tar.gz",
+                "extract_member": "interrupted",
+            }
+        )
+
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"data", b""]
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+
+        mock_tar_open = self.safe_patch("tarfile.open")  # audit-ignore-path
+        mock_tar = MagicMock()
+        mock_tar_open.return_value.__enter__.return_value = mock_tar
+
+        mock_member = MagicMock()
+        mock_member.name = "interrupted"
+        mock_member.islnk.return_value = False
+        mock_member.issym.return_value = False
+        mock_tar.getmembers.return_value = [mock_member]
+        mock_tar.__iter__.return_value = iter([mock_member])
+        mock_tar.extractfile.return_value = io.BytesIO(b"extracted-data")
+
+        self.safe_patch(
+            "shutil.copyfileobj",
+            side_effect=OSError("simulated interruption mid-write"),
+        )
+
+        target_bin = os.path.join(
+            tools.config.get("data_dir", "/var/lib/odoo"),
+            "hams_bin",
+            self.env["binary_downloader.mixin"]._get_target_filename(
+                "interrupted", tar_checksum
+            ),
+        )
+
+        with self.assertRaises(UserError):
+            self.env["binary.manifest"].ensure_executable("interrupted")
+
+        self.assertFalse(
+            os.path.exists(target_bin),
+            "[!] DIAGNOSTIC FOR AI: an interrupted extraction must never "
+            "leave a (partial) file at the final target_bin path.",
+        )
+        # No stray tempfile.mkstemp() leftover either -- _atomic_write_
+        # target()'s own except branch must clean up the temp file it
+        # created before re-raising, not just avoid touching target_bin.
+        # Scoped to files matching mkstemp()'s own default "tmp*" prefix
+        # (not every file in bin_dir) since bin_dir is a shared directory
+        # other tests/manifests may also leave real, unrelated files in.
+        bin_dir = os.path.dirname(target_bin)
+        leftover_tmp_files = [f for f in os.listdir(bin_dir) if f.startswith("tmp")]
+        self.assertFalse(
+            leftover_tmp_files,
+            "[!] DIAGNOSTIC FOR AI: an interrupted extraction must not "
+            "leave a stray temp file behind in bin_dir: %s" % leftover_tmp_files,
+        )
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestBinarySsrfProtection(HamsTransactionCase):
+    # Bug-hunt fix, 2026-09-09 (binary_utils_assert_host_is_ssrf_safe):
+    # exercises the real SSRF-safety check end to end. Deliberately its own
+    # class, with none of TestBinaryManifest's blanket mock of this exact
+    # method -- every case here uses a literal IP address so nothing needs
+    # live DNS/network access (socket.getaddrinfo resolves a literal IP
+    # without performing a real lookup).
+
+    def test_rejects_a_direct_loopback_link_local_or_private_host(self):
+        # Tests [@ANCHOR: binary_utils_assert_host_is_ssrf_safe]
+        mixin = self.env["binary_downloader.mixin"]
+        with self.assertRaises(UserError):
+            mixin._assert_host_is_ssrf_safe("127.0.0.1", "evilbin")
+        with self.assertRaisesRegex(UserError, "non-public address"):
+            # The AWS/GCP/Azure cloud-metadata address -- link-local.
+            mixin._assert_host_is_ssrf_safe("169.254.169.254", "evilbin")
+        with self.assertRaises(UserError):
+            mixin._assert_host_is_ssrf_safe("10.0.0.5", "evilbin")
+
+    def test_allows_a_real_public_address(self):
+        # Tests [@ANCHOR: binary_utils_assert_host_is_ssrf_safe]
+        # Must not raise.
+        self.env["binary_downloader.mixin"]._assert_host_is_ssrf_safe(
+            "8.8.8.8", "goodbin"
+        )
+
+    def test_ensure_executable_rejects_a_manifest_url_pointing_directly_at_an_internal_ip(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
+        manifest = self.env["binary.manifest"].create(
+            {
+                "name": "internalbin",
+                "url": "https://169.254.169.254/latest/meta-data/",
+                "checksum": hashlib.sha256(b"x").hexdigest(),
+                "archive_type": "binary",
+            }
+        )
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+
+        with self.assertRaisesRegex(UserError, "non-public address"):
+            manifest.ensure_executable("internalbin")
+        mock_urlopen.assert_not_called()
+
+    def test_download_rejects_a_redirect_downgrading_to_http(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
+        manifest = self.env["binary.manifest"].create(
+            {
+                "name": "redirectbin_http",
+                "url": "https://8.8.8.8/redirectbin_http",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "binary",
+            }
+        )
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+
+        mock_response = MagicMock()
+        del mock_response.readinto
+        mock_response.read.side_effect = [b"data", b""]
+        mock_response.getheader.return_value = None
+        mock_response.geturl.return_value = "http://8.8.8.8/redirectbin_http"
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen.return_value = mock_response
+
+        with self.assertRaisesRegex(UserError, "non-https"):
+            manifest.ensure_executable("redirectbin_http")
+
+    def test_download_rejects_a_redirect_landing_on_an_internal_address(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
+        manifest = self.env["binary.manifest"].create(
+            {
+                "name": "redirectbin_ip",
+                "url": "https://8.8.8.8/redirectbin_ip",
+                "checksum": hashlib.sha256(b"data").hexdigest(),
+                "archive_type": "binary",
+            }
+        )
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+
+        mock_response = MagicMock()
+        del mock_response.readinto
+        mock_response.read.side_effect = [b"data", b""]
+        mock_response.getheader.return_value = None
+        mock_response.geturl.return_value = "https://169.254.169.254/evil"
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen.return_value = mock_response
+
+        with self.assertRaisesRegex(UserError, "non-public address"):
+            manifest.ensure_executable("redirectbin_ip")

@@ -205,9 +205,29 @@ class BinaryManifest(models.Model):
             for checksum, count in version_groups:
                 checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
 
+        # Bug-hunt fix, 2026-09-09: checksum_counts above is a GLOBAL count
+        # taken before any of `self` is actually removed, so it still
+        # includes every record in `self` itself. Unlinking two-or-more
+        # manifests/versions that share a checksum in the SAME call (e.g.
+        # selecting both rows in the UI and deleting them together) used to
+        # see count > 1 for every one of them and skip deletion of ALL of
+        # them, permanently leaking the on-disk file even though nothing
+        # outside this very unlink() call still references it. Subtract how
+        # many of `self`'s own rows share each checksum -- self-references
+        # are about to disappear, so they don't count towards "still
+        # referenced elsewhere."
+        self_checksum_counts = {}
+        for record in self:
+            if record.checksum:
+                self_checksum_counts[record.checksum] = (
+                    self_checksum_counts.get(record.checksum, 0) + 1
+                )
 
         for record in self:
             if record.name and record.checksum:
-                if checksum_counts.get(record.checksum, 0) <= 1:
+                remaining_external_refs = checksum_counts.get(
+                    record.checksum, 0
+                ) - self_checksum_counts.get(record.checksum, 0)
+                if remaining_external_refs <= 0:
                     self.env["binary_downloader.mixin"].with_user(svc_uid)._unlink_binary_file(record.name, record.checksum)
         return super().unlink()

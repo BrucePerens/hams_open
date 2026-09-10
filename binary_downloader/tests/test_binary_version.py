@@ -30,6 +30,15 @@ class TestBinaryVersion(HamsTransactionCase):
             }
         )
 
+        # See test_binary_manifest.py's own setUp for the full explanation:
+        # _download_and_extract() now does a real DNS-based SSRF check on
+        # the download host before making any request, which this offline
+        # test suite shouldn't depend on live DNS to exercise.
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._assert_host_is_ssrf_safe",
+            return_value=None,
+        )
+
     def test_version_constraints(self):
         # [@ANCHOR: test_binary_version_standard]
 
