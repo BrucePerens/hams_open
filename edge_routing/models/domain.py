@@ -40,6 +40,7 @@ class EdgeRoutingDomain(models.Model):
                     _("This target slug is reserved and cannot be used.")
                 )
 
+    # [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
     @api.model
     def push_all_to_pager_duty(self):
         """
@@ -71,15 +72,40 @@ class EdgeRoutingDomain(models.Model):
 
             if "ham.dns.zone" in env_svc:
                 try:
-                    dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
-                    last_id = 0
-                    while True:
-                        dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
-                        if not dns_batch:
-                            break
-                        all_domains.extend(dns_batch.mapped("name"))
-                        last_id = dns_batch[-1].id
-                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                    # bug-hunt (2026-09-09): savepoint is load-bearing, not
+                    # decorative -- see the identical note on
+                    # get_target_slug_by_domain below. _get_service_env()'s
+                    # own SQL-backed uid lookup can raise a real Postgres
+                    # `RAISE EXCEPTION`, which aborts the transaction; the
+                    # outer `except Exception` here already recovers this
+                    # specific function's own control flow either way (no
+                    # further DB call follows in this function today), but
+                    # without the savepoint the transaction stays poisoned
+                    # for whatever runs next in the SAME transaction --
+                    # e.g. ir.cron's own end-of-job bookkeeping writes, if
+                    # this method is invoked as part of a larger cron
+                    # transaction rather than getting its own.
+                    with self.env.cr.savepoint():
+                        dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
+                        last_id = 0
+                        while True:
+                            dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
+                            if not dns_batch:
+                                break
+                            all_domains.extend(dns_batch.mapped("name"))
+                            last_id = dns_batch[-1].id
+                except Exception as e:  # audit-ignore-catch-all
+                    # bug-hunt (2026-09-09): this used to catch only
+                    # (KeyError, ValueError) -- but _get_service_env() ->
+                    # _get_service_uid() raises AccessError on a bad/missing
+                    # xml_id, and the underlying SQL-backed uid resolution
+                    # can raise a psycopg2 error, neither of which is a
+                    # KeyError/ValueError. A real DNS-zone lookup failure of
+                    # either kind would have propagated uncaught out of this
+                    # explicitly-labeled "soft dependency" block, crashing
+                    # the whole cron run instead of just skipping the DNS
+                    # domains. Class 20 (try/except narrower than the real
+                    # failure mode).
                     _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
 
             unique_domains = list(set(all_domains))
@@ -95,7 +121,15 @@ class EdgeRoutingDomain(models.Model):
                 timeout=5,
             )
             response.raise_for_status()
-        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
+            # bug-hunt (2026-09-09): requests.post()/raise_for_status() raise
+            # requests.exceptions.* (ConnectionError, Timeout, HTTPError) on
+            # any real network/HTTP failure -- none of those are KeyError or
+            # ValueError, so a genuinely offline PagerDuty endpoint used to
+            # crash this cron job with an uncaught exception instead of
+            # logging and returning, defeating the whole point of wrapping
+            # an external HTTP call in a broad "don't fail the cron" guard.
+            # Class 20 (try/except narrower than the real failure mode).
             _logger.warning("Failed to sync domains to PagerDuty: %s", e)
 
     # [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
@@ -106,7 +140,15 @@ class EdgeRoutingDomain(models.Model):
                 self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
                     self._name, valid_names
                 )
-            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
+                # bug-hunt (2026-09-09): _notify_cache_invalidation() issues
+                # a raw `self.env.cr.execute("SELECT pg_notify(...)")` --
+                # any DB/connection-level failure there raises a psycopg2
+                # error, not KeyError/ValueError. A transient DB hiccup
+                # during cache-invalidation notification would have
+                # propagated uncaught out of create()/write()/unlink(),
+                # aborting the whole record mutation over what should be a
+                # best-effort cache ping. Class 20.
                 _logger.warning("Failed to notify cache invalidation: %s", e)
 
         try:
@@ -114,7 +156,11 @@ class EdgeRoutingDomain(models.Model):
             cron = self.env.ref('edge_routing.ir_cron_push_pager_duty', raise_if_not_found=False)
             if cron:
                 cron._trigger()
-        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+        except Exception as e:  # audit-ignore-catch-all
+            # bug-hunt (2026-09-09): broadened alongside the cache-invalidation
+            # guard above -- cron._trigger() is a DB write (ir.cron.trigger)
+            # that can fail for reasons beyond KeyError/ValueError; this path
+            # is explicitly "best effort, don't block the CRUD op." Class 20.
             _logger.warning("Failed to trigger PagerDuty sync cron: %s", e)
 
     # [@ANCHOR: edge_routing:COMM_domain_create]
@@ -146,6 +192,7 @@ class EdgeRoutingDomain(models.Model):
         self._invalidate_cache(names)
         return res
 
+    # [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
     @api.model
     @distributed_cache()
     def get_target_slug_by_domain(self, domain, override_svc_uid=None):
@@ -163,10 +210,35 @@ class EdgeRoutingDomain(models.Model):
                 self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
                 if self.env.cr.fetchone():
                     try:
-                        target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                            "edge_routing.edge_routing_service_account"
-                        )
-                    except (KeyError, ValueError):  # audit-ignore-catch-all
+                        # bug-hunt (2026-09-09): the savepoint is load-
+                        # bearing, not decorative -- _get_service_uid()'s
+                        # own SQL-backed uid lookup does a real Postgres
+                        # `RAISE EXCEPTION` (see
+                        # zero_sudo_get_service_uid() in
+                        # zero_sudo/data/postgres_procedures.xml) on a
+                        # missing/disabled/non-service account. A raw SQL
+                        # RAISE EXCEPTION aborts the CURRENT transaction --
+                        # without a savepoint to roll back to, the
+                        # `target_env = self.env` fallback below would
+                        # still be caught here, but the very next line's
+                        # `target_env[self._name].search(...)` would then
+                        # raise `InFailedSqlTransaction` uncaught, since
+                        # every statement on a poisoned transaction fails
+                        # until it's rolled back to a savepoint (or the
+                        # whole transaction). Class 20, one level deeper.
+                        with self.env.cr.savepoint():
+                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                                "edge_routing.edge_routing_service_account"
+                            )
+                    except Exception:  # audit-ignore-catch-all
+                        # bug-hunt (2026-09-09): _get_service_env() raises
+                        # AccessError (not KeyError/ValueError) on a bad
+                        # xml_id, plus a possible psycopg2 error from the
+                        # SQL-backed uid lookup -- this fallback-to-self
+                        # path only actually triggered for a KeyError/
+                        # ValueError, so a real service-account resolution
+                        # failure would have crashed domain resolution
+                        # instead of degrading to self.env. Class 20.
                         _logger.warning("Failed to get service env")
                         target_env = self.env
                 else:

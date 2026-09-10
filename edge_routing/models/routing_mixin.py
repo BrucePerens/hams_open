@@ -59,6 +59,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         existing_slugs set itself."""
         return slug in existing_slugs
 
+    # [@ANCHOR: edge_routing:COMM_mixin_generate_unique_slug]
     def _generate_unique_slug(self, base_string, record_id=False, forbidden_slugs=None):
         """
         Generates a URL-safe, globally unique slug. Cross-references reserved routes
@@ -82,7 +83,13 @@ class EdgeRoutingMixin(models.AbstractModel):
                         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
                             "edge_routing.edge_routing_service_account"
                         )
-                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                except Exception as e:  # audit-ignore-catch-all
+                    # bug-hunt (2026-09-09): _get_service_env() raises
+                    # AccessError (not KeyError/ValueError) on a bad xml_id,
+                    # plus a possible psycopg2 error from the SQL-backed uid
+                    # lookup -- narrowed to the wrong types, this fallback
+                    # never actually caught a real resolution failure.
+                    # Class 20.
                     _logger.warning("Error: %s", e)
                     env_svc = self.env
             else:
@@ -129,6 +136,8 @@ class EdgeRoutingMixin(models.AbstractModel):
             slug = f"{base_slug}-{counter}"
             counter += 1
 
+    # [@ANCHOR: edge_routing:COMM_mixin_get_record_by_slug]
+    # (real coverage: see edge_routing:COMM_mixin_get_record_by_slug's own claim)
     # # Verified by [@ANCHOR: user_websites:test_group_site_routing]
     @api.model
     @distributed_cache()
@@ -152,7 +161,13 @@ class EdgeRoutingMixin(models.AbstractModel):
                             target_env = self.env["zero_sudo.security.utils"]._get_service_env(
                                 "edge_routing.edge_routing_service_account"
                             )
-                    except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                    except Exception as e:  # audit-ignore-catch-all
+                        # bug-hunt (2026-09-09): _get_service_env() raises
+                        # AccessError (not KeyError/ValueError) on a bad
+                        # xml_id, plus a possible psycopg2 error from the
+                        # SQL-backed uid lookup -- narrowed to the wrong
+                        # types, this fallback never actually caught a real
+                        # resolution failure. Class 20.
                         _logger.warning("Failed to get service env: %s", e)
                         target_env = self.env
                 else:
@@ -160,10 +175,30 @@ class EdgeRoutingMixin(models.AbstractModel):
             else:
                 target_env = self.env
 
+        # bug-hunt (2026-09-09): was `("website_slug", "=ilike", slug)`.
+        # Odoo's `=ilike` (unlike bare `ilike`) passes its operand through
+        # to SQL `ILIKE` verbatim, with NO wildcard-wrapping AND NO
+        # escaping of `%`/`_` (confirmed directly against
+        # odoo/orm/fields.py's `condition_to_sql`: `need_wildcard = '=' not
+        # in operator`, so for `=ilike` the raw value becomes the pattern
+        # as-is). `slug` here is attacker/visitor-controlled (a raw URL
+        # path segment) -- a request for `/a%/blog` sets `slug = "a%"`,
+        # which becomes `ILIKE 'a%'`, matching ANY record whose
+        # `website_slug` starts with "a" instead of failing to find an
+        # exact match, letting a visitor land on -- or probe for the
+        # existence of -- a slug that isn't the one they typed (`_` is
+        # similarly a single-character wildcard). Plain `=` is a safe,
+        # behavior-preserving fix here specifically because `website_slug`
+        # is DB-constrained to `^[a-z0-9\-]+$` (see this mixin's own
+        # `_website_slug_format` CHECK constraint) and `slug` is already
+        # lowercased above -- no legitimate stored value can differ from
+        # `slug` only by case or contain `%`/`_`, so `=` and `=ilike`
+        # return identical results for every real slug while closing the
+        # wildcard-injection surface entirely.
         record = (
             target_env[self._name]
             .with_context(active_test=False)
-            .search([("website_slug", "=ilike", slug)], limit=1)
+            .search([("website_slug", "=", slug)], limit=1)
         )
         return record.id if record else False
 
@@ -203,6 +238,8 @@ class EdgeRoutingMixin(models.AbstractModel):
     # # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
 
     # # Verified by [@ANCHOR: user_websites:test_group_slug_cache_invalidation]
+    # (real coverage: see edge_routing:COMM_mixin_write's own claim)
+    # [@ANCHOR: edge_routing:COMM_mixin_write]
     def write(self, vals):
         if vals.get("website_slug"):
             slug_to_check = slugify(vals["website_slug"])
@@ -231,7 +268,14 @@ class EdgeRoutingMixin(models.AbstractModel):
                     self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
                         self._name, all_slugs_to_invalidate
                     )
-                except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+                except Exception as e:  # audit-ignore-catch-all
+                    # bug-hunt (2026-09-09): _notify_cache_invalidation()
+                    # issues a raw `self.env.cr.execute("SELECT
+                    # pg_notify(...)")`; any DB/connection-level failure
+                    # there raises a psycopg2 error, not KeyError/ValueError.
+                    # A transient DB hiccup during this best-effort cache
+                    # ping would have propagated uncaught out of write(),
+                    # aborting the whole record update. Class 20.
                     _logger.warning("Failed to notify cache invalidation for %s: %s", all_slugs_to_invalidate, e)
                     
             # Handle the batch write edge case for missing slugs when name is updated
@@ -270,6 +314,10 @@ class EdgeRoutingMixin(models.AbstractModel):
                 self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
                     self._name, slugs
                 )
-            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+            except Exception as e:  # audit-ignore-catch-all
+                # bug-hunt (2026-09-09): same root cause as the write() and
+                # domain.py cache-invalidation guards -- pg_notify() raises
+                # a psycopg2 error, not KeyError/ValueError, on a DB/
+                # connection failure. Class 20.
                 _logger.warning("Failed to notify local cache invalidation on unlink for %s: %s", slugs, e)
         return res
