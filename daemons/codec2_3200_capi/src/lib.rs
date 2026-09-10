@@ -16,6 +16,31 @@
 //! `codec2_create` doc comment) -- a caller that only ever calls encode
 //! (or only ever decode) on a given handle pays for the unused half's
 //! state, the same real tradeoff the reference makes.
+//!
+//! **Every real FFI entry point below (other than `codec2_create`,
+//! which never dereferences a pointer) is a thin `extern "C"` trampoline
+//! around a private, non-`extern "C"` `*_impl` function that does the
+//! actual NULL-checking and work.** This is deliberate, not
+//! stylistic: Rust has guaranteed since 1.71 that a panic which tries
+//! to unwind *out of* an `extern "C"` function aborts the process on
+//! the spot, at that function's own boundary, rather than continuing to
+//! unwind into the caller (previously undefined behavior when the
+//! caller was real C with no unwind tables at all; now a defined,
+//! clean abort either way -- matching the real reference library's own
+//! `assert()`-then-`abort()` behavior for a violated contract, which is
+//! why every NULL check here still uses `assert!` rather than a
+//! recoverable `Result`). The consequence for testing: a panic can
+//! never be caught with `#[should_panic]`/`catch_unwind` once it has to
+//! cross back out through the `extern "C"` frame itself -- confirmed
+//! empirically while writing this crate's own NULL-argument regression
+//! tests (calling straight through `codec2_encode`/`codec2_decode_ber`
+//! with a NULL buffer under `#[should_panic]` aborted the whole test
+//! binary with SIGABRT instead of failing one test). Splitting the
+//! NULL-checking logic into a plain-Rust-ABI `*_impl` function lets a
+//! test call that function directly -- an ordinary Rust call that can
+//! unwind and be caught normally -- while the real `extern "C"` entry
+//! point a C caller actually links against still aborts cleanly on a
+//! contract violation, exactly as intended.
 
 use ham_digital_modes::codec2_3200::{Decoder, EncoderFixed, BYTES_PER_FRAME, SAMPLES_PER_FRAME};
 use std::os::raw::c_int;
@@ -52,8 +77,7 @@ pub extern "C" fn codec2_create(mode: c_int) -> *mut CODEC2 {
 /// `codec2_create` and not already destroyed (matches the real
 /// library's own contract -- its own `codec2_destroy` `assert`s
 /// non-NULL rather than tolerating it, so this does the same).
-#[no_mangle]
-pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
+unsafe fn destroy_impl(codec2_state: *mut CODEC2) {
     assert!(
         !codec2_state.is_null(),
         "codec2_destroy: codec2_state must not be NULL"
@@ -62,20 +86,34 @@ pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
 }
 
 /// # Safety
+/// Same contract as [`destroy_impl`].
+#[no_mangle]
+// [@ANCHOR: codec2_destroy]
+pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
+    destroy_impl(codec2_state)
+}
+
+/// `codec2_state`, `bytes`, and `speech_in` are all asserted non-NULL
+/// before any dereference (a NULL buffer pointer previously reached a
+/// raw pointer cast/dereference with no check at all, unlike
+/// `codec2_state` -- undefined behavior instead of the clean,
+/// diagnosable panic every other NULL-contract violation in this crate
+/// produces).
+///
+/// # Safety
 /// `codec2_state` must be a live handle from `codec2_create`;
 /// `speech_in` must point to at least `codec2_samples_per_frame` valid
 /// `int16_t`s; `bytes` must point to at least `codec2_bytes_per_frame`
 /// writable bytes.
-#[no_mangle]
-// [@ANCHOR: codec2_encode]
-pub unsafe extern "C" fn codec2_encode(
-    codec2_state: *mut CODEC2,
-    bytes: *mut u8,
-    speech_in: *const i16,
-) {
+unsafe fn encode_impl(codec2_state: *mut CODEC2, bytes: *mut u8, speech_in: *const i16) {
     assert!(
         !codec2_state.is_null(),
         "codec2_encode: codec2_state must not be NULL"
+    );
+    assert!(!bytes.is_null(), "codec2_encode: bytes must not be NULL");
+    assert!(
+        !speech_in.is_null(),
+        "codec2_encode: speech_in must not be NULL"
     );
     let state = &mut *codec2_state;
     let speech = &*(speech_in as *const [i16; SAMPLES_PER_FRAME]);
@@ -84,17 +122,30 @@ pub unsafe extern "C" fn codec2_encode(
 }
 
 /// # Safety
+/// Same contract as [`encode_impl`].
+#[no_mangle]
+// [@ANCHOR: codec2_encode]
+pub unsafe extern "C" fn codec2_encode(
+    codec2_state: *mut CODEC2,
+    bytes: *mut u8,
+    speech_in: *const i16,
+) {
+    encode_impl(codec2_state, bytes, speech_in)
+}
+
+/// # Safety
 /// `codec2_state` must be a live handle from `codec2_create`; `bytes`
 /// must point to at least `codec2_bytes_per_frame` valid bytes;
 /// `speech_out` must point to at least `codec2_samples_per_frame`
 /// writable `int16_t`s.
 #[no_mangle]
+// [@ANCHOR: codec2_decode]
 pub unsafe extern "C" fn codec2_decode(
     codec2_state: *mut CODEC2,
     speech_out: *mut i16,
     bytes: *const u8,
 ) {
-    codec2_decode_ber(codec2_state, speech_out, bytes, 0.0);
+    decode_ber_impl(codec2_state, speech_out, bytes, 0.0)
 }
 
 /// `ber_est` is unused for `CODEC2_MODE_3200`: checked against the real
@@ -104,11 +155,12 @@ pub unsafe extern "C" fn codec2_decode(
 /// mode. Matched here rather than inventing a soft-decision treatment
 /// the real reference doesn't apply at 3200bps either.
 ///
+/// `codec2_state`, `speech_out`, and `bytes` are all asserted non-NULL
+/// before any dereference, same reasoning as [`encode_impl`].
+///
 /// # Safety
 /// Same pointer/length contract as `codec2_decode`.
-#[no_mangle]
-// [@ANCHOR: codec2_decode_ber]
-pub unsafe extern "C" fn codec2_decode_ber(
+unsafe fn decode_ber_impl(
     codec2_state: *mut CODEC2,
     speech_out: *mut i16,
     bytes: *const u8,
@@ -118,6 +170,14 @@ pub unsafe extern "C" fn codec2_decode_ber(
         !codec2_state.is_null(),
         "codec2_decode_ber: codec2_state must not be NULL"
     );
+    assert!(
+        !speech_out.is_null(),
+        "codec2_decode_ber: speech_out must not be NULL"
+    );
+    assert!(
+        !bytes.is_null(),
+        "codec2_decode_ber: bytes must not be NULL"
+    );
     let state = &mut *codec2_state;
     let frame = &*(bytes as *const [u8; BYTES_PER_FRAME]);
     let out = state.decoder.decode(frame);
@@ -125,11 +185,23 @@ pub unsafe extern "C" fn codec2_decode_ber(
 }
 
 /// # Safety
+/// Same contract as [`decode_ber_impl`].
+#[no_mangle]
+// [@ANCHOR: codec2_decode_ber]
+pub unsafe extern "C" fn codec2_decode_ber(
+    codec2_state: *mut CODEC2,
+    speech_out: *mut i16,
+    bytes: *const u8,
+    ber_est: f32,
+) {
+    decode_ber_impl(codec2_state, speech_out, bytes, ber_est)
+}
+
+/// # Safety
 /// `codec2_state` must be non-NULL (value not otherwise inspected --
 /// same real answer, 160, for every live handle, since this build only
 /// ever creates `CODEC2_MODE_3200` handles).
-#[no_mangle]
-pub unsafe extern "C" fn codec2_samples_per_frame(codec2_state: *mut CODEC2) -> c_int {
+unsafe fn samples_per_frame_impl(codec2_state: *mut CODEC2) -> c_int {
     assert!(
         !codec2_state.is_null(),
         "codec2_samples_per_frame: codec2_state must not be NULL"
@@ -138,9 +210,16 @@ pub unsafe extern "C" fn codec2_samples_per_frame(codec2_state: *mut CODEC2) -> 
 }
 
 /// # Safety
-/// Same contract as `codec2_samples_per_frame`.
+/// Same contract as [`samples_per_frame_impl`].
 #[no_mangle]
-pub unsafe extern "C" fn codec2_bits_per_frame(codec2_state: *mut CODEC2) -> c_int {
+// [@ANCHOR: codec2_samples_per_frame]
+pub unsafe extern "C" fn codec2_samples_per_frame(codec2_state: *mut CODEC2) -> c_int {
+    samples_per_frame_impl(codec2_state)
+}
+
+/// # Safety
+/// Same contract as `codec2_samples_per_frame`.
+unsafe fn bits_per_frame_impl(codec2_state: *mut CODEC2) -> c_int {
     assert!(
         !codec2_state.is_null(),
         "codec2_bits_per_frame: codec2_state must not be NULL"
@@ -149,14 +228,29 @@ pub unsafe extern "C" fn codec2_bits_per_frame(codec2_state: *mut CODEC2) -> c_i
 }
 
 /// # Safety
-/// Same contract as `codec2_samples_per_frame`.
+/// Same contract as [`bits_per_frame_impl`].
 #[no_mangle]
-pub unsafe extern "C" fn codec2_bytes_per_frame(codec2_state: *mut CODEC2) -> c_int {
+// [@ANCHOR: codec2_bits_per_frame]
+pub unsafe extern "C" fn codec2_bits_per_frame(codec2_state: *mut CODEC2) -> c_int {
+    bits_per_frame_impl(codec2_state)
+}
+
+/// # Safety
+/// Same contract as `codec2_samples_per_frame`.
+unsafe fn bytes_per_frame_impl(codec2_state: *mut CODEC2) -> c_int {
     assert!(
         !codec2_state.is_null(),
         "codec2_bytes_per_frame: codec2_state must not be NULL"
     );
     BYTES_PER_FRAME as c_int
+}
+
+/// # Safety
+/// Same contract as [`bytes_per_frame_impl`].
+#[no_mangle]
+// [@ANCHOR: codec2_bytes_per_frame]
+pub unsafe extern "C" fn codec2_bytes_per_frame(codec2_state: *mut CODEC2) -> c_int {
+    bytes_per_frame_impl(codec2_state)
 }
 
 #[cfg(test)]
@@ -166,7 +260,12 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: codec2_create]
     // Tests [@ANCHOR: codec2_encode]
+    // Tests [@ANCHOR: codec2_decode]
     // Tests [@ANCHOR: codec2_decode_ber]
+    // Tests [@ANCHOR: codec2_destroy]
+    // Tests [@ANCHOR: codec2_samples_per_frame]
+    // Tests [@ANCHOR: codec2_bits_per_frame]
+    // Tests [@ANCHOR: codec2_bytes_per_frame]
     fn create_encode_decode_destroy_round_trip_over_the_c_abi_matches_direct_rust_use() {
         // Exercises the exact same call sequence a C caller makes,
         // through the actual `extern "C"` entry points (not the
@@ -213,6 +312,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: codec2_create]
+    // Tests [@ANCHOR: codec2_destroy]
     fn create_rejects_every_mode_but_3200() {
         for mode in [1, 2, 3, 4, 5, 8, -1, 999] {
             assert!(
@@ -224,6 +325,107 @@ mod tests {
             let h = codec2_create(CODEC2_MODE_3200);
             assert!(!h.is_null());
             codec2_destroy(h);
+        }
+    }
+
+    // Regression coverage for a real bug found in this bug-hunt pass:
+    // codec2_encode/codec2_decode_ber checked codec2_state for NULL but
+    // dereferenced their buffer pointers (speech_in/bytes/speech_out)
+    // with no check at all, so a NULL buffer argument hit a raw pointer
+    // dereference directly -- undefined behavior (a likely segfault with
+    // no diagnostic), unlike every other NULL-contract violation in this
+    // crate, which produces a clean, debuggable panic (and, per Rust's
+    // own guarantee since 1.71, a clean process abort at the real
+    // `extern "C"` entry point's own boundary, rather than UB from
+    // unwinding into a real C caller).
+    //
+    // These tests call the private `*_impl` functions directly, not the
+    // public `extern "C"` entry points -- see this file's own top-level
+    // doc comment for why: a panic can't be caught with
+    // `#[should_panic]` once it has to unwind back out through an
+    // `extern "C"` frame (confirmed empirically: doing exactly that
+    // aborted the whole test binary with SIGABRT instead of failing one
+    // test). Calling `encode_impl`/`decode_ber_impl` directly is an
+    // ordinary Rust call that unwinds normally, while still exercising
+    // the exact same NULL-checking logic the real FFI entry points run.
+
+    #[test]
+    // Tests [@ANCHOR: codec2_encode]
+    #[should_panic(expected = "codec2_encode: bytes must not be NULL")]
+    fn encode_rejects_null_bytes_out_pointer() {
+        unsafe {
+            let h = codec2_create(CODEC2_MODE_3200);
+            let speech_in = [0i16; SAMPLES_PER_FRAME];
+            encode_impl(h, std::ptr::null_mut(), speech_in.as_ptr());
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_encode]
+    #[should_panic(expected = "codec2_encode: speech_in must not be NULL")]
+    fn encode_rejects_null_speech_in_pointer() {
+        unsafe {
+            let h = codec2_create(CODEC2_MODE_3200);
+            let mut bytes = [0u8; BYTES_PER_FRAME];
+            encode_impl(h, bytes.as_mut_ptr(), std::ptr::null());
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_decode_ber]
+    #[should_panic(expected = "codec2_decode_ber: speech_out must not be NULL")]
+    fn decode_ber_rejects_null_speech_out_pointer() {
+        unsafe {
+            let h = codec2_create(CODEC2_MODE_3200);
+            let bytes = [0u8; BYTES_PER_FRAME];
+            decode_ber_impl(h, std::ptr::null_mut(), bytes.as_ptr(), 0.0);
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_decode_ber]
+    #[should_panic(expected = "codec2_decode_ber: bytes must not be NULL")]
+    fn decode_ber_rejects_null_bytes_pointer() {
+        unsafe {
+            let h = codec2_create(CODEC2_MODE_3200);
+            let mut speech_out = [0i16; SAMPLES_PER_FRAME];
+            decode_ber_impl(h, speech_out.as_mut_ptr(), std::ptr::null(), 0.0);
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_destroy]
+    #[should_panic(expected = "codec2_destroy: codec2_state must not be NULL")]
+    fn destroy_rejects_null_state() {
+        unsafe {
+            destroy_impl(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_samples_per_frame]
+    #[should_panic(expected = "codec2_samples_per_frame: codec2_state must not be NULL")]
+    fn samples_per_frame_rejects_null_state() {
+        unsafe {
+            samples_per_frame_impl(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_bits_per_frame]
+    #[should_panic(expected = "codec2_bits_per_frame: codec2_state must not be NULL")]
+    fn bits_per_frame_rejects_null_state() {
+        unsafe {
+            bits_per_frame_impl(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: codec2_bytes_per_frame]
+    #[should_panic(expected = "codec2_bytes_per_frame: codec2_state must not be NULL")]
+    fn bytes_per_frame_rejects_null_state() {
+        unsafe {
+            bytes_per_frame_impl(std::ptr::null_mut());
         }
     }
 }
