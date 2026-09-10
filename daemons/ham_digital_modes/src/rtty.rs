@@ -671,6 +671,24 @@ impl RttyDecoder {
     /// that completed decoding as a result.
     // [@ANCHOR: RttyDecoder::feed]
     pub fn feed(&mut self, samples: &[i16]) -> String {
+        // `rtty_scan` itself already guards a degenerate `window_len ==
+        // 0` (a `sample_rate` too small relative to RTTY_BAUD for even
+        // one whole sample per bit period -- e.g. `sample_rate: 0` from
+        // a misconfigured/misdetected audio device) by returning
+        // immediately without ever advancing `state.pos`. That's correct
+        // for `rtty_demodulate`'s one-shot whole-buffer case, but here it
+        // means `state.pos` (the trim threshold's own trigger below)
+        // would never advance either -- so this decoder's
+        // `pending_samples` buffer would grow completely unbounded for
+        // the lifetime of the stream instead of merely failing to decode
+        // anything, a real memory-leak-shaped bug distinct from (and
+        // milder than, but the same root cause as) `Ft8Decoder::new`'s
+        // own zero-sample-rate hang fixed in ft8.rs this same pass.
+        // Bail out before ever accumulating samples we can never usefully
+        // scan.
+        if (self.sample_rate as f64 / RTTY_BAUD).round() as usize == 0 {
+            return String::new();
+        }
         self.pending_samples.extend_from_slice(samples);
         let out = rtty_scan(
             &self.pending_samples,
@@ -772,6 +790,33 @@ mod tests {
             .collect();
         let decoded = rtty_demodulate(&noise, RTTY_DEFAULT_MARK_HZ, sample_rate);
         assert!(decoded.len() < 1000, "noise produced an implausibly large amount of decoded text -- likely a framing/advance bug, not just expected occasional false characters");
+    }
+
+    #[test]
+    // Tests [@ANCHOR: RttyDecoder::feed]
+    fn feed_does_not_grow_its_buffer_unboundedly_at_a_degenerate_sample_rate() {
+        // Bug found and fixed by this pass: rtty_scan's own `window_len
+        // == 0` guard (correct for the one-shot rtty_demodulate case)
+        // meant `state.pos` never advances at a sample_rate too low
+        // relative to RTTY_BAUD to produce even one sample per bit
+        // period (0 is the clearest case -- a plausible real
+        // misconfiguration, e.g. a failed audio-device negotiation) --
+        // so RttyDecoder::feed's own pending_samples buffer, gated only
+        // on state.pos ever exceeding a threshold, would accumulate
+        // every fed sample forever with no bound, for the life of the
+        // stream. Confirm the fix directly: feeding a real amount of
+        // audio into a sample_rate: 0 decoder must not leave a large,
+        // ever-growing buffer behind.
+        let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, 0);
+        for _ in 0..50 {
+            let out = decoder.feed(&[0i16; 1000]);
+            assert_eq!(out, "", "a zero sample rate can never decode anything");
+        }
+        assert_eq!(
+            decoder.pending_samples.len(),
+            0,
+            "feed() must not accumulate samples it can structurally never scan"
+        );
     }
 
     /// The real measurement behind `PresenceGate`: 10s of synthetic PRNG

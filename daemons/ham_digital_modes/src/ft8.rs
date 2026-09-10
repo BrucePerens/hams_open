@@ -62,6 +62,31 @@ impl Ft8Decoder {
             return None;
         }
         let block_size = unsafe { ffi::ft8_session_block_size(session) } as usize;
+        if block_size == 0 {
+            // The vendored shim computes `block_size = sample_rate *
+            // symbol_period` (monitor.c) with no validation of its own --
+            // a zero (or negative, cast down) `sample_rate` argument
+            // yields a live, non-NULL session whose block_size is 0.
+            // `feed()`'s own `while pending.len() - offset >=
+            // self.block_size` loop never terminates when block_size is
+            // 0 (the right-hand side is always 0, so the condition is
+            // always true and `offset` never advances) -- a real,
+            // reachable infinite-loop/hang, not a crash, on nothing more
+            // exotic than a caller passing sample_rate: 0 (a plausible
+            // real-world config bug, e.g. a failed audio-device
+            // negotiation reporting 0 Hz). Every other decoder in this
+            // crate already guards the equivalent case explicitly
+            // (psk31_demodulate's `if samples_per_symbol == 0 { return
+            // Vec::new(); }`, rtty_scan's `if window_len == 0 { return
+            // out; }`, Psk31Decoder::new's own `.max(1.0)` clamp) --
+            // treat this the same way the null-session check just above
+            // already does: fail construction rather than hand back a
+            // decoder that can never make forward progress.
+            unsafe {
+                ffi::ft8_session_free(session);
+            }
+            return None;
+        }
         Some(Ft8Decoder {
             session,
             pending: Vec::with_capacity(block_size),
@@ -299,6 +324,27 @@ mod tests {
     fn new_and_drop_do_not_crash() {
         let decoder = Ft8Decoder::new(12000, 200.0, 3000.0);
         assert!(decoder.is_some());
+    }
+
+    #[test]
+    // Tests [@ANCHOR: Ft8Decoder::new]
+    fn new_rejects_a_zero_sample_rate_instead_of_returning_a_decoder_that_would_hang() {
+        // Bug found and fixed by this pass: sample_rate: 0 used to
+        // produce a live, non-NULL session (the shim never validates
+        // the argument) whose real block_size was 0 -- feed()'s own
+        // `while pending.len() - offset >= self.block_size` loop can
+        // never terminate against a 0 divisor-equivalent, since the
+        // right-hand side is always 0. That's a real, reachable
+        // infinite loop from ordinary API misuse (not exotic malformed
+        // audio), not merely a theoretical concern. Confirm the fix by
+        // checking construction itself now fails cleanly -- deliberately
+        // not calling feed() on a sample_rate: 0 decoder even to prove
+        // the old behavior, since that call would legitimately hang this
+        // test process forever if the fix ever regressed.
+        assert!(
+            Ft8Decoder::new(0, 200.0, 3000.0).is_none(),
+            "a zero sample rate must fail construction, not hand back a decoder whose feed() can never make progress"
+        );
     }
 
     #[test]

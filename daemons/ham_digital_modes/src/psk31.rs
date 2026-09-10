@@ -159,6 +159,13 @@ const VARICODE: [(u16, u8); 128] = [
     (0b1110110101, 10),
 ];
 
+/// Longest real Varicode codeword, in bits (verified for all 128 table
+/// entries by this module's own tests: none exceeds 10 bits). Used by
+/// `psk31_decode_bits`/`VaricodeAccumulator::push_bit` to bound their own
+/// bit accumulators -- see those functions' own comments for why a run
+/// longer than this can never be a real codeword-in-progress.
+const MAX_VARICODE_BITS: u8 = 10;
+
 // [@ANCHOR: char_to_code]
 fn char_to_code(c: u8) -> Option<(u16, u8)> {
     if c < 128 {
@@ -230,6 +237,21 @@ pub fn psk31_decode_bits(bits: &[bool]) -> String {
         acc = (acc << 1) | (bit as u16);
         count += 1;
         prev_was_zero = !bit;
+        // A run this long with no "00" gap can never be a real,
+        // in-progress codeword (every entry in VARICODE is at most
+        // MAX_VARICODE_BITS bits -- verified for all 128 by
+        // every_codeword_ends_in_a_one_bit/every_codeword_starts_with_a_
+        // one_bit above). Left unbounded, a sufficiently long run of
+        // same-parity bits (plausible from real demodulated noise, which
+        // has no Varicode structure to keep it short) would grow `count`
+        // past u8::MAX -- a panic in a debug build, or a silent wrap
+        // (acc/count desync) in release. Reset now instead of letting
+        // the accumulator run unbounded; the very next "00" still
+        // starts a fresh, correctly-bounded accumulation.
+        if count > MAX_VARICODE_BITS {
+            acc = 0;
+            count = 0;
+        }
     }
     if count > 0 {
         if let Some(c) = code_to_char(acc, count) {
@@ -432,6 +454,15 @@ impl VaricodeAccumulator {
         self.acc = (self.acc << 1) | (bit as u16);
         self.count += 1;
         self.prev_was_zero = !bit;
+        // Same unbounded-accumulator hazard as psk31_decode_bits's own
+        // identical guard (see its comment) -- this streaming path feeds
+        // directly from live demodulated audio (Psk31Decoder::feed),
+        // real noise/signal-loss included, so a long same-parity run is
+        // not just a theoretical adversarial input here.
+        if self.count > MAX_VARICODE_BITS {
+            self.acc = 0;
+            self.count = 0;
+        }
         None
     }
 }
@@ -587,6 +618,51 @@ mod tests {
                 prev_zero = !bit;
             }
         }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: psk31_decode_bits]
+    fn decode_bits_does_not_panic_or_overflow_on_a_long_same_parity_run() {
+        // Bug found and fixed by this pass: a run of same-parity bits
+        // longer than u8::MAX (255) with no "00" gap used to grow the
+        // internal `count: u8` accumulator past its own type's range --
+        // a panic in a debug build (like this test), or a silent
+        // wraparound desync in release. Demodulated audio (real noise,
+        // or a long dropout with no genuine Varicode structure) has no
+        // reason to ever produce a "00" gap on its own, so this is a
+        // real reachable input, not a contrived one. 1000 bits of `true`
+        // (a steady run, matching an unbroken "steady carrier" decode)
+        // must not panic and must still decode something rather than
+        // hang or crash -- the exact accumulated character content past
+        // the reset point isn't the point (the run is not valid
+        // Varicode data to begin with); not panicking, and not silently
+        // wrapping into a corrupt (acc, count) pair, is.
+        let bits = vec![true; 1000];
+        let decoded = psk31_decode_bits(&bits);
+        // No panic reaching here is the primary assertion. Also confirm
+        // the decoder doesn't manufacture an implausible amount of
+        // output from a single unbroken run with no real gaps in it.
+        assert!(
+            decoded.len() < 10,
+            "a single, gap-free 1000-bit run should not decode to many characters, got {decoded:?}"
+        );
+
+        // Same run, but through the streaming accumulator
+        // (VaricodeAccumulator::push_bit) -- the exact path real,
+        // continuous demodulated audio actually takes via
+        // Psk31Decoder::feed, distinct code from psk31_decode_bits above
+        // even though both share the same fix.
+        let mut acc = VaricodeAccumulator::new();
+        let mut streamed = String::new();
+        for _ in 0..1000 {
+            if let Some(c) = acc.push_bit(true) {
+                streamed.push(c);
+            }
+        }
+        assert!(
+            streamed.len() < 10,
+            "streaming accumulator should behave the same way as the whole-buffer decoder, got {streamed:?}"
+        );
     }
 
     #[test]
