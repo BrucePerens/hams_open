@@ -192,9 +192,17 @@ pub fn autocorrelate_fixed(wn_q: &[i32]) -> [i64; LPC_ORD + 1] {
 /// 1000` -- an exact integer division standing in for `* (1 +
 /// WHITE_NOISE_CORRECTION_ALPHA)` (`1e-3 == 1/1000` exactly, unlike an
 /// arbitrary float constant, so this introduces no quantization error of
-/// its own beyond the division's own round-to-nearest). `r_q[0]` is
-/// always positive (real signal energy), so `div_round_i128`'s own
-/// positive-divisor precondition holds trivially.
+/// its own beyond the division's own round-to-nearest). `div_round_i128`
+/// is called with the *literal constant* `1000` as its divisor here, not
+/// `r_q[0]` -- `r_q[0]`'s own sign is irrelevant to this call's own
+/// precondition (`div_round_i128`'s divisor must be positive, and `1000`
+/// always is), regardless of whether `r_q[0]` itself is strictly
+/// positive (ordinary real signal energy) or exactly zero (a genuinely
+/// silent/all-zero frame -- see `r0_normalize_fixed`'s own doc comment
+/// for why that case is real, not hypothetical, and why THIS function's
+/// own multiplicative-only correction has no effect on it: `0 + 0/1000
+/// == 0`, not a rescued small positive floor).
+// [@ANCHOR: apply_white_noise_correction_fixed]
 pub fn apply_white_noise_correction_fixed(r_q: &mut [i64; LPC_ORD + 1]) {
     r_q[0] += div_round_i128(r_q[0] as i128, 1000);
 }
@@ -300,6 +308,7 @@ const LEVINSON_FRAC_BITS: u32 = 40;
 /// characterized (0.04% float32-vs-float64 floor, up to 0.9% under
 /// coarser per-step requantization). This port's own test compares
 /// against that measured band directly, not against zero divergence.
+// [@ANCHOR: levinson_durbin_fixed]
 pub fn levinson_durbin_fixed(r: &Autocorr) -> LpcCoeffs {
     let (a_q, _fired) = levinson_durbin_fixed_core(r);
     std::array::from_fn(|i| a_q[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
@@ -420,7 +429,40 @@ fn levinson_durbin_fixed_core_from_r_norm(
         // approach i64's own range for a pathological frame (this
         // stage's whole point is finding those frames, not assuming
         // they can't occur).
-        let k_q: i64 = if numerator_q == 0 {
+        //
+        // **`e_q == 0` is also guarded here, not just `numerator_q ==
+        // 0`** -- a real bug this port's own adversarial testing found,
+        // not a preemptive nicety. `e_q` reaches exactly `0` whenever a
+        // PRIOR iteration's `k_q` lands exactly on this format's
+        // representable boundary (`|k_q| == 1<<LEVINSON_FRAC_BITS`,
+        // i.e. a reflection coefficient of exactly +-1.0) -- that is
+        // NOT the `clamped` condition below (which only fires on `>`,
+        // matching the float reference's own `k.abs() > 1.0` exactly,
+        // per Bruce's own explicit direction not to touch that
+        // threshold), so a boundary-exact `k_q` is a real, legal,
+        // unclamped value that zeroes `one_minus_ksq_q` (`1.0 - 1.0^2
+        // == 0`) and, through it, `e_q` on the very next iteration.
+        // Confirmed empirically, not just derived: a crafted
+        // `r_norm_q` (`[1.0, -1.0, 0, 0, ...]`, forcing `k_q ==
+        // +1<<LEVINSON_FRAC_BITS` at `i=1` with a nonzero `numerator_q`
+        // at `i=2`) panicked with `attempt to divide by zero` before
+        // this guard, in both debug and `--release` builds -- unlike
+        // the float reference, where the identical scenario produces a
+        // *silent* `inf`/`NaN` (float division by zero never traps),
+        // not a crash, so this divergence from the float reference's
+        // own behavior is a deliberate, narrow exception to "match the
+        // float reference's clamp behavior as closely as practical and
+        // no closer": a hard crash is a categorically different,
+        // strictly worse outcome than the float reference's own already-
+        // characterized fragility, not a change to that fragility's own
+        // divergence rate. Once `e_q` is exactly `0`, the signal is
+        // (by construction) already perfectly predicted by the
+        // coefficients found so far -- treating `k_q` as `0` for this
+        // and every subsequent iteration (since `e_q` stays exactly `0`
+        // once reached: `q_mul(0, anything) == 0`) leaves `a[]` simply
+        // copied through unchanged, the correct, safe behavior for "no
+        // further refinement is possible."
+        let k_q: i64 = if numerator_q == 0 || e_q == 0 {
             0
         } else {
             div_round_i128(-((numerator_q as i128) << LEVINSON_FRAC_BITS), e_q as i128)
@@ -459,12 +501,50 @@ fn levinson_durbin_fixed_core_from_r_norm(
 /// correction in place; frame 273's own real fragility (this file's own
 /// extensive documentation above) makes no promise about this
 /// normalization's behavior without it.
+///
+/// **`r0_q <= 0` (a genuinely silent/all-zero frame -- real, not
+/// hypothetical: a squelched receiver, a muted mic, or comfort-noise
+/// padding can all hand a real production encoder an all-zero sample
+/// block) is handled explicitly, not just `debug_assert!`-ed away.** A
+/// real bug this port's own adversarial testing found, not a preemptive
+/// nicety: an earlier version only `debug_assert!`ed `r0_q > 0` and then
+/// divided anyway -- in a debug build that panics with the assert's own
+/// message; in a **release** build (the assert compiles out, but the
+/// division is real integer arithmetic, not `f32`) `div_round_i128`
+/// still divides by `r0_q`, and Rust's integer division panics
+/// unconditionally on a zero divisor regardless of build profile --
+/// confirmed empirically: feeding an all-zero windowed frame through
+/// `EncoderFixed::encode` panicked with `attempt to divide by zero` in a
+/// release build (`cargo test --release`), not just the assert's own
+/// message in debug. This is the fixed-point production path's own
+/// unique exposure -- `levinson_durbin_fixed_core`'s parallel, `f32`-
+/// based normalization (`r[j] / r0`) produces `0.0/0.0 = NaN` for the
+/// identical all-zero input, which is NOT a panic (IEEE754 float
+/// division never traps), and `f32_to_q64`'s `as i64` cast then
+/// saturates that NaN to exactly `0` (Rust's float-to-int cast semantics
+/// since 1.45) -- so the "historical" float-normalization core already
+/// degrades gracefully on this exact input by accident, while this
+/// function's genuine integer division does not. Fixed by returning the
+/// same effective result the graceful path already produces: `r_norm_q`
+/// with every entry `0` except `r_norm_q[0] = 1<<LEVINSON_FRAC_BITS`
+/// (nominally "1.0", though `levinson_durbin_fixed_core_from_r_norm`
+/// never actually reads `r_norm_q[0]` -- it hardcodes its own initial
+/// `e_q = 1<<LEVINSON_FRAC_BITS` directly -- so only the `r_norm_q[1..]
+/// = 0` entries are load-bearing here). With every `r_norm_q[j>=1]`
+/// zero, the recursion's own `numerator_q == 0` fast path fires on every
+/// iteration, `k_q` stays `0`, and the result is the identity filter
+/// `ak = [1, 0, 0, ..., 0]` (a physically correct "no prediction" answer
+/// for a signal with no measurable energy to predict from) with `e`
+/// unchanged at its maximum -- never a panic, and never a
+/// silently-wrong nonzero prediction either.
+// [@ANCHOR: r0_normalize_fixed]
 fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
     let r0_q = r_q[0];
-    debug_assert!(
-        r0_q > 0,
-        "r0_normalize_fixed: r0_q must be positive, got {r0_q}"
-    );
+    if r0_q <= 0 {
+        let mut r_norm_q = [0i64; LPC_ORD + 1];
+        r_norm_q[0] = 1i64 << LEVINSON_FRAC_BITS;
+        return r_norm_q;
+    }
     std::array::from_fn(|j| div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128))
 }
 
@@ -499,6 +579,7 @@ pub fn levinson_durbin_fixed_from_integer_r(
 /// doesn't need `COEF_FRAC_BITS` (`pub(crate)`, not `pub` -- only
 /// `floating_reference::lpc`'s own `find_next_root` needs to reach it
 /// from outside this module) to do it.
+// [@ANCHOR: dequantize_coef_q23]
 pub fn dequantize_coef_q23(a_q23: &[i64; LPC_ORD + 1]) -> LpcCoeffs {
     std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
 }
@@ -518,6 +599,7 @@ pub(crate) const COEF_FRAC_BITS: u32 = 23;
 /// there produced real, monotonically worsening mismatch rates).
 const CHEB_FRAC_BITS: u32 = 29;
 
+// [@ANCHOR: f32_to_q]
 fn f32_to_q(x: f32, frac_bits: u32) -> i32 {
     (x as f64 * (1i64 << frac_bits) as f64).round() as i32
 }
@@ -534,6 +616,7 @@ fn f32_to_q(x: f32, frac_bits: u32) -> i32 {
 /// all), producing coefficient errors up to 5.9 on every single test
 /// frame. Caught by this module's own `levinson_durbin_fixed_diverges_
 /// from_float_only_at_measured_clamp_disagreement_frames` test.
+// [@ANCHOR: f32_to_q64]
 fn f32_to_q64(x: f32, frac_bits: u32) -> i64 {
     (x as f64 * (1i64 << frac_bits) as f64).round() as i64
 }
@@ -722,6 +805,7 @@ const ACOS_LUT_SIZE: usize = (1 << ACOS_LUT_BITS) + 1;
 /// built once, table construction itself isn't the hot path so a plain
 /// float `.acos()`/round is fine here, unlike `acos_lut_fixed` below,
 /// which runs once per LSP root, every frame.
+// [@ANCHOR: acos_lut_table_q23]
 fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
     static TABLE: OnceLock<[i32; ACOS_LUT_SIZE]> = OnceLock::new();
     TABLE.get_or_init(|| {
@@ -736,6 +820,7 @@ fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
 /// the exact class of table/reality mismatch `BW_GAMMA_Q23` hit
 /// earlier this pass (an independently-computed value disagreeing with
 /// Rust's own real output at a rounding tie).
+// [@ANCHOR: pi_q23]
 pub(crate) fn pi_q23() -> i64 {
     static PI_Q23: OnceLock<i64> = OnceLock::new();
     *PI_Q23.get_or_init(|| fixed_point::f32_to_q_exact_round(std::f32::consts::PI, COEF_FRAC_BITS))
@@ -793,6 +878,7 @@ const COS_LUT_SIZE: usize = (1 << COS_LUT_BITS) + 1;
 /// `cos(i/levels * pi)` for `i` in `0..=levels`, Q23 -- built once, same
 /// "table construction isn't the hot path" reasoning as `acos_lut_table_
 /// q23`.
+// [@ANCHOR: cos_lut_table_q23]
 fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE] {
     static TABLE: OnceLock<[i32; COS_LUT_SIZE]> = OnceLock::new();
     TABLE.get_or_init(|| {
@@ -2253,6 +2339,160 @@ mod levinson_durbin_fixed_tests {
             assert_eq!(
                 n_diverged_without_clamp_disagreement, 0,
                 "found {n_diverged_without_clamp_disagreement} frame(s) where the r0-normalization candidate diverged from float by more than 0.05 with NO clamp disagreement (worst: {worst_unexplained_err}) -- expected white noise correction to have resolved this; if it's regressed, the correction's own effect needs rechecking, not just loosening this assertion"
+            );
+        }
+    }
+
+    /// Regression coverage for a real bug found and fixed in this
+    /// bug-hunt pass, 2026-09-10: `r0_normalize_fixed` used to only
+    /// `debug_assert!` its `r0_q > 0` precondition and then divide
+    /// anyway -- in a release build (where `debug_assert!` compiles
+    /// out) that meant a real, unconditional Rust integer
+    /// divide-by-zero panic for any all-zero autocorrelation, which a
+    /// real production encoder can genuinely receive (a squelched
+    /// receiver, a muted mic, or comfort-noise padding all hand real
+    /// zero-valued PCM samples to `EncoderFixed::encode`, which
+    /// windows them, autocorrelates them, and feeds the result straight
+    /// into this exact function with no upstream silence gate). See
+    /// `r0_normalize_fixed`'s own doc comment for the full derivation,
+    /// including why `levinson_durbin_fixed_core`'s sibling `f32`-based
+    /// normalization path degrades gracefully (an accidental `NaN`-to-
+    /// `0` cast) on the identical input while this function's genuine
+    /// integer division did not.
+    mod r0_normalize_fixed_on_an_all_silent_frame {
+        use super::*;
+
+        /// Confirmed empirically, not just derived: this exact call
+        /// panicked with `attempt to divide by zero` before the fix, in
+        /// BOTH debug (via the removed `debug_assert!`'s own message)
+        /// and `--release` builds (via the real integer division inside
+        /// `div_round_i128`) -- release matters most here, since that's
+        /// the build a real deployed daemon actually runs.
+        #[test]
+        fn r0_normalize_fixed_does_not_panic_on_an_all_zero_r_q() {
+            let r_q = [0i64; LPC_ORD + 1];
+            let r_norm_q = r0_normalize_fixed(&r_q);
+            assert_eq!(
+                r_norm_q[0],
+                1i64 << LEVINSON_FRAC_BITS,
+                "expected the 'no signal, no prediction' sentinel (1.0 in Q(LEVINSON_FRAC_BITS)) at index 0"
+            );
+            for (j, &v) in r_norm_q.iter().enumerate().skip(1) {
+                assert_eq!(v, 0, "expected r_norm_q[{j}] == 0 for an all-zero input, got {v}");
+            }
+        }
+
+        /// The real, end-to-end production path an all-silent frame
+        /// actually takes inside `EncoderFixed::encode`:
+        /// `autocorrelate_fixed` on an all-zero windowed block produces
+        /// an all-zero `R[]`, `apply_white_noise_correction_fixed`
+        /// leaves it all-zero (`0 + 0/1000 == 0` -- the multiplicative
+        /// correction has no effect on a genuinely zero `r_q[0]`, unlike
+        /// on any real nonzero signal), and that all-zero `R[]` is
+        /// exactly what `levinson_durbin_fixed_from_integer_r` receives.
+        /// Asserts the whole chain now returns the identity ("no
+        /// prediction") filter rather than panicking.
+        #[test]
+        fn levinson_durbin_fixed_from_integer_r_does_not_panic_on_an_all_silent_frame() {
+            let wn_q = [0i32; 320];
+            let r_q = autocorrelate_fixed(&wn_q);
+            assert!(
+                r_q.iter().all(|&v| v == 0),
+                "an all-zero windowed frame should autocorrelate to all zero"
+            );
+
+            let mut r_q_for_levinson = r_q;
+            apply_white_noise_correction_fixed(&mut r_q_for_levinson);
+            assert_eq!(
+                r_q_for_levinson[0], 0,
+                "white noise correction's own multiplicative form has no effect on a genuinely zero r_q[0]"
+            );
+
+            let (ak, a_q23) = levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
+
+            assert_eq!(a_q23[0], 1i64 << COEF_FRAC_BITS, "expected the identity filter's a[0] == 1.0");
+            for (i, &a) in a_q23.iter().enumerate().skip(1) {
+                assert_eq!(a, 0, "expected the identity ('no prediction') filter a[{i}] == 0 for an all-silent frame, got {a}");
+            }
+            assert_eq!(ak[0], 1.0);
+            for (i, &a) in ak.iter().enumerate().skip(1) {
+                assert_eq!(a, 0.0, "expected ak[{i}] == 0.0, got {a}");
+            }
+        }
+
+        /// A negative `r0_q` should never occur for a real autocorrelation
+        /// (`R[0]` is a sum of squares), but this function's own guard is
+        /// `<= 0`, not `== 0` specifically -- confirm the same graceful
+        /// path covers a hypothetical negative value too, rather than only
+        /// the exact-zero case the real production trigger above hits.
+        #[test]
+        fn r0_normalize_fixed_does_not_panic_on_a_negative_r0() {
+            let mut r_q = [1i64; LPC_ORD + 1];
+            r_q[0] = -5;
+            let r_norm_q = r0_normalize_fixed(&r_q);
+            assert_eq!(r_norm_q[0], 1i64 << LEVINSON_FRAC_BITS);
+        }
+    }
+
+    /// Regression coverage for a SECOND, distinct real bug found and
+    /// fixed in this same bug-hunt pass, 2026-09-10, inside
+    /// `levinson_durbin_fixed_core_from_r_norm` itself (the recursion
+    /// shared by BOTH `levinson_durbin_fixed_core` -- the "historical"
+    /// f32-normalized entry point -- and `levinson_durbin_fixed_core_
+    /// from_r_norm`'s real production caller, `levinson_durbin_fixed_
+    /// from_integer_r`, so this fix protects both). Unlike the
+    /// `r0_normalize_fixed` bug above (a zero *input*), this one is
+    /// entirely internal to the recursion: a reflection coefficient
+    /// `k_q` landing EXACTLY on this format's representable boundary
+    /// (`|k_q| == 1<<LEVINSON_FRAC_BITS`, i.e. a reflection coefficient
+    /// of exactly +-1.0) is a real, legal, UNCLAMPED value (the clamp
+    /// only fires on strictly `>`, matching the float reference's own
+    /// `k.abs() > 1.0` exactly) that zeroes `one_minus_ksq_q` and, one
+    /// iteration later, `e_q` -- and the next iteration's division by
+    /// that exact-zero `e_q` panicked with `attempt to divide by zero`
+    /// before this fix, in both debug and `--release` builds. See
+    /// `levinson_durbin_fixed_core_from_r_norm`'s own doc comment for
+    /// the full derivation, including why this is a deliberate,
+    /// narrow exception to "match the float reference's clamp
+    /// behavior as closely as practical and no closer" -- a hard crash
+    /// is categorically worse than the float reference's own silent
+    /// `inf`/`NaN` on the identical input, not a change to that
+    /// reference's own already-characterized divergence rate.
+    mod levinson_durbin_fixed_core_boundary_k_does_not_zero_divide {
+        use super::*;
+
+        /// Crafted, not from the real corpus (this exact boundary
+        /// condition -- `k_q` landing exactly, not approximately, on
+        /// the format's own representable limit -- is real but far too
+        /// rare to expect the 362-frame real captured corpus to happen
+        /// to contain an instance): `r_norm_q = [1.0, -1.0, 0, 0, ...]`
+        /// forces `k_q == +1<<LEVINSON_FRAC_BITS` exactly at `i=1`
+        /// (`numerator_q = r_norm_q[1] = -1<<F`, `e_q` still `1<<F`, so
+        /// `k_q = -(-1<<F)*2^F/2^F = 1<<F` with no rounding involved),
+        /// which zeroes `e_q` for `i=2`; `r_norm_q[2] = 0` still leaves
+        /// `i=2`'s own `numerator_q` nonzero (`sum_q = q_mul(a_prev_q[1],
+        /// r_norm_q[1]) = q_mul(1<<F, -1<<F) = -1<<F`), so `i=2` must
+        /// take the real division branch against `e_q == 0`.
+        #[test]
+        fn levinson_durbin_fixed_core_from_r_norm_does_not_panic_when_k_hits_the_boundary_exactly(
+        ) {
+            let mut r_norm_q = [0i64; LPC_ORD + 1];
+            r_norm_q[0] = 1i64 << LEVINSON_FRAC_BITS;
+            r_norm_q[1] = -(1i64 << LEVINSON_FRAC_BITS);
+            let (_a_q23, fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
+            // Reaching this line at all is the real safety property
+            // this test checks -- before the fix, the call above
+            // panicked with `attempt to divide by zero`.
+            //
+            // i=1's own k_q hits the boundary exactly but is NOT the
+            // `clamped`/`fired` case (that's reserved for `> 1<<F`,
+            // matching the float reference) -- confirm `fired[1]` is
+            // correctly `false` here, i.e. this really is testing the
+            // boundary-exact path, not accidentally exercising the
+            // ordinary clamp instead.
+            assert!(
+                !fired[1],
+                "expected i=1's own k_q (exactly 1<<LEVINSON_FRAC_BITS) to NOT be the `clamped`/`fired` case -- this test is meant to probe the boundary-exact path, not the ordinary clamp"
             );
         }
     }
