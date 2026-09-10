@@ -397,6 +397,24 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         this_file = os.path.abspath(__file__)
         for frame_info in inspect.stack():
+            if not os.path.isfile(frame_info.filename):
+                # Not a real source file on disk -- e.g. "<stdin>" or
+                # "<console>" for an interactive shell (python3 REPL,
+                # `odoo shell`), "<string>" for exec()'d code, "<stdin>"
+                # for `python3 -c`. A real source file's frame filename
+                # is already an absolute path from Python's own import
+                # machinery, so it's already a real file at this point;
+                # only these pseudo-frames fail this check. This must
+                # run BEFORE os.path.abspath() below: abspath() silently
+                # resolves a bare pseudo-name like "<stdin>" against the
+                # current working directory (into "<cwd>/<stdin>"),
+                # which would make the directory walk below start from
+                # cwd and misattribute the call to whatever module cwd
+                # happens to be inside -- an operator- or
+                # attacker-influenced coincidence, not a real signal of
+                # which module's code actually made the call. Treat
+                # this the same as any other indeterminate caller.
+                break
             caller_file = os.path.abspath(frame_info.filename)
             if caller_file == this_file:
                 continue

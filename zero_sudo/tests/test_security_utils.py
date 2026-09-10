@@ -701,6 +701,59 @@ class TestSecurityUtils(HamsTransactionCase):
         utils = self.env["zero_sudo.security.utils"]
         self.assertEqual(utils._caller_module_name(), "zero_sudo")
 
+    def test_17c_caller_module_name_rejects_interactive_shell_frame(self):
+        # Tests [@ANCHOR: zero_sudo:caller_module_name]
+        """
+        A call originating from an interactive shell/console (python3
+        REPL, `odoo shell`, `python3 -c`, exec()'d strings) has a
+        pseudo-frame filename like "<stdin>" or "<console>" instead of
+        a real file path. _caller_module_name() must recognize that and
+        return None (indeterminate caller) rather than resolving
+        os.path.abspath("<stdin>") to "<cwd>/<stdin>" and walking
+        upward from the current working directory -- which would
+        silently misattribute the call to whatever module the cwd
+        happens to be inside, regardless of what code actually made the
+        call.
+
+        Regression test for a real bug found during 2026-09-08 patent-
+        disclosure Fable reviews (disclosure 19): before the fix, this
+        method joined a pseudo-frame's filename with cwd without first
+        checking whether it was a real file, so an interactive-shell
+        caller was attributed to the cwd's module instead of being
+        rejected as indeterminate.
+        """
+        utils = self.env["zero_sudo.security.utils"]
+
+        # _caller_module_name() first skips frames whose file is
+        # security_utils.py itself, then examines the first remaining
+        # frame as "the immediate caller". Standing in for that
+        # immediate caller with a single pseudo-frame (filename
+        # "<stdin>", as a real interactive shell/console frame would
+        # have) is sufficient to exercise the check regardless of what
+        # this test file's own real frame looks like.
+        fake_frame_info = MagicMock()
+        fake_frame_info.filename = "<stdin>"
+
+        # Pin cwd to this test file's own directory (a real subdirectory
+        # of zero_sudo, which does have a __manifest__.py up its tree)
+        # so a pre-fix misattribution-via-cwd would be caught here: if
+        # the isfile() guard were missing, os.path.abspath("<stdin>")
+        # would resolve against this cwd and the walk-upward logic
+        # would incorrectly return "zero_sudo".
+        tests_dir = os.path.dirname(os.path.abspath(__file__))
+        self.safe_patch("os.getcwd", return_value=tests_dir)
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.inspect.stack",
+            return_value=[fake_frame_info],
+        )
+
+        self.assertIsNone(
+            utils._caller_module_name(),
+            "An interactive-shell-style pseudo-frame (filename "
+            "'<stdin>') must be rejected as an indeterminate caller, "
+            "not resolved via the current working directory.",
+        )
+
     def test_18_resolve_dependency_cycle_declared_and_installed(self):
         # Tests [@ANCHOR: zero_sudo:resolve_dependency_cycle]
         """
