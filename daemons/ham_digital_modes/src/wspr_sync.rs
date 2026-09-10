@@ -131,6 +131,7 @@ use rustfft::FftPlanner;
 /// tone spacing equals its symbol rate (`WSPR_SYMBOL_RATE_HZ`), so an
 /// `spsym`-point FFT's own bin spacing lands exactly on WSPR's tone
 /// spacing with no extra zero-padding needed.
+// [@ANCHOR: samples_per_symbol]
 fn samples_per_symbol(sample_rate: u32) -> usize {
     (sample_rate as f64 / WSPR_SYMBOL_RATE_HZ).round() as usize
 }
@@ -152,6 +153,7 @@ fn samples_per_symbol(sample_rate: u32) -> usize {
 /// pipeline test (`wspr_decode_fires_at_a_real_utc_slot_boundary`) blow
 /// through its own timeout: the search was still grinding through
 /// offsets that could never contain a real window.
+// [@ANCHOR: required_window_samples]
 pub fn required_window_samples(sample_rate: u32) -> usize {
     WSPR_NUM_SYMBOLS * samples_per_symbol(sample_rate)
 }
@@ -175,6 +177,7 @@ pub fn required_window_samples(sample_rate: u32) -> usize {
 /// same, tested code path rather than an unmeasured 48kHz one. Any
 /// trailing samples that don't fill a complete group of 4 are dropped,
 /// not padded.
+// [@ANCHOR: decimate_4x_box_average]
 pub fn decimate_4x_box_average(samples: &[i16]) -> Vec<i16> {
     samples
         .chunks_exact(4)
@@ -205,6 +208,22 @@ pub fn decimate_4x_box_average(samples: &[i16]) -> Vec<i16> {
 /// it down, rather than this function re-planning (and `FftPlanner`
 /// re-searching for a fast factorization of the block size) on every
 /// single call, the one real per-candidate cost in the whole search.
+///
+/// Returns `None` (never panics) both when `samples` is too short for a
+/// full 162-symbol window at `start_sample`, AND when `[bin_lo,
+/// bin_hi_inclusive]` doesn't fit inside the `spsym`-point complex FFT's
+/// own valid bin range `0..spsym` -- a real, previously-unguarded second
+/// precondition alongside the length one: a caller-supplied frequency
+/// (`find_sync()`'s own `freq_hi_hz`, or the `base_hz` behind `extract_
+/// all_four_tone_magnitudes()`) that's out of range for `sample_rate`
+/// (above Nyquist, or the result of an upstream NaN/infinity) used to
+/// reach a raw `buf[bin]` index here and panic instead of returning the
+/// same graceful "no candidate" `None` the length check already gives a
+/// too-short buffer -- see `find_sync()`'s and `extract_all_four_tone_
+/// magnitudes()`'s own doc comments for the caller-side range checks
+/// that make this defense-in-depth (both callers already reject an
+/// out-of-range frequency before ever computing a `bin_lo`/`bin_hi_
+/// inclusive` this function would refuse), not the only guard.
 // [@ANCHOR: spectrum_matrix]
 fn spectrum_matrix(
     samples: &[i16],
@@ -217,6 +236,9 @@ fn spectrum_matrix(
 ) -> Option<Vec<Vec<f64>>> {
     let spsym = samples_per_symbol(sample_rate);
     if start_sample + WSPR_NUM_SYMBOLS * spsym > samples.len() {
+        return None;
+    }
+    if bin_hi_inclusive < bin_lo || bin_hi_inclusive >= spsym {
         return None;
     }
     let two_pi = std::f64::consts::TAU;
@@ -378,13 +400,25 @@ pub struct SyncResult {
 /// scoring each by `cosine_score()`'s own correlation of `sync_
 /// statistic()` against `sync_pattern()`. Returns the single
 /// best-scoring candidate, or `None` if `samples` is too short for even
-/// one full 162-symbol window OR the best candidate found still scored
-/// below `min_sync_score` (pass `MIN_SYNC_SCORE` for the documented,
-/// measured default -- see its own doc comment for what it protects
-/// against and why it's a caller-supplied argument, not a hardcoded
-/// gate). Single-strongest-signal only, zero drift only -- see this
-/// module's own doc comment on scope. `sync_score` on a returned result
-/// is a real, bounded (`[-1, 1]`) correlation coefficient, not a
+/// one full 162-symbol window, OR `freq_lo_hz`/`freq_hi_hz` don't
+/// describe a valid, in-range search band for `sample_rate` (non-finite,
+/// negative, empty/inverted, or `freq_hi_hz` above the Nyquist frequency
+/// `sample_rate/2` -- searching above Nyquist is physically meaningless
+/// for a real-valued sampled signal, not just an arbitrary cutoff), OR
+/// the best candidate found still scored below `min_sync_score` (pass
+/// `MIN_SYNC_SCORE` for the documented, measured default -- see its own
+/// doc comment for what it protects against and why it's a
+/// caller-supplied argument, not a hardcoded gate). None of these three
+/// preconditions are distinguished in the returned `Option` -- a caller
+/// needing to tell them apart should check its own inputs first. Bug
+/// found and fixed 2026-09-10: prior to the Nyquist/finiteness check,
+/// an out-of-range (or NaN/infinite) `freq_hi_hz` reached raw bin-index
+/// arithmetic instead of hitting this same graceful `None` a too-short
+/// buffer already got -- see `find_sync_returns_none_instead_of_
+/// panicking_on_a_freq_hi_hz_above_nyquist`/`..._on_a_non_finite_freq_
+/// hi_hz` below. Single-strongest-signal only, zero drift only -- see
+/// this module's own doc comment on scope. `sync_score` on a returned
+/// result is a real, bounded (`[-1, 1]`) correlation coefficient, not a
 /// raw/unbounded statistic -- see `cosine_score()`'s own doc comment for
 /// why that distinction is load-bearing, not cosmetic.
 // [@ANCHOR: find_sync]
@@ -397,7 +431,22 @@ pub fn find_sync(
     min_sync_score: f64,
 ) -> Option<SyncResult> {
     let bin_hz = WSPR_SYMBOL_RATE_HZ;
-    if freq_lo_hz < 0.0 || freq_hi_hz <= freq_lo_hz {
+    // Explicit, not just implied by the checks below (which do already
+    // reject it, since `nyquist_hz` becomes `0.0` and `freq_hi_hz` must
+    // be `> freq_lo_hz >= 0.0`, hence `> 0.0 == nyquist_hz` -- but a
+    // degenerate `sample_rate` deserves its own named guard rather than
+    // relying on that derivation staying correct if this function's
+    // other checks are ever edited).
+    if sample_rate == 0 {
+        return None;
+    }
+    let nyquist_hz = sample_rate as f64 / 2.0;
+    if !freq_lo_hz.is_finite()
+        || !freq_hi_hz.is_finite()
+        || freq_lo_hz < 0.0
+        || freq_hi_hz <= freq_lo_hz
+        || freq_hi_hz > nyquist_hz
+    {
         return None;
     }
     let bin_lo = (freq_lo_hz / bin_hz).floor() as usize;
@@ -469,7 +518,13 @@ pub fn find_sync(
 /// transmission order (matching `wspr.rs`'s own `SYNC_VECTOR`/
 /// `interleave_permutation()` target-array indexing), NOT yet
 /// de-interleaved into the decoder's encoder-order convention -- see
-/// `evidence_to_symbol_values()` below for that step.
+/// `evidence_to_symbol_values()` below for that step. Returns `None`
+/// (never panics) if `samples` is too short for a full window at
+/// `start_sample`, OR `base_hz` is non-finite, negative, or above the
+/// Nyquist frequency `sample_rate/2` for `sample_rate` -- see
+/// `extract_all_four_tone_magnitudes()`'s own doc comment for why that
+/// range check exists (a real bug found and fixed here 2026-09-10, not
+/// a defensive-only addition).
 // [@ANCHOR: extract_symbol_evidence]
 pub fn extract_symbol_evidence(
     samples: &[i16],
@@ -497,6 +552,37 @@ pub fn extract_symbol_evidence(
 /// reference at each symbol position, uncontaminated by the winner/loser
 /// max/min selection bias `evidence_to_symbol_values()`'s own calibration
 /// has -- see `diagnostic_clean_noise_reference_from_impossible_tones`.
+///
+/// Validates `base_hz` before doing any bin arithmetic with it (finite,
+/// non-negative, and no higher than the Nyquist frequency `sample_rate/2`
+/// -- a tone above Nyquist can't be represented by this FFT anyway), and
+/// returns `None` rather than proceeding when it isn't. **Bug found and
+/// fixed 2026-09-10**: before this check existed, a non-finite (NaN/
+/// infinity) or merely out-of-range-for-`sample_rate` `base_hz` reached
+/// `(base_hz / bin_hz).round().max(0.0) as usize` and then `base_bin +
+/// 3` directly -- confirmed to panic two different ways depending on the
+/// exact value: `base_hz = f64::INFINITY` overflowed the `base_bin + 3`
+/// `usize` addition ("attempt to add with overflow", since Rust's
+/// float-to-int cast saturates infinity to `usize::MAX` rather than
+/// panicking on the cast itself), while a large-but-finite `base_hz`
+/// close to or above `sample_rate` (e.g. `11999.0` at a 12kHz
+/// `sample_rate`, still a plausible value for a caller that mixed up a
+/// dial/RF frequency with an audio baseband frequency, or paired the
+/// wrong `sample_rate` with an already-decimated buffer) reached
+/// `spectrum_matrix()`'s own `buf[bin].norm()` with a bin index past the
+/// `spsym`-point FFT's own valid range, panicking with a plain "index
+/// out of bounds" instead. Both are now caught here, before either kind
+/// of arithmetic runs, and turned into this function's own already-
+/// documented `None` ("no candidate"/"invalid input") outcome instead of
+/// a crash -- exactly the same graceful-`None` contract this function
+/// (and `find_sync()`, which had the identical gap on its own
+/// `freq_hi_hz` -- see that function's own doc comment) already gives
+/// for a too-short `samples` buffer, just extended to cover the other
+/// real precondition (a `base_hz`/`sample_rate` pairing this FFT can
+/// actually represent) that wasn't previously checked at all. See
+/// `extract_all_four_tone_magnitudes_returns_none_instead_of_panicking_
+/// on_a_non_finite_or_out_of_range_base_hz` below for the regression
+/// test.
 // [@ANCHOR: extract_all_four_tone_magnitudes]
 fn extract_all_four_tone_magnitudes(
     samples: &[i16],
@@ -505,6 +591,21 @@ fn extract_all_four_tone_magnitudes(
     start_sample: usize,
 ) -> Option<[[f64; 4]; WSPR_NUM_SYMBOLS]> {
     let bin_hz = WSPR_SYMBOL_RATE_HZ;
+    // `sample_rate == 0` is checked explicitly, separately from the
+    // `base_hz > nyquist_hz` check below: with `sample_rate == 0`,
+    // `nyquist_hz` is itself `0.0`, so `base_hz == 0.0` (a real
+    // possibility, not just a contrived value -- `find_sync()`'s own
+    // detected `base_hz` could plausibly be `0.0` for genuinely
+    // signal-free input) would pass `base_hz > nyquist_hz` (`0.0 >
+    // 0.0` is `false`) and reach `samples_per_symbol(0) == 0` below,
+    // an FFT block size this function has never been exercised at.
+    if sample_rate == 0 {
+        return None;
+    }
+    let nyquist_hz = sample_rate as f64 / 2.0;
+    if !base_hz.is_finite() || base_hz < 0.0 || base_hz > nyquist_hz {
+        return None;
+    }
     let base_bin = (base_hz / bin_hz).round().max(0.0) as usize;
     let sub_bin_hz_offset = base_hz - (base_bin as f64) * bin_hz;
     let spsym = samples_per_symbol(sample_rate);
@@ -533,7 +634,11 @@ fn extract_all_four_tone_magnitudes(
 /// "impossible tone" reference the Per-Symbol Channel Model Redesign
 /// (`docs/proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`) uses to build a
 /// local per-symbol noise_stddev estimate. Returned in real transmission
-/// order, same convention as `extract_symbol_evidence()`.
+/// order, same convention as `extract_symbol_evidence()`. Same `None`
+/// contract as `extract_symbol_evidence()` (too-short buffer, or a
+/// non-finite/out-of-Nyquist-range `base_hz`) -- both go through the
+/// same validated `extract_all_four_tone_magnitudes()`.
+// [@ANCHOR: extract_impossible_tone_evidence]
 pub fn extract_impossible_tone_evidence(
     samples: &[i16],
     sample_rate: u32,
@@ -636,6 +741,7 @@ const CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH: usize = 20;
 /// own 0/5 there. See `docs/proposals/WSPR_DECODE_IMPLEMENTATION_PLAN.md`'s
 /// own "Built, and partially measured to work" section for the full
 /// writeup and the real, still-open remainder of the gap.
+// [@ANCHOR: evidence_to_symbol_values]
 pub fn evidence_to_symbol_values(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
 ) -> (
@@ -714,6 +820,7 @@ fn evidence_to_symbol_values_windowed(
 /// still comes from the same windowed winner/loser calculation --  only
 /// `noise_stddev`'s source differs from `evidence_to_symbol_values_
 /// windowed()` above.
+// [@ANCHOR: evidence_to_symbol_values_windowed_clean_reference]
 fn evidence_to_symbol_values_windowed_clean_reference(
     evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
     impossible_tone_evidence: &[[f64; 2]; WSPR_NUM_SYMBOLS],
@@ -2533,4 +2640,134 @@ mod tests {
         // output shape and `fano_bit_metric()`'s inputs, not another
         // scalar-constant sweep.
     }
+
+    /// Regression test for the bug documented on `find_sync()`'s own doc
+    /// comment: a `freq_hi_hz` above the Nyquist frequency for
+    /// `sample_rate` used to reach `spectrum_matrix()`'s own
+    /// `buf[bin].norm()` with a bin index past the FFT's valid range and
+    /// panic with a plain "index out of bounds," instead of returning
+    /// `None` the way an equally-invalid too-short `samples` buffer
+    /// already does. Confirmed to panic before the fix with exactly
+    /// this input (`sample_rate=12000`, `freq_hi_hz=20_000.0`, Nyquist
+    /// = 6000Hz) against a `samples` buffer large enough that the
+    /// length precondition alone wouldn't already return `None` first
+    /// (masking the real bug under test).
+    #[test]
+    fn find_sync_returns_none_instead_of_panicking_on_a_freq_hi_hz_above_nyquist() {
+        let sample_rate = 12000u32;
+        let samples = vec![0i16; 3 * required_window_samples(sample_rate)];
+        let result = find_sync(&samples, sample_rate, 0.0, 20_000.0, 100, 0.0);
+        assert_eq!(
+            result, None,
+            "a freq_hi_hz above sample_rate/2 must be rejected as None, not searched"
+        );
+    }
+
+    /// Same bug class, the other trigger named in `find_sync()`'s own
+    /// doc comment: `freq_hi_hz = f64::INFINITY` used to overflow the
+    /// `bin_hi = ... as usize + 3` addition and panic with "attempt to
+    /// add with overflow" (Rust's float-to-int cast saturates infinity
+    /// to `usize::MAX`, so the `+ 3` right after it is what actually
+    /// overflowed) before ever reaching `spectrum_matrix()`. A NaN
+    /// `freq_lo_hz`/`freq_hi_hz` pair is checked too, since the
+    /// pre-fix guard (`freq_lo_hz < 0.0 || freq_hi_hz <= freq_lo_hz`)
+    /// used direct float comparisons that are all silently `false` for
+    /// NaN, letting it slip past unnoticed -- confirmed this specific
+    /// NaN case happened not to panic even pre-fix (it degenerated into
+    /// a harmless, meaningless near-zero-Hz search instead), but it's
+    /// still real, silently-wrong-input-accepted behavior `is_finite()`
+    /// now closes explicitly rather than by accident.
+    #[test]
+    fn find_sync_returns_none_instead_of_panicking_on_a_non_finite_freq_hi_hz() {
+        let sample_rate = 12000u32;
+        let samples = vec![0i16; 3 * required_window_samples(sample_rate)];
+        assert_eq!(
+            find_sync(&samples, sample_rate, 0.0, f64::INFINITY, 100, 0.0),
+            None
+        );
+        assert_eq!(
+            find_sync(&samples, sample_rate, f64::NAN, f64::NAN, 100, 0.0),
+            None
+        );
+    }
+
+    /// Regression test for the bug documented on `extract_all_four_tone_
+    /// magnitudes()`'s own doc comment: an out-of-range or non-finite
+    /// `base_hz` reached raw bin-index arithmetic and panicked, two
+    /// different ways, instead of returning the same `None` a too-short
+    /// `samples` buffer already gets. Exercises both call paths
+    /// (`extract_symbol_evidence()` and `extract_impossible_tone_
+    /// evidence()`), since both are thin wrappers around the one shared,
+    /// now-fixed function, and both real panics found while writing this
+    /// claim: `base_hz = f64::INFINITY` (overflow on `base_bin + 3`) and
+    /// `base_hz = 11999.0` at `sample_rate = 12000` (a finite, plausible-
+    /// looking value -- e.g. a caller confusing a dial/RF frequency with
+    /// an audio baseband one -- that's still effectively out of range,
+    /// causing a plain FFT-bin-index-out-of-bounds panic instead).
+    #[test]
+    fn extract_all_four_tone_magnitudes_returns_none_instead_of_panicking_on_a_non_finite_or_out_of_range_base_hz(
+    ) {
+        let sample_rate = 12000u32;
+        // Large enough that the length precondition alone doesn't
+        // already return None first, masking the real bug under test.
+        let samples = vec![0i16; 3 * required_window_samples(sample_rate)];
+
+        for base_hz in [f64::INFINITY, f64::NAN, f64::NEG_INFINITY, 11999.0, -1.0] {
+            assert_eq!(
+                extract_symbol_evidence(&samples, sample_rate, base_hz, 0),
+                None,
+                "extract_symbol_evidence must reject base_hz={base_hz} as None, not panic"
+            );
+            assert_eq!(
+                extract_impossible_tone_evidence(&samples, sample_rate, base_hz, 0),
+                None,
+                "extract_impossible_tone_evidence must reject base_hz={base_hz} as None, not panic"
+            );
+        }
+    }
+
+    /// Confirms the fix didn't tighten the valid range: a `base_hz`
+    /// exactly at (or safely under) the Nyquist frequency, and a
+    /// `freq_hi_hz` exactly at Nyquist, must still work exactly as
+    /// before -- this bug-hunt pass's fix is a new lower/upper bound
+    /// check, not a change to the values that were already valid.
+    #[test]
+    fn nyquist_boundary_frequencies_still_work_normally() {
+        let sample_rate = 12000u32;
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let base_hz = 1500.0;
+        let audio = wspr_modulate(&symbols, base_hz, sample_rate);
+        assert!(
+            extract_symbol_evidence(&audio, sample_rate, base_hz, 0).is_some(),
+            "an ordinary, well-in-range base_hz must still work after the fix"
+        );
+
+        let samples = vec![0i16; 3 * required_window_samples(sample_rate)];
+        // freq_hi_hz exactly at Nyquist -- must not be rejected (only
+        // strictly ABOVE Nyquist is invalid).
+        assert!(
+            find_sync(&samples, sample_rate, 100.0, sample_rate as f64 / 2.0, 100, 0.0).is_some(),
+            "freq_hi_hz exactly at Nyquist must still be accepted"
+        );
+    }
+
+    /// A degenerate `sample_rate == 0` (e.g. an unconfigured/uninitialized
+    /// audio device reporting a zero rate before real capture starts) must
+    /// return `None`, not reach `samples_per_symbol(0) == 0` and plan a
+    /// zero-length FFT -- an untested block size this module's own
+    /// documented "STFT block length equals samples_per_symbol()" design
+    /// was never meant to be exercised at. Checked directly on
+    /// `extract_all_four_tone_magnitudes()`'s two public callers, since
+    /// `find_sync()`'s own `sample_rate == 0` case is separately covered
+    /// by its own Nyquist-derived rejection (`nyquist_hz` becomes `0.0`,
+    /// and `freq_hi_hz` must be `> freq_lo_hz >= 0.0`) as well as its own
+    /// explicit guard.
+    #[test]
+    fn sample_rate_zero_returns_none_instead_of_reaching_a_zero_length_fft() {
+        let samples = vec![0i16; 1000];
+        assert_eq!(extract_symbol_evidence(&samples, 0, 0.0, 0), None);
+        assert_eq!(extract_impossible_tone_evidence(&samples, 0, 0.0, 0), None);
+        assert_eq!(find_sync(&samples, 0, 0.0, 100.0, 10, 0.0), None);
+    }
 }
+
