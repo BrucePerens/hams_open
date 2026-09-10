@@ -125,13 +125,40 @@ pub(crate) fn pack_call(callsign: &str) -> Option<u32> {
 }
 
 /// Packs a 4-character grid locator and a power level in dBm into
-/// WSPR's 22-bit `m` field.
+/// WSPR's 22-bit `m` field. Enforces the real Maidenhead grid-square
+/// convention on the way in (positions 0-1 are field letters A-R,
+/// positions 2-3 are digits 0-9) -- found and fixed 2026-09-09: this
+/// function used to accept anything `grid_char_code()` could map (any
+/// A-Z or digit in any of the 4 positions) and rely on
+/// `unpack_grid4_power()`'s own bounds check to catch a malformed
+/// shape later. That reliance was false in general, not just
+/// theoretically: e.g. `pack_grid4_power("99EN", 33)` used to pack
+/// "successfully" and then silently UNPACK to a different, wrong grid
+/// (`("JK43", 33)`) instead of failing anywhere in the round trip, and
+/// `pack_grid4_power("SS00", 33)` (one letter past the real A-R range)
+/// similarly packed and silently unpacked to `("RA90", 33)` -- directly
+/// contradicting `unpack_grid4_power()`'s own former doc comment, which
+/// claimed a malformed pack "correctly fails to unpack" using `"ZZ99"`
+/// as its own worked example (which, checked directly, never even
+/// packs in the first place: `pack_grid4_power("ZZ99", 33)` was already
+/// `None` before this fix, since the resulting `m` fell outside the
+/// bounds check below -- the doc's own illustrative example did not
+/// exercise the failure mode it claimed to demonstrate). Validating the
+/// real format here, rather than trusting a later bounds check to catch
+/// every malformed shape, closes the gap for real instead of leaving it
+/// to a downstream check that provably doesn't catch every case.
 // [@ANCHOR: pack_grid4_power]
 pub(crate) fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
     let bytes = grid4.to_ascii_uppercase();
     let bytes = bytes.as_bytes();
     if bytes.len() != 4 {
         return None;
+    }
+    if !(b'A'..=b'R').contains(&bytes[0]) || !(b'A'..=b'R').contains(&bytes[1]) {
+        return None; // positions 0-1 must be real Maidenhead field letters (A-R).
+    }
+    if !bytes[2].is_ascii_digit() || !bytes[3].is_ascii_digit() {
+        return None; // positions 2-3 must be digits.
     }
     let g: Vec<i64> = bytes
         .iter()
@@ -200,18 +227,18 @@ pub(crate) fn unpack_call(n: u32) -> Option<String> {
 /// layout (not itself re-derivable from the packed value alone, since
 /// `grid_char_code()` maps letters and digits to overlapping small
 /// integers) is assumed here as a fixed, standard WSPR/Maidenhead
-/// convention -- position 0/1 are always letters, 2/3 always digits --
-/// the same real-world convention `pack_grid4_power()`'s own caller is
-/// already expected to follow, not something decoded from the bits.
-/// The grid-letter bounds here (`0..18`, Maidenhead fields A-R) are
-/// deliberately tighter than `pack_grid4_power()`'s own `grid_char_
-/// code()` allows on the way in (which accepts any A-Z, not just A-R)
-/// -- this is the intended asymmetry, not a bug: `pack_grid4_power`
-/// trusts a real caller to pass a standard grid square, `unpack_grid4_
-/// power` has to actively reject values a real encode could never have
-/// produced, since it's the fail-fast boundary for a possibly-wrong
-/// decode (`ZZ99`-shaped input packs fine; its own packed output
-/// correctly fails to unpack).
+/// convention -- position 0/1 are always letters, 2/3 always digits.
+/// The grid-letter bounds here (`0..18`, Maidenhead fields A-R) now
+/// match `pack_grid4_power()`'s own real-format validation exactly
+/// (both were `A..=R`/digit-only as of the 2026-09-09 fix documented on
+/// `pack_grid4_power()` -- see its own doc comment for the concrete
+/// silent-mismatch bug that fix closed). This function remains a real,
+/// independent fail-fast boundary in its own right: it rejects any `m`
+/// value outside the range a real `pack_grid4_power()` output could
+/// ever produce, regardless of whether that `m` came from a correctly-
+/// packed real message or from a wrong/corrupted decode upstream (this
+/// module's own sequential decoder can and does hand this function
+/// arbitrary garbage bit patterns on a wrong or low-confidence decode).
 // [@ANCHOR: unpack_grid4_power]
 pub(crate) fn unpack_grid4_power(m: u32) -> Option<(String, i32)> {
     let m = m as i64;
@@ -715,6 +742,36 @@ mod tests {
         let m = pack_grid4_power("EN50", 33).expect("EN50/33 should pack");
         assert!(m < (1u32 << 22));
         assert!(pack_grid4_power("XY", 33).is_none()); // wrong length
+    }
+
+    #[test]
+    // Tests [@ANCHOR: pack_grid4_power]
+    fn pack_grid4_power_rejects_non_maidenhead_shaped_grids_instead_of_silently_mispacking_them() {
+        // Regression test for a real bug found and fixed 2026-09-09: pack_grid4_power used to
+        // accept any grid_char_code()-mappable 4 characters (digits in letter positions, letters
+        // past the real A-R field range), silently producing a packed value that unpack_grid4_
+        // power then decoded back into a DIFFERENT, wrong-but-plausible grid instead of either
+        // side ever failing. Confirmed independently (in Python, then cross-checked against this
+        // exact formula) before the fix: "99EN"/33 packed successfully and unpacked back as
+        // ("JK43", 33); "SS00"/33 (one letter past the real A-R range) packed successfully and
+        // unpacked back as ("RA90", 33). Neither is a standard Maidenhead grid, and neither ever
+        // triggered a None anywhere in the round trip pre-fix.
+        assert!(
+            pack_grid4_power("99EN", 33).is_none(),
+            "digits in the letter positions must be rejected, not silently packed"
+        );
+        assert!(
+            pack_grid4_power("SS00", 33).is_none(),
+            "'S' is one field past the real Maidenhead A-R range and must be rejected"
+        );
+        assert!(
+            pack_grid4_power("ZZ99", 33).is_none(),
+            "'Z' is far past the real Maidenhead A-R range and must be rejected"
+        );
+        // A real, standard-format grid must still pack correctly -- the fix must not have
+        // narrowed acceptance below the real, documented Maidenhead field range (A-R).
+        assert!(pack_grid4_power("RR99", 33).is_some(), "'R' is the real upper field bound and must still be accepted");
+        assert!(pack_grid4_power("AA00", 33).is_some(), "'A' is the real lower field bound and must still be accepted");
     }
 
     #[test]

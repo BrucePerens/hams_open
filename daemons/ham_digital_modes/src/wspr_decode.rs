@@ -127,22 +127,67 @@ impl Ord for StackNode {
 /// The Fano/sequential-decoding bit metric -- see this module's own doc
 /// comment for the full formula and its provenance. The shared Gaussian
 /// normalizing constant `1/(sqrt(2*pi)*noise_stddev)` is deliberately
-/// omitted from `gaussian_shape` below: it multiplies P(r|0), P(r|1),
+/// omitted from `gaussian_exponent` below: it multiplies P(r|0), P(r|1),
 /// and therefore P(r) identically, so it cancels exactly in the
 /// P(r|hyp_bit)/P(r) ratio this function computes and never needs to be
 /// evaluated.
+///
+/// Computed via a log-sum-exp (max-subtraction) reformulation rather than
+/// forming `p_r_given_hyp / p_r` from two raw `exp()` calls directly --
+/// found and fixed 2026-09-09 during a bug-hunt pass, not a stylistic
+/// preference. For a `r` far from BOTH `+amplitude` and `-amplitude` (a
+/// real, reachable condition on a real receiver: an RFI spike, a fading
+/// dropout that briefly invalidates the caller's own per-symbol amplitude/
+/// noise_stddev estimate, or simply a wrong hypothesis deep in a search
+/// that has drifted off the correct path), BOTH Gaussian exponents can be
+/// large negative numbers whose `exp()` each individually underflows to
+/// exactly `0.0` in f64 -- the naive `p_r_given_hyp / p_r` then computes
+/// `0.0 / 0.0`, which is NaN. That NaN is not a cosmetic issue: it flows
+/// straight into `StackNode`'s `Ord` impl the next time this node is
+/// compared inside the search's `BinaryHeap`, and that impl's own
+/// `.expect("branch metric must be finite ...")` panics immediately,
+/// which means a single noisy/outlier channel-bit value anywhere in a
+/// real received transmission can abort the entire decode (and, in a
+/// long-running daemon, the whole process) instead of the intended
+/// behavior: recognizing the input as strong evidence against whichever
+/// hypothesis it disagrees with. Confirmed empirically before this fix
+/// (not just derived): `fano_bit_metric(100.0, true, 1.0, 1.0)` returned
+/// `NaN`, and feeding that same outlier into `sequential_decode()` as one
+/// of 162 otherwise-ordinary channel values panicked with exactly that
+/// message on the very first node expansion.
+///
+/// The fix subtracts the larger of the two exponents before exponentiating
+/// either one (the standard log-sum-exp trick): at least one of the two
+/// shifted terms is then always exactly `exp(0.0) == 1.0`, so the shifted
+/// denominator can never underflow to `0.0` (it's always `>= 0.5`), and
+/// `0.0 / 0.0` can no longer arise from this computation for any finite
+/// `r`/`amplitude`/`noise_stddev`. This changes floating-point rounding
+/// on some inputs but not the mathematical result: `(a_hyp - max) -
+/// (log2(p_r_shifted))` is algebraically identical to the original
+/// `log2(p_r_given_hyp / p_r)` (the `max` term the numerator and
+/// denominator each implicitly subtract cancels in the ratio), confirmed
+/// by `fano_bit_metric_matches_the_naive_formula_away_from_the_underflow_
+/// edge` below holding bit-for-bit-close agreement with the original
+/// direct-ratio formula on ordinary, non-extreme inputs.
 // [@ANCHOR: fano_bit_metric]
 fn fano_bit_metric(r: f64, hyp_bit: bool, amplitude: f64, noise_stddev: f64) -> f64 {
     const RATE_BITS_PER_CHANNEL_BIT: f64 = 0.5;
-    let gaussian_shape = |x: f64, mean: f64| -> f64 {
+    // -0.5*z^2 for hypothesized transmitted bit 1 (mean=+amplitude) and 0
+    // (mean=-amplitude) -- the Gaussian log-density shape (natural log,
+    // unnormalized), always finite for finite r/amplitude/noise_stddev.
+    let gaussian_exponent = |x: f64, mean: f64| -> f64 {
         let z = (x - mean) / noise_stddev;
-        (-0.5 * z * z).exp()
+        -0.5 * z * z
     };
-    let p_r_given_1 = gaussian_shape(r, amplitude);
-    let p_r_given_0 = gaussian_shape(r, -amplitude);
-    let p_r = 0.5 * p_r_given_0 + 0.5 * p_r_given_1;
-    let p_r_given_hyp = if hyp_bit { p_r_given_1 } else { p_r_given_0 };
-    (p_r_given_hyp / p_r).log2() - RATE_BITS_PER_CHANNEL_BIT
+    let a1 = gaussian_exponent(r, amplitude);
+    let a0 = gaussian_exponent(r, -amplitude);
+    let a_hyp = if hyp_bit { a1 } else { a0 };
+    let max_a = a0.max(a1);
+    // At least one of (a0 - max_a), (a1 - max_a) is exactly 0.0, so at
+    // least one exp() term below is exactly 1.0 -- p_r_shifted can never
+    // underflow to 0.0, unlike computing exp(a0)/exp(a1) directly.
+    let p_r_shifted = 0.5 * (a0 - max_a).exp() + 0.5 * (a1 - max_a).exp();
+    ((a_hyp - max_a).exp() / p_r_shifted).log2() - RATE_BITS_PER_CHANNEL_BIT
 }
 
 /// Runs the stack-algorithm sequential decode over `channel_bit_values`
@@ -853,6 +898,82 @@ mod tests {
             "any_rung_failed_to_mostly_decode = {any_rung_failed_to_mostly_decode} -- see printed table \
              above for the real per-rung breakdown; this is diagnostic, not pass/fail."
         );
+    }
+
+    #[test]
+    // Tests [@ANCHOR: fano_bit_metric]
+    fn fano_bit_metric_stays_finite_for_a_gross_outlier_far_from_both_hypotheses() {
+        // Regression test for a real bug found and fixed 2026-09-09: before the
+        // log-sum-exp reformulation, both Gaussian densities underflowed to
+        // exactly 0.0 for an `r` this far from both +-amplitude, and the naive
+        // p_r_given_hyp/p_r computed 0.0/0.0 = NaN. Confirmed pre-fix that this
+        // exact call returned NaN.
+        for hyp_bit in [false, true] {
+            let m = fano_bit_metric(100.0, hyp_bit, 1.0, 1.0);
+            assert!(
+                m.is_finite(),
+                "metric for a gross outlier (hyp_bit={hyp_bit}) was {m}, expected finite"
+            );
+        }
+    }
+
+    #[test]
+    fn fano_bit_metric_matches_the_naive_formula_away_from_the_underflow_edge() {
+        // The log-sum-exp rewrite must not change the mathematical result for
+        // ordinary, non-extreme inputs -- only its numerical robustness at the
+        // extreme edge. Recomputes the ORIGINAL, pre-fix direct-ratio formula
+        // independently here (not a call into the fixed function) and checks
+        // near-exact agreement over a range of realistic r/amplitude/noise_stddev
+        // combinations that stay well away from the underflow edge.
+        fn naive_formula(r: f64, hyp_bit: bool, amplitude: f64, noise_stddev: f64) -> f64 {
+            let gaussian_shape = |x: f64, mean: f64| -> f64 {
+                let z = (x - mean) / noise_stddev;
+                (-0.5 * z * z).exp()
+            };
+            let p_r_given_1 = gaussian_shape(r, amplitude);
+            let p_r_given_0 = gaussian_shape(r, -amplitude);
+            let p_r = 0.5 * p_r_given_0 + 0.5 * p_r_given_1;
+            let p_r_given_hyp = if hyp_bit { p_r_given_1 } else { p_r_given_0 };
+            (p_r_given_hyp / p_r).log2() - 0.5
+        }
+
+        for &r in &[-1.5, -0.9, -0.2, 0.0, 0.3, 0.9, 1.5] {
+            for &hyp_bit in &[false, true] {
+                for &(amplitude, noise_stddev) in &[(1.0, 0.3), (1.0, 0.9), (1.0, 5.0)] {
+                    let expected = naive_formula(r, hyp_bit, amplitude, noise_stddev);
+                    let actual = fano_bit_metric(r, hyp_bit, amplitude, noise_stddev);
+                    assert!(
+                        (expected - actual).abs() < 1e-9,
+                        "r={r}, hyp_bit={hyp_bit}, amplitude={amplitude}, noise_stddev={noise_stddev}: \
+                         naive={expected}, log-sum-exp={actual}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sequential_decode_does_not_panic_when_one_symbol_is_a_gross_outlier() {
+        // End-to-end regression test at the real caller boundary: before the
+        // fix, a single grossly-out-of-model channel value anywhere in a real
+        // 162-symbol transmission (an RFI spike, a bad per-symbol channel
+        // estimate) reached fano_bit_metric via sequential_decode's own search
+        // and panicked the first time that NaN metric was compared inside the
+        // BinaryHeap -- aborting the whole decode (and, in a long-running
+        // daemon, the whole process) instead of just treating that one
+        // observation as strong (or informative) evidence. This must now
+        // either succeed or return a real Err, never panic.
+        let mut channel_bit_values = [0.5f64; WSPR_NUM_SYMBOLS];
+        channel_bit_values[0] = 100.0; // gross outlier, e.g. an RFI spike
+        let amplitude = [1.0f64; WSPR_NUM_SYMBOLS];
+        let noise_stddev = [1.0f64; WSPR_NUM_SYMBOLS];
+        let result = sequential_decode(&channel_bit_values, &amplitude, &noise_stddev, 10_000);
+        // Not asserting Ok specifically -- a single outlier symbol amid
+        // otherwise-uninformative 0.5 values may or may not let the search
+        // reach full depth within the cycle budget; the real invariant this
+        // guards is "does not panic," which the surrounding call itself
+        // already proves by returning at all.
+        let _ = result;
     }
 
     #[test]
