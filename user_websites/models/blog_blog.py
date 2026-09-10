@@ -30,34 +30,93 @@ class BlogBlog(models.Model):
         owner_ids = [
             vals.get("owner_user_id") for vals in vals_list if vals.get("owner_user_id")
         ]
-        if not owner_ids:
+        # Bug-hunt fix, 2026-09-09: this check used to be keyed purely on
+        # owner_user_id, exactly like website.page's own check it was
+        # modeled on -- so a batch that sets user_websites_group_id
+        # instead (every group-owned blog, reachable both from
+        # controllers/main.py's create_blog route and, since
+        # group_user_websites_user holds full 1,1,1,1 ir.model.access on
+        # blog.blog, from direct RPC with an arbitrary distinct `name` per
+        # call) hit `if not owner_ids: return` and skipped quota
+        # entirely -- the exact "any authenticated user can create
+        # unbounded blogs via direct RPC" hole this function exists to
+        # close, just reopened through the other of the mixin's two
+        # mutually-exclusive ownership fields. See
+        # docs/bug_hunt_claims/hams_open/user_websites/claims/
+        # user_websites_blog_quota_check.md in hams_com for the full
+        # writeup.
+        group_ids = [
+            vals.get("user_websites_group_id")
+            for vals in vals_list
+            if vals.get("user_websites_group_id")
+        ]
+        if not owner_ids and not group_ids:
             return
-        unique_owner_ids = list(set(owner_ids))
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
-        limits = {user.id: user._get_blog_limit() for user in users}
 
-        existing_counts = {u_id: 0 for u_id in unique_owner_ids}
-        for owner, count in (
-            self.env["blog.blog"]
-            .with_user(svc_uid)
-            ._read_group([("owner_user_id", "in", unique_owner_ids)], ["owner_user_id"], ["__count"])
-        ):
-            existing_counts[owner.id] = count
+        if owner_ids:
+            unique_owner_ids = list(set(owner_ids))
+            users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
+            limits = {user.id: user._get_blog_limit() for user in users}
 
-        batch_counts = {u_id: 0 for u_id in unique_owner_ids}
-        for vals in vals_list:
-            o_id = vals.get("owner_user_id")
-            if o_id:
-                batch_counts[o_id] += 1
+            existing_counts = {u_id: 0 for u_id in unique_owner_ids}
+            for owner, count in (
+                self.env["blog.blog"]
+                .with_user(svc_uid)
+                ._read_group([("owner_user_id", "in", unique_owner_ids)], ["owner_user_id"], ["__count"])
+            ):
+                existing_counts[owner.id] = count
 
-        for o_id in unique_owner_ids:
-            if existing_counts[o_id] + batch_counts[o_id] > limits[o_id]:
-                raise ValidationError(
-                    _("You have reached your limit of %s blogs.") % limits[o_id]
+            batch_counts = {u_id: 0 for u_id in unique_owner_ids}
+            for vals in vals_list:
+                o_id = vals.get("owner_user_id")
+                if o_id:
+                    batch_counts[o_id] += 1
+
+            for o_id in unique_owner_ids:
+                if existing_counts[o_id] + batch_counts[o_id] > limits[o_id]:
+                    raise ValidationError(
+                        _("You have reached your limit of %s blogs.") % limits[o_id]
+                    )
+
+        if group_ids:
+            unique_group_ids = list(set(group_ids))
+            # No per-group configurable limit field exists yet (a real,
+            # separate product decision -- should a group's limit scale
+            # with its member count?); reuse the same global default a
+            # lone user gets, applied to the group as a whole, as the
+            # conservative floor that closes the unbounded-creation hole
+            # without presuming an answer to that product question.
+            group_limit = int(
+                self.env["zero_sudo.security.utils"]._get_system_param(
+                    "user_websites.global_blog_limit", 5
                 )
+            )
+            existing_group_counts = {g_id: 0 for g_id in unique_group_ids}
+            for group, count in (
+                self.env["blog.blog"]
+                .with_user(svc_uid)
+                ._read_group(
+                    [("user_websites_group_id", "in", unique_group_ids)],
+                    ["user_websites_group_id"],
+                    ["__count"],
+                )
+            ):
+                existing_group_counts[group.id] = count
+
+            batch_group_counts = {g_id: 0 for g_id in unique_group_ids}
+            for vals in vals_list:
+                g_id = vals.get("user_websites_group_id")
+                if g_id:
+                    batch_group_counts[g_id] += 1
+
+            for g_id in unique_group_ids:
+                if existing_group_counts[g_id] + batch_group_counts[g_id] > group_limit:
+                    raise ValidationError(
+                        _("This group has reached its limit of %s blogs.") % group_limit
+                    )
 
     # [@ANCHOR: user_websites:COMM_blog_blog_create]
     @api.model_create_multi

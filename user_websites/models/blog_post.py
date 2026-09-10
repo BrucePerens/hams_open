@@ -23,12 +23,25 @@ class BlogPost(models.Model):
 
     _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog post with this exact title!")
 
+    # [@ANCHOR: user_websites:COMM_blog_post_invalidate_cloudflare_cache]
     def _invalidate_cloudflare_cache(self):
         """Purge the global Cache-Tag at the edge."""
-        # Enforce strict architectural schema. Do not mask missing dependencies.
-        purge_queue = self.env["cloudflare.purge.queue"]
-        if not purge_queue:
-            return
+        # Bug-hunt fix, 2026-09-09: `self.env["cloudflare.purge.queue"]` is
+        # a plain model accessor -- an always-empty recordset, truthy only
+        # after an actual search/browse returns rows, and it raises
+        # KeyError immediately (before reaching this line at all) if the
+        # model were unregistered. `cloudflare` is also a hard dependency
+        # of this module's own __manifest__.py, so that KeyError case
+        # can't happen here anyway. The old `if not purge_queue: return`
+        # was therefore always true and always returned -- this whole
+        # method, including the enqueue_tags() call below, was dead code
+        # that never actually purged anything. (test_audit_edge_cases.py's
+        # setUp() already mocks CloudflarePurgeQueue.enqueue_tags/
+        # enqueue_urls "to prevent Cloudflare cache purge hooks from
+        # leaking queue records during tests" -- confirming the intent
+        # was always for this call to actually fire.) See
+        # docs/bug_hunt_claims/hams_open/user_websites/claims/
+        # invalidate_cloudflare_cache.md in hams_com for the full writeup.
 
         # ADR 0078: Pre-fetch related fields to prevent N+1 queries in the loop
         self.mapped("owner_user_id.website_slug")
@@ -88,35 +101,94 @@ class BlogPost(models.Model):
         owner_ids = [
             vals.get("owner_user_id") for vals in vals_list if vals.get("owner_user_id")
         ]
-        if not owner_ids:
+        # Bug-hunt fix, 2026-09-09: this check used to be keyed purely on
+        # owner_user_id, exactly like website.page's own check it was
+        # modeled on -- so a batch that sets user_websites_group_id
+        # instead (every group-owned post, reachable from a group member
+        # via direct RPC since group_user_websites_user holds full
+        # 1,1,1,1 ir.model.access on blog.post) hit `if not owner_ids:
+        # return` and skipped quota entirely -- the exact "any
+        # authenticated user can create unbounded posts via direct RPC,
+        # each one enqueuing a real Cloudflare purge" hole this function
+        # exists to close, just reopened through the other of the
+        # mixin's two mutually-exclusive ownership fields. See
+        # docs/bug_hunt_claims/hams_open/user_websites/claims/
+        # user_websites_blog_post_quota_check.md in hams_com for the full
+        # writeup.
+        group_ids = [
+            vals.get("user_websites_group_id")
+            for vals in vals_list
+            if vals.get("user_websites_group_id")
+        ]
+        if not owner_ids and not group_ids:
             return
-        unique_owner_ids = list(set(owner_ids))
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
-        limits = {user.id: user._get_blog_post_limit() for user in users}
 
-        existing_counts = {u_id: 0 for u_id in unique_owner_ids}
-        for owner, count in (
-            self.env["blog.post"]
-            .with_user(svc_uid)
-            ._read_group([("owner_user_id", "in", unique_owner_ids)], ["owner_user_id"], ["__count"])
-        ):
-            existing_counts[owner.id] = count
+        if owner_ids:
+            unique_owner_ids = list(set(owner_ids))
+            users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
+            limits = {user.id: user._get_blog_post_limit() for user in users}
 
-        batch_counts = {u_id: 0 for u_id in unique_owner_ids}
-        for vals in vals_list:
-            o_id = vals.get("owner_user_id")
-            if o_id:
-                batch_counts[o_id] += 1
+            existing_counts = {u_id: 0 for u_id in unique_owner_ids}
+            for owner, count in (
+                self.env["blog.post"]
+                .with_user(svc_uid)
+                ._read_group([("owner_user_id", "in", unique_owner_ids)], ["owner_user_id"], ["__count"])
+            ):
+                existing_counts[owner.id] = count
 
-        for o_id in unique_owner_ids:
-            if existing_counts[o_id] + batch_counts[o_id] > limits[o_id]:
-                raise ValidationError(
-                    _("You have reached your limit of %s blog posts.") % limits[o_id]
+            batch_counts = {u_id: 0 for u_id in unique_owner_ids}
+            for vals in vals_list:
+                o_id = vals.get("owner_user_id")
+                if o_id:
+                    batch_counts[o_id] += 1
+
+            for o_id in unique_owner_ids:
+                if existing_counts[o_id] + batch_counts[o_id] > limits[o_id]:
+                    raise ValidationError(
+                        _("You have reached your limit of %s blog posts.") % limits[o_id]
+                    )
+
+        if group_ids:
+            unique_group_ids = list(set(group_ids))
+            # No per-group configurable limit field exists yet (a real,
+            # separate product decision -- should a group's post limit
+            # scale with member count?); reuse the same global default a
+            # lone user gets, applied to the group as a whole, as the
+            # conservative floor that closes the unbounded-creation hole
+            # without presuming an answer to that product question.
+            group_limit = int(
+                self.env["zero_sudo.security.utils"]._get_system_param(
+                    "user_websites.global_blog_post_limit", 500
                 )
+            )
+            existing_group_counts = {g_id: 0 for g_id in unique_group_ids}
+            for group, count in (
+                self.env["blog.post"]
+                .with_user(svc_uid)
+                ._read_group(
+                    [("user_websites_group_id", "in", unique_group_ids)],
+                    ["user_websites_group_id"],
+                    ["__count"],
+                )
+            ):
+                existing_group_counts[group.id] = count
 
+            batch_group_counts = {g_id: 0 for g_id in unique_group_ids}
+            for vals in vals_list:
+                g_id = vals.get("user_websites_group_id")
+                if g_id:
+                    batch_group_counts[g_id] += 1
+
+            for g_id in unique_group_ids:
+                if existing_group_counts[g_id] + batch_group_counts[g_id] > group_limit:
+                    raise ValidationError(
+                        _("This group has reached its limit of %s blog posts.") % group_limit
+                    )
+
+    # [@ANCHOR: user_websites:COMM_blog_post_create]
     @api.model_create_multi
     def create(self, vals_list):
         # # Tested by [@ANCHOR: user_websites:test_group_blog_post_creation]
@@ -257,7 +329,24 @@ class BlogPost(models.Model):
         except AccessError:
             res = super(BlogPost, self).write(vals)
 
-        if "is_published" in vals or "name" in vals or "content" in vals:
+        # Bug-hunt fix, 2026-09-09: "owner_user_id"/"user_websites_group_id"
+        # added -- an (admin/service-account-only, per
+        # _check_proxy_ownership_write) ownership transfer moves this post
+        # from one owner/group's blog index to another's without touching
+        # is_published/name/content at all, so the pre-fix condition never
+        # invalidated either the old or the new blog index's distributed
+        # cache entry for a pure ownership-transfer write. urls_to_invalidate
+        # (captured before the write, above) already holds the pre-transfer
+        # URL; _get_blog_urls() below now naturally picks up the
+        # post-transfer one via self's refreshed owner_user_id/
+        # user_websites_group_id.
+        if (
+            "is_published" in vals
+            or "name" in vals
+            or "content" in vals
+            or "owner_user_id" in vals
+            or "user_websites_group_id" in vals
+        ):
             new_urls = self._get_blog_urls()
             all_urls = list(set(urls_to_invalidate + new_urls))
             utils = self.env["zero_sudo.security.utils"]
@@ -358,7 +447,22 @@ class BlogPost(models.Model):
             unsub_url = f"{base_url}/website/unsubscribe/{digest.owner_model}/{digest.owner_record_id}/{partner.id}/{timestamp}/{token}"
 
             headers = {
-                "List-Unsubscribe": f"<<{unsub_url}>>",
+                # Bug-hunt fix, 2026-09-09: this was "<<{unsub_url}>>" --
+                # double angle brackets. RFC 2369/8058 require the URI
+                # wrapped in a SINGLE pair (`<https://.../unsub>`); a
+                # lenient `<([^>]+)>`-style header parser matches the
+                # first "<" through the first ">" and so extracts
+                # "<https://.../unsub" (a leading stray "<" still
+                # attached, an invalid URL) instead of the real one,
+                # breaking RFC 8058 one-click unsubscribe compliance for
+                # any mail client/provider that parses strictly. The
+                # existing regression test
+                # (test_01_weekly_digest_and_unsubscribe_headers) never
+                # caught this because it recovers the URL with
+                # `.strip("<>")`, which strips an arbitrary run of
+                # matching characters from both ends and tolerates the
+                # extra brackets either way.
+                "List-Unsubscribe": f"<{unsub_url}>",
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             }
 
