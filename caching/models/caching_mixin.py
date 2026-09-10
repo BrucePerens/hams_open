@@ -28,6 +28,24 @@ class CachingMixin(models.AbstractModel):
         Scans 'static/' dirs of all installed modules.
         Returns tuple: (latest_mtime, file_sizes).
         """
+        # BUG FIX (bug-hunt 2026-09-09): `override_svc_uid` used to be applied via a real
+        # `.with_user(svc_uid)` call at the controllers/main.py call site. Commit d53c30cc
+        # ("Fix caching module according to vetted plan") replaced that real elevation with
+        # this same-named kwarg, but nothing downstream ever actually switched `self`'s
+        # acting user to it -- from that commit forward the parameter was threaded through
+        # every call site (looking like real privilege scoping) while silently doing
+        # nothing. Currently harmless on its own, since this function makes no ORM calls
+        # today -- but the service account it's meant to scope to
+        # (`caching.user_caching_service`) already has real, narrower ACLs provisioned for
+        # it (see ../data/security_data.xml, ../security/ir.model.access.csv), and a future
+        # change adding an ORM read here (e.g. `ir.config_parameter`/`ir.module.module`,
+        # exactly what those ACLs already grant) would silently run under the caller's own
+        # ambient identity -- the public website visitor, for the /sw.js route -- instead of
+        # the intended micro-privileged account, with no test able to tell the difference.
+        # Restoring the real elevation now closes that gap before it can bite.
+        if override_svc_uid:
+            self = self.with_user(override_svc_uid)
+
         max_mtime = 0.0
         file_sizes = []
 
@@ -75,6 +93,13 @@ class CachingMixin(models.AbstractModel):
         Calculates the safe dynamic max file size based on quota.
         Returns tuple: (latest_mtime_string, dynamic_max_size_string).
         """
+        # BUG FIX (bug-hunt 2026-09-09): see get_fs_stats()'s own comment above -- restores
+        # the real `.with_user()` elevation `override_svc_uid` always looked like it
+        # provided. Applied here too (not just inside get_fs_stats itself) so this
+        # function's own body would also run under the intended account if it's ever
+        # extended to touch the ORM directly, not just the nested get_fs_stats() call.
+        if override_svc_uid:
+            self = self.with_user(override_svc_uid)
         max_mtime, file_sizes = self.get_fs_stats(override_svc_uid=override_svc_uid)
 
         SAFE_QUOTA = max(0, quota_mb - 10) * 1024 * 1024
