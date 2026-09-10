@@ -97,6 +97,7 @@ const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
 
 /// Bit width of the `i`th LSP dimension's own index -- 4,4,4,4,4,4,4,3,3,2
 /// (36 bits total), matching upstream's own `lsp_bits(i)`.
+// [@ANCHOR: lsp_bits]
 pub fn lsp_bits(i: usize) -> u32 {
     LSP_CB[i].log2m
 }
@@ -107,6 +108,7 @@ pub fn lsp_bits(i: usize) -> u32 {
 /// reference's own linear-scan `quantise()` for a 1-D codebook (nearest
 /// by absolute difference is the same as nearest by squared error for a
 /// scalar), just without the O(m) search.
+// [@ANCHOR: quantise_dim]
 fn quantise_dim(dim: &LspDim, target_hz: f32) -> u32 {
     let idx = ((target_hz - dim.start_hz) / dim.step_hz).round();
     idx.clamp(0.0, (dim.levels - 1) as f32) as u32
@@ -115,6 +117,7 @@ fn quantise_dim(dim: &LspDim, target_hz: f32) -> u32 {
 /// Scalar LSP quantiser. From a vector of unquantised LSPs (radians)
 /// finds the quantised LSP indexes -- one call per dimension, each
 /// dimension's own independent codebook.
+// [@ANCHOR: encode_lsps_scalar]
 pub fn encode_lsps_scalar(lsp: &[f32; super::LPC_ORD]) -> [u32; super::LPC_ORD] {
     std::array::from_fn(|i| quantise_dim(&LSP_CB[i], lsp[i] * HZ_PER_RAD))
 }
@@ -122,6 +125,7 @@ pub fn encode_lsps_scalar(lsp: &[f32; super::LPC_ORD]) -> [u32; super::LPC_ORD] 
 /// From a vector of quantised LSP indexes, returns the quantised LSPs
 /// (radians) -- the real quantized value any compliant decoder must
 /// reproduce exactly, since this *is* the table, not a design choice.
+// [@ANCHOR: decode_lsps_scalar]
 pub fn decode_lsps_scalar(indexes: &[u32; super::LPC_ORD]) -> [f32; super::LPC_ORD] {
     std::array::from_fn(|i| {
         let dim = &LSP_CB[i];
@@ -163,6 +167,7 @@ fn rad_per_hz_q23() -> i64 {
     *V.get_or_init(|| f32_to_q_exact_round(RAD_PER_HZ, FRAC_BITS))
 }
 
+// [@ANCHOR: q_mul_q23]
 fn q_mul_q23(a: i64, b: i64) -> i64 {
     ((a as i128 * b as i128) >> FRAC_BITS) as i64
 }
@@ -190,6 +195,7 @@ fn quantise_dim_fixed(start_q23: i64, step_q23: i64, levels: u32, target_hz_q23:
 
 /// Encodes one dimension's LSP (Q23 radians) to its nearest codebook
 /// index, entirely in `i64` Q23 arithmetic -- no `f32` anywhere.
+// [@ANCHOR: encode_lsps_scalar_fixed]
 pub fn encode_lsps_scalar_fixed(lsp_q23: &[i64; super::LPC_ORD]) -> [u32; super::LPC_ORD] {
     let cb = lsp_cb_q23();
     std::array::from_fn(|i| {
@@ -201,6 +207,7 @@ pub fn encode_lsps_scalar_fixed(lsp_q23: &[i64; super::LPC_ORD]) -> [u32; super:
 /// Decodes quantised LSP indexes to Q23 radians -- entirely in `i64`
 /// Q23 arithmetic, the exact same table `decode_lsps_scalar` uses,
 /// just never touching `f32`.
+// [@ANCHOR: decode_lsps_scalar_fixed]
 pub fn decode_lsps_scalar_fixed(indexes: &[u32; super::LPC_ORD]) -> [i64; super::LPC_ORD] {
     let cb = lsp_cb_q23();
     std::array::from_fn(|i| {
@@ -214,6 +221,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: lsp_bits]
     fn lsp_bits_sums_to_36_total_bits() {
         let total: u32 = (0..super::super::LPC_ORD).map(lsp_bits).sum();
         assert_eq!(
@@ -223,6 +231,9 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: encode_lsps_scalar]
+    // Tests [@ANCHOR: decode_lsps_scalar]
+    // Tests [@ANCHOR: quantise_dim]
     fn encode_then_decode_recovers_the_same_quantised_value_for_every_real_index() {
         for i in 0..super::super::LPC_ORD {
             let dim = &LSP_CB[i];
@@ -243,6 +254,7 @@ mod tests {
     /// directly against the plain upstream Codec2 source text -- not
     /// just the evenly-spaced reconstruction's own internal consistency.
     #[test]
+    // Tests [@ANCHOR: decode_lsps_scalar]
     fn decode_matches_the_real_upstream_codebook_tables_at_specific_indices() {
         let cases: [(usize, u32, f32); 10] = [
             (0, 0, 225.0),
@@ -286,6 +298,8 @@ mod tests {
     /// roundings) -- measured max 0.000166 rad across every real index,
     /// bound set from that real margin, not guessed.
     #[test]
+    // Tests [@ANCHOR: decode_lsps_scalar_fixed]
+    // Tests [@ANCHOR: q_mul_q23]
     fn decode_lsps_scalar_fixed_matches_the_float_version_for_every_real_index() {
         for i in 0..super::super::LPC_ORD {
             for level in 0..LSP_CB[i].levels {
@@ -308,6 +322,8 @@ mod tests {
     /// for_every_real_index` checks for the float version.
     #[test]
     // Tests [@ANCHOR: quantise_dim_fixed]
+    // Tests [@ANCHOR: encode_lsps_scalar_fixed]
+    // Tests [@ANCHOR: decode_lsps_scalar_fixed]
     fn encode_then_decode_recovers_the_same_quantised_value_for_every_real_index_fixed() {
         for i in 0..super::super::LPC_ORD {
             for level in 0..LSP_CB[i].levels {

@@ -61,6 +61,7 @@ pub fn bw_expand_lsps(lsp: &mut [f32; LPC_ORD], min_sep_low: f32, min_sep_high: 
 /// `interpolate_lsp` is this at a fixed `weight=0.5`; 1600bps's LSPs
 /// update only once per 40ms, so the three intermediate 10ms sub-frames
 /// need weights 0.25/0.5/0.75 instead of one single midpoint.
+// [@ANCHOR: interpolate_lsp_ver2]
 pub fn interpolate_lsp_ver2(
     prev: &[f32; LPC_ORD],
     next: &[f32; LPC_ORD],
@@ -100,11 +101,13 @@ pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize {
 }
 
 /// `50.0 * (pi/4000)` in Q23 -- the real reference's own `min_sep_low`
-/// for the 1600bps decoder's one real `bw_expand_lsps_fixed` call site,
-/// computed once via `OnceLock` rather than hand-typed. A no-argument
-/// function rather than a value looked up by Hz: this mode's decoder
-/// only ever needs these two specific margins, so there's no real
-/// "wrong Hz value" case to guard against at runtime.
+/// for the 1600bps decoder's two real `bw_expand_lsps_fixed` call sites
+/// (`DecoderFixed::decode` and `DecoderFixed::decode_16k_fixed`, both
+/// passing the identical margin), computed once via `OnceLock` rather
+/// than hand-typed. A no-argument function rather than a value looked
+/// up by Hz: this mode's decoder only ever needs these two specific
+/// margins, so there's no real "wrong Hz value" case to guard against
+/// at runtime.
 pub fn min_sep_low_q23() -> i64 {
     static V: OnceLock<i64> = OnceLock::new();
     *V.get_or_init(|| f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS))
@@ -140,6 +143,7 @@ pub fn bw_expand_lsps_fixed(lsp: &mut [i64; LPC_ORD], min_sep_low_q23: i64, min_
 /// fraction, so this is a plain integer multiply-add and a rounded
 /// right-shift, no division and no rounding loss beyond that one
 /// final round-to-nearest shift.
+// [@ANCHOR: interpolate_lsp_ver2_fixed]
 pub fn interpolate_lsp_ver2_fixed(
     prev: &[i64; LPC_ORD],
     next: &[i64; LPC_ORD],
@@ -176,6 +180,43 @@ mod tests {
         }
     }
 
+    /// `check_lsp_order`'s own restart-on-swap loop (`i = 1` after every
+    /// swap, deliberately mirroring the real reference's own quirky
+    /// resume-at-`i=2` behavior -- see this function's own doc comment)
+    /// has no explicit iteration cap; a future edit to the swap/nudge
+    /// arithmetic that broke its real-world termination property could
+    /// hang the decode daemon on a single bad frame with no other signal.
+    /// Guards against that with a real, bounded wall-clock budget rather
+    /// than an in-loop counter (which would need editing the function's
+    /// own signature) -- the reversed-order input here is the worst case
+    /// found by an adversarial probe of 200,000 random trials plus
+    /// targeted reversed/sawtooth/all-equal patterns (max 129 loop
+    /// iterations, 37 swaps, for `LPC_ORD=10`), so 2 seconds is an
+    /// enormous margin, not a tight bound picked to avoid flaking.
+    #[test]
+    fn check_lsp_order_terminates_promptly_on_the_worst_case_fully_reversed_input() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut lsp: [f32; super::LPC_ORD] =
+                std::array::from_fn(|i| (super::LPC_ORD - i) as f32);
+            let swaps = check_lsp_order(&mut lsp);
+            let _ = tx.send(swaps);
+        });
+        match rx.recv_timeout(Duration::from_secs(2)) {
+            Ok(swaps) => assert!(
+                swaps > 0,
+                "fully reversed input should have required at least one swap"
+            ),
+            Err(_) => panic!(
+                "check_lsp_order did not return within 2s on a fully reversed \
+                 input -- possible infinite loop regression in the restart-on-swap logic"
+            ),
+        }
+    }
+
     #[test]
     // Tests [@ANCHOR: bw_expand_lsps]
     fn bw_expand_lsps_separates_two_lsps_that_start_too_close() {
@@ -201,6 +242,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: interpolate_lsp_ver2]
     fn interpolate_lsp_ver2_at_weight_zero_and_one_returns_the_endpoints() {
         let prev: [f32; super::LPC_ORD] = std::array::from_fn(|i| i as f32);
         let next: [f32; super::LPC_ORD] = std::array::from_fn(|i| 10.0 + i as f32);
@@ -258,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: interpolate_lsp_ver2_fixed]
     fn interpolate_lsp_ver2_fixed_matches_the_float_version_at_all_three_real_weights() {
         let prev: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.1 + 0.05 * i as f32);
         let next: [f32; super::LPC_ORD] = std::array::from_fn(|i| 0.2 + 0.06 * i as f32);
