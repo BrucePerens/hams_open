@@ -26,12 +26,14 @@ R2_ASSET_URL = 'https://demo-r2-worker.cloudflare-tunnel.workers.dev/'
 
 
 class PkgUploader:
+    # [@ANCHOR: release_pkgs:PkgUploader::__init__]
     def __init__(self, account_id, bucket_name, client_id, client_secret):
         self.account_id = account_id
         self.bucket_name = bucket_name
         self.client_id = client_id
         self.client_secret = client_secret
 
+    # [@ANCHOR: release_pkgs:PkgUploader::upload_pkg_to_r2]
     def upload_pkg_to_r2(self, filename, upload_file_path):
         endpoint_url = f"https://{self.account_id}.r2.cloudflarestorage.com"
 
@@ -72,6 +74,7 @@ class PkgCreator:
         gpg_key_id - gpg key id of what you want to use to sign the packages.(String) 
     """
 
+    # [@ANCHOR: release_pkgs:PkgCreator::create_distribution_conf]
     def create_distribution_conf(self,
                                  file_path,
                                  origin,
@@ -103,21 +106,29 @@ class PkgCreator:
         dist: contains all the pkgs and signed releases that are necessary for an apt download.
     """
 
+    # [@ANCHOR: release_pkgs:PkgCreator::create_deb_pkgs]
     def create_deb_pkgs(self, release, deb_file):
+        # Bug fix (bug-hunt, 2026-09-09): the bare `raise` below is not inside an `except` block,
+        # so it has no "currently handled exception" to re-raise -- confirmed empirically (a bare
+        # `raise` outside `except` raises `RuntimeError: No active exception to reraise`), which
+        # discarded the real return code/stderr from the exception object itself, even though
+        # both were already computed right there and printed. Same bug found and fixed
+        # identically in create_rpm_pkgs/_sign_rpms/_sign_repomd/import_rpm_key below.
         print(f"creating deb pkgs: {release} : {deb_file}")
         p = Popen(["reprepro", "includedeb", release, deb_file], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if p.returncode != 0:
             print(f"create deb_pkgs result => {out}, {err}")
-            raise
+            raise RuntimeError(f"reprepro includedeb {release} {deb_file} failed (exit {p.returncode}): {err}")
 
+    # [@ANCHOR: release_pkgs:PkgCreator::create_rpm_pkgs]
     def create_rpm_pkgs(self, artifacts_path, gpg_key_name):
         self._setup_rpm_pkg_directories(artifacts_path, gpg_key_name)
         p = Popen(["createrepo_c", "./rpm"], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if p.returncode != 0:
             print(f"create rpm_pkgs result => {out}, {err}")
-            raise
+            raise RuntimeError(f"createrepo_c ./rpm failed (exit {p.returncode}): {err}")
 
         self._sign_repomd()
 
@@ -132,6 +143,7 @@ class PkgCreator:
         gpgkey=https://pkg.cloudflare.com/cloudflare-main.gpg
     """
 
+    # [@ANCHOR: release_pkgs:PkgCreator::create_repo_file]
     def create_repo_file(self, file_path, binary_name, baseurl, gpgkey_url):
         repo_file_path = os.path.join(file_path, binary_name + '.repo')
         with open(repo_file_path, "w+") as repo_file:
@@ -145,19 +157,21 @@ class PkgCreator:
         return repo_file_path
 
 
+    # [@ANCHOR: release_pkgs:PkgCreator::_sign_rpms]
     def _sign_rpms(self, file_path, gpg_key_name):
         p = Popen(["rpm", "--define", f"_gpg_name {gpg_key_name}", "--addsign", file_path], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if p.returncode != 0:
             print(f"rpm sign result result => {out}, {err}")
-            raise
+            raise RuntimeError(f"rpm --addsign {file_path} failed (exit {p.returncode}): {err}")
 
+    # [@ANCHOR: release_pkgs:PkgCreator::_sign_repomd]
     def _sign_repomd(self):
         p = Popen(["gpg", "--batch", "--yes", "--detach-sign", "--armor", "./rpm/repodata/repomd.xml"], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if p.returncode != 0:
             print(f"sign repomd result => {out}, {err}")
-            raise
+            raise RuntimeError(f"gpg --detach-sign ./rpm/repodata/repomd.xml failed (exit {p.returncode}): {err}")
 
     """
         sets up and signs the RPM directories in the following format:
@@ -169,6 +183,7 @@ class PkgCreator:
         this assumes the assets are in the format <prefix>-<aarch64/x86_64/386>.rpm
     """
 
+    # [@ANCHOR: release_pkgs:PkgCreator::_setup_rpm_pkg_directories]
     def _setup_rpm_pkg_directories(self, artifacts_path, gpg_key_name, archs=["aarch64", "x86_64", "386"]):
         for arch in archs:
             for root, _, files in os.walk(artifacts_path):
@@ -186,6 +201,7 @@ class PkgCreator:
         it returns the GPG ID after a successful import
     """
 
+    # [@ANCHOR: release_pkgs:PkgCreator::import_gpg_keys]
     def import_gpg_keys(self, private_key, public_key):
         gpg = gnupg.GPG()
         private_key = base64.b64decode(private_key)
@@ -206,6 +222,7 @@ class PkgCreator:
 
         raise Exception(f"Could not find imported key with fingerprint {imported_fingerprint}")
 
+    # [@ANCHOR: release_pkgs:PkgCreator::import_multiple_gpg_keys]
     def import_multiple_gpg_keys(self, primary_private_key, primary_public_key, secondary_private_key=None, secondary_public_key=None):
         """
         Import one or two GPG keypairs. Returns a list of (fingerprint, uid) with the primary first.
@@ -223,6 +240,7 @@ class PkgCreator:
         This enables us to sign rpms.
     """
 
+    # [@ANCHOR: release_pkgs:PkgCreator::import_rpm_key]
     def import_rpm_key(self, public_key):
         file_name = "pb.key"
         with open(file_name, "wb") as f:
@@ -233,7 +251,7 @@ class PkgCreator:
         out, err = p.communicate()
         if p.returncode != 0:
             print(f"create rpm import result => {out}, {err}")
-            raise
+            raise RuntimeError(f"rpm --import {file_name} failed (exit {p.returncode}): {err}")
 
 
 """
@@ -245,18 +263,28 @@ class PkgCreator:
 """
 
 
+# [@ANCHOR: release_pkgs:upload_from_directories]
 def upload_from_directories(pkg_uploader, directory, release, binary):
+    """
+    Bug fix (bug-hunt, 2026-09-09): this used to catch a failed R2 upload, log it, and `return`
+    -- silently abandoning the rest of the walk (every remaining file in `directory` never gets
+    uploaded) with no exception propagating to the top-level `__main__` block, which has no
+    try/except of its own around this call at all. That let a partially-published apt/yum
+    repository (e.g. a signed InRelease file present with some or all of its referenced .deb
+    packages missing) look like a fully successful release from the process's own exit code
+    (0), matching this project's own silent-failure-gate bug class. Fixed to let the failure
+    propagate -- `upload_pkg_to_r2` already re-raises `ClientError` itself, so simply not
+    catching it here is enough for the process to fail loudly and non-zero, consistent with
+    every other failure path in this same file (the bare-`raise` fixes above) and in the sibling
+    github_release.py/github_message.py scripts.
+    """
     for root, _, files in os.walk(directory):
         for file in files:
             upload_file_name = os.path.join(binary, root, file)
             if release:
                 upload_file_name = os.path.join(release, upload_file_name)
             filename = os.path.join(root, file)
-            try:
-                pkg_uploader.upload_pkg_to_r2(filename, upload_file_name)
-            except ClientError as e:
-                logging.error(e)
-                return
+            pkg_uploader.upload_pkg_to_r2(filename, upload_file_name)
 
 
 """ 
@@ -273,6 +301,7 @@ def upload_from_directories(pkg_uploader, directory, release, binary):
 """
 
 
+# [@ANCHOR: release_pkgs:create_deb_packaging]
 def create_deb_packaging(pkg_creator, pkg_uploader, releases, primary_gpg_key_id, secondary_gpg_key_id, binary_name, archs, package_component,
                          release_version):
     # set configuration for package creation.
@@ -291,10 +320,18 @@ def create_deb_packaging(pkg_creator, pkg_uploader, releases, primary_gpg_key_id
         sign_with_ids)
 
     # create deb pkgs
+    # Bug fix (bug-hunt, 2026-09-09): this hardcoded the literal "cloudflared" in the artifact
+    # filename instead of using this function's own `binary_name` parameter -- every other file
+    # path built in this module (create_rpm_packaging, _setup_rpm_pkg_directories,
+    # create_repo_file) is correctly parameterized by binary_name/artifacts_path, so this only
+    # worked by coincidence because the one real caller always passes "cloudflared". A
+    # differently-named binary would silently look for the wrong .deb file and fail (or,
+    # if a stray "cloudflared-linux-<arch>.deb" happened to exist from a previous build, package
+    # the wrong binary's artifact under this release).
     for release in releases:
         for arch in archs:
             print(f"creating deb pkgs for {release} and {arch}...")
-            pkg_creator.create_deb_pkgs(release, f"./artifacts/cloudflared-linux-{arch}.deb")
+            pkg_creator.create_deb_pkgs(release, f"./artifacts/{binary_name}-linux-{arch}.deb")
 
     print("uploading latest to r2...")
     upload_from_directories(pkg_uploader, "dists", None, binary_name)
@@ -306,6 +343,7 @@ def create_deb_packaging(pkg_creator, pkg_uploader, releases, primary_gpg_key_id
         upload_from_directories(pkg_uploader, "pool", release_version, binary_name)
 
 
+# [@ANCHOR: release_pkgs:create_rpm_packaging]
 def create_rpm_packaging(
         pkg_creator,
         pkg_uploader,
@@ -332,6 +370,7 @@ def create_rpm_packaging(
         upload_from_directories(pkg_uploader, "rpm", release_version, binary_name)
 
 
+# [@ANCHOR: release_pkgs:parse_args]
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Creates linux releases and uploads them in a packaged format"
@@ -401,7 +440,35 @@ def parse_args():
     )
     args = parser.parse_args()
 
-    return args
+    # Bug fix (bug-hunt, 2026-09-09): unlike its two sibling scripts (github_message.py and
+    # github_release.py's own parse_args, both of which validate every required argument up
+    # front with a clear "Missing X" message), this one previously returned unconditionally with
+    # no validation at all. A misconfigured CI invocation (e.g. R2_ACCOUNT_ID unset) failed deep
+    # inside boto3/GPG with a confusing, hard-to-diagnose low-level error (e.g. a DNS failure
+    # resolving "https://None.r2.cloudflarestorage.com") instead of a clear message naming the
+    # actual missing input. Fixed to match the sibling scripts' own established convention.
+    is_valid = True
+    if not args.bucket:
+        logging.error("Missing R2 bucket name")
+        is_valid = False
+    if not args.id:
+        logging.error("Missing R2 client id")
+        is_valid = False
+    if not args.secret:
+        logging.error("Missing R2 client secret")
+        is_valid = False
+    if not args.account:
+        logging.error("Missing R2 account id")
+        is_valid = False
+    if not args.binary:
+        logging.error("Missing binary name")
+        is_valid = False
+
+    if is_valid:
+        return args
+
+    parser.print_usage()
+    exit(1)
 
 
 if __name__ == "__main__":
