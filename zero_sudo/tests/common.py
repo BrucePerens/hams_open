@@ -628,6 +628,19 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
 
     @classmethod
     def setUpClass(cls):
+        # Fresh, per-class daemon list. _active_daemons = [] at the class
+        # body above is shared, by object identity, across every subclass
+        # that doesn't shadow it -- self.__class__._active_daemons.append()
+        # in start_daemon() and cls._active_daemons.clear() in
+        # tearDownClass() below would otherwise both be operating on ONE
+        # list object for the entire test process, not a list scoped to
+        # "daemons this class started". Nothing currently overrides
+        # tearDownClass() without calling super() (which would skip the
+        # final .clear() and leak a class's daemons into whichever
+        # HamsTransactionCase subclass runs next), but that's exactly the
+        # kind of latent, silent cross-class contamination this shared
+        # mutable class attribute invites -- give each class its own list.
+        cls._active_daemons = []
         # Guarantee a valid Fernet key for test cryptography operations
         cls._hams_test_crypto_key = Fernet.generate_key().decode("utf-8")
         cls._crypto_patcher = patch(
@@ -640,8 +653,26 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
             return_value=cls._hams_test_crypto_key,
             create=True,
         )
-        cls._crypto_patcher.start()
-        cls._crypto_patcher_res_users.start()
+        # Use startClassPatcher() (Odoo's own BaseCase helper), NOT a bare
+        # .start() paired with a hand-rolled .stop() down in tearDownClass:
+        # unittest only calls a class's own tearDownClass() when THAT
+        # class's setUpClass() returned successfully -- verified against
+        # cpython's unittest/suite.py: _tearDownPreviousClass() bails out
+        # early via `if getattr(previousClass, '_classSetupFailed', False):
+        # return`, before ever calling tearDownClass(), whenever setUpClass
+        # raised. If anything below this line -- super().setUpClass(), the
+        # raw SQL insert, the cache-invalidation calls, or (for a subclass)
+        # whatever its own overridden setUpClass does after calling super()
+        # -- ever raises, a bare .start() here would leak both read_secret()
+        # patches globally for the rest of the whole test process: every
+        # later, unrelated test class would then silently encrypt/decrypt
+        # against THIS failed class's leftover Fernet key instead of its
+        # own. startClassPatcher() registers the matching .stop() via
+        # addClassCleanup(), which unittest DOES still run even when
+        # setUpClass() fails partway through (doClassCleanups() runs
+        # unconditionally on failure, unlike tearDownClass()).
+        cls.startClassPatcher(cls._crypto_patcher)
+        cls.startClassPatcher(cls._crypto_patcher_res_users)
         # zero_sudo.security.utils._get_crypto_secret() is a SEPARATE
         # secret source (HAMS_CRYPTO_KEY env var / secret file /
         # admin_passwd) from read_secret() above, and now fails closed
@@ -666,11 +697,36 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
     @classmethod
     # [@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]
     def tearDownClass(cls):
-        cls._crypto_patcher.stop()
-        cls._crypto_patcher_res_users.stop()
+        # cls._crypto_patcher / cls._crypto_patcher_res_users are stopped
+        # automatically via addClassCleanup (registered by
+        # startClassPatcher() in setUpClass above) -- do NOT call .stop()
+        # on them here too. In the normal success path unittest runs
+        # doClassCleanups() right after this method returns, so a manual
+        # .stop() here would double-stop the same patcher (RuntimeError:
+        # stop called on unstarted patcher).
         for p in cls._active_daemons:
             try:
-                p.terminate()
+                # SIGTERM the whole process group, not just the leader
+                # (os.kill(p.pid, ...) via Popen.terminate() only signals
+                # the ONE pid). _start_daemon_process() launches with
+                # start_new_session=True specifically so this process (and
+                # any children it forks itself, e.g. a subprocess.run()
+                # health-check/scan helper) lives in its own process group
+                # -- terminate() alone doesn't use that grouping at all, so
+                # if the daemon's own leader dies promptly on SIGTERM
+                # (common for a plain Python script with no signal
+                # handler) while a child of it is still running, wait()
+                # below returns quickly, no escalation ever fires, and
+                # that child is silently orphaned and keeps running past
+                # this test class's teardown. Match the escalation branch
+                # below (and daemon_utils._stop_daemon_process(), the
+                # shared helper this class deliberately does NOT reuse
+                # because it wants its own timeout/logging here) by
+                # signaling the whole group from the very first attempt.
+                try:
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass  # already exited: p.wait() below will reap it immediately.
                 p.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
                 _logger.warning(
