@@ -33,10 +33,24 @@ BEGIN
           )
       )
       AND (
-          u.company_id = p_company_id
-          OR (
-              u.company_id IS NULL
-              AND p_company_id IS NULL
+          p_company_id IS NULL
+          OR EXISTS (
+              -- Bug-hunt fix: this used to check u.company_id (res.users'
+              -- own SINGLE default company), not whether the on-duty
+              -- user is actually a MEMBER of the requesting company --
+              -- the wrong field for this codebase's own established
+              -- multi-company convention (see e.g. this module's
+              -- pager_check_website_company_rule ir.rule, which checks
+              -- company_id IN company_ids, and hams_shared/docs/
+              -- odoo_orm_reference.md's own note that company_ids/
+              -- _get_company_ids() is the real source of a user's
+              -- granted company scope). An admin whose personal default
+              -- company is A but who also covers company B (in their
+              -- company_ids) would silently show as "no one on duty" on
+              -- B's dashboard under the old check even while genuinely
+              -- on shift for B.
+              SELECT 1 FROM res_company_users_rel rcu
+              WHERE rcu.user_id = u.id AND rcu.cid = p_company_id
           )
       )
     LIMIT 1;
@@ -144,6 +158,7 @@ def _install_postgres_procedures(env):
     Install Postgres stored procedures for pager board.
     # Verified by [@ANCHOR: test_pager_duty_procedures]
     """
+    # [@ANCHOR: pager_duty:install_postgres_procedures]
     env.flush_all()
     try:
         with env.cr.savepoint():

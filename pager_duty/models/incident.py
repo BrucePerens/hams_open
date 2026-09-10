@@ -167,14 +167,47 @@ class PagerIncident(models.Model):
     # [@ANCHOR: pager_duty:incident_write]
     def write(self, vals):
         now = fields.Datetime.now()
-        if vals.get("status") == "acknowledged":
-            vals["time_acknowledged"] = now
-            if not vals.get("acknowledged_by_id"):
-                vals["acknowledged_by_id"] = self.env.user.id
-        elif vals.get("status") == "resolved":
-            vals["time_resolved"] = now
+        target_status = vals.get("status")
 
-        res = super(PagerIncident, self.with_context(mail_notrack=True)).write(vals)
+        # Bug-hunt fix (class 18: state-machine guard exists only in
+        # client-rendered UI): the board's own "Acknowledge" button is the
+        # ONLY place this transition was ever guarded (see
+        # static/src/components/board/board.xml's `t-if="inc.status ===
+        # 'open'"`) -- there was no server-side check here at all, so a
+        # repeat write({"status": "acknowledged"}) (or "resolved") on an
+        # incident already in that state -- direct RPC, a second board
+        # click racing the first, or an admin re-saving the form -- used
+        # to silently overwrite the real first-transition timestamp and
+        # acknowledged_by_id attribution, corrupting the stored MTTA/MTTR
+        # metrics and the audit trail. Only records actually transitioning
+        # for the first time get the timestamp/attribution stamped; a
+        # record already in the target state still gets the rest of
+        # `vals` applied (so e.g. re-saving the form doesn't silently drop
+        # other field edits), just without re-stamping.
+        if target_status == "acknowledged":
+            transitioning = self.filtered(lambda r: r.status != "acknowledged")
+            already_there = self - transitioning
+            if transitioning:
+                ack_vals = dict(vals, time_acknowledged=now)
+                if not ack_vals.get("acknowledged_by_id"):
+                    ack_vals["acknowledged_by_id"] = self.env.user.id
+                res = super(PagerIncident, transitioning.with_context(mail_notrack=True)).write(ack_vals)
+                if already_there:
+                    res = super(PagerIncident, already_there.with_context(mail_notrack=True)).write(vals) and res
+            else:
+                res = super(PagerIncident, self.with_context(mail_notrack=True)).write(vals)
+        elif target_status == "resolved":
+            transitioning = self.filtered(lambda r: r.status != "resolved")
+            already_there = self - transitioning
+            if transitioning:
+                resolve_vals = dict(vals, time_resolved=now)
+                res = super(PagerIncident, transitioning.with_context(mail_notrack=True)).write(resolve_vals)
+                if already_there:
+                    res = super(PagerIncident, already_there.with_context(mail_notrack=True)).write(vals) and res
+            else:
+                res = super(PagerIncident, self.with_context(mail_notrack=True)).write(vals)
+        else:
+            res = super(PagerIncident, self.with_context(mail_notrack=True)).write(vals)
 
         # MTTA and MTTR are now handled via computed fields.
 
@@ -225,7 +258,20 @@ class PagerIncident(models.Model):
             ).mapped("partner_id")
 
             if not partners:
-                partners = pager_admin_group.user_ids.mapped("partner_id")
+                # Bug-hunt fix (class 17: iteration domain broader than
+                # granted scope): this used to fall back to EVERY member of
+                # group_pager_admin, including admins scoped (via
+                # pager_incident_website_company_rule) to a DIFFERENT
+                # website/company than this incident -- someone who can't
+                # even see this incident via search() would still get
+                # paged about it. Fall back only to admins with no
+                # website_id of their own (genuinely global admins, e.g.
+                # base.user_root/base.user_admin, the only members this
+                # group ships with by default) -- never to an admin who
+                # IS scoped to a specific, different website.
+                partners = pager_admin_group.user_ids.filtered(
+                    lambda u: "website_id" not in u._fields or not u.website_id
+                ).mapped("partner_id")
 
             msg_body = _("🚨 ESCALATION: Incident open for > 15 minutes!")
             inc.with_user(mail_svc).message_post(

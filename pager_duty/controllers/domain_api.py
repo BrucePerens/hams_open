@@ -16,6 +16,7 @@ class PagerDutyController(http.Controller):
         methods=["POST"],
         csrf=False,
     )
+    # [@ANCHOR: pager_duty:update_domains]
     def update_domains(self, domains=None, api_identity=None, **kwargs):
         """
         Receives a list of custom domains and updates the pager duty maintenance function.

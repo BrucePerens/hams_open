@@ -520,7 +520,24 @@ class PagerCheck(models.Model):
         path = self._get_config_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
-            with open(path, "w", encoding="utf-8") as f:
+            # Bug-hunt fix (class 11: credential handled with a permission
+            # gap): this file embeds plaintext dbpass/SMTP credentials for
+            # every configured check (see the dbpass field above and its
+            # `check_dict["password"]` write in this same method). A plain
+            # open(path, "w") creates the file at the umask-default mode
+            # (typically 0o644 -- world-readable), leaving a real window
+            # (and, on umasks that don't restrict group/other, a permanent
+            # state) where any other local account on the host can read
+            # every monitored system's credentials. Using os.open() with
+            # an explicit 0o600 mode at creation time -- not a chmod()
+            # after the fact -- avoids the create-then-chmod race
+            # entirely: the file is never briefly (or permanently)
+            # world-readable.
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                # fd is now owned by `f` -- its own `with` exit closes it,
+                # on every path including a write failure, so there is no
+                # separate os.close() to pair with this os.open().
                 f.write(json_content)
         except OSError as e:
             _logger.warning("Failed to write daemon configuration to %s: %s", path, e)
