@@ -68,6 +68,7 @@ class HamGdprExportToken(models.Model):
         return token
 
     @api.model
+    # [@ANCHOR: user_websites:COMM_gdpr_token_consume]
     def _consume(self, token):
         """Validates and atomically consumes a token, returning the res.users
         record it was issued for. Raises AccessError on any failure (missing,
@@ -133,6 +134,7 @@ class HamGdprExportToken(models.Model):
         return self.env["res.users"].browse(user_id)
 
     @api.model
+    # [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
     def consume_and_export(self, token):
         """The one RPC entrypoint the export daemon calls back into Odoo
         with. Validates+consumes the token, then materializes the full

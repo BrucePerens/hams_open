@@ -21,6 +21,7 @@ from odoo.modules.registry import Registry
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: user_websites:COMM_async_unpublish_group_content]
 def _async_unpublish_group_content(db_name, group_ids):
     """Unpublishes group content in the background to prevent transaction lock exhaustion."""
     # Registry(db_name) and registry.cursor() used to sit outside the try
@@ -117,7 +118,37 @@ def _async_unpublish_group_content(db_name, group_ids):
                         time.sleep(0.1)  # audit-ignore-sleep
 
             for company_id, comp_group_ids in company_groups.items():
-                _unpublish_for_company(company_id, comp_group_ids)
+                try:
+                    _unpublish_for_company(company_id, comp_group_ids)
+                except psycopg2.Error:
+                    # A DB-level error poisons the rest of this transaction
+                    # (Postgres refuses further statements on an aborted
+                    # transaction) -- re-raise so the outer psycopg2.Error
+                    # handler logs it and the whole function bails out,
+                    # exactly as before this per-company isolation was added.
+                    raise
+                except Exception:
+                    # Found in bug-hunt review: before this try/except, one
+                    # company raising here (e.g. a future ir.rule change
+                    # scoping website.page/blog.post by company would make
+                    # `allowed_company_ids=[company_id]` raise AccessError
+                    # for any company outside this service account's own
+                    # real scope -- today just `base.main_company`, per
+                    # data/user_websites_data.xml -- see
+                    # hams_shared/docs/odoo_orm_reference.md's non-sudo
+                    # allowed_company_ids note) would hit the bare `except
+                    # Exception` far below and abort every *other* company's
+                    # unpublish in the same batch too, not just the failing
+                    # one. Isolate per company: log and continue, so one
+                    # company's failure can't block unrelated companies'
+                    # suspensions from taking effect.
+                    _logger.exception(
+                        "Async unpublish group content failed for company id "
+                        "%s (group_ids=%s) -- continuing with any other "
+                        "companies in this batch",
+                        company_id,
+                        comp_group_ids,
+                    )
 
         finally:
             env.cr.rollback()
@@ -221,6 +252,7 @@ class UserWebsitesGroup(models.Model):
         default=lambda self: self.env.company,
     )
 
+    # [@ANCHOR: user_websites:COMM_group_create]
     @api.model_create_multi
     def create(self, vals_list):
         # # Tested by [@ANCHOR: user_websites:test_group_site_creation]
@@ -256,7 +288,31 @@ class UserWebsitesGroup(models.Model):
                 if privilege_id:
                     group_vals["privilege_id"] = privilege_id
                 elif category_id:
-                    group_vals["privilege_id"] = category_id
+                    # BUG (found in bug-hunt review): this used to assign
+                    # `category_id` here too -- but `category_id` is an
+                    # `ir.module.category` record id (looked up above from
+                    # 'module_category_user_websites'), while
+                    # `res.groups.privilege_id` is a Many2one to the
+                    # completely different `res.groups.privilege` model.
+                    # Writing an `ir.module.category` id into that column
+                    # would either violate the FK constraint (raising a
+                    # confusing raw IntegrityError instead of ever reaching
+                    # this method's own caller cleanly) or, worse, silently
+                    # point at whatever unrelated `res.groups.privilege` row
+                    # happens to share that same numeric id. Only fall back
+                    # to leaving privilege_id unset (it isn't required) and
+                    # log loudly -- this branch should be unreachable in a
+                    # normally-installed module (both records load from the
+                    # same XML file), so hitting it at all means the
+                    # module's own data didn't load as expected.
+                    _logger.warning(
+                        "user_websites: expected privilege record "
+                        "'user_websites.privilege_user_websites' not found "
+                        "(only its module category was) while auto-creating "
+                        "a security group -- leaving privilege_id unset "
+                        "rather than assigning module_category_user_websites's "
+                        "id, which belongs to a different model."
+                    )
 
                 groups_to_create_vals.append(group_vals)
                 indices_needing_groups.append(i)
@@ -284,8 +340,25 @@ class UserWebsitesGroup(models.Model):
         try:
             with self.env.cr.savepoint():
                 result = super(UserWebsitesGroup, self).write(vals)
-        except IntegrityError:
-            raise ValidationError(_("The Group Website Slug must be unique and valid."))
+        except IntegrityError as e:
+            # BUG (found in bug-hunt review): this used to catch every
+            # IntegrityError from the whole write() -- not just website_slug
+            # ones -- and always re-raised the same "slug must be unique"
+            # message. `vals` can carry any field (e.g. a bad `odoo_group_id`
+            # FK, or some other constraint entirely), so a completely
+            # unrelated integrity failure was being mislabeled as a slug
+            # problem, hiding the real cause from whoever has to debug it.
+            # Only relabel the error when the violated constraint is
+            # actually one of the two website_slug constraints declared on
+            # `edge.routing.mixin` (`_website_slug_unique`/
+            # `_website_slug_format`, named `<table>_website_slug_*` in the
+            # DB per odoo/orm/table_objects.py's TableObject.full_name) --
+            # otherwise re-raise the original error so it fails loudly with
+            # its own real cause intact.
+            constraint_name = getattr(getattr(e, "diag", None), "constraint_name", None) or ""
+            if "website_slug" in constraint_name:
+                raise ValidationError(_("The Group Website Slug must be unique and valid."))
+            raise
 
         # --- 301 Redirect Automation ---
         if "website_slug" in vals:
