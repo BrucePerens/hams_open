@@ -1,10 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import base64
 import email
 import email.policy
+import functools
 import logging
 import json
 import re
 import urllib.request
+from datetime import datetime, timezone
+
+from cryptography import x509
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+
 from odoo import http
 from odoo.http import request
 
@@ -20,9 +29,179 @@ _logger = logging.getLogger(__name__)
 # real path to steal the instance's own IAM credentials
 # (http://169.254.169.254/...), or to probe/attack other internal-only
 # services -- a classic SSRF, not a hypothetical.
+_SNS_HOST_PATTERN = r"sns\.[a-z0-9-]+\.amazonaws\.com"
 _SNS_SUBSCRIBE_URL_RE = re.compile(
-    r"^https://sns\.[a-z0-9-]+\.amazonaws\.com/", re.IGNORECASE
+    rf"^https://{_SNS_HOST_PATTERN}/", re.IGNORECASE
 )
+
+# Bug-hunt finding, 2026-09-09 (receive_sns_webhook.md, bug class 26): the
+# SubscribeURL host check above closed the SSRF sub-vector, but nothing
+# verified the request actually came from AWS SNS at all -- the entire
+# trust boundary was one opaque per-domain token, leakable via a plain
+# query-string URL. Real AWS SNS notifications are signed
+# (Signature/SigningCertURL/SignatureVersion, verifiable against an
+# Amazon-issued X.509 cert); this closes that gap as a second,
+# independent layer on top of the token, not a replacement for it.
+#
+# AWS's real SigningCertURL is always of the shape
+# https://sns.<region>.amazonaws.com/SimpleNotificationService-<hex>.pem --
+# stricter than the bare host check above (a signing-cert fetch has no
+# legitimate reason to hit any other path on that host), so this is its
+# own, separate regex rather than reusing _SNS_SUBSCRIBE_URL_RE.
+_SNS_SIGNING_CERT_URL_RE = re.compile(
+    rf"^https://{_SNS_HOST_PATTERN}/SimpleNotificationService-[0-9a-f]+\.pem$",
+    re.IGNORECASE,
+)
+
+# AWS's documented field set/order for the string-to-sign. Verified
+# directly against AWS's own open-source reference implementation
+# (aws/aws-sdk-java, aws-java-sdk-sns's SignatureChecker.java,
+# publishMessageValues()/subscribeMessageValues()/stringToSign() --
+# fetched and read 2026-09-09, not recalled from memory): that code
+# builds a TreeMap<String,String> (alphabetically sorted by key) of the
+# same field names below and joins "key\nvalue\n" for every entry,
+# including the last -- i.e. every value gets a trailing newline, with
+# no special-cased final field. The alphabetical order TreeMap produces
+# for these exact key sets happens to equal the tuples below (confirmed
+# by hand: Message < MessageId < Subject < Timestamp < TopicArn < Type;
+# Message < MessageId < SubscribeURL < Timestamp < Token < TopicArn <
+# Type), so listing them in that order here and joining the same way
+# reproduces AWS's own reference algorithm exactly, not merely "an order
+# that happens to verify against messages this code itself produces."
+# Subject is the one field signed only when actually present on the
+# message (parsedMessage.containsKey(SUBJECT) in the same reference
+# code) -- a Notification with no Subject omits it from the signed
+# string entirely, it is never signed as an empty string. AWS's own SNS
+# Developer Guide additionally documents this same field set/order in
+# prose (SubscriptionConfirmation/UnsubscribeConfirmation are treated
+# identically -- the reference code's own comment: "no difference, for
+# now").
+_NOTIFICATION_SIGNED_FIELDS = ('Message', 'MessageId', 'Subject', 'Timestamp', 'TopicArn', 'Type')
+_SUBSCRIBE_SIGNED_FIELDS = ('Message', 'MessageId', 'SubscribeURL', 'Timestamp', 'Token', 'TopicArn', 'Type')
+
+# The only payload_type values ses.webhook.log's own Selection field
+# accepts -- anything else attacker-controlled in the JSON body's "Type"
+# must be coerced to 'Unknown' before ever reaching a log create() call.
+# Found in passing while adding the signature-rejection log path below:
+# the pre-existing code wrote payload.get('Type', 'Unknown') into
+# log_vals['payload_type'] completely unclamped, so an attacker-supplied
+# Type of anything outside the four known values would make the
+# `finally` block's own log create() raise ValueError on an invalid
+# Selection value -- the exact "unconstrained attacker string into a
+# Selection field" shape test_03b already found and fixed once for
+# 'status' (rejected_subscribe_url); this is the same bug class in the
+# sibling field, closed the same way.
+_KNOWN_PAYLOAD_TYPES = {'Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation'}
+
+
+def _build_string_to_sign(payload):
+    """Builds the canonical newline-delimited string AWS SNS itself signs, per the message's own
+    Type. Returns None (never raises) if the Type isn't one AWS signs at all, or if a field the
+    Type requires is simply absent -- both are treated as "cannot verify," not a shortcut past
+    verification, so the caller fails closed either way."""
+    payload_type = payload.get('Type')
+    if payload_type == 'Notification':
+        signed_fields = _NOTIFICATION_SIGNED_FIELDS
+    elif payload_type in ('SubscriptionConfirmation', 'UnsubscribeConfirmation'):
+        signed_fields = _SUBSCRIBE_SIGNED_FIELDS
+    else:
+        return None
+
+    parts = []
+    for field in signed_fields:
+        if field == 'Subject':
+            if 'Subject' not in payload:
+                continue
+        elif field not in payload:
+            return None
+        parts.append(field)
+        parts.append(str(payload[field]))
+    return "\n".join(parts) + "\n"
+
+
+# [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
+@functools.lru_cache(maxsize=16)
+def _fetch_sns_signing_cert(signing_cert_url):
+    """Fetches and caches (by URL) an AWS SNS signing certificate's raw PEM bytes.
+
+    Deliberately has NO host/SSRF check of its own -- the caller (`_verify_sns_signature`) MUST
+    validate `signing_cert_url` against `_SNS_SIGNING_CERT_URL_RE` before ever calling this. Kept
+    as its own small function, separate from the SubscribeURL fetch in `receive_sns_webhook`
+    (which goes through `urllib.request.urlopen` directly and is asserted on by existing tests),
+    specifically so tests can patch this one function in isolation without disturbing that
+    unrelated assertion or fighting `lru_cache`'s memoization across unrelated test cases.
+
+    `lru_cache` does not memoize a raised exception -- a transient fetch failure is retried on the
+    next call rather than being "stuck" returning a cached error forever.
+    """
+    # Host/path pre-validated by the caller (_verify_sns_signature, against
+    # _SNS_SIGNING_CERT_URL_RE) before this function is ever reached.
+    with urllib.request.urlopen(signing_cert_url, timeout=10) as resp:
+        return resp.read()
+
+
+# [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+def _verify_sns_signature(payload):
+    """Verifies an AWS SNS message's own `Signature` field against the certificate its
+    `SigningCertURL` names, per AWS's documented HTTP(S) signing scheme (SignatureVersion 1 =
+    SHA1withRSA, SignatureVersion 2 = SHA256withRSA, both RSASSA-PKCS1-v1_5 -- `padding.PKCS1v15`
+    is the `cryptography` library's name for that same padding scheme).
+
+    Fails closed: any missing required field, a `SigningCertURL` that isn't a real
+    `sns.<region>.amazonaws.com` signing-cert URL, an unreachable/malformed/expired certificate,
+    an unsupported `SignatureVersion`, or an actual signature mismatch all return False. Never
+    raises -- callers get a plain boolean gate, identical in shape to the token check this
+    supplements.
+    """
+    try:
+        signature_b64 = payload.get('Signature')
+        signing_cert_url = payload.get('SigningCertURL')
+        signature_version = payload.get('SignatureVersion', '1')
+
+        if not signature_b64 or not signing_cert_url:
+            return False
+
+        if not _SNS_SIGNING_CERT_URL_RE.match(signing_cert_url):
+            _logger.warning(
+                "SES Webhook: refusing to trust a SigningCertURL that isn't a real AWS SNS "
+                "signing-cert host: %s", signing_cert_url,
+            )
+            return False
+
+        string_to_sign = _build_string_to_sign(payload)
+        if string_to_sign is None:
+            return False
+
+        if signature_version == '1':
+            hash_algorithm = hashes.SHA1()
+        elif signature_version == '2':
+            hash_algorithm = hashes.SHA256()
+        else:
+            _logger.warning("SES Webhook: unsupported SignatureVersion %r.", signature_version)
+            return False
+
+        cert_pem = _fetch_sns_signing_cert(signing_cert_url)
+        certificate = x509.load_pem_x509_certificate(cert_pem)
+
+        now = datetime.now(timezone.utc)
+        if now < certificate.not_valid_before_utc or now > certificate.not_valid_after_utc:
+            _logger.warning(
+                "SES Webhook: SigningCertURL's certificate is expired or not yet valid: %s",
+                signing_cert_url,
+            )
+            return False
+
+        public_key = certificate.public_key()
+        signature = base64.b64decode(signature_b64, validate=True)
+
+        public_key.verify(signature, string_to_sign.encode('utf-8'), padding.PKCS1v15(), hash_algorithm)
+        return True
+    except InvalidSignature:
+        return False
+    except Exception as e:  # audit-ignore-catch-all: fail-closed -- ANY parse/network/crypto error here means "not verified," never "trust it anyway."
+        _logger.warning("SES Webhook: signature verification raised %s: %s", type(e).__name__, e)
+        return False
+
 
 class SesWebhookController(http.Controller):
     
@@ -74,9 +253,43 @@ class SesWebhookController(http.Controller):
         except json.JSONDecodeError:
             return request.make_response("Invalid JSON", status=400)
 
+        if not isinstance(payload, dict):
+            # A JSON array/string/number is valid JSON but not a valid SNS
+            # message shape -- every .get() below assumes a dict. Found in
+            # passing while adding signature verification: previously this
+            # would 500 instead of 400 (e.g. raw_data == '[]').
+            return request.make_response("Invalid JSON", status=400)
+
         payload_type = payload.get('Type', 'Unknown')
+        if payload_type not in _KNOWN_PAYLOAD_TYPES:
+            payload_type = 'Unknown'
         message_id = payload.get('MessageId', 'Unknown')
-        
+
+        # 2. Verify the message is actually signed by AWS SNS -- a second,
+        # independent layer on top of the per-domain token above (neither
+        # replaces the other; see the module-level comment on
+        # _verify_sns_signature). Deliberately checked BEFORE any
+        # processing/dispatch below, and logged with its own distinct
+        # 'rejected_signature' status so a real forgery attempt against a
+        # known-valid token is forensically visible, not silently 403'd
+        # with no trace the way a plain bad-token request is.
+        if not _verify_sns_signature(payload):
+            _logger.warning(
+                "SES Webhook denied: SNS signature verification failed for domain %s "
+                "(Type=%s, MessageId=%s) -- token was valid, but the message itself was "
+                "not verifiably signed by AWS SNS.",
+                domain.name, payload_type, message_id,
+            )
+            request.env['ses.webhook.log'].with_user(svc_uid).create({
+                'name': message_id,
+                'payload_type': payload_type,
+                'raw_payload': raw_data,
+                'domain_id': domain.id,
+                'status': 'rejected_signature',
+                'error_message': 'AWS SNS message signature verification failed.',
+            })
+            return request.make_response("Forbidden", status=403)
+
         # Create Log Record
         log_vals = {
             'name': message_id,
@@ -233,6 +446,18 @@ class SesWebhookController(http.Controller):
                 _logger.info("Received UnsubscribeConfirmation for domain %s.", domain.name)
                 log_vals.update({'status': 'ignored'})
             else:
+                # Bug-hunt note, 2026-09-09: this branch is currently
+                # unreachable in practice. _verify_sns_signature (called
+                # above, before this dispatch) rejects with 403 for any
+                # Type outside the three signed types (SignatureChecker
+                # can't build a string-to-sign for one), so payload_type
+                # can no longer actually be 'Unknown' by the time this
+                # code runs. Left in place as defensive dead code rather
+                # than removed -- a future change to the signature-gate
+                # ordering/scope would silently reopen this path, and it
+                # costs nothing to keep a sane fallback for that case.
+                # See receive_sns_webhook.md's own claim for the full
+                # analysis (bug-hunt Known Bug Class 1).
                 log_vals.update({'status': 'ignored', 'error_message': 'Unknown payload type'})
                 
         # Must return 200 to AWS regardless of what fails inside (a

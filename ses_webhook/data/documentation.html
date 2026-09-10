@@ -10,7 +10,7 @@
         <li><strong>List View:</strong> Displays configured domains, their associated company, and the Webhook URL.</li>
         <li><strong>Form View:</strong> Allows administrators to register a new domain and map it to a tenant company.
             <ul>
-                <li><strong>Secret Token:</strong> Automatically generated and used to authenticate requests.</li>
+                <li><strong>Secret Token:</strong> Automatically generated and used to authenticate requests -- one of two independent checks; incoming requests are also required to carry a real, verified AWS SNS message signature.</li>
                 <li><strong>Webhook URL:</strong> The URL to provide to Amazon SNS. It can be easily copied to the clipboard.</li>
                 <li><strong>AWS Configuration Instructions:</strong> A dedicated tab providing step-by-step guidance on setting up the Amazon SNS Topic and Amazon SES Receipt Rule.</li>
             </ul>

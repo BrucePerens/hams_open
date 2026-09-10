@@ -8,9 +8,16 @@ call, authenticates it, and hands the raw email off to Odoo's standard
 
 ## The Solution
 1. **Receiving the notification**: `POST /mail/webhook/sns`
-   ([@ANCHOR: COMM_receive_sns_webhook]) authenticates the request via a
-   per-domain `secret_token` query parameter, auto-confirms SNS subscription
-   requests, and decodes the raw MIME email from the SNS `content` field
+   ([@ANCHOR: COMM_receive_sns_webhook]) authenticates the request via TWO
+   independent layers -- a per-domain `secret_token` query parameter, AND a
+   real AWS SNS message-signature check (`Signature`/`SigningCertURL`/
+   `SignatureVersion`, verified against AWS's documented signing scheme, see
+   [@ANCHOR: ses_webhook:COMM_verify_sns_signature] in the module's own
+   README) -- before doing anything else. Either failing rejects the
+   request with 403; a signature failure alone (valid token, forged/unsigned
+   message) is logged separately so a leaked token being actively abused is
+   forensically visible. Only then does it auto-confirm SNS subscription
+   requests and decode the raw MIME email from the SNS `content` field
    before handing it to `message_process`.
 2. **Failing safe toward AWS**: SNS retries a webhook delivery indefinitely
    until it receives a 2xx response, so a processing failure on Odoo's side

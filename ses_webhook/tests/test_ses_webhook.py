@@ -1,10 +1,112 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import base64
 import json
+from datetime import datetime, timedelta, timezone
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.x509.oid import NameOID
+
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+# Captured at import time, BEFORE any test's setUp() patches the module
+# attribute of the same name -- `from ... import X` binds a direct
+# reference to the real, undecorated-by-mock function object, which
+# mock.patch('module.X') (patching the *module's* attribute afterward)
+# does not retroactively change. Used by the one test
+# (test_33_fetch_sns_signing_cert_caches_by_url) that needs to exercise
+# the real lru_cache behavior directly, bypassing every other test's
+# mock of this same name.
+from odoo.addons.ses_webhook.controllers.webhook_api import (
+    _fetch_sns_signing_cert as _REAL_FETCH_SNS_SIGNING_CERT,
+)
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
+
+
+# A realistic-shaped SigningCertURL: real AWS ones are always
+# https://sns.<region>.amazonaws.com/SimpleNotificationService-<32-hex>.pem
+# -- matches webhook_api.py's own _SNS_SIGNING_CERT_URL_RE.
+_TEST_SIGNING_CERT_URL = (
+    "https://sns.us-east-1.amazonaws.com/"
+    "SimpleNotificationService-0123456789abcdef0123456789abcdef.pem"
+)
+
+
+def _make_self_signed_cert(private_key, not_before=None, not_after=None):
+    """Builds a real, self-signed X.509 certificate for `private_key`, standing in for the
+    Amazon-issued cert a real SigningCertURL would serve. Deliberately NOT a mock of the
+    verification function itself (that would be a vacuous test per this project's own bug-hunt
+    Known Bug Class 2) -- this is a real certificate, real key, real signature, checked by the
+    real `cryptography` verification path in webhook_api.py."""
+    now = datetime.now(timezone.utc)
+    not_before = not_before or (now - timedelta(days=1))
+    not_after = not_after or (now + timedelta(days=365))
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "sns.amazonaws.com")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .sign(private_key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM)
+
+
+def _sns_string_to_sign(payload):
+    """Independently re-derives AWS SNS's own documented string-to-sign format -- deliberately
+    NOT imported from webhook_api.py's own `_build_string_to_sign`. If this test helper and the
+    production builder ever disagree, a signature this helper produces must fail against
+    production, which is the whole point: importing the production builder to do the signing
+    would make the "valid signature verifies" test tautological (it would pass even if both were
+    wrong in the same way)."""
+    payload_type = payload["Type"]
+    if payload_type == "Notification":
+        fields = ["Message", "MessageId"]
+        if "Subject" in payload:
+            fields.append("Subject")
+        fields += ["Timestamp", "TopicArn", "Type"]
+    elif payload_type in ("SubscriptionConfirmation", "UnsubscribeConfirmation"):
+        fields = ["Message", "MessageId", "SubscribeURL", "Timestamp", "Token", "TopicArn", "Type"]
+    else:
+        raise ValueError(f"Don't know how to sign Type={payload_type!r}")
+
+    parts = []
+    for field in fields:
+        parts.append(field)
+        parts.append(str(payload[field]))
+    return "\n".join(parts) + "\n"
+
+
+def _sign_sns_payload(payload, private_key, signature_version="1", signing_cert_url=_TEST_SIGNING_CERT_URL):
+    """Returns a copy of `payload` filled out with real, required-but-previously-absent SNS
+    fields (Timestamp/TopicArn/Token as needed) plus a real Signature computed against
+    `private_key`, exactly the way AWS SNS itself signs an outgoing notification."""
+    payload = dict(payload)
+    payload.setdefault("Timestamp", "2026-09-09T00:00:00.000Z")
+    payload.setdefault("TopicArn", "arn:aws:sns:us-east-1:123456789012:test-topic")
+    # Real AWS SubscriptionConfirmation/UnsubscribeConfirmation messages always carry a
+    # human-readable "Message" too (the "You have chosen to subscribe..." text) -- it's a
+    # required signed field for every Type, not just Notification (whose own tests already set
+    # a real one, the SES event JSON), so default it here rather than in every individual test.
+    payload.setdefault("Message", "You have chosen to subscribe to the topic.")
+    if payload["Type"] in ("SubscriptionConfirmation", "UnsubscribeConfirmation"):
+        payload.setdefault("Token", "test-token-value")
+
+    string_to_sign = _sns_string_to_sign(payload)
+    hash_algorithm = hashes.SHA1() if signature_version == "1" else hashes.SHA256()
+    signature = private_key.sign(string_to_sign.encode("utf-8"), padding.PKCS1v15(), hash_algorithm)
+
+    payload["Signature"] = base64.b64encode(signature).decode("ascii")
+    payload["SignatureVersion"] = signature_version
+    payload["SigningCertURL"] = signing_cert_url
+    return payload
+
 
 @tagged('post_install', '-at_install')
 class TestSesWebhook(HamsHttpCase):
@@ -12,6 +114,18 @@ class TestSesWebhook(HamsHttpCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        # Real RSA keypair + real self-signed certificate, generated once per test class --
+        # every signed test payload below is verified against this real cryptographic material
+        # by webhook_api.py's real, unmocked `_verify_sns_signature`. Only the network fetch of
+        # "the cert bytes living at SigningCertURL" is mocked (in setUp, below) -- there is no
+        # real AWS endpoint to fetch from in a test sandbox, and _SNS_SIGNING_CERT_URL_RE's own
+        # SSRF guard means this suite can't legitimately point SigningCertURL anywhere but a real
+        # sns.*.amazonaws.com host anyway.
+        cls._sns_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cls._sns_cert_pem = _make_self_signed_cert(cls._sns_private_key)
+        # A second, unrelated keypair/cert -- used to prove a signature made with the WRONG key
+        # (as opposed to a bit-flipped signature) is still rejected.
+        cls._sns_other_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         # Four companies, not two: stress-tests the service-account
         # mechanism under more realistic multi-tenant conditions than a
         # single pairwise A/B check can. Company D is deliberately never
@@ -66,6 +180,26 @@ class TestSesWebhook(HamsHttpCase):
             'group_ids': [(6, 0, [cls.env.ref('base.group_portal').id])],
         })
 
+    def setUp(self):
+        super().setUp()
+        # Every test below now needs *some* AWS SNS signature-verification behavior, since
+        # webhook_api.py's own _verify_sns_signature runs before any payload dispatch. Rather
+        # than making a real HTTPS request to a real sns.*.amazonaws.com host (there is none in
+        # this sandbox, and _SNS_SIGNING_CERT_URL_RE's own SSRF guard means there's nowhere else
+        # legitimate to point it), the cert *fetch* -- not the verification math itself -- is
+        # mocked here, patched fresh per test so each test can override its return_value/
+        # side_effect independently. This is the one function boundary the production code was
+        # deliberately split at for exactly this reason -- see _fetch_sns_signing_cert's own
+        # docstring in webhook_api.py.
+        self.cert_fetch_mock = self.safe_patch(
+            'odoo.addons.ses_webhook.controllers.webhook_api._fetch_sns_signing_cert'
+        )
+        self.cert_fetch_mock.return_value = self._sns_cert_pem
+
+    def _sign(self, payload, **kwargs):
+        """Shorthand for signing a test payload with this class's own real test keypair."""
+        return _sign_sns_payload(payload, self._sns_private_key, **kwargs)
+
     def test_01_webhook_unauthorized(self):
         # Tests [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
         """Verify that requests without the correct token are rejected with 403 Forbidden."""
@@ -97,6 +231,7 @@ class TestSesWebhook(HamsHttpCase):
             # actually written to test.
             "SubscribeURL": "https://sns.us-east-1.amazonaws.com/confirm"
         }
+        payload = self._sign(payload)
         mock_urlopen = self.safe_patch('urllib.request.urlopen')
         mock_urlopen.return_value = True
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
@@ -123,6 +258,12 @@ class TestSesWebhook(HamsHttpCase):
             "MessageId": "msg-sub-rejected",
             "SubscribeURL": "https://evil.example.com/confirm",
         }
+        # Signed validly (over the literal evil URL, exactly as AWS would
+        # sign whatever SubscribeURL a real Subscribe API call produced) --
+        # this test is about the SubscribeURL host check specifically, not
+        # signature verification, so the signature itself must pass to
+        # reach that check at all.
+        payload = self._sign(payload)
         mock_urlopen = self.safe_patch('urllib.request.urlopen')
         response = self.url_open(
             f'/mail/webhook/sns?token={self.domain_a.secret_token}',
@@ -140,7 +281,8 @@ class TestSesWebhook(HamsHttpCase):
         raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Test A\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-notif-a", "Message": json.dumps(ses_message)}
-        
+        payload = self._sign(payload)
+
         mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
         mock_process.return_value = True
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
@@ -163,7 +305,8 @@ class TestSesWebhook(HamsHttpCase):
         raw_email = b"From: b@test-b.com\nTo: c@d.com\nSubject: Test B\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-notif-b", "Message": json.dumps(ses_message)}
-        
+        payload = self._sign(payload)
+
         mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
         mock_process.return_value = True
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_b.secret_token}', data=json.dumps(payload).encode('utf-8'))
@@ -183,7 +326,8 @@ class TestSesWebhook(HamsHttpCase):
         """Verify Notification without 'content' logs an error and ignores it."""
         ses_message = {"notificationType": "Received"}
         payload = {"Type": "Notification", "MessageId": "msg-no-content", "Message": json.dumps(ses_message)}
-        
+        payload = self._sign(payload)
+
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200) # Returns 200 to AWS to stop retries
         
@@ -194,8 +338,16 @@ class TestSesWebhook(HamsHttpCase):
 
     def test_07_webhook_unsubscribe_confirmation(self):
         """Verify UnsubscribeConfirmation is ignored properly."""
-        payload = {"Type": "UnsubscribeConfirmation", "MessageId": "msg-unsub"}
-        
+        payload = {
+            "Type": "UnsubscribeConfirmation",
+            "MessageId": "msg-unsub",
+            # Real UnsubscribeConfirmation messages carry a SubscribeURL
+            # (to resubscribe) the same way SubscriptionConfirmation does
+            # -- it's one of the fields AWS itself signs for this Type.
+            "SubscribeURL": "https://sns.us-east-1.amazonaws.com/resubscribe",
+        }
+        payload = self._sign(payload)
+
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
         
@@ -217,6 +369,7 @@ class TestSesWebhook(HamsHttpCase):
             "mail": {"messageId": "mail-1"},
         }
         payload = {"Type": "Notification", "MessageId": "msg-complaint-1", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
 
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
@@ -240,6 +393,7 @@ class TestSesWebhook(HamsHttpCase):
             },
         }
         payload = {"Type": "Notification", "MessageId": "msg-bounce-permanent", "Message": json.dumps(permanent_message)}
+        payload = self._sign(payload)
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(self.env['mail.blacklist'].search([('email', '=', 'harddown@example.com')])), 1)
@@ -253,9 +407,311 @@ class TestSesWebhook(HamsHttpCase):
             },
         }
         payload = {"Type": "Notification", "MessageId": "msg-bounce-transient", "Message": json.dumps(transient_message)}
+        payload = self._sign(payload)
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(self.env['mail.blacklist'].search([('email', '=', 'mailboxfull@example.com')])), 0)
+
+    # ------------------------------------------------------------------
+    # AWS SNS message-signature verification (bug-hunt fix, 2026-09-09):
+    # a leaked per-domain token alone must no longer be sufficient to
+    # forge a notification -- see receive_sns_webhook.md's claim and
+    # night_shift_todo.md's own entry for the full finding this closes.
+    # ------------------------------------------------------------------
+
+    def test_25_signature_valid_notification_accepted(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A validly-signed Notification (SignatureVersion 1, the AWS default) is accepted and
+        processed exactly as before -- the baseline positive case every other rejection test
+        below is contrasted against."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Signed\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-valid-v1", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload, signature_version="1")
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+        mock_process.assert_called_once()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-valid-v1')])
+        self.assertEqual(log.status, 'success')
+
+    def test_25b_signature_with_subject_field_accepted(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """AWS signs 'Subject' only when the message actually carries one, in a specific position
+        in the signed field order (between MessageId and Timestamp) -- a real Notification with a
+        Subject must still verify correctly, not just the more common Subject-less case every
+        other test here exercises."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Has A Subject\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {
+            "Type": "Notification",
+            "MessageId": "msg-sig-with-subject",
+            "Subject": "SES Notification",
+            "Message": json.dumps(ses_message),
+        }
+        payload = self._sign(payload)
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+        mock_process.assert_called_once()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-with-subject')])
+        self.assertEqual(log.status, 'success')
+
+    def test_26_signature_version_2_sha256_accepted(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """SignatureVersion 2 (SHA256, AWS's recommended stronger option) is a fully supported,
+        independently-exercised code path, not just version 1."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Signed V2\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-valid-v2", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload, signature_version="2")
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 200)
+        mock_process.assert_called_once()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-valid-v2')])
+        self.assertEqual(log.status, 'success')
+
+    def test_27_signature_missing_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """The exact shape every OTHER test in this file used to send before this fix, and the
+        exact shape a leaked-token attacker would send with no AWS involvement at all: a
+        completely unsigned payload. Must now be rejected with 403 and a distinct
+        'rejected_signature' log status, even though the token itself is valid."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Forged\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-missing", "Message": json.dumps(ses_message)}
+        # No Signature/SigningCertURL/SignatureVersion at all -- not signed.
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        mock_process.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-missing')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'rejected_signature')
+        self.assertEqual(log.domain_id, self.domain_a)
+
+    def test_28_signature_tampered_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A validly-structured, validly-signed payload whose Message is altered AFTER signing
+        (the classic tamper scenario -- an attacker who captured or partially controls a real
+        signed message and modifies its content) must be rejected: the signature no longer
+        matches the string it was computed over."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nOriginal"}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-tampered", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
+        # Tamper with Message AFTER signing -- the Signature field is now stale/invalid for
+        # this (different) Message content.
+        tampered_message = {"notificationType": "Received", "content": "From: attacker@evil.com\nTo: c@d.com\n\nTampered"}
+        payload["Message"] = json.dumps(tampered_message)
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        mock_process.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-tampered')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_29_signature_wrong_key_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A signature that is well-formed (right length, valid base64, produced by a REAL RSA
+        private key over the REAL correct string-to-sign) but from a key that doesn't match the
+        certificate served at SigningCertURL must still be rejected -- distinct from tampering:
+        the string-to-sign is untouched, only the signing key differs, which real AWS's
+        certificate-bound verification is specifically designed to catch."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-wrongkey", "Message": json.dumps(ses_message)}
+        payload = _sign_sns_payload(payload, self._sns_other_private_key)  # NOT self._sns_private_key
+        # cert_fetch_mock (from setUp) still serves self._sns_cert_pem, which is the cert for
+        # self._sns_private_key -- so this signature won't verify against it.
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        mock_process.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-wrongkey')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_30_signature_non_aws_cert_host_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A SigningCertURL pointing anywhere other than a real sns.<region>.amazonaws.com host
+        must be rejected WITHOUT ever fetching it -- the same SSRF-prevention shape as the
+        existing SubscribeURL host check, applied to the cert fetch. Asserts the cert-fetch mock
+        itself is never called, proving the host check runs before any network access, not just
+        that the end result happens to be a rejection."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-evilcert", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload, signing_cert_url="https://evil.example.com/SimpleNotificationService-abc.pem")
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        mock_process.assert_not_called()
+        self.cert_fetch_mock.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-evilcert')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_30b_signature_cert_url_wrong_path_shape_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A SigningCertURL on a genuinely correct AWS SNS host, but NOT matching the real
+        SimpleNotificationService-<hex>.pem path AWS actually serves certs at, must also be
+        rejected -- the host-only check alone isn't the full guard; the path shape matters too
+        (a same-host path a real SNS cert endpoint would never actually use)."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-badpath", "Message": json.dumps(ses_message)}
+        payload = self._sign(
+            payload, signing_cert_url="https://sns.us-east-1.amazonaws.com/not-a-real-cert-path.pem"
+        )
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        self.cert_fetch_mock.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-badpath')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_31_signature_expired_cert_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A real, validly-signed message whose signing certificate has already expired must be
+        rejected -- an expired cert is no longer a trustworthy statement that the key it names
+        actually belongs to Amazon SNS. Uses a real expired X.509 certificate (not a mocked
+        expiry check), issued for the SAME key that actually signs this payload, so the
+        signature math itself is correct and only the cert's own validity window is the reason
+        for rejection."""
+        expired_cert_pem = _make_self_signed_cert(
+            self._sns_private_key,
+            not_before=datetime.now(timezone.utc) - timedelta(days=30),
+            not_after=datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        self.cert_fetch_mock.return_value = expired_cert_pem
+
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-expired", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-expired')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_32_signature_unsupported_version_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """An unrecognized SignatureVersion (neither '1' nor '2') must fail closed rather than
+        falling back to any default algorithm -- checked before ever fetching the certificate."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        payload = {"Type": "Notification", "MessageId": "msg-sig-badversion", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload, signature_version="1")
+        payload["SignatureVersion"] = "3"  # Not a real AWS SignatureVersion.
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        self.cert_fetch_mock.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-badversion')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_33_fetch_sns_signing_cert_caches_by_url(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
+        """Direct, isolated unit test of _fetch_sns_signing_cert itself (bypassing every other
+        test's own mock of it, via the reference captured at module-import time): two calls with
+        the same URL must issue exactly one real HTTP(S) fetch, the second served from cache."""
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        # `urllib.request.urlopen(...)` is used as `with urlopen(...) as resp: resp.read()` --
+        # MagicMock's built-in context-manager support means `.return_value.__enter__` is
+        # already a real, callable magic method; only its own return needs configuring.
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = b'fake-cert-bytes'
+
+        url = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-cachetest0000000000000000000000.pem"
+        first = _REAL_FETCH_SNS_SIGNING_CERT(url)
+        second = _REAL_FETCH_SNS_SIGNING_CERT(url)
+
+        self.assertEqual(first, b'fake-cert-bytes')
+        self.assertEqual(second, b'fake-cert-bytes')
+        mock_urlopen.assert_called_once_with(url, timeout=10)
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+
+    def test_34_forged_complaint_without_signature_does_not_blacklist(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+
+        # Tests [@ANCHOR: ses_webhook:COMM_handle_ses_event_notification]
+        """The actual finding this fix closes, end to end: before signature verification, anyone
+        holding domain_a's token alone could forge a Complaint naming an arbitrary address and
+        get it blacklisted (see test_23's identical payload shape, which used to succeed with no
+        signature at all). Now it must be rejected before ever reaching
+        _handle_ses_event_notification, and the target address must NOT end up blacklisted."""
+        ses_message = {
+            "notificationType": "Complaint",
+            "complaint": {
+                "complainedRecipients": [{"emailAddress": "innocent-target@example.com"}],
+                "feedbackId": "forged-feedback",
+            },
+        }
+        payload = {"Type": "Notification", "MessageId": "msg-forged-complaint", "Message": json.dumps(ses_message)}
+        # Deliberately unsigned -- exactly what a leaked-token-only attacker can produce.
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+
+        self.assertFalse(
+            self.env['mail.blacklist'].search([('email', '=', 'innocent-target@example.com')]),
+            "An unsigned, forged Complaint must NOT be able to blacklist an arbitrary address "
+            "just because the per-domain token was valid.",
+        )
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-forged-complaint')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_35_forged_unmatched_sender_notification_does_not_send_nudge(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+
+        # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
+        """The second concrete finding this fix closes: before signature verification, anyone
+        holding domain_a's token could forge a raw-MIME Notification naming an arbitrary,
+        unregistered 'From:' address and trigger a real outbound registration-nudge email TO
+        that address FROM the tenant's own domain (see test_19's identical scenario, which used
+        to succeed unsigned). Now it must be rejected before create_and_notify ever runs, with
+        no pending_submission and no outbound mail.mail created for the forged address."""
+        raw_email = b"From: attacker-chosen@example.com\nTo: c@d.com\nSubject: Forged\n\nX"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = {"Type": "Notification", "MessageId": "msg-forged-nudge", "Message": json.dumps(ses_message)}
+        # Deliberately unsigned.
+
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        mock_process.assert_not_called()
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        submission = self.env['ses.webhook.pending_submission'].with_user(svc_uid).search(
+            [('sender_email', '=', 'attacker-chosen@example.com')]
+        )
+        self.assertFalse(
+            submission,
+            "An unsigned, forged Notification must NOT be able to trigger a real registration-"
+            "nudge email to an attacker-chosen address just because the per-domain token was valid.",
+        )
+        mail = self.env['mail.mail'].search([('email_to', '=', 'attacker-chosen@example.com')])
+        self.assertFalse(mail)
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-forged-nudge')])
+        self.assertEqual(log.status, 'rejected_signature')
 
     def test_09_webhook_url_computes_for_plain_internal_user(self):
         # Tests [@ANCHOR: ses_webhook:COMM_compute_webhook_url]
@@ -564,6 +1020,7 @@ class TestSesWebhook(HamsHttpCase):
         raw_email = b"From: d@test-d-e2e.com\nTo: c@d.com\nSubject: Test D\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode("utf-8")}
         payload = {"Type": "Notification", "MessageId": "msg-notif-d", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
 
         mock_process = self.safe_patch("odoo.addons.mail.models.mail_thread.MailThread.message_process")
         mock_process.return_value = True
@@ -666,6 +1123,7 @@ class TestSesWebhook(HamsHttpCase):
         raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Test Failure\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-forced-failure", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
 
         mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
         mock_process.side_effect = RuntimeError("simulated processing failure")
@@ -704,6 +1162,7 @@ class TestSesWebhook(HamsHttpCase):
         raw_email = b"From: nobody-registered@test-a.com\nTo: c@d.com\nSubject: Unmatched\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-unmatched", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
 
         mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
 
@@ -748,6 +1207,7 @@ class TestSesWebhook(HamsHttpCase):
         raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Matched\n\nTest"
         ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
         payload = {"Type": "Notification", "MessageId": "msg-matched", "Message": json.dumps(ses_message)}
+        payload = self._sign(payload)
 
         mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
         mock_process.return_value = True

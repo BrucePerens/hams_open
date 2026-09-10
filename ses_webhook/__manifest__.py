@@ -7,6 +7,13 @@
     'author': 'HAMS',
     'category': 'Mail',
     'depends': ['mail', 'zero_sudo'],
+    # 'cryptography' verifies real AWS SNS message signatures
+    # (controllers/webhook_api.py's _verify_sns_signature) -- already
+    # guaranteed present (Odoo itself depends on it), declared here for
+    # accuracy/discoverability, not because installation actually needs it.
+    'external_dependencies': {
+        'python': ['cryptography'],
+    },
     'data': [
         'security/ses_webhook_security.xml',
         'security/ir.model.access.csv',
