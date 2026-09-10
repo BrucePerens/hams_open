@@ -67,6 +67,7 @@ class TestSesWebhook(HamsHttpCase):
         })
 
     def test_01_webhook_unauthorized(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
         """Verify that requests without the correct token are rejected with 403 Forbidden."""
         response = self.url_open('/mail/webhook/sns', data=b'{}', headers={'Content-Type': 'application/json'})
         self.assertEqual(response.status_code, 403, "Should reject without token")

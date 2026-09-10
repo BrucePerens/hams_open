@@ -7,10 +7,11 @@ call, authenticates it, and hands the raw email off to Odoo's standard
 `mail.thread.message_process` pipeline for the matched tenant company.
 
 ## The Solution
-1. **Receiving the notification**: `POST /mail/webhook/sns` authenticates the
-   request via a per-domain `secret_token` query parameter, auto-confirms SNS
-   subscription requests, and decodes the raw MIME email from the SNS
-   `content` field before handing it to `message_process`.
+1. **Receiving the notification**: `POST /mail/webhook/sns`
+   ([@ANCHOR: COMM_receive_sns_webhook]) authenticates the request via a
+   per-domain `secret_token` query parameter, auto-confirms SNS subscription
+   requests, and decodes the raw MIME email from the SNS `content` field
+   before handing it to `message_process`.
 2. **Failing safe toward AWS**: SNS retries a webhook delivery indefinitely
    until it receives a 2xx response, so a processing failure on Odoo's side
    (a malformed payload, a `message_process` exception, an unmatched domain)

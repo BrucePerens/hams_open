@@ -28,6 +28,7 @@ class SesWebhookController(http.Controller):
     
     @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False)
     def receive_sns_webhook(self, **kwargs):
+        # [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
         """
         Receives Amazon SNS webhooks for incoming SES emails.
         Validates the secret token against configured domains,
