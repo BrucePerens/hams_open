@@ -31,3 +31,4 @@ from . import test_ui_tours
 from . import test_user_websites_blog_post
 from . import test_website_page_name_delegation
 from . import test_xpath_rendering
+from . import test_toast_notifications_hoot

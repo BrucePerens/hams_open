@@ -22,6 +22,12 @@
             "caching/static/tests/tours/caching_tour.js",
             "caching/static/tests/tours/sw_behavior_tour.js",
         ],
+        # burn-ignore-hoot-runner-coverage: this module's hoot unit
+        # tests below are registered here but have no tests/test_*.py
+        # runner that actually executes them via browser_js() -- a real,
+        # tracked gap (found 2026-09-09 while fixing a separate,
+        # widespread window.fetch hoot-mocking bug), not an intentional
+        # design choice. See check_hoot_runner_coverage.py.
         "web.assets_unit_tests": [
             # toast.js also has to be listed here, not just in
             # web.assets_frontend above: /web/tests's own
