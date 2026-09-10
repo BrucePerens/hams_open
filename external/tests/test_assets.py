@@ -125,8 +125,14 @@ class TestExternalAssets(HamsHttpCase):
         
         self.safe_patch("odoo.addons.external.fetch_assets.hash_file", return_value=None)
         mock_move = self.safe_patch("shutil.move")
-        mock_move.side_effect = Exception("Original Exception")
-        
+        # Must be one of the types download_file's except clause actually
+        # catches (urllib.error.URLError, ValueError, OSError) -- a bare
+        # Exception propagates untouched without ever entering that except
+        # block, so this test previously passed trivially regardless of
+        # whether the guarded os.path.exists()/os.remove() cleanup logic
+        # (the thing this test claims to verify) was even reachable.
+        mock_move.side_effect = OSError("Original Exception")
+
         self.safe_patch("os.path.exists", return_value=False)
         mock_remove = self.safe_patch("os.remove")
         mock_remove.side_effect = FileNotFoundError("Should not be called")
