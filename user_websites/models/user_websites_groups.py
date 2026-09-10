@@ -417,8 +417,20 @@ class UserWebsitesGroup(models.Model):
 
         if not is_test:
             db_name = self.env.cr.dbname
-            BACKGROUND_EXECUTOR.submit(
-                _async_unpublish_group_content, db_name, group_ids
+            # Bug-hunt fix, 2026-09-09: defer via postcommit, matching the
+            # identical fix already applied to res_users_moderation.py's
+            # action_suspend_user_websites for the same class of function.
+            # Firing this immediately let the per-group suspension loop
+            # below still raise (e.g. message_post() failing for one group
+            # in a multi-group batch) and roll back this whole transaction
+            # -- including every is_suspended_from_websites write and audit
+            # message -- while the background unpublish, on its own
+            # separate DB connection, would still commit. postcommit only
+            # runs if this transaction's own commit() actually happens.
+            self.env.cr.postcommit.add(
+                lambda: BACKGROUND_EXECUTOR.submit(
+                    _async_unpublish_group_content, db_name, group_ids
+                )
             )
         else:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
