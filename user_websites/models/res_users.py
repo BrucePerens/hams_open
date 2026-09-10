@@ -274,7 +274,34 @@ class ResUsers(models.Model):
                 user.id: user.website_slug for user in self if user.website_slug
             }
 
+        try:
+            if "website_slug" in vals and not vals["website_slug"]:
+                vals["website_slug"] = False
+            with self.env.cr.savepoint():
+                result = super(ResUsers, self).write(vals)
+        except IntegrityError:
+            raise ValidationError(_("The Website Slug must be unique and valid."))
+
         # --- Content Lifecycle Policy ---
+        # Adversarial security review, 2026-09-09: this block used to run
+        # BEFORE super().write(vals) above, i.e. before the access-controlled
+        # write that actually applies (or rejects) the deactivation. Scheduling
+        # the postcommit unpublish job -- or, in test mode, unpublishing
+        # synchronously with service-account-elevated privileges -- based
+        # merely on the REQUESTED vals let a caller trigger real content
+        # takedown for a user whose "active": False write never actually
+        # succeeded: `Cursor.postcommit` is transaction-scoped, not
+        # call-scoped, so any code elsewhere in the same request that caught
+        # the resulting AccessError and let the overall transaction commit
+        # anyway (a common batch/cron "skip records I can't touch" pattern)
+        # would still fire the queued unpublish for content whose owner was
+        # never actually deactivated. The test-mode synchronous branch was
+        # worse: it ran immediately, with no savepoint of its own, so even a
+        # locally-caught AccessError from the write below left the just-run
+        # unpublish in place. Moving this block after a *successful*
+        # super().write() ties the side effect to the authorized outcome, not
+        # the request -- matching the "301 Redirect Automation" block below,
+        # which already only runs once the write has taken effect.
         if "active" in vals and not vals["active"]:
             users_to_archive = self.ids
             is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
@@ -328,14 +355,6 @@ class ResUsers(models.Model):
                     blogs.write({"active": False})
                     if len(blogs) < 5000:
                         break
-
-        try:
-            if "website_slug" in vals and not vals["website_slug"]:
-                vals["website_slug"] = False
-            with self.env.cr.savepoint():
-                result = super(ResUsers, self).write(vals)
-        except IntegrityError:
-            raise ValidationError(_("The Website Slug must be unique and valid."))
 
         # --- 301 Redirect Automation ---
         if "website_slug" in vals:
@@ -695,8 +714,30 @@ class ResUsers(models.Model):
         # # Verified by [@ANCHOR: test_gdpr_erasure_pages]
 
         # # Verified by [@ANCHOR: test_gdpr_erasure_posts]
+
+        # Adversarial security review, 2026-09-09: the three searches below
+        # used to run as `self.env` (the CALLER's own permissions) while the
+        # matching unlink() already used `env_svc` (the elevated service
+        # account) -- an inconsistent trust boundary compared to this same
+        # file's own established Service Account Pattern (`_async_unpublish_
+        # content` above searches AND writes via env_svc). Per compliance's
+        # own test contract (test_execute_gdpr_erasure_uses_the_service_
+        # account_not_the_caller, compliance/tests/test_gdpr_base.py), this
+        # method must "succeed even when called by a low-privilege user" --
+        # but website_page_group_rule/blog_post_group_rule only grant a
+        # caller visibility into pages/posts owned by groups THEY belong to.
+        # A caller who is not a member of the target user's own website
+        # group (e.g. an admin-triggered erasure, or any future caller other
+        # than the exact self-service `request.env.user._execute_gdpr_
+        # erasure()` path) would have the search silently return zero rows,
+        # so the `if not pages/posts/blogs: break` fires immediately and the
+        # target's real content is never found -- and therefore never
+        # erased -- even though env_svc (used only for the unlink) already
+        # has full rights to delete it once found. Searching via env_svc
+        # closes that gap: enumeration and deletion now share the same,
+        # already-scoped-to-owner_user_id, elevated identity.
         while True:
-            pages = self.env["website.page"].search(
+            pages = env_svc["website.page"].search(
                 [("owner_user_id", "=", self.id)], limit=5000
             )
             if not pages:
@@ -726,7 +767,7 @@ class ResUsers(models.Model):
                 time.sleep(0.1)  # audit-ignore-sleep
 
         while True:
-            posts = self.env["blog.post"].search(
+            posts = env_svc["blog.post"].search(
                 [("owner_user_id", "=", self.id)], limit=5000
             )
             if not posts:
@@ -756,7 +797,7 @@ class ResUsers(models.Model):
                 time.sleep(0.1)  # audit-ignore-sleep
 
         while True:
-            blogs = self.env["blog.blog"].search(
+            blogs = env_svc["blog.blog"].search(
                 [("owner_user_id", "=", self.id)], limit=5000
             )
             if not blogs:
