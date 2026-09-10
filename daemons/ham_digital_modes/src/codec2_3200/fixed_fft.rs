@@ -84,6 +84,7 @@ impl ComplexQ23 {
 /// (real LPC-coefficient-derived spectra never reach the extreme
 /// full-scale-`i16`-amplitude magnitudes `nlp.rs`'s own power spectrum
 /// can).
+// [@ANCHOR: fixed_fft:rshift_round_i128]
 pub(crate) fn rshift_round_i128(x: i128, n: u32) -> i64 {
     let shifted = (x + (1i128 << (n - 1))) >> n;
     debug_assert!(
