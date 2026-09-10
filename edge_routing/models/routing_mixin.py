@@ -40,6 +40,7 @@ class EdgeRoutingMixin(models.AbstractModel):
             if record.website_slug and record.website_slug in RESERVED_SLUGS:
                 raise ValidationError(
                     _("The slug '%s' is reserved and cannot be used.")
+                    % record.website_slug
                 )
 
     # [@ANCHOR: edge_routing:COMM_get_routing_models]
