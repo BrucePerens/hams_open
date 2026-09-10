@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, api
+import email.utils
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -23,8 +24,31 @@ class MailThread(models.AbstractModel):
         subject = message_dict.get('subject', '').lower()
         body = message_dict.get('body', '').lower()
 
-        is_bounce_route = bounce_alias in to_emails
-        is_not_read_route = not_read_alias in to_emails
+        # bug-hunt (2026-09-09): `to_emails` is the raw "To" header text,
+        # which can legitimately carry multiple comma-separated recipients
+        # (each with its own display name). A bare `alias in to_emails`
+        # substring test matches any recipient whose LOCAL PART, DOMAIN, OR
+        # DISPLAY NAME happens to contain the alias text -- e.g. a real,
+        # unrelated address like "postmaster-notify@example.com" or
+        # "Do Not Reply <noreply@example.com>" (contains "not-read"'s
+        # neighbor "reply", not exact, but the same shape of false-positive
+        # risk applies to any alias substring) cc'd alongside hams.com's own
+        # mail would silently trigger the drop branches below even though
+        # the message was never actually addressed to our own not-read@/
+        # postmaster@/bounce alias. Parse the header into individual
+        # addresses and match each alias against a recipient's own local
+        # part exactly instead of scanning the whole raw header text.
+        to_local_parts = {
+            addr.split('@', 1)[0]
+            for _name, addr in email.utils.getaddresses([to_emails])
+            if addr
+        }
+
+        def _alias_matches(alias):
+            return alias.split('@', 1)[0] in to_local_parts
+
+        is_bounce_route = _alias_matches(bounce_alias)
+        is_not_read_route = _alias_matches(not_read_alias)
         # postmaster@ is the RFC 5321-mandated admin contact address for this
         # domain -- it genuinely receives the same DSN-bounce/vacation-reply
         # noise the dedicated bounce alias does, so it gets the same
@@ -32,7 +56,7 @@ class MailThread(models.AbstractModel):
         # real inquiry and must NOT be dropped: it falls through to
         # super().message_route(), which resolves the "postmaster" mail.alias
         # (pager_duty/data/mail_alias_data.xml) into a real incident.
-        is_postmaster_route = postmaster_alias in to_emails
+        is_postmaster_route = _alias_matches(postmaster_alias)
 
         if is_bounce_route or is_not_read_route or is_postmaster_route:
             # Check for unsubscribe intent

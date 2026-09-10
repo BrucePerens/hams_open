@@ -117,13 +117,34 @@ class DmarcReport(models.Model):
                 with zipfile.ZipFile(io.BytesIO(raw_data)) as z:  # audit-ignore-path
                     for info in z.infolist():
                         if info.filename.endswith('.xml'):
-                            if info.file_size > _MAX_DECOMPRESSED_BYTES:
+                            # bug-hunt (2026-09-09): `info.file_size` is the
+                            # UNCOMPRESSED size declared in the archive's own
+                            # central directory -- attacker-controlled
+                            # metadata, not a real bound on what
+                            # `z.read(name)` will actually produce. Python's
+                            # zipfile only checks the real decompressed size
+                            # against the CRC/size trailer AFTER fully
+                            # inflating the entry into memory, so a crafted
+                            # entry that LIES about a small file_size while
+                            # its DEFLATE stream actually expands to
+                            # gigabytes would exhaust memory before this
+                            # pre-check's rejection (or the eventual
+                            # BadZipFile) ever has a chance to fire -- a
+                            # classic zip-bomb, still reachable by any
+                            # unauthenticated DMARC rua= sender per this
+                            # file's own module docstring. The `.gz` branch
+                            # below already gets this right by capping the
+                            # actual bytes READ via `gz.read(n)`; do the same
+                            # here via a size-capped read on the entry's own
+                            # stream instead of trusting the declared size.
+                            with z.open(info) as zf:  # audit-ignore-path
+                                xml_content = zf.read(_MAX_DECOMPRESSED_BYTES + 1)
+                            if len(xml_content) > _MAX_DECOMPRESSED_BYTES:
                                 _logger.warning(
-                                    "Refusing to extract %s from %s: declared size %d exceeds cap",
-                                    info.filename, attachment_name, info.file_size,
+                                    "Refusing to extract %s from %s: decompressed size exceeds %d byte cap",
+                                    info.filename, attachment_name, _MAX_DECOMPRESSED_BYTES,
                                 )
                                 return False
-                            xml_content = z.read(info.filename)
                             break
             elif attachment_name.endswith('.gz'):
                 with gzip.GzipFile(fileobj=io.BytesIO(raw_data)) as gz:  # audit-ignore-path
