@@ -126,7 +126,19 @@ def main():
         print("token verified, no expiry set")
         return 0
 
-    expiry_dt = datetime.datetime.fromisoformat(expires_on.replace("Z", "+00:00"))
+    # Widened to also cover the date-parsing step itself (bug-hunt review,
+    # tier 1): fromisoformat() was outside the try/except above and could
+    # raise a bare ValueError on an unexpected `expires_on` shape, which
+    # would exit the process via an uncaught traceback instead of this
+    # script's own documented one-line-message convention (this runs as a
+    # "synthetic" check's subprocess -- generalized_monitor.py truncates
+    # stderr to 100 chars in the incident body, so a multi-line traceback
+    # gets cut mid-word instead of showing the real problem).
+    try:
+        expiry_dt = datetime.datetime.fromisoformat(expires_on.replace("Z", "+00:00"))
+    except ValueError as e:
+        print(f"Cloudflare returned an unparseable expires_on {expires_on!r}: {e}", file=sys.stderr)
+        return 1
     days_left = (expiry_dt - datetime.datetime.now(datetime.timezone.utc)).days
 
     if days_left <= warn_days:

@@ -143,7 +143,15 @@ def redis_search_listener(r_client):
                 # Push results back to queue for Asynchronous Bastion Pattern
                 res_payload = {"matches": matches}
                 r_client.lpush("pager_log_search_res_queue", json.dumps({"uuid": uuid_str, "payload": res_payload}))
-            except (OSError, json.JSONDecodeError, KeyError) as e:
+            # Widened from (OSError, json.JSONDecodeError, KeyError) (bug-hunt
+            # review, tier 1): a message that parses as valid JSON but isn't a
+            # dict (e.g. a JSON array/string) makes `req["uuid"]` raise
+            # TypeError, not KeyError -- previously uncaught, which crashed this
+            # whole listener (and, since it's the only thing blocking main(),
+            # the entire chrooted log-analyzer daemon and every one of its
+            # tail_file() threads) on a single malformed message instead of
+            # just failing that one search request.
+            except (OSError, json.JSONDecodeError, KeyError, TypeError) as e:
                 logger.error(f"Search failure: {e}")
 
 

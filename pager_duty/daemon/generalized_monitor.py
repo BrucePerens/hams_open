@@ -106,7 +106,28 @@ def get_odoo_client(logger, config):
         db = "odoo"
 
     user = os.environ.get("ODOO_USER") or "pager_service_internal"
-    password = os.environ.get("ODOO_PASSWORD") or ""  # burn-ignore-env
+    # Real bug, found by bug-hunt review (tier 1): this used to silently
+    # fall back to an empty-string password when ODOO_PASSWORD wasn't set
+    # (e.g. a typo'd var name or a missing line in /etc/pager_daemons.env),
+    # instead of failing loudly -- the exact anti-pattern
+    # pager_mcp_server.py's own _get_client() explicitly calls out and
+    # avoids for this same credential category ("a missing key must fail
+    # loudly, not silently degrade to an unauthenticated ... call"). This
+    # is the main paging daemon's own Odoo client: a bad/empty credential
+    # here means every check thread's status write and every incident
+    # report fails, but each of those call sites' own broad
+    # "audit-ignore-catch-all" except just logs a warning and carries on --
+    # so a misconfigured password would have silently disabled all paging
+    # instead of halting the daemon at boot the way a missing dependency or
+    # a missing config file already does.
+    password = os.environ.get("ODOO_PASSWORD")  # burn-ignore-env
+    if not password:
+        logger.critical(
+            "ODOO_PASSWORD is not set -- refusing to start with an "
+            "unauthenticated Odoo client (would silently disable all "
+            "incident reporting)."
+        )
+        return None
     try:
         return OdooClient(url, db, user, password)
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
@@ -188,28 +209,44 @@ def verify_and_install_dependencies(client, checks):
                 time.sleep(10)  # audit-ignore-sleep
 
             if not success:
+                # Real bug, found by bug-hunt review (tier 1): the
+                # report-incident-and-exit block below used to be at this
+                # same indentation level as this `if not success:` guard
+                # (a sibling, not nested inside it) -- so it ran
+                # unconditionally, even when the retry loop above *did*
+                # eventually provision the dependency (success=True). On
+                # the success path `msg` was never assigned, so the
+                # report_incident call raised a bare NameError -- silently
+                # swallowed by the broad "audit-ignore-catch-all" except
+                # right below it and logged as a misleading "Failed to
+                # report ... via RPC" warning -- and then `sys.exit(1)`
+                # still ran regardless, killing the daemon (systemd would
+                # restart it) immediately after it had *successfully*
+                # resolved its own missing dependency. Nesting this block
+                # inside `if not success:` makes it run only on the actual
+                # failure path it was written for.
                 msg = f"FATAL: Missing dependency '{cmd}'. Halting."
                 logger.critical(msg)
                 fallback_notify("Daemon Boot", msg, "critical")
-            try:
-                client.execute(
-                    "pager.incident",
-                    "report_incident",
-                    vals={
-                        "source": "Daemon Boot",
-                        "severity": "critical",
-                        "description": msg,
-                    },
-                )
-            except (
-                ConnectionError,
-                socket.timeout,
-                Exception,
-            ) as e:  # audit-ignore-catch-all
-                logger.warning(
-                    "Failed to report missing dependency incident via RPC: %s", e
-                )
-            sys.exit(1)
+                try:
+                    client.execute(
+                        "pager.incident",
+                        "report_incident",
+                        vals={
+                            "source": "Daemon Boot",
+                            "severity": "critical",
+                            "description": msg,
+                        },
+                    )
+                except (
+                    ConnectionError,
+                    socket.timeout,
+                    Exception,
+                ) as e:  # audit-ignore-catch-all
+                    logger.warning(
+                        "Failed to report missing dependency incident via RPC: %s", e
+                    )
+                sys.exit(1)
 
 
 THREAD_HEARTBEATS = {}
@@ -1377,7 +1414,27 @@ def polling_thread(client, check):
                     ids=[check_id],
                     vals={"status": status, "last_run": now},
                 )
-            except (OSError, xmlrpc.client.Fault, xmlrpc.client.ProtocolError) as e:
+            # Real bug, found by bug-hunt review (tier 1): this used to
+            # only catch (OSError, xmlrpc.client.Fault,
+            # xmlrpc.client.ProtocolError) -- leftover exception types from
+            # an old XML-RPC-based client. `client` here is the JSON-2
+            # OdooClient defined at the top of this module, whose
+            # `execute()` raises a bare `Exception` on an HTTPError (e.g. a
+            # real 401 from a bad ODOO_PASSWORD) and never raises any
+            # xmlrpc.client type at all. A bare Exception wasn't caught by
+            # the old tuple, so it propagated out of this thread's own
+            # `while True:` loop and silently killed the whole
+            # polling_thread for this check -- recoverable only once the
+            # THREAD_HEARTBEATS watchdog noticed the stalled heartbeat
+            # (up to `max(300, interval*3)` seconds later) and force-
+            # restarted the entire daemon. Matching the broad
+            # "audit-ignore-catch-all" pattern already used for every other
+            # client.execute() call site in this same file.
+            except (
+                ConnectionError,
+                socket.timeout,
+                Exception,
+            ) as e:  # audit-ignore-catch-all
                 logger.warning(f"[{name}] Failed to update status in Odoo: {e}")
 
         if not success:
@@ -1461,7 +1518,14 @@ def log_tail_thread(client, check):
                         )
             else:
                 time.sleep(1)  # audit-ignore-sleep
-        except FileNotFoundError:
+        # Widened from FileNotFoundError alone (bug-hunt review, tier 1):
+        # a rotated-away log file can also raise PermissionError or other
+        # OSError subclasses during os.stat()/open() (e.g. a logrotate
+        # permissions hiccup), which used to be uncaught here and would
+        # kill this thread outright instead of retrying -- matching
+        # pager_log_analyzer.py's own tail_file(), which already catches
+        # the full OSError for this identical inode-rotation loop.
+        except OSError:
             time.sleep(5)  # audit-ignore-sleep
             continue
 

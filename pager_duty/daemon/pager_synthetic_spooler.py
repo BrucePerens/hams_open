@@ -2,7 +2,7 @@
 
 # -*- coding: utf-8 -*-
 import os
-# import sys
+import sys
 import time
 import json
 import subprocess
@@ -221,6 +221,26 @@ def execute_check(check):
     except (OSError, subprocess.SubprocessError) as e:
         logger.warning("Execution error: %s", e)
         res["error"] = str(e)
+    # Real bug, found by bug-hunt review (tier 1): the `raise ValueError(...)`
+    # (bad sandbox_downloads URL scheme) and `raise Exception(...)` (checksum
+    # mismatch) a few lines above are neither OSError nor
+    # subprocess.SubprocessError, so they used to escape this function
+    # entirely uncaught. main() submits execute_check() per check via a
+    # ThreadPoolExecutor and calls future.result() inside a try that only
+    # catches concurrent.futures.CancelledError -- so one check with a bad
+    # download URL or a flaky/replaced download (checksum mismatch) would
+    # crash the *entire* spooler daemon's main loop, not just report that one
+    # check's own `res["error"]` the way this function's return-value design
+    # (and every other failure branch here) already does. Since
+    # pager-synthetic-spooler.service restarts on failure and re-reads the
+    # same config immediately, a single persistently-misconfigured check
+    # would crash-loop the daemon and stop reporting on every OTHER
+    # playwright/bash/executable check too. This broad catch restores the
+    # intended per-check isolation: any failure in this function becomes
+    # res["error"], never an escaped exception.
+    except Exception as e:  # noqa: BLE001 -- deliberate per-check isolation boundary
+        logger.warning("Unexpected execution error: %s", e)
+        res["error"] = str(e)
 
     return name, res
 
@@ -229,6 +249,16 @@ def execute_check(check):
 def main():
     config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
     if not os.path.exists(config_path):
+        # Real bug, found by bug-hunt review (tier 1): this branch used to
+        # return 1 with no log line at all, and the `if __name__ ==
+        # "__main__":` guard below called `main()` without `sys.exit(...)`,
+        # so a missing config file made the process exit cleanly (code 0)
+        # having logged nothing whatsoever -- under
+        # pager-synthetic-spooler.service's `Restart=always`/`RestartSec=10`
+        # that's a completely silent crash-loop (systemd restarts on ANY
+        # exit under Restart=always, clean or not) instead of the loud,
+        # visible failure a missing config deserves.
+        logger.critical("pager_config.json not found at %s.", config_path)
         return 1
 
     try:
@@ -277,4 +307,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Real bug, found by bug-hunt review (tier 1): this used to call
+    # main() without sys.exit(...), so main()'s own `return 1` on a
+    # missing/unparseable config was silently discarded -- the process
+    # always exited 0 regardless of whether it actually did anything.
+    sys.exit(main())
