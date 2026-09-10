@@ -63,9 +63,21 @@ class RabbitMQPool(models.AbstractModel):
             body = json.dumps(body)
 
         def _do_publish():
+            # Bug-hunt finding (class 5, silent-failure gate): publish()
+            # already returned True to its caller before this postcommit
+            # callback ever runs, so a failure here can never be signaled
+            # back -- the caller has no way to know the message was
+            # dropped. That contract isn't changed here (it would require
+            # a bigger redesign of the postcommit-deferred publish model),
+            # but the two failure branches below are the ONLY remaining
+            # trail for reconciling a lost message, so they now log
+            # exchange/routing_key instead of a bare generic message.
             channel = self._get_channel()
             if not channel:
-                _logger.error("Cannot publish message, no RabbitMQ channel available.")
+                _logger.error(
+                    "Cannot publish message, no RabbitMQ channel available "
+                    "(exchange=%r, routing_key=%r).", exchange, routing_key
+                )
                 return False
             try:
                 with self._lock:
@@ -77,7 +89,10 @@ class RabbitMQPool(models.AbstractModel):
                     )
                 return True
             except pika.exceptions.AMQPError:
-                _logger.exception("Failed to publish message to RabbitMQ")
+                _logger.exception(
+                    "Failed to publish message to RabbitMQ (exchange=%r, routing_key=%r)",
+                    exchange, routing_key,
+                )
                 # Force reconnect on next attempt
                 self.__class__._connection = None
                 return False

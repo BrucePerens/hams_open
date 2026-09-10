@@ -79,8 +79,19 @@ def post_init_hook(env):
     try:
         with env_svc.cr.savepoint():
             env_svc.cr.execute(sql)
-    except Exception as e: # audit-ignore-catch-all
-        _logger.error("Failed to execute compliance_enforce_protection DDL: %s", e)
+    except Exception:  # audit-ignore-catch-all: logged with full traceback then re-raised, see below
+        # Bug-hunt finding (class 5, silent-failure gate): this used to log
+        # and swallow, letting module install/upgrade complete
+        # "successfully" while the cookie-consent/legal-page enforcement
+        # this hook exists for silently never ran -- a real compliance
+        # obligation (GDPR/CCPA cookie consent) failing loudly here is
+        # much safer than shipping a site with the banner off and nobody
+        # aware of it. The savepoint above already rolled back this
+        # statement's own effects cleanly, so re-raising here just fails
+        # the install/upgrade transaction, matching this codebase's
+        # fail-fast philosophy -- it does not leave anything half-applied.
+        _logger.exception("Failed to execute compliance_enforce_protection DDL")
+        raise
 
     _logger.info("Executing Compliance Enforcement via Postgres Procedure.")
     # Performance Optimization: Reduced dozens of ORM round-trips
@@ -90,8 +101,12 @@ def post_init_hook(env):
     try:
         with env_svc.cr.savepoint():
             env_svc.cr.execute("SELECT compliance_enforce_protection()")
-    except Exception as e: # audit-ignore-catch-all
-        _logger.error("Failed to call compliance_enforce_protection(): %s", e)
+    except Exception:  # audit-ignore-catch-all: logged with full traceback then re-raised, see above
+        # Same bug-hunt finding as the DDL block above: don't silently
+        # swallow a failure to actually enforce cookie-bar/legal-page
+        # compliance -- fail the install/upgrade loudly instead.
+        _logger.exception("Failed to call compliance_enforce_protection()")
+        raise
 
     env_svc["ir.module.module"]._bootstrap_knowledge_docs()
 
