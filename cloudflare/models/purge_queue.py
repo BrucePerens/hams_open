@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
+import logging
 import time
 from odoo import models, fields, api
 from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
+
+_logger = logging.getLogger(__name__)
 
 
 
@@ -155,6 +158,19 @@ class CloudflarePurgeQueue(models.Model):
             if not token or not zone_id:
                 # Missing credentials, immediately fail the batch to prevent infinite loops
                 success = False
+                # Bug fix (bug-hunt, review_tier 1, 2026-09-09, bug class 5):
+                # this previously failed the batch with no signal anywhere --
+                # an admin would only ever see a growing pile of "failed"
+                # purge.queue rows with no indication of *why* (no website
+                # resolved at all, or that website's own credentials were
+                # never configured). Log it so it's diagnosable without
+                # having to reverse-engineer the cause from queue state.
+                _logger.warning(
+                    "Cloudflare purge queue: failing %d record(s) for website "
+                    "id=%s -- missing API token or zone ID.",
+                    len(batch_records),
+                    first_website.id if first_website else False,
+                )
                 batch_records.write({"state": "failed"})
             else:
                 # If we are purging everything for this website, we can drop all other pending records for it.

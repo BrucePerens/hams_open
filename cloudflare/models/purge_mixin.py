@@ -15,7 +15,29 @@ class CloudflarePurgeMixin(models.AbstractModel):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_purge"
         )
-
+        # Bug-hunt note (review_tier 1, 2026-09-09): a website_id=False
+        # record here is genuinely served on EVERY website in the whole
+        # install, not just the acting user's own company -- confirmed
+        # against user_websites/models/website_page.py's own
+        # _get_page_id_by_url, whose lookup domain is
+        # `[('website_id', '=', False), ('website_id', '=', website_id)]`
+        # with no company filter at all, and matches stock Odoo's own
+        # website.page multi-website domain (website.py:
+        # `Domain('website_id', 'in', [False, *self.ids])`). An earlier
+        # version of this fix scoped the fallback search below to
+        # `self.env.companies` on the theory that fanning a purge out to
+        # every website was a cross-tenant amplification bug -- that was
+        # wrong: since such content really is rendered on every tenant's
+        # site, purging every website IS the correct cache-coherence
+        # behavior, and the company-scoped version would have left every
+        # OTHER tenant serving stale content after a legitimate edit to
+        # global content. Reverted to the original unscoped search. The
+        # real, unresolved question this dispatch's callout was reaching
+        # for is upstream of this file: who can actually create/edit a
+        # website_id=False record at all (an access-control property of
+        # website.page/website.menu/etc. themselves, not of this purge
+        # queue) -- not independently verified in this pass; see this
+        # function's own claim file for the full writeup.
         any_missing_website = any(not r.website_id for r in self)
         if any_missing_website:
             all_website_ids = (
@@ -44,7 +66,13 @@ class CloudflarePurgeMixin(models.AbstractModel):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_purge"
         )
-
+        # Bug-hunt note (review_tier 1, 2026-09-09): see
+        # _enqueue_cloudflare_purge's own comment above -- fanning out to
+        # every website when a record has no website_id is correct-by-design
+        # here (website_id=False content is genuinely served on every
+        # tenant's site), not a cross-tenant scoping bug. Left unscoped
+        # deliberately, after an earlier version of this fix wrongly
+        # narrowed it and was reverted.
         if any(not m.website_id for m in self):
             website_ids = (
                 self.env["website"].with_user(svc_uid).search([], limit=1000).ids

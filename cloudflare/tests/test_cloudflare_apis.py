@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 import requests
 from unittest.mock import MagicMock
+from odoo.exceptions import AccessError
 from odoo.tools import mute_logger
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -59,6 +60,50 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertEqual(called_data["secret"], "my_super_secret_key")
         self.assertEqual(called_data["response"], "fake_token_123")
 
+    def test_02b_verify_token_works_for_an_unprivileged_caller(self):
+        # Tests [@ANCHOR: COMM_cf_turnstile_verify]
+        # Bug-hunt, review_tier 1, 2026-09-09: verify_token exists
+        # specifically to be called by an anonymous/ordinary site visitor
+        # submitting a Turnstile CAPTCHA response -- `cloudflare_turnstile_
+        # secret` carries a `groups=` restriction, and reading it via the
+        # caller's own unelevated env used to raise AccessError for
+        # exactly that population. test_02_turnstile_secret_fetch above
+        # only proves this works for the admin-level default test user,
+        # which already has base.group_system -- it can't catch this bug,
+        # since the fix (elevating via with_user on the WAF service
+        # account) and the bug it fixes both look identical to an
+        # already-privileged caller. This test uses a bare portal user
+        # instead, the same population the real feature exists to serve.
+        website = self.env["website"].get_current_website()
+        website.write({"cloudflare_turnstile_secret": "my_super_secret_key"})
+
+        mock_post = self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_api.session.post"
+        )
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_post.return_value = mock_response
+
+        unprivileged = self.env["res.users"].create(
+            {
+                "name": "Unprivileged Turnstile Caller",
+                "login": "turnstile_unprivileged",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        res = (
+            self.env["cloudflare.turnstile"]
+            .with_user(unprivileged)
+            .verify_token("fake_token_123", "odoo", website_id=website.id)
+        )
+        self.assertTrue(
+            res,
+            "[!] DIAGNOSTIC FOR AI: an unprivileged/anonymous caller must "
+            "still get a real verification verdict, not an AccessError, "
+            "from verify_token -- that's the entire point of CAPTCHA "
+            "verification.",
+        )
+
     def test_03_tunnel_setup(self):
         # [@ANCHOR: COMM_test_cf_tunnel_setup]
 
@@ -113,6 +158,34 @@ class TestCloudflareAPIs(HamsTransactionCase):
         )
         self.assertTrue(tunnel)
         self.assertEqual(tunnel.name, "Tunnel 1")
+
+    def test_04b_sync_tunnels_rejects_an_unprivileged_caller(self):
+        # Tests [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
+        # Bug-hunt, review_tier 1, 2026-09-09: action_sync_tunnels is a
+        # public @api.model method on cloudflare.tunnel whose own
+        # ir.model.access.csv grants access only to
+        # cloudflare.group_cloudflare_tunnel/base.group_system -- but its
+        # own first ORM touch is `self.env["website"].search(...)`, and
+        # core Odoo's website module grants base.group_public read on
+        # `website`. So a caller with no real cloudflare.tunnel access at
+        # all (here, a plain portal user) could previously still trigger a
+        # real Cloudflare API call and local cloudflare.tunnel writes for
+        # every website, because _sync_tunnels_for_website elevates to the
+        # tunnel service account before ever touching cloudflare.tunnel's
+        # own ACL. Must now be refused before any of that runs.
+        unprivileged = self.env["res.users"].create(
+            {
+                "name": "Unprivileged Tunnel Caller",
+                "login": "tunnel_unprivileged",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        with self.assertRaises(
+            AccessError,
+            msg="[!] DIAGNOSTIC FOR AI: an unprivileged caller must not be "
+            "able to trigger a real Cloudflare tunnel sync.",
+        ):
+            self.env["cloudflare.tunnel"].with_user(unprivileged).action_sync_tunnels()
 
     def test_05_delete_tunnel(self):
         # [@ANCHOR: COMM_test_cf_delete_tunnel]

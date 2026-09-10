@@ -124,6 +124,26 @@ class CloudflareConfigManager(models.AbstractModel):
     @api.model
     # [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
     def initialize_cloudflare_state(self):
+        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): this is a public
+        # (non-underscore-prefixed) @api.model method on an AbstractModel
+        # with no ir.model.access.csv row of its own -- exactly the same
+        # RPC-exposure shape _check_waf_caller_authorized's own comment
+        # documents for action_pull_waf_rules/action_push_waf_rules, and
+        # the same fix was applied to cloudflare.waf.ban_ip. This sibling
+        # entry point was missed: any authenticated (including the public
+        # website user, since `website` grants base.group_public read)
+        # caller could invoke this directly, and it reads
+        # website._get_cloudflare_credentials() for every website with NO
+        # with_user() elevation of its own -- so on a warm
+        # @distributed_cache() hit (realistically the common case, since
+        # post_init_hook/cron paths call it regularly) the real, decrypted
+        # per-website Cloudflare API token comes back without the field's
+        # own group-restricted ACL check ever running, and gets used to
+        # make real outbound Cloudflare API calls and to overwrite local
+        # cloudflare.waf.rule / cloudflare.config.backup records. Gating
+        # here, before any of that, closes it the same way the sibling
+        # actions were closed.
+        self._check_waf_caller_authorized()
         _logger.info("[*] Initializing Cloudflare Edge State across Websites...")
         websites_to_pull = []
         websites_to_push = []

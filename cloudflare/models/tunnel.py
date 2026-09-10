@@ -4,7 +4,7 @@ import logging
 from urllib.parse import urlparse
 
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from ..utils.cloudflare_api import (
     delete_cfd_tunnel,
     get_cfd_tunnel_token,
@@ -33,6 +33,32 @@ class CloudflareTunnel(models.Model):
     route_ids = fields.One2many(
         "cloudflare.tunnel.route", "tunnel_id", string="Routing Table"
     )
+
+    # [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
+    def _check_tunnel_caller_authorized(self):
+        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): same shape as
+        # cloudflare.config.manager's own _check_waf_caller_authorized --
+        # action_sync_tunnels is a public (non-underscore-prefixed)
+        # @api.model method, directly dispatchable via /web/dataset/call_kw
+        # by any authenticated session, including the public website user
+        # (base.group_public has read on `website`, the very first model
+        # this action queries). It then calls _sync_tunnels_for_website()
+        # for every website, which elevates to the
+        # cloudflare.user_cloudflare_tunnel service account BEFORE ever
+        # touching cloudflare.tunnel's own (much stricter) ACL -- so an
+        # anonymous site visitor could trigger a real Cloudflare API call
+        # (list_cfd_tunnels) and real local cloudflare.tunnel writes for
+        # every website in the system, with zero permission check. Gating
+        # here, in the actual RPC entry point, closes that the same way
+        # the WAF actions were closed.
+        if not (
+            self.env.user.has_group("cloudflare.group_cloudflare_tunnel")
+            or self.env.user.has_group("base.group_system")
+            or self.env.user.is_service_account
+        ):
+            raise AccessError(
+                _("You are not authorized to manage Cloudflare Tunnels.")
+            )
 
     # [@ANCHOR: cloudflare:COMM_tunnel_action_push_configuration]
     def action_push_configuration(self):
@@ -80,48 +106,109 @@ class CloudflareTunnel(models.Model):
             )
             if not success:
                 raise UserError(_("Failed to push configuration: %s") % msg)
-            
-            # Simple notification since mail.thread isn't used
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": _("Success"),
-                    "message": _("Successfully pushed configuration to Cloudflare."),
-                    "type": "success",
-                    "sticky": False,
-                },
-            }
+
+        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): this notification
+        # return used to live INSIDE the `for tunnel in self:` loop above,
+        # at the same indent as the `payload =`/`update_cfd_tunnel_
+        # configuration(...)` lines -- so calling this action on more than
+        # one selected tunnel (the normal multi-select list-view case)
+        # pushed configuration to only the first tunnel in the batch and
+        # returned immediately, silently skipping every other tunnel in
+        # `self` while still showing "Successfully pushed configuration"
+        # as if the whole batch succeeded. Moved outside the loop so every
+        # tunnel in `self` is actually processed before the one summary
+        # notification is returned.
+        # Simple notification since mail.thread isn't used
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Success"),
+                "message": _("Successfully pushed configuration to Cloudflare."),
+                "type": "success",
+                "sticky": False,
+            },
+        }
 
     def action_delete_tunnel(self):
         # [@ANCHOR: COMM_cf_delete_tunnel]
 
         # # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
-        tunnels_to_unlink = self.env["cloudflare.tunnel"]
+        # Bug fix (bug-hunt, review_tier 1, 2026-09-09), corrected same
+        # day after an advisor review caught the first version of this
+        # fix was transactionally inert: this used to collect every
+        # successfully-remote-deleted tunnel into `tunnels_to_unlink` and
+        # unlink them all in one batch AFTER the loop, with a `raise
+        # UserError` on any tunnel's failure INSIDE the loop -- so a later
+        # tunnel's failure aborted before that batched unlink() ever ran.
+        # A first fix attempt moved the unlink() to run immediately after
+        # each success, still inside the loop, still followed by `raise
+        # UserError` on a later failure -- but a single Odoo RPC request
+        # is one DB transaction that only commits at the very end; an
+        # uncaught exception ANYWHERE in the request rolls the whole
+        # transaction back, including every unlink() already executed
+        # earlier in the same Python call, regardless of when in the
+        # function they ran. That first fix was therefore transactionally
+        # identical to the original bug -- verified by re-reading Odoo's
+        # own request-dispatch/commit model, not assumed. The real fix:
+        # stop raising when a partial success has already happened, since
+        # raising is what discards it. Failures are now collected instead
+        # of raised immediately; each successful remote delete is unlinked
+        # locally as it happens; and only THEN does the method decide how
+        # to report failures:
+        failures = []
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
             account_id = tunnel.website_id.cloudflare_account_id
 
             if not token or not account_id:
-                raise UserError(
-                    _("Missing Cloudflare API Token or Account ID for the website.")
+                failures.append(
+                    _("%s: missing Cloudflare API Token or Account ID for the website.")
+                    % tunnel.display_name
                 )
+                continue
 
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
-                tunnels_to_unlink |= tunnel
+                # ADR-0001: Headless Mutation Context
+                tunnel.unlink()
             else:
-                raise UserError(_("Failed to delete tunnel: %s") % msg)
-        
-        if tunnels_to_unlink:
-            # ADR-0001: Headless Mutation Context
-            tunnels_to_unlink.unlink()
+                failures.append(_("%s: %s") % (tunnel.display_name, msg))
+
+        if not failures:
+            return
+
+        if len(failures) == len(self):
+            # Nothing in this batch succeeded -- there is no already-
+            # committed-in-this-request local unlink a rollback could
+            # discard, so raising here is both safe and preserves this
+            # action's original single-tunnel UX (a hard, modal error).
+            raise UserError("\n".join(failures))
+
+        # A MIX of success and failure: raising here would roll back the
+        # whole transaction, including the tunnel(s) already unlinked
+        # above in this same request -- re-orphaning them against their
+        # already-deleted Cloudflare state, which is the exact bug this
+        # fix exists to close. Report the failures as a non-fatal warning
+        # instead, so the successful deletes actually commit when the
+        # request finishes.
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Some tunnels could not be deleted"),
+                "message": "\n".join(failures),
+                "type": "warning",
+                "sticky": True,
+            },
+        }
 
     @api.model
     def action_sync_tunnels(self):
         # [@ANCHOR: COMM_cf_sync_tunnels]
 
         # # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
+        self._check_tunnel_caller_authorized()
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
             # We sync synchronously because this is called via cron or manually, and we don't have queue_job.

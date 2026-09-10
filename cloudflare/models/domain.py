@@ -2,7 +2,8 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import logging
 
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import AccessError
 from odoo.addons.cloudflare.utils import cloudflare_api as cf_utils
 
 _logger = logging.getLogger(__name__)
@@ -117,6 +118,35 @@ class CloudflareRoutingDomain(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]
     def action_sync_ssl_status(self):
+        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): edge.routing.domain
+        # grants perm_read=1 to base.group_public/base.group_portal/
+        # base.group_user (ir.model.access.csv rows from edge_routing), so
+        # this public (non-underscore-prefixed) method is reachable via
+        # /web/dataset/call_kw by literally any site visitor who can name
+        # or enumerate a domain record id -- including the unauthenticated
+        # public website user. _get_website_mapping() elevates to the
+        # cloudflare.user_cloudflare_tunnel service account before this
+        # method ever checks write access, so the real outbound Cloudflare
+        # API call below (cf_utils.get_custom_hostname, using the site's
+        # real production token) fires unconditionally; only the
+        # subsequent `record.ssl_status = new_status` write is actually
+        # ACL-gated (perm_write=1 is base.group_system-only here), and
+        # only when the status changed. That means an unauthenticated
+        # caller can trigger a real, credentialed Cloudflare API call for
+        # any domain record merely by knowing its id -- the exact same
+        # "network-exposed handler with weaker access restriction than its
+        # own purpose implies" shape already found and fixed for
+        # action_pull_waf_rules/action_push_waf_rules and
+        # cloudflare.waf.ban_ip. Gating on the same permission the
+        # eventual write already requires closes it before the network
+        # call, not just before the local side effect.
+        if not (
+            self.env.user.has_group("base.group_system")
+            or self.env.user.is_service_account
+        ):
+            raise AccessError(
+                _("You are not authorized to sync Cloudflare SSL status.")
+            )
         website_map = self._get_website_mapping()
         for record in self:
             if not record.cloudflare_hostname_id:

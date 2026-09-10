@@ -3,7 +3,7 @@
 from odoo import models, fields, api
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 import logging
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 
 class WebsiteCloudflare(models.Model):
@@ -57,7 +57,22 @@ class WebsiteCloudflare(models.Model):
         key = key_record.value if key_record else None
         if not key:
             return None
-        return Fernet(key.encode("utf-8"))
+        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): a corrupted/malformed
+        # key row (wrong length, not valid url-safe base64) previously raised
+        # ValueError straight out of this method, uncaught -- crashing any
+        # compute (_compute_cf_api_token/_compute_cf_turnstile_secret) that
+        # calls it, since those are @api.depends compute methods with no
+        # try/except of their own. Fail closed to "no Fernet available"
+        # instead, which _crypt_field below already treats the same as "no
+        # key configured" (falls through to its own False/`***ERROR***`
+        # handling rather than raising).
+        try:
+            return Fernet(key.encode("utf-8"))
+        except ValueError as e:
+            logging.getLogger(__name__).warning(
+                "Cloudflare encryption key is malformed: %s", e
+            )
+            return None
 
     # [@ANCHOR: cloudflare:COMM_crypt_field]
     def _crypt_field(self, value, decrypt=False):
@@ -69,7 +84,21 @@ class WebsiteCloudflare(models.Model):
                 return f.decrypt(value.encode("utf-8")).decode("utf-8")
             else:
                 return f.encrypt(value.encode("utf-8")).decode("utf-8")
-        except ValueError as e:
+        except (ValueError, InvalidToken) as e:
+            # Bug fix (bug-hunt, review_tier 1, 2026-09-09, bug class 20): the
+            # actual, only exception Fernet.decrypt() raises for a corrupted/
+            # tampered/wrong-key ciphertext is `cryptography.fernet.
+            # InvalidToken`, a direct Exception subclass -- NOT a ValueError
+            # (independently confirmed against the installed `cryptography`
+            # package: decrypt() on malformed/garbage/empty input always
+            # raises InvalidToken, never ValueError). The original
+            # `except ValueError` here never caught the real failure mode it
+            # exists to handle -- e.g. after rotating the shared
+            # `daemon.key.registry` "cloudflare_encryption_key" value, every
+            # previously-encrypted token would raise InvalidToken uncaught
+            # straight out of a compute field (_compute_cf_api_token /
+            # _compute_cf_turnstile_secret), crashing the Settings form
+            # instead of showing the intended "***ERROR***" marker.
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
             return "***ERROR***" if decrypt else False
 
