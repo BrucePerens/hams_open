@@ -101,6 +101,45 @@ class TestBridgeAndMisc(RealTransactionCase):
             )
         )
 
+    def test_blog_post_unlink_enqueues_a_purge(self):
+        # Tests [@ANCHOR: cloudflare:COMM_blog_post_unlink]
+
+        # Bug-hunt fix, 2026-09-11: BlogPost had no unlink() override at
+        # all (write() was covered, so archiving via active=False purged
+        # correctly, but a real hard delete left the now-404 URL cached at
+        # Cloudflare's edge forever).
+        blog = self.env["blog.blog"].create({"name": "Bridge Test Blog Unlink"})
+        post = self.env["blog.post"].create(
+            {"name": "Bridge Test Post Unlink", "blog_id": blog.id}
+        )
+        website_url = post.website_url
+        self.PurgeQueue.search([], limit=10000).unlink()
+        post.unlink()
+        if website_url:
+            self.assertTrue(
+                self.PurgeQueue.search_count(
+                    [("target_item", "like", "%" + website_url)]
+                )
+            )
+
+    def test_product_template_unlink_enqueues_a_purge(self):
+        # Tests [@ANCHOR: cloudflare:COMM_product_unlink]
+
+        # Bug-hunt fix, 2026-09-11: same missing-purge-on-hard-delete gap
+        # as BlogPost.unlink() above.
+        product = self.env["product.template"].create(
+            {"name": "Bridge Test Product Unlink"}
+        )
+        website_url = product.website_url
+        self.PurgeQueue.search([], limit=10000).unlink()
+        product.unlink()
+        if website_url:
+            self.assertTrue(
+                self.PurgeQueue.search_count(
+                    [("target_item", "like", "%" + website_url)]
+                )
+            )
+
     def test_trigger_edge_purge_static_assets_enqueues_on_mtime_increase(self):
         # Tests [@ANCHOR: cloudflare:COMM_trigger_edge_purge_static_assets]
         self.website.write({"cloudflare_api_token": "tok", "cloudflare_zone_id": "zone"})

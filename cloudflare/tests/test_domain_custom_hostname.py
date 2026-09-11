@@ -12,7 +12,6 @@ exercised here against a real website whose domain matches the routing
 domain's own name, with only the outbound Cloudflare API calls mocked.
 """
 from cryptography.fernet import Fernet
-from odoo.exceptions import UserError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -60,15 +59,28 @@ class TestDomainCustomHostname(RealTransactionCase):
         self.assertEqual(domain.cloudflare_hostname_id, "hostname_123")
         self.assertEqual(domain.ssl_status, "pending_deployment")
 
-    def test_create_with_no_matching_website_raises_a_user_error(self):
-        with self.assertRaises(UserError):
-            self.env["edge.routing.domain"].create(
-                {
-                    "name": "https://no-such-website.example",
-                    "target_slug": "no-such-website",
-                }
-            )
-            self.env.flush_all()
+    def test_create_with_no_matching_website_skips_provisioning_not_raise(self):
+        # Tests [@ANCHOR: cloudflare:COMM_create_custom_hostname_batch]
+
+        # Bug-hunt fix, 2026-09-11: this test predates
+        # _create_cloudflare_custom_hostname_batch()'s own documented
+        # design change (see that method's comment) -- edge.routing.domain
+        # is a generic domain->slug->record mapping used for non-website
+        # targets too, so a create() with no matching website is a real,
+        # normal case that must succeed (custom-hostname provisioning is
+        # just skipped), not something that raises. This test went dark
+        # (never imported by tests/__init__.py) before that design change
+        # landed, so it kept asserting the OLD behavior undetected. Updated
+        # to match the current, intentional behavior instead of reverting
+        # the design change to make a stale assertion pass again.
+        domain = self.env["edge.routing.domain"].create(
+            {
+                "name": "https://no-such-website.example",
+                "target_slug": "no-such-website",
+            }
+        )
+        self.assertTrue(domain.exists())
+        self.assertFalse(domain.cloudflare_hostname_id)
 
     def test_unlink_deletes_the_custom_hostname_when_one_exists(self):
         # Tests [@ANCHOR: cloudflare:COMM_delete_custom_hostname_batch]

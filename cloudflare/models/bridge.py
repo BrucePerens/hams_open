@@ -33,21 +33,20 @@ class BlogPost(models.Model):
         self._enqueue_cloudflare_purge("website_url")
         return res
 
-    # Bug-hunt finding, NOT fixed here (review_tier 1, 2026-09-09):
-    # WebsitePage.unlink() (above) and WebsiteMenu.unlink() (below) both
-    # enqueue a purge before deletion, but BlogPost has no unlink() override
-    # at all -- archiving a post via `write({"active": False})` is covered
-    # (goes through write() above), but a real `unlink()` (hard delete)
-    # leaves its now-404 URL cached at Cloudflare's edge indefinitely, with
-    # nothing left in Odoo to trigger a later purge for it. Deliberately not
-    # adding the fix directly in this pass: doing it properly needs a new
-    # `[@ANCHOR: ...]` (this repo's anchor system requires a real `# Tests
-    # [@ANCHOR: ...]` link and a doc citation for any new base anchor, per
-    # verify_anchors.py) and a real regression test to go with it, and this
-    # bug-hunt pass is explicitly reading-and-reasoning only, not running
-    # the test suite to confirm a new test actually exercises the fix. See
-    # the bug-hunt claim for cloudflare:COMM_blog_post_write for the full
-    # writeup -- flagged as a real, concrete, buildable follow-up.
+    # [@ANCHOR: cloudflare:COMM_blog_post_unlink]
+    def unlink(self):
+        # Bug-hunt fix, 2026-09-11 (was: review_tier 1, flagged not fixed,
+        # 2026-09-09): WebsitePage.unlink() (above) and WebsiteMenu.unlink()
+        # (below) both enqueue a purge before deletion, but BlogPost had no
+        # unlink() override at all -- archiving a post via
+        # `write({"active": False})` was covered (goes through write()
+        # above), but a real `unlink()` (hard delete) left its now-404 URL
+        # cached at Cloudflare's edge indefinitely, with nothing left in
+        # Odoo to trigger a later purge for it. Enqueuing BEFORE
+        # super().unlink() (matching WebsitePage's own ordering) since
+        # website_url can no longer be read off the record once it's gone.
+        self._enqueue_cloudflare_purge("website_url")
+        return super().unlink()
 
 
 class WebsiteMenu(models.Model):
@@ -79,6 +78,11 @@ class ProductTemplate(models.Model):
         self._enqueue_cloudflare_purge("website_url")
         return res
 
-    # Bug-hunt finding, NOT fixed here (review_tier 1, 2026-09-09): same
-    # missing-purge-on-hard-delete gap as BlogPost above -- see that
-    # comment and the bug-hunt claim for cloudflare:COMM_product_write.
+    # [@ANCHOR: cloudflare:COMM_product_unlink]
+    def unlink(self):
+        # Bug-hunt fix, 2026-09-11 (was: review_tier 1, flagged not fixed,
+        # 2026-09-09): same missing-purge-on-hard-delete gap as
+        # BlogPost.unlink() above -- see that method's own comment for the
+        # full reasoning.
+        self._enqueue_cloudflare_purge("website_url")
+        return super().unlink()

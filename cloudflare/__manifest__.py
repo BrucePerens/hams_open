@@ -16,6 +16,7 @@
         "website_sale",
         "edge_routing",
         "knowledge",
+        "caching",
     ],
     "data": [
         "security/security_data.xml",

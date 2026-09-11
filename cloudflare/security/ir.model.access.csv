@@ -12,6 +12,7 @@ access_res_company_waf_svc,res.company waf svc,base.model_res_company,cloudflare
 access_res_users_waf_svc,res.users waf svc,base.model_res_users,cloudflare.group_cloudflare_waf,1,0,0,0
 access_cloudflare_purge_queue_waf_svc,cloudflare.purge.queue waf svc,model_cloudflare_purge_queue,cloudflare.group_cloudflare_waf,1,1,1,1
 access_cloudflare_tunnel_tunnel_svc,cloudflare.tunnel tunnel svc,model_cloudflare_tunnel,cloudflare.group_cloudflare_tunnel,1,1,1,1
+access_cloudflare_tunnel_route_tunnel_svc,cloudflare.tunnel.route tunnel svc,model_cloudflare_tunnel_route,cloudflare.group_cloudflare_tunnel,1,1,1,1
 access_website_tunnel_svc,website tunnel svc,website.model_website,cloudflare.group_cloudflare_tunnel,1,0,0,0
 access_res_company_tunnel_svc,res.company tunnel svc,base.model_res_company,cloudflare.group_cloudflare_tunnel,1,0,0,0
 access_cloudflare_purge_queue_admin,cloudflare.purge.queue admin,model_cloudflare_purge_queue,base.group_system,1,1,1,1
@@ -23,6 +24,7 @@ access_cloudflare_tunnel_wizard_admin,cloudflare.tunnel.wizard admin,model_cloud
 access_cloudflare_purge_wizard_admin,cloudflare.purge.wizard admin,model_cloudflare_purge_wizard,base.group_system,1,1,1,1
 access_cloudflare_zone_settings_wizard_admin,cloudflare.zone.settings.wizard admin,model_cloudflare_zone_settings_wizard,base.group_system,1,1,1,1
 access_cloudflare_tunnel_admin,cloudflare.tunnel admin,model_cloudflare_tunnel,base.group_system,1,1,1,1
+access_cloudflare_tunnel_route_admin,cloudflare.tunnel.route admin,model_cloudflare_tunnel_route,base.group_system,1,1,1,1
 access_cloudflare_ip_ban_public,cloudflare.ip.ban public,model_cloudflare_ip_ban,base.group_public,0,0,0,0
 access_cloudflare_ip_ban_portal,cloudflare.ip.ban portal,model_cloudflare_ip_ban,base.group_portal,0,0,0,0
 access_cloudflare_dns_record_admin,cloudflare.dns.record admin,model_cloudflare_dns_record,base.group_system,1,1,1,1
