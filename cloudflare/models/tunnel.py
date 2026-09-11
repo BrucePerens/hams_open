@@ -212,7 +212,28 @@ class CloudflareTunnel(models.Model):
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
             # We sync synchronously because this is called via cron or manually, and we don't have queue_job.
-            self._sync_tunnels_for_website(website.id)
+            # Bug-hunt fix, 2026-09-11: an uncaught exception from any one website's sync (a
+            # Cloudflare API failure, a malformed response, a DB constraint violation) used to
+            # propagate straight out of this loop, aborting the sync for every OTHER website in
+            # the same cron/manual run -- a transient failure on one customer's tunnels silently
+            # starved every other website's sync until the next scheduled run. Isolating each
+            # website's sync in its own savepoint (not just a bare try/except) matters
+            # specifically for a DB-level failure: once a query raises inside a transaction,
+            # Postgres marks the whole transaction aborted and refuses every further query on
+            # that cursor until a rollback -- a bare try/except would stop the traceback there,
+            # but every subsequent website's ORM calls would then also fail with "current
+            # transaction is aborted". A savepoint rolls back only this website's own partial
+            # writes, leaving the cursor usable for the rest of the loop.
+            try:
+                with self.env.cr.savepoint():
+                    self._sync_tunnels_for_website(website.id)
+            except Exception:  # audit-ignore-catch-all
+                _logger.exception(
+                    "Cloudflare tunnel sync failed for website %s (id=%s); continuing with "
+                    "the remaining websites.",
+                    website.name,
+                    website.id,
+                )
 
         return {
             "type": "ir.actions.client",

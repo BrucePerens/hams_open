@@ -159,6 +159,55 @@ class TestCloudflareAPIs(HamsTransactionCase):
         self.assertTrue(tunnel)
         self.assertEqual(tunnel.name, "Tunnel 1")
 
+    def test_04a_sync_tunnels_isolates_one_websites_failure_from_the_rest(self):
+        # Tests [@ANCHOR: COMM_cf_sync_tunnels]
+        # Bug-hunt fix, 2026-09-11: action_sync_tunnels looped over every website calling
+        # _sync_tunnels_for_website with no isolation at all -- an uncaught exception from
+        # ANY one website's sync (a Cloudflare API failure, a malformed response, a DB
+        # constraint violation) aborted the whole loop, silently starving every OTHER
+        # website's sync for the rest of that cron/manual run. A savepoint around each
+        # website's own sync (not just a bare try/except) matters specifically because a
+        # DB-level failure marks the whole Postgres transaction aborted, refusing every
+        # further query on that cursor until rolled back -- exercising a real ORM write
+        # failure here (not just a network-layer exception) so a fix that only isolated
+        # Python-level exceptions, without a savepoint, would still fail this test.
+        website_broken = self.env["website"].create({"name": "Broken Cloudflare Tenant"})
+        website_ok = self.env["website"].create({"name": "Healthy Cloudflare Tenant"})
+
+        # Patching _sync_tunnels_for_website itself (rather than list_cfd_tunnels/
+        # credentials several layers down) isolates this test to exactly the loop logic
+        # action_sync_tunnels owns -- unittest.mock.patch on a class method doesn't bind
+        # `self`, so the side_effect below receives only the plain `website_id` int
+        # actually passed at each call site, with no dependency on real credentials, the
+        # encrypted cloudflare_api_token field, or its @distributed_cache().
+        calls = []
+
+        def _sync_side_effect(website_id):
+            calls.append(website_id)
+            if website_id == website_broken.id:
+                # Simulate a real ORM-level failure (not just a Python-level exception) to
+                # prove the fix uses a savepoint, not merely a try/except: a bare
+                # try/except would silence this too, but a DB-level failure marks the
+                # whole Postgres transaction aborted -- the FOLLOWING website's own ORM
+                # calls would then also fail with "current transaction is aborted" unless
+                # isolated by a real savepoint, which is exactly what this proves.
+                self.env.cr.execute("SELECT 1/0")
+
+        mock_sync = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.CloudflareTunnel._sync_tunnels_for_website"
+        )
+        mock_sync.side_effect = _sync_side_effect
+
+        with mute_logger("odoo.addons.cloudflare.models.tunnel"):
+            self.env["cloudflare.tunnel"].action_sync_tunnels()
+
+        self.assertIn(
+            website_ok.id,
+            calls,
+            "A failure syncing one website's tunnels must not prevent a later website in "
+            "the same run from being synced too.",
+        )
+
     def test_04b_sync_tunnels_rejects_an_unprivileged_caller(self):
         # Tests [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
         # Bug-hunt, review_tier 1, 2026-09-09: action_sync_tunnels is a
