@@ -248,7 +248,33 @@ pub fn psk31_decode_bits(bits: &[bool]) -> String {
         // (acc/count desync) in release. Reset now instead of letting
         // the accumulator run unbounded; the very next "00" still
         // starts a fresh, correctly-bounded accumulation.
-        if count > MAX_VARICODE_BITS {
+        //
+        // Real bug found 2026-09-11 (see night_shift_todo.md for the full
+        // investigation): this threshold used to be bare
+        // `MAX_VARICODE_BITS`, which silently dropped every one of the 10
+        // real printable-ASCII characters whose codeword is exactly
+        // MAX_VARICODE_BITS (10) bits long -- '%', '&', '?', '@', 'Z',
+        // '^', '`', '{', '}', '~' -- whenever one was immediately
+        // followed by the "00" inter-character gap (i.e. every single
+        // time one of these characters is transmitted, not an edge
+        // case). The `!bit && prev_was_zero` branch above only
+        // recognizes a gap on its SECOND zero bit; the FIRST zero of the
+        // gap is provisionally folded into the accumulator one line up,
+        // exactly like any other bit, before it's known whether a
+        // second zero will confirm it as a gap or a real bit will
+        // extend the codeword further. For a full 10-bit codeword, that
+        // provisional fold pushes `count` to 11 -- which this guard,
+        // firing at `> MAX_VARICODE_BITS` (10), treated as "obviously
+        // noise, reset now," discarding the completed codeword's own
+        // bits before the second gap-zero ever arrived to confirm and
+        // decode it. The accumulator can legitimately hold up to
+        // MAX_VARICODE_BITS real bits PLUS exactly one provisional
+        // (not-yet-confirmed) gap bit -- `+ 1` here reflects that real
+        // invariant, not an arbitrary loosening: noise is still bounded
+        // to a small, fixed constant (one bit later than before), and
+        // a real max-length codeword's own provisional gap-bit no
+        // longer gets treated as proof of runaway noise.
+        if count > MAX_VARICODE_BITS + 1 {
             acc = 0;
             count = 0;
         }
@@ -459,7 +485,16 @@ impl VaricodeAccumulator {
         // directly from live demodulated audio (Psk31Decoder::feed),
         // real noise/signal-loss included, so a long same-parity run is
         // not just a theoretical adversarial input here.
-        if self.count > MAX_VARICODE_BITS {
+        //
+        // Same real bug and same fix as psk31_decode_bits's own identical
+        // guard (see that function's own comment for the full
+        // investigation): a full MAX_VARICODE_BITS-length codeword's own
+        // first gap-zero is provisionally folded in above before the
+        // second zero confirms the gap, pushing `count` to
+        // MAX_VARICODE_BITS + 1 -- `+ 1` here accounts for that real,
+        // legitimate provisional bit rather than treating it as proof of
+        // runaway noise.
+        if self.count > MAX_VARICODE_BITS + 1 {
             self.acc = 0;
             self.count = 0;
         }
@@ -560,6 +595,73 @@ pub fn psk31_decode_audio(samples: &[i16], carrier_hz: f64, sample_rate: u32) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Real bug found 2026-09-11 while root-causing a long-standing test failure
+    /// (`digital_decoder.rs`'s `subcarrier_signal_with_a_slash_suffixed_callsign_produces_
+    /// signature_verified`, misdiagnosed for a while as being about the '/' character
+    /// specifically): the actual cause was any character whose Varicode codeword is exactly
+    /// `MAX_VARICODE_BITS` (10) bits long, immediately followed by the "00" inter-character
+    /// gap -- both `psk31_decode_bits`'s and `VaricodeAccumulator::push_bit`'s own runaway-
+    /// noise guard used to fire one bit too early (`> MAX_VARICODE_BITS` instead of
+    /// `> MAX_VARICODE_BITS + 1`), discarding the completed codeword before its own second
+    /// gap-zero ever arrived to confirm and decode it -- see both guards' own doc comments
+    /// for the full mechanism. Confirmed via a real standalone round-trip using the EXACT
+    /// captured payload from that failing test (a real Ed25519-signed envelope containing
+    /// four real 'Z' characters, all four silently dropped before the fix, all four present
+    /// after it) before landing on this general, table-driven regression test.
+    #[test]
+    fn every_max_length_codeword_survives_a_real_round_trip_followed_by_a_gap() {
+        for (ascii, &(_, bitcount)) in VARICODE.iter().enumerate() {
+            if bitcount != MAX_VARICODE_BITS {
+                continue;
+            }
+            let c = ascii as u8 as char;
+            if !c.is_ascii_graphic() {
+                continue; // Control characters aren't real transmitted text; skip them.
+            }
+            // Two repeats: proves the SECOND codeword decodes too, not just the first --
+            // real transmitted text always has more than one character after a max-length
+            // one, and the accumulator's own state must correctly reset and continue.
+            let text = format!("{c}{c}");
+            let audio = psk31_encode_text(&text, 2450.0, 48000);
+
+            let whole_buffer = psk31_decode_audio(&audio, 2450.0, 48000);
+            assert_eq!(
+                whole_buffer, text,
+                "whole-buffer decode dropped max-length codeword {c:?} (ascii {ascii})"
+            );
+
+            let mut decoder = Psk31Decoder::new(2450.0, 48000);
+            let mut streamed = String::new();
+            // Arbitrary, non-symbol-aligned chunk size -- matches this crate's real
+            // callers (digital_decoder.rs feeds whatever chunk size its own audio_rx
+            // channel happens to receive, never symbol-aligned by construction).
+            for chunk in audio.chunks(240) {
+                streamed.push_str(&decoder.feed(chunk));
+            }
+            assert_eq!(
+                streamed, text,
+                "streamed/chunked decode dropped max-length codeword {c:?} (ascii {ascii})"
+            );
+        }
+    }
+
+    /// The exact real-world case that surfaced the bug above, kept verbatim as its own
+    /// test: a real Ed25519-signed subcarrier attestation envelope (captured directly from
+    /// `digital_decoder.rs`'s own previously-failing test) containing four real 'Z'
+    /// characters and three '/' characters, streamed through the same chunked-feed
+    /// interface `digital_decoder.rs` actually uses.
+    #[test]
+    fn real_captured_signed_envelope_with_z_and_slash_characters_decodes_verbatim() {
+        let text = "DE K6BP/P 1789161941|1789183541|m8LLo05mZXXRIPecnPHT3RH8NIXfl1jxjIsRWUw6mv4X2LZ3Y7u4EzSHN/ahbQXtdSRzrZ/IuYZdMn4GiwG9Bg== ";
+        let audio = psk31_encode_text(text, 2450.0, 48000);
+        let mut decoder = Psk31Decoder::new(2450.0, 48000);
+        let mut out = String::new();
+        for chunk in audio.chunks(240) {
+            out.push_str(&decoder.feed(chunk));
+        }
+        assert_eq!(out, text);
+    }
 
     #[test]
     // Tests [@ANCHOR: char_to_code]

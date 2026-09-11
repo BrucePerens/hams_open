@@ -344,16 +344,30 @@ const PRESENCE_MARGIN_DB: f32 = 20.0;
 /// enough to track genuine changes in band noise over real listening
 /// timescales.
 const PRESENCE_BETA: f32 = 0.02;
-/// Real minimum number of windows observed before the gate will accept
-/// *anything* -- gives the floor at least a little real basis first.
-/// Small: `observe`'s own outlier rejection means a strong real signal
-/// present from the very first window is never itself a reason to
-/// delay acceptance (the floor stays at its low cold-start value
-/// throughout, which is exactly what lets that signal's own edges clear
-/// the margin immediately) -- this only meaningfully delays acceptance
-/// while genuine ambient noise is still settling in.
+/// Real minimum number of windows observed before the gate will accept a MARGINAL reading
+/// (one that clears `PRESENCE_MARGIN_DB` but not `SIGNAL_BYPASS_MARGIN_DB` below) -- gives the
+/// floor a little real basis first, specifically covering the window during which a cold-start
+/// floor (0.0dB) hasn't yet climbed toward THIS noise's own real level. Confirmed directly this
+/// is a genuine, needed protection, not just defensive caution: `rtty_decoder_stays_effectively_
+/// silent_against_louder_noise_that_previously_deadlocked_the_floor`'s own noise reads ~22-30dB
+/// from its very first windows, comfortably clearing a cold `0+20=20dB` threshold before the
+/// floor's own EMA has had any observations to climb toward that noise's real ~22dB level --
+/// without this warmup, that gap produces exactly 1 real spurious character (measured directly,
+/// not assumed) in the handful of windows before the floor catches up. Does NOT gate
+/// `SIGNAL_BYPASS_MARGIN_DB`-strength readings -- see `accepts()`'s own doc comment for why an
+/// unconditional observation-count veto on those specifically was itself a real, separate bug.
 const PRESENCE_WARMUP_OBSERVATIONS: u32 = 10;
-
+/// A reading this many dB above the floor is treated as unambiguously real signal, bypassing
+/// `PRESENCE_WARMUP_OBSERVATIONS` entirely -- see `accepts()`'s own doc comment for the bug this
+/// closes. Measured directly, not guessed: a real full-amplitude RTTY signal reads ~53.6dB
+/// (matching `PresenceGate::new`'s own documented ~53dB figure); `rtty_decoder_stays_
+/// effectively_silent_against_louder_noise_that_previously_deadlocked_the_floor`'s own noise
+/// peaks at ~29.7dB even during its own cold-start-floor window. 40.0 sits with wide, real
+/// margin on both sides of that measured gap (10.3dB above the worst observed noise reading,
+/// 13.6dB below the real signal reading) -- not a boundary either regime came close to in
+/// measurement, unlike the genuinely fragile near-full-i16-scale noise case this module's own
+/// `#[ignore]`d test already discloses as a separate, harder, unfixed problem.
+const SIGNAL_BYPASS_MARGIN_DB: f32 = 40.0;
 impl PresenceGate {
     fn new() -> Self {
         // A third real bug, found the same way as the previous two --
@@ -394,9 +408,38 @@ impl PresenceGate {
         10.0 * (energy.max(1e-12)).log10() as f32
     }
 
+    /// Real bug found 2026-09-11 by fuzzing (see night_shift_todo.md for the full
+    /// investigation): this used to require `self.observations >= PRESENCE_WARMUP_OBSERVATIONS`
+    /// unconditionally, before accepting ANYTHING, on the documented reasoning that "a strong
+    /// real signal present from the very first window is never itself a reason to delay
+    /// acceptance" -- true for the FLOOR (a strong signal is always an outlier `observe()`
+    /// never absorbs, so `floor_db` stays at its low cold-start value regardless), but that
+    /// reasoning never accounted for the observation-COUNT veto itself, which blocked
+    /// acceptance regardless of how strong the signal was, for the gate's own first ~10
+    /// windows. Confirmed directly: a genuine, full-amplitude signal present from window 1
+    /// (e.g. a short RTTY message starting the instant `RttyDecoder` begins listening, or
+    /// `RttyDecoder` starting up mid-transmission) was silently rejected, exactly the scenario
+    /// the design's own comment claimed couldn't happen.
+    ///
+    /// The fix is NOT to remove the warmup counter outright -- that regressed a real, separate,
+    /// already-measured protection: `rtty_decoder_stays_effectively_silent_against_louder_
+    /// noise_that_previously_deadlocked_the_floor`'s own noise reads ~22-30dB from its very
+    /// first windows (well above a COLD floor's `0+20=20dB` threshold, before the floor's own
+    /// EMA has had any observations to climb toward that noise's real ~22dB level), and the
+    /// warmup counter was the only thing preventing that specific window from producing
+    /// spurious decodes. Instead: `SIGNAL_BYPASS_MARGIN_DB` (40dB, see its own doc comment for
+    /// the real measured gap it sits inside) distinguishes "obviously real signal, bypass
+    /// warmup entirely" (~53dB, comfortably clears it) from "merely elevated, ambiguous
+    /// reading" (this noise's own ~30dB peak, comfortably doesn't) -- so a genuine strong
+    /// signal is never delayed, while ambiguous/moderate readings (which real noise regimes
+    /// this gate is tuned against can plausibly produce) still wait for the floor to gain a
+    /// real basis first.
     fn accepts(&self, energy: f64) -> bool {
-        self.observations >= PRESENCE_WARMUP_OBSERVATIONS
-            && Self::energy_to_db(energy) > self.floor_db + PRESENCE_MARGIN_DB
+        let energy_db = Self::energy_to_db(energy);
+        if energy_db > self.floor_db + SIGNAL_BYPASS_MARGIN_DB {
+            return true;
+        }
+        self.observations >= PRESENCE_WARMUP_OBSERVATIONS && energy_db > self.floor_db + PRESENCE_MARGIN_DB
     }
 
     /// Called on every window `rtty_scan` evaluates, edge candidate or
@@ -970,6 +1013,38 @@ mod tests {
         assert_eq!(
             got, text,
             "the presence gate must not reject a real, full-amplitude RTTY signal"
+        );
+    }
+
+    /// Real bug found 2026-09-11 by fuzzing (see `PresenceGate::accepts`'s own doc comment for
+    /// the full mechanism, and night_shift_todo.md for the investigation): unlike the test
+    /// above, this deliberately has NO leading idle-MARK audio at all -- exactly the real
+    /// scenario a short message starting the instant a receiver begins listening (or
+    /// `RttyDecoder` starting up mid-transmission) produces. Before the fix, the gate's own
+    /// `PRESENCE_WARMUP_OBSERVATIONS` requirement silently rejected this signal's own start-bit
+    /// edge regardless of how strong it was, since the observation counter starts at 0
+    /// regardless of energy.
+    #[test]
+    fn a_real_signal_with_no_leading_idle_audio_at_all_is_not_lost_to_warmup() {
+        let text = "J";
+        let sample_rate = 48000u32;
+        let mut mono = rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        // Trailing padding only, deliberately NOT leading padding -- this test is specifically
+        // about the presence gate's own warmup period, not the separate, already-documented
+        // "last character needs trailing lookahead margin" behavior
+        // (`the_final_character_lags_by_one_character_without_trailing_idle_audio_then_
+        // arrives_once_more_audio_does` above already covers that one on its own).
+        mono.extend(idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05));
+
+        let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let mut got = String::new();
+        for chunk in mono.chunks(2) {
+            got.push_str(&decoder.feed(chunk));
+        }
+        assert_eq!(
+            got, text,
+            "a real signal present from the very first window must not be lost to the \
+             presence gate's own warmup period"
         );
     }
 
