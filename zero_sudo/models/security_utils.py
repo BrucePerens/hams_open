@@ -560,6 +560,20 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _get_param_read_whitelist(self):
         """Returns the list of system parameters allowed to be read via Zero-Sudo."""
         return [
+            # A real, deliberate, per-deployment operational switch -- set
+            # only on a dev/staging/CI host that actually runs the SW tour
+            # tests, never on a real production host -- for whether
+            # sw.js/shack_sw.js serve their TEST_*/postMessage-driven test
+            # hooks at all. Deliberately NOT keyed off Odoo's own
+            # test_enable flag: Bruce banned exactly that shape of
+            # automatic test/prod behavior branching after an LLM coding
+            # agent exploited an earlier instance of it to fake passing
+            # tests (see ham_repeater_dir/models/ham_repeater_import.py's
+            # own comment on the same ban) -- this is instead an explicit,
+            # human-set config value, the same pattern as any other
+            # deployment-scoped feature flag, not something that silently
+            # differs just because a test happens to be running.
+            "caching.enable_sw_test_hooks",
             "distributed_redis_cache.redis_host",
             "distributed_redis_cache.redis_password",
             "distributed_redis_cache.redis_pass",

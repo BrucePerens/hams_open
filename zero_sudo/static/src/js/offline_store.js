@@ -54,10 +54,18 @@ export class OfflineStore {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([this.storeName], 'readwrite');
             const store = transaction.objectStore(this.storeName);
-            const request = store.add(logEntry);
+            store.add(logEntry);
 
-            request.onsuccess = () => {
-                // Request background sync if supported
+            // Resolve only on transaction.oncomplete, not the individual
+            // request's onsuccess: IndexedDB only guarantees durability at
+            // commit. A quota-exceeded error aborts the whole transaction
+            // AFTER the request's own onsuccess has already fired, so
+            // resolving there would tell the caller a log was saved when it
+            // was actually rolled back and lost.
+            transaction.oncomplete = () => {
+                // Request background sync if supported. Done here (not in
+                // the request's onsuccess) so we never request a sync for a
+                // write that didn't actually commit.
                 if ('serviceWorker' in navigator && 'SyncManager' in window) {
                     void (async () => {
                         let registration;
@@ -77,9 +85,19 @@ export class OfflineStore {
                 resolve(logEntry.uuid);
             };
 
-            request.onerror = (event) => {
-                console.error('[OfflineStore] Failed to save log:', event.target.error);
-                reject(event.target.error);
+            transaction.onerror = () => {
+                console.error('[OfflineStore] Failed to save log:', transaction.error);
+                reject(transaction.error);
+            };
+
+            // A transaction can also be silently rolled back (e.g.
+            // QuotaExceededError on the request) without transaction.onerror
+            // firing -- it goes straight to onabort instead. Without this
+            // handler, that path leaves this Promise permanently unsettled.
+            transaction.onabort = () => {
+                const err = transaction.error || new Error('Transaction aborted');
+                console.error('[OfflineStore] Failed to save log (aborted):', err);
+                reject(err);
             };
         });
     }
@@ -99,6 +117,14 @@ export class OfflineStore {
             request.onerror = (event) => {
                 reject(event.target.error);
             };
+
+            // Same hang-bug class as saveLog()'s own transaction.onabort:
+            // without this, a transaction that aborts without the
+            // request's own onerror firing leaves this Promise
+            // permanently unsettled.
+            transaction.onabort = () => {
+                reject(transaction.error || new Error('Transaction aborted'));
+            };
         });
     }
 
@@ -108,10 +134,16 @@ export class OfflineStore {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([this.storeName], 'readwrite');
             const store = transaction.objectStore(this.storeName);
-            const request = store.delete(uuid);
+            store.delete(uuid);
 
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject(event.target.error);
+            // Same reasoning as saveLog(): resolve on transaction.oncomplete
+            // (real commit), not the individual request's onsuccess, and
+            // handle onabort too -- otherwise a caller could be told a log
+            // was removed from the offline queue when it wasn't actually
+            // durable yet.
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error || new Error('Transaction aborted'));
         });
     }
 }

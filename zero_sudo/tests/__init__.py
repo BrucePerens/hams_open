@@ -17,6 +17,7 @@ from . import test_tdd_fixes
 from . import test_views
 from . import test_facility
 from . import test_controllers
+from . import test_offline_store_hoot
 from . import common
 from . import dummy_daemon
 

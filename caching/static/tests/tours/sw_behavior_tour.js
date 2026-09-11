@@ -482,3 +482,133 @@ registry.category("web_tour.tours").add("caching_sw_idb_error_check", {
         },
     ],
 });
+
+registry.category("web_tour.tours").add("caching_sw_offline_fallback_check", {
+    url: "/?debug=1",
+    steps: () => [
+        {
+            content: "Wait for page to load",
+            trigger: "body",
+        },
+        {
+            content: "Wait for the Service Worker to be ready",
+            trigger: "body",
+            run: async function () {
+                if (!("serviceWorker" in navigator)) {
+                    throw new Error("Service Worker is not supported by this browser environment.");
+                }
+                const registration = await TourUtils.assertSettles(
+                    navigator.serviceWorker.ready,
+                    5000,
+                    "navigator.serviceWorker.ready"
+                );
+                window.__testSwRegistration = registration;
+                document.body.classList.add("sw-offline-fallback-test-ready");
+            },
+        },
+        {
+            content: "Confirm SW ready",
+            trigger: "body.sw-offline-fallback-test-ready",
+            run: function () {},
+        },
+        {
+            content: "Test: offlineFallbackResponse() returns a real 503 page",
+            trigger: "body",
+            run: async function () {
+                // Tests [@ANCHOR: caching_sw_offline_fallback_response]
+                const result = await TourUtils.assertSettles(
+                    sendTestMessageToSW(window.__testSwRegistration, { type: "TEST_CHECK_OFFLINE_FALLBACK" }),
+                    5000,
+                    "TEST_CHECK_OFFLINE_FALLBACK"
+                );
+                if (result.status !== 503) {
+                    throw new Error(`Expected offlineFallbackResponse().status to be 503, got ${result.status}.`);
+                }
+                document.body.classList.add("sw-offline-fallback-test-passed");
+            },
+        },
+        {
+            content: "Confirm offline-fallback test passed",
+            trigger: "body.sw-offline-fallback-test-passed",
+            run: function () {},
+        },
+    ],
+});
+
+// Bug found 2026-09-11: activate()'s own cache-cleanup used to delete ANY
+// cache not equal to its own CACHE_NAME -- with no prefix scoping, that
+// means every time a caching-module deploy bumps CACHE_NAME (any asset
+// mtime or website.caching_invalidation_version change), it silently wiped
+// out every OTHER Service Worker's cache sharing this same origin's
+// CacheStorage, including shack_sw.js's entire offline QSO-logging cache.
+// Fixed by scoping deletion to CACHE_NAME_PREFIX. This tour proves it by
+// seeding a foreign, differently-prefixed cache alongside a genuinely
+// stale same-prefix one, then asserting cleanupStaleCaches() (driven here
+// via TEST_RUN_CACHE_CLEANUP, see sendTestMessageToSW's own comment above)
+// deletes only the latter.
+registry.category("web_tour.tours").add("caching_sw_cache_isolation_check", {
+    url: "/?debug=1",
+    steps: () => [
+        {
+            content: "Wait for page to load",
+            trigger: "body",
+        },
+        {
+            content: "Wait for the Service Worker to be ready",
+            trigger: "body",
+            run: async function () {
+                if (!("serviceWorker" in navigator)) {
+                    throw new Error("Service Worker is not supported by this browser environment.");
+                }
+                const registration = await TourUtils.assertSettles(
+                    navigator.serviceWorker.ready,
+                    5000,
+                    "navigator.serviceWorker.ready"
+                );
+                window.__testSwRegistration = registration;
+                document.body.classList.add("sw-isolation-test-ready");
+            },
+        },
+        {
+            content: "Confirm SW ready",
+            trigger: "body.sw-isolation-test-ready",
+            run: function () {},
+        },
+        {
+            content: "Test: cache cleanup never touches a differently-prefixed (foreign) cache",
+            trigger: "body",
+            run: async function () {
+                // Tests [@ANCHOR: caching_sw_cache_cleanup_prefix_scoped]
+                const staleOwnCache = "odoo-assets-cache-999999-v1";
+                const foreignCache = "ham-shack-offline-v1";
+
+                await TourUtils.assertSettles(caches.open(staleOwnCache), 2000, `caches.open(${staleOwnCache})`);
+                await TourUtils.assertSettles(caches.open(foreignCache), 2000, `caches.open(${foreignCache})`);
+
+                await TourUtils.assertSettles(
+                    sendTestMessageToSW(window.__testSwRegistration, { type: "TEST_RUN_CACHE_CLEANUP" }),
+                    5000,
+                    "TEST_RUN_CACHE_CLEANUP"
+                );
+
+                const remainingCaches = await caches.keys();
+                if (remainingCaches.includes(staleOwnCache)) {
+                    throw new Error(`Expected the stale same-prefix cache ${staleOwnCache} to be deleted, but it still exists.`);
+                }
+                if (!remainingCaches.includes(foreignCache)) {
+                    throw new Error(
+                        `Expected the foreign, differently-prefixed cache ${foreignCache} to survive cleanup, ` +
+                            "but it was deleted -- this is the cross-Service-Worker cache-wipe bug."
+                    );
+                }
+                await caches.delete(foreignCache);
+                document.body.classList.add("sw-isolation-test-passed");
+            },
+        },
+        {
+            content: "Confirm cache isolation test passed",
+            trigger: "body.sw-isolation-test-passed",
+            run: function () {},
+        },
+    ],
+});

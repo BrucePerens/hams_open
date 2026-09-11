@@ -13,6 +13,13 @@ class TestCachingTour(HamsHttpCase):
     def setUp(self):
         super().setUp()
         self.env.ref('base.user_admin').lang = 'en_US'
+        # sw.js's TEST_*-prefixed postMessage hooks are compiled out of
+        # what's served unless this is explicitly turned on (see
+        # zero_sudo/models/security_utils.py's own comment on
+        # caching.enable_sw_test_hooks) -- this test class is exactly the
+        # "deliberate, human-set opt-in" case that config parameter exists
+        # for.
+        self.env["ir.config_parameter"].set_param("caching.enable_sw_test_hooks", "True")
 
     def test_caching_service_worker_tour(self):
         """Verify Service Worker registration via tour."""
@@ -35,6 +42,25 @@ class TestCachingTour(HamsHttpCase):
         `indexedDB`. See docs/proposals/SERVICE_WORKER_TESTING.md's
         "Still open" section, now closed by this test."""
         self.start_tour("/?debug=1", "caching_sw_idb_error_check", login="admin")
+
+    def test_caching_sw_offline_fallback_tour(self):
+        """Bug found 2026-09-11: caches.match('/offline') resolving to
+        undefined (the precache entry evicted, or install-time precache
+        itself failed) made respondWith(undefined) a hard network error
+        instead of a usable offline page. Fixed with a synthesized
+        offlineFallbackResponse(); had zero test coverage before this."""
+        self.start_tour("/?debug=1", "caching_sw_offline_fallback_check", login="admin")
+
+    def test_caching_sw_cache_isolation_tour(self):
+        """Bug found 2026-09-11: activate()'s own cache cleanup deleted ANY
+        cache not equal to its own CACHE_NAME, no prefix scoping -- every
+        caching-module deploy that bumped CACHE_NAME silently wiped out
+        every OTHER Service Worker's cache sharing this origin's
+        CacheStorage, including ham_shack's shack_sw.js offline
+        QSO-logging cache. Fixed by scoping deletion to CACHE_NAME_PREFIX;
+        this proves a differently-prefixed (foreign) cache survives
+        cleanup while a genuinely stale same-prefix one does not."""
+        self.start_tour("/?debug=1", "caching_sw_cache_isolation_check", login="admin")
 
     def test_caching_sw_lru_eviction_tour(self):
         """Verify enforceLRUQuota() actually evicts the oldest entries once

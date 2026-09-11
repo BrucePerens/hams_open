@@ -3,6 +3,16 @@
 
 const CACHE_NAME = '__CACHE_NAME__';
 
+// Every cache name this SW ever creates starts with this prefix (see
+// caching/controllers/main.py's own `cache_name = f"odoo-assets-cache-..."`).
+// activate() below must only ever delete OUR OWN stale caches, never any
+// other Cache Storage entry on this origin -- shack_sw.js (a different
+// Service Worker, but the SAME origin's shared CacheStorage) keeps its own
+// "ham-shack-offline-*" caches there, and an unscoped `cacheName !==
+// CACHE_NAME` delete would wipe them out on every single caching-module
+// version bump.
+const CACHE_NAME_PREFIX = 'odoo-assets-cache-';
+
 // Matches /web/assets/ OR /any_module_name/static/
 // Anchored to the start of the path for precision.
 const CACHE_URL_REGEX = /^(\/web\/assets\/|\/[a-zA-Z0-9_-]+\/static\/)/;
@@ -13,6 +23,16 @@ const MAX_STORAGE_BYTES = __MAX_STORAGE_BYTES__;
 
 const DB_NAME = 'LRUCacheDB';
 const STORE_NAME = 'LRUMetadata';
+
+// A real per-deployment operational switch, substituted server-side by
+// caching/controllers/main.py's own /sw.js route from the
+// caching.enable_sw_test_hooks config parameter -- see that route's own
+// comment and security_utils.py's whitelist entry for why this is
+// deliberately NOT tied to Odoo's test_enable flag. False (hooks compiled
+// out of what's served) on every deployment unless a human has explicitly
+// turned it on for that specific instance; the tour tests below only ever
+// run against an instance that has.
+const TEST_HOOKS_ENABLED = __TEST_HOOKS_ENABLED__;
 
 // Test-only: forces the next openDB() call to reject instead of opening a
 // real database, for tour-driven coverage of the error paths that a real
@@ -53,6 +73,7 @@ async function updateLRUMetadata(url) {
             store.put({ url: url, timestamp: Date.now() });
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
         });
     } catch (e) {
         console.error('[Caching SW] IDB update error:', e);
@@ -89,10 +110,25 @@ async function enforceLRUQuota(cache) {
             };
             request.onerror = () => reject(request.error);
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
         });
     } catch (e) {
         console.error('[Caching SW] IDB quota enforcement error:', e);
     }
+}
+
+// Last-resort fallback when even the precached '/offline' entry is
+// missing (evicted, or install-time precache itself failed) -- without
+// this, caches.match() resolving to undefined makes respondWith(undefined)
+// a hard network error instead of a usable offline page.
+// [@ANCHOR: caching_sw_offline_fallback_response]
+function offlineFallbackResponse() {
+    return new Response(
+        '<!doctype html><html><head><meta charset="utf-8"><title>Offline</title></head>' +
+        '<body><h1>You are offline</h1><p>This page is not available right now. ' +
+        'Reconnect to the network and reload.</p></body></html>',
+        { status: 503, headers: { 'Content-Type': 'text/html' } }
+    );
 }
 
 self.addEventListener('install', (event) => {
@@ -106,17 +142,27 @@ self.addEventListener('install', (event) => {
     );
 });
 
+// Deletes only OUR OWN stale caches (see CACHE_NAME_PREFIX's own comment).
+// Factored out of the 'activate' listener so a test can invoke it directly
+// via the TEST_RUN_CACHE_CLEANUP message hook below, without needing to
+// force a real install/activate cycle (a new SW version replacing this
+// one) just to exercise this logic.
+// [@ANCHOR: caching_sw_cache_cleanup_prefix_scoped]
+function cleanupStaleCaches() {
+    return caches.keys().then((cacheNames) => {
+        return Promise.all(
+            cacheNames.map((cacheName) => {
+                if (cacheName.startsWith(CACHE_NAME_PREFIX) && cacheName !== CACHE_NAME) {
+                    return caches.delete(cacheName);
+                }
+            })
+        );
+    });
+}
+
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        }).then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((clients) => {
+        cleanupStaleCaches().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((clients) => {
             clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
             return;
         })
@@ -146,7 +192,7 @@ self.addEventListener('fetch', (event) => {
     // Network-first for navigations with offline fallback
     if (request.mode === 'navigate') {
         event.respondWith(
-            fetch(request).catch(() => caches.match('/offline'))
+            fetch(request).catch(async () => (await caches.match('/offline')) || offlineFallbackResponse())
         );
         return;
     }
@@ -191,7 +237,46 @@ self.addEventListener('fetch', (event) => {
                     return;
                 }
                 try {
-                    await cache.put(request, responseToCache);
+                    if (!isBundle && isNaN(parsedLength)) {
+                        // Content-Length was absent above (a chunked or
+                        // compressed response -- most JS/CSS in practice),
+                        // which used to skip the size check entirely and
+                        // let an arbitrarily large asset bypass
+                        // MAX_FILE_SIZE_BYTES. Measure the real decoded
+                        // body size here instead, off the response path
+                        // (this whole block is unawaited already).
+                        let sizeBytes;
+                        try {
+                            sizeBytes = (await responseToCache.clone().arrayBuffer()).byteLength;
+                        } catch (err) {
+                            console.warn(`[Caching SW] Could not measure size for ${request.url}, skipping cache:`, err);
+                            return;
+                        }
+                        if (sizeBytes > MAX_FILE_SIZE_BYTES) {
+                            console.warn(`[Caching SW] Skipping cache for large file (measured): ${request.url}`);
+                            return;
+                        }
+                    }
+                    try {
+                        // Keep responseToCache itself unconsumed (clone for
+                        // the actual put) so a QuotaExceededError below can
+                        // retry from a fresh, unread body instead of trying
+                        // to re-read an already-consumed stream.
+                        await cache.put(request, responseToCache.clone());
+                    } catch (putErr) {
+                        // A full origin quota makes cache.put() itself throw
+                        // QuotaExceededError. enforceLRUQuota() previously
+                        // only ever ran AFTER a successful put, so once the
+                        // cache was actually full, nothing ever evicted
+                        // anything again -- permanently stuck full. Evict
+                        // once and retry this exact put a single time.
+                        if (putErr && putErr.name === 'QuotaExceededError' && !isBundle) {
+                            await enforceLRUQuota(cache);
+                            await cache.put(request, responseToCache.clone());
+                        } else {
+                            throw putErr;
+                        }
+                    }
                     if (!isBundle) {
                         updateLRUMetadata(request.url).then(() => enforceLRUQuota(cache)).catch(console.error);
                     }
@@ -229,12 +314,32 @@ self.addEventListener('fetch', (event) => {
 // delivered and processed before the next test step runs.
 self.addEventListener('message', (event) => {
     if (!event.data || !event.data.type) return;
+    // See TEST_HOOKS_ENABLED's own comment above -- these are all
+    // TEST_-prefixed by convention, and none of them is meaningful
+    // production behavior, so gating the whole family at once here is
+    // safe and doesn't touch anything a real client would ever send.
+    if (!TEST_HOOKS_ENABLED) return;
 
     if (event.data.type === 'TEST_FORCE_IDB_ERROR') {
         __testForceIdbError = true;
         if (event.ports && event.ports[0]) {
             event.ports[0].postMessage({ ok: true });
         }
+        return;
+    }
+
+    if (event.data.type === 'TEST_RUN_CACHE_CLEANUP') {
+        // Re-runs activate()'s own cache-cleanup logic on demand -- proves
+        // it only ever deletes caches under CACHE_NAME_PREFIX (this SW's
+        // own family) and never a differently-named cache belonging to a
+        // different Service Worker sharing this origin's CacheStorage
+        // (shack_sw.js's 'ham-shack-offline-*' caches, in particular).
+        const port = event.ports && event.ports[0];
+        cleanupStaleCaches().then(() => {
+            if (port) port.postMessage({ ok: true });
+        }).catch((err) => {
+            if (port) port.postMessage({ ok: false, message: String(err && err.message) });
+        });
         return;
     }
 
@@ -257,5 +362,12 @@ self.addEventListener('message', (event) => {
             .catch((err) => {
                 if (port) port.postMessage({ settled: true, rejected: true, message: String(err && err.message) });
             });
+        return;
+    }
+
+    if (event.data.type === 'TEST_CHECK_OFFLINE_FALLBACK') {
+        // Tests [@ANCHOR: caching_sw_offline_fallback_response]
+        const port = event.ports && event.ports[0];
+        if (port) port.postMessage({ status: offlineFallbackResponse().status });
     }
 });

@@ -34,6 +34,17 @@
             "zero_sudo/static/src/js/tour_failure_dump.js",
             "zero_sudo/static/src/tours/zero_sudo_tour.js",
         ],
+        # Fast, hardware-independent hoot unit tests -- distinct from the full-browser-tour
+        # suite above. offline_store.js is duplicated here (not just referenced via
+        # web.assets_frontend above) because /web/tests's own assets_unit_tests_setup bundle
+        # only 'include's web.assets_backend, never web.assets_frontend -- confirmed directly
+        # (odoo/addons/web/__manifest__.py) and already the established convention in this
+        # codebase (see ham_shack/__manifest__.py's own web.assets_unit_tests comment on
+        # sdr_spectrum.js for the identical reasoning).
+        "web.assets_unit_tests": [
+            "zero_sudo/static/src/js/offline_store.js",
+            "zero_sudo/static/tests/offline_store.test.js",
+        ],
     },
     "data": [
         "data/security_data.xml",

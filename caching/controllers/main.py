@@ -56,6 +56,18 @@ class ServiceWorkerController(http.Controller):
         content = content.replace("__MAX_FILE_SIZE_BYTES__", str(max_file_size))
         content = content.replace("__MAX_STORAGE_BYTES__", str(quota_mb * 1024 * 1024))
 
+        # A real, deliberate per-deployment switch (see security_utils.py's
+        # own comment on caching.enable_sw_test_hooks) -- not derived from
+        # Odoo's own test_enable, on purpose. Off (test hooks compiled out
+        # of the served script) unless a human has explicitly turned this
+        # on for this specific Odoo instance.
+        test_hooks_enabled = request.env["zero_sudo.security.utils"]._get_system_param(
+            "caching.enable_sw_test_hooks", "False"
+        )
+        content = content.replace(
+            "__TEST_HOOKS_ENABLED__", "true" if str(test_hooks_enabled).lower() in ("1", "true") else "false"
+        )
+
         headers = [
             ("Content-Type", "application/javascript"),
             ("Cache-Control", "no-cache, max-age=0"),
