@@ -3,6 +3,7 @@
 # This software is released under the AGPL-3.0-or-later License.
 import os
 from cryptography.fernet import Fernet
+from odoo.exceptions import UserError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -76,14 +77,46 @@ class TestBackupCrypto(HamsTransactionCase):
         config.invalidate_recordset(["secret_key"])
         self.assertEqual(config.secret_key, "AKIA_FAKE_SECRET_VALUE")
 
-    def test_no_crypto_key_configured_leaves_crypt_field_falsy(self):
-        del os.environ["ODOO_BACKUP_CRYPTO_KEY"]  # burn-ignore-env
-        config = self.env["backup.config"].create(
-            {
-                "name": "No Key Test",
-                "engine": "kopia",
-                "target_path": "/var/lib/odoo/backups/no_key_test",
-                "kopia_password": "whatever",
-            }
+    def test_no_crypto_key_configured_raises_rather_than_silently_discarding(self):
+        # Tests [@ANCHOR: backup_management:COMM_crypt_field]
+
+        # Bug-hunt fix, 2026-09-11: this test went dark (never imported by
+        # tests/__init__.py, confirmed by grepping it) before TWO real,
+        # separate problems with it were ever caught.
+        #
+        # First, `del os.environ["ODOO_BACKUP_CRYPTO_KEY"]` doesn't actually
+        # achieve "no crypto key configured": `_get_fernet()` falls back to
+        # `HAMS_CRYPTO_KEY`, and `HamsTransactionCase.setUpClass()`
+        # (zero_sudo/tests/common.py) sets that via `os.environ.setdefault`
+        # -- a PROCESS-WIDE mutation that persists for the rest of the same
+        # `test.py` invocation once ANY earlier test class has run. By the
+        # time this specific test runs in a real combined suite, some
+        # earlier test has near-certainly already set `HAMS_CRYPTO_KEY`, so
+        # `_get_fernet()` still resolves a real key regardless of this
+        # test's own `del`. Patching `_get_fernet` directly simulates "no
+        # key resolves" reliably, independent of whatever the rest of the
+        # suite has already done to the process environment.
+        #
+        # Second, and more importantly: this test's own name and assertion
+        # described behavior `_crypt_field()` no longer has. Its own
+        # 2026-09-09 bug-hunt fix (see that method's comment) deliberately
+        # replaced "no key configured -> silently return False, discarding
+        # the admin's typed plaintext" with "raise UserError instead," per
+        # this project's fail-fast philosophy -- a credential that looks
+        # saved but silently wasn't is a confidentiality/durability risk.
+        # This test predates that fix (or was never updated for it) and so
+        # kept asserting the OLD, since-reverted behavior undetected.
+        # Updated to assert the current, intentional behavior instead of
+        # reverting the fail-fast fix to make a stale assertion pass again.
+        self.safe_patch_object(
+            type(self.env["backup.config"]), "_get_fernet", return_value=None
         )
-        self.assertFalse(config.kopia_password_crypt)
+        with self.assertRaises(UserError):
+            self.env["backup.config"].create(
+                {
+                    "name": "No Key Test",
+                    "engine": "kopia",
+                    "target_path": "/var/lib/odoo/backups/no_key_test",
+                    "kopia_password": "whatever",
+                }
+            )

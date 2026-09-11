@@ -30,7 +30,6 @@ def validate_backup_path(path):
         "/var/backups/global",
         "/opt/hams/backup",
         "/mnt/backup",
-        "/tmp",
         # Bug-hunt fix (2026-09-09, tier-1 pass): this is the ONLY base under
         # which daemon/main.py's own, independent allowlist
         # (BACKUP_WORKER_SCRIPTS_DIR, default
@@ -58,6 +57,18 @@ def validate_backup_path(path):
     # file living in that same directory) with the contents of a kopia
     # snapshot -- a real credential/privilege-compromise path, not just a
     # scoping papercut. Removed; nothing in this module needs it.
+    #
+    # Bug-hunt fix (2026-09-11): "/tmp" was also previously in this list --
+    # confirmed by grepping this entire module (code, tests, docs) that
+    # nothing legitimately targets it; the only reference anywhere was this
+    # allowlist entry itself. A world-writable directory (mode 1777) has no
+    # business being an allowed KOPIA_RESTORE_TARGET_PATH: any local user
+    # could pre-stage a symlink there, or a restore into a predictable
+    # /tmp path could plant/overwrite a file some OTHER privileged process
+    # later reads trusting its own location. Same bug class, same fix
+    # shape as the "/opt/hams/etc/keys" removal above -- a shared
+    # allowlist function accepting a base directory nothing actually needs,
+    # purely because it was convenient at some point. Removed.
 
     if not any(abs_path == base or abs_path.startswith(base + "/") for base in allowed_bases):
         raise UserError(
