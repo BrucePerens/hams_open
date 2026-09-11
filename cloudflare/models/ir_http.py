@@ -42,8 +42,14 @@ class IrHttp(models.AbstractModel):
         if any(
             path.startswith(prefix) for prefix in ("/web/static", "/web/assets")
         ):  # burn-ignore-route  # fmt: skip
-            response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=31536000"
-            response.headers["Cache-Tag"] = "odoo-static-assets"
+            # A transient error (500/404/etc.) must never be pinned at the edge for a
+            # year -- only a genuinely successful (or not-modified) asset response is
+            # long-TTL cacheable.
+            if response.status_code in (200, 304):
+                response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=31536000"
+                response.headers["Cache-Tag"] = "odoo-static-assets"
+            else:
+                response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
             return res
 
         # 2. Hardcoded Dynamic or API Routes (Zero caching)
@@ -78,6 +84,12 @@ class IrHttp(models.AbstractModel):
 
         # 4. Semi-Static Content (Public Website Pages, Blogs, Classifieds)
         # Cache heavily at the edge. The purge_queue will invalidate individual URLs when edited.
+        # A non-200/304 response here (a transient 500, a genuine 404) must not be pinned
+        # at the edge for a day -- that would keep serving the error long after the origin
+        # recovered, or long after the page starts existing.
+        if response.status_code not in (200, 304):
+            response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
+            return res
         response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=86400"
 
         # Inject Website-specific Cache-Tag for granular site-wide purging if needed.

@@ -15,6 +15,14 @@
     "version": "1.0",
     "license": "AGPL-3",
     "depends": ["base", "web", "mail"],
+    # distributed_redis_cache depends on zero_sudo (its own security-account/param-read
+    # plumbing), so zero_sudo can't declare a real 'depends' entry back on it -- that
+    # would close a real cycle Odoo's module loader can't install. models/ir_http.py's
+    # `from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache`
+    # is the actual coupling this documents; see
+    # zero_sudo/models/security_utils.py's `_resolve_dependency_cycle` docstring and
+    # hams_shared/tools/check_dependency_cycles.py for the established convention.
+    "depends_cycle": ["distributed_redis_cache"],
     "external_dependencies": {
         "python": ["psycopg2", "requests"]
     },

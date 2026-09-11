@@ -2,6 +2,14 @@
 from odoo import models, api, _
 from odoo.http import request
 from odoo.exceptions import AccessError
+# distributed_redis_cache depends on zero_sudo, so zero_sudo can't declare a real
+# 'depends' entry back on it without closing a cycle -- see this module's own
+# 'depends_cycle' manifest entry and zero_sudo.security.utils._resolve_dependency_cycle's
+# docstring for the established convention. This import is still a real, unconditional
+# coupling (the @distributed_cache() decorator below needs the name at class-definition
+# time, so a lazy runtime-guarded import like _resolve_dependency_cycle's usual callers
+# use doesn't apply here); it works because Python resolves `odoo.addons.X` against the
+# addons path directly, independent of either module's per-database installation state.
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
 class IrHttp(models.AbstractModel):

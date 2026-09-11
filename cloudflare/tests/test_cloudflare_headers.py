@@ -217,3 +217,63 @@ class TestCloudflareHeaders(HamsHttpCase):
             res.headers,
             "No website means no odoo-website-<id> Cache-Tag to add.",
         )
+
+    def test_06_error_response_is_not_pinned_at_the_edge(self):
+        # Tests [@ANCHOR: COMM_ir_http_post_dispatch_headers]
+        """Bug-hunt fix, 2026-09-11 (Fable review of the ir.http hot path):
+        a transient 500/404 used to get the same long-TTL edge caching as a
+        genuinely successful response, on both the static-asset branch
+        (max-age=31536000) and the semi-static-page branch (max-age=86400)
+        -- pinning the error at Cloudflare's edge long after origin recovers.
+        Both branches must now fall back to no-cache on a non-200/304 status."""
+
+        class DummyBase:
+            @classmethod
+            def _post_dispatch(cls, response):
+                return response
+
+        class DummyIrHttp(CloudflareIrHttp, DummyBase):
+            pass
+
+        class MockRequest:
+            env = type(
+                "MockEnv",
+                (object,),
+                {
+                    "user": type(
+                        "MockUser", (object,), {"_is_public": lambda self: True}
+                    )()
+                },
+            )()
+            httprequest = type(
+                "MockHttpRequest", (object,), {"path": "/some-public-route"}
+            )()
+
+            @property
+            def __dict__(self):
+                return {}
+
+        mock_request = MockRequest()
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+        )
+
+        # Semi-static branch (4): a 500 must not get max-age=86400.
+        error_response = Response(status=500)
+        res = DummyIrHttp._post_dispatch(error_response)
+        self.assertEqual(
+            res.headers.get("Cloudflare-CDN-Cache-Control"),
+            "no-cache, no-store",
+            "A 500 response must not be cached at the edge as semi-static content.",
+        )
+
+        # Static-asset branch (1): a 404 for a missing asset must not get
+        # max-age=31536000 either.
+        mock_request.httprequest.path = "/web/assets/1/missing.js"  # burn-ignore-route
+        missing_asset_response = Response(status=404)
+        res = DummyIrHttp._post_dispatch(missing_asset_response)
+        self.assertEqual(
+            res.headers.get("Cloudflare-CDN-Cache-Control"),
+            "no-cache, no-store",
+            "A 404 static-asset response must not be cached at the edge for a year.",
+        )
