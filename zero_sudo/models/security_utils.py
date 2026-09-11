@@ -15,6 +15,7 @@ import psycopg2.errors
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
 from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
+from odoo.http import request
 from odoo.modules.module import get_manifest as odoo_get_manifest
 
 _logger = logging.getLogger(__name__)
@@ -291,6 +292,54 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                 mail_auto_subscribe_no_notify=True, mail_notrack=True
             ).write({owner_field: orphan_uid})
         return sorted(real_ids)
+
+    @api.model
+    # [@ANCHOR: zero_sudo:get_trusted_client_ip]
+    def _get_trusted_client_ip(self, request_obj=None):
+        """
+        Returns the real client IP for the current (or given) request,
+        trusting Cloudflare's own CF-Connecting-IP/X-Forwarded-For headers
+        ONLY when the request's actual transport-level peer is loopback.
+
+        This deployment is Cloudflare-Tunnel-only (cloudflared and the Odoo
+        HTTP server always run on the same host, per Bruce's own
+        confirmation 2026-09-11 -- see
+        docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md,
+        which flagged this exact trust boundary as an open architectural
+        question until that answer): a loopback remote_addr IS the tunnel,
+        so its injected headers are genuine. Any other remote_addr means
+        the request did NOT arrive via the tunnel -- these headers are then
+        attacker-controlled (any client can set them on a raw request) and
+        MUST be ignored entirely, falling back to the real transport peer
+        address instead. If this deployment shape ever changes (a website
+        moves to classic direct-Cloudflare-proxy instead of Tunnel), this
+        function needs a per-website deployment-mode check instead of a
+        single global loopback test -- see the claim file above.
+
+        :param request_obj: an already-unwrapped request object (for
+            testing, or a caller that already has one); defaults to the
+            real current request via odoo.http.request.
+        :return: the real client IP as a string, or None if there is no
+            active request at all.
+        """
+        if request_obj is None:
+            if not request:
+                return None
+            request_obj = request._get_current_object()
+
+        remote_addr = request_obj.httprequest.remote_addr
+        if remote_addr not in ("127.0.0.1", "::1"):  # burn-ignore-tunnel-peer-check
+            # Not proxied through our own Tunnel -- CF-*/X-Forwarded-For
+            # headers here are unverifiable and must not be trusted.
+            return remote_addr
+
+        cf_ip = request_obj.httprequest.headers.get("CF-Connecting-IP")
+        if cf_ip:
+            return cf_ip.strip()
+        fw_ip = request_obj.httprequest.headers.get("X-Forwarded-For")
+        if fw_ip:
+            return fw_ip.split(",")[0].strip()
+        return remote_addr
 
     @api.model
     # [@ANCHOR: zero_sudo:ensure_executable]

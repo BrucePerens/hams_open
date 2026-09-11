@@ -30,16 +30,42 @@ class CloudflareUtils(models.AbstractModel):
         """
         Parses Cloudflare-specific geographic and threat headers injected at the edge.
         Returns a dictionary to be used by proprietary modules for default routing.
+
+        Bug-hunt fix, 2026-09-11 (see
+        docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md):
+        this used to trust every CF-* header unconditionally, with no check
+        that the request actually transited Cloudflare's edge -- forgeable
+        by any direct request to the origin. This deployment is
+        Tunnel-only (confirmed by Bruce 2026-09-11), so CF-* headers are
+        only genuine when the request's real transport peer is loopback
+        (cloudflared and Odoo run on the same host). When it isn't, every
+        CF-* field is dropped rather than trusted -- an attacker who
+        reaches origin directly gets no CF-derived geo/threat data at all,
+        not forged data.
         """
         if not request:
             return {}
 
         request_obj = request._get_current_object()
         headers = request_obj.httprequest.headers
+        real_ip = self.env["zero_sudo.security.utils"]._get_trusted_client_ip(request_obj)
+        via_tunnel = request_obj.httprequest.remote_addr in ("127.0.0.1", "::1")  # burn-ignore-tunnel-peer-check
+
+        if not via_tunnel:
+            return {
+                "ip": real_ip,
+                "country": None,
+                "region": None,
+                "city": None,
+                "postal_code": None,
+                "longitude": None,
+                "latitude": None,
+                "threat_score": None,
+                "as_number": None,
+            }
 
         return {
-            "ip": headers.get("CF-Connecting-IP")
-            or request_obj.httprequest.remote_addr,
+            "ip": real_ip,
             "country": headers.get("CF-IPCountry"),
             "region": headers.get("CF-Region"),
             "city": headers.get("CF-IPCity"),

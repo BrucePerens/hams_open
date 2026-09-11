@@ -1105,3 +1105,64 @@ class TestSecurityUtils(HamsTransactionCase):
         orphan_uid = utils._get_service_uid("zero_sudo.orphaned_record_owner")
         partner.invalidate_recordset()
         self.assertEqual(partner.user_id.id, orphan_uid)
+
+    def _mock_request_obj(self, remote_addr, headers=None):
+        mock_obj = MagicMock()
+        mock_obj.httprequest.remote_addr = remote_addr
+        mock_obj.httprequest.headers = headers or {}
+        return mock_obj
+
+    def test_28_get_trusted_client_ip_trusts_cf_header_from_loopback(self):
+        # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
+        """This deployment is Cloudflare-Tunnel-only (confirmed by Bruce
+        2026-09-11) -- cloudflared and Odoo run on the same host, so a
+        loopback remote_addr IS the tunnel, and its CF-Connecting-IP
+        header is genuine."""
+        utils = self.env["zero_sudo.security.utils"]
+        mock_obj = self._mock_request_obj(
+            "127.0.0.1", {"CF-Connecting-IP": "8.8.4.4"}  # burn-ignore-ssrf-test-value
+        )
+        self.assertEqual(utils._get_trusted_client_ip(mock_obj), "8.8.4.4")
+
+    def test_28b_get_trusted_client_ip_trusts_x_forwarded_for_from_loopback(self):
+        # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
+        utils = self.env["zero_sudo.security.utils"]
+        mock_obj = self._mock_request_obj(
+            "::1", {"X-Forwarded-For": "8.8.4.4, 10.0.0.1"}
+        )
+        self.assertEqual(
+            utils._get_trusted_client_ip(mock_obj),
+            "8.8.4.4",
+            "Only the first (real client) hop of a comma-separated "
+            "X-Forwarded-For chain must be used.",
+        )
+
+    def test_28c_get_trusted_client_ip_ignores_forged_headers_from_a_non_loopback_peer(self):
+        # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
+        """Bug-hunt fix, 2026-09-11: a request whose real transport peer is
+        NOT the local Tunnel must never trust CF-Connecting-IP/
+        X-Forwarded-For -- they're attacker-controlled on any path that
+        doesn't go through cloudflared. The real peer address must be
+        returned instead, even though a forged header is present."""
+        utils = self.env["zero_sudo.security.utils"]
+        mock_obj = self._mock_request_obj(
+            "203.0.113.5",
+            {"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "5.6.7.8"},
+        )
+        self.assertEqual(utils._get_trusted_client_ip(mock_obj), "203.0.113.5")
+
+    def test_28d_get_trusted_client_ip_falls_back_to_remote_addr_with_no_headers(self):
+        # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
+        utils = self.env["zero_sudo.security.utils"]
+        mock_obj = self._mock_request_obj("127.0.0.1", {})  # burn-ignore-ssrf-test-value
+        self.assertEqual(
+            utils._get_trusted_client_ip(mock_obj), "127.0.0.1"  # burn-ignore-ssrf-test-value
+        )
+
+    def test_28e_get_trusted_client_ip_returns_none_with_no_active_request(self):
+        # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.request", new=None
+        )
+        self.assertIsNone(utils._get_trusted_client_ip())
