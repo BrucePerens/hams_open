@@ -14,9 +14,28 @@ from unittest.mock import MagicMock
 from odoo import tools
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.binary_downloader.models.binary_utils import _safe_response_geturl
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
+
+
+class TestSafeResponseGeturl(HamsTransactionCase):
+    # Tests [@ANCHOR: binary_utils_safe_response_geturl]
+    # Bug-hunt fix, 2026-09-11: was inline `getattr(response, "geturl", lambda: None)()`
+    # (a 3-argument getattr(), forbidden by check_burn_list.py's own
+    # CRITICAL AI LAZINESS rule) -- extracted into this one, tested, centralized helper,
+    # identity-gated in the linter by file path + function name, matching the
+    # try_enable_line_buffering() precedent in ingest/daemon_utils.py.
+
+    def test_safe_response_geturl_returns_none_for_an_object_without_geturl(self):
+        response = io.BytesIO(b"data")
+        self.assertIsNone(_safe_response_geturl(response))
+
+    def test_safe_response_geturl_returns_the_real_url_when_supported(self):
+        mock_response = MagicMock()
+        mock_response.geturl.return_value = "https://example.com/final"
+        self.assertEqual(_safe_response_geturl(mock_response), "https://example.com/final")
 
 
 @tagged("post_install", "-at_install", "standard")

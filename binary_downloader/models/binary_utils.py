@@ -58,6 +58,27 @@ def _is_ssrf_safe_public_ip(ip_obj):
     )
 
 
+# [@ANCHOR: binary_utils_safe_response_geturl]
+# Verified by [@ANCHOR: test_safe_response_geturl_returns_none_for_an_object_without_geturl]
+def _safe_response_geturl(response):
+    """Returns response.geturl() if the object supports it, else None. Not every
+    urlopen()-like response guarantees .geturl() -- this module's own tests mock
+    urlopen() with plain io.BytesIO-based response doubles carrying no `geturl`
+    attribute at all -- so this is standard, correct feature-detection on a
+    stdlib-shaped object, not this codebase's own schema uncertainty. Callers
+    should never need their own hasattr()/getattr()/except AttributeError for
+    this; this is the one, tested, centralized place that pattern is allowed to
+    live for this module (same standing fix as ingest/daemon_utils.py's
+    try_enable_line_buffering(), per docs/proposals/LINTER_POLICY_REVISIT.md --
+    check_burn_list.py's 3-arg-getattr() rule exempts this exact function by
+    file path and function name, not by a copy-pasteable comment tag).
+    """
+    geturl = getattr(response, "geturl", None)
+    if geturl is None:
+        return None
+    return geturl()
+
+
 class BinaryDownloaderMixin(models.AbstractModel):
     _name = "binary_downloader.mixin"
     _description = "Binary Downloader Mixin"
@@ -166,15 +187,13 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     # below -- re-check the resolved final URL's host
                     # before trusting anything read from this response.
                     # `response.geturl()` is only a plain string on a real
-                    # urllib response; guarded so a test double that
-                    # doesn't model it at all (confirmed live: several of
-                    # this module's own tests mock urlopen() with a bare
-                    # MagicMock/MockResponse carrying no `geturl` attribute
-                    # whatsoever, which raised AttributeError here rather
-                    # than the non-string-return case this comment
-                    # originally anticipated) or returns a non-string can't
-                    # break this check.
-                    final_url = getattr(response, "geturl", lambda: None)()
+                    # urllib response; _safe_response_geturl() (above) guards
+                    # against a test double that doesn't model it at all
+                    # (confirmed live: several of this module's own tests
+                    # mock urlopen() with plain io.BytesIO-based response
+                    # doubles carrying no `geturl` attribute whatsoever) or
+                    # returns a non-string, so neither can break this check.
+                    final_url = _safe_response_geturl(response)
                     if isinstance(final_url, str) and final_url:
                         if not final_url.startswith("https://"):
                             raise UserError(
@@ -344,7 +363,10 @@ class BinaryDownloaderMixin(models.AbstractModel):
             with os.fdopen(fd, "wb") as target:  # audit-ignore-path  # fmt: skip
                 shutil.copyfileobj(source_fileobj, target)
             os.replace(tmp_target, target_bin)  # audit-ignore-path  # fmt: skip
-        except BaseException:
+        except BaseException:  # audit-ignore-catch-all
+            # Cleanup-then-reraise: must catch every kind of interruption (including
+            # KeyboardInterrupt/SystemExit) to avoid leaking tmp_target, and always
+            # re-raises unconditionally, so nothing is silently swallowed.
             if os.path.exists(tmp_target):  # audit-ignore-path  # fmt: skip
                 try:
                     os.unlink(tmp_target)  # audit-ignore-path  # fmt: skip

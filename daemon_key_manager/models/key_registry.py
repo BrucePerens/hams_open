@@ -460,7 +460,11 @@ class DaemonKeyRegistry(models.Model):
             try:
                 try:
                     os.fchmod(fd, 0o600)
-                except BaseException:
+                except BaseException:  # audit-ignore-catch-all
+                    # Cleanup-then-reraise: must catch every kind of interruption
+                    # (including KeyboardInterrupt/SystemExit) to avoid leaking this
+                    # fd, and always re-raises unconditionally, so nothing is
+                    # silently swallowed.
                     os.close(fd)
                     raise
                 with os.fdopen(fd, "w") as env_file:
@@ -468,7 +472,8 @@ class DaemonKeyRegistry(models.Model):
                     env_file.write("ODOO_RPC_LOGIN=%s\n" % login)
                     env_file.write("ODOO_RPC_KEY=%s\n" % key)
                 os.rename(tmp_path, path)
-            except BaseException:
+            except BaseException:  # audit-ignore-catch-all
+                # Same cleanup-then-reraise idiom as above, for the temp file itself.
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
                 raise
