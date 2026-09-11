@@ -333,7 +333,21 @@ pub(crate) fn exp2_lut(y: f32) -> f32 {
 /// analogue of an IEEE754 exponent extraction.
 // [@ANCHOR: log2_q23]
 pub(crate) fn log2_q23(x_q23: i64) -> i64 {
-    debug_assert!(x_q23 > 0, "log2_q23: x_q23 must be positive, got {x_q23}");
+    debug_assert!(x_q23 >= 0, "log2_q23: x_q23 must be non-negative, got {x_q23}");
+    // Bug-hunt fix, 2026-09-11: x_q23 == 0 is a legitimate saturated value from a real
+    // signal condition (exp2_q23 underflowing a very negative y to exactly zero, or a
+    // genuinely silent LPC/energy bin) -- not a caller bug the way a truly negative x_q23
+    // would be. The old `debug_assert!(x_q23 > 0, ...)` only caught this in debug builds;
+    // in a release build, x_q23 == 0 fed straight into the leading_zeros()/shift arithmetic
+    // below, where leading_zeros(0) == 64 drives `shift` very negative and
+    // mantissa_frac_q23's `as u64` cast of a negative i64 wraps to a huge value -- silently
+    // corrupting the result (not a panic, just wrong numbers) instead of the mathematically
+    // sane "very small" answer log2(0) saturates to. synthesis.rs's own e_db_q23
+    // computation already worked around this at ITS ONE call site with an external
+    // `.max(1)` -- fixing it here at the root protects every caller (envelope.rs,
+    // spectral_bridge.rs, interp.rs, synthesis.rs's other call site) instead of only the one
+    // that happened to add its own guard.
+    let x_q23 = x_q23.max(1);
     let bits = 63 - x_q23.leading_zeros() as i32; // position of the top set bit
     let shift = bits - 23; // x_q23 == mantissa_q23 * 2^shift, mantissa_q23 in [2^23, 2^24)
     let mantissa_q23: i64 = if shift >= 0 {
@@ -825,6 +839,31 @@ mod tests {
         assert!(
             max_abs_err_q23 < 16,
             "log2_q23 diverged from log2_lut by {max_abs_err_q23} Q23 counts, more than ordinary rounding noise"
+        );
+    }
+
+    #[test]
+    // Tests [@ANCHOR: log2_q23]
+    fn log2_q23_of_zero_does_not_produce_garbage_in_a_release_build() {
+        // Bug-hunt fix, 2026-09-11: the old precondition was `debug_assert!(x_q23 > 0, ...)`
+        // only -- a release build fed x_q23 == 0 straight into leading_zeros()/shift
+        // arithmetic (leading_zeros(0) == 64 drives shift very negative, and the
+        // mantissa_frac_q23 `as u64` cast of a negative i64 wraps to a huge value),
+        // silently corrupting the result. x_q23 == 0 is a real, legitimate input in
+        // release builds: exp2_q23 can underflow a very negative y to exactly zero, and
+        // this codebase's own synthesis.rs already had to work around exactly this at ITS
+        // one call site with an external `.max(1)` before calling log2_q23. This test
+        // deliberately does NOT run under cfg(debug_assertions) exemption -- it must pass
+        // in both debug and release, since the old debug_assert! already caught this in
+        // debug builds; the bug only ever manifested in release.
+        let got = log2_q23(0);
+        // The function now treats x_q23 == 0 identically to x_q23 == 1 (the smallest
+        // representable positive value), which is log2(2^-23) == -23.0 in Q23.
+        let want_q23 = -23i64 << 23;
+        assert_eq!(
+            got, want_q23,
+            "log2_q23(0) = {got}, want the same saturated floor as log2_q23(1) ({want_q23}) -- \
+             not a garbage value from the old unguarded shift/cast arithmetic"
         );
     }
 
