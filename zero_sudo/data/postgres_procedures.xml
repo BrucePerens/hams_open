@@ -46,10 +46,36 @@ BEGIN
         RAISE EXCEPTION 'Security Alert: % is a human user, not a Service Account.', p_xml_id;
     END IF;
 
+    -- Bug-hunt fix: checking res_groups_users_rel alone only sees DIRECT
+    -- group membership. Odoo's own group hierarchy also grants a user
+    -- everything a directly-held group's own implied_ids chain reaches
+    -- (res_groups_implied_rel: gid -> hid means "membership in gid implies
+    -- membership in hid"), and Odoo's own has_group()/all_group_ids checks
+    -- that full transitive closure, not just direct rows -- confirmed by
+    -- reading odoo/addons/base/models/res_users.py's own _has_group(),
+    -- which checks all_group_ids (computed from group_ids.all_implied_ids),
+    -- never a raw membership-table query. A service account holding
+    -- base.group_system/base.group_erp_manager only via an IMPLIED chain
+    -- (member of some other group X whose own implied_ids reaches one of
+    -- these, directly or through several hops) previously passed this
+    -- check silently, defeating the entire Zero-Sudo mandate this function
+    -- exists to enforce. The recursive CTE below walks that same implied
+    -- closure from the user's directly-held groups before checking for
+    -- group_system/group_erp_manager anywhere in it.
     SELECT EXISTS (
-        SELECT 1 FROM res_groups_users_rel rel
-        JOIN ir_model_data imd ON imd.res_id = rel.gid AND imd.model = 'res.groups'
-        WHERE rel.uid = v_uid AND imd.module = 'base' AND imd.name IN ('group_system', 'group_erp_manager')
+        SELECT 1
+        FROM (
+            WITH RECURSIVE effective_groups(gid) AS (
+                SELECT rel.gid FROM res_groups_users_rel rel WHERE rel.uid = v_uid
+                UNION
+                SELECT imp.hid
+                FROM res_groups_implied_rel imp
+                JOIN effective_groups eg ON imp.gid = eg.gid
+            )
+            SELECT gid FROM effective_groups
+        ) eg
+        JOIN ir_model_data imd ON imd.res_id = eg.gid AND imd.model = 'res.groups'
+        WHERE imd.module = 'base' AND imd.name IN ('group_system', 'group_erp_manager')
     ) INTO v_has_privilege_escalation;
 
     IF v_has_privilege_escalation THEN

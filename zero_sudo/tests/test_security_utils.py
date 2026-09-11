@@ -285,6 +285,64 @@ class TestSecurityUtils(HamsTransactionCase):
         except (AccessError, UserError, psycopg2.errors.RaiseException) as e:
             self.assertTrue(str(e))
 
+    @mute_logger("odoo.sql_db")
+    def test_04b_privilege_escalation_block_enforcement_via_implied_group(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_privilege_escalation_block_sql]
+
+        # Bug-hunt fix: the SQL mandate check in postgres_procedures.xml
+        # used to query res_groups_users_rel alone, which only sees DIRECT
+        # group membership. Odoo's own has_group() checks the full
+        # transitive implied-group closure (group_ids.all_implied_ids), so
+        # a service account that holds base.group_system only via an
+        # IMPLIED chain -- member of some OTHER group whose own
+        # implied_ids reaches group_system -- previously passed this check
+        # silently, defeating the mandate. This is the same test as
+        # test_04_privilege_escalation_block_enforcement above, except the
+        # rogue account is a member of a brand-new group that IMPLIES
+        # group_system, never group_system directly.
+        implying_group = self.env["res.groups"].create(
+            {
+                "name": "Sneaky Group That Implies Admin",
+                "implied_ids": [(4, self.env.ref("base.group_system").id)],
+            }
+        )
+        rogue_user = self.env["res.users"].create(
+            {
+                "name": "Rogue God Account Via Implication",
+                "login": "rogue_god_implied",
+                "is_service_account": True,
+                "group_ids": [(4, implying_group.id)],
+            }
+        )
+        self.assertIn(
+            self.env.ref("base.group_system"),
+            rogue_user.all_group_ids,
+            "Test setup sanity check: Odoo itself must consider this user a "
+            "group_system member via implication before this test means anything.",
+        )
+
+        self.env["ir.model.data"].create(
+            {
+                "module": "rogue_module",
+                "name": "sneaky_admin_service_via_implication",
+                "model": "res.users",
+                "res_id": rogue_user.id,
+            }
+        )
+
+        try:
+            with self.env.cr.savepoint():
+                utils = self.env["zero_sudo.security.utils"]
+                utils._get_service_uid(
+                    "rogue_module.sneaky_admin_service_via_implication"
+                )
+            self.fail(
+                "Must block Service Accounts with an IMPLIED group_system "
+                "membership from escalating privileges, not just a direct one."
+            )
+        except (AccessError, UserError, psycopg2.errors.RaiseException) as e:
+            self.assertTrue(str(e))
+
     def test_05_notify_cache_invalidation_list(self):
         # [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]
         # ---

@@ -49,9 +49,24 @@ class ResUsersZeroSudo(models.Model):
 
     # [@ANCHOR: zero_sudo:res_users_write]
     def write(self, vals):
-        if vals.get("is_service_account"):
+        # Bug-hunt fix: previously only forced a random password when
+        # is_service_account was being set to a TRUTHY value (becoming a
+        # service account). De-designating one (is_service_account: False)
+        # while ALSO supplying a real password in the SAME call skipped
+        # this branch (its value isn't truthy) and skipped the elif branch
+        # below too (it requires "is_service_account" not in vals at all)
+        # -- falling through to a plain super().write(vals) that applied
+        # the caller-chosen password as-is, silently restoring a loginable
+        # credential on a record that had been a service account moments
+        # earlier. Any transition of this field, in either direction, now
+        # forces a fresh random password in the same write, matching
+        # create()'s own existing behavior. Setting a REAL password for a
+        # newly-human account is a deliberate follow-up write, not
+        # something this call should ever silently allow to ride along.
+        if "is_service_account" in vals:
+            vals = dict(vals)
             vals["password"] = secrets.token_hex(32)
-        elif "password" in vals and "is_service_account" not in vals:
+        elif "password" in vals:
             if self.ids:
                 service_accounts = self.filtered("is_service_account")
                 if service_accounts:

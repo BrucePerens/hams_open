@@ -75,6 +75,41 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             bad_credential = dict(credential, login="service_batch_test@example.com")
             self.env["res.users"].authenticate(bad_credential, {"interactive": False})
 
+    def test_write_de_designating_a_service_account_still_forces_a_random_password(self):
+        # Tests [@ANCHOR: zero_sudo:res_users_write]
+
+        # Real bug: is_service_account=True forced a random password (the
+        # `if vals.get("is_service_account")` branch), but is_service_account
+        # =False, supplied in the SAME write() call as a real "password",
+        # matched neither that branch (falsy value) nor the elif branch
+        # (which requires "is_service_account" not in vals at all) -- it fell
+        # through to a plain super().write(vals) that applied the
+        # caller-chosen password as-is, letting a caller silently strip
+        # service-account status AND plant a known, loginable credential in
+        # one atomic call.
+        service = self.env["res.users"].create(
+            {
+                "name": "Formerly Service Account",
+                "login": "formerly_service_test@example.com",
+                "is_service_account": True,
+                "lang": "en_US",
+            }
+        )
+        service.write(
+            {"is_service_account": False, "password": "attacker_supplied_password"}
+        )
+        self.env.cr.flush()
+
+        self.assertFalse(service.is_service_account)
+
+        with self.assertRaises(Exception):
+            bad_credential = {
+                "login": "formerly_service_test@example.com",
+                "password": "attacker_supplied_password",
+                "type": "password",
+            }
+            self.env["res.users"].authenticate(bad_credential, {"interactive": False})
+
     def test_get_callsign_generates_unique_cached_synthetic_callsigns(self):
         # Tests [@ANCHOR: zero_sudo:get_callsign]
 
