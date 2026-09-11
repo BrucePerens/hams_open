@@ -252,7 +252,18 @@ mod tests {
     /// gray-coded form (`binary_to_gray(32) == 48 == 0b110000`) has a bit
     /// set at position 5, which falls inside the FIRST field's own
     /// 3-bit region (bits 7..5 of the byte), not the second field's.
+    ///
+    /// `#[cfg(debug_assertions)]`: the guard itself is a `debug_assert!`,
+    /// compiled out entirely in a release build -- a real bug found running
+    /// `hams_shared/tools/run_rust_coverage.py` (which defaults to
+    /// `cargo llvm-cov --release`): under `--release`, `write(32, 5)` no
+    /// longer panics at all, so `#[should_panic]` failed with "test did not
+    /// panic". Gating the test to debug builds (the only mode where the
+    /// assertion can ever fire) matches the guard's own documented scope --
+    /// a cheap developer-time sanity check for a precondition every current
+    /// real caller already satisfies, not a release-mode runtime guarantee.
     #[test]
+    #[cfg(debug_assertions)]
     #[should_panic(expected = "does not fit")]
     fn bit_writer_rejects_a_field_that_does_not_fit_its_declared_width() {
         let mut bytes = [0u8; 1];
@@ -263,8 +274,10 @@ mod tests {
 
     /// Same check for a 1-bit field (the `width > 1` gray-coding branch
     /// is skipped entirely for width==1, so this exercises the guard on
-    /// its own separate code path).
+    /// its own separate code path). See the sibling test above for why this
+    /// is gated to debug builds only.
     #[test]
+    #[cfg(debug_assertions)]
     #[should_panic(expected = "does not fit")]
     fn bit_writer_rejects_a_1_bit_field_that_is_not_0_or_1() {
         let mut bytes = [0u8; 1];
