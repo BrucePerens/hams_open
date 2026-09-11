@@ -7,13 +7,69 @@ import time
 import json
 import subprocess
 import hashlib
+import ipaddress
+import socket
+import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 import tempfile
 import concurrent.futures
 import shlex
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# Bug-hunt fix, 2026-09-11: execute_check()'s sandbox_downloads fetch below
+# runs in THIS daemon's own parent process, before any of the bwrap
+# sandboxing further down in this same function is ever applied -- and that
+# sandboxing's own "sandbox_network_access" setting (defaulting to
+# "loopback", i.e. no real network access at all) only governs the LATER
+# execution step, not this download. A check config whose sandbox_downloads
+# URL points at an internal/loopback/link-local target (the classic
+# 169.254.169.254 cloud-metadata address, or any other internal-only
+# service reachable from this daemon's own network position) would be
+# fetched from here regardless of that setting -- a real SSRF primitive.
+# Ported from binary_downloader/models/binary_utils.py's own
+# _is_ssrf_safe_public_ip/_assert_host_is_ssrf_safe (that module's own
+# 2026-09-09 bug-hunt fix for the identical shape of bug in a different
+# download path) rather than reinventing the check -- this file has no
+# Odoo import at all (it's a standalone daemon script), so the logic is
+# duplicated in pure-stdlib form instead of imported.
+def _is_ssrf_safe_public_ip(ip_obj):
+    return (
+        ip_obj.is_global
+        and not ip_obj.is_private
+        and not ip_obj.is_loopback
+        and not ip_obj.is_link_local
+        and not ip_obj.is_multicast
+        and not ip_obj.is_reserved
+        and not ip_obj.is_unspecified
+    )
+
+
+# [@ANCHOR: pager_duty:synthetic_spooler_ssrf_guard]
+def _assert_host_is_ssrf_safe(hostname, context):
+    if not hostname:
+        raise ValueError(f"Security Alert: download URL for {context} has no hostname.")
+    try:
+        addrinfo = socket.getaddrinfo(hostname, None)
+    except OSError as e:
+        raise ValueError(f"Could not resolve download host for {context}: {e}")
+    for info in addrinfo:
+        sockaddr = info[4]
+        try:
+            ip_obj = ipaddress.ip_address(sockaddr[0])
+        except ValueError:
+            continue
+        if not _is_ssrf_safe_public_ip(ip_obj):
+            raise ValueError(
+                f"Security Alert: download URL for {context} resolves to a "
+                f"non-public address ({sockaddr[0]}). Refusing to fetch from "
+                f"an internal/loopback/link-local network target."
+            )
+
+
 # Overridable so a test doesn't have to write into the real, hardcoded
 # system path -- matching check_cloudflare_token_expiry.py's/
 # pager_smart_spooler.py's own established HAMS_*_PATH override
@@ -42,12 +98,25 @@ def execute_check(check):
                         url, checksum, fname = parts
                         if not url.startswith(("http://", "https://")):
                             raise ValueError(f"Invalid URL scheme: {url}")
+                        _assert_host_is_ssrf_safe(urlparse(url).hostname, name)
                         target_path = os.path.join(tmpdir, os.path.basename(fname))
                         req = urllib.request.Request(
                             url,
                             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
                         )
                         with urllib.request.urlopen(req, timeout=30) as response, open(target_path, "wb") as out_file:
+                            # urllib's default opener follows HTTP redirects
+                            # on its own, with nothing re-validating where a
+                            # redirect actually landed -- an otherwise-safe
+                            # URL could 302 to an internal target, and the
+                            # bytes fetched from THAT response are exactly
+                            # what gets hashed and (if it somehow matched)
+                            # marked executable below. Re-check the
+                            # resolved final URL's host before trusting
+                            # anything read from this response.
+                            final_url = getattr(response, "geturl", lambda: None)()
+                            if isinstance(final_url, str) and final_url:
+                                _assert_host_is_ssrf_safe(urlparse(final_url).hostname, name)
                             out_file.write(response.read())
 
                         hasher = hashlib.sha256()
@@ -238,7 +307,7 @@ def execute_check(check):
     # playwright/bash/executable check too. This broad catch restores the
     # intended per-check isolation: any failure in this function becomes
     # res["error"], never an escaped exception.
-    except Exception as e:  # noqa: BLE001 -- deliberate per-check isolation boundary
+    except Exception as e:  # audit-ignore-catch-all -- deliberate per-check isolation boundary
         logger.warning("Unexpected execution error: %s", e)
         res["error"] = str(e)
 

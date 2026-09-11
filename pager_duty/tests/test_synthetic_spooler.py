@@ -40,6 +40,46 @@ class TestSyntheticSpooler(HamsTransactionCase):
             res["success"], "Ping should have failed due to unshared network."
         )
 
+    def test_02b_sandbox_downloads_rejects_a_loopback_target(self):
+        # Bug-hunt fix, 2026-09-11: sandbox_downloads' own fetch runs in
+        # this daemon's parent process, BEFORE the bwrap sandboxing
+        # test_02_real_network_block above exercises is ever applied --
+        # sandbox_network_access="loopback" (the default) only restricts
+        # the later execution step, not this download, so a malicious/
+        # compromised check config could previously make this daemon fetch
+        # from any internal/loopback/link-local target regardless of that
+        # setting. 127.0.0.1 needs no real network access to test: a safe,
+        # deterministic target that must be rejected before any connection
+        # is even attempted.
+        # Tests [@ANCHOR: pager_duty:synthetic_spooler_ssrf_guard]
+        check = {
+            "type": "bash",
+            "name": "test_ssrf_block",
+            "code_payload": "echo should_never_run",
+            "sandbox_downloads": "http://127.0.0.1/payload|deadbeef|payload.sh",  # burn-ignore-ssrf-test-value
+            "sandbox_network_access": "loopback",
+        }
+        name, res = pager_synthetic_spooler.execute_check(check)
+        self.assertFalse(
+            res["success"], "A sandbox_downloads URL targeting loopback must be rejected."
+        )
+        self.assertIn("non-public address", res.get("error", ""))
+
+    def test_02c_sandbox_downloads_rejects_an_invalid_scheme_before_ssrf_check(self):
+        # Sanity check: the pre-existing scheme check still runs, and runs
+        # first, so a non-http(s) URL is still rejected on its own terms
+        # rather than by the new SSRF guard.
+        check = {
+            "type": "bash",
+            "name": "test_bad_scheme",
+            "code_payload": "echo should_never_run",
+            "sandbox_downloads": "file:///etc/passwd|deadbeef|payload.sh",
+            "sandbox_network_access": "loopback",
+        }
+        name, res = pager_synthetic_spooler.execute_check(check)
+        self.assertFalse(res["success"])
+        self.assertIn("Invalid URL scheme", res.get("error", ""))
+
     def test_03_main_runs_one_real_cycle_and_writes_the_spool_file(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_main]
         class _StopLoop(Exception):
