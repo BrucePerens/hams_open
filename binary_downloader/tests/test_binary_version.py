@@ -78,6 +78,24 @@ class TestBinaryVersion(HamsTransactionCase):
             )
             self.env.flush_all()
 
+        # Bug-hunt fix, 2026-09-11: binary_manifest.py's own sibling check
+        # (_check_name_no_slashes) already blocks bare "."/".." in addition to slashes --
+        # this constraint didn't, until now.
+        for bad_version in (".", ".."):
+            with self.assertRaises(
+                ValidationError,
+                msg=f"[!] DIAGNOSTIC FOR AI: Must raise error on version number {bad_version!r}",
+            ):
+                self.env["binary.version"].create(
+                    {
+                        "manifest_id": self.manifest.id,
+                        "version_number": bad_version,
+                        "url": "https://example.com/v-dotdot",
+                        "checksum": "hash",
+                    }
+                )
+                self.env.flush_all()
+
         msg_extract = "[!] DIAGNOSTIC FOR AI: Must raise error on missing extract_member for tar.gz"
         with self.assertRaises(
             ValidationError,

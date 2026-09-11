@@ -53,11 +53,20 @@ class BinaryVersion(models.Model):
     @api.constrains("version_number")
     # [@ANCHOR: binary_version_check_version_no_slashes]
     def _check_version_no_slashes(self):
+        # Bug-hunt fix, 2026-09-11: this sibling of binary_manifest.py's own
+        # _check_name_no_slashes blocked "/"/"\\" but not the bare "." or ".."
+        # segments that check does -- version_number is never actually used as a raw
+        # filesystem path component today (only hashed into an advisory-lock id via
+        # _get_deterministic_hash, see action_download_to_pool), so this isn't a
+        # confirmed live path-traversal bug, but a future call site treating it like
+        # cmd_name shouldn't inherit a weaker guard than its sibling for no reason.
         for record in self:
             if "/" in record.version_number or "\\" in record.version_number:
                 raise ValidationError(
                     _("The version number cannot contain slashes or backslashes.")
                 )
+            if record.version_number in (".", ".."):
+                raise ValidationError(_("The version number cannot be '.' or '..'."))
 
     @api.constrains("url")
     # [@ANCHOR: binary_version_check_url_scheme]
