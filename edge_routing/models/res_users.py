@@ -6,7 +6,6 @@
 
 from odoo import models, fields, api
 
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -22,8 +21,15 @@ class ResUsersEdgeRouting(models.Model):
 
     # [@ANCHOR: edge_routing:COMM_res_users_get_record_by_slug]
     @api.model
-    @distributed_cache()
     def get_record_by_slug(self, slug):
+        # Not @distributed_cache()'d, unlike the mixin's own base
+        # implementation: the login-fallback branch below resolves against
+        # res.users.login, and routing_mixin.write()'s cache-invalidation
+        # hook only fires on website_slug/name changes (it has no way to
+        # know which slugs a login change could affect). Caching this
+        # method would let a stale 404 (or a stale hit) for a slug that
+        # matches a changed or newly-created login survive for the full
+        # 24h Redis TTL.
         res = super().get_record_by_slug(slug)
         if not res and slug:
             # Virtual Slug Fallback: Check if the URL matches their unique login (e.g. Callsign)

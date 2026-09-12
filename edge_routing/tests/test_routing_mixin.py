@@ -120,11 +120,31 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         )
 
     def test_get_record_by_slug_cache_removal(self):
-        # res.users get_record_by_slug should not be decorated with @distributed_cache
-        # If it is, the class method will have the 'clear_cache' attribute from the decorator
+        # res.users' get_record_by_slug() must not be decorated with
+        # @distributed_cache(): its login-fallback branch resolves against
+        # res.users.login, and routing_mixin.write()'s own cache-invalidation
+        # hook only fires on website_slug/name changes, so a cached result
+        # keyed on a slug that later matches a changed/new login would go
+        # stale for the full 24h Redis TTL.
+        #
+        # Bug found while touching this file for the override_svc_uid fix
+        # (2026-09-12): this test's original assertion (a bare
+        # `method.clear_cache` lookup) could never fail either way --
+        # distributed_cache()'s wrapper never sets a `clear_cache` attribute
+        # at all (confirmed directly against
+        # distributed_redis_cache/redis_cache.py), so the AttributeError
+        # fired unconditionally regardless of decoration, and the test
+        # passed the whole time res.users.get_record_by_slug WAS decorated.
+        # `functools.wraps` (which distributed_cache() does use) sets
+        # `__wrapped__` on the wrapper, which is what actually distinguishes
+        # a decorated method from a plain one.
         method = self.User.__class__.get_record_by_slug
-        with self.assertRaises(AttributeError, msg="get_record_by_slug on res.users should not have @distributed_cache"):
-            _ = method.clear_cache
+        self.assertFalse(
+            hasattr(method, "__wrapped__"),
+            "get_record_by_slug on res.users should not be wrapped by "
+            "@distributed_cache() -- its login-fallback branch isn't "
+            "covered by the mixin's write()-based cache invalidation.",
+        )
 
     def test_get_record_by_slug_no_longer_accepts_a_caller_supplied_service_uid(self):
         """
