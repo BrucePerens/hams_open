@@ -440,7 +440,7 @@ def _patched_chrome_stop(self, *args, **kwargs):
     # ChromeBrowser -- the real attribute is `.chrome` (verified against
     # odoo/tests/common.py's own ChromeBrowser.__init__). This lookup silently
     # found nothing and skipped this whole block on every prior run.
-    proc = getattr(self, "chrome", None)
+    proc = getattr(self, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
     if proc:
         try:
             parent = psutil.Process(proc.pid)
@@ -750,7 +750,8 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
                 try:
                     os.killpg(os.getpgid(p.pid), signal.SIGTERM)
                 except ProcessLookupError:
-                    pass  # already exited: p.wait() below will reap it immediately.
+                    # Already exited: p.wait() below will reap it immediately.
+                    _logger.debug("Daemon PID %s already exited before SIGTERM.", p.pid)
                 p.wait(timeout=2.0)
             except subprocess.TimeoutExpired:
                 _logger.warning(
@@ -1180,7 +1181,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         # ChromeBrowser.__init__). Silently found nothing
                         # and skipped this whole force-kill block on every
                         # run, every test, ever.
-                        proc = getattr(cls.browser, "chrome", None)
+                        proc = getattr(cls.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                         if proc:
                             try:
                                 parent = psutil.Process(proc.pid)
@@ -1216,7 +1217,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         # `._receiver` (verified against ChromeBrowser's
                         # own __init__) -- "_websocket_thread" never
                         # existed, so this neutering never ran.
-                        ws_thread = getattr(cls.browser, "_receiver", None)
+                        ws_thread = getattr(cls.browser, "_receiver", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                         if ws_thread:
                             ws_thread.join = lambda *args, **kwargs: None
 
@@ -1272,7 +1273,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 # `.chrome` (verified against odoo/tests/common.py's own
                 # ChromeBrowser.__init__). This force-kill block was dead
                 # on every run before this fix.
-                proc = getattr(self.browser, "chrome", None)
+                proc = getattr(self.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                 if proc:
                     try:
                         parent = psutil.Process(proc.pid)
@@ -1307,7 +1308,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 # Bug-hunt fix (2026-09-09): the real attribute is
                 # `._receiver` -- "_websocket_thread" never existed, so
                 # this neutering never ran.
-                ws_thread = getattr(self.browser, "_receiver", None)
+                ws_thread = getattr(self.browser, "_receiver", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                 if ws_thread:
                     ws_thread.join = lambda *args, **kwargs: None
 
