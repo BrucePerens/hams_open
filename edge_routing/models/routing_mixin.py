@@ -142,7 +142,7 @@ class EdgeRoutingMixin(models.AbstractModel):
     # # Verified by [@ANCHOR: user_websites:test_group_site_routing]
     @api.model
     @distributed_cache()
-    def get_record_by_slug(self, slug, override_svc_uid=None):
+    def get_record_by_slug(self, slug):
         """
         High-performance RAM cache for slug resolution.
         Prevents full DB queries on every public profile view.
@@ -151,30 +151,41 @@ class EdgeRoutingMixin(models.AbstractModel):
             return False
         slug = str(slug).lower()
 
-        if override_svc_uid:
-            target_env = self.with_user(override_svc_uid).env
-        else:
-            if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-                if self.env.cr.fetchone():
-                    try:
-                        with self.env.cr.savepoint():
-                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                                "edge_routing.edge_routing_service_account"
-                            )
-                    except Exception as e:  # audit-ignore-catch-all
-                        # bug-hunt (2026-09-09): _get_service_env() raises
-                        # AccessError (not KeyError/ValueError) on a bad
-                        # xml_id, plus a possible psycopg2 error from the
-                        # SQL-backed uid lookup -- narrowed to the wrong
-                        # types, this fallback never actually caught a real
-                        # resolution failure. Class 20.
-                        _logger.warning("Failed to get service env: %s", e)
-                        target_env = self.env
-                else:
+        # Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
+        # this method is public (no leading underscore), so it's directly
+        # callable via /web/dataset/call_kw by any authenticated session.
+        # It used to accept a caller-supplied `override_svc_uid` and do
+        # self.with_user(override_svc_uid).env with zero validation --
+        # letting any authenticated caller pick an arbitrary uid (real
+        # service account or not) to run this search as, bypassing whatever
+        # ir.rule scoping would normally apply to them. Confirmed no real
+        # caller anywhere in the codebase (Python or tests) ever passed this
+        # parameter -- every actual call site relies on the default
+        # service-account resolution below -- so removing it entirely
+        # closes the gap with no loss of real functionality, matching the
+        # fix already applied once to this exact shape
+        # (cloudflare.waf.ban_ip(), pre-2026-09-03).
+        if self.env.registry.loaded:
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+            if self.env.cr.fetchone():
+                try:
+                    with self.env.cr.savepoint():
+                        target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                            "edge_routing.edge_routing_service_account"
+                        )
+                except Exception as e:  # audit-ignore-catch-all
+                    # bug-hunt (2026-09-09): _get_service_env() raises
+                    # AccessError (not KeyError/ValueError) on a bad
+                    # xml_id, plus a possible psycopg2 error from the
+                    # SQL-backed uid lookup -- narrowed to the wrong
+                    # types, this fallback never actually caught a real
+                    # resolution failure. Class 20.
+                    _logger.warning("Failed to get service env: %s", e)
                     target_env = self.env
             else:
                 target_env = self.env
+        else:
+            target_env = self.env
 
         # bug-hunt (2026-09-09): was `("website_slug", "=ilike", slug)`.
         # Odoo's `=ilike` (unlike bare `ilike`) passes its operand through
@@ -205,7 +216,7 @@ class EdgeRoutingMixin(models.AbstractModel):
 
     # [@ANCHOR: edge_routing:COMM_get_record_by_domain]
     @api.model
-    def get_record_by_domain(self, domain, override_svc_uid=None):
+    def get_record_by_domain(self, domain):
         """
         Helper to map a custom domain directly to a record ID.
         Uses the edge.routing.domain distributed cache to resolve the slug,
@@ -214,11 +225,11 @@ class EdgeRoutingMixin(models.AbstractModel):
         if not domain:
             return False
 
-        slug = self.env["edge.routing.domain"].get_target_slug_by_domain(domain, override_svc_uid=override_svc_uid)
+        slug = self.env["edge.routing.domain"].get_target_slug_by_domain(domain)
         if not slug:
             return False
 
-        return self.get_record_by_slug(slug, override_svc_uid=override_svc_uid)
+        return self.get_record_by_slug(slug)
 
     # [@ANCHOR: edge_routing:COMM_mixin_create]
     @api.model_create_multi

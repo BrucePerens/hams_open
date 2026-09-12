@@ -195,7 +195,7 @@ class EdgeRoutingDomain(models.Model):
     # [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
     @api.model
     @distributed_cache()
-    def get_target_slug_by_domain(self, domain, override_svc_uid=None):
+    def get_target_slug_by_domain(self, domain):
         """
         High-performance RAM cache for domain to slug resolution.
         """
@@ -203,48 +203,55 @@ class EdgeRoutingDomain(models.Model):
             return False
         domain = str(domain).lower().strip()
 
-        if override_svc_uid:
-            target_env = self.with_user(override_svc_uid).env
-        else:
-            if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-                if self.env.cr.fetchone():
-                    try:
-                        # bug-hunt (2026-09-09): the savepoint is load-
-                        # bearing, not decorative -- _get_service_uid()'s
-                        # own SQL-backed uid lookup does a real Postgres
-                        # `RAISE EXCEPTION` (see
-                        # zero_sudo_get_service_uid() in
-                        # zero_sudo/data/postgres_procedures.xml) on a
-                        # missing/disabled/non-service account. A raw SQL
-                        # RAISE EXCEPTION aborts the CURRENT transaction --
-                        # without a savepoint to roll back to, the
-                        # `target_env = self.env` fallback below would
-                        # still be caught here, but the very next line's
-                        # `target_env[self._name].search(...)` would then
-                        # raise `InFailedSqlTransaction` uncaught, since
-                        # every statement on a poisoned transaction fails
-                        # until it's rolled back to a savepoint (or the
-                        # whole transaction). Class 20, one level deeper.
-                        with self.env.cr.savepoint():
-                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                                "edge_routing.edge_routing_service_account"
-                            )
-                    except Exception:  # audit-ignore-catch-all
-                        # bug-hunt (2026-09-09): _get_service_env() raises
-                        # AccessError (not KeyError/ValueError) on a bad
-                        # xml_id, plus a possible psycopg2 error from the
-                        # SQL-backed uid lookup -- this fallback-to-self
-                        # path only actually triggered for a KeyError/
-                        # ValueError, so a real service-account resolution
-                        # failure would have crashed domain resolution
-                        # instead of degrading to self.env. Class 20.
-                        _logger.warning("Failed to get service env")
-                        target_env = self.env
-                else:
+        # Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
+        # this method is public (no leading underscore), directly callable
+        # via /web/dataset/call_kw. It used to accept a caller-supplied
+        # `override_svc_uid` and do self.with_user(override_svc_uid).env
+        # with zero validation -- letting any authenticated caller pick an
+        # arbitrary uid to run this search as. No real caller anywhere in
+        # the codebase (Python or tests) ever passed this parameter, so
+        # removing it closes the gap with no loss of real functionality,
+        # matching the fix already applied once to this exact shape
+        # (cloudflare.waf.ban_ip(), pre-2026-09-03).
+        if self.env.registry.loaded:
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+            if self.env.cr.fetchone():
+                try:
+                    # bug-hunt (2026-09-09): the savepoint is load-
+                    # bearing, not decorative -- _get_service_uid()'s
+                    # own SQL-backed uid lookup does a real Postgres
+                    # `RAISE EXCEPTION` (see
+                    # zero_sudo_get_service_uid() in
+                    # zero_sudo/data/postgres_procedures.xml) on a
+                    # missing/disabled/non-service account. A raw SQL
+                    # RAISE EXCEPTION aborts the CURRENT transaction --
+                    # without a savepoint to roll back to, the
+                    # `target_env = self.env` fallback below would
+                    # still be caught here, but the very next line's
+                    # `target_env[self._name].search(...)` would then
+                    # raise `InFailedSqlTransaction` uncaught, since
+                    # every statement on a poisoned transaction fails
+                    # until it's rolled back to a savepoint (or the
+                    # whole transaction). Class 20, one level deeper.
+                    with self.env.cr.savepoint():
+                        target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                            "edge_routing.edge_routing_service_account"
+                        )
+                except Exception:  # audit-ignore-catch-all
+                    # bug-hunt (2026-09-09): _get_service_env() raises
+                    # AccessError (not KeyError/ValueError) on a bad
+                    # xml_id, plus a possible psycopg2 error from the
+                    # SQL-backed uid lookup -- this fallback-to-self
+                    # path only actually triggered for a KeyError/
+                    # ValueError, so a real service-account resolution
+                    # failure would have crashed domain resolution
+                    # instead of degrading to self.env. Class 20.
+                    _logger.warning("Failed to get service env")
                     target_env = self.env
             else:
                 target_env = self.env
+        else:
+            target_env = self.env
 
         record = (
             target_env[self._name]

@@ -5,6 +5,7 @@
 # License: AGPL-3.0
 
 import logging
+from odoo import SUPERUSER_ID
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError, ValidationError
@@ -124,6 +125,41 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         method = self.User.__class__.get_record_by_slug
         with self.assertRaises(AttributeError, msg="get_record_by_slug on res.users should not have @distributed_cache"):
             _ = method.clear_cache
+
+    def test_get_record_by_slug_no_longer_accepts_a_caller_supplied_service_uid(self):
+        """
+        Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
+        get_record_by_slug() (and get_record_by_domain()/
+        get_target_slug_by_domain()) used to accept a caller-supplied
+        `override_svc_uid` and run self.with_user(override_svc_uid).env
+        with zero validation -- any authenticated RPC caller (this method
+        is public, no leading underscore) could pick an arbitrary uid to
+        search under, bypassing whatever ir.rule scoping would normally
+        apply to them. No real caller anywhere in the codebase ever passed
+        this parameter, so it was removed entirely rather than validated.
+        Prove the parameter is genuinely gone, not just unused -- a
+        TypeError here is exactly what protects against the RPC path,
+        since Odoo's own dispatch passes kwargs straight through to the
+        method signature.
+        """
+        with self.assertRaises(TypeError):
+            self.env["user.websites.group"].get_record_by_slug(
+                "some-slug", override_svc_uid=SUPERUSER_ID
+            )
+
+    def test_get_record_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):
+        # Tests [@ANCHOR: edge_routing:COMM_get_record_by_domain]
+        with self.assertRaises(TypeError):
+            self.env["user.websites.group"].get_record_by_domain(
+                "example.com", override_svc_uid=SUPERUSER_ID
+            )
+
+    def test_get_target_slug_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
+        with self.assertRaises(TypeError):
+            self.env["edge.routing.domain"].get_target_slug_by_domain(
+                "example.com", override_svc_uid=SUPERUSER_ID
+            )
 
     def test_edge_routing_service_account_sql_check(self):
         # [@ANCHOR: test_edge_routing_service_account_sql_check]

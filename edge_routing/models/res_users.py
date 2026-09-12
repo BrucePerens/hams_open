@@ -23,48 +23,51 @@ class ResUsersEdgeRouting(models.Model):
     # [@ANCHOR: edge_routing:COMM_res_users_get_record_by_slug]
     @api.model
     @distributed_cache()
-    def get_record_by_slug(self, slug, override_svc_uid=None):
-        res = super().get_record_by_slug(slug, override_svc_uid=override_svc_uid)
+    def get_record_by_slug(self, slug):
+        res = super().get_record_by_slug(slug)
         if not res and slug:
             # Virtual Slug Fallback: Check if the URL matches their unique login (e.g. Callsign)
-            if override_svc_uid:
-                target_env = self.with_user(override_svc_uid).env
-            else:
-                if self.env.registry.loaded:
-                    self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-                    if self.env.cr.fetchone():
-                        try:
-                            # bug-hunt (2026-09-09): savepoint is load-
-                            # bearing -- _get_service_uid()'s SQL-backed uid
-                            # lookup does a real Postgres `RAISE EXCEPTION`
-                            # (zero_sudo_get_service_uid() in
-                            # zero_sudo/data/postgres_procedures.xml) on a
-                            # missing/disabled/non-service account, which
-                            # aborts the current transaction. Without a
-                            # savepoint to roll back to, the `target_env =
-                            # self.env` fallback below is caught here fine,
-                            # but the `target_env["res.users"].search(...)`
-                            # call a few lines down would then raise
-                            # `InFailedSqlTransaction` uncaught, since every
-                            # statement on a poisoned transaction fails
-                            # until rolled back. Class 20, one level deeper.
-                            with self.env.cr.savepoint():
-                                target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                                    "edge_routing.edge_routing_service_account"
-                                )
-                        except Exception as e:  # audit-ignore-catch-all
-                            # bug-hunt (2026-09-09): _get_service_env() raises
-                            # AccessError (not KeyError/ValueError) on a bad
-                            # xml_id, plus a possible psycopg2 error from the
-                            # SQL-backed uid lookup -- narrowed to the wrong
-                            # types, this fallback never actually caught a
-                            # real resolution failure. Class 20.
-                            _logger.warning("Failed to access website settings: %s", e)
-                            target_env = self.env
-                    else:
+            #
+            # Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid,
+            # 2026-09-12): this override used to accept the same
+            # caller-supplied `override_svc_uid` the base mixin method did,
+            # with the same zero-validation impersonation gap. Removed for
+            # the same reason (see routing_mixin.py's own get_record_by_slug).
+            if self.env.registry.loaded:
+                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+                if self.env.cr.fetchone():
+                    try:
+                        # bug-hunt (2026-09-09): savepoint is load-
+                        # bearing -- _get_service_uid()'s SQL-backed uid
+                        # lookup does a real Postgres `RAISE EXCEPTION`
+                        # (zero_sudo_get_service_uid() in
+                        # zero_sudo/data/postgres_procedures.xml) on a
+                        # missing/disabled/non-service account, which
+                        # aborts the current transaction. Without a
+                        # savepoint to roll back to, the `target_env =
+                        # self.env` fallback below is caught here fine,
+                        # but the `target_env["res.users"].search(...)`
+                        # call a few lines down would then raise
+                        # `InFailedSqlTransaction` uncaught, since every
+                        # statement on a poisoned transaction fails
+                        # until rolled back. Class 20, one level deeper.
+                        with self.env.cr.savepoint():
+                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
+                                "edge_routing.edge_routing_service_account"
+                            )
+                    except Exception as e:  # audit-ignore-catch-all
+                        # bug-hunt (2026-09-09): _get_service_env() raises
+                        # AccessError (not KeyError/ValueError) on a bad
+                        # xml_id, plus a possible psycopg2 error from the
+                        # SQL-backed uid lookup -- narrowed to the wrong
+                        # types, this fallback never actually caught a
+                        # real resolution failure. Class 20.
+                        _logger.warning("Failed to access website settings: %s", e)
                         target_env = self.env
                 else:
                     target_env = self.env
+            else:
+                target_env = self.env
 
             # bug-hunt (2026-09-09): was `("login", "=ilike",
             # str(slug).lower())`. Odoo's `=ilike` (unlike bare `ilike`)
