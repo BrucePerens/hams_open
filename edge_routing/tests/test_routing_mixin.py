@@ -5,7 +5,7 @@
 # License: AGPL-3.0
 
 import logging
-from odoo import SUPERUSER_ID
+from odoo import SUPERUSER_ID  # burn-ignore-superuser-rejection-test: see usage sites below
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import UserError, ValidationError
@@ -140,7 +140,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         # a decorated method from a plain one.
         method = self.User.__class__.get_record_by_slug
         self.assertFalse(
-            hasattr(method, "__wrapped__"),
+            hasattr(method, "__wrapped__"),  # burn-ignore-introspection
             "get_record_by_slug on res.users should not be wrapped by "
             "@distributed_cache() -- its login-fallback branch isn't "
             "covered by the mixin's write()-based cache invalidation.",
@@ -164,21 +164,21 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         """
         with self.assertRaises(TypeError):
             self.env["user.websites.group"].get_record_by_slug(
-                "some-slug", override_svc_uid=SUPERUSER_ID
+                "some-slug", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
             )
 
     def test_get_record_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):
         # Tests [@ANCHOR: edge_routing:COMM_get_record_by_domain]
         with self.assertRaises(TypeError):
             self.env["user.websites.group"].get_record_by_domain(
-                "example.com", override_svc_uid=SUPERUSER_ID
+                "example.com", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
             )
 
     def test_get_target_slug_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
         with self.assertRaises(TypeError):
             self.env["edge.routing.domain"].get_target_slug_by_domain(
-                "example.com", override_svc_uid=SUPERUSER_ID
+                "example.com", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
             )
 
     def test_edge_routing_service_account_sql_check(self):
