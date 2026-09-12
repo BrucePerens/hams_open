@@ -21,6 +21,15 @@ class UserWebsitesPublicDirectoryView(models.Model):
 
     # [@ANCHOR: user_websites:COMM_public_directory_view_init]
     def init(self):
+        # Bug-hunt fix (docs/bug_hunt_claims/.../public_directory_view_init.md):
+        # is_suspended_from_websites and privacy_show_in_directory are
+        # independent fields -- action_suspend_user_websites() (the only
+        # place the former is set True) never touches the latter -- so a
+        # suspended user (whose own site 404s on every real page-serving
+        # route, which all explicitly check is_suspended_from_websites) used
+        # to still be listed here with a working-looking name/slug/view-count
+        # entry whose link resolves to a 404. Excluded explicitly rather than
+        # relying on the unrelated privacy field to happen to also be unset.
         tools.drop_view_if_exists(self.env.cr, self._table)
         with self.env.cr.savepoint():
             self.env.cr.execute(
@@ -41,6 +50,7 @@ class UserWebsitesPublicDirectoryView(models.Model):
                 AND u.website_slug != ''
                 AND u.privacy_show_in_directory IS TRUE
                 AND u.is_service_account IS NOT TRUE
+                AND u.is_suspended_from_websites IS NOT TRUE
             )
         """
         )

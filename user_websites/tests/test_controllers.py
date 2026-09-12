@@ -175,3 +175,31 @@ class TestUserWebsitesControllers(RealTransactionCase):
             content,
             "CRITICAL PRIVACY VIOLATION: User opted out of the directory but was exposed!",
         )
+
+    def test_05_community_directory_excludes_suspended_user(self):
+        """
+        Bug-hunt fix (docs/bug_hunt_claims/.../public_directory_view_init.md):
+        user_websites_public_directory_view's own WHERE clause used to check
+        only privacy_show_in_directory/active/is_service_account, never
+        is_suspended_from_websites -- an independent field
+        action_suspend_user_websites() never touches. So a suspended user who
+        had opted into the directory (privacy_show_in_directory stays True
+        through suspension) kept appearing in /community with a name/slug/
+        view-count entry whose link 404s, even though every real page-serving
+        route (user_blog_index, user_home_fallback, etc.) already 404s their
+        actual site. Prove a suspended, opted-in user is now excluded.
+        """
+        self.user_a.is_suspended_from_websites = True
+        self.env.cr.commit()
+
+        self.authenticate(None, None)
+        response = self.url_open("/community")
+        content = response.content.decode("utf-8")
+
+        self.assertNotIn(
+            self.user_a.website_slug,
+            content,
+            "A suspended user must not be listed in the public community "
+            "directory, even if they previously opted in -- the listing "
+            "outlives the suspension and links to a page that 404s.",
+        )
