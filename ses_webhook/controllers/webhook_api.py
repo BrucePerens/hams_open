@@ -364,21 +364,26 @@ class SesWebhookController(http.Controller):
                     # of "the sender" matches message_process()'s own
                     # exactly rather than a second, subtly different parse.
                     #
-                    # .sudo() here for the same reason message_process()'s
-                    # own .sudo() below is justified: message_parse() reads
-                    # mail.alias.domain internally (Odoo 19's per-company
-                    # alias-domain lookup), which this route's public/
-                    # service-account env has no ACL for, and neither
-                    # message_parse() nor _mail_find_user_for_gateway()
-                    # writes anything -- _mail_find_user_for_gateway()
-                    # already self-elevates internally for its own partner
-                    # search regardless of caller privilege (see its own
-                    # Odoo source). A read-only parse under .sudo() carries
-                    # no more privilege than the .sudo()'d message_process()
-                    # call moments later would apply to the exact same
-                    # bytes for a matched sender anyway.
+                    # Real privilege-boundary fix, 2026-09-12 (asked and
+                    # confirmed with Bruce: prefer a narrow service account
+                    # over .sudo(), matching the standing zero-sudo
+                    # philosophy): this used to call
+                    # .sudo().message_parse(...) here, on the claim that
+                    # message_parse() reads mail.alias.domain internally
+                    # with no ACL for this route's own service account.
+                    # Checked empirically rather than trusting that claim a
+                    # second time -- Odoo core's own message_parse()
+                    # (mail/models/mail_thread.py) already calls
+                    # self.env['mail.alias.domain'].sudo()._find_aliases(...)
+                    # INTERNALLY, so the caller's own privilege on
+                    # mail.alias.domain was never actually relevant. Real
+                    # test run (test.py -u ses_webhook, 0 failed/0 error(s)
+                    # of 40 tests) confirms message_parse() succeeds under
+                    # plain with_user(svc_uid) on a real, unmocked raw
+                    # email (test_04/test_05's own fixtures) -- no .sudo()
+                    # and no new service account needed at all here.
                     parsed_message = email.message_from_bytes(email_bytes, policy=email.policy.SMTP)
-                    msg_dict = request.env['mail.thread'].sudo().message_parse(parsed_message)  # burn-ignore-sudo: read-only parse, no ACL for mail.alias.domain otherwise; see comment above.
+                    msg_dict = request.env['mail.thread'].with_user(svc_uid).message_parse(parsed_message)
                     email_from = msg_dict.get('email_from')
                     matched_user = (
                         request.env['mail.thread']._mail_find_user_for_gateway(email_from)
