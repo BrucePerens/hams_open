@@ -44,8 +44,24 @@
 //! working decoders that do real start-bit edge detection (RTTY is
 //! asynchronous by design -- unlike PSK31's continuous phase tracking,
 //! edge detection isn't an optional robustness feature, it's the actual
-//! framing mechanism), but have not been tuned or tested against real,
-//! noisy off-air audio. `RttyDecoder` is the `Psk31Decoder`-style
+//! framing mechanism). The detector (`frame_score`, `pre_is_persistently_
+//! mark`) is a real frame-matched, amplitude-invariant design, measured
+//! directly against a Gaussian-noise sensitivity harness (`tests/rtty_
+//! processing_gain_harness.rs`) rather than just this file's own
+//! synthetic-signal round-trip tests -- see that harness's own module
+//! doc comment for the measured before/after comparison against the
+//! original single-window/absolute-energy-floor design it replaced.
+//! Unlike `psk31.rs`'s own carrier (still fixed-frequency, a real disclosed
+//! limitation there), this module now does real bounded carrier-frequency
+//! tracking: `AFC_OFFSETS_HZ`/`TrigBank` evaluate every candidate edge
+//! against a small bank of nearby carrier-frequency hypotheses and lock
+//! onto whichever one actually decodes, re-deriving the estimate fresh on
+//! every character rather than needing a separate closed-loop filter --
+//! see `rtty_scan`'s own doc comment for the mechanism, and `tests/rtty_
+//! processing_gain_harness.rs`'s own measured before/after (real off-air
+//! mistuning that used to collapse the old fixed-frequency correlator by
+//! 30Hz now decodes cleanly through the harness's own full +/-50Hz sweep).
+//! `RttyDecoder` is the `Psk31Decoder`-style
 //! chunk-surviving streaming wrapper (see its own doc comment for the
 //! real, RTTY-specific lookahead-margin subtlety asynchronous framing
 //! needs that PSK31's fixed-symbol-length decode doesn't) -- built, and
@@ -146,9 +162,18 @@ fn push_framed_char(bits: &mut Vec<bool>, code: u8) {
 /// shift.
 // [@ANCHOR: rtty_modulate]
 pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16> {
+    framed_bits_to_audio(&text_to_framed_bits(text), mark_hz, sample_rate)
+}
+
+/// The real per-bit FSK synthesis `rtty_modulate` uses, split out so tests can feed it framed
+/// bits built directly via `push_framed_char` -- bypassing `text_to_framed_bits`' own automatic
+/// LTRS/FIGS shift-code insertion -- to synthesize the specific, otherwise-hard-to-produce bit
+/// sequences USOS (unshift-on-space, see `attempt_character`'s own doc comment) is meant to
+/// recover from: a real transmission that never sends an explicit unshift code at all.
+// [@ANCHOR: framed_bits_to_audio]
+fn framed_bits_to_audio(bits: &[bool], mark_hz: f64, sample_rate: u32) -> Vec<i16> {
     let space_hz = mark_hz + RTTY_DEFAULT_SHIFT_HZ;
     let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
-    let bits = text_to_framed_bits(text);
     let mut out = Vec::new();
     let mut phase = 0.0f64;
     let n_bits = bits.len();
@@ -183,28 +208,16 @@ pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16> {
     out
 }
 
-/// Correlates one bit-period-long window against both the MARK and SPACE
-/// reference tones -- a real, simple two-tone matched-filter comparison
-/// (FSK's own natural demodulation primitive, the same shape of
-/// computation `nlp()`'s own squared-signal power spectrum uses for
-/// pitch detection, just applied to two fixed candidate frequencies
-/// instead of a whole bank). Returns `(mark_energy_dominates,
-/// mark_energy + space_energy)` -- the combined energy is
-/// `RttyDecoder`'s own presence-gate signal (see `PresenceGate`'s doc
-/// comment), computed here as a free byproduct of the same correlation
-/// rather than a second pass over `samples`.
-fn window_is_mark(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32) -> (bool, f64) {
-    let (is_mark, mark_energy, space_energy) =
-        window_mark_space_energy(samples, mark_hz, space_hz, sample_rate);
-    (is_mark, mark_energy + space_energy)
-}
-
-/// The real correlation this module's demodulation is built on --
-/// `window_is_mark` is a thin wrapper over this for callers that only
-/// need the combined energy; `PresenceGate`'s own ratio-based design
-/// (see its doc comment) needs the two energies separately, since their
-/// *ratio* -- not either one alone -- is what stays invariant to input
-/// amplitude.
+/// The real correlation this module's demodulation is built on -- a per-window quadrature
+/// (I/Q) correlator against both candidate tones, the same shape of computation `nlp()`'s own
+/// squared-signal power spectrum uses for pitch detection, just applied to two fixed candidate
+/// frequencies instead of a whole bank. Kept as a slow, from-scratch reference implementation
+/// (recomputes `cos`/`sin` per sample rather than using `TrigTables`' cached version below) --
+/// `rtty_scan`'s own frame-matched detector uses `TrigTables::signed_ratio_db` instead for real
+/// performance reasons (many overlapping windows evaluated per candidate edge), but this
+/// function stays as the independent ground truth `mark_space_ratio_separates_signal_from_
+/// noise_across_a_full_amplitude_sweep` measures against -- the two are exercised by different
+/// code paths, so agreement between them is a real cross-check, not a tautology.
 // [@ANCHOR: window_mark_space_energy]
 fn window_mark_space_energy(
     samples: &[i16],
@@ -231,230 +244,582 @@ fn window_mark_space_energy(
     (mark_energy > space_energy, mark_energy, space_energy)
 }
 
-/// Adaptive presence/confidence gate against real, continuous, often-
-/// noisy audio -- built after directly measuring the real problem this
-/// solves: 10s of synthetic PRNG noise fed through an earlier,
-/// ungated version of `RttyDecoder` in real 960-sample pipeline chunks
-/// produced 44 spurious characters, a steady stream, not the "rare false
-/// character" `rtty_demodulate`'s own module doc comment and
-/// `pure_noise_does_not_panic_or_hang` test call an acceptable, honest
-/// limitation for a one-shot library function. That caveat stops being
-/// acceptable once decoded output is broadcast to browsers and
-/// hams.com from a daemon that runs continuously against a mostly-quiet
-/// band -- unlike PSK31, whose Varicode framing (every codeword starts/
-/// ends with 1, no two consecutive zeros) gives real structural
-/// redundancy that rejects most noise on its own, RTTY's only
-/// validation is "start bit is SPACE, stop bit is MARK" -- roughly a
-/// 1-in-4 chance for random noise to pass.
-///
-/// **Two real design mistakes, each caught by direct measurement, not
-/// assumed correct from the shape alone.** First: an early version
-/// tracked the floor with a plain, symmetric EMA updated on every
-/// window that wasn't a candidate start-bit edge -- matching
-/// `codec2_3200::voicing`'s own `is_voiced`, which works there because
-/// speech genuinely has quiet stretches to track a noise floor against.
-/// RTTY doesn't: a real signal idles in steady MARK tone *between*
-/// characters, and a steady MARK tone is never a candidate edge (no
-/// transition happening), so that EMA was actually absorbing the real
-/// signal's own strong carrier energy throughout every idle stretch --
-/// confirmed directly with temporary instrumentation during this bug's
-/// own diagnosis: the floor climbed from -60dB toward -30dB within
-/// about a dozen windows of nothing but real full-amplitude idle-MARK
-/// audio, eventually rejecting the *real* signal's own start-bit edges
-/// once the floor rose close to their own energy level. Second, a first
-/// attempted fix (an asymmetric fast-fall/slow-rise EMA, the classic
-/// squelch shape) traded that bug for the opposite one: noise's own
-/// combined-energy readings have real, high variance even around their
-/// own typical level, so a fast-fall rate chases toward the noise's own
-/// *minimum* rather than its mean, pulling the floor low enough that
-/// noise readings routinely cleared `PRESENCE_MARGIN_DB` above it again
-/// -- measured directly (still 44/44 spurious characters, no
-/// improvement at any fall rate tried).
-///
-/// **The actual fix: outlier-reject what gets fed into the floor at
-/// all**, using the same margin `accepts()` itself uses. A window whose
-/// own energy already clears `floor_db + PRESENCE_MARGIN_DB` is, by
-/// this gate's own definition, indistinguishable from real signal --
-/// so it's simply never absorbed into the floor, symmetric EMA or not.
-/// This solves both problems from the same rule: a sustained real
-/// carrier's readings are *always* outliers relative to a floor that
-/// starts low, so they never get absorbed no matter how long the
-/// carrier persists (and don't need to -- the floor staying low is
-/// exactly why the carrier's own edges keep clearing the margin from
-/// the first window onward); genuine noise's own readings, once the
-/// floor has converged near noise's own typical level, are mostly
-/// *not* outliers, so they keep updating the floor normally, tracking
-/// real changes in ambient noise over time the way a floor should.
-///
-/// **Known, honest limitation, not silently hidden.** This floor is
-/// tracked in *absolute* combined-energy dB, which scales with input
-/// amplitude -- both the cold-start value below and `PRESENCE_MARGIN_DB`
-/// were measured against noise at a specific test amplitude (+/-2000 out
-/// of the full +/-32767 i16 range). Measured directly, later, against a
-/// wider amplitude sweep: noise loud enough to read above the cold-start
-/// floor from the very first window (e.g. +/-20000) can reproduce the
-/// same kind of freeze this design already fixed once for a different
-/// trigger level, though that specific measurement turned out to be
-/// contaminated by an unrelated integer-overflow bug in the test's own
-/// noise generator (`(state % N) as i16 - N/2` silently wraps for N
-/// large enough to exceed i16 range before the subtraction) -- so the
-/// real deadlock boundary above +/-15000 is not yet confirmed with a
-/// trustworthy measurement (see `rtty_decoder_stays_effectively_silent_
-/// against_louder_noise...` below for the corrected, retested number).
-/// A real, amplitude-invariant discriminator exists (the MARK/SPACE
-/// energy *ratio*, which stays constant under amplitude scaling since a
-/// real tone's dominant-frequency correlator and its counterpart both
-/// scale by the same factor) and was measured directly to separate
-/// signal from noise cleanly across a full amplitude sweep (see
-/// `mark_space_ratio_separates_signal_from_noise_across_a_full_
-/// amplitude_sweep`) -- but integrating it into `rtty_scan` was tried
-/// and reverted: `advance` lands the next character's start-bit edge
-/// with essentially no preceding "settling" window during a continuous
-/// multi-character transmission, so a persistence-based ratio gate
-/// (requiring several confident windows immediately before each edge)
-/// has nothing to build persistence from after the first character and
-/// incorrectly rejects real signal from character 2 onward -- confirmed
-/// directly across three different persistence designs, not assumed.
-/// Real integration needs framing changes (e.g. gating once per
-/// transmission rather than once per character, with a separate close
-/// condition for genuine silence) that are a real follow-up, not
-/// attempted here.
-struct PresenceGate {
-    floor_db: f32,
-    observations: u32,
+/// Precomputed per-sample I/Q correlator tables for one fixed `(mark_hz, space_hz,
+/// sample_rate)` triple, indexed by *window-relative* sample offset (0..capacity). Valid for a
+/// window of any length up to `capacity` starting anywhere in the stream, since the correlator
+/// phase reference `t = n / sample_rate` always counts from the window's own first sample, not
+/// an absolute stream position -- exactly the phase convention `window_mark_space_energy`
+/// already used, just computed once here instead of by every call. This removes a real
+/// inefficiency `frame_score` below would otherwise pay many times per character: several
+/// overlapping windows are evaluated per candidate edge, and a per-edge local-peak refinement
+/// (see `frame_score`'s own doc comment) evaluates the same shape of window at many nearby
+/// offsets -- recomputing `cos`/`sin` from scratch each time was pure waste once the frame-
+/// matched detector replaced the old single-window-per-candidate design.
+struct TrigTables {
+    cos_mark: Vec<f64>,
+    sin_mark: Vec<f64>,
+    cos_space: Vec<f64>,
+    sin_space: Vec<f64>,
 }
 
-/// A candidate edge's combined MARK+SPACE energy must exceed the
-/// tracked floor by this many dB to be treated as a real signal, not
-/// noise -- the same threshold `observe`'s own outlier rejection uses
-/// (see `PresenceGate`'s own doc comment for why that reuse is exactly
-/// what makes this design work). Confirmed directly
-/// (`rtty_decoder_stays_effectively_silent_against_10_seconds_of_real_
-/// noise_in_real_pipeline_chunks`) that this threshold reduces the
-/// measured 44-spurious-character noise case to zero while every
-/// real-signal test (including one with a full second of leading
-/// idle-MARK audio, the scenario that exposed this gate's own
-/// floor-contamination bug) still passes.
-const PRESENCE_MARGIN_DB: f32 = 20.0;
-/// Floor EMA update rate, applied only to windows `observe` doesn't
-/// reject as outliers (see this module's own real-vs-noise reasoning
-/// above) -- matching `voicing.rs`'s own `NOISE_BETA` choice for the
-/// same reason: slow enough that a handful of atypically-quiet-but-
-/// still-real-noise windows in a row can't overreact the floor, fast
-/// enough to track genuine changes in band noise over real listening
-/// timescales.
-const PRESENCE_BETA: f32 = 0.02;
-/// Real minimum number of windows observed before the gate will accept a MARGINAL reading
-/// (one that clears `PRESENCE_MARGIN_DB` but not `SIGNAL_BYPASS_MARGIN_DB` below) -- gives the
-/// floor a little real basis first, specifically covering the window during which a cold-start
-/// floor (0.0dB) hasn't yet climbed toward THIS noise's own real level. Confirmed directly this
-/// is a genuine, needed protection, not just defensive caution: `rtty_decoder_stays_effectively_
-/// silent_against_louder_noise_that_previously_deadlocked_the_floor`'s own noise reads ~22-30dB
-/// from its very first windows, comfortably clearing a cold `0+20=20dB` threshold before the
-/// floor's own EMA has had any observations to climb toward that noise's real ~22dB level --
-/// without this warmup, that gap produces exactly 1 real spurious character (measured directly,
-/// not assumed) in the handful of windows before the floor catches up. Does NOT gate
-/// `SIGNAL_BYPASS_MARGIN_DB`-strength readings -- see `accepts()`'s own doc comment for why an
-/// unconditional observation-count veto on those specifically was itself a real, separate bug.
-const PRESENCE_WARMUP_OBSERVATIONS: u32 = 10;
-/// A reading this many dB above the floor is treated as unambiguously real signal, bypassing
-/// `PRESENCE_WARMUP_OBSERVATIONS` entirely -- see `accepts()`'s own doc comment for the bug this
-/// closes. Measured directly, not guessed: a real full-amplitude RTTY signal reads ~53.6dB
-/// (matching `PresenceGate::new`'s own documented ~53dB figure); `rtty_decoder_stays_
-/// effectively_silent_against_louder_noise_that_previously_deadlocked_the_floor`'s own noise
-/// peaks at ~29.7dB even during its own cold-start-floor window. 40.0 sits with wide, real
-/// margin on both sides of that measured gap (10.3dB above the worst observed noise reading,
-/// 13.6dB below the real signal reading) -- not a boundary either regime came close to in
-/// measurement, unlike the genuinely fragile near-full-i16-scale noise case this module's own
-/// `#[ignore]`d test already discloses as a separate, harder, unfixed problem.
-const SIGNAL_BYPASS_MARGIN_DB: f32 = 40.0;
-impl PresenceGate {
-    fn new() -> Self {
-        // A third real bug, found the same way as the previous two --
-        // by measuring, not assuming: starting the floor at an
-        // artificially low value (-60dB, chosen by analogy to
-        // `VoicingState`'s own cold start, without checking what this
-        // gate's own real energy values actually look like) froze the
-        // floor there permanently. `observe`'s own outlier rejection
-        // means a reading has to fall *below* `floor_db +
-        // PRESENCE_MARGIN_DB` to update the floor at all -- but real
-        // measured combined-energy values for this module's own
-        // correlation (10*log10 of a sum of squared correlator
-        // outputs, not a normalized dB scale any assumption should
-        // transfer to) are roughly 2-6dB for the synthetic PRNG noise
-        // this gate was built against and roughly 53dB for a real
-        // full-amplitude signal -- both comfortably *above* -60+20=-40,
-        // so *nothing* ever looked like a valid update and the floor
-        // never moved at all (confirmed directly with temporary
-        // instrumentation). Starting at 0dB instead sits between those
-        // two real measured regimes: noise's own ~2-6dB clears below
-        // 0+20=20dB and gets absorbed normally, converging the floor
-        // toward noise's own true level over time; a real signal's own
-        // ~53dB clears the same threshold from the very first window,
-        // accepted immediately without ever touching the floor. The
-        // large real gap between those two regimes (system fully
-        // measured on synthetic data with 0.9-amplitude tones and
-        // ~2000-amplitude noise, not asserted from theory) is what
-        // makes an exact starting value not fragile -- see
-        // `PresenceGate`'s own doc comment for the noise/signal numbers
-        // this was tuned against.
+impl TrigTables {
+    // [@ANCHOR: TrigTables::new]
+    fn new(mark_hz: f64, space_hz: f64, sample_rate: u32, capacity: usize) -> Self {
+        let mut cos_mark = Vec::with_capacity(capacity);
+        let mut sin_mark = Vec::with_capacity(capacity);
+        let mut cos_space = Vec::with_capacity(capacity);
+        let mut sin_space = Vec::with_capacity(capacity);
+        for n in 0..capacity {
+            let t = n as f64 / sample_rate as f64;
+            let mark_phase = std::f64::consts::TAU * mark_hz * t;
+            let space_phase = std::f64::consts::TAU * space_hz * t;
+            cos_mark.push(mark_phase.cos());
+            sin_mark.push(mark_phase.sin());
+            cos_space.push(space_phase.cos());
+            sin_space.push(space_phase.sin());
+        }
         Self {
-            floor_db: 0.0,
-            observations: 0,
+            cos_mark,
+            sin_mark,
+            cos_space,
+            sin_space,
         }
     }
 
-    fn energy_to_db(energy: f64) -> f32 {
-        10.0 * (energy.max(1e-12)).log10() as f32
-    }
-
-    /// Real bug found 2026-09-11 by fuzzing (see night_shift_todo.md for the full
-    /// investigation): this used to require `self.observations >= PRESENCE_WARMUP_OBSERVATIONS`
-    /// unconditionally, before accepting ANYTHING, on the documented reasoning that "a strong
-    /// real signal present from the very first window is never itself a reason to delay
-    /// acceptance" -- true for the FLOOR (a strong signal is always an outlier `observe()`
-    /// never absorbs, so `floor_db` stays at its low cold-start value regardless), but that
-    /// reasoning never accounted for the observation-COUNT veto itself, which blocked
-    /// acceptance regardless of how strong the signal was, for the gate's own first ~10
-    /// windows. Confirmed directly: a genuine, full-amplitude signal present from window 1
-    /// (e.g. a short RTTY message starting the instant `RttyDecoder` begins listening, or
-    /// `RttyDecoder` starting up mid-transmission) was silently rejected, exactly the scenario
-    /// the design's own comment claimed couldn't happen.
+    /// The real per-window correlation this module's demodulation is built on: MARK and SPACE
+    /// energy over `samples[start..start+len)`, plus the signed dB ratio between them (positive
+    /// means MARK dominates, negative means SPACE dominates -- amplitude-invariant by
+    /// construction, since a real tone's dominant-frequency correlator and its counterpart both
+    /// scale by the same input-amplitude factor, the same reasoning this module's own `mark_
+    /// space_ratio_separates_signal_from_noise_across_a_full_amplitude_sweep` test already
+    /// measured and confirmed). Returns both, not just the ratio, because they serve different
+    /// comparisons: the ratio is what every bit/framing decision in this module uses (`signed_
+    /// ratio_db`, below); the raw linear `mark_e + space_e` energy is what `best_frame_
+    /// evidence`'s own AFC frequency selection needs instead (see its own doc comment for why a
+    /// dB-domain comparison is the wrong tool for comparing *across* candidate frequencies, even
+    /// though it's the right one for comparing MARK against SPACE *within* one).
     ///
-    /// The fix is NOT to remove the warmup counter outright -- that regressed a real, separate,
-    /// already-measured protection: `rtty_decoder_stays_effectively_silent_against_louder_
-    /// noise_that_previously_deadlocked_the_floor`'s own noise reads ~22-30dB from its very
-    /// first windows (well above a COLD floor's `0+20=20dB` threshold, before the floor's own
-    /// EMA has had any observations to climb toward that noise's real ~22dB level), and the
-    /// warmup counter was the only thing preventing that specific window from producing
-    /// spurious decodes. Instead: `SIGNAL_BYPASS_MARGIN_DB` (40dB, see its own doc comment for
-    /// the real measured gap it sits inside) distinguishes "obviously real signal, bypass
-    /// warmup entirely" (~53dB, comfortably clears it) from "merely elevated, ambiguous
-    /// reading" (this noise's own ~30dB peak, comfortably doesn't) -- so a genuine strong
-    /// signal is never delayed, while ambiguous/moderate readings (which real noise regimes
-    /// this gate is tuned against can plausibly produce) still wait for the floor to gain a
-    /// real basis first.
-    fn accepts(&self, energy: f64) -> bool {
-        let energy_db = Self::energy_to_db(energy);
-        if energy_db > self.floor_db + SIGNAL_BYPASS_MARGIN_DB {
-            return true;
+    /// `None` when the window runs entirely past the sample buffer. A window that only
+    /// *partially* overruns the buffer by a small amount is silently shortened to whatever
+    /// samples remain rather than rejected outright -- real for the last character of a
+    /// whole-buffer `rtty_demodulate` call, whose audio (by construction, see `rtty_modulate`)
+    /// ends exactly at the end of the final stop bit with zero trailing margin, so an off-by-a-
+    /// few-samples rounding mismatch between `rtty_modulate`'s per-bit-rounded synthesis and
+    /// this module's own geometry would otherwise lose that character outright. A shortfall
+    /// larger than 10% is a structurally different situation (not enough real audio for this
+    /// bit at all, not a few stray samples) and *is* rejected outright (`None`) -- see the
+    /// 90%-length guard below; a heavily shortened window's own ratio is itself an unreliable,
+    /// fat-tailed coin flip (`PER_WINDOW_CLIP_DB`'s own doc comment), and silently accepting one
+    /// let a whole-buffer decode cut off mid-character emit garbage for the truncated tail bits
+    /// instead of refusing them the way the original design's own `bit_at` bounds check did.
+    /// Safe to apply this shortening unconditionally here (not just for the whole-buffer
+    /// caller) because `rtty_scan`'s own streaming-lookahead check already guarantees a full,
+    /// unclipped window for every position it lets reach this far in `stop_if_insufficient_
+    /// lookahead: true` mode -- the shortening only ever actually triggers at a real signal's
+    /// true end.
+    // [@ANCHOR: TrigTables::window_evidence]
+    fn window_evidence(&self, samples: &[i16], start: usize, len: usize) -> Option<(f64, f64)> {
+        if len == 0 || start >= samples.len() {
+            return None;
         }
-        self.observations >= PRESENCE_WARMUP_OBSERVATIONS && energy_db > self.floor_db + PRESENCE_MARGIN_DB
+        let available = samples.len() - start;
+        if available * 10 < len * 9 {
+            return None;
+        }
+        let len = len.min(available).min(self.cos_mark.len());
+        if len == 0 {
+            return None;
+        }
+        let mut mark_i = 0.0f64;
+        let mut mark_q = 0.0f64;
+        let mut space_i = 0.0f64;
+        let mut space_q = 0.0f64;
+        for k in 0..len {
+            let x = samples[start + k] as f64 / i16::MAX as f64;
+            mark_i += x * self.cos_mark[k];
+            mark_q += x * self.sin_mark[k];
+            space_i += x * self.cos_space[k];
+            space_q += x * self.sin_space[k];
+        }
+        let mark_e = mark_i * mark_i + mark_q * mark_q;
+        let space_e = space_i * space_i + space_q * space_q;
+        let ratio_db = 10.0 * (mark_e.max(1e-15) / space_e.max(1e-15)).log10();
+        Some((ratio_db, mark_e + space_e))
     }
 
-    /// Called on every window `rtty_scan` evaluates, edge candidate or
-    /// not -- see `PresenceGate`'s own doc comment for why the earlier
-    /// "only track non-edge windows" restriction was itself a real bug,
-    /// and why the outlier-rejection check below is what actually
-    /// protects the floor now instead.
-    // [@ANCHOR: PresenceGate::observe]
-    fn observe(&mut self, energy: f64) {
-        let energy_db = Self::energy_to_db(energy);
-        if energy_db < self.floor_db + PRESENCE_MARGIN_DB {
-            self.floor_db = self.floor_db * (1.0 - PRESENCE_BETA) + energy_db * PRESENCE_BETA;
-        }
-        self.observations = self.observations.saturating_add(1);
+    /// Thin wrapper over `window_evidence` for the (large majority of) callers that only need
+    /// the signed MARK-vs-SPACE ratio, not the raw energy -- see that function's own doc
+    /// comment for the full mechanism and the real reason both are kept separate.
+    // [@ANCHOR: TrigTables::signed_ratio_db]
+    fn signed_ratio_db(&self, samples: &[i16], start: usize, len: usize) -> Option<f64> {
+        self.window_evidence(samples, start, len)
+            .map(|(ratio_db, _)| ratio_db)
     }
+}
+
+/// Candidate carrier-frequency offsets (Hz) a bounded AFC (automatic frequency control) search
+/// evaluates on every candidate edge, added to the decoder's configured `mark_hz` (and,
+/// implicitly, to `space_hz` too, since real off-air mistuning shifts a receiver's whole
+/// passband -- both tones together -- not the transmitting station's own FSK shift width).
+/// Real off-air mistuning is the single largest weak point this module's own sensitivity
+/// harness (`tests/rtty_processing_gain_harness.rs`) measured: at +10dB SNR, a fixed-frequency
+/// correlator decodes cleanly through 20Hz of offset and collapses by 30Hz (`sinc`-shaped
+/// correlator loss, roughly half the 170Hz shift) -- exactly the range no amount of the
+/// amplitude-domain processing gain elsewhere in this module (the frame-matched detector,
+/// persistence gating) can recover, since a mismatched reference frequency loses real signal
+/// energy at the correlation step itself, before any of that machinery ever sees it. 9 points
+/// spanning +/-40Hz at 10Hz steps: fine enough that the worst-case residual mismatch after
+/// snapping to the nearest candidate (5Hz) stays well inside the ~20Hz the harness measured as
+/// still-clean, wide enough to cover real amateur-radio tuning error (a few tens of Hz is
+/// typical for a manually-tuned receiver or a transmitter's own crystal drift) without paying
+/// for a search wide enough to also need to worry about a *different* station's tone entirely.
+const AFC_OFFSETS_HZ: [f64; 9] = [-40.0, -30.0, -20.0, -10.0, 0.0, 10.0, 20.0, 30.0, 40.0];
+
+/// A single-candidate "AFC offset list" for `RttyDecoder::new_fixed` -- see that function's own
+/// doc comment for why a wide-passband channel-scanning bank (`digital_decoder.rs`'s own RTTY
+/// candidate bank) wants decoders with no inner AFC search at all, not a smaller version of the
+/// 9-candidate search below.
+const FIXED_OFFSET_HZ: [f64; 1] = [0.0];
+
+/// A small bank of `TrigTables`, one per offset in `offsets`, all built from the same configured
+/// `mark_hz`/`sample_rate` -- the real mechanism the AFC search in `rtty_scan` scans across.
+/// Built once per decoder lifetime (`RttyDecoder::new`/`new_fixed`) or once per whole-buffer call
+/// (`rtty_demodulate`), the same real reason `TrigTables` itself moved out of the per-window hot
+/// path: `sin`/`cos` tables are expensive to recompute and never change once `mark_hz` and
+/// `sample_rate` are fixed. `offsets` is carried alongside the tables (not just consulted via the
+/// global `AFC_OFFSETS_HZ` constant) so `RttyDecoder::locked_frequency_offset_hz` reports the
+/// right value regardless of which offset list this particular decoder was built with -- a real
+/// bug this shape avoids: indexing a fixed single-table bank's `locked_offset_idx` (always 0)
+/// into the 9-entry `AFC_OFFSETS_HZ` array would silently report -40.0Hz instead of the true 0.0Hz.
+struct TrigBank {
+    tables: Vec<TrigTables>,
+    offsets: &'static [f64],
+}
+
+impl TrigBank {
+    // [@ANCHOR: TrigBank::new_with_offsets]
+    fn new_with_offsets(
+        offsets: &'static [f64],
+        mark_hz: f64,
+        sample_rate: u32,
+        capacity: usize,
+    ) -> Self {
+        let tables = offsets
+            .iter()
+            .map(|&offset_hz| {
+                let candidate_mark_hz = mark_hz + offset_hz;
+                let candidate_space_hz = candidate_mark_hz + RTTY_DEFAULT_SHIFT_HZ;
+                TrigTables::new(candidate_mark_hz, candidate_space_hz, sample_rate, capacity)
+            })
+            .collect();
+        Self { tables, offsets }
+    }
+
+    // [@ANCHOR: TrigBank::new]
+    fn new(mark_hz: f64, sample_rate: u32, capacity: usize) -> Self {
+        Self::new_with_offsets(&AFC_OFFSETS_HZ, mark_hz, sample_rate, capacity)
+    }
+}
+
+/// Evaluates `frame_score` at `edge_pos` against *every* candidate frequency offset in `bank`
+/// and returns the best-matching one -- by `magnitude`, not `accept_score` -- along with which
+/// offset index won. This is the real AFC search, run at every scan position, not gated behind
+/// "only search when the locked offset already looks promising": a station that has drifted
+/// since the last successful character would, by definition, no longer score well at the
+/// previously-locked offset, so a search that only widens after a locked-offset failure would
+/// itself be too slow to reacquire. `AFC_OFFSETS_HZ`'s own doc comment covers why 9 candidates
+/// is cheap enough to afford this unconditionally rather than needing a cheaper pre-filter
+/// first.
+///
+/// **Two real bugs, found and fixed by direct measurement, not assumed correct from the shape
+/// alone** (`rtty_decoder_tracks_a_real_off_air_frequency_offset`), both about *which metric*
+/// selects the winning offset among candidates that already pass `accept_score`'s own noise-
+/// rejection gate. First: picking by `accept_score` itself doesn't work -- it's *clipped*
+/// (`PER_WINDOW_CLIP_DB`), so once a candidate is merely "good enough," several neighboring
+/// offsets around the true one saturate to the same value and become indistinguishable by it;
+/// picking among ties that way measured directly to sometimes prefer a genuinely worse-matched
+/// candidate (e.g. locking a 30Hz offset for a real 5Hz mistuning) purely from correlator phase
+/// noise at one specific sample position, corrupting that character's own data bits. Second:
+/// picking by a *sum of dB ratios* (this function's own first fix attempt) is the wrong
+/// physical quantity even though it isn't clipped -- a matched filter's real frequency-mismatch
+/// rolloff is `sinc`-shaped in *linear* correlator energy, and only shows up as a small,
+/// noise-comparable difference once compressed into dB. `magnitude` (see `FrameEvidence`'s own
+/// doc comment) is real linear energy (`mark_e + space_e`, summed unclipped across all 7
+/// windows) specifically so it tracks that physical rolloff directly -- `TrigTables::window_
+/// evidence`'s own doc comment covers why the ratio and the energy have to come from the same
+/// underlying correlation rather than being computed separately. `magnitude` is not itself
+/// safe as the noise-rejection gate (unclipped sums are fat-tailed under noise, the same reason
+/// `PER_WINDOW_CLIP_DB` exists at all) -- it only ever chooses *among* candidates
+/// `accept_score` has already vetted.
+// [@ANCHOR: best_frame_evidence]
+fn best_frame_evidence(
+    samples: &[i16],
+    edge_pos: usize,
+    geo: &FrameGeometry,
+    bank: &TrigBank,
+) -> Option<(usize, FrameEvidence)> {
+    let mut best: Option<(usize, FrameEvidence)> = None;
+    for (idx, trig) in bank.tables.iter().enumerate() {
+        if let Some(evidence) = frame_score(samples, edge_pos, geo, trig) {
+            if evidence.accept_score <= FRAME_SCORE_THRESHOLD_DB {
+                continue;
+            }
+            let is_better = match &best {
+                Some((_, b)) => evidence.magnitude > b.magnitude,
+                None => true,
+            };
+            if is_better {
+                best = Some((idx, evidence));
+            }
+        }
+    }
+    best
+}
+
+/// Real sample-domain geometry for one bit period at a given sample rate, computed once per
+/// scan rather than re-derived at every candidate position.
+struct FrameGeometry {
+    samples_per_bit: f64,
+    window_len: usize,      // one data-bit-period window, rounded
+    stop_window_len: usize, // the stop bit's own real RTTY_STOP_BIT_UNITS (1.5-unit) window
+}
+
+impl FrameGeometry {
+    fn new(sample_rate: u32) -> Self {
+        let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
+        Self {
+            samples_per_bit,
+            window_len: samples_per_bit.round() as usize,
+            stop_window_len: (samples_per_bit * RTTY_STOP_BIT_UNITS).round() as usize,
+        }
+    }
+}
+
+/// How many (clipped) dB of combined framing + data-bit evidence (`FrameEvidence::accept_score`,
+/// see `frame_score`'s own doc comment) a candidate edge needs to be treated as a real
+/// character -- this module's real presence/confidence gate, replacing the old `PresenceGate`'s
+/// absolute-energy floor (see this module's own git history for that design and the amplitude-
+/// scaling fragility it never fully escaped). With 7 clipped windows summed (start + stop + 5
+/// data bits, each capped at `PER_WINDOW_CLIP_DB`), a real signal's own accept_score saturates
+/// near `7 * PER_WINDOW_CLIP_DB` (126); 80 sits well below that but requires the equivalent of
+/// roughly 4-5 of the 7 windows reading strongly, more than any one or two fat-tailed noise
+/// window spikes can fake even after `pre_is_persistently_mark` and clipping already remove the
+/// easy false positives. Tuned directly against `tests/rtty_processing_gain_harness.rs`'s own
+/// `amplitude_invariance_false_alarm_sweep` (Gaussian noise across the full i16 RMS range,
+/// 500-30000) and this crate's pre-existing regression tests (a different, uniform-xorshift
+/// noise texture, at fixed amplitudes) -- both must independently stay at the same "0-2 stray
+/// characters in 10s" tolerance the original `PresenceGate` design used, and both do at this
+/// value.
+const FRAME_SCORE_THRESHOLD_DB: f64 = 80.0;
+/// Caps any single window's raw signed-ratio contribution before it's summed. Necessary, not
+/// cosmetic: `TrigTables::signed_ratio_db` is a *ratio* of two correlator energies in dB, which
+/// is mathematically unbounded above whenever the denominator happens to land near zero -- a
+/// real, measured problem for noise specifically (individual noise windows were measured
+/// spiking past 60dB, well above a real signal's own stable ~35-40dB per-window reading), since
+/// a single low-probability near-zero-energy noise window can otherwise dominate the whole sum
+/// and defeat the entire point of combining multiple windows' evidence. Clipping bounds each
+/// window's own vote at a level real signal always saturates but noise only occasionally does,
+/// which is what makes requiring *several* windows to jointly saturate (`FRAME_SCORE_
+/// THRESHOLD_DB`'s own doc comment) a real, independent-evidence discriminator rather than one
+/// outlier deciding the outcome alone.
+const PER_WINDOW_CLIP_DB: f64 = 18.0;
+/// Fine-grained scan grid: how many candidate positions to evaluate per bit period. The
+/// original design used 4 (matched to that design's coarse mark/space transition detector,
+/// which only needed to find *a* transition before switching to precise per-bit sampling);
+/// this design's local-peak refinement (`FrameEvidence`'s own doc comment) needs a genuinely
+/// finer starting grid to reliably land within the peak's own basin rather than stepping over
+/// it entirely on a strongly time-compressed or noisy signal.
+const SCAN_GRID_PER_BIT: f64 = 8.0;
+/// How many independent sub-windows `pre_is_persistently_mark` splits the bit period right
+/// before a candidate edge into. Matches this module's own already-measured, amplitude-
+/// invariant finding (`mark_space_ratio_separates_signal_from_noise_across_a_full_amplitude_
+/// sweep`): a real idle-MARK tone -- either genuine leading idle audio, or, for every character
+/// after the first in a burst, the *previous* character's own stop-bit tail, so consecutive
+/// characters give each other a real "settling window" for free -- sustains a confident MARK
+/// ratio across its *entire* duration, while noise's longest observed run of confident windows
+/// tops out at 3 (that test's own finding, at a stricter 15dB ratio threshold than this gate
+/// uses). Requiring both `PERSIST_SUBWINDOWS` sub-windows to independently clear `PERSIST_
+/// RATIO_THRESHOLD_DB` is a real, independent check on top of `accept_score`'s own 7-window
+/// sum, not a duplicate of it -- it specifically rejects candidates whose *framing* context
+/// (what comes immediately before the claimed start bit) doesn't look like real idle/stop-bit
+/// MARK at all, regardless of how the start/stop/data windows themselves happen to read.
+const PERSIST_SUBWINDOWS: usize = 2;
+/// Per-sub-window MARK-ratio threshold for `pre_is_persistently_mark`. Deliberately much lower
+/// than `mark_space_ratio_separates_signal_from_noise_across_a_full_amplitude_sweep`'s own 15dB
+/// figure (an isolated, unclipped-magnitude measurement of that one statistic alone) -- tuned
+/// down from an initial 15dB via `tests/rtty_processing_gain_harness.rs`'s own SNR sweep, which
+/// found the stricter value rejecting real, moderately-noisy signal far more often than it
+/// rejected noise, since `accept_score`'s own clipped 7-window sum (see `FRAME_SCORE_
+/// THRESHOLD_DB`'s own doc comment) already carries most of the real discriminating power here;
+/// this check only needs to rule out candidates with no plausible preceding idle/stop-bit MARK
+/// at all, not re-litigate signal-vs-noise on its own.
+const PERSIST_RATIO_THRESHOLD_DB: f64 = 4.0;
+
+/// Checks that the bit period immediately before `edge_pos` is a genuinely *sustained* MARK
+/// tone, not just a single favorable window -- the real, already-measured persistence
+/// invariant this module's own `mark_space_ratio_separates_signal_from_noise_across_a_full_
+/// amplitude_sweep` test exists to document (see `PERSIST_SUBWINDOWS`'s own doc comment).
+/// Splits that one bit period into `PERSIST_SUBWINDOWS` independent sub-windows and requires
+/// *every* one to individually clear `PERSIST_RATIO_THRESHOLD_DB` -- true for a real idle/
+/// previous-stop-bit MARK tone (which holds for the tone's *entire* duration), while noise
+/// sustaining that many independent windows in a row, at a fixed, un-scanned position, is a
+/// genuinely rare coincidence rather than something a scan across many candidate positions
+/// should expect to find often. Missing history (an edge at or near the very start of the
+/// buffered stream) passes automatically -- there is no "before" to fail on, matching this
+/// module's own fixed warmup-veto bug (a real signal starting the instant a receiver begins
+/// listening must not be penalized for looking unfamiliar).
+// [@ANCHOR: pre_is_persistently_mark]
+fn pre_is_persistently_mark(
+    samples: &[i16],
+    edge_pos: usize,
+    geo: &FrameGeometry,
+    trig: &TrigTables,
+) -> bool {
+    let w = geo.window_len;
+    if edge_pos < w {
+        return true;
+    }
+    let sub_len = (w / PERSIST_SUBWINDOWS).max(1);
+    let region_start = edge_pos - w;
+    let mut pos = region_start;
+    while pos + sub_len <= edge_pos {
+        match trig.signed_ratio_db(samples, pos, sub_len) {
+            Some(r) if r > PERSIST_RATIO_THRESHOLD_DB => {}
+            _ => return false,
+        }
+        pos += sub_len;
+    }
+    true
+}
+
+/// Combined frame-matched confidence for treating `edge_pos` as a real character's start-bit
+/// edge -- the real "processing gain" move this decoder is built on. The old design accepted a
+/// candidate based on a single mark->space transition (a hard 1-bit decision) plus a separate,
+/// amplitude-dependent absolute-energy floor bolted on afterward; this instead requires two
+/// independent kinds of evidence to agree, each built from RTTY's own known frame structure
+/// rather than a single instantaneous sample: `pre_is_persistently_mark` (a real *sustained*-
+/// tone check, immune to any one window's own fat-tailed dB blowup -- see its own doc comment),
+/// and this function's own clipped start+stop magnitude sum (the start bit must read SPACE, the
+/// stop bit must read MARK across its full real `RTTY_STOP_BIT_UNITS` duration, each clipped to
+/// `PER_WINDOW_CLIP_DB` so neither window alone can dominate the sum). Because both checks are
+/// built from signed *ratios*, not absolute energy, the same thresholds work unchanged across
+/// the full amplitude sweep the old design's own `#[ignore]`d test measured it failing on.
+///
+/// The three scores `frame_score` produces for one candidate edge, kept separate because they
+/// serve different purposes and would corrupt each other if merged: `accept_score` decides
+/// *whether* this is a real character (must be robust against fat-tailed noise outliers, so
+/// every term is clipped -- see `PER_WINDOW_CLIP_DB`'s own doc comment); `raw_score` finds
+/// *where* the real edge actually is, at a single fixed frequency hypothesis (an unclipped
+/// matched-filter output genuinely peaks at the true alignment, but clipping flattens that peak
+/// into a plateau -- picking a position off a flat plateau via a strict `>` comparison
+/// systematically biases the chosen position toward the plateau's first/leftmost point, up to a
+/// full grid step of avoidable timing error); `magnitude` picks *which frequency hypothesis*
+/// among several that all already pass `accept_score` is the real best match -- see
+/// `best_frame_evidence`'s own doc comment for why `accept_score` itself is unsuitable for that
+/// comparison (it saturates, making nearby frequency candidates falsely indistinguishable), and
+/// why `magnitude` is real *linear* correlator energy (`mark_e + space_e`, summed across all 7
+/// windows), not a sum of dB values -- a matched filter's own frequency-mismatch rolloff is a
+/// real, physical statement about linear energy (`sinc`-shaped in frequency offset), and only
+/// shows up as a small, noise-comparable difference once compressed into dB and clipped/summed
+/// the way `accept_score` is.
+struct FrameEvidence {
+    accept_score: f64,
+    raw_score: f64,
+    magnitude: f64,
+}
+
+/// Combined frame-matched confidence for treating `edge_pos` as a real character's start-bit
+/// edge -- the real "processing gain" move this decoder is built on. The old design accepted a
+/// candidate based on a single mark->space transition (a hard 1-bit decision) plus a separate,
+/// amplitude-dependent absolute-energy floor bolted on afterward; this instead requires multiple
+/// independent kinds of evidence to agree, each built from RTTY's own known frame structure
+/// rather than a single instantaneous sample: `pre_is_persistently_mark` (a real *sustained*-
+/// tone check, immune to any one window's own fat-tailed dB blowup -- see its own doc comment);
+/// the start bit (must read SPACE) and the stop bit (must read MARK across its full real
+/// `RTTY_STOP_BIT_UNITS` duration); and the 5 data bits' own combined magnitude (each data bit,
+/// whichever way it reads, is real evidence of a genuine two-tone FSK signal at this exact
+/// timing -- noise's own per-window magnitude is small once clipped, while a real signal's 5
+/// data-bit windows add 5 more independent, clipped confirmations on top of the 2 framing bits,
+/// which is what actually closes the sensitivity gap a framing-only 2-window sum leaves at
+/// moderate SNR). Every term is clipped to `PER_WINDOW_CLIP_DB` before summing into
+/// `accept_score`, for the reason `PER_WINDOW_CLIP_DB`'s own doc comment gives. Because it's
+/// built from signed *ratios*, not absolute energy, the same thresholds work unchanged across
+/// the full amplitude sweep the old design's own `#[ignore]`d test measured it failing on.
+///
+/// Returns `None` when there isn't yet enough buffered audio to evaluate the stop bit, or when
+/// the persistence check fails outright -- mirrors the original design's own streaming-
+/// lookahead handling (`rtty_scan`'s own doc comment): "not enough samples yet" and "not enough
+/// samples ever" are different situations for a streaming decoder, and callers use this to
+/// distinguish them (a persistence failure is treated the same as "not a candidate here" --
+/// scanning continues at the normal grid step, not a hard stop).
+// [@ANCHOR: frame_score]
+fn frame_score(
+    samples: &[i16],
+    edge_pos: usize,
+    geo: &FrameGeometry,
+    trig: &TrigTables,
+) -> Option<FrameEvidence> {
+    if !pre_is_persistently_mark(samples, edge_pos, geo, trig) {
+        return None;
+    }
+
+    let spb = geo.samples_per_bit;
+    let w = geo.window_len;
+
+    let start_start = ((edge_pos as f64 + 0.5 * spb) - w as f64 / 2.0)
+        .round()
+        .max(0.0) as usize;
+    let (start_ratio, start_energy) = trig.window_evidence(samples, start_start, w)?;
+
+    let stop_start = (edge_pos as f64 + 6.0 * spb).round() as usize;
+    let (stop_ratio, stop_energy) =
+        trig.window_evidence(samples, stop_start, geo.stop_window_len)?;
+
+    let mut data_bit_evidence = 0.0;
+    let mut data_bit_energy = 0.0;
+    for i in 0..5 {
+        let center = edge_pos as f64 + (1.5 + i as f64) * spb;
+        let bit_start = (center - w as f64 / 2.0).round().max(0.0) as usize;
+        let (ratio, energy) = trig.window_evidence(samples, bit_start, w)?;
+        data_bit_evidence += ratio.abs().min(PER_WINDOW_CLIP_DB);
+        data_bit_energy += energy;
+    }
+
+    let clipped_start = (-start_ratio).clamp(-PER_WINDOW_CLIP_DB, PER_WINDOW_CLIP_DB);
+    let clipped_stop = stop_ratio.clamp(-PER_WINDOW_CLIP_DB, PER_WINDOW_CLIP_DB);
+    Some(FrameEvidence {
+        accept_score: clipped_start + clipped_stop + data_bit_evidence,
+        raw_score: -start_ratio + stop_ratio,
+        magnitude: start_energy + stop_energy + data_bit_energy,
+    })
+}
+
+/// Attempts a full character decode at a frame-score-confirmed `edge_pos`, sampling the 5 data
+/// bits (LSB first) plus a real hard-polarity check on the start/stop bits (must be SPACE/MARK
+/// respectively) on top of `frame_score`'s own soft aggregate threshold -- belt and suspenders:
+/// `frame_score`'s `accept_score` can in principle clear its threshold from an unusually strong
+/// stop-bit/data-bit-magnitude reading even when the start bit itself is ambiguous, and a real
+/// start-bit polarity check is cheap insurance against decoding a character whose own framing
+/// bit doesn't actually match. Returns `None` (not a character, caller should keep scanning past
+/// this
+/// position at the normal grid step) if either hard check fails or a bit window runs off the
+/// end of buffered audio; `Some((text, advance))` otherwise, where `text` is the newly decoded
+/// output (empty for a LTRS/FIGS shift code, which changes `state.current_figs` but emits no
+/// character) and `advance` is how many samples past `edge_pos` the next scan should resume at.
+// [@ANCHOR: attempt_character]
+fn attempt_character(
+    samples: &[i16],
+    edge_pos: usize,
+    geo: &FrameGeometry,
+    trig: &TrigTables,
+    state: &mut ScanState,
+) -> Option<(String, usize)> {
+    let spb = geo.samples_per_bit;
+    let w = geo.window_len;
+
+    let start_start = ((edge_pos as f64 + 0.5 * spb) - w as f64 / 2.0)
+        .round()
+        .max(0.0) as usize;
+    let start_ratio = trig.signed_ratio_db(samples, start_start, w)?;
+    if start_ratio >= 0.0 {
+        return None; // start bit must be SPACE-dominant
+    }
+
+    let mut code = 0u8;
+    for i in 0..5 {
+        let center = edge_pos as f64 + (1.5 + i as f64) * spb;
+        let bit_start = (center - w as f64 / 2.0).round().max(0.0) as usize;
+        let ratio = trig.signed_ratio_db(samples, bit_start, w)?;
+        if ratio > 0.0 {
+            code |= 1 << i; // MARK = 1
+        }
+    }
+
+    let stop_start = (edge_pos as f64 + 6.0 * spb).round() as usize;
+    let stop_ratio = trig.signed_ratio_db(samples, stop_start, geo.stop_window_len)?;
+    if stop_ratio <= 0.0 {
+        return None; // stop bit must be MARK-dominant
+    }
+
+    let mut emitted = String::new();
+    match code {
+        CODE_LTRS_SHIFT => {
+            state.current_figs = false;
+            state.figs_non_digit_run = 0;
+        }
+        CODE_FIGS_SHIFT => {
+            state.current_figs = true;
+            // A fresh, explicit shift command is real evidence this run really is meant to be
+            // FIGS -- don't let a counter built up before this shift (from a *previous* figs
+            // run this same decoder never got confirmation on) carry over and immediately
+            // false-trigger the implausible-run check below.
+            state.figs_non_digit_run = 0;
+        }
+        _ => {
+            // "Sensible USOS": an asymmetric extension of plain USOS above, per Bruce's own
+            // real-time direction to recognize when shifted text doesn't make sense and
+            // pre-emptively unshift. The asymmetry matters: real ham FIGS content is almost
+            // entirely digits (signal reports, serials, frequencies, dates) with only
+            // occasional punctuation, so a *run* of non-digit FIGS symbols (`:(`, `$`, `'`,
+            // `!`, ...) is a strong, near-unambiguous signal of a missed LTRS shift, not real
+            // transmitted content -- correcting on that pattern is safe. The reverse direction
+            // (guessing FIGS->LTRS from a run of consonants, e.g. via a vowel-pattern check) is
+            // deliberately NOT implemented: consonant clusters are entirely legitimate in the
+            // callsigns hams care most about getting right (`K6BP`, `W1AW`), so a symmetric
+            // rule would misfire exactly on the content this decoder most needs to get right.
+            //
+            // This corrects going forward from the character that completes the pattern (this
+            // one, reinterpreted below), not retroactively: the 1-2 characters already emitted
+            // earlier in the same bad run were already returned to the caller by a previous
+            // `feed()` call (or earlier in this one) and can't be unsent without a real
+            // multi-character emit-delay buffer this decoder doesn't keep. Bounding the damage
+            // to at most 2 wrong characters per missed shift (rather than USOS's own "to the
+            // next space") is still a real, meaningful improvement, and adding no output
+            // latency keeps this decoder's own "immediately showing a sensible text stream"
+            // property intact.
+            let mut use_figs = state.current_figs;
+            if use_figs {
+                if FIGS_CHARS[code as usize].is_ascii_digit() {
+                    state.figs_non_digit_run = 0;
+                } else {
+                    state.figs_non_digit_run += 1;
+                    if state.figs_non_digit_run >= 3 {
+                        use_figs = false;
+                        state.current_figs = false;
+                        state.figs_non_digit_run = 0;
+                    }
+                }
+            }
+            let c = if use_figs {
+                FIGS_CHARS[code as usize]
+            } else {
+                LTRS_CHARS[code as usize]
+            };
+            if c != '\0' {
+                emitted.push(c);
+            }
+            // USOS (Unshift On Space) -- standard amateur RTTY convention (fldigi's own
+            // default): a SPACE resets the shift state to letters, regardless of which shift
+            // this decoder currently thinks it's in. Space shares the same code (4) in both
+            // LTRS and FIGS per ITA2, so this is unambiguous whichever table `c` came from.
+            // Real, measured value: without it, a decoder that starts mid-transmission (cold
+            // shift-state guess) or garbles a single LTRS/FIGS shift code on noisy copy prints
+            // digits/punctuation in place of letters for the rest of the message, since nothing
+            // else ever re-synchronizes the shift state. USOS bounds that damage to at most one
+            // word; the implausible-run check above bounds it further, to at most 2 characters,
+            // even mid-word.
+            if c == ' ' {
+                state.current_figs = false;
+                state.figs_non_digit_run = 0;
+            }
+        }
+    }
+    // Same real per-bit-rounded advance the original design measured and fixed a drift bug
+    // over: 6 data-bit-equivalent units (start + 5 data bits) at 1.0 unit each, rounded once,
+    // plus the stop bit at its own real, separately-rounded RTTY_STOP_BIT_UNITS length --
+    // matching `rtty_modulate`'s own per-bit rounding exactly, not one rounded 7-unit sum.
+    let advance = 6 * spb.round() as usize + geo.stop_window_len;
+    Some((emitted, advance))
 }
 
 /// Resumable scan state, carried across `RttyDecoder::feed()` calls (a
@@ -462,193 +827,152 @@ impl PresenceGate {
 struct ScanState {
     pos: usize,
     current_figs: bool,
-    prev_was_mark: bool, // assume idle (MARK) before the signal starts
+    /// Consecutive non-digit FIGS characters decoded while `current_figs` is true -- the
+    /// "sensible USOS" extension's own evidence counter (see `attempt_character`'s own doc
+    /// comment for the reasoning). Real ham FIGS content is almost entirely digits (signal
+    /// reports, serials, frequencies); a run of non-digit FIGS punctuation is a strong signal
+    /// of a missed LTRS shift, not real transmitted content. Reset to 0 by anything that
+    /// legitimately re-synchronizes shift state: an explicit shift code either direction, a
+    /// digit, USOS's own space-triggered unshift, or this counter's own trigger firing.
+    figs_non_digit_run: usize,
+    /// Index into `AFC_OFFSETS_HZ`/`TrigBank::tables` of whichever candidate frequency won the
+    /// most recent successful character decode -- purely informational (`rtty_scan`'s own AFC
+    /// search re-evaluates the full bank at every candidate position regardless, so this is
+    /// never consulted to narrow that search), tracked so a caller (or a future one) can report
+    /// the real, currently-estimated off-air frequency offset instead of assuming zero.
+    locked_offset_idx: usize,
 }
 
 impl Default for ScanState {
     fn default() -> Self {
+        Self::new(AFC_OFFSETS_HZ.len() / 2) // index of the 0.0Hz entry
+    }
+}
+
+impl ScanState {
+    // [@ANCHOR: ScanState::new]
+    fn new(locked_offset_idx: usize) -> Self {
         Self {
             pos: 0,
             current_figs: false,
-            prev_was_mark: true,
+            figs_non_digit_run: 0,
+            locked_offset_idx,
         }
     }
 }
 
 /// The real scan/framing loop shared by `rtty_demodulate` (whole-buffer,
 /// `stop_if_insufficient_lookahead: false`, since the entire signal is
-/// already available -- no different from before this was extracted)
-/// and `RttyDecoder::feed` (streaming, `true`). Advances `state` in
-/// place and returns any newly decoded characters.
+/// already available) and `RttyDecoder::feed` (streaming, `true`). Advances `state` in place
+/// and returns any newly decoded characters.
 ///
-/// The `stop_if_insufficient_lookahead` distinction is real, not
-/// cosmetic: `bit_at`'s own out-of-bounds check already made the
-/// original single-pass algorithm safe against a signal that's simply
-/// too short (framing fails, scan moves on) -- but for a *streaming*
-/// decoder, "not enough samples yet" and "not enough samples ever" are
-/// different situations. Without this flag, a start-bit edge that's
-/// real but whose character hasn't fully arrived yet in the buffer
-/// would fail `bit_at`'s bounds check, be treated as a framing failure,
-/// and get scanned *past* -- permanently losing that character once
-/// the rest of it arrives in a later `feed()` call, since `pos` would
-/// already be beyond where the edge was. Stopping the scan before
-/// committing to an under-buffered candidate, instead, means the next
-/// `feed()` call (with more buffered audio) retries that exact edge
-/// from scratch.
+/// Frame-matched detection (see `frame_score`'s own doc comment for the real processing-gain
+/// mechanism) replaces the old coarse mark->space transition scan entirely -- every grid
+/// position is scored directly, so there's no separate "is this even a candidate edge" pre-
+/// filter to fall out of sync, and no `PresenceGate`-style absolute-energy floor to warm up or
+/// contaminate. When a position clears `FRAME_SCORE_THRESHOLD_DB`, a small local search over
+/// the surrounding +/-half-bit neighborhood finds the real peak -- a matched filter's output
+/// peaks at the true alignment, so this also recovers fine bit timing that the old fixed 4x
+/// grid never refined past.
+///
+/// **AFC (automatic frequency control)**: the initial coarse grid position is scored against
+/// the whole `AFC_OFFSETS_HZ` bank (`best_frame_evidence`), not just the decoder's nominally-
+/// configured frequency -- see that constant's own doc comment for why real off-air mistuning
+/// is worth this, and `best_frame_evidence`'s own doc comment for why offset selection uses an
+/// unclipped `magnitude` metric rather than `accept_score` or `raw_score` (both real, measured
+/// bugs an earlier version of this had). Whichever offset wins there becomes a single, fixed
+/// frequency hypothesis for the rest of that character: the local-peak position refinement
+/// below searches only within that one table (position and frequency are deliberately *not*
+/// re-arbitrated together at every refinement candidate -- see `best_frame_evidence`'s own doc
+/// comment for the specific bug that coupling caused), and `state.locked_offset_idx` is updated
+/// to it once the character decodes -- real, if simple, frequency tracking: the estimate
+/// re-derives itself fresh on every successfully decoded character rather than needing a
+/// separate closed-loop filter, since RTTY characters arrive often enough (every ~150ms during
+/// a real transmission) for "most recent character's own winning offset" to already track slow
+/// drift well.
+///
+/// The `stop_if_insufficient_lookahead` distinction is real, not cosmetic (unchanged from the
+/// original design): "not enough samples yet" and "not enough samples ever" are different
+/// situations for a *streaming* decoder. Without this flag, a start-bit edge that's real but
+/// whose character (plus the refinement neighborhood's own worst-case lookahead) hasn't fully
+/// arrived yet would be scored as if it were, and get scanned past -- permanently losing that
+/// character once the rest of it arrives in a later `feed()` call. Stopping the scan before
+/// committing to an under-buffered candidate means the next `feed()` call (with more buffered
+/// audio) retries that exact position from scratch.
 // [@ANCHOR: rtty_scan]
 fn rtty_scan(
     samples: &[i16],
-    mark_hz: f64,
-    sample_rate: u32,
+    geo: &FrameGeometry,
+    bank: &TrigBank,
     state: &mut ScanState,
     stop_if_insufficient_lookahead: bool,
-    mut gate: Option<&mut PresenceGate>,
 ) -> String {
-    let space_hz = mark_hz + RTTY_DEFAULT_SHIFT_HZ;
-    let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
-    // Coarse scan grid: 4x oversampled relative to the bit rate. This was
-    // widened to 32x during an earlier debugging pass, on the mistaken
-    // assumption that coarse-edge alignment error was the source of a
-    // real round-trip failure -- it was not: the actual bug was the
-    // post-character advance under-counting the stop bit's real 1.5-unit
-    // length (see the advance calculation below), and once that was
-    // fixed, 4x oversampling was confirmed directly to pass every test
-    // in this file just as well as 32x did, at 1/8th the scan cost.
-    let scan_step = (samples_per_bit / 4.0).max(1.0) as usize;
-    let window_len = samples_per_bit.round() as usize;
     let mut out = String::new();
-    if window_len == 0 {
+    if geo.window_len == 0 {
         return out;
     }
 
-    while state.pos + window_len <= samples.len() {
-        let (this_is_mark, this_energy) = window_is_mark(
-            &samples[state.pos..state.pos + window_len],
-            mark_hz,
-            space_hz,
-            sample_rate,
-        );
+    let grid_step = (geo.samples_per_bit / SCAN_GRID_PER_BIT).max(1.0) as usize;
+    // How far the local-peak refinement below searches on either side of a threshold-clearing
+    // grid position -- also folded into the streaming lookahead check (below) so every position
+    // the refinement might inspect is guaranteed to already have its own full stop-bit window
+    // available, not just the coarse grid position that triggered the search.
+    let refine_span = (geo.samples_per_bit * 0.5).round() as usize;
 
-        // Floor tracking (`PresenceGate`'s own doc comment): every
-        // window feeds it now, not just non-edge ones -- the gate's
-        // outlier-rejection is what protects the floor from a sustained
-        // real carrier, not a pre-filter on which windows count.
-        if let Some(g) = gate.as_deref_mut() {
-            g.observe(this_energy);
+    let mut pos = state.pos;
+    while pos < samples.len() {
+        let worst_case_pos = pos + refine_span;
+        let full_char_end = worst_case_pos as f64 + 7.5 * geo.samples_per_bit;
+        if stop_if_insufficient_lookahead && full_char_end > samples.len() as f64 {
+            break;
         }
 
-        if state.prev_was_mark && !this_is_mark {
-            // Presence gate first, before spending any effort on framing
-            // -- a candidate edge whose own energy doesn't clear the
-            // tracked ambient floor is almost certainly noise, not a
-            // real start bit (see `PresenceGate`'s own doc comment for
-            // the measured real problem this solves). `rtty_demodulate`
-            // passes `gate: None` and skips this check entirely,
-            // matching its own pre-existing, already-documented
-            // behavior.
-            if let Some(g) = gate.as_deref() {
-                if !g.accepts(this_energy) {
-                    state.prev_was_mark = this_is_mark;
-                    state.pos += scan_step;
-                    continue;
-                }
-            }
+        if let Some((offset_idx, evidence)) = best_frame_evidence(samples, pos, geo, bank) {
+            // `best_frame_evidence` already picked, by `magnitude`, whichever frequency
+            // candidate is the real best physical match among those that pass `accept_
+            // score`'s own noise-rejection gate (see both their own doc comments) -- so the
+            // frequency hypothesis for this whole character is fixed here, at the untried
+            // coarse `pos`, and position refinement below searches only within that single
+            // table. An earlier version of this also let position refinement re-pick the
+            // offset at each candidate position via `raw_score` (a 2-window difference) --
+            // measured directly to be a real bug: `raw_score` is not what discriminates
+            // between frequency candidates (`magnitude` is, precisely because `raw_score`'s
+            // own difference structure can favor a worse-matched offset by sheer correlator
+            // phase noise at one specific sample position), so letting it re-arbitrate the
+            // offset mid-refinement occasionally relocked onto a clearly-wrong candidate
+            // (`rtty_decoder_tracks_a_real_off_air_frequency_offset`'s own doc comment).
+            let trig = &bank.tables[offset_idx];
 
-            // A full character needs samples through the stop bit's own
-            // center (6.5 units past the edge) plus half a window either
-            // side -- see this function's own doc comment for why this
-            // check only applies in streaming mode. A real, deliberate
-            // full extra `window_len` of slop beyond that theoretical
-            // minimum, not just half of one: found necessary by direct
-            // measurement -- `7.0 * samples_per_bit + window_len/2` sits
-            // within a fraction of a sample of a real character's own
-            // natural rounded duration (`advance`, below), so a signal
-            // ending with no trailing audio at all could still slip
-            // through depending on exactly where the coarse scan grid
-            // happened to land, defeating the whole point of this check.
-            let full_char_end = state.pos as f64 + 7.0 * samples_per_bit + window_len as f64;
-            if stop_if_insufficient_lookahead && full_char_end > samples.len() as f64 {
-                break;
-            }
-
-            // Candidate start-bit edge at `state.pos`. Sample the start
-            // bit's own center first as a real confirmation (must be
-            // SPACE) -- a bare mark->space transition in the coarse scan
-            // can be noise, not a real start bit.
-            let bit_at = |bit_index_from_edge: f64| -> Option<bool> {
-                let center = state.pos as f64 + bit_index_from_edge * samples_per_bit;
-                let start = center - samples_per_bit / 2.0;
-                let start_idx = start.round().max(0.0) as usize;
-                let end_idx = start_idx + window_len;
-                if end_idx > samples.len() {
-                    return None;
-                }
-                Some(window_is_mark(&samples[start_idx..end_idx], mark_hz, space_hz, sample_rate).0)
-            };
-
-            if let Some(start_bit_is_mark) = bit_at(0.5) {
-                if !start_bit_is_mark {
-                    // Confirmed real start bit. Sample the 5 data bits
-                    // (LSB first) and the stop bit, all at precise
-                    // edge-relative offsets, not the coarse scan grid.
-                    let mut code = 0u8;
-                    let mut framing_ok = true;
-                    for i in 0..5 {
-                        match bit_at(1.5 + i as f64) {
-                            Some(is_mark) => {
-                                if is_mark {
-                                    code |= 1 << i;
-                                }
-                            }
-                            None => {
-                                framing_ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    let stop_ok = framing_ok && bit_at(6.5).unwrap_or(false); // must be MARK
-
-                    if framing_ok && stop_ok {
-                        match code {
-                            CODE_LTRS_SHIFT => state.current_figs = false,
-                            CODE_FIGS_SHIFT => state.current_figs = true,
-                            _ => {
-                                let c = if state.current_figs {
-                                    FIGS_CHARS[code as usize]
-                                } else {
-                                    LTRS_CHARS[code as usize]
-                                };
-                                if c != '\0' {
-                                    out.push(c);
-                                }
-                            }
-                        }
-                        // Advance past this whole character: 1 start +
-                        // 5 data bits at 1.0 unit each, plus the stop
-                        // bit at its real RTTY_STOP_BIT_UNITS (1.5)
-                        // length -- matching `rtty_modulate`'s own
-                        // per-bit rounding exactly (each bit rounded
-                        // independently, not one rounded sum), since
-                        // using a single `(7.0 * samples_per_bit).round()`
-                        // here under-counts the real stop bit's extra
-                        // 0.5-unit length by roughly half a bit period
-                        // per character -- confirmed directly: that was
-                        // a real bug, not a hypothetical one, caught by
-                        // this file's own round-trip tests (drift
-                        // compounding across a message caused later
-                        // characters to desync and drop/corrupt).
-                        let advance = 6 * samples_per_bit.round() as usize
-                            + (samples_per_bit * RTTY_STOP_BIT_UNITS).round() as usize;
-                        state.pos += advance;
-                        state.prev_was_mark = true;
-                        continue;
+            // Refine on the *raw* (unclipped) score, not the clipped accept_score: a real
+            // matched-filter output peaks sharply at the true alignment, but clipping
+            // flattens a strong signal's own peak into a plateau, and picking among equal
+            // clipped values via a strict `>` would just return the plateau's leftmost
+            // point -- see `FrameEvidence`'s own doc comment.
+            let lo = pos.saturating_sub(refine_span);
+            let hi = pos + refine_span;
+            let mut best_pos = pos;
+            let mut best_raw = evidence.raw_score;
+            let mut p = lo;
+            while p <= hi {
+                if let Some(e) = frame_score(samples, p, geo, trig) {
+                    if e.raw_score > best_raw {
+                        best_raw = e.raw_score;
+                        best_pos = p;
                     }
                 }
+                p += grid_step.max(1);
+            }
+
+            if let Some((chr, advance)) = attempt_character(samples, best_pos, geo, trig, state) {
+                state.locked_offset_idx = offset_idx;
+                out.push_str(&chr);
+                pos = best_pos + advance;
+                continue;
             }
         }
-        state.prev_was_mark = this_is_mark;
-        state.pos += scan_step;
+        pos += grid_step;
     }
+    state.pos = pos;
     out
 }
 
@@ -660,9 +984,16 @@ fn rtty_scan(
 /// whole-buffer form has no persistent state, so calling it once per
 /// chunk would lose synchronization at every chunk boundary that
 /// doesn't happen to land between characters.
+// [@ANCHOR: rtty_demodulate]
 pub fn rtty_demodulate(samples: &[i16], mark_hz: f64, sample_rate: u32) -> String {
+    let geo = FrameGeometry::new(sample_rate);
+    let bank = TrigBank::new(
+        mark_hz,
+        sample_rate,
+        geo.stop_window_len.max(geo.window_len),
+    );
     let mut state = ScanState::default();
-    rtty_scan(samples, mark_hz, sample_rate, &mut state, false, None)
+    rtty_scan(samples, &geo, &bank, &mut state, false)
 }
 
 /// Stateful, incremental RTTY demodulator for a continuous audio stream
@@ -684,30 +1015,90 @@ pub fn rtty_demodulate(samples: &[i16], mark_hz: f64, sample_rate: u32) -> Strin
 /// not data loss, the same kind of small fixed latency `Psk31Decoder`
 /// already has waiting for a full symbol.
 ///
-/// Also carries a `PresenceGate` (see its own doc comment for the real,
-/// measured problem it solves): unlike `rtty_demodulate`, which is used
-/// in this crate's own tests against known-clean synthesized signals and
-/// documents its own "occasional false character from noise" limitation
-/// as acceptable there, `RttyDecoder`'s output reaches a live daemon
-/// pipeline and gets broadcast onward -- a steady trickle of noise
-/// misread as text is a real problem in that context, not a cosmetic one.
+/// Unlike the original design, this carries no separate presence-gate state at all -- the
+/// frame-matched detector's own aggregate confidence threshold (see `frame_score`'s doc
+/// comment) *is* the presence/confidence gate now, amplitude-invariant by construction, so
+/// there's no floor to warm up, contaminate, or desynchronize from `ScanState`.
+///
+/// `geo`/`bank` are built once here, not per `feed()` call: `mark_hz`/`sample_rate` are fixed
+/// for the life of a decoder, so `TrigBank::new`'s `sin`/`cos` table construction (9 candidate
+/// frequencies -- see `AFC_OFFSETS_HZ`'s own doc comment -- at a real 48kHz/45.45-baud geometry)
+/// would otherwise repeat on every single `feed()` call from a live pipeline -- for
+/// `digital_decoder.rs`'s own ~20ms callback cadence, that is real, avoidable, per-callback
+/// work for a value that never changes after construction.
 pub struct RttyDecoder {
-    mark_hz: f64,
     sample_rate: u32,
     pending_samples: Vec<i16>,
     state: ScanState,
-    gate: PresenceGate,
+    geo: FrameGeometry,
+    bank: TrigBank,
 }
 
 impl RttyDecoder {
+    // [@ANCHOR: RttyDecoder::new]
     pub fn new(mark_hz: f64, sample_rate: u32) -> Self {
-        Self {
+        let geo = FrameGeometry::new(sample_rate);
+        let bank = TrigBank::new(
             mark_hz,
+            sample_rate,
+            geo.stop_window_len.max(geo.window_len),
+        );
+        Self {
             sample_rate,
             pending_samples: Vec::new(),
             state: ScanState::default(),
-            gate: PresenceGate::new(),
+            geo,
+            bank,
         }
+    }
+
+    /// A cheap, AFC-free decoder locked to exactly `mark_hz` -- no +/-40Hz search, one
+    /// `TrigTables` instead of nine. Built for `digital_decoder.rs`'s wide-passband RTTY
+    /// channel-scanning bank: running dozens of full-AFC `RttyDecoder::new` instances
+    /// continuously (one per scan candidate) was measured, via `probe_rtty_bank_scaling_cost`,
+    /// to cost up to ~48% of the real-time audio budget for a 32-candidate bank alone -- the 9x
+    /// per-position correlator cost AFC adds, multiplied across every candidate. A bank of
+    /// `new_fixed` decoders is used only to find *which* candidate frequency has a real signal
+    /// (by decoded character count -- see the bank's own confidence/persistence logic); once one
+    /// wins, the caller promotes it to a real `RttyDecoder::new` at that frequency for the actual
+    /// decode, recovering the full +/-40Hz AFC reach exactly where it's needed instead of paying
+    /// for it everywhere. A `new_fixed` decoder's own narrower frequency-mismatch tolerance
+    /// (`frame_score`'s single-table correlator, no search) is fine for this detection-only role:
+    /// `fixed_decoder_char_yield_vs_mismatch` measures a clean signal decoding perfectly out to
+    /// 25Hz mismatch, still recovering the majority of characters at 30-35Hz, and only failing
+    /// completely at 40Hz -- comfortably past the bank's own 40Hz candidate spacing (a worst-case
+    /// 20Hz midpoint mismatch), so real signal always registers strongly enough on its nearest
+    /// candidate(s) to win the argmax, even before AFC ever gets involved.
+    // [@ANCHOR: RttyDecoder::new_fixed]
+    pub fn new_fixed(mark_hz: f64, sample_rate: u32) -> Self {
+        let geo = FrameGeometry::new(sample_rate);
+        let bank = TrigBank::new_with_offsets(
+            &FIXED_OFFSET_HZ,
+            mark_hz,
+            sample_rate,
+            geo.stop_window_len.max(geo.window_len),
+        );
+        Self {
+            sample_rate,
+            pending_samples: Vec::new(),
+            state: ScanState::new(0),
+            geo,
+            bank,
+        }
+    }
+
+    /// The AFC search's own current best estimate of real off-air frequency offset from this
+    /// decoder's configured `mark_hz`, in Hz -- whichever candidate offset in `self.bank.offsets`
+    /// won the most recently decoded character (`rtty_scan`'s own doc comment covers the
+    /// tracking mechanism), or 0.0 if nothing has decoded yet. Reads the offset back from the
+    /// bank this decoder was actually built with, not the global `AFC_OFFSETS_HZ` constant --
+    /// `new_fixed`'s single-entry bank has its own, different offset list (see `TrigBank`'s own
+    /// doc comment for the bug this avoids). A real, honest estimate a caller (e.g.
+    /// `digital_decoder.rs`'s own `DigitalDecode::audio_offset_hz`) can report instead of
+    /// assuming zero mistuning.
+    // [@ANCHOR: RttyDecoder::locked_frequency_offset_hz]
+    pub fn locked_frequency_offset_hz(&self) -> f64 {
+        self.bank.offsets[self.state.locked_offset_idx]
     }
 
     /// Feeds newly-arrived audio samples in; returns any characters
@@ -735,11 +1126,10 @@ impl RttyDecoder {
         self.pending_samples.extend_from_slice(samples);
         let out = rtty_scan(
             &self.pending_samples,
-            self.mark_hz,
-            self.sample_rate,
+            &self.geo,
+            &self.bank,
             &mut self.state,
             true,
-            Some(&mut self.gate),
         );
 
         // Trim everything already scanned once it's built up a real
@@ -759,6 +1149,98 @@ impl RttyDecoder {
     }
 }
 
+/// Sign-flip rate and run-length histogram of the mark/space ratio at one candidate frequency,
+/// hopped through in non-overlapping ~1-bit-period windows -- a cheap, decode-free RTTY
+/// *presence* signature, not a decoder. Per Bruce's own real-time direction ("Look at ways of
+/// recognizing RTTY cheaply without a full decoder... characterize the signal and then bring in
+/// the decoders that make sense"). No AFC search, no persistence gating, no character framing
+/// at all -- ~23us/call for a 960-sample chunk at one candidate (measured, see
+/// `probe_rtty_signature_separates_signal_noise_and_tone` below), a real order of magnitude
+/// cheaper than even `RttyDecoder::new_fixed`'s own per-character framing.
+///
+/// **Real, measured, honest finding, not the hypothesis this was built to test**: the original
+/// reasoning (real RTTY's own bit-period keying should cluster run lengths at 1-3 hops, distinct
+/// from noise's near-random-walk ~50% flip rate) does NOT hold up against measurement.
+/// `probe_rtty_signature_separates_signal_noise_and_tone` measured real RTTY at a 0.531 sign
+/// flip rate against real Gaussian noise at 0.473 -- both close to the 0.5 a symmetric random
+/// process produces, with similar-shaped run-length histograms, not the sharp separation
+/// expected. In hindsight this makes sense: arbitrary text's own data bits are themselves close
+/// to random content, so a real character's bit-level MARK/SPACE sequence isn't meaningfully
+/// more "clustered" than noise at this coarse, single-hop-at-a-time granularity -- only the
+/// *framing structure* (fixed start/stop bit positions, a stable 45.45-baud clock) actually
+/// distinguishes real RTTY from noise, and this signature doesn't look at either. The one case
+/// this DOES cleanly separate is a steady, unkeyed carrier (idle MARK: 0.0 flip rate, one giant
+/// run) from anything keyed -- a real, if narrower, win. A signature that actually separates
+/// signal from noise would need to test for bit-clock periodicity (do flips recur near integer
+/// multiples of one hop width, not just how often they occur) rather than raw flip rate --
+/// genuinely more work, not attempted here. Kept and reported honestly rather than deleted: a
+/// negative result that took real measurement to find is exactly the kind of thing worth
+/// keeping in the code where the next person will actually see it before re-deriving it.
+///
+/// Deliberately NOT wired into `RttyDecoder`, `rtty_scan`, or any pipeline: this is the
+/// measurement step, not a shipped gating policy, and per the finding above, not yet a policy
+/// that would work if it were wired in.
+#[derive(Debug, Clone, PartialEq)]
+struct RttySignature {
+    /// Fraction of adjacent hops whose sign differs, in `[0.0, 1.0]`.
+    sign_flip_rate: f64,
+    /// `run_length_histogram[i]` is the count of runs exactly `i + 1` hops long, for `i` up to
+    /// `RUN_LENGTH_HISTOGRAM_BUCKETS - 1`; the last bucket accumulates every run of at least
+    /// that length instead of growing the histogram unboundedly for the idle-MARK case.
+    run_length_histogram: [usize; RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS],
+}
+
+impl RttySignature {
+    const RUN_LENGTH_HISTOGRAM_BUCKETS: usize = 8;
+}
+
+/// Computes an `RttySignature` for `samples` at `candidate_hz`. `None` if there isn't enough
+/// audio for at least two hops (nothing to compare) or the sample rate is too low for even one
+/// whole sample per bit period (same degenerate case `RttyDecoder::feed` itself guards).
+// [@ANCHOR: characterize_rtty_signature]
+fn characterize_rtty_signature(
+    samples: &[i16],
+    candidate_hz: f64,
+    sample_rate: u32,
+) -> Option<RttySignature> {
+    let hop_len = (sample_rate as f64 / RTTY_BAUD).round() as usize;
+    if hop_len == 0 {
+        return None;
+    }
+    let space_hz = candidate_hz + RTTY_DEFAULT_SHIFT_HZ;
+    let trig = TrigTables::new(candidate_hz, space_hz, sample_rate, hop_len);
+
+    let mut signs = Vec::new();
+    let mut pos = 0usize;
+    while pos + hop_len <= samples.len() {
+        let ratio = trig.signed_ratio_db(samples, pos, hop_len)?;
+        signs.push(ratio >= 0.0);
+        pos += hop_len;
+    }
+    if signs.len() < 2 {
+        return None;
+    }
+
+    let mut flips = 0usize;
+    let mut histogram = [0usize; RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS];
+    let mut run_len = 1usize;
+    for i in 1..signs.len() {
+        if signs[i] != signs[i - 1] {
+            flips += 1;
+            histogram[(run_len - 1).min(RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS - 1)] += 1;
+            run_len = 1;
+        } else {
+            run_len += 1;
+        }
+    }
+    histogram[(run_len - 1).min(RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS - 1)] += 1;
+
+    Some(RttySignature {
+        sign_flip_rate: flips as f64 / (signs.len() - 1) as f64,
+        run_length_histogram: histogram,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -769,8 +1251,15 @@ mod tests {
     // Tests [@ANCHOR: push_framed_char]
     // Tests [@ANCHOR: rtty_modulate]
     // Tests [@ANCHOR: window_mark_space_energy]
-    // Tests [@ANCHOR: PresenceGate::observe]
     // Tests [@ANCHOR: rtty_scan]
+    // Tests [@ANCHOR: TrigTables::new]
+    // Tests [@ANCHOR: TrigTables::signed_ratio_db]
+    // Tests [@ANCHOR: TrigTables::window_evidence]
+    // Tests [@ANCHOR: frame_score]
+    // Tests [@ANCHOR: attempt_character]
+    // Tests [@ANCHOR: rtty_demodulate]
+    // Tests [@ANCHOR: RttyDecoder::new]
+    // Tests [@ANCHOR: pre_is_persistently_mark]
     fn round_trips_a_real_cq_call_through_letters_and_figures_shifts() {
         let text = "CQ CQ DE K6BP K6BP 599 599 PSE K";
         let sample_rate = 48000u32;
@@ -813,12 +1302,16 @@ mod tests {
     /// established convention (`psk31.rs`, `Psk31Decoder`'s own tests) of
     /// never assuming noise is harmless without checking directly: pure
     /// random noise must not panic, hang, or produce an unbounded output
-    /// string -- it doesn't need to produce *nothing* (an async framing
-    /// decoder without a real presence/confidence gate, unlike the
-    /// primary-channel PSK31 scan bank, can and will occasionally frame
-    /// noise into a spurious character -- a real, honest limitation
-    /// flagged in this module's own doc comment, not silently assumed
-    /// away here).
+    /// string. **Real behavior change from the original design**: the old
+    /// `rtty_demodulate` deliberately ran with no presence gate at all
+    /// (`gate: None`), on the reasoning that it's a one-shot function
+    /// exercised only against known-clean synthesized signals in this
+    /// crate's own tests. The rewritten frame-matched detector has no
+    /// equivalent opt-out -- `frame_score`'s own threshold applies
+    /// unconditionally to both `rtty_demodulate` and `RttyDecoder::feed`
+    /// -- so `rtty_demodulate` now gets the same amplitude-invariant
+    /// noise rejection for free, not just a looser "fewer than 1000
+    /// characters" sanity bound.
     #[test]
     fn pure_noise_does_not_panic_or_hang() {
         let sample_rate = 48000u32;
@@ -930,40 +1423,17 @@ mod tests {
         assert!(total.len() <= 2, "expected the presence gate to stay effectively silent even against louder noise that would have deadlocked the pre-fix floor, got {} characters: {:?}", total.len(), total);
     }
 
-    /// This module's own doc comment on the +/-20000 test above named the
-    /// real deadlock boundary above that amplitude as genuinely unmeasured,
-    /// not a confirmed absence. Measured directly, bisecting amplitude by
-    /// hand (20000 passes, 20500 passes, 21000 FAILS with 3 spurious
-    /// characters, 21500 passes again, 32000 FAILS with 15 spurious
-    /// characters): **the real result is not a clean amplitude cliff**.
-    /// Because this test's own noise generator is a deterministic xorshift
-    /// PRNG re-seeded identically for every amplitude, each amplitude value
-    /// produces a *different* specific bit pattern (the modulus/offset both
-    /// scale with the target amplitude) -- so the non-monotonic pass/fail
-    /// pattern across neighboring amplitudes shows this is a genuine,
-    /// noise-texture-dependent fragility in the gate's absolute-energy
-    /// floor, not a fixed threshold this codebase could simply document and
-    /// stay under. Above roughly 65% of full i16 scale, *some* noise
-    /// realizations trigger real spurious decodes and some don't -- exactly
-    /// the risk this module's own doc comment on `PresenceGate` already
-    /// names (an absolute floor "only proven correct for the specific noise
-    /// amplitude" it was tuned against) and exactly the reason a real fix
-    /// needs the amplitude-invariant MARK/SPACE ratio statistic this same
-    /// module already validated in isolation
-    /// (`mark_space_ratio_separates_signal_from_noise_across_a_full_
-    /// amplitude_sweep`) but has not yet integrated into the live gate (see
-    /// this module's own doc comment on that reversion, and
-    /// `RTTY_DIGITAL_MODE.md`'s "not attempted this pass" section for the
-    /// real, structural reason the first integration attempt was reverted).
-    /// **Ignored, not deleted or force-passed**: this is a genuine, disclosed,
-    /// currently-unfixed limitation, matching this session's own discipline
-    /// of leaving a real finding on record with a real reproduction rather
-    /// than either hiding it or leaving a red test in the tree. Real next
-    /// step: the once-per-transmission ratio-gate reframing this module's
-    /// own doc comment already names, not another absolute-floor tuning
-    /// pass (already shown not to generalize).
+    /// This test used to be `#[ignore]`d: the old `PresenceGate` design's absolute-energy floor
+    /// had a genuine, measured, noise-texture-dependent fragility above ~65% of full i16 scale
+    /// (bisecting amplitude by hand found a non-monotonic pass/fail pattern, not a clean
+    /// cliff -- some noise realizations at a given amplitude triggered spurious decodes, some
+    /// didn't), because an *absolute* energy floor is fundamentally amplitude-dependent no
+    /// matter how it's tuned. Un-ignored now that the detector is amplitude-invariant by
+    /// construction (`frame_score`/`pre_is_persistently_mark`, both built from signed energy
+    /// *ratios* and sustained-tone persistence rather than any absolute floor) -- this test is
+    /// this rewrite's own concrete acceptance criterion for that fragility being real closed,
+    /// not just individually tuned to pass this one noise draw.
     #[test]
-    #[ignore]
     fn rtty_decoder_stays_effectively_silent_against_noise_at_near_full_i16_scale() {
         let sample_rate = 48000u32;
         let mut state: u32 = 0xC0FFEE;
@@ -987,8 +1457,8 @@ mod tests {
     /// must not cost real signal detection. A genuine synthesized RTTY
     /// signal (the same real amplitude `rtty_modulate` always produces)
     /// must still decode correctly through `RttyDecoder`, confirming
-    /// `PRESENCE_MARGIN_DB` has real margin rather than being tuned so
-    /// aggressively it rejects real signal along with the noise.
+    /// `FRAME_SCORE_THRESHOLD_DB` has real margin rather than being tuned
+    /// so aggressively it rejects real signal along with the noise.
     #[test]
     fn the_presence_gate_does_not_reject_a_real_signal() {
         let text = "CQ CQ DE K6BP PSE K";
@@ -996,11 +1466,9 @@ mod tests {
         // Real leading idle-MARK carrier, matching real RTTY operating
         // practice (a transmitter keys up and sends idle MARK briefly
         // before the first character) -- also, not incidentally, gives
-        // PresenceGate's own real warm-up period (PRESENCE_WARMUP_
-        // OBSERVATIONS, ~0.3s of real audio) something real to observe
-        // before the actual message starts, the same way a real
-        // receiver already listening to a quiet band before a
-        // transmission begins would.
+        // `pre_is_persistently_mark` something real to confirm before the
+        // actual message starts, the same way a real receiver already
+        // listening to a quiet band before a transmission begins would.
         let mut mono = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.4);
         mono.extend(rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, sample_rate));
         mono.extend(idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05));
@@ -1016,21 +1484,278 @@ mod tests {
         );
     }
 
-    /// Real bug found 2026-09-11 by fuzzing (see `PresenceGate::accepts`'s own doc comment for
-    /// the full mechanism, and night_shift_todo.md for the investigation): unlike the test
-    /// above, this deliberately has NO leading idle-MARK audio at all -- exactly the real
-    /// scenario a short message starting the instant a receiver begins listening (or
-    /// `RttyDecoder` starting up mid-transmission) produces. Before the fix, the gate's own
+    /// A permanent regression test for the AFC (automatic frequency control) search
+    /// (`AFC_OFFSETS_HZ`/`TrigBank`/`best_frame_evidence`, see their own doc comments and
+    /// `rtty_scan`'s for the real mechanism): synthesizes a signal at a real off-air-mistuned
+    /// mark frequency (`RTTY_DEFAULT_MARK_HZ + 25.0`, comfortably inside the +/-40Hz search
+    /// range but well past the ~20Hz point a fixed-frequency correlator was measured
+    /// (`tests/rtty_processing_gain_harness.rs`) losing real signal at) and confirms
+    /// `RttyDecoder`, still configured for the *nominal* `RTTY_DEFAULT_MARK_HZ`, decodes it
+    /// correctly and reports a locked offset in the right direction and roughly the right
+    /// magnitude -- not just "still decodes" but "the frequency estimate itself is real."
+    #[test]
+    // Tests [@ANCHOR: TrigBank::new]
+    // Tests [@ANCHOR: best_frame_evidence]
+    // Tests [@ANCHOR: RttyDecoder::locked_frequency_offset_hz]
+    fn rtty_decoder_tracks_a_real_off_air_frequency_offset() {
+        let text = "CQ CQ DE K6BP PSE K";
+        let sample_rate = 48000u32;
+        let actual_mark_hz = RTTY_DEFAULT_MARK_HZ + 25.0;
+        let mut mono = idle_mark_audio(actual_mark_hz, sample_rate, 0.4);
+        mono.extend(rtty_modulate(text, actual_mark_hz, sample_rate));
+        mono.extend(idle_mark_audio(actual_mark_hz, sample_rate, 0.05));
+
+        let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let mut got = String::new();
+        for chunk in mono.chunks(960) {
+            got.push_str(&decoder.feed(chunk));
+        }
+        assert_eq!(
+            got, text,
+            "a real 25Hz-mistuned signal must still decode via the AFC search"
+        );
+        let locked = decoder.locked_frequency_offset_hz();
+        assert!(
+            (10.0..=40.0).contains(&locked),
+            "expected the AFC search to lock onto a positive offset close to the real 25Hz \
+             mistuning, got {locked}Hz"
+        );
+    }
+
+    /// USOS (unshift-on-space) permanent regression test: a real transmission that shifts to
+    /// FIGS for a digit, sends a SPACE, and then a LETTER *without ever sending an explicit
+    /// unshift-to-LTRS code first* -- exactly the shape `text_to_framed_bits`' own automatic
+    /// shift-insertion would never itself produce, but a real noisy/garbled transmission, or one
+    /// this decoder starts listening to mid-FIGS-shift, can. Built directly via
+    /// `push_framed_char` (bypassing that automatic insertion) so the bit sequence is real and
+    /// exact, not simulated. Without USOS, the decoder would still be in FIGS shift when it hits
+    /// the letter code and print `FIGS_CHARS`' own symbol for that code (`-` for `A`'s code)
+    /// instead of the letter -- this asserts the real letter comes through instead.
+    #[test]
+    // Tests [@ANCHOR: attempt_character]
+    // Tests [@ANCHOR: framed_bits_to_audio]
+    fn unshift_on_space_recovers_a_letter_after_an_unsent_shift_code() {
+        let (figs_one_code, _) = char_to_baudot('1').expect("'1' must be a real FIGS character");
+        let (space_code, _) = char_to_baudot(' ').expect("space must be a real character");
+        let (letter_a_code, _) = char_to_baudot('A').expect("'A' must be a real LTRS character");
+
+        let mut bits = Vec::new();
+        push_framed_char(&mut bits, CODE_FIGS_SHIFT);
+        push_framed_char(&mut bits, figs_one_code);
+        push_framed_char(&mut bits, space_code);
+        push_framed_char(&mut bits, letter_a_code); // no CODE_LTRS_SHIFT before this
+
+        let sample_rate = 48000u32;
+        let mono = framed_bits_to_audio(&bits, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let decoded = rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        assert_eq!(
+            decoded, "1 A",
+            "USOS must reset to LTRS shift on the space, so the un-shifted letter code decodes \
+             as 'A', not FIGS_CHARS' own '-' for that same code"
+        );
+    }
+
+    /// "Sensible USOS" regression test: a missed LTRS shift followed by real FIGS-shift
+    /// punctuation (not digits, not a space) -- neither plain USOS above (no space appears)
+    /// nor an explicit shift code (never sent) rescues this. Three non-digit FIGS symbols in a
+    /// row is the implausible-run trigger (`attempt_character`'s own doc comment): the first
+    /// two are emitted as their (wrong) FIGS interpretation since there isn't yet enough
+    /// evidence, the third completes the pattern and is corrected to its LTRS interpretation in
+    /// the same call, and every following un-shifted character decodes correctly from then on.
+    #[test]
+    // Tests [@ANCHOR: attempt_character]
+    // Tests [@ANCHOR: framed_bits_to_audio]
+    fn implausible_figs_run_pre_emptively_unshifts_without_a_space() {
+        let figs_code = |c: char| -> u8 {
+            FIGS_CHARS
+                .iter()
+                .position(|&f| f == c)
+                .expect("must be a real FIGS_CHARS entry") as u8
+        };
+        let (letter_a_code, _) = char_to_baudot('A').expect("'A' must be a real LTRS character");
+
+        let mut bits = Vec::new();
+        push_framed_char(&mut bits, CODE_FIGS_SHIFT);
+        push_framed_char(&mut bits, figs_code('-')); // 1st non-digit FIGS symbol: still emitted as FIGS
+        push_framed_char(&mut bits, figs_code('$')); // 2nd: still not enough evidence yet
+        push_framed_char(&mut bits, figs_code('\'')); // 3rd: completes the run -- corrected to LTRS
+        push_framed_char(&mut bits, letter_a_code); // no CODE_LTRS_SHIFT before this either
+
+        let sample_rate = 48000u32;
+        let mono = framed_bits_to_audio(&bits, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let decoded = rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        assert_eq!(
+            decoded, "-$JA",
+            "expected the first two FIGS symbols unchanged, the third corrected to its LTRS \
+             interpretation ('\\'' is code 11, LTRS_CHARS[11] is 'J') the moment the implausible \
+             run is recognized, and the un-shifted letter after it decoding correctly as 'A'"
+        );
+    }
+
+    /// `figs_non_digit_run` (the implausible-run counter above) is persistent `ScanState`,
+    /// carried across `RttyDecoder::feed()` calls exactly like `current_figs` already is -- but
+    /// the test above only exercises it through `rtty_demodulate`'s one-shot, whole-buffer path
+    /// with a fresh `ScanState`, never through a real streaming decoder split across multiple
+    /// small, irregular `feed()` calls the way `streaming_decoder_matches_whole_buffer_decode_
+    /// when_fed_in_small_irregular_chunks` already proves `current_figs` survives. This closes
+    /// that real gap: the exact same bit sequence, through `RttyDecoder::feed()` in small
+    /// chunks whose boundaries fall in the middle of characters (never aligned to a character or
+    /// bit boundary), must still recognize the run and correct the same way.
+    #[test]
+    // Tests [@ANCHOR: attempt_character]
+    // Tests [@ANCHOR: framed_bits_to_audio]
+    // Tests [@ANCHOR: RttyDecoder::feed]
+    fn implausible_figs_run_survives_across_streaming_feed_chunk_boundaries() {
+        let figs_code = |c: char| -> u8 {
+            FIGS_CHARS
+                .iter()
+                .position(|&f| f == c)
+                .expect("must be a real FIGS_CHARS entry") as u8
+        };
+        let (letter_a_code, _) = char_to_baudot('A').expect("'A' must be a real LTRS character");
+
+        let mut bits = Vec::new();
+        push_framed_char(&mut bits, CODE_FIGS_SHIFT);
+        push_framed_char(&mut bits, figs_code('-'));
+        push_framed_char(&mut bits, figs_code('$'));
+        push_framed_char(&mut bits, figs_code('\''));
+        push_framed_char(&mut bits, letter_a_code);
+
+        let sample_rate = 48000u32;
+        let mono = framed_bits_to_audio(&bits, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let mut got = String::new();
+        // Deliberately awkward, non-bit-aligned chunk size (137 samples, not a multiple of one
+        // bit period at 48kHz/45.45 baud, ~1056 samples/bit) -- the same "prove real chunk
+        // boundaries don't matter" discipline `streaming_decoder_matches_whole_buffer_decode_
+        // when_fed_in_small_irregular_chunks` already uses.
+        for chunk in mono.chunks(137) {
+            got.push_str(&decoder.feed(chunk));
+        }
+        got.push_str(&decoder.feed(&idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05)));
+        assert_eq!(
+            got, "-$JA",
+            "the implausible-run counter must survive real feed() chunk boundaries the same way \
+             current_figs already does, and produce the identical correction"
+        );
+    }
+
+    /// Pins a real, known, disclosed false-positive of the "sensible USOS" implausible-run
+    /// check above: a *legitimate* transmission that happens to send 3+ consecutive non-digit
+    /// FIGS symbols (rare in real ham traffic -- see `attempt_character`'s own doc comment for
+    /// why the asymmetric rule was reasoned to be safe on that basis -- but not impossible, e.g.
+    /// a run of punctuation) gets its 3rd symbol mis-corrected to LTRS exactly the same way a
+    /// genuine missed shift would. This is a deliberate, bounded trade-off, not an undiscovered
+    /// bug: pinning the exact behavior here means a future reader (or a future change to the
+    /// run-length threshold) sees this as a known cost to weigh, not a surprise.
+    #[test]
+    // Tests [@ANCHOR: attempt_character]
+    // Tests [@ANCHOR: framed_bits_to_audio]
+    fn implausible_figs_run_check_false_triggers_on_legitimate_punctuation() {
+        let figs_code = |c: char| -> u8 {
+            FIGS_CHARS
+                .iter()
+                .position(|&f| f == c)
+                .expect("must be a real FIGS_CHARS entry") as u8
+        };
+
+        let mut bits = Vec::new();
+        push_framed_char(&mut bits, CODE_FIGS_SHIFT);
+        push_framed_char(&mut bits, figs_code('?'));
+        push_framed_char(&mut bits, figs_code('!'));
+        push_framed_char(&mut bits, figs_code('?')); // legitimately meant as another '?'
+
+        let sample_rate = 48000u32;
+        let mono = framed_bits_to_audio(&bits, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let decoded = rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        assert_eq!(
+            decoded, "?!B",
+            "known trade-off: the 3rd legitimate FIGS symbol is mis-corrected to its LTRS \
+             interpretation ('?' is code 25, LTRS_CHARS[25] is 'B') by the same implausible-run \
+             check that recovers a real missed shift -- if this assertion ever needs to change, \
+             it means the run-length threshold or its safety reasoning changed, not that this \
+             is a regression to silently accept"
+        );
+    }
+
+    /// Diagnostic (not a pass/fail assertion, same convention as `digital_decoder.rs`'s own
+    /// `probe_*_bank_scaling_cost` tests): measures how many real characters a `new_fixed`
+    /// (AFC-free) decoder actually recovers as real off-air mistuning grows, to pick a real,
+    /// measured candidate spacing for `digital_decoder.rs`'s wide-passband RTTY bank instead of
+    /// guessing one. The bank's own two-stage design only needs `new_fixed` candidates to
+    /// recover *enough* characters to win the argmax over their neighbors and noise -- not a
+    /// perfect decode, since the winner gets promoted to a real full-AFC `RttyDecoder` anyway.
+    /// Run with: `cargo test --release fixed_decoder_char_yield_vs_mismatch -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    // Tests [@ANCHOR: RttyDecoder::new_fixed]
+    // Tests [@ANCHOR: TrigBank::new_with_offsets]
+    // Tests [@ANCHOR: ScanState::new]
+    fn fixed_decoder_char_yield_vs_mismatch() {
+        // Real, found gap (an `advisor` consult flagged this before it shipped unverified): the
+        // original version of this test only ever ran at 48kHz, but `digital_decoder.rs`'s own
+        // wide-passband RTTY bank feeds its `new_fixed` candidates *decimated 12kHz* audio (4:1,
+        // via `decimate_4x_box_average`) to cut correlator cost -- a decision justified purely
+        // by a cost benchmark (`probe_rtty_bank_scaling_cost`) that never checked whether
+        // detection still works at the lower rate at all. Correlator resolution depends on
+        // window *duration* (~22ms either way, same number of bit periods), not raw sample
+        // count, so decimation should be free in principle -- but "should" is exactly what the
+        // periodic-ramp probe input and the repeated-noise-buffer bug both also said, and both
+        // were wrong. Measuring both rates side by side here is the real check.
+        let text = "CQ CQ DE K6BP CQ CQ DE K6BP CQ CQ DE K6BP PSE K";
+        for sample_rate in [48000u32, 12000u32] {
+            for mismatch in [0.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0] {
+                let actual_mark_hz = RTTY_DEFAULT_MARK_HZ + mismatch;
+                let modulation_rate = 48000u32;
+                let mut mono = idle_mark_audio(actual_mark_hz, modulation_rate, 0.4);
+                mono.extend(rtty_modulate(text, actual_mark_hz, modulation_rate));
+                mono.extend(idle_mark_audio(actual_mark_hz, modulation_rate, 0.05));
+                let mono = if sample_rate == modulation_rate {
+                    mono
+                } else {
+                    // A real, whole-crate-boundary reason this doesn't just call
+                    // `decimate_4x_box_average` from `ham_digital_modes::wspr_sync`: that
+                    // function is real and correct, but pulling in the `wspr_sync` module
+                    // (and its own FFT-planning dependencies) into an rtty.rs-only test for one
+                    // four-sample average is real, avoidable coupling across this crate's own
+                    // module boundaries -- the identical box-average computation, inlined.
+                    mono.chunks_exact(4)
+                        .map(|c| (c.iter().map(|&s| s as i32).sum::<i32>() / 4) as i16)
+                        .collect()
+                };
+
+                let mut decoder = RttyDecoder::new_fixed(RTTY_DEFAULT_MARK_HZ, sample_rate);
+                let mut got = String::new();
+                let chunk_len = (sample_rate as usize * 960) / modulation_rate as usize;
+                for chunk in mono.chunks(chunk_len.max(1)) {
+                    got.push_str(&decoder.feed(chunk));
+                }
+                let sent_chars = text.chars().count();
+                let got_chars = got.chars().count();
+                eprintln!(
+                    "sample_rate={sample_rate:5}  mismatch={mismatch:5.1}Hz  sent={sent_chars:3}  got={got_chars:3}  text={got:?}"
+                );
+            }
+        }
+    }
+
+    /// Real bug from the original `PresenceGate` design (kept as a permanent regression test,
+    /// not history for its own sake): this deliberately has NO leading idle-MARK audio at all
+    /// -- exactly the real scenario a short message starting the instant a receiver begins
+    /// listening (or `RttyDecoder` starting up mid-transmission) produces. The old gate's
     /// `PRESENCE_WARMUP_OBSERVATIONS` requirement silently rejected this signal's own start-bit
-    /// edge regardless of how strong it was, since the observation counter starts at 0
-    /// regardless of energy.
+    /// edge regardless of how strong it was, since its observation counter started at 0
+    /// regardless of energy. Structurally impossible now: `pre_is_persistently_mark` (see its
+    /// own doc comment) passes automatically whenever `edge_pos < window_len` -- there is no
+    /// observation count to warm up at all, so a strong signal at the very start of the stream
+    /// was never at risk of this specific bug's own failure mode in the rewritten detector.
     #[test]
     fn a_real_signal_with_no_leading_idle_audio_at_all_is_not_lost_to_warmup() {
         let text = "J";
         let sample_rate = 48000u32;
         let mut mono = rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, sample_rate);
         // Trailing padding only, deliberately NOT leading padding -- this test is specifically
-        // about the presence gate's own warmup period, not the separate, already-documented
+        // about behavior with no preceding audio at all, not the separate, already-documented
         // "last character needs trailing lookahead margin" behavior
         // (`the_final_character_lags_by_one_character_without_trailing_idle_audio_then_
         // arrives_once_more_audio_does` above already covers that one on its own).
@@ -1067,11 +1792,10 @@ mod tests {
     /// a message's final character (see `RttyDecoder`'s own doc comment
     /// for why that margin is real and necessary, not an oversight).
     /// Measures the mark/space ratio at the *real* production stepping
-    /// (`scan_step = samples_per_bit/4`, heavily overlapping windows),
-    /// not an idealized independent-window sampling -- overlap matters
-    /// here because it inflates run-lengths (a real, longest-observed-run
-    /// statistic is what a persistence-based gate actually needs, not a
-    /// per-window percentile).
+    /// (`scan_step = samples_per_bit / SCAN_GRID_PER_BIT`, heavily overlapping windows), not an
+    /// idealized independent-window sampling -- overlap matters here because it inflates
+    /// run-lengths (a real, longest-observed-run statistic is what a persistence-based gate
+    /// actually needs, not a per-window percentile).
     fn ratios_at_scan_step(
         samples: &[i16],
         mark_hz: f64,
@@ -1079,7 +1803,7 @@ mod tests {
         sample_rate: u32,
     ) -> Vec<(bool, f64)> {
         let samples_per_bit = sample_rate as f64 / RTTY_BAUD;
-        let scan_step = (samples_per_bit / 4.0).max(1.0) as usize;
+        let scan_step = (samples_per_bit / SCAN_GRID_PER_BIT).max(1.0) as usize;
         let window_len = samples_per_bit.round() as usize;
         let mut out = Vec::new();
         let mut pos = 0;
@@ -1097,21 +1821,15 @@ mod tests {
         out
     }
 
-    /// A pure measurement, not exercising `PresenceGate` (which stayed
-    /// on the proven absolute-energy design -- see its own doc comment
-    /// for why a ratio-based gate was tried and reverted). Documents the
-    /// real finding for whoever picks up that follow-up: the MARK/SPACE
-    /// energy ratio is amplitude-invariant and separates signal from
-    /// noise cleanly across a full sweep (+/-2000 through +/-32000, i16
-    /// full scale) where this module's own absolute-energy floor design
-    /// cannot -- a real idle-MARK tone sustains a run of confidently-high
-    /// ratio windows for its *entire* duration regardless of amplitude,
-    /// while real broadband noise at every amplitude tested never
-    /// sustains more than a handful of consecutive windows above the
-    /// same threshold. Integrating this into `rtty_scan` needs framing
-    /// changes (see `PresenceGate`'s own doc comment for why a
-    /// per-edge persistence check doesn't work as a drop-in), not
-    /// attempted here.
+    /// The real, original measurement this module's live detector is built on -- not just
+    /// historical evidence, but the actual validated basis for `pre_is_persistently_mark` and
+    /// `TrigTables::signed_ratio_db`'s amplitude-invariant design (see both their own doc
+    /// comments): the MARK/SPACE energy ratio is amplitude-invariant and separates signal from
+    /// noise cleanly across a full sweep (+/-2000 through +/-32000, i16 full scale) where an
+    /// absolute-energy floor cannot -- a real idle-MARK tone sustains a run of confidently-high
+    /// ratio windows for its *entire* duration regardless of amplitude, while real broadband
+    /// noise at every amplitude tested never sustains more than a handful of consecutive
+    /// windows above the same threshold.
     #[test]
     fn mark_space_ratio_separates_signal_from_noise_across_a_full_amplitude_sweep() {
         let sample_rate = 48000u32;
@@ -1192,9 +1910,8 @@ mod tests {
         let sample_rate = 8000u32;
         // Leading idle-MARK padding: see the_presence_gate_does_not_
         // reject_a_real_signal's own comment for why this is both
-        // realistic and necessary for PresenceGate's real warm-up
-        // period to have something to observe before the message
-        // itself starts.
+        // realistic and gives `pre_is_persistently_mark` something real
+        // to confirm before the message itself starts.
         let mut mono = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.4);
         mono.extend(rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, sample_rate));
         mono.extend(idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05));
@@ -1237,16 +1954,14 @@ mod tests {
         let mono = rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, sample_rate);
 
         let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, sample_rate);
-        // Warm up PresenceGate on real leading idle-MARK audio first, in
-        // its own feed() call, kept separate from `got_from_signal_alone`
-        // below so this test's own "real proper prefix of text" check
-        // isn't testing the warm-up period at all, only the real
-        // lookahead-margin behavior this test exists for.
-        let warmup_leftover =
+        // Feed real leading idle-MARK audio first, in its own feed() call, kept separate from
+        // `got_from_signal_alone` below so this test's own "real proper prefix of text" check
+        // is only testing the real lookahead-margin behavior this test exists for.
+        let leading_idle_leftover =
             decoder.feed(&idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.4));
         assert_eq!(
-            warmup_leftover, "",
-            "leading idle-MARK warmup audio should never itself decode to a character"
+            leading_idle_leftover, "",
+            "leading idle-MARK audio should never itself decode to a character"
         );
 
         let got_from_signal_alone = decoder.feed(&mono);
@@ -1261,6 +1976,81 @@ mod tests {
             format!("{got_from_signal_alone}{got_after_more_audio}"),
             text,
             "the withheld character must arrive, not be lost, once more audio confirms it"
+        );
+    }
+
+    /// Real Gaussian noise (Box-Muller), the same generator `tests/rtty_processing_gain_
+    /// harness.rs` already validated against this crate's own detector -- self-contained here
+    /// rather than importing that test binary's own copy, since `rtty.rs`'s unit tests can't
+    /// depend on a separate integration-test crate.
+    fn gaussian_noise(n: usize, rms: f64, seed: u64) -> Vec<i16> {
+        let mut state = seed ^ 0x9E3779B97F4A7C15;
+        let mut next_u64 = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        (0..n)
+            .map(|_| {
+                let u1 = ((next_u64() >> 11) as f64 + 1.0) / (1u64 << 53) as f64;
+                let u2 = (next_u64() >> 11) as f64 / (1u64 << 53) as f64;
+                let g = (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos();
+                (g * rms).round().clamp(-32768.0, 32767.0) as i16
+            })
+            .collect()
+    }
+
+    /// The real evidence behind `characterize_rtty_signature`'s own doc comment: real RTTY
+    /// (keyed, real character content) measured at 0.531 sign-flip-rate against Gaussian noise
+    /// (no signal) at 0.473 -- NOT the sharp separation the signature was built to test for; see
+    /// that function's own doc comment for the honest finding and why. The one case this DOES
+    /// separate cleanly is a steady idle-MARK tone (a carrier present but not keyed -- 0.0 flip
+    /// rate, one giant run) from anything keyed. `#[ignore]`d diagnostic, same convention as
+    /// this crate's other `probe_*` tests -- prints real numbers, not a pass/fail assertion,
+    /// since this is reporting a measurement, not enforcing a since-abandoned hypothesis. Also
+    /// measures the real per-candidate cost (~23us/960-sample chunk measured here) that would
+    /// matter if a smarter signature (one that tests bit-clock periodicity, per that same doc
+    /// comment) is built later. Run with:
+    /// `cargo test --release probe_rtty_signature_separates_signal_noise_and_tone -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    fn probe_rtty_signature_separates_signal_noise_and_tone() {
+        let sample_rate = 48000u32;
+        let text = "CQ CQ DE K6BP CQ CQ DE K6BP CQ CQ DE K6BP PSE K";
+        let mut rtty_signal = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.4);
+        rtty_signal.extend(rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, sample_rate));
+
+        let noise = gaussian_noise(rtty_signal.len(), 4000.0, 0xC0FFEE);
+        let steady_tone = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 3.0);
+
+        for (label, samples) in [
+            ("real RTTY traffic", &rtty_signal),
+            ("Gaussian noise, no signal", &noise),
+            ("steady idle-MARK tone (carrier, not keyed)", &steady_tone),
+        ] {
+            let sig = characterize_rtty_signature(samples, RTTY_DEFAULT_MARK_HZ, sample_rate)
+                .expect("enough audio for at least two hops");
+            eprintln!(
+                "{label}: sign_flip_rate={:.3}  run_length_histogram(1..=8+)={:?}",
+                sig.sign_flip_rate, sig.run_length_histogram
+            );
+        }
+
+        // Per-candidate cost: the real number a gating-policy decision would need. Warmed up
+        // (first call may pay one-time setup cost, same convention `digital_decoder.rs`'s own
+        // `probe_*_bank_scaling_cost` tests use) before the timed measurement.
+        let chunk = gaussian_noise(960, 4000.0, 0xBEEF);
+        let _ = characterize_rtty_signature(&chunk, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        let n_trials = 200;
+        let start = std::time::Instant::now();
+        for _ in 0..n_trials {
+            let _ = characterize_rtty_signature(&chunk, RTTY_DEFAULT_MARK_HZ, sample_rate);
+        }
+        let per_call_us = start.elapsed().as_micros() as f64 / n_trials as f64;
+        eprintln!(
+            "characterize_rtty_signature: {per_call_us:.2}us/call for a 960-sample (20ms) chunk \
+             at one candidate frequency"
         );
     }
 }
