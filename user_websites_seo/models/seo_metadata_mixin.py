@@ -3,7 +3,7 @@
 from odoo import models
 
 
-class SEOMetadataMixin(models.AbstractModel):  # burn-ignore-env
+class SEOMetadataMixin(models.AbstractModel):
     _name = "user.websites.seo.metadata.mixin"
     _description = "User Websites SEO Metadata Mixin"
 
