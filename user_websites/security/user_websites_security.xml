@@ -231,22 +231,46 @@
             <field name="perm_unlink" eval="False"/>
         </record>
 
+        <!-- Bug-hunt fix (docs/bug_hunt_claims/.../published_read_rules.md, 2026-09-12): this
+             rule's domain used to be [('is_published', '=', True)], a different field from stock
+             Odoo's own website_blog_post_public rule ([('website_published', '=', True)],
+             website_blog/security/website_blog_security.xml), which also matches
+             base.group_public/base.group_portal on this same model. Since Odoo OR-combines
+             same-model group-scoped rule domains, and website_published (a computed field:
+             is_published AND (no website_id OR website_id matches the current website)) implies
+             is_published but not the reverse, the OR-combined domain optimized to the broader
+             is_published alone: silently stripping stock's own current-website scoping. In a
+             multi-website deployment (a real, provisioned configuration here: the service account
+             holds website.group_multi_website), a blog.post published on one website became
+             readable by a visitor browsing a different one. Fixed by matching stock's own field
+             exactly, keeping this rule's broader group list (it also covers
+             group_user_websites_user, which stock's rule doesn't). -->
         <record id="blog_post_published_read_rule" model="ir.rule">
             <field name="name">Blog Post Published Read Rule</field>
             <field name="model_id" ref="website_blog.model_blog_post"/>
             <field name="groups" eval="[(4, ref('base.group_public')), (4, ref('base.group_portal')), (4, ref('user_websites.group_user_websites_user'))]"/>
-            <field name="domain_force">[('is_published', '=', True)]</field>
+            <field name="domain_force">[('website_published', '=', True)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>
             <field name="perm_unlink" eval="False"/>
         </record>
 
+        <!-- Bug-hunt fix (docs/bug_hunt_claims/.../published_read_rules.md, 2026-09-12): this
+             rule's domain used to be [(1, '=', 1)] (unconditional), while stock Odoo's own
+             website_blog_public rule (same model, same base.group_public/base.group_portal
+             groups) restricts to [('active', '=', True)]. Odoo OR-combines same-model
+             group-scoped rule domains, so [('active','=',True)] OR (1,'=',1) optimizes to
+             (1,'=',1): this module's own rule silently nullified stock's own archived/
+             soft-deleted-record filter, letting any public or portal caller read every blog.blog
+             record regardless of its active flag. Fixed by matching stock's own domain exactly,
+             keeping this rule's broader group list (it also covers group_user_websites_user,
+             which stock's rule doesn't). -->
         <record id="blog_blog_published_read_rule" model="ir.rule">
             <field name="name">Blog Published Read Rule</field>
             <field name="model_id" ref="website_blog.model_blog_blog"/>
             <field name="groups" eval="[(4, ref('base.group_public')), (4, ref('base.group_portal')), (4, ref('user_websites.group_user_websites_user'))]"/>
-            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="domain_force">[('active', '=', True)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
             <field name="perm_create" eval="False"/>
