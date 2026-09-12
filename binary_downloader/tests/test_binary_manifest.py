@@ -876,7 +876,7 @@ class TestBinarySsrfProtection(HamsTransactionCase):
         # Tests [@ANCHOR: binary_utils_assert_host_is_ssrf_safe]
         mixin = self.env["binary_downloader.mixin"]
         with self.assertRaises(UserError):
-            mixin._assert_host_is_ssrf_safe("127.0.0.1", "evilbin")
+            mixin._assert_host_is_ssrf_safe("127.0.0.1", "evilbin")  # burn-ignore-ssrf-test-value
         with self.assertRaisesRegex(UserError, "non-public address"):
             # The AWS/GCP/Azure cloud-metadata address -- link-local.
             mixin._assert_host_is_ssrf_safe("169.254.169.254", "evilbin")

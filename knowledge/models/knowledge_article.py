@@ -1,11 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import logging
+
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tools import html2plaintext
 import re
 import unicodedata
+
+_logger = logging.getLogger(__name__)
 
 
 class KnowledgeArticle(models.Model):
@@ -195,7 +199,20 @@ class KnowledgeArticle(models.Model):
                         visited.add(current.id)
                         current = current.parent_id
                 except AccessError:
-                    pass
+                    # Deliberate graceful drop, matching the persisted
+                    # branch's own behavior above (line ~175's `if
+                    # parent_id in visible_ids`): a backend user previewing
+                    # an in-progress hierarchy could hit a private ancestor
+                    # outside their own access, and this breadcrumb display
+                    # should truncate there rather than crash the whole
+                    # article view. Logged at debug (not warning/error)
+                    # since this is expected, routine behavior for any
+                    # partially-visible hierarchy, not a fault condition.
+                    _logger.debug(
+                        "Breadcrumb computation for article %s stopped early: "
+                        "an ancestor is outside the current user's access.",
+                        article.id,
+                    )
                 breadcrumbs.reverse()
                 article.breadcrumb_article_ids = [(6, 0, breadcrumbs)]
 
