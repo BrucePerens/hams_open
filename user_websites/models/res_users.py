@@ -287,7 +287,10 @@ class ResUsers(models.Model):
             # constraint failures (e.g. a bad FK) as a slug problem. Only
             # relabel when the violated constraint is actually one of the
             # website_slug constraints declared on `edge.routing.mixin`.
-            constraint_name = getattr(getattr(e, "diag", None), "constraint_name", None) or ""
+            # e is a psycopg2.IntegrityError: .diag and .diag.constraint_name
+            # are always present on it (constraint_name is None, not
+            # missing, when not applicable) -- no getattr() defaulting needed.
+            constraint_name = e.diag.constraint_name or ""
             if "website_slug" in constraint_name:
                 raise ValidationError(_("The Website Slug must be unique and valid."))
             raise

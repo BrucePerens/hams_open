@@ -127,7 +127,7 @@ def _async_unpublish_group_content(db_name, group_ids):
                     # handler logs it and the whole function bails out,
                     # exactly as before this per-company isolation was added.
                     raise
-                except Exception:
+                except Exception:  # audit-ignore-catch-all: one company's unrelated failure (e.g. a future ir.rule AccessError) must not abort every other company's unpublish in the same batch -- see the logged justification below.
                     # Found in bug-hunt review: before this try/except, one
                     # company raising here (e.g. a future ir.rule change
                     # scoping website.page/blog.post by company would make
@@ -355,7 +355,10 @@ class UserWebsitesGroup(models.Model):
             # DB per odoo/orm/table_objects.py's TableObject.full_name) --
             # otherwise re-raise the original error so it fails loudly with
             # its own real cause intact.
-            constraint_name = getattr(getattr(e, "diag", None), "constraint_name", None) or ""
+            # e is a psycopg2.IntegrityError: .diag and .diag.constraint_name
+            # are always present on it (constraint_name is None, not
+            # missing, when not applicable) -- no getattr() defaulting needed.
+            constraint_name = e.diag.constraint_name or ""
             if "website_slug" in constraint_name:
                 raise ValidationError(_("The Group Website Slug must be unique and valid."))
             raise
