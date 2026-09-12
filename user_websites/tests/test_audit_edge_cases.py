@@ -482,6 +482,83 @@ class TestAuditEdgeCases(RealTransactionCase):
             "regressed and the cross-company leak is back.",
         )
 
+    def test_11_portal_user_cannot_read_another_companys_website_group(self):
+        """
+        Bug-hunt fix (docs/bug_hunt_claims/.../acl_user_websites_group.md,
+        2026-09-12): user_websites_group_multi_company_rule only listed
+        base.group_user in its `groups`, even though base.group_portal and
+        base.group_public each carry their own read-only ACL row on this
+        model (access_user_websites_group_user/_public). Per Odoo's "no
+        matching group rule = fully unrestricted" default, that left both
+        groups with unscoped, cross-company read of every user.websites.group
+        record platform-wide -- including violation_strike_count and
+        is_suspended_from_websites, internal moderation data, not just the
+        public-directory-like name/slug. Confirmed live for portal: any
+        authenticated portal user (a suspended website owner, an unrelated
+        customer) could read another company's group data via an ordinary,
+        already-reachable RPC call. Prove a plain portal user, a member of
+        no group at all, can see only their own company's groups now.
+        """
+        other_company = self.env["res.company"].create({"name": "Unrelated Co 3"})
+        # Pass company_id explicitly rather than using with_company(other_company):
+        # with_company() validates the ACTING user's own company_ids, which the
+        # test-runner admin doesn't have other_company in, and raises "Access to
+        # unauthorized or invalid companies." The field itself is a plain
+        # Many2one with a default, not something this create() override
+        # otherwise derives, so setting it directly in vals is equivalent and
+        # avoids that unrelated validation (same pattern already used by
+        # test_10_cron_pending_report_count_does_not_leak_across_companies above).
+        other_company_group = self.env["user.websites.group"].create(
+            {
+                "name": "Other Company Secret Group",
+                "website_slug": "other-company-secret-group",
+                "violation_strike_count": 2,
+                "is_suspended_from_websites": True,
+                "company_id": other_company.id,
+            }
+        )
+        self.env.flush_all()
+
+        # Sanity check the fixture itself: if company_id didn't actually land
+        # on the new record, the assertion below would pass for the wrong
+        # reason (nothing would be excluded by any company-scoping rule,
+        # correct or absent).
+        self.assertEqual(
+            other_company_group.company_id.id,
+            other_company.id,
+            "Test fixture error: the group was not actually created under "
+            "the second company, so this test cannot exercise the "
+            "cross-company rule at all.",
+        )
+
+        same_company_group = self.env["user.websites.group"].create(
+            {
+                "name": "Same Company Group",
+                "website_slug": "same-company-group",
+            }
+        )
+        self.env.flush_all()
+
+        readable_ids = (
+            self.env["user.websites.group"]
+            .with_user(self.test_user)
+            .search(
+                [("id", "in", [other_company_group.id, same_company_group.id])]
+            )
+            .ids
+        )
+        self.assertEqual(
+            readable_ids,
+            [same_company_group.id],
+            "A portal user must be able to read their own company's "
+            "user.websites.group records but not another company's -- if "
+            "the other company's record is included, the multi-company "
+            "ir.rule fix regressed and the cross-tenant leak (including "
+            "violation_strike_count/is_suspended_from_websites) is back; if "
+            "neither record is included, the rule is over-filtering rather "
+            "than correctly scoping.",
+        )
+
     def test_async_unpublish_survives_non_psycopg2_exception(self):
         # Tests [@ANCHOR: COMM_user_websites_async_unpublish_catch_all]
         """

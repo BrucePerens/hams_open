@@ -342,5 +342,30 @@
             <field name="perm_create" eval="True"/>
             <field name="perm_unlink" eval="True"/>
         </record>
+
+        <!-- Bug-hunt fix (docs/bug_hunt_claims/.../acl_user_websites_group.md, 2026-09-12):
+             base.group_portal and base.group_public each have their own read-only ACL row on this
+             model (access_user_websites_group_user/_public), but neither group matched the rule
+             above (base.group_user only): per the "no matching group rule = fully unrestricted"
+             mechanism, that left both groups with unscoped, cross-company read of every
+             user.websites.group record platform-wide, including violation_strike_count and
+             is_suspended_from_websites, which read as internal moderation data rather than public-
+             directory data. Confirmed live for portal (a real, password-authenticated login that
+             can call /web/dataset/call_kw directly); the public row is latent in practice (the
+             generic RPC endpoint requires an authenticated session, which an anonymous website
+             visitor's request never has), but fixed for both since the mechanism is identical and
+             perm_write/create/unlink stay 0 for both groups regardless of this rule's own
+             all-True perm flags (ir.rule can only narrow which records are visible, never grant an
+             operation the ACL itself doesn't already allow). -->
+        <record id="user_websites_group_multi_company_rule_portal_public" model="ir.rule">
+            <field name="name">User Websites Group Multi-Company Rule (Portal/Public)</field>
+            <field name="model_id" ref="model_user_websites_group"/>
+            <field name="groups" eval="[(4, ref('base.group_portal')), (4, ref('base.group_public'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
     </data>
 </odoo>

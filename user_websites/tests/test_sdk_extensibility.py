@@ -236,15 +236,26 @@ class TestSDKExtensibility(RealTransactionCase):
         # Tests [@ANCHOR: mixin_proxy_ownership_create]
         """Verify a public/anonymous user cannot create an orphaned, unowned record.
 
-        website.page's own ACL already denies base.group_public any create
-        right at all, so this path can't be reached through create() as a
-        real anonymous visitor -- but the mixin's own guard (the "not
-        owner_id and not group_id" branch, only reachable when
-        _is_public() is True, since any other authenticated user gets
-        auto-assigned ownership instead) is real defense-in-depth that had
-        never actually been exercised by a test. Calling the guard
-        directly proves it still works on its own, independent of ACL
-        configuration.
+        Correction (docs/bug_hunt_claims/.../acl_website_page.md): this
+        docstring used to claim "website.page's own ACL already denies
+        base.group_public any create right at all, so this path can't be
+        reached through create() as a real anonymous visitor" -- that was
+        false. create() never called self.check_access("create") against
+        the real caller (unlike write()/unlink()), so
+        access_website_page_public's perm_create=0 was never actually
+        enforced; a public user could reach create() and pass this exact
+        mixin guard by explicitly setting owner_user_id to their own
+        (public) user id. That gap is now closed directly in create()
+        (see website_page.py's own create(), and
+        test_orm_security.py's test_01b_prevent_public_user_create_via_
+        self_ownership, which exercises the real create() path rather than
+        calling this mixin helper directly).
+
+        This test itself remains useful as defense-in-depth: it proves the
+        mixin's own guard (the "not owner_id and not group_id" branch, only
+        reachable when _is_public() is True, since any other authenticated
+        user gets auto-assigned ownership instead) still works correctly on
+        its own, independent of ACL configuration.
         """
         public_user = self.env.ref("base.public_user")
         with self.assertRaises(

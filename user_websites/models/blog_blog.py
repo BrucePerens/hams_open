@@ -121,6 +121,19 @@ class BlogBlog(models.Model):
     # [@ANCHOR: user_websites:COMM_blog_blog_create]
     @api.model_create_multi
     def create(self, vals_list):
+        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_blog_post_and_blog_blog.md):
+        # unlike write()/unlink() below, this method never enforced the real
+        # ir.model.access perm_create against the actual caller -- only
+        # _check_proxy_ownership_create's own ownership-plausibility check ran,
+        # then creation proceeded via the service account (which always has
+        # create=1). That let a base.group_public caller create a blog owned
+        # by the shared public user account by explicitly passing
+        # owner_user_id equal to their own (public) user id, bypassing
+        # access_blog_blog_public's perm_create=0. self.check_access("create")
+        # mirrors write()/unlink()'s own existing calls and is a no-op for
+        # every legitimate caller (internal/portal/admin all hold
+        # group_user_websites_user, which grants create=1, via implied_ids).
+        self.check_access("create")
         self._check_proxy_ownership_create(vals_list)
         self._check_blog_quota(vals_list)
         if not (

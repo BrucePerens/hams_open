@@ -77,6 +77,71 @@ class TestORMSecurity(RealTransactionCase):
             )
             self.env.flush_all()
 
+    def test_01b_prevent_public_user_create_via_self_ownership(self):
+        """
+        Bug-hunt fix (docs/bug_hunt_claims/hams_open/user_websites/security/
+        claims/acl_website_page.md and its blog_post/blog_blog sibling):
+        create() on website.page/blog.post/blog.blog never called
+        self.check_access("create") against the real caller -- unlike
+        write()/unlink() below, which do. That meant access_website_page_
+        public/portal's perm_create=0 was never actually enforced for
+        create(): a base.group_public caller could pass the mixin's own
+        ownership-plausibility check (`_check_proxy_ownership_create`) by
+        explicitly setting owner_user_id equal to their own (public) user
+        id -- satisfying "owner_id == user_id" -- and creation would then
+        proceed via the service account, which always has create=1,
+        regardless of the real caller's own lack of permission.
+
+        This is the real create() path (not the mixin helper called
+        directly, unlike test_07_api_armor_public_user_must_have_owner in
+        test_sdk_extensibility.py, whose own docstring incorrectly assumed
+        this path was already blocked by ACL). check_access("create") now
+        runs before ownership validation and correctly denies the public
+        user, mirroring write()/unlink()'s own existing calls.
+        """
+        public_user = self.env.ref("base.public_user")
+
+        with self.assertRaises(
+            AccessError,
+            msg="A public user must not be able to create a website.page, "
+            "even when self-assigning ownership to the public user's own id.",
+        ):
+            self.env["website.page"].with_user(public_user).create(
+                {
+                    "url": "/public-self-owned-page",
+                    "name": "Public Self-Owned Page",
+                    "type": "qweb",
+                    "owner_user_id": public_user.id,
+                }
+            )
+            self.env.flush_all()
+
+        with self.assertRaises(
+            AccessError,
+            msg="A public user must not be able to create a blog.blog, "
+            "even when self-assigning ownership to the public user's own id.",
+        ):
+            self.env["blog.blog"].with_user(public_user).create(
+                {
+                    "name": "Public Self-Owned Blog",
+                    "owner_user_id": public_user.id,
+                }
+            )
+            self.env.flush_all()
+
+        with self.assertRaises(
+            AccessError,
+            msg="A public user must not be able to create a blog.post, "
+            "even when self-assigning ownership to the public user's own id.",
+        ):
+            self.env["blog.post"].with_user(public_user).create(
+                {
+                    "name": "Public Self-Owned Post",
+                    "owner_user_id": public_user.id,
+                }
+            )
+            self.env.flush_all()
+
     def test_02_prevent_report_state_tampering(self):
         """
         Ensure that while users can CREATE violation reports, they absolutely

@@ -440,6 +440,20 @@ class WebsitePage(models.Model):
         # and ownership validation happening first is if anything the more
         # correct order (validate the request is legitimate before
         # spending effort sanitizing its content).
+
+        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_website_page.md): unlike
+        # write()/unlink() below, this method never enforced the real
+        # ir.model.access perm_create against the actual caller -- only the
+        # ownership-plausibility check above ran, then creation proceeded via
+        # the service account (which always has create=1). That let a
+        # base.group_public caller create a page owned by the shared public
+        # user account by explicitly passing owner_user_id equal to their own
+        # (public) user id, bypassing access_website_page_public's
+        # perm_create=0. self.check_access("create") mirrors write()/
+        # unlink()'s own existing calls and is a no-op for every legitimate
+        # caller (internal/portal/admin all hold group_user_websites_user,
+        # which grants create=1, via implied_ids).
+        self.check_access("create")
         self._check_proxy_ownership_create(vals_list)
 
         # 0. Sanitize arch to prevent Stored XSS
