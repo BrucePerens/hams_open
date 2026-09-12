@@ -9,6 +9,7 @@
 pub mod ambe;
 pub mod codec2_1600;
 pub mod codec2_3200;
+pub mod dstar;
 pub mod ft8;
 pub mod psk31;
 pub mod rtty;
