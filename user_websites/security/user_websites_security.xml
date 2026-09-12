@@ -300,8 +300,32 @@
         <record id="content_violation_appeal_admin_rule" model="ir.rule">
             <field name="name">Content Violation Appeal Admin Rule</field>
             <field name="model_id" ref="model_content_violation_appeal"/>
-            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_administrator')), (4, ref('user_websites.group_user_websites_service_account'))]"/>
+            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_administrator'))]"/>
             <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Bug-hunt fix (2026-09-12): mirrors content_violation_report_service_account_rule's
+             own 2026-09-09 fix above, exactly the same shape and same root cause: the service
+             account used to share the Administrator's own unconditional [(1,'=',1)] rule, which
+             OR dominates content_violation_appeal_multi_company_rule's own company_id scoping
+             (Odoo combines same-model group-matching rule domains with OR). No current caller
+             does a with_company(company)-scoped count()/search() against content.violation.appeal
+             the way _cron_notify_pending_reports does for content.violation.report (checked:
+             grepped for with_company against this model, zero hits), so unlike the report-model
+             bug, this one is LATENT, not confirmed live, but the structural flaw is identical and
+             would produce the same cross-company leak the moment anything iterates companies
+             against this model the way the report cron does. Administrator is kept cross-company
+             deliberately, same reasoning as the report rule; the service account gets its own
+             rule scoped exactly like an ordinary user's. -->
+        <record id="content_violation_appeal_service_account_rule" model="ir.rule">
+            <field name="name">Content Violation Appeal Service Account Rule</field>
+            <field name="model_id" ref="model_content_violation_appeal"/>
+            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_service_account'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
             <field name="perm_create" eval="True"/>
