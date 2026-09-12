@@ -6,12 +6,20 @@
 //!
 //! The header checksum and the 39-byte routing header's own pack/unpack are implemented here.
 //! The slow-data block/interleaving state machine is real, separately-scoped follow-on work
-//! (see the plan doc's own "Real next steps"), not attempted in this pass. The routing
-//! header's 3 flag bytes are carried as opaque raw bytes, not decoded bit-by-bit: KM4ML's own
-//! DV packet structure doc says only "same as DD mode" for their meaning, without stating what
-//! that is, and this pass doesn't have a confirmed source for the individual flag bits --
-//! decoding them speculatively would be exactly the kind of unverified guess this whole module
-//! is built to avoid.
+//! (see the plan doc's own "Real next steps"), NOT attempted in this pass -- checked directly
+//! (not assumed) whether MMDVM's own real firmware, already the authoritative second reference
+//! that resolved the checksum's own ambiguity below, has an equivalent slow-data type/length
+//! parser to cross-check against: it does not (a repeater only needs to relay slow-data bits
+//! transparently, never interpret their type, so MMDVM has no reason to parse them at all).
+//! G4KLX's own Slow Data document is explicit that real ambiguities remain in what it
+//! documents ("There are still a number of unanswered issues about the slow data... further
+//! tests and investigations are needed") -- implementing the block type/length nibble split
+//! speculatively, with no second source to confirm it against, would be exactly the kind of
+//! unverified guess this whole module exists to avoid; the header/checksum pieces above were
+//! implementable with confidence specifically because both were independently cross-checked,
+//! and slow data currently is not. The routing header's 3 flag bytes are similarly carried as
+//! opaque raw bytes, not decoded bit-by-bit: KM4ML's own DV packet structure doc says only
+//! "same as DD mode" for their meaning, without stating what that is.
 //!
 //! # Sources
 //!
