@@ -729,6 +729,19 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "cloudflare.tunnel.provisioned",
             "caching.safe_quota_mb",
             "user_websites.last_digest_id",
+            # Real TLS certificate/key material for
+            # ham_relay_bridge.models.relay_node.update_wildcard_tls_cert(),
+            # asked and confirmed with Bruce 2026-09-12 ("Make a special
+            # service account that can be assumed narrowly when making the
+            # necessary call" -- i.e. prefer this over .sudo(), matching
+            # the standing zero-sudo philosophy). That RPC entrypoint
+            # already gates the caller to the one login allowed to invoke
+            # it at all (relay_cert_renew_service_internal) before ever
+            # reaching this whitelist -- the whitelist here is the second,
+            # independent layer (WHICH keys, not WHO), same as every other
+            # entry above.
+            "ham_relay_bridge.relay_wildcard_cert_pem",
+            "ham_relay_bridge.relay_wildcard_key_pem",
         ]
 
     @api.model
