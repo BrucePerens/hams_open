@@ -28,7 +28,6 @@ access_res_users_svc,res.users svc,base.model_res_users,user_websites.group_user
 access_res_groups_svc,res.groups svc,base.model_res_groups,user_websites.group_user_websites_service_account,1,1,1,1
 access_website_rewrite_svc,website.rewrite svc,website.model_website_rewrite,user_websites.group_user_websites_service_account,1,1,1,1
 access_ir_ui_view_svc,ir.ui.view svc,base.model_ir_ui_view,user_websites.group_user_websites_service_account,1,1,1,1
-access_ir_config_parameter_svc,ir.config_parameter svc,base.model_ir_config_parameter,user_websites.group_user_websites_service_account,1,1,1,1
 access_res_partner_svc,res.partner svc,base.model_res_partner,user_websites.group_user_websites_service_account,1,1,0,0
 access_content_violation_report_svc,content.violation.report svc,model_content_violation_report,user_websites.group_user_websites_service_account,1,1,1,1
 access_content_violation_appeal_svc,content.violation.appeal svc,model_content_violation_appeal,user_websites.group_user_websites_service_account,1,1,1,1

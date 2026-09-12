@@ -101,10 +101,13 @@ class TestAuditEdgeCases(RealTransactionCase):
         # "last_digest_id" -- so this reset was silently a no-op and the
         # test only worked because the very next lines immediately
         # overwrite the real key anyway.)
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
-        )
-        self.env["ir.config_parameter"].with_user(svc_uid).set_param(
+        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_svc_infra_models.md):
+        # blog_post.py itself no longer writes ir.config_parameter directly
+        # under the service account (access_ir_config_parameter_svc was
+        # removed as an over-broad ACL grant), so this fixture must go
+        # through the same mediated, whitelisted path production code now
+        # uses, or it would raise AccessError once the raw ACL is gone.
+        self.env["zero_sudo.security.utils"]._set_system_param(
             "user_websites.last_digest_id", "0"
         )
 
@@ -122,7 +125,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         )
 
         # Simulate an interrupted batch by explicitly setting the last_digest_id to a high number
-        self.env["ir.config_parameter"].with_user(svc_uid).set_param(
+        self.env["zero_sudo.security.utils"]._set_system_param(
             "user_websites.last_digest_id", "999999"
         )
 

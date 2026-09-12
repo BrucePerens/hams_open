@@ -425,7 +425,17 @@ class BlogPost(models.Model):
         )
 
         if not digests:
-            self.env["ir.config_parameter"].with_user(svc_uid).set_param(
+            # Bug-hunt fix (docs/bug_hunt_claims/.../acl_svc_infra_models.md):
+            # this used to write via the raw ir.config_parameter model under
+            # the service account, which requires access_ir_config_parameter_svc
+            # -- a broad, unscoped ACL grant to EVERY system parameter in the
+            # instance, entirely bypassing the whitelist mechanism
+            # (_get_param_write_whitelist) this codebase built specifically to
+            # bound config-parameter access. "user_websites.last_digest_id" is
+            # already in that whitelist, so _set_system_param() is a drop-in
+            # replacement with no behavior change, and lets the raw ACL grant
+            # be removed.
+            self.env["zero_sudo.security.utils"]._set_system_param(
                 "user_websites.last_digest_id", "0"
             )
             return
@@ -504,11 +514,11 @@ class BlogPost(models.Model):
             template.with_user(mail_svc).with_context(**ctx).send_mail(digest.first_post_id, force_send=False, email_values=email_vals)   # audit-ignore-mail: Tested by [@ANCHOR: COMM_test_weekly_digest_mail_template]  # fmt: skip
 
         if len(digests) == 50:
-            self.env["ir.config_parameter"].with_user(svc_uid).set_param(
+            self.env["zero_sudo.security.utils"]._set_system_param(
                 "user_websites.last_digest_id", str(digests[-1].id)
             )
             self.env.ref("user_websites.ir_cron_send_weekly_digest")._trigger()
         else:
-            self.env["ir.config_parameter"].with_user(svc_uid).set_param(
+            self.env["zero_sudo.security.utils"]._set_system_param(
                 "user_websites.last_digest_id", "0"
             )
