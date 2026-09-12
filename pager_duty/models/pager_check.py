@@ -788,8 +788,15 @@ class PagerCheck(models.Model):
         else:
             certbot_checks.write({"target": ",".join(domains)})
 
-        # Soft-depend on ham_dns
-        HamDnsRecord = self.env["ham.dns.record"] if "ham.dns.record" in self.env else None  # burn-ignore-env
+        # Soft-depend on ham_dns. Deliberately kept soft, not a real
+        # __manifest__.py dependency (asked and confirmed with Bruce
+        # 2026-09-12): this is a pure convenience integration (auto-create
+        # a DNS record for a domain being registered for certbot
+        # monitoring) on top of this method's own real job, which needs
+        # nothing from ham_dns at all -- and ham_dns lives in hams_com
+        # while pager_duty lives in hams_open, so a hard dependency would
+        # mean hams_open could no longer be installed/tested standalone.
+        HamDnsRecord = self.env["ham.dns.record"] if "ham.dns.record" in self.env else None  # burn-ignore-env burn-ignore-optional-cross-repo-dep
         if HamDnsRecord is not None:
             # Reconfigure DNS if ham_dns is installed
             try:
