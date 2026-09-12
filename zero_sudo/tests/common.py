@@ -74,13 +74,37 @@ _original_handle_request_paused = odoo.tests.common.ChromeBrowser._handle_reques
 
 odoo.tests.common.HttpCase.fetch_proxy = None
 
+# Real bug found live 2026-09-12 (ham_shack's own test_03_shack_relay_confirm_claim_tour, which
+# needs to prove a real fetch() round trip against a fake relay that is NOT this test server's own
+# host, per LOCAL_RELAY_ZERO_TOUCH_ONBOARDING.md's "different LAN host" scenario): the safety net
+# below -- allowing only `HOST` ("127.0.0.1") through to a real network fetch, so a test can never
+# accidentally make an unbounded real external request -- has NO opt-in for a test that
+# deliberately needs a real HTTP round trip against a genuinely different host/address (a plain
+# fetch_proxy() mock defeats that whole test's own design goal of exercising the real fetch/CORS/
+# JSON-parsing pipeline, not just a pre-decided canned response). This is a purely additive,
+# default-off extension point: a test case sets `self.extra_allowed_fetch_hosts` to a tuple of
+# additional literal hostnames it has independently verified are safe, hermetic, and under its own
+# control (e.g. a fake HTTPServer this same test spins up and tears down) -- every existing test,
+# with nothing set, behaves identically to before this change.
+# [@ANCHOR: zero_sudo:extra_allowed_fetch_hosts]
+# Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
+# Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
+odoo.tests.common.HttpCase.extra_allowed_fetch_hosts = ()
+
 
 # [@ANCHOR: zero_sudo:patched_handle_request_paused]
+# Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
+# Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
 def _patched_handle_request_paused(self, *args, **kwargs):
     params = kwargs if kwargs else (args[0] if args else {})
     url = params.get("request", {}).get("url", "")
     _logger.info("Fetch intercept: %s", url)
-    if url.startswith(f"http://{HOST}") or url.startswith(f"https://{HOST}") or url.startswith("data:") or url.startswith("about:"):
+    allowed_hosts = (HOST,) + tuple(self.test_case.extra_allowed_fetch_hosts or ())
+    if (
+        any(url.startswith(f"http://{h}") or url.startswith(f"https://{h}") for h in allowed_hosts)
+        or url.startswith("data:")
+        or url.startswith("about:")
+    ):
         cmd = "Fetch.continueRequest"
         response = {}
     else:

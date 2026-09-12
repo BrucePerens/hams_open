@@ -4,8 +4,11 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
-from odoo.tests.common import tagged
-from .common import HamsHttpCase
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from odoo.tests.common import HOST, tagged
+from .common import HamsHttpCase, HamsTransactionCase, _patched_handle_request_paused
 
 
 @tagged("post_install", "-at_install")
@@ -101,3 +104,81 @@ class TestZeroSudoViews(HamsHttpCase):
         """Verify that the security.log views compile and render correctly."""
         self.env["zero_sudo.security.log"].get_view(view_type="form")
         self.env["zero_sudo.security.log"].get_view(view_type="list")
+
+
+@tagged("post_install", "-at_install")
+class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
+    """Direct unit coverage for `_patched_handle_request_paused`'s
+    `extra_allowed_fetch_hosts` opt-in (added 2026-09-12) -- no real
+    ChromeBrowser/websocket needed, since the function under test is pure
+    Python logic dispatching on a URL string. Real bug this opt-in fixes:
+    ham_shack's test_03_shack_relay_confirm_claim_tour needs a real fetch()
+    round trip against a fake relay that is deliberately NOT this test
+    server's own host (per LOCAL_RELAY_ZERO_TOUCH_ONBOARDING.md's "different
+    LAN host" scenario) -- before this opt-in, this safety net's hardcoded
+    `HOST`-only allowlist left no way to do that without either a
+    self.fetch_proxy() mock (defeating the whole point of a real HTTP round
+    trip) or disabling the safety net outright.
+    """
+
+    def _fake_browser(self, extra_allowed_fetch_hosts=()):
+        # A bare object, not a real ChromeBrowser: only `.test_case` (read by
+        # the function under test) and `._websocket_send` (asserted against
+        # below) are ever touched.
+        test_case = SimpleNamespace(
+            fetch_proxy=None, extra_allowed_fetch_hosts=extra_allowed_fetch_hosts
+        )
+        browser = SimpleNamespace(test_case=test_case, _websocket_send=MagicMock())
+        return browser
+
+    def _call(self, browser, url):
+        _patched_handle_request_paused(
+            browser, {"request": {"url": url}, "requestId": "req-1"}
+        )
+
+    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
+    # Tests [@ANCHOR: zero_sudo:extra_allowed_fetch_hosts]
+    # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
+    def test_01_default_behavior_unchanged_non_host_url_still_fails(self):
+        browser = self._fake_browser()
+        self._call(browser, "http://192.168.10.92:38913/api/auth_status")
+        cmd, kwargs = browser._websocket_send.call_args[0][0], browser._websocket_send.call_args[1]
+        self.assertEqual(cmd, "Fetch.failRequest")
+        self.assertEqual(kwargs["params"]["errorReason"], "Failed")
+
+    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
+    # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
+    def test_02_the_standard_host_still_passes_through_with_no_opt_in(self):
+        browser = self._fake_browser()
+        self._call(browser, f"http://{HOST}:8069/web/session/get_session_info")
+        cmd = browser._websocket_send.call_args[0][0]
+        self.assertEqual(cmd, "Fetch.continueRequest")
+
+    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
+    # Tests [@ANCHOR: zero_sudo:extra_allowed_fetch_hosts]
+    # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
+    def test_03_an_opted_in_extra_host_passes_through_for_real(self):
+        browser = self._fake_browser(extra_allowed_fetch_hosts=("127.0.0.2",))
+        self._call(browser, "http://127.0.0.2:38913/api/auth_status")
+        cmd = browser._websocket_send.call_args[0][0]
+        self.assertEqual(
+            cmd,
+            "Fetch.continueRequest",
+            "[!] DIAGNOSTIC FOR AI: extra_allowed_fetch_hosts must let a real "
+            "fetch to that exact host proceed, matching HOST's own treatment.",
+        )
+
+    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
+    # Tests [@ANCHOR: zero_sudo:extra_allowed_fetch_hosts]
+    # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
+    def test_04_opting_in_one_host_does_not_allow_a_different_one(self):
+        browser = self._fake_browser(extra_allowed_fetch_hosts=("127.0.0.2",))
+        self._call(browser, "http://192.168.10.92:38913/api/auth_status")
+        cmd = browser._websocket_send.call_args[0][0]
+        self.assertEqual(
+            cmd,
+            "Fetch.failRequest",
+            "[!] DIAGNOSTIC FOR AI: the opt-in must not become a blanket "
+            "allow-everything switch -- only the specific listed host(s) "
+            "should ever bypass the safety net.",
+        )
