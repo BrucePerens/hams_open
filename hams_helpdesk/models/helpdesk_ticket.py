@@ -236,6 +236,16 @@ class HelpdeskTicket(models.Model):
                 "calendar_event_id",
                 "website_id",
                 "company_id",
+                # bug-hunt (2026-09-13): partner_id was missing from this set, and carries no
+                # field-level `groups=` restriction of its own either. ir.rule's write-time
+                # access check validates the domain against the record's CURRENT (pre-write)
+                # state, so a portal caller whose own partner_id matches the rule today could
+                # write partner_id to an arbitrary OTHER partner's id -- removing the ticket
+                # from their own portal view and, if that partner is also a portal user,
+                # inserting it (with its full history) into a stranger's. Confirmed exploitable
+                # via a real probe test before this fix, converted below into
+                # test_05b_portal_cannot_reassign_partner_id.
+                "partner_id",
             }
             if any(f in vals for f in restricted_fields):
                 raise AccessError(

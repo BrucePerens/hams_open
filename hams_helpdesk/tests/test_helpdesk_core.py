@@ -247,6 +247,30 @@ class TestHelpdeskCore(HamsTransactionCase):
         ticket_as_portal.write({"description": "Updated description by portal user"})
         self.assertIn("Updated description by portal user", ticket.description)
 
+    def test_05b_portal_cannot_reassign_partner_id(self):
+        # Tests [@ANCHOR: helpdesk_micro_privilege]
+        # bug-hunt (2026-09-13): partner_id was missing from write()'s restricted_fields set,
+        # and carries no field-level groups= restriction either. ir.rule's write-time access
+        # check validates the domain against the record's CURRENT (pre-write) state, so a
+        # portal caller could write partner_id to an arbitrary OTHER partner's id -- confirmed
+        # exploitable via a real probe before this fix (0 errors, the write silently succeeded).
+        # Removing the ticket from their own portal view and, if that partner is also a portal
+        # user, inserting it (with its full history) into a stranger's.
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Partner Reassignment Probe",
+                "partner_id": self.portal_user.partner_id.id,
+                "stage": "new",
+            }
+        )
+        ticket_as_portal = ticket.with_user(self.portal_user)
+        with self.assertRaises(
+            AccessError,
+            msg="Portal user MUST NOT be able to reassign a ticket to a different partner.",
+        ):
+            ticket_as_portal.write({"partner_id": self.manager_partner.id})
+            self.env.flush_all()
+
     def test_06_callsign_population(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_onchange_partner_id]
         """Verify the callsign field is automatically populated from the partner."""
