@@ -1559,8 +1559,24 @@ if __name__ == "__main__":
 
     verify_and_install_dependencies(client, checks)
 
+    # Bug-hunt fix (2026-09-13): this pool submits one infinite-loop task
+    # per check PLUS 2 always-on proxy threads (log_anomaly_proxy,
+    # log_search_proxy, submitted below before the per-check loop) --
+    # len(checks) + 2 tasks total, not len(checks) + 1. Since every task
+    # is an infinite loop that never returns its worker to the pool, the
+    # old undersized pool permanently starved exactly one submitted task
+    # (always the LAST check in the list, since the 2 proxies are
+    # submitted first and claim 2 of the pool's threads before the
+    # per-check loop even starts) -- that check's own thread would never
+    # run at all, silently, for the life of the daemon. Worse, the
+    # THREAD_HEARTBEATS watchdog couldn't catch it either: a thread that
+    # never started never writes a heartbeat key, so it never appears in
+    # THREAD_HEARTBEATS.items() to be timed out -- the exact same
+    # "invisible to the watchdog" gap main_loop.md's own claim already
+    # documented and fixed for the 2 proxy threads themselves, one layer
+    # up.
     executor = concurrent.futures.ThreadPoolExecutor(
-        max_workers=max(1, len(checks) + 1)
+        max_workers=max(1, len(checks) + 2)
     )
     futures = []
 
@@ -1578,10 +1594,17 @@ if __name__ == "__main__":
         # handshake but never responds would hang here with blpop's own
         # 5s timeout never firing (some intermediary proxy), and the
         # watchdog would never notice since this thread never appeared as
-        # a key in THREAD_HEARTBEATS at all. Timeout generous relative to
-        # blpop's own 5s block so a couple of slow-but-healthy iterations
-        # don't trip a false restart.
-        THREAD_TIMEOUTS["log_anomaly_proxy"] = 60
+        # a key in THREAD_HEARTBEATS at all. Timeout matches
+        # polling_thread's own established floor (max(300, interval*3))
+        # rather than a tighter value: the watchdog's response is
+        # os._exit(1), a hard, ungraceful kill of the WHOLE daemon
+        # (every check thread along with it, no cleanup) -- a per-
+        # iteration Odoo JSON-2 RPC via report() can legitimately take up
+        # to its own 5s urlopen timeout, so a tighter bound buys no real
+        # protection against a genuine indefinite hang (still caught) but
+        # adds real risk of a false-positive full-daemon kill on a
+        # slow-but-alive RPC burst.
+        THREAD_TIMEOUTS["log_anomaly_proxy"] = 300
         while True:
             THREAD_HEARTBEATS["log_anomaly_proxy"] = time.time()
             try:
@@ -1613,8 +1636,9 @@ if __name__ == "__main__":
             decode_responses=True,
         )
         # Bug-hunt fix (2026-09-13): same watchdog-coverage gap and fix as
-        # log_anomaly_proxy above -- see its own comment.
-        THREAD_TIMEOUTS["log_search_proxy"] = 60
+        # log_anomaly_proxy above -- see its own comment, including why
+        # this uses the file's own 300s floor rather than a tighter bound.
+        THREAD_TIMEOUTS["log_search_proxy"] = 300
         while True:
             THREAD_HEARTBEATS["log_search_proxy"] = time.time()
             try:
