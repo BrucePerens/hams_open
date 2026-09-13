@@ -10,6 +10,7 @@ import subprocess
 import sys
 import signal
 import time
+import urllib.parse
 import urllib.request
 from odoo import models, api, fields, _
 from odoo.exceptions import UserError
@@ -22,6 +23,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
     _description = "Daemon Management Utilities"
     name = fields.Char(string="Name", default=lambda self: self._description)
 
+    # [@ANCHOR: zero_sudo:_start_daemon_process]
     @api.model
     # Verified by [@ANCHOR: zero_sudo:COMM_test_daemon_utils_rpc_security]
     def _start_daemon_process(self, script_path, args=None, env_vars=None):
@@ -55,17 +57,56 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         if process and process.poll() is None:
             _logger.info("Stopping daemon PID %s", process.pid)
             try:
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    # bug-hunt (2026-09-13): process.poll() above only proves
+                    # the process was still alive at THAT instant -- it can
+                    # exit on its own (or be reaped by something else) in the
+                    # window between that check and this os.getpgid() call,
+                    # which would otherwise raise this uncaught and abort the
+                    # whole stop attempt. Already exited is exactly the
+                    # outcome this method is trying to reach, so treat it as
+                    # success rather than propagating.
+                    return
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 _logger.warning(
                     "Daemon PID %s did not terminate, forcing SIGKILL", process.pid
                 )
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    # Same TOCTOU reasoning as the sibling SIGTERM-path handler a few lines
+                    # up: the process can exit on its own (or be reaped by something else)
+                    # between the SIGTERM wait's timeout and this SIGKILL attempt --
+                    # already gone is the outcome this method wants, so log and treat it as
+                    # success rather than propagating.
+                    _logger.info(
+                        "Daemon PID %s already exited before SIGKILL was sent.",
+                        process.pid,
+                    )
 
+    # [@ANCHOR: zero_sudo:_poll_health_check]
     @api.model
     def _poll_health_check(self, url, timeout=30, interval=1):
         """Polls a URL until it returns 200 OK or times out."""
+        # bug-hunt (2026-09-13): urllib.request.urlopen() honors whatever
+        # scheme the URL names, including file:// -- with no restriction
+        # here, a caller that ever builds `url` from anything less trusted
+        # than a hardcoded localhost string (this method's own real callers
+        # today are all test-only, per a repo-wide grep, so this was latent
+        # not live) could turn this health check into an arbitrary local
+        # file read or a request against an unintended internal endpoint.
+        # This method is already private (RPC-unreachable, per
+        # test_daemon_utils_rpc_security's own "prevent SSRF via RPC"
+        # assertion), so this is defense-in-depth, not a fix for a live
+        # exploit.
+        parsed_scheme = urllib.parse.urlsplit(url).scheme
+        if parsed_scheme not in ("http", "https"):
+            raise UserError(
+                _("Health check URL must use http or https, got: %s") % (parsed_scheme or url)
+            )
         _logger.info("Polling health check %s for up to %s seconds", url, timeout)
         start_time = time.time()
         while time.time() - start_time < timeout:

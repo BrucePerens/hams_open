@@ -136,6 +136,48 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         self.assertEqual(first_kwargs["headers"]["Authorization"], "Bearer test_key")
         self.assertEqual(retry_kwargs["headers"]["Authorization"], "Bearer rotated_key")
 
+    def test_call_does_not_retry_on_unrelated_error_mentioning_access_words(self):
+        # bug-hunt (2026-09-13): regression test for a real false-positive
+        # risk in the retry-trigger check -- a 422 ValidationError (a
+        # business error a credential reload could never fix) whose own
+        # message text happens to contain the word "AccessError" used to
+        # also trigger the self-healing retry, via a bare substring match
+        # against the whole stringified error object. Odoo's own exception
+        # hierarchy (odoo/exceptions.py) already guarantees every failure a
+        # credential reload COULD fix surfaces as a real HTTP 401/403, so
+        # the substring match was pure risk with no real coverage -- this
+        # locks in that a 422 with access-flavored TEXT makes exactly one
+        # call, not two.
+        mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        mock_validation_error = MagicMock()
+        mock_validation_error.status_code = 422
+        mock_validation_error.json.return_value = {
+            "error": {
+                "code": 422,
+                "message": "Validation Error",
+                "data": {
+                    "name": "odoo.exceptions.ValidationError",
+                    "message": "Quota exceeded: AccessError raised elsewhere in the stack trace",
+                },
+            }
+        }
+        mock_session.post.return_value = mock_validation_error
+
+        client = SecureJSONRPCClient(self.env_path, self.base_url, self.db_name)
+        with self.assertRaises(RuntimeError):
+            client.call("res.users", "search", domain=[])
+
+        self.assertEqual(
+            mock_session.post.call_count,
+            1,
+            "A 422 business error must never trigger the credential-reload "
+            "retry, even when its own message text happens to mention "
+            "'AccessError' -- only a real 401/403 should.",
+        )
+
     def test_missing_env_file(self):
         non_existent = os.path.join(self.test_dir, "non_existent.env")
         with self.assertRaises(FileNotFoundError):

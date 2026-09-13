@@ -115,14 +115,34 @@ class Module(models.Model):
             self._install_single_doc(utils, Article, mod_name, doc_info, existing_hashes, article_by_name)
 
     @api.model
+    # [@ANCHOR: zero_sudo:is_path_within_module_dir]
+    def _is_path_within_module_dir(self, base_dir, resolved_path):
+        # bug-hunt (2026-09-13): a bare .startswith(base_dir) matches by
+        # PREFIX with no path-separator boundary -- e.g. base_dir
+        # ".../addons/zero_sudo" is a plain string-prefix of a sibling
+        # directory ".../addons/zero_sudo_evil", so a resolved path escaping
+        # into that sibling via this module's own manifest-declared
+        # knowledge_docs path would have passed a bare-prefix check. Split
+        # out as its own small, pure, directly-unit-testable method (no
+        # real filesystem layout needed to exercise the boundary condition)
+        # rather than inlined string logic in `_install_single_doc`.
+        return resolved_path == base_dir or resolved_path.startswith(base_dir + os.sep)
+
+    @api.model
     # [@ANCHOR: zero_sudo:install_single_doc]
     def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, article_by_name=None):
         path = doc_info.get("path")
         if not path or ".." in path.split(os.path.sep):
             return
-            
+
         base_dir = os.path.realpath(get_module_path(module_name))
-        if not os.path.realpath(os.path.join(base_dir, path)).startswith(base_dir):
+        resolved_path = os.path.realpath(os.path.join(base_dir, path))
+        # The leading ".." guard above already blocks the common traversal
+        # case, but this second, independent check (also catching an
+        # absolute `path` that bypasses os.path.join's own base_dir
+        # entirely) must hold the module-directory boundary itself, not
+        # just a string prefix of it -- see _is_path_within_module_dir.
+        if not self._is_path_within_module_dir(base_dir, resolved_path):
             return
 
         try:

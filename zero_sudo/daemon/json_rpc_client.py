@@ -95,16 +95,24 @@ Failed to decode JSON response: {e}
 """.strip()
             raise RuntimeError(err_msg)
 
-        err_obj = result.get("error") if isinstance(result, dict) else None
-        # A rejected/rotated bearer token surfaces as AccessDenied, not
-        # AccessError (odoo.exceptions.AccessDenied vs. .AccessError are
-        # distinct classes) -- the old check only matched the latter, so it
-        # never actually fired for the one scenario (a stale api_key) this
-        # self-healing retry exists to recover from.
-        is_access_err = err_obj and (
-            "AccessError" in str(err_obj) or "AccessDenied" in str(err_obj)
-        )
-        if response.status_code in (401, 403) or is_access_err:
+        # bug-hunt (2026-09-13): the previous version of this check also
+        # OR'd in a bare substring match ("AccessError"/"AccessDenied" in
+        # str(err_obj)) against the whole, unstructured error object --
+        # confirmed unnecessary AND risky by reading odoo/exceptions.py and
+        # Json2Dispatcher.handle_error directly: EVERY failure a credential
+        # reload could ever fix already surfaces as a real HTTP 401
+        # (werkzeug Unauthorized, from _auth_method_bearer on a rejected/
+        # stale bearer token) or 403 (AccessDenied/AccessError, both
+        # UserError subclasses with http_status = 403) -- the status-code
+        # check below is already complete and structurally guaranteed, not
+        # a guess. The substring match added no real coverage and could
+        # misfire on an UNRELATED business error (e.g. a 422
+        # ValidationError whose own message text happens to contain the
+        # word "AccessError") that a credential reload could never fix --
+        # triggering a needless duplicate retry (a real risk for a
+        # non-idempotent call: create/write, not just search) instead of
+        # surfacing the real error immediately.
+        if response.status_code in (401, 403):
             # [@ANCHOR: COMM_json_rpc_self_healing_retry]
             warn_msg = """
 JSON-2 Access Denied. 

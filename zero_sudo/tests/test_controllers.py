@@ -149,3 +149,71 @@ class TestZeroSudoControllers(RealTransactionCase):
             "ordinary web route must be rejected by _authenticate()'s own "
             "AccessError, not served like a normal user's session.",
         )
+
+    def test_03_json_session_authenticate_blocks_service_account(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
+        """Regression test for a real 2026-09-13 bug-hunt finding:
+        /web/login (test_01 above) is NOT the only real session-establishing
+        login endpoint -- Odoo's own web client (and any third-party JSON
+        client) actually logs in via /web/session/authenticate, a separate
+        JSON-RPC route this module never covered. Because ir_http.py's
+        _authenticate() dispatch guard (test_02 above) only ever sees
+        request.session.uid as it stood BEFORE the CURRENT request's own
+        login logic runs, it cannot catch a service account authenticating
+        on this exact request either -- before this fix, this endpoint
+        would have returned a real, live session_info() payload (uid, name,
+        allowed companies, etc.) straight to the caller for a service
+        account's own credentials, with no audit trail at all, exactly the
+        interactive-web-UI access this module exists to deny."""
+        login = "test_service_json_session_block"
+        password = "test_password"
+        user = self.env["res.users"].create(
+            {
+                "name": "Test Service JSON Session Block",
+                "login": login,
+                "password": password,
+                "is_service_account": False,
+                "active": True,
+                "lang": "en_US",
+            }
+        )
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor] # fmt: skip
+            "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
+        )
+        self.env.cr.commit()
+
+        # NOTE: this asserts a plain, non-error RETURN VALUE
+        # (`{"uid": None}`), NOT a raised exception -- a second, real bug
+        # found and fixed the same day: `retrying()` (odoo/service/model.py)
+        # only commits the transaction when the dispatched function returns
+        # normally; an exception takes its `except Exception: ...; raise`
+        # branch instead, which never commits, and `_serve_db()`'s own
+        # `finally: cr.close()` then rolls back. Raising from here would
+        # have silently discarded the very security-log row this test
+        # asserts below. Returning `{"uid": None}` mirrors Odoo core's own
+        # real precedent in this exact function (the MFA-mismatch branch a
+        # few lines up in `super().authenticate()`) for "don't complete
+        # this login" without raising.
+        result = self.make_jsonrpc_request(
+            "/web/session/authenticate",  # burn-ignore-route
+            {"db": self.env.cr.dbname, "login": login, "password": password},
+        )
+        self.assertEqual(
+            result,
+            {"uid": None},
+            msg="[!] DIAGNOSTIC FOR AI: /web/session/authenticate must reject "
+            "a service account's credentials with a plain denial, instead "
+            "of returning a live session_info() payload.",
+        )
+
+        self.env.cr.commit()
+        self.env.invalidate_all()
+        log_entry = self.env["zero_sudo.security.log"].search(
+            [("user_id", "=", user.id), ("reason", "=", "service_account_blocked")],
+            limit=1,
+        )
+        self.assertTrue(
+            log_entry,
+            msg="[!] DIAGNOSTIC FOR AI: Security log entry was not created for "
+            "the blocked /web/session/authenticate attempt.",
+        )

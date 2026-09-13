@@ -8,6 +8,7 @@
 from odoo import http
 from odoo.http import request
 from odoo.addons.web.controllers.home import Home
+from odoo.addons.web.controllers.session import Session
 
 
 class ZeroSudoHome(Home):
@@ -65,3 +66,80 @@ class ZeroSudoHome(Home):
                     "/web/login?error=access_denied_service"
                 )  # burn-ignore-route: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
         return response
+
+
+class ZeroSudoSession(Session):
+    @http.route()
+    # [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
+    # ---
+    # # Verified by [@ANCHOR: zero_sudo:COMM_test_json_session_authenticate_interceptor]
+    # bug-hunt (2026-09-13): `/web/login` (ZeroSudoHome.web_login above) is
+    # NOT the only real session-establishing login endpoint -- Odoo's own
+    # web client (and any third-party JSON client) logs in via this exact
+    # JSON-RPC route (odoo/addons/web/controllers/session.py's
+    # Session.authenticate), which was never covered by the web_login
+    # override above. Because ir_http.py's `_authenticate()` request-dispatch
+    # guard reads `request.session.uid` as it stood BEFORE this request's own
+    # dispatch began (confirmed against odoo/addons/base/models/ir_http.py's
+    # `_authenticate`/`_authenticate_explicit`, which run ahead of
+    # `_dispatch`), it cannot catch a service account authenticating on THIS
+    # request either -- the exact same reason `web_login` needs its own
+    # post-super() check instead of relying on that hook alone. Without this
+    # override, a service account's leaked credentials could complete one
+    # real authenticated call here, returning a live `session_info()`
+    # payload (uid, name, allowed companies, etc.) straight to the caller
+    # with no audit trail at all -- contradicting docs/stories/
+    # login_blocking.md's own "Even if a service account somehow already
+    # has a live session... _authenticate() re-checks on every single
+    # authenticated request dispatch" claim for this one specific request.
+    # (bug-hunt (2026-09-13), second pass: this used to `raise AccessDenied`
+    # here instead of returning. Confirmed by reading odoo/service/model.py's
+    # `retrying()` line by line: it only calls `env.cr.commit()` AFTER
+    # `func()` (this whole dispatch, our override included) returns without
+    # raising -- any exception takes the `except Exception: ...; raise`
+    # branch instead, which resets the transaction and re-raises WITHOUT
+    # ever committing, and `_serve_db()`'s own `finally: cr.close()` then
+    # rolls back via `Cursor.close()` -> `_close(False)` -> `self.
+    # rollback()` (also confirmed directly, `odoo/sql_db.py`). Raising
+    # therefore silently discarded the very `zero_sudo.security.log` row
+    # this override exists to create -- the audit trail this whole
+    # interceptor is supposed to add would never actually have persisted.
+    # Fixed to mirror Odoo core's own real precedent for "don't complete
+    # this login" in this exact function: `super().authenticate()`'s own
+    # MFA-mismatch branch above already returns `{"uid": None}` rather than
+    # raising, for the identical reason -- a normal return commits the
+    # transaction (the log row persists for real) and lets
+    # Dispatcher.post_dispatch() run (so `request.session.logout()` below
+    # is now actually load-bearing -- the rotated/logged-out session gets
+    # saved -- not defense-in-depth-only as an earlier draft of this
+    # comment claimed).)
+    def authenticate(self, db, login, password, base_location=None):
+        result = super().authenticate(db, login, password, base_location=base_location)
+
+        if request.session.uid:
+            # SECURITY MANDATE: mirrors ZeroSudoHome.web_login's own
+            # direct-SQL check above -- see that method's own comment for
+            # why this intentionally does not use .sudo()/ORM here.
+            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_test_json_session_authenticate_interceptor]  # fmt: skip
+                "SELECT is_service_account FROM res_users WHERE id = %s",
+                (request.session.uid,),
+            )
+            res = request.env.cr.fetchone()
+            if res and res[0]:
+                blocked_uid = request.session.uid
+                utils = request.env["zero_sudo.security.utils"]
+                facility_env = utils._get_service_env(
+                    "zero_sudo.odoo_facility_service_internal"
+                )
+                facility_env["zero_sudo.security.log"].create(
+                    {
+                        "user_id": blocked_uid,
+                        "login": login,
+                        "ip_address": request.httprequest.remote_addr,
+                        "user_agent": request.httprequest.user_agent.string,
+                        "reason": "service_account_blocked",
+                    }
+                )
+                request.session.logout()
+                return {"uid": None}
+        return result

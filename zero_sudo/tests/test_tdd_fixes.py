@@ -6,7 +6,7 @@
 
 
 from . import common
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 from odoo import _
 
 import os
@@ -327,10 +327,110 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_documentation_wrappers(self):
         # [@ANCHOR: zero_sudo:COMM_test_documentation_wrappers]
-        
+
         # file_open() forces utf-8 internally for text mode already and
         # doesn't accept an encoding= kwarg of its own.
         with file_open("zero_sudo/data/testing_documentation.html", "r") as f:
             content = f.read().strip()
         self.assertTrue(content.startswith('<div class="o_knowledge_content">'))
         self.assertTrue(content.endswith('</div>'))
+
+    def test_rpc_path_exemption_requires_exact_or_delimited_prefix(self):
+        # Tests [@ANCHOR: zero_sudo:is_rpc_path_exempt_from_service_account_block]
+        # Regression test for a real 2026-09-13 bug-hunt finding: the old
+        # bare .startswith('/jsonrpc')/.startswith('/xmlrpc') check would
+        # have exempted ANY path sharing that prefix, not just Odoo's own
+        # two real RPC endpoints. Latent (no colliding route exists in this
+        # codebase today), but this test locks in the tightened boundary so
+        # a future route can't silently reopen it.
+        ir_http = self.env["ir.http"]
+        exempt = ir_http._is_rpc_path_exempt_from_service_account_block
+        # Real endpoints: must remain exempt.
+        self.assertTrue(exempt("/jsonrpc"))
+        self.assertTrue(exempt("/xmlrpc/common"))
+        self.assertTrue(exempt("/xmlrpc/2/object"))
+        # Prefix-sharing look-alikes that are NOT the real endpoints: must
+        # NOT be exempt.
+        self.assertFalse(exempt("/jsonrpc_evil"))
+        self.assertFalse(exempt("/jsonrpc2"))
+        self.assertFalse(exempt("/xmlrpcevil"))
+        self.assertFalse(exempt("/xmlrpc"))  # no trailing segment at all
+        self.assertFalse(exempt("/web"))
+        self.assertFalse(exempt("/odoo"))
+
+    def test_install_single_doc_rejects_sibling_prefix_traversal(self):
+        # Tests [@ANCHOR: zero_sudo:is_path_within_module_dir]
+        # Regression test for a real 2026-09-13 bug-hunt finding: a bare
+        # `resolved_path.startswith(base_dir)` (no separator) would have
+        # treated a sibling directory that merely shares base_dir as a
+        # string PREFIX (e.g. ".../addons/zero_sudo_evil" starting with
+        # ".../addons/zero_sudo") as "inside" the module directory.
+        ir_module = self.env["ir.module.module"]
+        is_within = ir_module._is_path_within_module_dir
+        base_dir = "/opt/hams/addons/zero_sudo"
+        # Genuinely inside: allowed.
+        self.assertTrue(is_within(base_dir, base_dir))
+        self.assertTrue(is_within(base_dir, base_dir + "/data/documentation.html"))
+        # A sibling directory that is a bare string-prefix match but NOT
+        # actually inside base_dir: must be rejected.
+        self.assertFalse(is_within(base_dir, base_dir + "_evil/secret.txt"))
+        self.assertFalse(is_within(base_dir, base_dir + "_evil"))
+        # Unrelated/absolute escape: must be rejected.
+        self.assertFalse(is_within(base_dir, "/etc/passwd"))
+
+    def test_poll_health_check_rejects_non_http_scheme(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
+        # Regression test for a real 2026-09-13 bug-hunt finding: urlopen()
+        # honors whatever scheme it's given, including file://, which would
+        # let a caller building this URL from anything less trusted than a
+        # hardcoded test string turn a health check into an arbitrary local
+        # file read (or a request against an unintended internal scheme).
+        # Already unreachable via RPC today (test_daemon_utils_rpc_security),
+        # so this is defense-in-depth, but it must fail LOUDLY (UserError),
+        # never silently attempt the request.
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+
+        def mock_urlopen(*args, **kwargs):
+            self.fail("urlopen() must never be called for a non-http(s) scheme")
+
+        self.safe_patch("urllib.request.urlopen", mock_urlopen)
+        with self.assertRaises(UserError):
+            daemon_utils._poll_health_check("file:///etc/passwd", timeout=1, interval=0.1)
+
+    def test_stop_daemon_process_survives_toctou_exit(self):
+        # Tests [@ANCHOR: zero_sudo:stop_daemon_process]
+        # Regression test for a real 2026-09-13 bug-hunt finding: process.
+        # poll() only proves the process was alive at that instant -- if it
+        # exits between that check and os.getpgid(pid), the old code let a
+        # bare ProcessLookupError propagate uncaught instead of treating
+        # "already exited" as the success it actually is.
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+
+        class FakeProcess:
+            """poll() lies and claims the process is still running --
+            simulating the exact TOCTOU race window _stop_daemon_process
+            must survive -- while os.getpgid() is patched below to raise
+            exactly what a real already-exited PID would raise. Deliberately
+            NOT exercised against a real PID: even a genuinely-reaped real
+            process risks the kernel having already reused its PID for an
+            unrelated process by the time this test's own os.getpgid() call
+            runs, which could send a real signal to that unrelated process's
+            group -- unacceptable on a shared dev box."""
+
+            pid = 424242  # Only ever passed to the patched os.getpgid below.
+
+            def poll(self):
+                return None
+
+            def wait(self, timeout=None):
+                raise AssertionError(
+                    "wait() should not be reached once the process is already gone"
+                )
+
+        def fake_getpgid(pid):
+            raise ProcessLookupError(3, "No such process")
+
+        self.safe_patch("os.getpgid", fake_getpgid)
+
+        # Must not raise ProcessLookupError.
+        daemon_utils._stop_daemon_process(FakeProcess())
