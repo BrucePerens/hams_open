@@ -95,24 +95,34 @@ class Module(models.Model):
             return
 
         hash_keys = []
-        names = []
+        article_id_keys = []
         for mod_name, doc_info in all_doc_infos:
             name = doc_info.get("name", f"{mod_name} Documentation")
             hash_key = f"zero_sudo.doc_hash_{mod_name}_{name.replace(' ', '_')}"
+            article_id_key = f"zero_sudo.doc_article_id_{mod_name}_{name.replace(' ', '_')}"
             hash_keys.append(hash_key)
-            names.append(name)
+            article_id_keys.append(article_id_key)
 
-        # Bulk load hashes
+        # Bulk load hashes AND article-identity ids in one query. Both are
+        # keyed by (module_name, name) -- see _install_single_doc's own
+        # article_id_key construction for why this replaced a by-`name`-only
+        # `knowledge.article` search: two different modules can plausibly
+        # pick the same doc `name` ("Getting Started", "Overview", ...), and
+        # a shared-`name` article lookup would let the second module's
+        # bootstrap pass silently overwrite the first module's article. See
+        # night_shift_todo.md and the install_single_doc bug-hunt claim for
+        # the full history of this fix.
         env_svc = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
-        records = env_svc["zero_sudo.kv"].search([("key", "in", hash_keys)], limit=len(hash_keys))
-        existing_hashes = {r.key: r.value for r in records}
-
-        # Bulk load existing articles
-        existing_articles = Article.search([("name", "in", names)], limit=len(names))
-        article_by_name = {a.name: a for a in existing_articles}
+        all_kv_keys = hash_keys + article_id_keys
+        records = env_svc["zero_sudo.kv"].search([("key", "in", all_kv_keys)], limit=len(all_kv_keys))
+        kv_by_key = {r.key: r.value for r in records}
+        existing_hashes = {k: v for k, v in kv_by_key.items() if k in set(hash_keys)}
+        existing_article_ids = {k: v for k, v in kv_by_key.items() if k in set(article_id_keys)}
 
         for mod_name, doc_info in all_doc_infos:
-            self._install_single_doc(utils, Article, mod_name, doc_info, existing_hashes, article_by_name)
+            self._install_single_doc(
+                utils, Article, mod_name, doc_info, existing_hashes, existing_article_ids
+            )
 
     @api.model
     # [@ANCHOR: zero_sudo:is_path_within_module_dir]
@@ -130,7 +140,7 @@ class Module(models.Model):
 
     @api.model
     # [@ANCHOR: zero_sudo:install_single_doc]
-    def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, article_by_name=None):
+    def _install_single_doc(self, utils, Article, module_name, doc_info, existing_hashes=None, existing_article_ids=None):
         path = doc_info.get("path")
         if not path or ".." in path.split(os.path.sep):
             return
@@ -183,11 +193,44 @@ class Module(models.Model):
         vals["internal_permission"] = "read"
         vals["icon"] = icon
 
-        existing = article_by_name.get(name) if article_by_name is not None else Article.search([("name", "=", name)], limit=1)
+        # bug-hunt (2026-09-13): article identity is looked up by this
+        # module's OWN previously-recorded article id, never by searching
+        # `knowledge.article` on the shared, collision-prone `name` field --
+        # see the module-level docstring on the caller and the
+        # install_single_doc bug-hunt claim for the full "two modules pick
+        # the same doc name" scenario this closes. The id is stored in a KV
+        # entry keyed the same way as the content hash (module_name, name),
+        # so it can never resolve to a DIFFERENT module's article even if
+        # both chose an identical display name.
+        article_id_key = f"zero_sudo.doc_article_id_{module_name}_{name.replace(' ', '_')}"
+        existing_article_id = (
+            existing_article_ids.get(article_id_key)
+            if existing_article_ids is not None
+            else utils._get_kv(article_id_key)
+        )
+
+        existing = Article.browse()
+        if existing_article_id:
+            try:
+                existing_article_id = int(existing_article_id)
+            except (TypeError, ValueError):
+                existing_article_id = None
+            if existing_article_id:
+                candidate = Article.browse(existing_article_id)
+                # The article may have been deleted since we recorded its id
+                # (by a portal user, an admin, or a manual cleanup) -- must
+                # re-check existence rather than trusting the stored id
+                # blindly, or write() below would raise on a stale/missing
+                # record.
+                if candidate.exists():
+                    existing = candidate
+
         if existing:
             existing.write(vals)
+            article = existing
         else:
-            Article.create(vals)
+            article = Article.create(vals)
 
         utils._set_kv(hash_key, content_hash)
+        utils._set_kv(article_id_key, str(article.id))
         _logger.info("Installed/Updated knowledge documentation for %s", name)
