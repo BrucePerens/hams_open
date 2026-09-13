@@ -442,7 +442,7 @@ class BackupConfig(models.Model):
                     "description": message,
                 }
             )
-        except (UserError, AccessError, ValueError) as e:
+        except Exception as e:  # audit-ignore-catch-all: report_incident's real exception surface is pager_duty's own (Redis errors, ORM validation errors, etc.) and not fully enumerable from here -- the documented invariant is "never let alerting failure block the audit trail" below, which a narrower except tuple silently violated for any exception type it didn't happen to name.
             logging.getLogger(__name__).warning("An error occurred: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

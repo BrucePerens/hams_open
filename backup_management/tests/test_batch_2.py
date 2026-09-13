@@ -126,3 +126,50 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertIn("kopia_password", payload)
         self.assertIn("exclude_patterns", payload)
 
+    def test_kopia_restore_destination_ignores_free_text_target_path(self):
+        # Bug-hunt fix (2026-09-13): action_restore's kopia branch used to
+        # build the real filesystem restore destination straight from
+        # restore_target_path, a free-text field the ir.rule multi-tenant
+        # scoping on backup.snapshot/backup.config never touches. A backup
+        # admin scoped to only their own website's snapshots could type
+        # another tenant's own target_path basename here, and since Kopia's
+        # `restore` writes INTO the given directory, this could clobber
+        # another tenant's real backup repository. The fix derives the
+        # destination from backup.job's own database-assigned id instead
+        # (immune to injection/traversal by construction), leaving
+        # restore_target_path's own field/validation in place but unused
+        # for kopia. This asserts the *actual* cmd_args sent to the worker
+        # use the job-id-derived path, not the attacker-controlled one --
+        # not just that some restore succeeded.
+        snap = self.env["backup.snapshot"].create({
+            "config_id": self.config1.id,
+            "snapshot_id": "snap_restore_dest",
+        })
+        wizard = self.env["backup.restore.wizard"].create({
+            "snapshot_id": snap.id,
+            # Deliberately shaped like another tenant's own target_path
+            # basename -- not a shell-injection payload (that's covered by
+            # test_restore_wizard_validation/test_restore_wizard_security),
+            # a plausible *other config's* real destination.
+            "restore_target_path": "/var/lib/odoo/backups/test_kopia1",
+        })
+        mock_pub = self.safe_patch(
+            "odoo.addons.backup_management.models.restore_wizard.publish_to_rabbitmq"
+        )
+        res = wizard.action_restore()
+        self.env.cr.postcommit.run()
+
+        mock_pub.assert_called_once()
+        payload = json.loads(mock_pub.call_args[0][1])
+        job = self.env["backup.job"].browse(res.get("res_id"))
+        expected_dest = f"/var/lib/odoo/backups/restore_{job.id}"
+        self.assertEqual(
+            payload["cmd_args"],
+            ["kopia", "restore", "snap_restore_dest", expected_dest],
+        )
+        self.assertNotIn(wizard.restore_target_path, payload["cmd_args"])
+        # The real destination must also be discoverable from the job
+        # itself, since the operator's own restore_target_path input no
+        # longer says where the data actually went.
+        self.assertIn(expected_dest, job.output_log)
+

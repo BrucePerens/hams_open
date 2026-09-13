@@ -67,12 +67,70 @@ class BackupRestoreWizard(models.TransientModel):
 
         cmd_args = []
         if self.snapshot_id.config_id.engine == "kopia":
+            # Bug-hunt fix (2026-09-13): same root cause as the pgbackrest
+            # stanza fix below -- the real Kopia restore destination used to
+            # come straight from self.restore_target_path, a free-text field
+            # the ir.rule multi-tenant scoping on backup.snapshot/
+            # backup.config never touches (it's typed by the user, not
+            # looked up). A backup admin scoped to only their own website's
+            # snapshots could still type e.g. another config's own
+            # target_path basename here; unlike pgbackrest (which
+            # reconfigures a pre-provisioned live DB location), Kopia's
+            # `restore` writes INTO the given directory, so this could
+            # clobber/corrupt another tenant's real backup repository.
+            #
+            # Considered (and rejected) deriving this from
+            # self.snapshot_id.snapshot_id, matching backup_snapshot.py's
+            # own `restore_command` display convention literally -- but
+            # `snapshot_id` (Char, "Snapshot ID / Label") has NO format
+            # constraint of its own (unlike backup.config.target_path,
+            # which _check_security_paths enforces as strict
+            # alnum-or-validate_backup_path()), and `group_backup_admin`
+            # has full create/write access to backup.snapshot
+            # (ir.model.access.csv: 1,1,1,1) -- using it here would let an
+            # admin plant `../../etc/cron.d/evil`-shaped content into a real
+            # filesystem destination, trading one path-control bug for
+            # another. Used `job.id` instead: `backup.job`'s own real,
+            # database-assigned auto-increment integer, created a few lines
+            # above -- immune to injection/traversal by construction, and
+            # unique per restore invocation (not just per snapshot label),
+            # closing even the label-collision concern already raised for
+            # the pgbackrest case. restore_target_path's own field/
+            # validation is left in place (still required, still checked)
+            # rather than removed, matching the pgbackrest fix's own
+            # precedent of not expanding a bounded security fix into a UI
+            # change.
+            #
+            # Follow-up (not expanded here, matching this fix's own "don't
+            # turn a bounded security fix into a UI change" precedent):
+            # restore_target_path stays `required=True` on the wizard even
+            # though it is now completely unused for the kopia branch (it
+            # is still genuinely used, as the stanza name, for pgbackrest
+            # below). A real follow-up would relabel/derequire it per
+            # engine rather than silently accepting an operator-typed value
+            # that this branch now discards.
+            kopia_restore_dest = f"/var/lib/odoo/backups/restore_{job.id}"
             cmd_args = [
                 "kopia",
                 "restore",
                 self.snapshot_id.snapshot_id,
-                self.restore_target_path,
+                kopia_restore_dest,
             ]
+            # The operator-typed restore_target_path is no longer the real
+            # destination (see above) -- record the *actual* one job.id
+            # picked on the job record itself, so it's discoverable from
+            # the job form rather than only from this source file's
+            # comments or the daemon's own process log.
+            job.write(
+                {
+                    "output_log": (
+                        job.output_log
+                        + f"\nRestore destination: {kopia_restore_dest} "
+                        "(auto-assigned per job; restore_target_path is "
+                        "not used for kopia restores).\n"
+                    )
+                }
+            )
         elif self.snapshot_id.config_id.engine == "pgbackrest":
             # Bug-hunt fix (2026-09-09, tier-1 pass): the stanza that gets
             # restored (and therefore which tenant's live PostgreSQL data
