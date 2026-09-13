@@ -36,6 +36,15 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         self.assertEqual(pager_log_analyzer.translate_path("/var/log/syslog"), "/syslog")
         self.assertEqual(pager_log_analyzer.translate_path("/other/path"), "/other/path")
 
+    def test_01b_translate_path_only_strips_a_leading_prefix_not_every_occurrence(self):
+        # Bug-hunt fix (2026-09-13): the old fp.replace("/var/log", "")
+        # stripped the substring anywhere in fp, so a path with "/var/log"
+        # somewhere other than a leading prefix silently produced a wrong
+        # chroot-relative path instead of being left alone.
+        self.assertEqual(
+            pager_log_analyzer.translate_path("/home/var/log/x"), "/home/var/log/x"
+        )
+
     def test_02_tail_file_reports_a_matching_line_and_ignores_others(self):
         # Tests [@ANCHOR: pager_duty:tail_file]
         with tempfile.NamedTemporaryFile(

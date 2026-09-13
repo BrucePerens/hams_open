@@ -34,7 +34,15 @@ logger = logging.getLogger("pager_log_analyzer")
 def translate_path(fp):
     """Maps absolute paths to the chrooted filesystem view."""
     # Because we chrooted to /var/log, /var/log/syslog is now just /syslog
-    return fp.replace("/var/log", "")
+    #
+    # Bug-hunt fix (2026-09-13): a plain fp.replace("/var/log", "") stripped
+    # every occurrence of the substring anywhere in fp, not just a leading
+    # "/var/log" prefix -- e.g. translate_path("/home/var/log/x") silently
+    # returned "/home/x" instead of leaving the unexpected prefix alone.
+    # Not exploitable (both call sites only ever pass config-controlled or
+    # already-gated internal paths, per translate_path.md), but a real
+    # correctness gap. removeprefix only strips a genuine leading match.
+    return fp.removeprefix("/var/log")
 
 
 # --- 4. Tailing Engine ---

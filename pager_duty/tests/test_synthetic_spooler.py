@@ -20,7 +20,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
         # A genuine public address must be accepted.
         self.assertTrue(is_safe(ipaddress.ip_address("8.8.8.8")))
         # Every non-public category this function exists to reject.
-        self.assertFalse(is_safe(ipaddress.ip_address("127.0.0.1")))  # loopback
+        self.assertFalse(is_safe(ipaddress.ip_address("127.0.0.1")))  # loopback  # burn-ignore-ssrf-test-value
         self.assertFalse(is_safe(ipaddress.ip_address("10.0.0.1")))  # private
         self.assertFalse(is_safe(ipaddress.ip_address("169.254.169.254")))  # link-local / cloud metadata
         self.assertFalse(is_safe(ipaddress.ip_address("224.0.0.1")))  # multicast

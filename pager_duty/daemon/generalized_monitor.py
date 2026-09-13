@@ -1572,7 +1572,18 @@ if __name__ == "__main__":
             password=REDIS_PASS,
             decode_responses=True,
         )
+        # Bug-hunt fix (2026-09-13): this thread was never covered by the
+        # THREAD_HEARTBEATS watchdog below (main_loop.md's own claim
+        # flagged this) -- a Redis connection that accepts the TCP
+        # handshake but never responds would hang here with blpop's own
+        # 5s timeout never firing (some intermediary proxy), and the
+        # watchdog would never notice since this thread never appeared as
+        # a key in THREAD_HEARTBEATS at all. Timeout generous relative to
+        # blpop's own 5s block so a couple of slow-but-healthy iterations
+        # don't trip a false restart.
+        THREAD_TIMEOUTS["log_anomaly_proxy"] = 60
         while True:
+            THREAD_HEARTBEATS["log_anomaly_proxy"] = time.time()
             try:
                 res = r.blpop("pager_log_anomalies", timeout=5)
                 if res:
@@ -1601,7 +1612,11 @@ if __name__ == "__main__":
             password=REDIS_PASS,
             decode_responses=True,
         )
+        # Bug-hunt fix (2026-09-13): same watchdog-coverage gap and fix as
+        # log_anomaly_proxy above -- see its own comment.
+        THREAD_TIMEOUTS["log_search_proxy"] = 60
         while True:
+            THREAD_HEARTBEATS["log_search_proxy"] = time.time()
             try:
                 res = r.blpop("pager_log_search_res_queue", timeout=5)
                 if res:
