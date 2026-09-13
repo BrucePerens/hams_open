@@ -142,13 +142,29 @@ class BlogBlog(models.Model):
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
+            )
         ):
+            # bug-hunt (2026-09-13): website_id used to be in this whitelist, the same
+            # "owner can opt their own record out of multi-website tenant isolation" gap
+            # already found and fixed in website_page.py's own create()/write() -- stock
+            # Odoo's website_domain() (`Domain('website_id', 'in', [False, *self.ids])`)
+            # treats website_id=False as "visible on every website in the install," and
+            # unlike blog.post's own website_id (related='blog_id.website_id',
+            # readonly=True -- genuinely non-writable regardless of any allowlist),
+            # blog.blog's website_id comes from stock website.multi.mixin and is a plain,
+            # independently writable Many2one. The only legitimate setter
+            # (controllers/main.py's create_blog) already runs via the
+            # user_websites_service_account's own env, which the new 4th clause above
+            # (matching website_page.py's own established exemption) now recognizes as
+            # admin, so removing website_id here only ever affects a non-admin,
+            # non-service-account caller, who had no legitimate reason to set it.
             allowed = {
                 "name",
                 "subtitle",
                 "owner_user_id",
                 "user_websites_group_id",
-                "website_id",
                 "website_meta_title",
                 "website_meta_description",
                 "website_meta_keywords",
@@ -216,13 +232,21 @@ class BlogBlog(models.Model):
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
+            )
         ):
+            # bug-hunt (2026-09-13): see create()'s own comment above -- same
+            # multi-website-isolation-opt-out fix, applied here too. No legitimate write()
+            # caller in this codebase sets website_id on an existing blog (grepped
+            # controllers/main.py: both real writers of this field are create_vals
+            # dicts passed to create(), never a write() call), so this is a pure
+            # closure with no legitimate flow to preserve.
             allowed = {
                 "name",
                 "subtitle",
                 "owner_user_id",
                 "user_websites_group_id",
-                "website_id",
                 "website_meta_title",
                 "website_meta_description",
                 "website_meta_keywords",

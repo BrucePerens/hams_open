@@ -123,3 +123,53 @@ class TestBlogLimits(RealTransactionCase):
                 {"name": "Excess Admin Blog", "owner_user_id": admin.id}
             )
             self.env.flush_all()
+
+    def test_04_portal_owner_cannot_set_website_id_to_opt_out_of_isolation(self):
+        # bug-hunt (2026-09-13): website_page.py's own write()/create() already
+        # had this exact class of bug found and fixed (see its own comment,
+        # "website_page owner can opt their own page out of multi-website
+        # tenant isolation") -- website_id was removed from THAT model's
+        # allowlist because a non-admin caller could set/clear it via RPC,
+        # and stock Odoo's own website_domain() (`Domain('website_id', 'in',
+        # [False, *self.ids])`) treats website_id=False as "visible on every
+        # website in the install." blog_blog.py's create()/write() carried
+        # the identical gap. Unlike blog.post's own website_id
+        # (related='blog_id.website_id', readonly=True -- genuinely
+        # non-writable regardless of any allowlist), blog.blog's website_id
+        # comes from stock website.multi.mixin and is a plain, independently
+        # writable Many2one -- confirmed directly against
+        # /usr/lib/python3/dist-packages/odoo/addons/website/models/
+        # mixins.py's own WebsiteMultiMixin. The fixture blog below is
+        # created via this test's own admin env (matching test_01/02/03's
+        # own convention), so its own real create() call is exempt from the
+        # allowlist and website_id lands as given -- this test is about the
+        # WRITE-side gap specifically, isolated from create()'s own
+        # (now also fixed) behavior.
+        website_a = self.env["website"].get_current_website()
+        blog = self.env["blog.blog"].create(
+            {
+                "name": "Isolation Probe Blog",
+                "owner_user_id": self.user.id,
+                "website_id": website_a.id,
+            }
+        )
+        self.assertEqual(
+            blog.website_id.id,
+            website_a.id,
+            "fixture: blog must start out bound to website_a",
+        )
+
+        self.env["blog.blog"].with_user(self.user).browse(blog.id).write(
+            {"website_id": False}
+        )
+        blog.invalidate_recordset()
+
+        self.assertEqual(
+            blog.website_id.id,
+            website_a.id,
+            "[!] DIAGNOSTIC FOR AI: a portal blog owner must not be able to null "
+            "website_id via a plain write() -- doing so would make the blog (and, via "
+            "the related field, every post under it) render on every website in the "
+            "install instead of just their own, the same multi-website-isolation-"
+            "opt-out bug already found and fixed for website.page.",
+        )
