@@ -10,7 +10,7 @@ import subprocess
 import logging
 
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
     notify_model_invalidation,
@@ -228,6 +228,28 @@ class PagerCheck(models.Model):
         Restricted to a known allow-list of safe monitoring tools.
         """
         # [@ANCHOR: rpc_ensure_executable_security]
+        # Consumer-first review, 2026-09-13: this is a plain @api.model method, not gated by
+        # ir.model.access on `pager.check` itself -- Odoo's own RPC dispatch (web/dataset/call_kw)
+        # never checks model access before invoking a method call; access is only enforced lazily
+        # when the method body itself touches a field via search()/read()/write(), none of which
+        # this method does on `pager.check`. The allow-list below stops an arbitrary command from
+        # being provisioned, but nothing stopped an arbitrary AUTHENTICATED user (any signed-up
+        # portal ham, not just a pager admin) from triggering the elevated
+        # binary_downloader.user_binary_downloader_service account to provision one of the
+        # allow-listed binaries at will -- the existing test (test_02_rpc_ensure_executable_
+        # security) only ever exercised the allow-list, never caller authorization, as the default
+        # (effectively admin) test user. Gated to the same groups `ir.model.access.csv` already
+        # grants real access to `pager.check` itself (group_pager_admin, group_pager_service),
+        # matching this model's own established access scope rather than inventing a new one.
+        user = self.env.user
+        if not (
+            user.is_service_account
+            or user.has_group("base.group_system")
+            or user.has_group("pager_duty.group_pager_admin")
+            or user.has_group("pager_duty.group_pager_service")
+        ):
+            raise AccessError(_("Only Pager Duty admins or service accounts can provision monitoring executables."))
+
         allow_list = {
             "dig",
             "snmpget",

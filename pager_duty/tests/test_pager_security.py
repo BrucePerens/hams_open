@@ -129,6 +129,20 @@ class TestPagerSecurity(HamsTransactionCase):
             res = CheckModel.rpc_ensure_executable("ping")
         self.assertNotEqual(res.get("message"), "Command not in allow-list.")
 
+    def test_02b_rpc_ensure_executable_rejects_an_unrelated_authenticated_user(self):
+        # Real gap found 2026-09-13: this is a plain @api.model method, never gated by
+        # ir.model.access on pager.check itself, so ANY authenticated user (not just a Pager Duty
+        # admin/service account) could trigger the elevated binary_downloader service account to
+        # provision an allow-listed binary. test_02 above only ever ran as the (effectively admin)
+        # default test user, so it never actually exercised this boundary.
+        with self.assertRaises(
+            AccessError,
+            msg="[!] DIAGNOSTIC FOR AI: an ordinary portal user with no pager_duty group at all "
+            "must not be able to trigger binary provisioning under the elevated "
+            "binary_downloader service account.",
+        ):
+            self.env["pager.check"].with_user(self.user_std).rpc_ensure_executable("ping")
+
     def test_03_documentation_injection(self):
         """
         Verify that documentation is correctly injected during post_init_hook.
