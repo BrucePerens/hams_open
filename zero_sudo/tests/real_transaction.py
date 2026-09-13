@@ -208,11 +208,27 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                                     e,
                                 )
                                 try:
+                                    # bug-hunt (2026-09-13): this raw SQL DELETE used to
+                                    # run with no savepoint of its own. When it failed
+                                    # too (e.g. still FK-blocked), the resulting
+                                    # psycopg2 error left the WHOLE cursor's transaction
+                                    # aborted for the rest of this teardown -- every
+                                    # OTHER tracked model still queued for cleanup in
+                                    # this same last-attempt pass would then also fail
+                                    # (via a confusing InFailedSqlTransaction rather
+                                    # than its own real error), and the eventual
+                                    # self.env.cr.commit() below would silently discard
+                                    # even successfully-deleted records from earlier in
+                                    # this same pass, misreporting them as leaked. A
+                                    # savepoint here contains one model's fallback
+                                    # failure to itself, matching the ORM unlink
+                                    # attempt's own savepoint just above.
                                     table = model_env._table
-                                    self.env.cr.execute(
-                                        sql.SQL("DELETE FROM {} WHERE id IN %s").format(sql.Identifier(table)),
-                                        (tuple(ids),)
-                                    )
+                                    with self.env.cr.savepoint():
+                                        self.env.cr.execute(
+                                            sql.SQL("DELETE FROM {} WHERE id IN %s").format(sql.Identifier(table)),
+                                            (tuple(ids),)
+                                        )
                                     _logger.info("SQL fallback succeeded for %s %s", model_name, ids)
                                     pending_deletes = False
                                     self._tracked_records[model_name] = set()
