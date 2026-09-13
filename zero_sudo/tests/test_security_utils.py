@@ -10,6 +10,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.models import security_utils as security_utils_module
 from odoo.exceptions import AccessError, UserError
 from unittest.mock import MagicMock, mock_open
+import json
 import os
 import odoo
 from odoo.tools import mute_logger
@@ -216,35 +217,63 @@ class TestSecurityUtils(HamsTransactionCase):
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal]
         # ---
-        # [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]
-        # ---
-        # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]
-        # ---
-        # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_single]
-        # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_cache_signaling]
+        """
+        Bug-hunt fix, 2026-09-13: this test used to assert the exact shape of a
+        `pg_notify("cache_invalidation", "test.model:test_key")` call -- which locked in a real
+        bug (the real listener, `distributed_redis_cache/daemons/cache_manager.py`, LISTENs on
+        `"distributed_cache_invalidation"`, not `"cache_invalidation"`, and expects a JSON
+        payload, not a plain colon-joined string) rather than catching it, a bug class 2
+        (non-discriminating test) instance -- it "passed" whether the signal actually reached
+        the real daemon or not, since it only checked what THIS function sent, never what the
+        real consumer requires. Rewritten to assert the actual, corrected contract:
+        `_notify_cache_invalidation` must delegate to the real
+        `distributed_cache_invalidation` channel with a JSON-decodable `{"model": ...}` payload.
+        "test.model" is intentionally replaced with a real model name ("res.partner") --
+        `notify_model_invalidation()` (the delegate) silently no-ops for any string that isn't a
+        real, registered model, which a fake name would trigger and defeat this test's own point.
+        """
         utils = self.env["zero_sudo.security.utils"]
-        
+
         original_execute = self.env.cr.execute
         calls = []
         def fake_execute(query, params=None, log_exceptions=True):
             calls.append((query, params))
             return original_execute(query, params, log_exceptions)
-        
+
         self.env.cr.execute = fake_execute
         try:
-            utils._notify_cache_invalidation("test.model", "test_key")
-            self.assertEqual(len(calls), 1)
-            self.assertEqual(calls[0][0], "SELECT pg_notify(%s, %s)")
-            self.assertEqual(calls[0][1], ("cache_invalidation", "test.model:test_key"))
-            
+            utils._notify_cache_invalidation("res.partner", "test_key")
+            notify_calls = [c for c in calls if c[0] == "SELECT pg_notify(%s, %s)"]
+            self.assertEqual(
+                len(notify_calls), 1,
+                "_notify_cache_invalidation() must issue exactly one pg_notify() call.",
+            )
+            channel, payload = notify_calls[0][1]
+            self.assertEqual(
+                channel, "distributed_cache_invalidation",
+                "Must notify on the channel distributed_redis_cache/daemons/cache_manager.py "
+                "actually LISTENs on -- the OLD 'cache_invalidation' channel has no real "
+                "listener anywhere in either repo.",
+            )
+            decoded = json.loads(payload)
+            self.assertEqual(
+                decoded.get("model"), "res.partner",
+                "Payload must be JSON (the real listener does json.loads() on it) and name "
+                "the invalidated model.",
+            )
+
             # Test edge cases
             calls.clear()
             utils._notify_cache_invalidation("", "test_key")
-            utils._notify_cache_invalidation("test.model", "")
+            utils._notify_cache_invalidation("res.partner", "")
             utils._notify_cache_invalidation(None, "test_key")
-            utils._notify_cache_invalidation("test.model", None)
-            self.assertEqual(len(calls), 0, "Should not notify for empty model or key")
+            utils._notify_cache_invalidation("res.partner", None)
+            self.assertEqual(
+                len([c for c in calls if c[0] == "SELECT pg_notify(%s, %s)"]),
+                0,
+                "Should not notify for empty model or key",
+            )
         finally:
             self.env.cr.execute = original_execute
 
@@ -349,43 +378,43 @@ class TestSecurityUtils(HamsTransactionCase):
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]
         # ---
-        # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_batch]
-        """Test _notify_cache_invalidation with a list payload."""
+        # Tests [@ANCHOR: zero_sudo:COMM_coherent_cache_signal]
+        """
+        Test _notify_cache_invalidation with a list payload (the "batch" call shape used by
+        real callers like blog_post.py/website_page.py, which pass a list of URLs).
+
+        Bug-hunt fix, 2026-09-13: this test previously asserted the exact `unnest()`-based
+        chunking SQL the old, broken implementation used to send multiple per-key payloads on
+        the WRONG channel (see test_03's own updated docstring for the full story on why that
+        channel was never actually listened to) -- itself a non-discriminating test (bug class
+        2), since it verified the shape of a signal nothing downstream ever consumed. The real
+        daemon+Redis pipeline only ever operates at whole-MODEL granularity, never per-key, so
+        there is nothing left to chunk: rewritten to assert that a list of keys still results in
+        exactly ONE correctly-addressed notify for the model (not one per key), matching the
+        real, corrected, delegated behavior.
+        """
         utils = self.env["zero_sudo.security.utils"]
-        
+
         original_execute = self.env.cr.execute
         calls = []
         def fake_execute(query, params=None, log_exceptions=True):
             calls.append((query, params))
             return original_execute(query, params, log_exceptions)
-            
+
         self.env.cr.execute = fake_execute
         try:
-            utils._notify_cache_invalidation("test.model", ["key1", "key2", "key1"])
+            utils._notify_cache_invalidation("res.partner", ["key1", "key2", "key1"])
 
-            # Extract the arguments passed to execute
-            self.assertEqual(len(calls), 1)
-            query = calls[0][0]
-            params = calls[0][1]
-
+            notify_calls = [c for c in calls if c[0] == "SELECT pg_notify(%s, %s)"]
             self.assertEqual(
-                query, "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload"
+                len(notify_calls), 1,
+                "A list of keys must still produce exactly one whole-model notify, not one "
+                "per key -- the real daemon+Redis pipeline has no per-key granularity to "
+                "chunk for.",
             )
-            self.assertEqual(params[0], "cache_invalidation")
-            # We must sort the payloads because set conversion makes the order non-deterministic
-            self.assertListEqual(
-                sorted(params[1]), sorted(["test.model:key1", "test.model:key2"])
-            )
-
-            # Test chunking
-            calls.clear()
-            many_keys = [f"key{i}" for i in range(250)]
-            utils._notify_cache_invalidation("test.model", many_keys)
-            self.assertEqual(
-                len(calls),
-                3,
-                "Should chunk 250 keys into 3 calls (100+100+50)",
-            )
+            channel, payload = notify_calls[0][1]
+            self.assertEqual(channel, "distributed_cache_invalidation")
+            self.assertEqual(json.loads(payload).get("model"), "res.partner")
         finally:
             self.env.cr.execute = original_execute
 
@@ -703,14 +732,30 @@ class TestSecurityUtils(HamsTransactionCase):
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_invalidate_model_cache]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_invalidate_model_cache]
-        """Verify secure record-level cache invalidation for specific models."""
+        """
+        Verify secure record-level cache invalidation for specific models.
+
+        Bug-hunt fix, 2026-09-13: this test used to patch `self.env.registry.clear_cache` and
+        assert IT was called -- which is exactly the mechanism this pass found to be the real
+        bug (`registry.clear_cache()` with no arguments clears the whole 'default' ormcache
+        bucket for EVERY model, not `model_name`, contradicting this function's own name and
+        docstring). A passing assertion on the buggy mechanism is itself a bug class 2
+        (non-discriminating test) instance -- it couldn't have told the difference between the
+        real, model-scoped `invalidate_model_cache()` and the old, unscoped
+        `registry.clear_cache()`. Rewritten to assert the corrected mechanism directly: the
+        model-scoped `invalidate_model_cache()` (imported at the top of this file) is called
+        with `model_name`, and `registry.clear_cache()` is NOT called at all (there is no
+        remaining reason for this function to touch the registry-wide ormcache bucket).
+        """
         utils = self.env["zero_sudo.security.utils"]
 
         # 1. Admin should be able to invalidate any model cache
-        # We patch registry.clear_cache to verify it is called
         mock_clear_cache = self.safe_patch_object(self.env.registry, "clear_cache")
-        # We use patch directly because self.safe_patch_object might have issues with some objects
-        # Use the class since it's an AbstractModel and 'utils' is just a reference
+        mock_invalidate = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.invalidate_model_cache"
+        )
+        mock_invalidate.start()
+        self.addCleanup(mock_invalidate.stop)
         mock_notify = self.safe_patch(
             "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._notify_cache_invalidation"
         )
@@ -718,8 +763,9 @@ class TestSecurityUtils(HamsTransactionCase):
         self.addCleanup(mock_notify.stop)
 
         utils._invalidate_model_cache("res.partner")
-        mock_clear_cache.assert_called_once()
-        # mock_notify.assert_called_once_with("res.partner", "CLEAR_ALL")
+        mock_invalidate.assert_called_once_with(utils.env, "res.partner")
+        mock_notify.assert_called_once_with("res.partner", "CLEAR_ALL")
+        mock_clear_cache.assert_not_called()
 
         # 2. Non-admin with write access should be able to invalidate
         # We need a user with some write access but not system.
@@ -745,9 +791,10 @@ class TestSecurityUtils(HamsTransactionCase):
         mock_check.start()
         self.addCleanup(mock_check.stop)
 
-        count_before = mock_clear_cache.call_count
+        count_before = mock_invalidate.call_count
         utils.with_user(test_user)._invalidate_model_cache("res.partner")
-        self.assertEqual(mock_clear_cache.call_count, count_before + 1)
+        self.assertEqual(mock_invalidate.call_count, count_before + 1)
+        mock_clear_cache.assert_not_called()
 
     def test_17b_caller_module_name_walks_the_real_stack(self):
         # Tests [@ANCHOR: zero_sudo:caller_module_name]

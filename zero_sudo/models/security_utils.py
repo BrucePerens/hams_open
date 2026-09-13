@@ -12,7 +12,11 @@ import logging
 
 import psycopg2.errors
 
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, invalidate_model_cache
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    distributed_cache,
+    invalidate_model_cache,
+    notify_model_invalidation,
+)
 from odoo import models, api, fields, tools, _
 from odoo.exceptions import AccessError, UserError
 from odoo.http import request
@@ -20,11 +24,29 @@ from odoo.modules.module import get_manifest as odoo_get_manifest
 
 _logger = logging.getLogger(__name__)
 
-# Module-level, process-lifetime cache of {xml_id: uid} for every KNOWN service account, as of
-# this worker's own startup -- see _preload_service_uid_cache()'s own docstring below for why
-# this lives here (not on the model instance, not in an ORM cache) and exactly what it does and
-# does not cache. A plain dict, not an LRU/ormcache: entries are never evicted, only ever added
-# (at startup, and rarely again on a genuine post-startup cache-miss -- see _get_service_uid()).
+# Module-level, process-lifetime cache of {(dbname, xml_id): uid} for every KNOWN service
+# account, as of this worker's own startup -- see _preload_service_uid_cache()'s own docstring
+# below for why this lives here (not on the model instance, not in an ORM cache) and exactly what
+# it does and does not cache. A plain dict, not an LRU/ormcache: entries are never evicted, only
+# ever added (at startup, and rarely again on a genuine post-startup cache-miss -- see
+# _get_service_uid()).
+#
+# Keyed by (dbname, xml_id), not bare xml_id -- bug-hunt fix, 2026-09-13: this deployment is
+# single-database today (db_name = hams_dev in /etc/odoo/odoo.conf, confirmed independently via
+# this project's own night_shift_todo.md/night_shift_history.md, not merely trusted from this
+# file's own docstring), so a bare xml_id key happens to be safe right now -- but this dict is
+# process-wide and module-level, shared by every registry any worker in this process ever builds.
+# If this ever became a multi-database deployment (odoo-bin -d db1,db2, or a dbfilter routing
+# multiple real databases through the same worker pool), two different databases' own service
+# accounts sharing the same xml_id (a very likely collision -- xml_ids like
+# "zero_sudo.config_service_internal" are the SAME string in every database that installs this
+# module) would silently clobber each other's cached uid, handing one database's request the
+# WRONG numeric uid for another database's own service account -- a cross-tenant privilege
+# mix-up, not merely a wrong-answer bug. `ham_base/models/ir_config_parameter.py` already keys
+# its own, structurally identical service-uid cache by db_name for exactly this reason (see its
+# own `_SERVICE_UID_CACHE[db_name] = ...`) -- this fix copies that already-established, in-repo
+# pattern rather than inventing a new one. No behavior change for the current single-db
+# deployment: `self.env.cr.dbname` is the same constant on every call in that shape.
 _SERVICE_UID_CACHE = {}
 
 
@@ -76,16 +98,29 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         genuinely static) `ir_model_data` lookup on a hit, never to skip the safety check itself.
         """
         global _SERVICE_UID_CACHE
+        dbname = self.env.cr.dbname
         self.env.cr.execute(
             "SELECT d.module || '.' || d.name, d.res_id "
             "FROM ir_model_data d "
             "JOIN res_users u ON u.id = d.res_id "
             "WHERE d.model = 'res.users' AND u.is_service_account = true"
         )
-        _SERVICE_UID_CACHE = dict(self.env.cr.fetchall())
+        # Keyed by (dbname, xml_id) -- see _SERVICE_UID_CACHE's own module-level comment for why.
+        # Drop only THIS database's own previously-cached entries (preserving the original
+        # "full refresh on every _register_hook()" semantics -- a service account uninstalled
+        # since the last preload must not linger in the cache) before merging in the freshly
+        # queried set, WITHOUT touching any OTHER database's own entries a worker process may
+        # already have cached from a different registry build.
+        fresh = {(dbname, xml_id): uid for xml_id, uid in self.env.cr.fetchall()}
+        _SERVICE_UID_CACHE = {
+            k: v for k, v in _SERVICE_UID_CACHE.items() if k[0] != dbname
+        }
+        _SERVICE_UID_CACHE.update(fresh)
         _logger.info(
-            "zero_sudo: preloaded %d service-account UID(s) into the in-process hash table.",
+            "zero_sudo: preloaded %d service-account UID(s) for database '%s' into the "
+            "in-process hash table.",
             len(_SERVICE_UID_CACHE),
+            dbname,
         )
 
     @api.model
@@ -164,7 +199,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # inside a test (or any other) transaction that later rolls back would otherwise leak
         # into every subsequent call in this same worker process. A genuine miss is rare enough
         # that paying the full resolve cost again next time is the safe trade.
-        uid = _SERVICE_UID_CACHE.get(xml_id)
+        # Keyed by (dbname, xml_id) -- see _SERVICE_UID_CACHE's own module-level comment
+        # (bug-hunt fix, 2026-09-13: a bare xml_id key would collide across databases in a
+        # multi-database deployment).
+        uid = _SERVICE_UID_CACHE.get((self.env.cr.dbname, xml_id))
         try:
             with self.env.cr.savepoint():
                 if uid is not None:
@@ -624,10 +662,26 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     % model_name
                 )
 
-        # We assume the identity of the dedicated cache invalidation service
-        # to perform the registry-level cache clearing.
-        env_svc = self._get_service_env("zero_sudo.cache_invalidation_service_internal")
-        env_svc.registry.clear_cache()
+        # Bug-hunt fix (2026-09-13): this used to escalate to a dedicated
+        # "zero_sudo.cache_invalidation_service_internal" service account
+        # purely to call `env_svc.registry.clear_cache()` -- a call that (a)
+        # needs no privileged uid at all (it's a pure in-process operation,
+        # no ORM access check anywhere in it), and (b) with no arguments
+        # clears only Odoo's own 'default' `tools.ormcache` bucket for EVERY
+        # model in the registry, not `model_name` specifically -- so the
+        # access check two lines up (write access to ONE model) never
+        # actually matched the real blast radius (a full-registry cache
+        # clear). This function's own name and docstring promise a
+        # model-SCOPED invalidation; `invalidate_model_cache()` (imported
+        # above, from distributed_redis_cache.redis_cache) is the real,
+        # already-existing, already-correctly-used-elsewhere-in-this-file
+        # (see _set_kv() below) mechanism for that -- it clears exactly
+        # this worker's own Redis + local-fallback entries for
+        # `model_name` alone. `_notify_cache_invalidation()` below (also
+        # fixed this same pass -- see its own docstring) is what extends
+        # that to every OTHER worker.
+        invalidate_model_cache(self.env, model_name)
+        self._notify_cache_invalidation(model_name, "CLEAR_ALL")
 
         # Log the invalidation event
         facility_env = self._get_service_env("zero_sudo.odoo_facility_service_internal")
@@ -639,44 +693,77 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             }
         )
 
-        # Also signal distributed caches via pg_notify
-        self._notify_cache_invalidation(model_name, "CLEAR_ALL")
-
     @api.model
     def _notify_cache_invalidation(self, model_name, key_value):
         # [@ANCHOR: zero_sudo:COMM_coherent_cache_signal]
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal]
         # ---
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]
+        # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_cache_signaling]
-        if not model_name:
-            return
+        """
+        Signals every OTHER worker process (not just this one) that
+        `model_name`'s own cached entries are stale, via Postgres NOTIFY.
 
-        if isinstance(key_value, (list, set, tuple)):
-            payloads = [f"{model_name}:{kv}" for kv in set(key_value) if kv]
-            if payloads:
-                # We limit the number of notifications in a single call to prevent
-                # potential PostgreSQL performance issues or payload size limits.
-                # Standard PG_NOTIFY payload limit is 8000 bytes.
-                for i in range(0, len(payloads), 100):
-                    chunk = payloads[i : i + 100]
-                    # [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_batch]
-                    # ---
-                    # # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_coherent_cache_signal_batch]
-                    # ---
-                    self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_batch]  # fmt: skip
-                        "SELECT pg_notify(%s, payload) FROM unnest(%s) AS payload",
-                        ("cache_invalidation", chunk),
-                    )
-        elif key_value:
-            # [@ANCHOR: zero_sudo:COMM_coherent_cache_signal_single]
-            # ---
-            # # Verified by [@ANCHOR: zero_sudo:COMM_COMM_test_coherent_cache_signal_single]
-            # ---
-            self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_coherent_cache_signal_single]  # fmt: skip
-                "SELECT pg_notify(%s, %s)",
-                ("cache_invalidation", f"{model_name}:{key_value}"),
-            )
+        Bug-hunt fix (2026-09-13) -- this was a REAL, live, previously
+        undiscovered defect, not merely a latent one: this function sent
+        `pg_notify("cache_invalidation", f"{model_name}:{key_value}")` (a
+        plain colon-joined string, batched via `unnest()` for a list of
+        keys) -- but the actual, only real listener,
+        `distributed_redis_cache/daemons/cache_manager.py`, LISTENs on a
+        DIFFERENT channel entirely (`"distributed_cache_invalidation"`,
+        confirmed by reading its own `PG_CHANNEL` constant) and expects a
+        JSON payload (`json.loads(payload)` immediately on receipt, then
+        publishes it to Redis pub/sub verbatim) -- a plain string payload
+        would fail that `json.loads()` and be logged as "Malformed JSON
+        payload from Postgres", never reaching Redis. Confirmed via grep
+        that NOTHING in either repo LISTENs on the plain "cache_invalidation"
+        channel this file was sending to -- every real call to this
+        function was a pure no-op for cross-worker purposes, silently,
+        since the channel/format mismatch raised nothing locally (pg_notify
+        itself always "succeeds" from the sender's perspective regardless
+        of whether anyone is listening).
+
+        Real, LIVE consequence (not merely latent): `blog_post.py` (3 call
+        sites) and `edge_routing/{domain,routing_mixin}.py` (3 call sites)
+        call ONLY this function for their own cross-worker cache
+        coherency, with no other invalidation signal alongside it -- for
+        those, a blog post's URL/publish-state change or a
+        custom-domain/routing change was never actually propagated to any
+        OTHER worker process's own in-memory L1 cache
+        (`distributed_redis_cache/redis_cache.py`'s `_local_cache`, checked
+        BEFORE Redis on every `@distributed_cache()` read), which would
+        keep serving stale content until that worker's own 24h Redis TTL
+        boundary or a restart. `user_websites/models/website_page.py`'s two
+        call sites happened to be harmless in practice: each one calls this
+        (broken) function immediately followed by a correct, manually
+        inlined `notify_model_invalidation(self.env, self._name)` +
+        matching `pg_notify(..., "distributed_cache_invalidation", ...)`
+        pair -- real cross-worker invalidation for `website.page` already
+        works via that sibling call, making this function's own call there
+        redundant rather than load-bearing. That duplication in
+        website_page.py is a separate, lower-priority cleanup outside this
+        file's own edit scope -- see night_shift_todo.md.
+
+        Fix: delegate to `notify_model_invalidation()` (imported above,
+        from distributed_redis_cache.redis_cache) -- the real, already-
+        correct, already-tested implementation of exactly this "signal
+        every worker, including this one, that a model's cache is stale"
+        contract (correct channel, correct JSON payload shape
+        `{"model": ..., "dbname": ...}`, and its own `model_name not in
+        env` validation this file's version never had at all). The
+        previous per-key/per-batch granularity (`key_value`, chunked via
+        `unnest()` for a list) was never actually consumed by anything
+        downstream -- the real daemon+Redis pipeline only ever operates at
+        MODEL granularity -- so collapsing to one whole-model signal loses
+        no real capability; `key_value` is kept as a required argument
+        (still enforced as "don't fire for a falsy invalidation target")
+        purely to avoid changing every real call site's own signature.
+        """
+        if not model_name or not key_value:
+            return
+        notify_model_invalidation(self.env, model_name)
 
     @api.model
     # [@ANCHOR: zero_sudo:get_param_read_whitelist]
@@ -948,7 +1035,17 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
         # Direct SQL bypasses the ORM cache. We must invalidate it.
         self.env["zero_sudo.kv"].invalidate_model()
+        # `invalidate_model_cache()` clears THIS worker's own Redis + local-fallback entries
+        # immediately (so a same-transaction `_set_kv()` followed by `_get_kv()` never sees a
+        # stale value). Bug-hunt fix (2026-09-13): that alone never reached any OTHER worker
+        # process's own in-memory cache -- nothing here ever signalled them. `notify_model_
+        # invalidation()` (added this pass) sends the real, correctly-addressed cross-worker
+        # pg_notify signal (see _notify_cache_invalidation()'s own docstring for the full story
+        # on why the channel this file used to send on was never actually being listened to);
+        # its own local invalidation is deferred to postcommit, which is why the immediate call
+        # above is kept rather than replaced by this one.
         invalidate_model_cache(self.env, "zero_sudo.security.utils")
+        notify_model_invalidation(self.env, "zero_sudo.security.utils")
 
     @api.model
     @distributed_cache()
