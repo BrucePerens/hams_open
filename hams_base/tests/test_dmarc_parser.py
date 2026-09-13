@@ -56,6 +56,25 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(record.count, 5)
         self.assertEqual(record.dkim_alignment, "pass")
 
+    def test_two_reports_missing_report_id_are_not_deduplicated_against_each_other(self):
+        # Bug-hunt fix (2026-09-13): findtext("report_id") returns None for
+        # a report with no <report_id> element, and Odoo's domain evaluator
+        # treats ('report_id', '=', None) as IS NULL -- so a second,
+        # genuinely different malformed report used to be silently dropped
+        # as a false "already exists" match against the first one instead
+        # of being parsed into its own record.
+        xml_no_id_a = self.sample_xml.replace("<report_id>12345</report_id>", "")
+        xml_no_id_b = xml_no_id_a.replace(
+            "<org_name>google.com</org_name>", "<org_name>yahoo.com</org_name>"
+        )
+        report_a = self.DmarcReport._parse_dmarc_xml(xml_no_id_a)
+        report_b = self.DmarcReport._parse_dmarc_xml(xml_no_id_b)
+        self.assertTrue(report_a)
+        self.assertTrue(report_b)
+        self.assertNotEqual(report_a.id, report_b.id)
+        self.assertEqual(report_a.org_name, "google.com")
+        self.assertEqual(report_b.org_name, "yahoo.com")
+
     def test_message_new_with_zip(self):
         # Tests [@ANCHOR: hams_base:COMM_dmarc_message_new]
 

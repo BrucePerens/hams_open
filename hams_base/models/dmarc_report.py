@@ -191,9 +191,20 @@ class DmarcReport(models.Model):
         end = _safe_int(date_range.findtext("end")) if date_range is not None else 0
 
         # Check if report already exists
-        existing = self.env['hams_base.dmarc.report'].search([('report_id', '=', report_id)], limit=1)
-        if existing:
-            return existing
+        #
+        # Bug-hunt fix (2026-09-13): only dedup on a genuine report_id.
+        # findtext() returns None for a missing <report_id> element, and
+        # Odoo's domain evaluator treats ('report_id', '=', None) as
+        # IS NULL, which would match ANY prior report also missing a
+        # report_id -- silently dropping every subsequent malformed-but-
+        # distinct DMARC report as a false "already exists" after the
+        # first one. A report with no report_id can never legitimately be
+        # deduplicated (there is nothing to key on), so always create a
+        # new record for it instead of searching.
+        if report_id:
+            existing = self.env['hams_base.dmarc.report'].search([('report_id', '=', report_id)], limit=1)
+            if existing:
+                return existing
 
         domain = policy_published.findtext("domain")
         
