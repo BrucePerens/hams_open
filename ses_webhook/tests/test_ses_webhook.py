@@ -636,15 +636,45 @@ class TestSesWebhook(HamsHttpCase):
         # `urllib.request.urlopen(...)` is used as `with urlopen(...) as resp: resp.read()` --
         # MagicMock's built-in context-manager support means `.return_value.__enter__` is
         # already a real, callable magic method; only its own return needs configuring.
-        mock_urlopen.return_value.__enter__.return_value.read.return_value = b'fake-cert-bytes'
+        #
+        # Bug-hunt fix (2026-09-13): this used to feed back plain
+        # `b'fake-cert-bytes'` -- fine before the fix, but the fix now
+        # parses the response as a real x509 certificate before returning
+        # it (to avoid caching a malformed 200 response forever, see the
+        # function's own docstring), so this must be real, parseable PEM
+        # bytes or this test itself would raise. Reuses the same
+        # self-signed cert fixture other tests already sign against.
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = self._sns_cert_pem
 
         url = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-cachetest0000000000000000000000.pem"
         first = _REAL_FETCH_SNS_SIGNING_CERT(url)
         second = _REAL_FETCH_SNS_SIGNING_CERT(url)
 
-        self.assertEqual(first, b'fake-cert-bytes')
-        self.assertEqual(second, b'fake-cert-bytes')
+        self.assertEqual(first, self._sns_cert_pem)
+        self.assertEqual(second, self._sns_cert_pem)
         mock_urlopen.assert_called_once_with(url, timeout=10)
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+
+    def test_33b_fetch_sns_signing_cert_does_not_cache_a_malformed_response(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
+        """Bug-hunt fix (2026-09-13): a 200 response with a body that isn't a parseable PEM
+        certificate (e.g. a proxy/CDN error page served with HTTP 200) must not be cached --
+        lru_cache never memoizes a raised exception, so if the parse happens INSIDE this cached
+        function, a transient bad response is retried (and can succeed) on the very next call for
+        the same URL, rather than permanently poisoning the cache for the process's lifetime."""
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        url = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-badcachetest000000000000000000.pem"
+
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = b'<html>502 Bad Gateway</html>'
+        with self.assertRaises(ValueError):
+            _REAL_FETCH_SNS_SIGNING_CERT(url)
+
+        # The failed call must not be cached -- a subsequent call with a real cert must succeed.
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = self._sns_cert_pem
+        result = _REAL_FETCH_SNS_SIGNING_CERT(url)
+        self.assertEqual(result, self._sns_cert_pem)
+        self.assertEqual(mock_urlopen.call_count, 2)
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
 
     def test_34_forged_complaint_without_signature_does_not_blacklist(self):

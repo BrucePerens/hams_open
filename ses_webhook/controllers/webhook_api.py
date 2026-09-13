@@ -135,11 +135,25 @@ def _fetch_sns_signing_cert(signing_cert_url):
 
     `lru_cache` does not memoize a raised exception -- a transient fetch failure is retried on the
     next call rather than being "stuck" returning a cached error forever.
+
+    Bug-hunt fix (2026-09-13): this used to return whatever bytes came back from a 200 response
+    with no validation, so a 200 response with a non-certificate body (e.g. a proxy/CDN error page
+    served with HTTP 200 for the cert URL) got cached here as if it were a valid cert, and every
+    subsequent message reusing this same SigningCertURL would then fail
+    `x509.load_pem_x509_certificate` in the caller for the remainder of the process's lifetime,
+    instead of retrying the fetch on the next message. Now parses (and discards the result) here,
+    before returning, so a malformed response raises before this function ever returns -- `lru_cache`
+    never caches a raised exception. Still returns the raw PEM bytes (not the parsed certificate)
+    to keep this function's return type unchanged for existing callers/tests
+    (test_33_fetch_sns_signing_cert_caches_by_url asserts on the raw bytes directly); the caller
+    parses again, which is cheap and keeps this function's own job purely "fetch a valid cert."
     """
     # Host/path pre-validated by the caller (_verify_sns_signature, against
     # _SNS_SIGNING_CERT_URL_RE) before this function is ever reached.
     with urllib.request.urlopen(signing_cert_url, timeout=10) as resp:
-        return resp.read()
+        cert_pem = resp.read()
+    x509.load_pem_x509_certificate(cert_pem)
+    return cert_pem
 
 
 # [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
