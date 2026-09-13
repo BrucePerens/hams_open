@@ -76,7 +76,18 @@ class ManualLibraryController(http.Controller):
                 if cache_key:
                     _md_cache[cache_key] = res
                 return res
-            except (KeyError, ValueError) as e:   # Verified by [@ANCHOR: test_manual_markdown_fallback]
+            except (KeyError, ValueError, RecursionError) as e:
+                # bug-hunt (2026-09-13): this claim's own residual-risk note flagged
+                # that `except (KeyError, ValueError)` was never checked against every
+                # exception type markdown.markdown() can actually raise for malformed
+                # input. Confirmed empirically: ordinary, trivially-typeable text whose
+                # plain-text content is a long run of "- " list markers (no exploit
+                # tooling needed) drives python-markdown's list parser past Python's
+                # recursion limit, raising RecursionError -- uncaught here, this 500'd
+                # the whole article page on every single view (no surrounding guard in
+                # the caller either). Regression test:
+                # test_09_markdown_compiler_deeply_nested_list_falls_back_gracefully
+                # in tests/test_robustness.py.
                 _logger.warning("Markdown compilation failed: %s", e)
 
         res = Markup(html_body)

@@ -234,3 +234,36 @@ class TestManualRobustness(HamsHttpCase):
             "The markdown compiler must sanitize its output -- a live "
             "<script> tag must never reach the rendered page.",
         )
+
+    def test_09_markdown_compiler_deeply_nested_list_falls_back_gracefully(self):
+        """
+        [!] SECURITY/ROBUSTNESS: _compile_markdown()'s own claim flagged an
+        unverified residual risk -- its `except (KeyError, ValueError)`
+        around `markdown.markdown(...)` was never checked against every
+        exception type the library can actually raise for malformed
+        input. A body whose plain-text content is a long run of "- "
+        list markers (trivially producible by an ordinary user pasting
+        or repeatedly typing "- ", no exploit tooling needed) drives
+        python-markdown's list parser past Python's recursion limit,
+        raising `RecursionError`. Confirmed via a real probe run before
+        this fix: this 500'd the article page on every single view.
+        `RecursionError` is now caught alongside `KeyError`/`ValueError`,
+        falling back to the already-sanitized `Markup(html_body)`.
+        """
+        crash_article = self.env["knowledge.article"].create(
+            {
+                "name": "Recursion Bomb Article",
+                "body": "<p>" + ("- " * 3000) + "item</p>",
+                "is_published": True,
+                "active": True,
+            }
+        )
+
+        self.authenticate(None, None)
+        response = self.url_open(crash_article.website_url)
+        self.assertEqual(
+            response.status_code,
+            200,
+            "A RecursionError from the markdown compiler must fall back "
+            "gracefully, not 500 the whole article page.",
+        )
