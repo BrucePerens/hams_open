@@ -13,16 +13,26 @@
             <field name="state">code</field>
             <field name="code">
 # Procedure for optimized service account resolution and security verification
-sql_get_uid = """
-CREATE OR REPLACE FUNCTION zero_sudo_get_service_uid(p_xml_id TEXT)
+#
+# Split into two halves, 2026-09-13 (Bruce's own direct instruction: "Change the initialization
+# software to load the service user-IDs into a hash-table at start-up"): zero_sudo_resolve_
+# service_xmlid() is the pure ir_model_data lookup -- genuinely immutable once a noupdate="1"
+# data record installs, safe to cache in-process -- and zero_sudo_verify_service_uid() is the
+# LIVE safety verdict (active / is_service_account / no privilege-escalation), which must never
+# be cached since any of those three can change at runtime (an admin disabling a compromised
+# account, a group grant changing). zero_sudo_get_service_uid() itself is kept as a thin
+# combination of both, byte-for-byte behaviorally identical to its old single-function form, so
+# every existing direct SQL caller (and every existing test asserting its exact exception
+# messages) keeps working unchanged. security_utils.py's own _get_service_uid() is what actually
+# calls the two halves separately to skip the ir_model_data resolution on a cache hit -- see its
+# own docstring for the Python-side half of this story.
+sql_resolve_xmlid = """
+CREATE OR REPLACE FUNCTION zero_sudo_resolve_service_xmlid(p_xml_id TEXT)
 RETURNS INTEGER AS $$
 DECLARE
     v_module TEXT;
     v_name TEXT;
     v_uid INTEGER;
-    v_active BOOLEAN;
-    v_is_svc BOOLEAN;
-    v_has_privilege_escalation BOOLEAN;
 BEGIN
     v_module := split_part(p_xml_id, '.', 1);
     v_name := split_part(p_xml_id, '.', 2);
@@ -35,8 +45,21 @@ BEGIN
         RAISE EXCEPTION 'Security Alert: Service Account % not found.', p_xml_id;
     END IF;
 
+    RETURN v_uid;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+sql_verify_uid = """
+CREATE OR REPLACE FUNCTION zero_sudo_verify_service_uid(p_uid INTEGER, p_xml_id TEXT)
+RETURNS VOID AS $$
+DECLARE
+    v_active BOOLEAN;
+    v_is_svc BOOLEAN;
+    v_has_privilege_escalation BOOLEAN;
+BEGIN
     SELECT active, is_service_account INTO v_active, v_is_svc
-    FROM res_users WHERE id = v_uid;
+    FROM res_users WHERE id = p_uid;
 
     IF v_active IS NOT TRUE THEN
         RAISE EXCEPTION 'Security Alert: Service Account % is disabled.', p_xml_id;
@@ -66,7 +89,7 @@ BEGIN
         SELECT 1
         FROM (
             WITH RECURSIVE effective_groups(gid) AS (
-                SELECT rel.gid FROM res_groups_users_rel rel WHERE rel.uid = v_uid
+                SELECT rel.gid FROM res_groups_users_rel rel WHERE rel.uid = p_uid
                 UNION
                 SELECT imp.hid
                 FROM res_groups_implied_rel imp
@@ -81,7 +104,18 @@ BEGIN
     IF v_has_privilege_escalation THEN
         RAISE EXCEPTION 'Security Alert: Service Account % violates the Zero-Sudo mandate by possessing global administrative groups.', p_xml_id;
     END IF;
+END;
+$$ LANGUAGE plpgsql;
+"""
 
+sql_get_uid = """
+CREATE OR REPLACE FUNCTION zero_sudo_get_service_uid(p_xml_id TEXT)
+RETURNS INTEGER AS $$
+DECLARE
+    v_uid INTEGER;
+BEGIN
+    v_uid := zero_sudo_resolve_service_xmlid(p_xml_id);
+    PERFORM zero_sudo_verify_service_uid(v_uid, p_xml_id);
     RETURN v_uid;
 END;
 $$ LANGUAGE plpgsql;
@@ -99,6 +133,8 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
+env.cr.execute(sql_resolve_xmlid)
+env.cr.execute(sql_verify_uid)
 env.cr.execute(sql_get_uid)
 env.cr.execute(sql_set_kv)
             </field>

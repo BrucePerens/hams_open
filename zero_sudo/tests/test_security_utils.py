@@ -7,6 +7,7 @@
 from odoo.tests.common import tagged
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.models import security_utils as security_utils_module
 from odoo.exceptions import AccessError, UserError
 from unittest.mock import MagicMock, mock_open
 import os
@@ -1166,3 +1167,156 @@ class TestSecurityUtils(HamsTransactionCase):
             "odoo.addons.zero_sudo.models.security_utils.request", new=None
         )
         self.assertIsNone(utils._get_trusted_client_ip())
+
+    def test_29_preload_service_uid_cache_populates_known_service_accounts_only(self):
+        # Tests [@ANCHOR: zero_sudo:preload_service_uid_cache]
+        """Bruce's own direct instruction (2026-09-12/13): "load the service user-IDs into a
+        hash-table at start-up." _register_hook() (which every real server startup already
+        calls once per registry build, before this test even ran) should have already populated
+        the cache -- this proves it actually contains a real, known service account's xml_id
+        mapped to its real uid, and does NOT contain a real human admin's xml_id (base.user_admin
+        is never is_service_account=True, so the preload query's own WHERE clause must exclude
+        it)."""
+        utils = self.env["zero_sudo.security.utils"]
+        real_uid = utils._get_service_uid("zero_sudo.mail_service_internal")
+        self.assertEqual(
+            security_utils_module._SERVICE_UID_CACHE.get("zero_sudo.mail_service_internal"),
+            real_uid,
+            "A real, already-installed service account must be preloaded into the cache by "
+            "_register_hook(), keyed to its own real uid.",
+        )
+        self.assertNotIn(
+            "base.user_admin",
+            security_utils_module._SERVICE_UID_CACHE,
+            "A real human admin user must never appear in the service-uid cache, even though "
+            "it has a real ir.model.data xml_id -- the preload query's own is_service_account "
+            "filter must exclude it.",
+        )
+
+    def test_30_get_service_uid_cache_hit_skips_ir_model_data_but_still_verifies_live(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
+        """The cache-hit path (a real, preloaded service account) must still return the correct
+        uid -- proving the split into zero_sudo_resolve_service_xmlid()/
+        zero_sudo_verify_service_uid() didn't change the outward-facing result for the common
+        case, only which SQL function actually runs underneath."""
+        utils = self.env["zero_sudo.security.utils"]
+        xml_id = "zero_sudo.mail_service_internal"
+        self.assertIn(
+            xml_id,
+            security_utils_module._SERVICE_UID_CACHE,
+            "Test setup assumption: this account must actually be preloaded, or this test "
+            "cannot tell a cache hit apart from a miss.",
+        )
+        uid = utils._get_service_uid(xml_id)
+        self.assertTrue(
+            self.env["res.users"].browse(uid).is_service_account,
+            "The uid returned via the cache-hit path must be the real, correct service account.",
+        )
+
+    def test_31_get_service_uid_cache_hit_still_fails_live_if_disabled_after_preload(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
+        """The single most important correctness property of this whole cache: a service
+        account that WAS valid at preload time but has since been disabled (a real admin action,
+        mid-server-lifetime) must still be rejected live, not silently trusted because its uid
+        sits in the process-level cache. Proves the safety verdict (active/is_service_account/
+        no privilege escalation) is never itself cached -- only the xml_id->uid resolution is.
+
+        Uses a dedicated, test-local account rather than a real shared one (e.g.
+        zero_sudo.mail_service_internal, used pervasively elsewhere in this exact suite):
+        _SERVICE_UID_CACHE is a module-level, process-lifetime dict, not scoped to this test's
+        own transaction, so disabling a real shared account here -- even with a try/finally
+        restore -- risks other tests in the same worker observing it disabled if anything
+        (test ordering, an aborted run) skips the restore. Manually seeding the cache with a
+        fresh, throwaway account's own real uid reproduces the exact "cached at preload time"
+        precondition this test needs, without touching anything another test depends on."""
+        fresh_user = self.env["res.users"].create(
+            {
+                "name": "Cache Staleness Test Service Account",
+                "login": "cache_staleness_test_service_account",
+                "is_service_account": True,
+            }
+        )
+        xml_id_name = "cache_staleness_test_service_account_xmlid"
+        self.env["ir.model.data"].create(
+            {
+                "module": "test_module",
+                "name": xml_id_name,
+                "model": "res.users",
+                "res_id": fresh_user.id,
+            }
+        )
+        xml_id = f"test_module.{xml_id_name}"
+
+        # Simulate "this account was already valid and cached at this worker's own startup" --
+        # a real preload never sees a freshly-created record like this one, so the cache has to
+        # be seeded directly to reproduce the precondition this test is about.
+        security_utils_module._SERVICE_UID_CACHE[xml_id] = fresh_user.id
+        try:
+            utils = self.env["zero_sudo.security.utils"]
+            uid = utils._get_service_uid(xml_id)
+            self.assertEqual(
+                uid,
+                fresh_user.id,
+                "Sanity check: the seeded cache entry must resolve correctly while the "
+                "account is still genuinely valid, before this test disables it.",
+            )
+
+            fresh_user.write({"active": False})
+            try:
+                with self.env.cr.savepoint():
+                    utils._get_service_uid(xml_id)
+                self.fail(
+                    "A cached service account that was disabled AFTER preload must still be "
+                    "rejected -- the cache must never mask a live safety-state change."
+                )
+            except (AccessError, UserError, psycopg2.errors.RaiseException) as e:
+                self.assertTrue(str(e))
+        finally:
+            # This dict is not transaction-scoped, so it must be cleaned up explicitly --
+            # this test's own record creations above roll back automatically at teardown, but
+            # a stray cache entry pointing at a since-rolled-back uid would not.
+            security_utils_module._SERVICE_UID_CACHE.pop(xml_id, None)
+
+    def test_32_get_service_uid_cache_miss_resolves_live_and_does_not_pollute_the_cache(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
+        """A service account created AFTER this worker's own startup (this test's own fresh
+        fixture) is, by construction, a cache miss -- _get_service_uid() must still resolve and
+        verify it correctly via the original full SQL function, and must NOT write the result
+        into the process-level cache (that cache is not transaction-scoped, so a value written
+        here would leak into every later test in this same worker even after this test's own
+        transaction rolls back)."""
+        rogue_but_valid_user = self.env["res.users"].create(
+            {
+                "name": "Freshly Created Service Account",
+                "login": "freshly_created_service_account",
+                "is_service_account": True,
+            }
+        )
+        xml_id_name = "freshly_created_service_account_xmlid"
+        self.env["ir.model.data"].create(
+            {
+                "module": "test_module",
+                "name": xml_id_name,
+                "model": "res.users",
+                "res_id": rogue_but_valid_user.id,
+            }
+        )
+        full_xml_id = f"test_module.{xml_id_name}"
+        self.assertNotIn(
+            full_xml_id,
+            security_utils_module._SERVICE_UID_CACHE,
+            "Test setup assumption: a service account created mid-test must not already be in "
+            "the startup-time cache, or this test cannot tell a miss apart from a hit.",
+        )
+
+        utils = self.env["zero_sudo.security.utils"]
+        uid = utils._get_service_uid(full_xml_id)
+        self.assertEqual(uid, rogue_but_valid_user.id)
+        self.assertNotIn(
+            full_xml_id,
+            security_utils_module._SERVICE_UID_CACHE,
+            "A cache miss must resolve live without writing the result back into the "
+            "process-level cache -- see _get_service_uid()'s own comment on why (a value "
+            "written from inside a transaction that later rolls back would otherwise leak "
+            "into every later call in this same worker process).",
+        )

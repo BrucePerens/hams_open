@@ -20,6 +20,13 @@ from odoo.modules.module import get_manifest as odoo_get_manifest
 
 _logger = logging.getLogger(__name__)
 
+# Module-level, process-lifetime cache of {xml_id: uid} for every KNOWN service account, as of
+# this worker's own startup -- see _preload_service_uid_cache()'s own docstring below for why
+# this lives here (not on the model instance, not in an ORM cache) and exactly what it does and
+# does not cache. A plain dict, not an LRU/ormcache: entries are never evicted, only ever added
+# (at startup, and rarely again on a genuine post-startup cache-miss -- see _get_service_uid()).
+_SERVICE_UID_CACHE = {}
+
 
 class ZeroSudoSecurityUtils(models.AbstractModel):
     _name = "zero_sudo.security.utils"
@@ -28,6 +35,58 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         "Privilege Utilities"
     )
     name = fields.Char(string="Name", default=lambda self: self._description)
+
+    def _register_hook(self):
+        # [@ANCHOR: zero_sudo:register_hook_preload_service_uids]
+        super()._register_hook()
+        self._preload_service_uid_cache()
+
+    @api.model
+    def _preload_service_uid_cache(self):
+        # [@ANCHOR: zero_sudo:preload_service_uid_cache]
+        """
+        Bruce's own direct instruction (2026-09-12/13): "Change the initialization software to
+        load the service user-IDs into a hash-table at start-up. Make sure database
+        initialization saves them before the program even starts."
+
+        `_register_hook()` runs exactly once per registry build (see `odoo/modules/loading.py`'s
+        own STEP 9, `for model in env.values(): model._register_hook()`) -- confirmed directly
+        that this fires for an AbstractModel like this one, not just concrete models (`env.values()`
+        iterates every registered model regardless of kind). On this deployment specifically
+        (`db_name` set in `/etc/odoo/odoo.conf`, real prefork `workers`), that registry build
+        happens once in the master process via `preload_registries()` BEFORE any worker forks and
+        starts accepting connections -- confirmed live by checking the actual running server's
+        command line and config, not assumed -- so this cache really is populated "before the
+        program" (in the sense of "before it starts serving traffic") "even starts", matching
+        Bruce's own wording, and every forked worker inherits the already-populated dict for free
+        via fork() copy-on-write. The "database initialization" half of his instruction is
+        already structurally guaranteed by Odoo's own module-loading order: every service
+        account's `res.users` row and its `ir.model.data` xml_id come from a module's own
+        `noupdate="1"` XML data, loaded during that same module's install/update, which always
+        completes before `_register_hook()` ever runs for that registry -- there is no separate
+        "database initialization" step this needs to wait for.
+
+        Deliberately caches ONLY the xml_id -> uid RESOLUTION (`ir_model_data`'s `res_id`), never
+        the runtime safety verdict (active / is_service_account / no privilege-escalation) --
+        that resolution is genuinely immutable once a `noupdate="1"` data record installs, but the
+        safety verdict can change at any time a real admin disables a compromised account or
+        changes a group grant, and this codebase's whole Zero-Sudo mandate depends on that check
+        never going stale. `_get_service_uid()` below always re-verifies live on every single
+        call, cache hit or not -- this cache exists purely to skip the (comparatively expensive,
+        genuinely static) `ir_model_data` lookup on a hit, never to skip the safety check itself.
+        """
+        global _SERVICE_UID_CACHE
+        self.env.cr.execute(
+            "SELECT d.module || '.' || d.name, d.res_id "
+            "FROM ir_model_data d "
+            "JOIN res_users u ON u.id = d.res_id "
+            "WHERE d.model = 'res.users' AND u.is_service_account = true"
+        )
+        _SERVICE_UID_CACHE = dict(self.env.cr.fetchall())
+        _logger.info(
+            "zero_sudo: preloaded %d service-account UID(s) into the in-process hash table.",
+            len(_SERVICE_UID_CACHE),
+        )
 
     @api.model
     def _get_deterministic_hash(self, input_string):
@@ -71,11 +130,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
 
-        # Bug-hunt fix (2026-09-09): `zero_sudo_get_service_uid()` (the SQL
-        # procedure below) does a real Postgres `RAISE EXCEPTION` when the
-        # requested account genuinely doesn't exist, is disabled, or isn't
-        # a service account -- that propagates through
-        # `odoo/sql_db.py`'s `Cursor.execute()` (which logs and
+        # Bug-hunt fix (2026-09-09): `zero_sudo_get_service_uid()`/`zero_sudo_verify_service_uid()`
+        # (the SQL procedures below) do a real Postgres `RAISE EXCEPTION` when the requested
+        # account genuinely doesn't exist, is disabled, or isn't a service account -- that
+        # propagates through `odoo/sql_db.py`'s `Cursor.execute()` (which logs and
         # unconditionally re-raises) as a raw `psycopg2.errors.
         # RaiseException`, NOT `odoo.exceptions.AccessError`. Every caller
         # across this codebase that wraps a `_get_service_uid()` call in
@@ -94,10 +152,26 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # below just fine, but its very next SQL statement (a fallback
         # query, or anything else in the same transaction) would then
         # raise `InFailedSqlTransaction` uncaught.
+        #
+        # Cache-hit/miss split, 2026-09-13 (see _preload_service_uid_cache()'s own docstring for
+        # the full "why"): a cache hit skips straight to the live safety-verify half
+        # (zero_sudo_verify_service_uid), keyed on the already-known uid -- the SAME live check
+        # as before, just without re-resolving the xml_id via ir_model_data first. A cache miss
+        # (a service account that didn't exist yet when this worker's own registry loaded --
+        # e.g. a module installed without a restart) falls back to the original, unchanged,
+        # full resolve-and-verify function, and deliberately does NOT write the result back into
+        # the module-level cache: that cache is not transaction-scoped, so a value written from
+        # inside a test (or any other) transaction that later rolls back would otherwise leak
+        # into every subsequent call in this same worker process. A genuine miss is rare enough
+        # that paying the full resolve cost again next time is the safe trade.
+        uid = _SERVICE_UID_CACHE.get(xml_id)
         try:
             with self.env.cr.savepoint():
-                self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]  # fmt: skip
-                uid = self.env.cr.fetchone()[0]
+                if uid is not None:
+                    self.env.cr.execute("SELECT zero_sudo_verify_service_uid(%s, %s)", (uid, xml_id))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]  # fmt: skip
+                else:
+                    self.env.cr.execute("SELECT zero_sudo_get_service_uid(%s)", (xml_id,))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_resolve]  # fmt: skip
+                    uid = self.env.cr.fetchone()[0]
         except psycopg2.errors.RaiseException as e:
             raise AccessError(
                 _("Service account resolution failed for '%s': %s") % (xml_id, e)
