@@ -44,23 +44,57 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
         mock_session.post.return_value = mock_response
 
         client = SecureJSONRPCClient(self.env_path, self.base_url, self.db_name)
-        result = client.call("res.users", "search", [[]])
+        result = client.call("res.users", "search", domain=[])
 
         self.assertEqual(result, "success")
         self.assertEqual(mock_session.post.call_count, 1)
-        
+
         call_args, call_kwargs = mock_session.post.call_args
         host = os.environ.get("ODOO_HOST", "odoo")
         self.assertEqual(call_args[0], f"http://{host}:8069/json/2/res.users/search")
         payload = call_kwargs["json"]
-        self.assertEqual(payload["args"], [[]])
+        # bug-hunt (2026-09-13): Odoo's real JSON-2 route
+        # (odoo.http.Json2Dispatcher.dispatch) merges the JSON body's own
+        # top-level keys straight into the endpoint's keyword arguments --
+        # there is no generic "args" envelope. A caller sends `ids` (the
+        # recordset the method runs on) plus the target method's own real
+        # keyword arguments directly.
+        self.assertEqual(payload["ids"], [])
+        self.assertEqual(payload["domain"], [])
+        self.assertNotIn("args", payload)
+
+    def test_call_sends_a_real_bearer_authorization_header(self):
+        # bug-hunt (2026-09-13): the route is declared auth='bearer'
+        # (odoo/addons/rpc/controllers/json2.py) -- confirmed by reading
+        # ir_http.py's own _auth_method_bearer, it requires a real
+        # "Authorization: Bearer <api_key>" header checked against
+        # res.users.apikeys, and nothing else. The client used to send only
+        # a home-grown X-Auth-Signature/X-Auth-Nonce scheme that no
+        # server-side code anywhere validates, so it never authenticated at
+        # all against the real endpoint.
+        mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": "ok"}
+        mock_session.post.return_value = mock_response
+
+        client = SecureJSONRPCClient(self.env_path, self.base_url, self.db_name)
+        client.call("res.users", "search", domain=[])
+
+        _call_args, call_kwargs = mock_session.post.call_args
+        headers = call_kwargs["headers"]
+        self.assertEqual(headers["Authorization"], "Bearer test_key")
+        self.assertNotIn("X-Auth-Signature", headers)
 
     def test_call_self_healing(self):
         # [@ANCHOR: zero_sudo:COMM_test_call_self_healing]
@@ -89,10 +123,18 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
             f.write("ODOO_RPC_LOGIN=test_user\n")
             f.write("ODOO_RPC_KEY=rotated_key\n")
 
-        result = client.call("res.users", "search", [[]])
+        result = client.call("res.users", "search", domain=[])
 
         self.assertEqual(result, "healed")
         self.assertEqual(mock_session.post.call_count, 2)
+
+        # bug-hunt (2026-09-13): prove the retry actually re-authenticates
+        # with the freshly-reloaded key, not just a blind resend of the
+        # identical (still-stale) request.
+        _first_args, first_kwargs = mock_session.post.call_args_list[0]
+        _retry_args, retry_kwargs = mock_session.post.call_args_list[1]
+        self.assertEqual(first_kwargs["headers"]["Authorization"], "Bearer test_key")
+        self.assertEqual(retry_kwargs["headers"]["Authorization"], "Bearer rotated_key")
 
     def test_missing_env_file(self):
         non_existent = os.path.join(self.test_dir, "non_existent.env")

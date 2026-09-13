@@ -7,10 +7,6 @@
 import os
 import requests
 import logging
-import hmac
-import hashlib
-import time
-import secrets
 import json
 
 _logger = logging.getLogger(__name__)
@@ -29,7 +25,6 @@ class SecureJSONRPCClient:
         self.base_url = base_url.rstrip("/")
         self.db_name = db_name
         self.login = None
-        self.uid = None
         self.api_key = None
         self.session = requests.Session()
         self._load_credentials()
@@ -57,35 +52,38 @@ Missing LOGIN or KEY.
 """.strip()
             raise ValueError(err_msg)
 
-    def call(self, model, method, args=None, kwargs=None):
-        if args is None:
-            args = []
-        if kwargs is None:
-            kwargs = {}
-
+    def call(self, model, method, ids=(), **kwargs):
+        # bug-hunt (2026-09-13): this used to send a positional `args` list
+        # wrapped inside the JSON body, and authenticated with a home-grown
+        # X-Auth-Signature/X-Auth-Nonce HMAC scheme instead of a real
+        # Authorization header. Neither matches Odoo's actual JSON-2 wire
+        # protocol: odoo.http.Json2Dispatcher.dispatch() merges the JSON
+        # body's own top-level keys straight into the endpoint's keyword
+        # arguments (confirmed by reading odoo/http.py directly), so a
+        # caller must send `ids` plus the target method's own real keyword
+        # arguments (e.g. `domain=[...]` for search()) -- there is no
+        # generic "args" envelope Odoo's route ever reads. And the route
+        # itself is declared `auth='bearer'` (odoo/addons/rpc/controllers/
+        # json2.py), which requires a real `Authorization: Bearer <api_key>`
+        # header verified against res.users.apikeys -- confirmed by reading
+        # ir_http.py's own _auth_method_bearer, no server-side code anywhere
+        # in this codebase ever validated the old X-Auth-Signature headers.
+        # This client was therefore non-functional against the real
+        # endpoint from the start; grep confirms it has zero production
+        # callers today (only its own tests, which mocked out
+        # requests.Session entirely and so never caught either defect).
+        # Fixed to match the real protocol and the already-working
+        # reference implementation in backup_management/daemon/main.py's
+        # _json2_call().
         url = f"{self.base_url}/json/2/{model}/{method}"
-        payload = kwargs.copy()
-        if args:
-            payload["args"] = args
+        payload = {"ids": list(ids), **kwargs}
 
         def _do_request():
-            timestamp = str(int(time.time()))
-            nonce = secrets.token_hex(16)
-            payload_str = json.dumps(payload)
-            message = f"{timestamp}|{nonce}|{payload_str}".encode("utf-8")
-            signature = hmac.new(self.api_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
-
             headers = {
                 "X-Odoo-Database": self.db_name,
                 "Content-Type": "application/json",
-                "X-Auth-User": self.login,
-                "X-Auth-Timestamp": timestamp,
-                "X-Auth-Nonce": nonce,
-                "X-Auth-Signature": signature,
+                "Authorization": f"Bearer {self.api_key}",
             }
-            if self.uid:
-                headers["X-Odoo-Service-Uid"] = str(self.uid)
-
             return self.session.post(url, json=payload, headers=headers, timeout=30)
 
         response = _do_request()
@@ -98,7 +96,14 @@ Failed to decode JSON response: {e}
             raise RuntimeError(err_msg)
 
         err_obj = result.get("error") if isinstance(result, dict) else None
-        is_access_err = err_obj and "AccessError" in str(err_obj)
+        # A rejected/rotated bearer token surfaces as AccessDenied, not
+        # AccessError (odoo.exceptions.AccessDenied vs. .AccessError are
+        # distinct classes) -- the old check only matched the latter, so it
+        # never actually fired for the one scenario (a stale api_key) this
+        # self-healing retry exists to recover from.
+        is_access_err = err_obj and (
+            "AccessError" in str(err_obj) or "AccessDenied" in str(err_obj)
+        )
         if response.status_code in (401, 403) or is_access_err:
             # [@ANCHOR: COMM_json_rpc_self_healing_retry]
             warn_msg = """
