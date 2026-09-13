@@ -119,38 +119,38 @@ class UserWebsitesWeeklyDigestView(models.Model):
                 """
                 CREATE OR REPLACE VIEW user_websites_weekly_digest_view AS (
                 SELECT
-                    row_number() OVER () as id,
+                    row_number() OVER (ORDER BY f.partner_id, u.partner_id) as id,
                     'Weekly Digest SQL View'::varchar as name,
                     f.partner_id as partner_id,
                     p.name as author_name,
                     'res.partner' as owner_model,
                     u.partner_id as owner_record_id,
-                    string_agg(pst.id::text, ',') as post_ids_string,
+                    string_agg(pst.id::text, ',' ORDER BY pst.id) as post_ids_string,
                     min(pst.id) as first_post_id
                 FROM mail_followers f
                 JOIN res_users u ON (f.res_model = 'res.partner' AND f.res_id = u.partner_id)
                 JOIN res_partner p ON u.partner_id = p.id
                 JOIN blog_post pst ON (pst.owner_user_id = u.id)
                 WHERE pst.is_published IS TRUE
-                AND pst.create_date >= now() - interval '7 days'
+                AND pst.create_date >= (now() AT TIME ZONE 'UTC') - interval '7 days'
                 GROUP BY f.partner_id, u.partner_id, p.name
 
                 UNION ALL
 
                 SELECT
-                    row_number() OVER () + 5000000 as id,
+                    row_number() OVER (ORDER BY f.partner_id, g.id) + 5000000 as id,
                     'Weekly Digest SQL View'::varchar as name,
                     f.partner_id as partner_id,
                     g.name as author_name,
                     'user.websites.group' as owner_model,
                     g.id as owner_record_id,
-                    string_agg(pst.id::text, ',') as post_ids_string,
+                    string_agg(pst.id::text, ',' ORDER BY pst.id) as post_ids_string,
                     min(pst.id) as first_post_id
                 FROM mail_followers f
                 JOIN user_websites_group g ON (f.res_model = 'user.websites.group' AND f.res_id = g.id)
                 JOIN blog_post pst ON (pst.user_websites_group_id = g.id)
                 WHERE pst.is_published IS TRUE
-                AND pst.create_date >= now() - interval '7 days'
+                AND pst.create_date >= (now() AT TIME ZONE 'UTC') - interval '7 days'
                 GROUP BY f.partner_id, g.id, g.name
             )
         """

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 import ast
+import datetime
 import odoo
 import time
 from odoo.tests.common import tagged
@@ -185,6 +186,109 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
                 [("owner_user_id", "=", self.creator.id)], limit=1
             )
             template.send_mail(test_post.id, force_send=False)   # audit-ignore-mail: model_id verified against user_websites_data.xml (website_blog.model_blog_post, matches blog.post) -- Tested by [@ANCHOR: COMM_test_weekly_digest_mail_template]
+
+    def test_01b_weekly_digest_view_excludes_a_post_older_than_7_days_in_real_utc_terms(self):
+        # bug-hunt (2026-09-13): user_websites_weekly_digest_view.md's own Finding 2 --
+        # `create_date >= now() - interval '7 days'` compared a naive (UTC-per-Odoo-
+        # convention) timestamp column against `now()` (timestamptz), which forces
+        # PostgreSQL to implicitly reinterpret the naive value in the SESSION's own
+        # TimeZone GUC (confirmed America/Los_Angeles on this dev box) rather than as
+        # UTC -- widening the effective window by up to the session's own UTC offset
+        # (7-8 hours). A post genuinely more than 7 days old in real UTC terms (here,
+        # 7 days + 3 hours) was incorrectly still included. Fixed by converting `now()`
+        # to a naive UTC timestamp via `AT TIME ZONE 'UTC'` before subtracting, making
+        # both sides of the comparison naive (no implicit session-timezone cast).
+        # Tests [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
+        stale_post = self.env["blog.post"].search(
+            [("owner_user_id", "=", self.creator.id)], limit=1
+        )
+        stale_create_date = odoo.fields.Datetime.now() - datetime.timedelta(
+            days=7, hours=3
+        )
+        self.env.cr.execute(
+            "UPDATE blog_post SET create_date = %s WHERE id = %s",
+            (stale_create_date, stale_post.id),
+        )
+        stale_post.invalidate_recordset(["create_date"])
+
+        digests = self.env["user_websites.weekly_digest_view"].search(
+            [("partner_id", "=", self.follower.partner_id.id)]
+        )
+        for digest in digests:
+            self.assertNotIn(
+                str(stale_post.id),
+                (digest.post_ids_string or "").split(","),
+                "[!] DIAGNOSTIC FOR AI: a post created more than 7 days ago in real UTC "
+                "terms must never appear in the weekly digest view, regardless of the "
+                "Postgres session's own TimeZone setting.",
+            )
+
+    def test_01c_weekly_digest_view_ids_are_stable_across_repeated_queries(self):
+        # bug-hunt (2026-09-13): user_websites_weekly_digest_view.md's own Finding 1 --
+        # `row_number() OVER ()` (no ORDER BY inside the window) numbered rows in
+        # whatever order Postgres's hash-aggregate happened to produce, which is not
+        # guaranteed stable across independent executions of the same view SQL -- and
+        # since this is a plain (non-materialized) VIEW, `search()` and the later
+        # `_read()` triggered by the first field access are each a SEPARATE execution.
+        # Fixed by adding `ORDER BY f.partner_id, u.partner_id` (and the group branch's
+        # `f.partner_id, g.id`) inside the window function, making the id assignment a
+        # deterministic function of the GROUP BY key rather than of aggregation
+        # internals. This test creates a second, independent digest row (a second
+        # follower/owner pair) so there is more than one row whose relative order could
+        # shift, then queries the view twice independently and asserts the same id
+        # maps to the same owner both times.
+        # Tests [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
+        second_creator = self.env["res.users"].create(
+            {
+                "name": "Second Content Creator",
+                "login": "creator_test_2",
+                "email": "creator2@example.com",
+                "website_slug": "creator-test-2",
+                "group_ids": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_portal").id,
+                            self.env.ref("user_websites.group_user_websites_user").id,
+                        ],
+                    )
+                ],
+            }
+        )
+        second_creator.partner_id.message_subscribe(
+            partner_ids=[self.follower.partner_id.id]
+        )
+        blog = self.env["blog.blog"].search([("name", "=", "Community Blog")], limit=1)
+        self.env["blog.post"].create(
+            {
+                "name": "Second Creator's Post",
+                "blog_id": blog.id,
+                "owner_user_id": second_creator.id,
+                "is_published": True,
+                "website_published": True,
+            }
+        )
+
+        View = self.env["user_websites.weekly_digest_view"]
+        first_pass = View.search([("partner_id", "=", self.follower.partner_id.id)])
+        first_mapping = {d.id: d.owner_record_id for d in first_pass}
+        self.assertGreaterEqual(
+            len(first_mapping), 2, "fixture: at least 2 distinct digest rows required"
+        )
+
+        View.invalidate_model()
+        second_pass = View.search([("partner_id", "=", self.follower.partner_id.id)])
+        second_mapping = {d.id: d.owner_record_id for d in second_pass}
+
+        self.assertEqual(
+            first_mapping,
+            second_mapping,
+            "[!] DIAGNOSTIC FOR AI: the same digest view id must map to the same "
+            "owner_record_id across independent executions of the underlying SQL -- "
+            "an unstable row_number() would let a later field-read return a "
+            "different conceptual row than search() originally identified by that id.",
+        )
 
     def test_02_invalid_unsubscribe_token(self):
         """
