@@ -421,6 +421,7 @@ class TestSesWebhook(HamsHttpCase):
 
     def test_25_signature_valid_notification_accepted(self):
         # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        # Tests [@ANCHOR: ses_webhook:build_string_to_sign]
         """A validly-signed Notification (SignatureVersion 1, the AWS default) is accepted and
         processed exactly as before -- the baseline positive case every other rejection test
         below is contrasted against."""

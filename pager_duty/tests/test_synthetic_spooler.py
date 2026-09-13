@@ -1,6 +1,7 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import ipaddress
 import json
 import os
 import tempfile
@@ -12,6 +13,19 @@ from odoo.addons.pager_duty.daemon import pager_synthetic_spooler
 
 @tagged("post_install", "-at_install")
 class TestSyntheticSpooler(HamsTransactionCase):
+
+    def test_is_ssrf_safe_public_ip_classifies_real_addresses_correctly(self):
+        # Tests [@ANCHOR: pager_duty:synthetic_spooler_is_ssrf_safe_public_ip]
+        is_safe = pager_synthetic_spooler._is_ssrf_safe_public_ip
+        # A genuine public address must be accepted.
+        self.assertTrue(is_safe(ipaddress.ip_address("8.8.8.8")))
+        # Every non-public category this function exists to reject.
+        self.assertFalse(is_safe(ipaddress.ip_address("127.0.0.1")))  # loopback
+        self.assertFalse(is_safe(ipaddress.ip_address("10.0.0.1")))  # private
+        self.assertFalse(is_safe(ipaddress.ip_address("169.254.169.254")))  # link-local / cloud metadata
+        self.assertFalse(is_safe(ipaddress.ip_address("224.0.0.1")))  # multicast
+        self.assertFalse(is_safe(ipaddress.ip_address("0.0.0.0")))  # unspecified
+        self.assertFalse(is_safe(ipaddress.ip_address("::1")))  # IPv6 loopback
 
     def test_00_i18n_headless_audit(self):
         # Tests [@ANCHOR: synthetic_i18n]

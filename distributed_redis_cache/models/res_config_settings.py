@@ -23,6 +23,8 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="distributed_redis_cache.redis_password",
     )
 
+    # [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
+    # Verified by [@ANCHOR: test_b2_10_settings_save_invalidates_the_redis_pool_cache]
     def set_values(self):
         # bug-hunt (2026-09-09): redis_pool.get_redis_connection() caches
         # the resolved (host, port, password) tuple per dbname in the

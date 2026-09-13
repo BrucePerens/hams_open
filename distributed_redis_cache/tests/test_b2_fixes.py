@@ -280,6 +280,7 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertNotIn("distributed_redis_cache.test_integration_active", content)
 
     def test_b2_10_settings_save_invalidates_the_redis_pool_cache(self):
+        # Tests [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
         # bug-hunt (2026-09-09): get_redis_connection() caches the
         # resolved (host, port, password) tuple in `_db_configs` forever,
         # with nothing ever invalidating it -- before this fix, saving new

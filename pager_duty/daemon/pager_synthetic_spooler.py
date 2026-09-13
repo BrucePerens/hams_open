@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 # download path) rather than reinventing the check -- this file has no
 # Odoo import at all (it's a standalone daemon script), so the logic is
 # duplicated in pure-stdlib form instead of imported.
+# [@ANCHOR: pager_duty:synthetic_spooler_is_ssrf_safe_public_ip]
+# Verified by [@ANCHOR: test_is_ssrf_safe_public_ip_classifies_real_addresses_correctly]
 def _is_ssrf_safe_public_ip(ip_obj):
     return (
         ip_obj.is_global

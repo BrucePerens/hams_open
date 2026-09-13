@@ -94,6 +94,8 @@ _SUBSCRIBE_SIGNED_FIELDS = ('Message', 'MessageId', 'SubscribeURL', 'Timestamp',
 _KNOWN_PAYLOAD_TYPES = {'Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation'}
 
 
+# [@ANCHOR: ses_webhook:build_string_to_sign]
+# Verified by [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
 def _build_string_to_sign(payload):
     """Builds the canonical newline-delimited string AWS SNS itself signs, per the message's own
     Type. Returns None (never raises) if the Type isn't one AWS signs at all, or if a field the
