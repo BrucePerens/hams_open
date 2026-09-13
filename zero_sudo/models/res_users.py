@@ -7,6 +7,7 @@
 import secrets
 
 from odoo import api, fields, models
+from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 
 
 class ResUsersZeroSudo(models.Model):
@@ -66,16 +67,37 @@ class ResUsersZeroSudo(models.Model):
         if "is_service_account" in vals:
             vals = dict(vals)
             vals["password"] = secrets.token_hex(32)
+            res = super().write(vals)
+            # Bug-hunt fix, 2026-09-13 (found during the parallel security_utils.py bug-hunt
+            # dispatch, deferred here to avoid a same-day edit collision on this file, now closed
+            # separately): `ir.http._is_service_account_cached` (zero_sudo/models/ir_http.py) is
+            # `@distributed_cache()`-decorated -- an L1, process-lifetime cache checked BEFORE
+            # Redis's own 24h TTL is ever consulted, so a worker that already cached this uid's
+            # OLD `is_service_account` value would keep serving it indefinitely, not just for up
+            # to 24h. This write is the ONLY place that field's real value changes, and until this
+            # fix nothing here ever invalidated that cache -- promoting a compromised user to a
+            # service account (the exact incident-response action this flag exists to support)
+            # would NOT actually revoke their already-cached "not a service account" verdict on
+            # any worker that had already resolved it, letting them keep using the interactive Web
+            # UI (`ir_http._authenticate`'s own gate, which reads this exact cached value) past
+            # the moment an admin believed the account was locked down. `notify_model_invalidation`
+            # both clears this worker's own local+Redis entries (deferred to postcommit, so a
+            # write that later rolls back never incorrectly evicts a still-valid cached value) and
+            # signals every OTHER worker via the real, already-fixed pg_notify path (see
+            # security_utils.py's own `_notify_cache_invalidation` claim for why that's the
+            # correct, listened-to channel).
+            notify_model_invalidation(self.env, "ir.http")
+            return res
         elif "password" in vals:
             if self.ids:
                 service_accounts = self.filtered("is_service_account")
                 if service_accounts:
                     regular_accounts = self - service_accounts
-                    
+
                     res = True
                     if regular_accounts:
                         res = super(ResUsersZeroSudo, regular_accounts).write(vals)
-                    
+
                     vals_no_pw = vals.copy()
                     vals_no_pw.pop("password", None)
                     if vals_no_pw:

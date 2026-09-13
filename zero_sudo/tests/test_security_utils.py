@@ -1224,16 +1224,23 @@ class TestSecurityUtils(HamsTransactionCase):
         mapped to its real uid, and does NOT contain a real human admin's xml_id (base.user_admin
         is never is_service_account=True, so the preload query's own WHERE clause must exclude
         it)."""
+        # Bug-hunt fix, 2026-09-13: _SERVICE_UID_CACHE was re-keyed from bare xml_id to
+        # (dbname, xml_id) in the same-day security_utils.py bug-hunt pass (see
+        # _preload_service_uid_cache's own module-level comment for the cross-database
+        # collision this closes), but this test's own assertions were never updated to match --
+        # confirmed live: this assertion started failing the moment that fix landed, looking up
+        # a bare-string key against a dict now keyed by 2-tuples.
+        dbname = self.env.cr.dbname
         utils = self.env["zero_sudo.security.utils"]
         real_uid = utils._get_service_uid("zero_sudo.mail_service_internal")
         self.assertEqual(
-            security_utils_module._SERVICE_UID_CACHE.get("zero_sudo.mail_service_internal"),
+            security_utils_module._SERVICE_UID_CACHE.get((dbname, "zero_sudo.mail_service_internal")),
             real_uid,
             "A real, already-installed service account must be preloaded into the cache by "
-            "_register_hook(), keyed to its own real uid.",
+            "_register_hook(), keyed to its own real (dbname, xml_id) pair.",
         )
         self.assertNotIn(
-            "base.user_admin",
+            (dbname, "base.user_admin"),
             security_utils_module._SERVICE_UID_CACHE,
             "A real human admin user must never appear in the service-uid cache, even though "
             "it has a real ir.model.data xml_id -- the preload query's own is_service_account "
@@ -1246,10 +1253,12 @@ class TestSecurityUtils(HamsTransactionCase):
         uid -- proving the split into zero_sudo_resolve_service_xmlid()/
         zero_sudo_verify_service_uid() didn't change the outward-facing result for the common
         case, only which SQL function actually runs underneath."""
+        # Bug-hunt fix, 2026-09-13: same tuple-key mismatch as test_29's own fix above -- see
+        # that test's comment for the full story.
         utils = self.env["zero_sudo.security.utils"]
         xml_id = "zero_sudo.mail_service_internal"
         self.assertIn(
-            xml_id,
+            (self.env.cr.dbname, xml_id),
             security_utils_module._SERVICE_UID_CACHE,
             "Test setup assumption: this account must actually be preloaded, or this test "
             "cannot tell a cache hit apart from a miss.",
@@ -1297,7 +1306,14 @@ class TestSecurityUtils(HamsTransactionCase):
         # Simulate "this account was already valid and cached at this worker's own startup" --
         # a real preload never sees a freshly-created record like this one, so the cache has to
         # be seeded directly to reproduce the precondition this test is about.
-        security_utils_module._SERVICE_UID_CACHE[xml_id] = fresh_user.id
+        # Bug-hunt fix, 2026-09-13: keyed by bare xml_id before this fix -- since
+        # _SERVICE_UID_CACHE was re-keyed to (dbname, xml_id) the same day, a seed under the old
+        # bare-string shape was silently invisible to the real _get_service_uid() lookup, so this
+        # test was actually exercising the live-resolve fallback path the whole time, not the
+        # cache-hit-then-disabled precondition it claims to (both happen to raise for the disabled
+        # account either way, which is why this didn't show up as an outright failure).
+        cache_key = (self.env.cr.dbname, xml_id)
+        security_utils_module._SERVICE_UID_CACHE[cache_key] = fresh_user.id
         try:
             utils = self.env["zero_sudo.security.utils"]
             uid = utils._get_service_uid(xml_id)
@@ -1322,7 +1338,7 @@ class TestSecurityUtils(HamsTransactionCase):
             # This dict is not transaction-scoped, so it must be cleaned up explicitly --
             # this test's own record creations above roll back automatically at teardown, but
             # a stray cache entry pointing at a since-rolled-back uid would not.
-            security_utils_module._SERVICE_UID_CACHE.pop(xml_id, None)
+            security_utils_module._SERVICE_UID_CACHE.pop(cache_key, None)
 
     def test_32_get_service_uid_cache_miss_resolves_live_and_does_not_pollute_the_cache(self):
         # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
@@ -1349,8 +1365,13 @@ class TestSecurityUtils(HamsTransactionCase):
             }
         )
         full_xml_id = f"test_module.{xml_id_name}"
+        # Bug-hunt fix, 2026-09-13: same tuple-key mismatch as test_29/31's own fixes above --
+        # checking a bare-string key here would always trivially pass (real entries are keyed by
+        # (dbname, xml_id) since the same-day _SERVICE_UID_CACHE re-keying), silently testing
+        # nothing about the real cache shape.
+        cache_key = (self.env.cr.dbname, full_xml_id)
         self.assertNotIn(
-            full_xml_id,
+            cache_key,
             security_utils_module._SERVICE_UID_CACHE,
             "Test setup assumption: a service account created mid-test must not already be in "
             "the startup-time cache, or this test cannot tell a miss apart from a hit.",
@@ -1360,7 +1381,7 @@ class TestSecurityUtils(HamsTransactionCase):
         uid = utils._get_service_uid(full_xml_id)
         self.assertEqual(uid, rogue_but_valid_user.id)
         self.assertNotIn(
-            full_xml_id,
+            cache_key,
             security_utils_module._SERVICE_UID_CACHE,
             "A cache miss must resolve live without writing the result back into the "
             "process-level cache -- see _get_service_uid()'s own comment on why (a value "

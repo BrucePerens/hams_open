@@ -110,6 +110,53 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             }
             self.env["res.users"].authenticate(bad_credential, {"interactive": False})
 
+    def test_write_invalidates_the_is_service_account_cache(self):
+        # Tests [@ANCHOR: zero_sudo:res_users_write]
+
+        # Bug-hunt fix, 2026-09-13: `ir.http._is_service_account_cached` is
+        # `@distributed_cache()`-decorated -- an L1, process-lifetime cache
+        # checked BEFORE Redis's own 24h TTL is ever consulted. Before this
+        # fix, write() never invalidated it, so a worker that had already
+        # cached a uid's OLD is_service_account value kept serving that
+        # stale verdict indefinitely, not just for up to 24h. This is the
+        # exact incident-response scenario the flag exists for: promoting a
+        # compromised user to a service account (to block their interactive
+        # Web UI access, per ir_http._authenticate's own gate) must actually
+        # take effect, not silently keep honoring the pre-promotion cached
+        # answer.
+        #
+        # Asserting `notify_model_invalidation` was actually invoked, rather
+        # than trying to observe the real end-to-end cache-clearing effect,
+        # matches this test class's own established convention (see e.g.
+        # `test_15_invalidate_model_cache` in security_utils.py's own test
+        # suite) and this file's own `safe_patch_object`'s documented reason
+        # for it: proving the real postcommit-deferred side effect directly
+        # needs a genuine `env.cr.commit()`, which
+        # `common.HamsTransactionCase` (this class) explicitly forbids
+        # (`check_burn_list.py`'s own TEST CURSOR CORRUPTION rule) precisely
+        # because it corrupts the shared test cursor other tests in this
+        # same run still need -- `RealTransactionCase` exists for tests that
+        # genuinely need that, and this one doesn't: the actual clearing
+        # behavior of `notify_model_invalidation`/`invalidate_model_cache`
+        # is already covered by security_utils.py's own tests.
+        user = self.env["res.users"].create(
+            {
+                "name": "Soon To Be Service Account",
+                "login": "soon_service_account_test@example.com",
+                "is_service_account": False,
+                "lang": "en_US",
+            }
+        )
+
+        mock_notify = self.safe_patch(
+            "odoo.addons.zero_sudo.models.res_users.notify_model_invalidation"
+        )
+        user.write({"name": "Renamed, Not Yet A Service Account"})
+        mock_notify.assert_not_called()
+
+        user.write({"is_service_account": True})
+        mock_notify.assert_called_once_with(self.env, "ir.http")
+
     def test_get_callsign_generates_unique_cached_synthetic_callsigns(self):
         # Tests [@ANCHOR: zero_sudo:get_callsign]
 
