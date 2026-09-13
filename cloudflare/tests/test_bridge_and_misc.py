@@ -244,3 +244,43 @@ class TestBridgeAndMisc(RealTransactionCase):
             cf_daemon._tunnel_future = None
             cf_daemon._lib = None
         fake_lib.StopTunnel.assert_called_once()
+
+    def test_get_cloudflare_credentials_treats_a_decrypt_error_sentinel_as_no_token(self):
+        # bug-hunt (2026-09-13): crypt_field.md's own "not fixed here" design note --
+        # on a genuine decrypt failure, _crypt_field() returns the literal string
+        # "***ERROR***" (a deliberate, established cross-module UI convention, not
+        # changed here), but every real caller of _get_cloudflare_credentials()
+        # gates on plain truthiness (`if token and zone_id:`, `if not token:` --
+        # confirmed directly in domain.py/tunnel.py/purge_wizard.py and others).
+        # "***ERROR***" is truthy, so without a fix those callers would proceed to
+        # call the real Cloudflare API with the literal string "***ERROR***" as the
+        # bearer token instead of failing fast locally. Mocking the compute method
+        # directly (not orchestrating a real key-rotation/InvalidToken scenario,
+        # which is already covered by crypt_field's own tests) isolates exactly the
+        # new filtering logic in _get_cloudflare_credentials itself.
+        # Tests [@ANCHOR: cloudflare:COMM_get_cloudflare_credentials]
+        self.website.write({"cloudflare_zone_id": "zone123"})
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.website.WebsiteCloudflare._compute_cf_api_token",
+            new=lambda self: setattr(self, "cloudflare_api_token", "***ERROR***"),
+        )
+        self.website.invalidate_recordset(["cloudflare_api_token"])
+
+        # redis_bypass_cache: _get_cloudflare_credentials is @distributed_cache()'d,
+        # and its module-level L1 fallback cache is a plain process-global dict --
+        # shared across every test in this worker process, not scoped per-test.
+        # Bypassing it here is what makes this test actually exercise today's
+        # real code rather than risk a stale cached tuple from an earlier test's
+        # own real (unmocked) call on this same "current website" record.
+        token, zone = self.website.with_context(
+            redis_bypass_cache=True
+        )._get_cloudflare_credentials()
+
+        self.assertFalse(
+            token,
+            "[!] DIAGNOSTIC FOR AI: a decrypt-error sentinel must never be returned as "
+            "if it were a real, usable API token -- every caller's own `if token:` "
+            "gate would treat the literal string \"***ERROR***\" as present and "
+            "proceed to call the real Cloudflare API with it.",
+        )
+        self.assertEqual(zone, "zone123")

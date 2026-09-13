@@ -141,4 +141,18 @@ class WebsiteCloudflare(models.Model):
         self.ensure_one()
         token = self.cloudflare_api_token
         zone = self.cloudflare_zone_id
+        # bug-hunt (2026-09-13): on a genuine decrypt failure, _crypt_field()
+        # returns the literal string "***ERROR***" -- a truthy value, and a
+        # deliberate, established cross-module UI convention (backup_
+        # management's own crypt fields use the identical sentinel), not
+        # something to change here. But every caller of this function gates
+        # on plain truthiness (`if token and zone_id:`, `if not token:`), so
+        # without this check they'd proceed to call the real Cloudflare API
+        # with the literal string "***ERROR***" as the bearer token on a
+        # decrypt failure, instead of failing fast locally with a clear
+        # error. Centralized here (this function's own real callers all go
+        # through it) rather than fixed at each of the dozen-plus call
+        # sites individually.
+        if token == "***ERROR***":
+            token = False
         return token, zone
