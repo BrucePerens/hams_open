@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+
+        <template id="intellectual_property_template" name="Intellectual Property: Filed Patent Applications and Open Source Publication">
+            <!-- [@ANCHOR: compliance:intellectual_property_page] -->
+            <t t-call="website.layout">
+                <div id="wrap" class="oe_structure oe_empty">
+                    <section class="s_text_block pt40 pb40">
+                        <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
+                            <h1 class="mb-4 fw-bold">Intellectual Property: Filed Patent Applications and Open Source Publication</h1>
+
+                            <p>This page records, in one place, the two forms of intellectual property
+                            disclosure that exist side by side for the hams.com/hams_open project: USPTO
+                            provisional patent applications filed on specific inventions, and the separate,
+                            ongoing publication of the project's implementation code as open source. It
+                            exists so the relationship between the two is explicit and auditable, not
+                            something that has to be reconstructed from separate records.</p>
+
+                            <p>Filer/inventor for all applications below: Bruce Perens (pro se, sole
+                            inventor). Full filing detail (attorney docket numbers, confirmation numbers,
+                            Patent Center submission numbers, receipt timestamps, payment records) is
+                            maintained in the project's internal filing record
+                            (<code>docs/proposals/patent_disclosures/filed_applications/USPTO_FILING_RECORD.md</code>);
+                            this page lists only the USPTO-assigned application serial numbers, for quick
+                            reference.</p>
+
+                            <h3 class="mt-4">Filed provisional patent applications (serial numbers)</h3>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-sm">
+                                    <thead>
+                                        <tr><th>#</th><th>Application Serial No.</th><th>Title of Invention</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>01</td><td>64/151,656</td><td>Local Frequency Interlock / PTT Watchdog</td></tr>
+                                        <tr><td>02</td><td>64/151,659</td><td>mTLS Split-DNS Identity Bridge</td></tr>
+                                        <tr><td>03</td><td>64/151,663</td><td>Web Session to Noise-Handshake Attestation Bridge</td></tr>
+                                        <tr><td>04</td><td>64/151,666</td><td>Squelch-Derived Horizon Mask Learning</td></tr>
+                                        <tr><td>05a</td><td>64/151,670</td><td>Content-Distance-Scheduled Reinforcement</td></tr>
+                                        <tr><td>05b</td><td>64/151,678</td><td>Deterministic Operation-Log State Continuity</td></tr>
+                                        <tr><td>05c</td><td>64/151,679</td><td>Narrative-Grounded Assessment Derivation</td></tr>
+                                        <tr><td>06a</td><td>64/151,672</td><td>Identification Obligation Authentication and Utterance Routing</td></tr>
+                                        <tr><td>06b</td><td>64/151,682</td><td>Graduated Criterion-Driven Approval Posture</td></tr>
+                                        <tr><td>06c</td><td>64/151,684</td><td>Passive Multi-Channel Monitoring With Audio Provenance</td></tr>
+                                        <tr><td>06d</td><td>64/151,687</td><td>Accountability-Derived Downstream Artifacts</td></tr>
+                                        <tr><td>07</td><td>64/151,690</td><td>PSK31 Attestation Subcarrier</td></tr>
+                                        <tr><td>08</td><td>64/151,692</td><td>SWL-to-Licensed Confidence-Tiered Correlation</td></tr>
+                                        <tr><td>09</td><td>64/151,694</td><td>Wireless Attestation Across Channel Types</td></tr>
+                                        <tr><td>10a</td><td>64/151,696</td><td>Federated Hardware-Rooted Transmitter Identity Core</td></tr>
+                                        <tr><td>10b</td><td>64/151,699</td><td>Zero-Knowledge Repeater Admission Gating</td></tr>
+                                        <tr><td>10c</td><td>64/151,704</td><td>Correlated and Self-Reported Transmitter Location</td></tr>
+                                        <tr><td>10d</td><td>64/151,705</td><td>Transmitter Ownership Transfer Chain of Custody</td></tr>
+                                        <tr><td>11</td><td>64/151,706</td><td>Self-Remediating Capability-Scoped Revocation</td></tr>
+                                        <tr><td>12</td><td>64/151,707</td><td>Verified-Scope Delegated Privilege</td></tr>
+                                        <tr><td>13</td><td>64/151,709</td><td>Proof-Bound Policy-Exception Suppression</td></tr>
+                                        <tr><td>14</td><td>64/151,710</td><td>Channel Broadcast Inference Offload to Co-Present Participants</td></tr>
+                                        <tr><td>15</td><td>64/151,711</td><td>Deadline-Calibrated Accelerator Qualification</td></tr>
+                                        <tr><td>16</td><td>64/151,714</td><td>Personalized Propagation Forecast Capped History Blend</td></tr>
+                                        <tr><td>17</td><td>64/151,715</td><td>Self-Calibrating Browser CW Decoder</td></tr>
+                                        <tr><td>18</td><td>64/151,716</td><td>Live Fraction Capped Background Prefetch</td></tr>
+                                        <tr><td>19</td><td>64/151,719</td><td>Call-Stack Verified Soft Dependency Resolution</td></tr>
+                                        <tr><td>20</td><td>64/151,720</td><td>Local Custody LoTW Bridge</td></tr>
+                                        <tr><td>21</td><td>64/151,721</td><td>Unified Heterogeneous Backend Control Interface</td></tr>
+                                        <tr><td>22</td><td>64/151,722</td><td>Third-Party Attested Teleoperation Channel for Arbitrary Devices</td></tr>
+                                        <tr><td>23</td><td>64/151,723</td><td>AI QSO Logging Assistant With Bidirectional Busted-Call Correction</td></tr>
+                                        <tr><td>24</td><td>64/151,725</td><td>Ground-Truth Verified Multi-Agent Liveness Supervisor</td></tr>
+                                        <tr><td>25</td><td>64/151,726</td><td>Single-Verification Multi-Purpose Third-Party Attestation Service</td></tr>
+                                        <tr><td>26</td><td>64/151,728</td><td>Dual-Render Propagation Forecast With Gated Live Region</td></tr>
+                                        <tr><td>27</td><td>64/151,730</td><td>Shared-Weight Ledger Dual-Policy Question Selection</td></tr>
+                                        <tr><td>28</td><td>64/151,732</td><td>Blind SSB Sideband/Offset Correction via Naturalness Search</td></tr>
+                                        <tr><td>29</td><td>64/151,735</td><td>Unified Multi-Mode Signal Identification and Closed-Loop Receiver Correction</td></tr>
+                                        <tr><td>30</td><td>64/151,737</td><td>Automatic Receiver Filter Bandwidth Selection</td></tr>
+                                        <tr><td>31</td><td>64/151,739</td><td>Co-Channel Interference Suppression via Calibrated Dominant-Signal Attribution</td></tr>
+                                        <tr><td>32</td><td>64/151,740</td><td>Speaker-Identity-Driven Spatial Beam Control for Multi-Participant Arrays</td></tr>
+                                        <tr><td>33</td><td>64/151,741</td><td>Content-Calibrated Selective Attenuation for Hearing Protection</td></tr>
+                                        <tr><td>34</td><td>64/151,744</td><td>Ego-Motion-Corrected Identity-Calibrated Speech Attention for Mobile Robots</td></tr>
+                                        <tr><td>36</td><td>64/151,745</td><td>Directed-Command Discrimination for UAVs With Ego-Noise-Suppressed Attention</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <p>All 43 applications above are Utility - Provisional Applications under 35
+                            U.S.C. § 111(b), filed under USPTO Customer Number 244826, Micro Entity status.
+                            A provisional application is not examined and does not itself issue as a patent;
+                            each establishes a priority date for a future non-provisional filing within the
+                            following 12 months.</p>
+
+                            <h3 class="mt-4">Awareness of third-party patent activity</h3>
+                            <p>Regulator AI Global, Inc. (<a href="https://regulator-ai.com/" target="_blank" rel="noopener">https://regulator-ai.com/</a>)
+                            is reported to have filed additional patents in a related space. As of this
+                            writing no specific application, serial, or publication number is known, and it
+                            has not been confirmed whether these have actually been submitted to the USPTO
+                            or any other patent office. Bruce Perens is reported as a co-inventor on these
+                            with Regulator AI Global, Inc., and these patents are intended to be licensed to
+                            hams.com. This entry is a placeholder for awareness/tracking purposes only and
+                            should be updated with specific numbers once/if they become available.</p>
+
+                            <h3 class="mt-4">Open source publication</h3>
+                            <p>Independent of the patent filings above, the project's implementation code is
+                            published as open source on GitHub under the <code>BrucePerens</code> account:</p>
+
+                            <table class="table table-striped table-sm">
+                                <thead>
+                                    <tr><th>Repository</th><th>URL</th><th>Visibility</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><code>hams_shared</code></td><td><a href="https://github.com/BrucePerens/hams_shared" target="_blank" rel="noopener">https://github.com/BrucePerens/hams_shared</a></td><td>Public</td></tr>
+                                    <tr><td><code>hams_open</code></td><td><a href="https://github.com/BrucePerens/hams_open" target="_blank" rel="noopener">https://github.com/BrucePerens/hams_open</a></td><td>Public</td></tr>
+                                </tbody>
+                            </table>
+
+                            <p>Both repositories are public as of this writing. Licensing is not uniform
+                            across every file (see <code>hams_open/LICENSING.md</code> for the authoritative,
+                            file-by-file survey), but the overwhelming majority of the codebase — every Odoo
+                            addon module (models, controllers, views) in both repositories — is licensed
+                            <strong>AGPL-3.0-or-later</strong>. Known, deliberate exceptions: the Rust
+                            <code>daemons/ham_digital_modes/</code> decoder daemon is
+                            <strong>LGPL-3.0-or-later</strong>, and the mypy Odoo-type-stub tooling under
+                            <code>hams_shared/tools/</code> is <strong>GPL-3.0-or-later</strong>.
+                            <code>hams_shared</code> is tracked as its own independent git submodule of
+                            <code>hams_open</code>, with its own commit history, but its files carry the same
+                            per-file license-header convention described above.</p>
+
+                            <t t-call="compliance.compliance_legal_links"/>
+                        </div>
+                    </section>
+                </div>
+            </t>
+        </template>
+
+        <record id="intellectual_property_page" model="website.page">
+            <field name="name">Intellectual Property</field>
+            <field name="url">/intellectual-property</field>
+            <field name="is_published">True</field>
+            <field name="view_id" ref="intellectual_property_template"/>
+            <field name="track">True</field>
+        </record>
+
+        <record id="doc_intellectual_property" model="compliance.document">
+            <field name="name">Intellectual Property</field>
+            <field name="description">Filed USPTO provisional patent applications and the project's open source publication status, including awareness of related third-party patent activity.</field>
+            <field name="url">/intellectual-property</field>
+            <field name="sequence">50</field>
+        </record>
+
+    </data>
+</odoo>

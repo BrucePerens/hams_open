@@ -13,6 +13,7 @@ pub mod dstar;
 pub mod ft8;
 pub mod psk31;
 pub mod rtty;
+pub mod timing_characterizer;
 pub mod wspr;
 pub mod wspr_decode;
 pub mod wspr_sync;

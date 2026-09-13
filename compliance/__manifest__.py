@@ -27,6 +27,7 @@ Upon installation, it:
               "views/compliance_templates.xml",
               "data/compliance_data.xml",
               "data/protects_hams_data.xml",
+              "data/intellectual_property_data.xml",
              ],
     "knowledge_docs": [{"name": "Site Owner's Guide to Regulatory Compliance",
                         "path": "data/documentation.html",
