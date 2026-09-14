@@ -83,7 +83,7 @@ class TestBinaryManifestIntegration(HamsTransactionCase):
         # second call ("ValueError: I/O operation on closed file"), so
         # hand back a fresh MockResponse each time instead.
         self.safe_patch(
-            "urllib.request.urlopen",
+            "odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe",
             side_effect=lambda *args, **kwargs: MockResponse(tar_bytes),
         )
 
@@ -175,7 +175,7 @@ class TestBinaryManifestReal(RealTransactionCase):
         if not website:
             website = self.env["website"].create({"name": "Test Tenant"})
 
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
         mock_response = MagicMock()
         mock_response.read.side_effect = [b"data", b""]
         mock_response.__enter__.return_value = mock_response

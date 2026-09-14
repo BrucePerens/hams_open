@@ -13,6 +13,7 @@ from . import real_transaction
 from . import test_integration
 from . import test_json_rpc_client
 from . import test_security_utils
+from . import test_ssrf_safe_fetch
 from . import test_tdd_fixes
 from . import test_views
 from . import test_facility

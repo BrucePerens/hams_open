@@ -3,12 +3,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import hashlib
-import ipaddress
 import logging
 import os
 import platform
 import shutil
-import socket
 import stat
 import tarfile
 import zipfile
@@ -18,6 +16,12 @@ import urllib.error
 from urllib.parse import urlparse
 from odoo import models, api, tools, fields, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import (
+    SSRFValidationError,
+    is_ssrf_safe_public_ip as _shared_is_ssrf_safe_public_ip,
+    resolve_ssrf_safe_addresses as _resolve_ssrf_safe_addresses,
+    urlopen_ssrf_safe as _urlopen_ssrf_safe,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -36,26 +40,26 @@ _logger = logging.getLogger(__name__)
 # issue real network requests to internal targets, independent of whether
 # the fetched bytes ever pass the checksum check that gates actual
 # extraction/installation.
+#
+# Bug-hunt fix, 2026-09-14 (binary_utils_is_ssrf_safe_public_ip /
+# binary_utils_assert_host_is_ssrf_safe): the classification predicate and
+# the resolve+pin mechanism both now live in
+# `zero_sudo.daemon.ssrf_safe_fetch` (imported above), shared with
+# `pager_duty/daemon/pager_synthetic_spooler.py`'s own independently-
+# duplicated copy of this exact check -- see that module's own docstring for
+# why `zero_sudo` (a module both `binary_downloader` and `pager_duty` already
+# depend on) is the shared home, and why this used to be a real
+# DNS-rebinding TOCTOU (this predicate's own hostname validation and the
+# actual `urlopen()` connection used to be two separate, independently-timed
+# DNS lookups; the real fix pins the connection to the exact address this
+# predicate already validated, rather than trusting a second lookup). Kept
+# as a real, thin, anchored wrapper (not a bare re-export) so this anchor
+# stays attached to a real function span for `check_claims_freshness.py`'s
+# own AST-based hashing, and every existing caller/test of
+# `_is_ssrf_safe_public_ip` keeps working unchanged.
 # [@ANCHOR: binary_utils_is_ssrf_safe_public_ip]
 def _is_ssrf_safe_public_ip(ip_obj):
-    """Returns True only for an address a server-initiated download has any
-    legitimate reason to reach. `is_global` alone already excludes every
-    range checked individually below on modern Python -- the individual
-    checks are kept explicit so this can't silently widen if a future
-    Python release ever changes what `is_global` means, and so the intent
-    (reject loopback, link-local -- which covers the AWS/GCP/Azure
-    169.254.169.254 metadata address, RFC 1918/4193 private-use ranges,
-    multicast, "reserved," and unspecified/0.0.0.0 addresses) is legible
-    without cross-referencing the ipaddress module's own docs."""
-    return (
-        ip_obj.is_global
-        and not ip_obj.is_private
-        and not ip_obj.is_loopback
-        and not ip_obj.is_link_local
-        and not ip_obj.is_multicast
-        and not ip_obj.is_reserved
-        and not ip_obj.is_unspecified
-    )
+    return _shared_is_ssrf_safe_public_ip(ip_obj)
 
 
 # [@ANCHOR: binary_utils_safe_response_geturl]
@@ -165,9 +169,19 @@ class BinaryDownloaderMixin(models.AbstractModel):
                 url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}, method="HEAD"
             )
             try:
-                with urllib.request.urlopen(head_req, timeout=15):
+                # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe() (not plain
+                # urllib.request.urlopen()) resolves + validates + pins the
+                # real connection to the validated address on every hop
+                # (this request and any redirect it follows) -- see
+                # zero_sudo/daemon/ssrf_safe_fetch.py's own docstring for
+                # the DNS-rebinding TOCTOU this closes that the manual
+                # _assert_host_is_ssrf_safe() pre-check above, by itself,
+                # never could (it validates a hostname; urlopen() used to
+                # re-resolve the SAME hostname separately, moments later,
+                # to actually connect).
+                with _urlopen_ssrf_safe(head_req, cmd_name, https_only=True, timeout=15):
                     pass
-            except urllib.error.URLError as e:
+            except (urllib.error.URLError, SSRFValidationError) as e:
                 _logger.warning("HEAD request failed for %s: %s", url, e)
 
             get_req = urllib.request.Request(
@@ -175,7 +189,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             )
             tmp_path = None
             try:
-                with urllib.request.urlopen(get_req, timeout=15) as response:
+                with _urlopen_ssrf_safe(get_req, cmd_name, https_only=True, timeout=15) as response:
                     # Bug-hunt fix, 2026-09-09: the pre-check above only
                     # validates the URL as *given*; urllib's default opener
                     # follows HTTP redirects on its own, with nothing
@@ -286,6 +300,9 @@ class BinaryDownloaderMixin(models.AbstractModel):
                         _logger.warning("Failed to remove temporary file %s: %s", tmp_path, e)
         except (UserError, ValidationError):
             raise
+        except SSRFValidationError as e:
+            _logger.exception("SSRF safety check rejected a fetch for %s", cmd_name)
+            raise UserError(_("Security Alert: %s") % str(e))
         except (urllib.error.URLError, OSError, tarfile.TarError, zipfile.BadZipFile) as e:
             _logger.exception("Failed to auto-install %s", cmd_name)
             raise UserError(_("Failed to auto-install %s: %s") % (cmd_name, str(e)))
@@ -303,32 +320,27 @@ class BinaryDownloaderMixin(models.AbstractModel):
         way this module's tests already mock urlopen()/shutil.which()/
         platform.*() instead of the test suite needing live DNS/network
         access to run.
+
+        Bug-hunt fix, 2026-09-14: delegates to the shared, tested
+        `zero_sudo.daemon.ssrf_safe_fetch.resolve_ssrf_safe_addresses()` (see
+        that module's own docstring for the full DNS-rebinding TOCTOU
+        writeup). This method, by itself, only ever validates a hostname --
+        it cannot guarantee the connection `_download_and_extract()` makes a
+        moment later actually goes to one of the addresses just checked here
+        (that used to require a second, independently-timed
+        `socket.getaddrinfo()` call inside `urlopen()` itself, which a
+        DNS-rebinding attacker could answer differently). The real fix is
+        `_download_and_extract()` calling `_urlopen_ssrf_safe()` instead of
+        `urllib.request.urlopen()` directly, which pins the actual connection
+        to the exact address this method validates; this method's own
+        contract (raise `UserError` for a falsy/unresolvable/unsafe hostname,
+        do nothing otherwise) is unchanged, so every existing caller and test
+        of it keeps working exactly as before.
         """
-        if not hostname:
-            raise UserError(
-                _("Security Alert: Download URL for %s has no hostname.") % cmd_name
-            )
         try:
-            addrinfo = socket.getaddrinfo(hostname, None)
-        except OSError as e:
-            raise UserError(
-                _("Could not resolve download host for %s: %s") % (cmd_name, e)
-            )
-        for info in addrinfo:
-            sockaddr = info[4]
-            try:
-                ip_obj = ipaddress.ip_address(sockaddr[0])
-            except ValueError:
-                continue
-            if not _is_ssrf_safe_public_ip(ip_obj):
-                raise UserError(
-                    _(
-                        "Security Alert: Download URL for %s resolves to a "
-                        "non-public address (%s). Refusing to fetch from an "
-                        "internal/loopback/link-local network target."
-                    )
-                    % (cmd_name, sockaddr[0])
-                )
+            _resolve_ssrf_safe_addresses(hostname, cmd_name)
+        except SSRFValidationError as e:
+            raise UserError(_("Security Alert: %s") % str(e))
 
     @api.model
     # [@ANCHOR: binary_utils_atomic_write_target]

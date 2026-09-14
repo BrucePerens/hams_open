@@ -163,7 +163,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -251,7 +251,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         mock_response_get = MagicMock()
         del mock_response_get.readinto
@@ -355,7 +355,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         self.env["binary.manifest"].create(
             {
@@ -403,7 +403,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         self.env["binary.manifest"].create(
             {
@@ -443,7 +443,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         # Create a real zip in memory
         zip_buffer = io.BytesIO()
@@ -481,7 +481,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         self.env["binary.manifest"].create(
             {
@@ -520,7 +520,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         self.env["binary.manifest"].create(
             {
@@ -565,7 +565,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         self.env["binary.manifest"].create(
             {
@@ -606,7 +606,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value="/usr/bin/testbin")
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         # Create a manifest
         self.env["binary.manifest"].create(
@@ -796,7 +796,7 @@ class TestBinaryManifest(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         tar_checksum = hashlib.sha256(b"data").hexdigest()
         manifest = self.env["binary.manifest"].create(
@@ -903,7 +903,7 @@ class TestBinarySsrfProtection(HamsTransactionCase):
         self.safe_patch("shutil.which", return_value=None)
         self.safe_patch("platform.system", return_value="Linux")
         self.safe_patch("platform.machine", return_value="x86_64")
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         with self.assertRaisesRegex(UserError, "non-public address"):
             manifest.ensure_executable("internalbin")
@@ -929,7 +929,7 @@ class TestBinarySsrfProtection(HamsTransactionCase):
         mock_response.getheader.return_value = None
         mock_response.geturl.return_value = "http://8.8.8.8/redirectbin_http"
         mock_response.__enter__.return_value = mock_response
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
         mock_urlopen.return_value = mock_response
 
         with self.assertRaisesRegex(UserError, "non-https"):
@@ -955,7 +955,7 @@ class TestBinarySsrfProtection(HamsTransactionCase):
         mock_response.getheader.return_value = None
         mock_response.geturl.return_value = "https://169.254.169.254/evil"
         mock_response.__enter__.return_value = mock_response
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
         mock_urlopen.return_value = mock_response
 
         with self.assertRaisesRegex(UserError, "non-public address"):

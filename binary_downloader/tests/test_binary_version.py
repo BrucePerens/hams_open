@@ -197,7 +197,7 @@ class TestBinaryVersion(HamsTransactionCase):
             }
         )
 
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
         mock_response = MagicMock()
         mock_response.read.side_effect = [b"vdata", b""]
         mock_response.__enter__.return_value = mock_response
@@ -240,7 +240,7 @@ class TestBinaryVersion(HamsTransactionCase):
             }
         )
 
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
         mock_response = MagicMock()
         mock_response.read.side_effect = [b"data", b""]
         mock_response.__enter__.return_value = mock_response
@@ -278,7 +278,7 @@ class TestBinaryVersion(HamsTransactionCase):
             "[!] DIAGNOSTIC FOR AI: must be False before anything is downloaded.",
         )
 
-        mock_urlopen = self.safe_patch("urllib.request.urlopen")
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
         mock_response = MagicMock()
         mock_response.read.side_effect = [b"downloaded-data", b""]
         mock_response.__enter__.return_value = mock_response

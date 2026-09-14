@@ -80,7 +80,7 @@ class TestBinaryDownloaderTour(HamsHttpCase):
         # rejects it as a mismatch, exactly what happened before this
         # fix (confirmed: b"dummy" hashes to b5a2c962..., not 03ac6742...).
         self.safe_patch(
-            "urllib.request.urlopen",
+            "odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe",
             side_effect=lambda *args, **kwargs: MockResponse(b"1234"),
         )
         url_action = "/odoo?debug=1&action=binary_downloader.action_binary_downloader_manifest"

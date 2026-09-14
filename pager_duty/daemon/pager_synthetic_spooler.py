@@ -7,8 +7,6 @@ import time
 import json
 import subprocess
 import hashlib
-import ipaddress
-import socket
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -19,57 +17,60 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Bug-hunt fix, 2026-09-14: the SSRF classification predicate + the
+# resolve-and-pin fetch mechanism used to be duplicated here in pure-stdlib
+# form (see the "Ported from binary_downloader" note below, kept for
+# history) because this file has no Odoo import at all (it's a real,
+# standalone systemd-managed script -- see pager-synthetic-spooler.service
+# -- and hams_shared/tools/check_burn_list.py's own "CRITICAL DAEMON
+# DECOUPLING" rule bans `import odoo`/`from odoo` in any daemon/ directory
+# outright). Now imported from zero_sudo/daemon/ssrf_safe_fetch.py -- a
+# plain, Odoo-free module living in a sibling addon's own `daemon/`
+# directory, reached via a `sys.path` hop rather than the `odoo.addons`
+# namespace (which requires the `odoo` package itself to be importable --
+# confirmed NOT the case in this daemon's own real process environment) --
+# instead of a second, independently-duplicated copy. See that module's own
+# docstring for the real DNS-rebinding TOCTOU this closes (this file's own
+# hostname check and the actual `urlopen()` connection used to be two
+# separate, independently-timed DNS lookups; the fix pins the connection to
+# the exact address already validated, rather than trusting a second
+# lookup) and why `zero_sudo` (already a hard Odoo `depends` of both
+# `pager_duty` and `binary_downloader`) is the shared home.
+_ZERO_SUDO_DAEMON_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "zero_sudo", "daemon")
+)
+if _ZERO_SUDO_DAEMON_DIR not in sys.path:
+    sys.path.insert(0, _ZERO_SUDO_DAEMON_DIR)
+from ssrf_safe_fetch import (  # noqa: E402
+    SSRFValidationError,
+    is_ssrf_safe_public_ip as _shared_is_ssrf_safe_public_ip,
+    resolve_ssrf_safe_addresses as _resolve_ssrf_safe_addresses,
+    urlopen_ssrf_safe as _urlopen_ssrf_safe,
+)
 
-# Bug-hunt fix, 2026-09-11: execute_check()'s sandbox_downloads fetch below
-# runs in THIS daemon's own parent process, before any of the bwrap
-# sandboxing further down in this same function is ever applied -- and that
-# sandboxing's own "sandbox_network_access" setting (defaulting to
-# "loopback", i.e. no real network access at all) only governs the LATER
-# execution step, not this download. A check config whose sandbox_downloads
-# URL points at an internal/loopback/link-local target (the classic
-# 169.254.169.254 cloud-metadata address, or any other internal-only
-# service reachable from this daemon's own network position) would be
-# fetched from here regardless of that setting -- a real SSRF primitive.
+
 # Ported from binary_downloader/models/binary_utils.py's own
 # _is_ssrf_safe_public_ip/_assert_host_is_ssrf_safe (that module's own
 # 2026-09-09 bug-hunt fix for the identical shape of bug in a different
-# download path) rather than reinventing the check -- this file has no
-# Odoo import at all (it's a standalone daemon script), so the logic is
-# duplicated in pure-stdlib form instead of imported.
+# download path) rather than reinventing the check -- as of 2026-09-14 both
+# this function and _assert_host_is_ssrf_safe below are thin wrappers
+# around the shared zero_sudo.daemon.ssrf_safe_fetch implementation
+# (imported above), not a fresh duplicate -- kept as real functions (not a
+# bare re-export) so these anchors stay attached to a real function span
+# for check_claims_freshness.py's own AST-based hashing, and every existing
+# caller/test keeps working unchanged.
 # [@ANCHOR: pager_duty:synthetic_spooler_is_ssrf_safe_public_ip]
 # Verified by [@ANCHOR: test_is_ssrf_safe_public_ip_classifies_real_addresses_correctly]
 def _is_ssrf_safe_public_ip(ip_obj):
-    return (
-        ip_obj.is_global
-        and not ip_obj.is_private
-        and not ip_obj.is_loopback
-        and not ip_obj.is_link_local
-        and not ip_obj.is_multicast
-        and not ip_obj.is_reserved
-        and not ip_obj.is_unspecified
-    )
+    return _shared_is_ssrf_safe_public_ip(ip_obj)
 
 
 # [@ANCHOR: pager_duty:synthetic_spooler_ssrf_guard]
 def _assert_host_is_ssrf_safe(hostname, context):
-    if not hostname:
-        raise ValueError(f"Security Alert: download URL for {context} has no hostname.")
     try:
-        addrinfo = socket.getaddrinfo(hostname, None)
-    except OSError as e:
-        raise ValueError(f"Could not resolve download host for {context}: {e}")
-    for info in addrinfo:
-        sockaddr = info[4]
-        try:
-            ip_obj = ipaddress.ip_address(sockaddr[0])
-        except ValueError:
-            continue
-        if not _is_ssrf_safe_public_ip(ip_obj):
-            raise ValueError(
-                f"Security Alert: download URL for {context} resolves to a "
-                f"non-public address ({sockaddr[0]}). Refusing to fetch from "
-                f"an internal/loopback/link-local network target."
-            )
+        _resolve_ssrf_safe_addresses(hostname, context)
+    except SSRFValidationError as e:
+        raise ValueError(f"Security Alert: {e}") from e
 
 
 # Overridable so a test doesn't have to write into the real, hardcoded
@@ -106,20 +107,29 @@ def execute_check(check):
                             url,
                             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
                         )
-                        with urllib.request.urlopen(req, timeout=30) as response, open(target_path, "wb") as out_file:
-                            # urllib's default opener follows HTTP redirects
-                            # on its own, with nothing re-validating where a
-                            # redirect actually landed -- an otherwise-safe
-                            # URL could 302 to an internal target, and the
-                            # bytes fetched from THAT response are exactly
-                            # what gets hashed and (if it somehow matched)
-                            # marked executable below. Re-check the
-                            # resolved final URL's host before trusting
-                            # anything read from this response.
-                            final_url = getattr(response, "geturl", lambda: None)()
-                            if isinstance(final_url, str) and final_url:
-                                _assert_host_is_ssrf_safe(urlparse(final_url).hostname, name)
-                            out_file.write(response.read())
+                        try:
+                            # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe()
+                            # (not plain urllib.request.urlopen()) resolves
+                            # + validates + pins the real connection to the
+                            # validated address on every hop (this request
+                            # and any redirect it follows) -- see
+                            # zero_sudo/daemon/ssrf_safe_fetch.py's own
+                            # docstring for the DNS-rebinding TOCTOU this
+                            # closes that the manual
+                            # _assert_host_is_ssrf_safe() pre-check above,
+                            # by itself, never could. The manual
+                            # final-URL re-check below is kept anyway as
+                            # defense in depth (and to give an immediate,
+                            # specific error for the common case) --
+                            # harmless now that the real connection is
+                            # already pinned regardless.
+                            with _urlopen_ssrf_safe(req, name, https_only=False, timeout=30) as response, open(target_path, "wb") as out_file:
+                                final_url = getattr(response, "geturl", lambda: None)()
+                                if isinstance(final_url, str) and final_url:
+                                    _assert_host_is_ssrf_safe(urlparse(final_url).hostname, name)
+                                out_file.write(response.read())
+                        except SSRFValidationError as e:
+                            raise ValueError(f"Security Alert: {e}") from e
 
                         hasher = hashlib.sha256()
                         with open(target_path, "rb") as f:
