@@ -1,0 +1,14 @@
+# Real, confirmed cross-compile linker failure (2026-09-14, armv7-unknown-linux-gnueabihf,
+# Raspberry Pi 400/500 hardware qualification, pi500-1 building for pi400-1): `cargo build
+# --release --target armv7-unknown-linux-gnueabihf` on this crate alone succeeds without this
+# file (it only produces an rlib, no link step), but `cargo test --release --target
+# armv7-unknown-linux-gnueabihf --no-run` (and the `examples/`) DOES link real executables, and
+# without this override cargo used the host's native `cc` (aarch64) as the link driver for the
+# armv7 target -- failed with "file in wrong format" / "collect2: error: ld returned 1 exit
+# status" for every test/example binary. Same class of bug hams_local_relay's own
+# daemons/hams_local_relay/.cargo/config.toml (hams_com repo) and this crate's sibling
+# codec2_3200_capi/.cargo/config.toml already document and fix. `arm-linux-gnueabihf-gcc` (from
+# the `gcc-arm-linux-gnueabihf` package) is a real, working linker driver for this target; cargo
+# doesn't default to it without being told.
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-linux-gnueabihf-gcc"
