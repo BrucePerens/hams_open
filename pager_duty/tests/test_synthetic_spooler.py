@@ -94,6 +94,66 @@ class TestSyntheticSpooler(HamsTransactionCase):
         self.assertFalse(res["success"])
         self.assertIn("Invalid URL scheme", res.get("error", ""))
 
+    def test_02d_sandbox_downloads_aborts_on_a_response_exceeding_the_size_cap(self):
+        # Tests [@ANCHOR: synthetic_i18n]
+        # Bug-hunt fix, 2026-09-14: `response.read()` used to be called with
+        # no size bound at all, reading a whole HTTP response into memory in
+        # one call -- since sandbox_downloads is re-fetched on every
+        # `interval`, an oversized (compromised, misconfigured, or simply
+        # much-larger-than-expected) response is a repeatable memory-
+        # exhaustion DoS against this daemon's own process. This test
+        # patches MAX_SANDBOX_DOWNLOAD_BYTES down to a tiny value (rather
+        # than serving a real 200MB+ fixture) and confirms a response larger
+        # than the cap is rejected mid-stream, not silently accepted.
+        real_download_bytes = b"x" * 100
+
+        class _FakeResponse:
+            def __init__(self, data):
+                self._buf = data
+
+            def read(self, n=-1):
+                if n < 0 or n >= len(self._buf):
+                    chunk, self._buf = self._buf, b""
+                else:
+                    chunk, self._buf = self._buf[:n], self._buf[n:]
+                return chunk
+
+            def geturl(self):
+                return "https://example.invalid/payload"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_synthetic_spooler._assert_host_is_ssrf_safe",
+            return_value=None,
+        )
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_synthetic_spooler._urlopen_ssrf_safe",
+            return_value=_FakeResponse(real_download_bytes),
+        )
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.MAX_SANDBOX_DOWNLOAD_BYTES",
+            10,
+        )
+        check = {
+            "type": "bash",
+            "name": "test_size_cap",
+            "code_payload": "echo should_never_run",
+            "sandbox_downloads": "https://example.invalid/payload|deadbeef|payload.bin",
+            "sandbox_network_access": "loopback",
+        }
+        name, res = pager_synthetic_spooler.execute_check(check)
+        self.assertFalse(
+            res["success"],
+            "A sandbox_downloads response larger than MAX_SANDBOX_DOWNLOAD_BYTES must be rejected.",
+        )
+        self.assertIn("exceeded", res.get("error", ""))
+        self.assertIn("byte cap", res.get("error", ""))
+
     def test_03_main_runs_one_real_cycle_and_writes_the_spool_file(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_main]
         class _StopLoop(Exception):

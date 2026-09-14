@@ -79,6 +79,18 @@ def _assert_host_is_ssrf_safe(hostname, context):
 # convention.
 SPOOL_FILE = os.environ.get("HAMS_SYNTHETIC_SPOOL_PATH") or "/var/log/pager_synthetic_spool.json"  # burn-ignore-env
 
+# Bug-hunt fix, 2026-09-14: hard ceiling on a single sandbox_downloads fetch.
+# Module-level (not a local constant) so a test can override it without a
+# multi-hundred-MB fixture. A `pager.check` whose `sandbox_downloads` target
+# is compromised, misconfigured, or simply serves an unexpectedly large
+# response used to be read in ONE unbounded `response.read()` call straight
+# into memory -- unlike binary_utils.py's own sibling download path, which at
+# least streams in bounded chunks. Since `execute_check` re-runs on every
+# `interval` (as short as 60s) for as long as the check exists, an
+# unbounded response is a repeatable memory-exhaustion DoS against this
+# daemon's own process, not a one-off.
+MAX_SANDBOX_DOWNLOAD_BYTES = 200 * 1024 * 1024
+
 
 def execute_check(check):
     # [@ANCHOR: synthetic_i18n]
@@ -127,7 +139,23 @@ def execute_check(check):
                                 final_url = getattr(response, "geturl", lambda: None)()
                                 if isinstance(final_url, str) and final_url:
                                     _assert_host_is_ssrf_safe(urlparse(final_url).hostname, name)
-                                out_file.write(response.read())
+                                # Bug-hunt fix, 2026-09-14: stream in bounded
+                                # chunks and enforce MAX_SANDBOX_DOWNLOAD_BYTES
+                                # as we go (not via a trusted, attacker-
+                                # controlled Content-Length header, which a
+                                # malicious/compromised server can simply omit
+                                # or under-report) -- see that constant's own
+                                # comment for the DoS this closes.
+                                downloaded = 0
+                                for chunk in iter(lambda: response.read(65536), b""):
+                                    downloaded += len(chunk)
+                                    if downloaded > MAX_SANDBOX_DOWNLOAD_BYTES:
+                                        raise ValueError(
+                                            f"sandbox_downloads target for {fname} "
+                                            f"exceeded the {MAX_SANDBOX_DOWNLOAD_BYTES}"
+                                            f"-byte cap; aborted mid-download."
+                                        )
+                                    out_file.write(chunk)
                         except SSRFValidationError as e:
                             raise ValueError(f"Security Alert: {e}") from e
 
