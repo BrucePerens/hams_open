@@ -1,5 +1,6 @@
 # Real, confirmed cross-compile linker failure (2026-09-14, armv7-unknown-linux-gnueabihf,
-# Raspberry Pi 400/500 hardware qualification, pi500-1 building for pi400-1): `cargo build
+# Raspberry Pi 400/500 hardware qualification -- building on a faster Pi for a 32-bit-userland Pi
+# target board): `cargo build
 # --release --target armv7-unknown-linux-gnueabihf` on this crate alone succeeds without this
 # file (it only produces an rlib, no link step), but `cargo test --release --target
 # armv7-unknown-linux-gnueabihf --no-run` (and the `examples/`) DOES link real executables, and

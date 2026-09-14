@@ -1,5 +1,6 @@
 # Real, confirmed cross-compile linker failure (2026-09-14, armv7-unknown-linux-gnueabihf,
-# Raspberry Pi 400/500 hardware qualification, pi500-1 building for pi400-1): this crate is
+# Raspberry Pi 400/500 hardware qualification -- building on a faster Pi for a 32-bit-userland Pi
+# target board): this crate is
 # `crate-type = ["cdylib", "staticlib"]` (the drop-in libcodec2.so/.a), so unlike a plain rlib
 # crate it actually invokes a linker to produce a shared object. Without this override, cargo
 # used the host's native `cc` (aarch64) as the link driver for the armv7 target and failed with
