@@ -2,12 +2,34 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.addons.base.models.res_groups import ResGroups
+from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 
 @tagged("post_install", "-at_install")
 class TestConfigSettings(HamsTransactionCase):
+    """
+    night_shift_todo.md "saving ANY Settings page can crash with an
+    AccessError", full design writeup right after that entry: this file used
+    to test a `user_websites_administrators_ids` Many2many field on
+    res.config.settings whose get_values()/set_values() overrides read/wrote
+    group_user_websites_administrator.user_ids directly, on every single
+    Settings save, company-wide. That field and its overrides have been
+    removed entirely (see res_config_settings.py's own comment for the full
+    reasoning) rather than patched, because managing an arbitrary
+    res.groups record's membership from inside res.config.settings was the
+    wrong mechanism twice over: it fires unconditionally on every unrelated
+    Settings save (the actual crash mechanism), and it required granting
+    group_user_websites_administrator -- a content-moderation-tier role that
+    does not imply base.group_system -- model-level access to the ENTIRE
+    shared res.config.settings model to make the field reachable at all,
+    which handed that role read/write on every OTHER module's settings too
+    (proven concretely in test_04 below). These tests now guard the
+    replacement design instead: group membership is managed through Odoo's
+    own already-correctly-scoped Groups UI, and res.config.settings grants
+    nothing beyond base.group_system.
+    """
 
     def setUp(self):
         super(TestConfigSettings, self).setUp()
@@ -25,98 +47,77 @@ class TestConfigSettings(HamsTransactionCase):
             }
         )
 
-    def test_01_settings_sync_with_group(self):
-        """
-        Ensure that setting values in the ResConfigSettings TransientModel properly
-        updates the underlying res.groups mapping, and vice-versa.
-        """
-        # Step 1: Add user via settings
-        settings = self.env["res.config.settings"].create(
-            {"user_websites_administrators_ids": [(4, self.user_admin_test.id)]}
+        self.websites_admin_user = self.env["res.users"].create(
+            {
+                "name": "Websites Admin Test",
+                "login": "websitesadmintest",
+                "email": "websitesadmintest@example.com",
+                "website_slug": "websitesadmintest",
+                "group_ids": [(6, 0, [self.admin_group.id])],
+            }
         )
-        # Tests [@ANCHOR: user_websites:COMM_settings_set_values]
-        settings.set_values()
 
-        # Verify user is now in the security group
+    def test_01_user_websites_administrators_ids_field_removed(self):
+        """
+        The field that used to drive the unconditional-every-save group
+        write no longer exists on the shared res.config.settings model at
+        all -- not just unused, genuinely gone, so no future module can
+        collide with it or rediscover the same footgun by accident.
+        """
+        self.assertNotIn(
+            "user_websites_administrators_ids",
+            self.env["res.config.settings"]._fields,
+            "user_websites_administrators_ids must be removed from "
+            "res.config.settings, not merely deprecated -- it was the "
+            "field driving the unconditional group_ids write.",
+        )
+
+    def test_02_admin_group_membership_still_manageable_via_res_groups(self):
+        """
+        The replacement path: a System Administrator manages
+        group_user_websites_administrator's membership the same way Odoo
+        expects ANY group's membership to be managed -- directly via
+        res.groups (the "Groups" technical view, or the per-user Access
+        Rights tab, since group_user_websites_administrator and
+        group_user_websites_user share one res.groups.privilege). This is
+        not new capability added by this fix; it already worked, and
+        continues to, precisely because it was never routed through
+        res.config.settings.set_values() in the first place.
+        """
+        self.assertNotIn(self.user_admin_test, self.admin_group.user_ids)
+
+        self.admin_group.write({"user_ids": [(4, self.user_admin_test.id)]})
         self.assertIn(
             self.user_admin_test,
             self.admin_group.user_ids,
-            "User should be added to the Administrator group via settings.",
+            "a System Administrator must still be able to grant this role "
+            "directly via res.groups, the correctly-scoped replacement for "
+            "the removed Settings field.",
         )
 
-        # Step 2: Read values back via settings
-        new_settings = self.env["res.config.settings"].create({})
-        # Tests [@ANCHOR: user_websites:COMM_settings_get_values]
-        retrieved_values = new_settings.get_values()
-
-        self.assertIn(
-            self.user_admin_test.id,
-            retrieved_values.get("user_websites_administrators_ids", [])[0][2],
-            "get_values should accurately pull users from the Administrator group.",
-        )
-
-        # Step 3: Remove user via settings
-        clear_settings = self.env["res.config.settings"].create(
-            {"user_websites_administrators_ids": [(3, self.user_admin_test.id)]}
-        )
-        clear_settings.set_values()
-
+        self.admin_group.write({"user_ids": [(3, self.user_admin_test.id)]})
         self.assertNotIn(
             self.user_admin_test,
             self.admin_group.user_ids,
-            "User should be removed from the Administrator group via settings.",
+            "...and revoke it the same way.",
         )
 
-    def test_02_set_values_is_a_noop_when_the_admin_list_is_unchanged(self):
+    def test_03_settings_save_never_touches_group_membership_anymore(self):
         """
-        night_shift_todo.md "saving ANY Settings page can crash with an
-        AccessError": res.groups.write() on user_ids unconditionally cascades
-        through mail's own discuss-channel resubscription, which needs a real
-        secret a service account is correctly never granted -- crashing the
-        WHOLE settings-save request, for every Settings page, every time
-        set_values() runs (i.e. constantly, since Odoo's own set_values()
-        chains through every installed module's override on every single
-        Settings save). This test proves the actual, most common case (no
-        admin-list change at all) no longer calls write() -- the narrower,
-        already-safe half of that finding's own recorded fix; the real
-        architecture question (what to do when the list DOES change) is
-        still open, and is NOT what this test covers.
+        Direct proof the crash mechanism is now structurally impossible, not
+        just usually skipped (the previous, rejected patch's own "only
+        write if changed" approach still called res.groups.write() on a
+        real admin-list change -- see this test's own historical
+        counterpart, test_03_set_values_still_writes_when_the_admin_list_
+        actually_changes, deleted along with the mechanism it exercised).
+        No installed module's set_values()/get_values() has any reason to
+        call ResGroups.write() at all anymore; the same autospec/side_effect
+        approach test_02_set_values_is_a_noop_when_the_admin_list_is_
+        unchanged (this file's own prior version) had to use, and for the
+        same reason (a real res.config.settings.set_values() call chains
+        through every installed module, dwarfing a plain query-count
+        ceiling).
         """
-        # Tests [@ANCHOR: user_websites:COMM_settings_set_values]
-        settings = self.env["res.config.settings"].create(
-            {"user_websites_administrators_ids": [(4, self.user_admin_test.id)]}
-        )
-        settings.set_values()
-        self.assertIn(self.user_admin_test, self.admin_group.user_ids)
-
-        # A real, previously-tried, dead end worth recording so it isn't
-        # retried: `self.env.cr.sql_log_count` before/after (the "prove zero
-        # queries" pattern `safe_patch_object`'s own docstring suggests, and
-        # `test_performance_regressions.py`'s own established precedent in
-        # this exact module) does NOT isolate this specific write -- a real
-        # `res.config.settings.set_values()` call chains through EVERY
-        # installed module's own override (confirmed directly: 598 real
-        # queries for one call on this test database, dwarfing anything a
-        # reasonable ceiling could distinguish `res.groups.write()`'s own
-        # contribution from). Patching `ResGroups.write` directly instead,
-        # to prove the specific method was (or wasn't) called.
-        #
-        # `autospec=True` is required, not just `wraps=` -- without it,
-        # patching an UNBOUND method on the class produces a plain Mock
-        # that isn't a real descriptor, so `admin_group.write(vals)` never
-        # gets `admin_group` bound as `self` before reaching `wraps`, and
-        # the real `vals` argument silently lands in `self`'s own position
-        # instead (`ResGroups.write() missing 1 required positional
-        # argument: 'vals'`, confirmed by hitting this for real). But this
-        # project's own `safe_patch_object` unconditionally defaults
-        # `new_callable=DiagnosticMock` whenever `new`/`new_callable` isn't
-        # already a kwarg, and `mock.patch.object` refuses `autospec` and a
-        # real `new_callable` together -- passing `new_callable=None`
-        # explicitly (satisfying the helper's own "already in kwargs" check
-        # so it doesn't inject its default, and satisfying mock.patch's own
-        # `new_callable is not None` guard) is what actually unlocks
-        # `autospec=True` through this helper without bypassing it, also
-        # confirmed by hitting the alternative failure first.
         write_mock = self.safe_patch_object(
             ResGroups,
             "write",
@@ -125,37 +126,34 @@ class TestConfigSettings(HamsTransactionCase):
             side_effect=ResGroups.write,
         )
 
-        # Same admin list, set a second time -- the real-world common case
-        # (every OTHER Settings page save, which still runs this method).
-        same_settings = self.env["res.config.settings"].create(
-            {"user_websites_administrators_ids": [(4, self.user_admin_test.id)]}
-        )
-        same_settings.set_values()
-
-        write_mock.assert_not_called()
-        self.assertIn(
-            self.user_admin_test,
-            self.admin_group.user_ids,
-            "membership must still be correct even though no write happened",
-        )
-
-    def test_03_set_values_still_writes_when_the_admin_list_actually_changes(self):
-        """Non-vacuousness for test_02 above: the skip-when-unchanged guard must
-        never mask a real membership change."""
-        # Tests [@ANCHOR: user_websites:COMM_settings_set_values]
-        self.assertNotIn(
-            self.user_admin_test,
-            self.admin_group.user_ids,
-            "sanity check: this user must not already be an admin before set_values() runs",
-        )
-
         settings = self.env["res.config.settings"].create(
-            {"user_websites_administrators_ids": [(4, self.user_admin_test.id)]}
+            {"global_website_page_limit": 250}
         )
         settings.set_values()
 
-        self.assertIn(
-            self.user_admin_test,
-            self.admin_group.user_ids,
-            "a real admin-list change must still reach res.groups.write()",
-        )
+        write_mock.assert_not_called()
+
+    def test_04_websites_admin_cannot_read_or_write_other_modules_settings(self):
+        """
+        The concrete severity proof behind this fix's own design writeup:
+        before the access-csv row was deleted, group_user_websites_
+        administrator -- a content-moderation role, not a System
+        Administrator -- held model-level read/write on the ENTIRE shared
+        res.config.settings model (ir.model.access.csv grants are per
+        (model, group), never per field), which meant it could read and
+        overwrite real credentials belonging to completely unrelated
+        modules. distributed_redis_cache and cloudflare are both real
+        dependencies of user_websites (see its own __manifest__.py), so
+        their fields are guaranteed present on res.config.settings in this
+        exact test run -- this is not a hypothetical field, it is
+        distributed_redis_cache's actual Redis password field.
+        """
+        with self.assertRaises(
+            AccessError,
+            msg="a non-sysadmin User Websites Administrator must not be "
+            "able to even instantiate res.config.settings, let alone "
+            "read/write an unrelated module's redis_password field",
+        ):
+            self.env["res.config.settings"].with_user(
+                self.websites_admin_user
+            ).create({"redis_password": "attacker-supplied-value"})

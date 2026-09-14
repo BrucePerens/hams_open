@@ -3,7 +3,28 @@
 <odoo>
     <!-- Verified by [@ANCHOR: test_dropzone_settings] -->
 
-    <record id="res_config_settings_view_form_inherit_user_websites" model="ir.ui.view"> 
+    <!--
+        night_shift_todo.md "saving ANY Settings page can crash with an
+        AccessError": the "Select users who can manage all user sites and
+        violation reports" many2many field that used to live in this block
+        wrote group_user_websites_administrator.user_ids as a side effect of
+        every Settings save. It has been removed, see
+        res_config_settings.py's own comment for the full reasoning. This
+        button replaces it with a direct link to Odoo's own, already
+        correctly scoped ("Groups", base.action_res_groups,
+        base.group_system-tier only) group-membership UI, so managing this
+        role is still one click from Settings without re-implementing
+        anything here.
+    -->
+    <record id="action_open_user_websites_administrator_group" model="ir.actions.act_window">
+        <field name="name">User Websites Administrators</field>
+        <field name="res_model">res.groups</field>
+        <field name="view_mode">form</field>
+        <field name="res_id" eval="ref('user_websites.group_user_websites_administrator')"/>
+        <field name="target">current</field>
+    </record>
+
+    <record id="res_config_settings_view_form_inherit_user_websites" model="ir.ui.view">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_dropzone_settings] -->
         <field name="name">res.config.settings.view.form.inherit.user.websites</field>
         <field name="model">res.config.settings</field>
@@ -16,8 +37,8 @@
                 </div>
                 <app data-string="User Websites" string="User Websites" name="user_websites" data-key="user_websites">
                     <block title="User Websites Management" id="user_websites_management">
-                        <setting help="Select users who can manage all user sites and violation reports.">
-                            <field name="user_websites_administrators_ids" widget="many2many_tags"/>
+                        <setting help="Manage which users can manage all user sites and violation reports, via Odoo's own Groups screen.">
+                            <button name="%(action_open_user_websites_administrator_group)d" icon="oi-arrow-right" type="action" string="Manage Administrators" class="btn-link"/>
                         </setting>
                         <setting help="Default maximum number of web pages a standard user can create.">
                             <field name="global_website_page_limit"/>

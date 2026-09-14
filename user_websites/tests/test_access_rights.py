@@ -73,27 +73,29 @@ class TestAccessRights(HamsTransactionCase):
 
         self.assertTrue(access, "Admin should have write access to settings")
 
-    def test_03_websites_admin_can_access_settings_and_see_field(self):
-        try:
+    def test_03_websites_admin_cannot_access_settings(self):
+        """
+        night_shift_todo.md "saving ANY Settings page can crash with an
+        AccessError", full design writeup: this test used to assert the
+        OPPOSITE of what it asserts now -- that group_user_websites_
+        administrator (a content-moderation-tier role; it does not imply
+        base.group_system) DID have write access to the whole shared
+        res.config.settings model, treating a real privilege-escalation
+        hole as a feature. `ir.model.access.csv` grants are per (model,
+        group), never per field, so that access was never actually scoped
+        to this module's own fields -- it covered every field any installed
+        module merges onto this one TransientModel (see test_config_
+        settings.py's test_04 for the concrete cross-module proof: this
+        role could read/write distributed_redis_cache's redis_password and
+        cloudflare's cloudflare_api_token). The access-csv row that granted
+        this (`access_res_config_settings_admin`) has been deleted; this
+        role now has no access to res.config.settings at all, matching
+        every other non-base.group_system group in both repos.
+        """
+        with self.assertRaises(AccessError):
             self.env["res.config.settings"].with_user(
                 self.websites_admin_user
             ).check_access("write")
-            access = True
-        except AccessError:
-            access = False
-
-        self.assertTrue(
-            access, "User Websites Admin should have write access to settings"
-        )
-
-        try:
-            self.env["res.config.settings"].with_user(
-                self.websites_admin_user
-            ).default_get(["user_websites_administrators_ids"])
-        except AccessError:
-            self.fail(
-                "User Websites Admin should be able to read user_websites_administrators_ids"
-            )
 
     def test_04_public_cannot_access_settings(self):
         """

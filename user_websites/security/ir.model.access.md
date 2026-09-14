@@ -28,11 +28,23 @@ Here's a breakdown of the rules in this file:
   - **Permissions:** Read, Write (but not Create or Delete).
   - **Purpose:** Allows administrators to modify user settings related to user websites (like page limits), but not to create or delete system users through this module's access rights.
 
-- **`access_res_config_settings_admin`**
-  - **Group:** User Websites Administrator
-  - **Model:** `res.config.settings` (Settings)
-  - **Permissions:** Full access.
-  - **Purpose:** Allows administrators to access and modify the settings for the User Websites module in the general settings area.
+- **`access_res_config_settings_admin`** -- **removed** (night_shift_todo.md
+  "saving ANY Settings page can crash with an AccessError", full design
+  writeup right after that entry). `ir.model.access.csv` grants are per
+  (model, group), never per field, so this row was never actually scoped to
+  the User Websites section of Settings -- it granted full read/write on
+  the entire shared `res.config.settings` model, meaning User Websites
+  Administrator (a content-moderation-tier role, not a System
+  Administrator) could read and overwrite every OTHER installed module's
+  settings too, including real credentials (confirmed concretely:
+  `distributed_redis_cache`'s `redis_password`, `cloudflare`'s
+  `cloudflare_api_token`). It was also the row that made the
+  unconditional-every-save `res.groups.write()` in the old
+  `res_config_settings.py` reachable at all. Managing this group's
+  membership now goes through Odoo's own "Groups" screen
+  (`base.action_res_groups`) or a user's own Access Rights tab, both
+  already correctly gated to `base.group_system`-tier and neither wired
+  through `res.config.settings.set_values()`.
 
 - **`access_website_page_user`**
   - **Group:** User Website Owner

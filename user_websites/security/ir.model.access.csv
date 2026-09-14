@@ -12,7 +12,6 @@ access_content_violation_report_public,content.violation.report public,model_con
 access_content_violation_appeal_admin,content.violation.appeal admin,model_content_violation_appeal,user_websites.group_user_websites_administrator,1,1,1,1
 access_content_violation_appeal_user,content.violation.appeal user,model_content_violation_appeal,base.group_portal,1,0,1,0
 access_res_users_admin,res.users user websites admin,base.model_res_users,user_websites.group_user_websites_administrator,1,1,0,0
-access_res_config_settings_admin,res.config.settings user websites admin,base.model_res_config_settings,user_websites.group_user_websites_administrator,1,1,1,1
 access_website_page_user,website.page user,website.model_website_page,user_websites.group_user_websites_user,1,1,1,1
 access_blog_post_user,blog.post user,website_blog.model_blog_post,user_websites.group_user_websites_user,1,1,1,1
 access_blog_blog_user,blog.blog user,website_blog.model_blog_blog,user_websites.group_user_websites_user,1,1,1,1

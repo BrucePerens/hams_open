@@ -9,7 +9,20 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(4, ref('user_websites.group_user_websites_service_account')), (4, ref('website.group_multi_website'))]"/>
+            <!--
+                night_shift_todo.md "saving ANY Settings page can crash with
+                an AccessError": this account's membership in
+                group_user_websites_administrator used to be a side effect
+                of res_config_settings.py's own set_values() re-adding it on
+                every Settings save (removed, see that file's own
+                comment). Seeding it here directly, instead, means a fresh
+                install (or one where nobody has ever touched Settings)
+                doesn't silently leave this service account without the
+                administrator-tier group any has_group() check in this
+                module might expect it to hold when it acts with_user(this
+                account).
+            -->
+            <field name="group_ids" eval="[(4, ref('user_websites.group_user_websites_service_account')), (4, ref('user_websites.group_user_websites_administrator')), (4, ref('website.group_multi_website'))]"/>
         </record>
     </data>
     <data noupdate="1">

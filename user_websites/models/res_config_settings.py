@@ -2,23 +2,66 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
-import logging
-
-from odoo import models, fields, api
-
-_logger = logging.getLogger(__name__)
+from odoo import models, fields
 
 
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
-    user_websites_administrators_ids = fields.Many2many(
-        "res.users",
-        relation="settings_user_websites_admin_rel",
-        string="User Websites Administrators",
-        help="Users with full access to manage all user websites and groups.",
-    )
-
+    # night_shift_todo.md "saving ANY Settings page can crash with an
+    # AccessError" (2026-09-13), full design writeup and investigation in the
+    # follow-up section right after it: this module used to also carry a
+    # `user_websites_administrators_ids` Many2many(res.users) field here,
+    # with get_values()/set_values() overrides that read/wrote
+    # `group_user_websites_administrator.user_ids` directly on every single
+    # Settings save, company-wide, regardless of which page's fields
+    # actually changed. That was removed entirely, not patched, because the
+    # investigation converged on it being the wrong mechanism twice over:
+    # (1) `res.config.settings` is one TransientModel Odoo's own MRO chains
+    # through unconditionally on every installed module's own
+    # get_values()/set_values() on every save -- writing a *security group's
+    # membership* as a side effect of that shared, unconditional call chain
+    # is what let an unrelated field's write (e.g. Redis config) cascade
+    # into `mail`'s own discuss-channel resubscription and crash on a
+    # zero-sudo secret-read AccessError; every other Settings-contributing
+    # module in both repos only ever persists plain scalar
+    # `config_parameter` values here, with no side effects on other models,
+    # and that is the actual, coherent contract this model supports; and
+    # (2) managing an arbitrary `res.groups` record's membership already has
+    # a purpose-built, correctly-scoped Odoo mechanism -- the "Users &
+    # Companies > Groups" technical view (`base.action_res_groups`) and the
+    # per-user "Access Rights" tab (`group_user_websites_administrator` and
+    # `group_user_websites_user` already share one `res.groups.privilege`,
+    # so a System Administrator can already pick "Administrator" for the
+    # "User Websites / Website Access" privilege straight from any user's
+    # own form, no code required) -- neither of which is wired through
+    # `set_values()`'s "fires on every unrelated save" contract, so neither
+    # can reproduce this crash. Reusing that existing mechanism, instead of
+    # re-inventing a narrower one inside Settings, was the actual fix.
+    #
+    # This also closed a second, independently real security gap the
+    # investigation surfaced: `user_websites/security/ir.model.access.csv`
+    # used to grant `group_user_websites_administrator` (a
+    # content-moderation-tier role -- it does NOT imply `base.group_system`)
+    # full model-level read/write/create/unlink access to
+    # `res.config.settings` itself, so that role could reach the Settings
+    # form at all. Odoo's `ir.model.access.csv` grants are per (model,
+    # group), never per field, so that grant was never actually scoped to
+    # this module's own 3 fields -- it handed out read/write on every field
+    # any installed module merges onto this one shared TransientModel
+    # (confirmed empirically in test_config_settings.py: a
+    # `group_user_websites_administrator`-only user could read and
+    # overwrite `distributed_redis_cache`'s `redis_password` and
+    # `cloudflare`'s `cloudflare_api_token`, real credentials belonging to
+    # entirely unrelated modules). The "General Settings" menu item itself
+    # independently requires `base.group_system`
+    # (`base_setup.menu_general_settings`), so this was never reachable
+    # through normal UI navigation, but `ir.model.access.csv` is enforced by
+    # the ORM regardless of menu visibility -- a direct RPC call from a
+    # `group_user_websites_administrator` account (not a System
+    # Administrator) could still reach it. That access-csv row has been
+    # deleted; this role now has no access to `res.config.settings` at all,
+    # matching every other non-`base.group_system` group in both repos.
     global_website_page_limit = fields.Integer(
         string="Global Page Limit",
         config_parameter="user_websites.global_website_page_limit",
@@ -31,75 +74,3 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="user_websites.company_abuse_email",
         help="Email address where content violation reports will be sent.",
     )
-
-    @api.model
-    # [@ANCHOR: user_websites:COMM_settings_get_values]
-    def get_values(self):
-        res = super(ResConfigSettings, self).get_values()
-        admin_group = self.env.ref(
-            "user_websites.group_user_websites_administrator", raise_if_not_found=False
-        )
-        if admin_group:
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_websites_service_account"
-            )
-            admin_users = [
-                u.id for u in admin_group.with_user(svc_uid).user_ids if u.id != svc_uid
-            ]
-            res["user_websites_administrators_ids"] = [(6, 0, admin_users)]
-        else:
-            res["user_websites_administrators_ids"] = [(6, 0, [])]
-        return res
-
-    # [@ANCHOR: user_websites:COMM_settings_set_values]
-    def set_values(self):
-        super(ResConfigSettings, self).set_values()
-        admin_group = self.env.ref(
-            "user_websites.group_user_websites_administrator", raise_if_not_found=False
-        )
-        if admin_group:
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_websites_service_account"
-            )
-            new_ids = set(self.user_websites_administrators_ids.ids + [svc_uid])
-            # night_shift_todo.md "saving ANY Settings page can crash with an
-            # AccessError" (2026-09-13): res.groups.write() on user_ids
-            # unconditionally cascades through mail's own
-            # _subscribe_users_automatically() for every real discuss
-            # channel scoped to this group (or any group it implies),
-            # which in turn needs ir.config_parameter's real
-            # "database.secret" to compute each member's avatar access
-            # token -- a read the service account this write runs as is
-            # correctly, deliberately never granted, so it raises
-            # AccessError and crashes the WHOLE settings-save request,
-            # for every Settings page, not just this one's own fields.
-            # This narrower fix (skip the write when membership hasn't
-            # actually changed) does not resolve the underlying tension --
-            # a real admin-list change still hits the same crash, and
-            # picking a real fix for that needs Bruce's own call between
-            # the two architectural options recorded in night_shift_todo.md
-            # -- but it does eliminate the actual majority of real-world
-            # exposure, since this code runs on every Settings save
-            # regardless of which page's fields changed, and most of those
-            # saves never touch this field at all.
-            current_ids = set(
-                admin_group.with_user(svc_uid).user_ids.ids
-            )
-            if new_ids != current_ids:
-                admin_group.with_user(svc_uid).write(
-                    {"user_ids": [(6, 0, list(new_ids))]}
-                )
-        else:
-            # Unlike global_website_page_limit/company_abuse_email (plain
-            # config_parameter fields super().set_values() already persisted
-            # unconditionally above), the administrators list has no
-            # fallback storage -- if the group's own XML data hasn't loaded
-            # yet (a transient upgrade-ordering state; this group is meant
-            # to always exist once the module is installed), this branch
-            # used to silently drop the admin selection the caller just
-            # made with the Settings screen still reporting success. Log it
-            # so the gap is at least visible instead of fully silent.
-            _logger.warning(
-                "user_websites.group_user_websites_administrator not found; "
-                "administrators selection from Settings was not saved."
-            )
