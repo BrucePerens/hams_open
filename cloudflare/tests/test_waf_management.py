@@ -341,3 +341,45 @@ class TestWafManagement(HamsTransactionCase):
                 f"matched by the WAF rule expression {expression!r} -- this route would be "
                 "reachable unauthenticated in production.",
             )
+
+    def test_10_execute_ban_repeat_call_leaves_an_active_ban_alone(self):
+        # Tests [@ANCHOR: COMM_cf_execute_ban]
+        """Real bug, 2026-09-15: _execute_ban() created a row on every call, so a second
+        call for the same (ip_address, website_id) violated _ip_website_uniq and aborted the
+        caller's transaction (ham_events' honeypot returned a 500 on a repeat hit). A repeat
+        call for an already-active ban must neither create a second row nor push a second
+        Cloudflare rule."""
+        mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
+        mock_ban_ip.return_value = (True, "fake_rule_repeat")
+        ban_model = self.env["cloudflare.ip.ban"].with_user(self.svc_uid)
+
+        self.assertTrue(ban_model._execute_ban("10.0.0.10", website_id=self.website.id))
+        self.assertTrue(ban_model._execute_ban("10.0.0.10", website_id=self.website.id))
+
+        self.assertEqual(mock_ban_ip.call_count, 1)
+        bans = self.env["cloudflare.ip.ban"].search([("ip_address", "=", "10.0.0.10")])
+        self.assertEqual(len(bans), 1)
+        self.assertEqual(bans.state, "active")
+        self.assertEqual(bans.cf_rule_id, "fake_rule_repeat")
+
+    def test_11_execute_ban_retries_a_failed_ban_on_its_existing_row(self):
+        # Tests [@ANCHOR: COMM_cf_execute_ban]
+        """A failed ban (Cloudflare unreachable the first time) must be retried on the next
+        call and the SAME row updated, not left failed forever and not duplicated."""
+        mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
+        ban_model = self.env["cloudflare.ip.ban"].with_user(self.svc_uid)
+
+        mock_ban_ip.return_value = (False, "Edge Offline")
+        self.assertFalse(ban_model._execute_ban("10.0.0.11", website_id=self.website.id))
+        first = self.env["cloudflare.ip.ban"].search([("ip_address", "=", "10.0.0.11")])
+        self.assertEqual(first.state, "failed")
+
+        mock_ban_ip.return_value = (True, "fake_rule_retry")
+        self.assertTrue(ban_model._execute_ban("10.0.0.11", website_id=self.website.id))
+
+        self.assertEqual(mock_ban_ip.call_count, 2)
+        bans = self.env["cloudflare.ip.ban"].search([("ip_address", "=", "10.0.0.11")])
+        self.assertEqual(bans, first, "The retry must update the existing row, not create one.")
+        self.assertEqual(bans.state, "active")
+        self.assertEqual(bans.cf_rule_id, "fake_rule_retry")
+        self.assertEqual(bans.notes, "Honeypot Triggered")

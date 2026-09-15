@@ -63,13 +63,37 @@ class CloudflareIPBan(models.Model):
         else:
             token, zone_id = None, None
 
+        # Idempotent per (ip_address, website_id), which the table's UNIQUE
+        # constraint allows only once. Real bug, 2026-09-15: this used to
+        # create() on every call, so a second honeypot hit from the same IP
+        # raised IntegrityError and aborted the caller's transaction
+        # (ham_events' issue-report form returned a 500 on the repeat hit).
+        # An active ban is left alone, with no second Cloudflare rule; a
+        # failed or lifted one is retried and its existing row updated.
+        existing = self.env["cloudflare.ip.ban"].search(
+            [
+                ("ip_address", "=", ip_address),
+                ("website_id", "=", website.id if website.exists() else False),
+            ],
+            limit=1,
+        )
+        if existing.state == "active":
+            return True
+
+        def _record(vals):
+            vals = dict(vals, ip_address=ip_address, mode=mode)
+            if existing:
+                # ADR-0001: Headless Mutation Context
+                existing.write(vals)
+            else:
+                # ADR-0001: Headless Mutation Context
+                self.env["cloudflare.ip.ban"].create(vals)
+
         if not token or not zone_id:
-            # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.ip.ban"].create(
+            _record(
                 {
-                    "ip_address": ip_address,
-                    "mode": mode,
                     "notes": "Failed: Missing Cloudflare credentials.",
+                    "cf_rule_id": False,
                     "state": "failed",
                     "website_id": website.id if website.exists() else False,
                 }
@@ -79,11 +103,8 @@ class CloudflareIPBan(models.Model):
         success, result = ban_ip(ip_address, mode, notes, token, zone_id)
 
         if success:
-            # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.ip.ban"].create(
+            _record(
                 {
-                    "ip_address": ip_address,
-                    "mode": mode,
                     "notes": notes,
                     "cf_rule_id": result,
                     "state": "active",
@@ -91,18 +112,15 @@ class CloudflareIPBan(models.Model):
                 }
             )
             return True
-        else:
-            # ADR-0001: Headless Mutation Context
-            self.env["cloudflare.ip.ban"].create(
-                {
-                    "ip_address": ip_address,
-                    "mode": mode,
-                    "notes": f"Failed to deploy: {result}",
-                    "state": "failed",
-                    "website_id": website.id,
-                }
-            )
-            return False
+        _record(
+            {
+                "notes": f"Failed to deploy: {result}",
+                "cf_rule_id": False,
+                "state": "failed",
+                "website_id": website.id,
+            }
+        )
+        return False
 
     def action_lift_ban(self):
         # [@ANCHOR: COMM_cf_action_lift_ban]
