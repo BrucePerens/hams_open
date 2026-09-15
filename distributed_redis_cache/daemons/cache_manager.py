@@ -66,7 +66,7 @@ DB_NAME = os.getenv("DB_NAME", "odoo")
 # elsewhere for safety mechanisms. Log loudly instead, once, so the gap
 # is visible rather than silent.
 DB_USER = os.getenv("DB_USER", "odoo")
-DB_PASS = os.getenv("DB_PASS", "odoo")
+DB_PASS = os.getenv("DB_PASS", "odoo")  # burn-ignore-env: deliberate no-bricking fallback documented above; tracked in night_shift_todo/low/cache-manager-odoo-password-fallback
 if not os.path.exists(DB_ENV_FILE):
     logger.warning(
         "%s not found -- connecting to Postgres as '%s' with no privilege "
