@@ -13,7 +13,7 @@
 // oncomplete-based Promise settlement actually resolves/rejects correctly on the happy path,
 // which is the one thing that had never been directly exercised at all.
 import { afterEach, describe, expect, test } from "@odoo/hoot";
-import { OfflineStore } from "@zero_sudo/js/offline_store";
+import { isStorageFullError, OfflineStore } from "@zero_sudo/js/offline_store";
 
 // A fresh, unique-per-test database name avoids any cross-test IndexedDB state bleeding between
 // runs in the same browser profile -- simpler and more robust than trying to clear/reset a
@@ -43,6 +43,17 @@ afterEach(() => {
 
 describe("offline_store", () => {
     describe.current.tags("zero_sudo_offline_store");
+
+    // Tests [@ANCHOR: is_storage_full_error]
+    test("isStorageFullError() recognizes real quota errors and nothing else", () => {
+        // A real DOMException, the exact type IndexedDB raises in Chrome when the disk is full.
+        expect(isStorageFullError(new DOMException("full", "QuotaExceededError"))).toBe(true);
+        expect(isStorageFullError({ name: "NS_ERROR_DOM_QUOTA_REACHED" })).toBe(true);
+        expect(isStorageFullError({ name: "Error", code: 22 })).toBe(true);
+        expect(isStorageFullError(new DOMException("gone", "AbortError"))).toBe(false);
+        expect(isStorageFullError(new Error("Transaction aborted"))).toBe(false);
+        expect(isStorageFullError(undefined)).toBe(false);
+    });
 
     test("saveLog() resolves with a real uuid, and getPendingLogs() finds it", async () => {
         const store = makeStore();

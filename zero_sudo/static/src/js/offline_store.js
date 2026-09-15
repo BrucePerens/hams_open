@@ -9,6 +9,25 @@
 // radio shack installed at all). zero_sudo is a real dependency of both. Defaults match the
 // original hardcoded values exactly, so ham_shack's own existing IndexedDB database/data is
 // unaffected by the move.
+/**
+ * True when `err` (a saveLog() rejection) means the browser refused the write for lack of
+ * storage -- the disk is full, or this site's storage quota is used up. Chrome and the spec
+ * raise a DOMException named "QuotaExceededError" (legacy code 22); Firefox has also used
+ * "NS_ERROR_DOM_QUOTA_REACHED" (code 1014). Callers use this to tell the operator "Disk Full"
+ * rather than a generic or misleading error (2026-09-15: a full disk used to lose offline QSOs
+ * silently, or show "Network Error").
+ */
+// [@ANCHOR: is_storage_full_error]
+export function isStorageFullError(err) {
+    if (!err) return false;
+    return (
+        err.name === "QuotaExceededError" ||
+        err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+        err.code === 22 ||
+        err.code === 1014
+    );
+}
+
 export class OfflineStore {
     constructor(dbName = 'HamShackOfflineDB', storeName = 'offline_logs') {
         this.dbName = dbName;
