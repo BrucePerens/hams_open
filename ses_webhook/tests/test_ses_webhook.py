@@ -88,7 +88,13 @@ def _sign_sns_payload(payload, private_key, signature_version="1", signing_cert_
     fields (Timestamp/TopicArn/Token as needed) plus a real Signature computed against
     `private_key`, exactly the way AWS SNS itself signs an outgoing notification."""
     payload = dict(payload)
-    payload.setdefault("Timestamp", "2026-09-09T00:00:00.000Z")
+    # Real, current time by default -- not a fixed calendar date -- because webhook_api.py's own
+    # _verify_sns_signature now enforces a freshness window (_MAX_SNS_MESSAGE_AGE) against this
+    # exact field. A hardcoded past date would eventually (and did, once the 2026-09-14 freshness
+    # check landed) start failing every test that doesn't care about freshness, for a reason
+    # unrelated to what each test actually exercises. Tests that DO care about freshness
+    # (test_35/test_36 below) pass an explicit Timestamp override instead.
+    payload.setdefault("Timestamp", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
     payload.setdefault("TopicArn", "arn:aws:sns:us-east-1:123456789012:test-topic")
     # Real AWS SubscriptionConfirmation/UnsubscribeConfirmation messages always carry a
     # human-readable "Message" too (the "You have chosen to subscribe..." text) -- it's a
@@ -624,6 +630,65 @@ class TestSesWebhook(HamsHttpCase):
         self.cert_fetch_mock.assert_not_called()
 
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-badversion')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_32b_signature_stale_timestamp_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A real, correctly-signed payload whose signed Timestamp is far outside
+        _MAX_SNS_MESSAGE_AGE must be rejected -- this is exactly what a captured-and-replayed
+        legitimate message looks like: valid signature, valid cert, but stale. Checked before the
+        certificate is ever fetched (cheap-check-first), like test_32's SignatureVersion gate."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        stale_timestamp = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        payload = {
+            "Type": "Notification", "MessageId": "msg-sig-stale", "Message": json.dumps(ses_message),
+            "Timestamp": stale_timestamp,
+        }
+        payload = self._sign(payload)
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        self.cert_fetch_mock.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-stale')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_32c_signature_future_timestamp_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A signed Timestamp far in the future (well past the tolerance any real clock skew
+        would produce) must also be rejected, not just a stale one -- the freshness window is
+        symmetric, matching webhook_api.py's own abs(age) check."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        future_timestamp = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        payload = {
+            "Type": "Notification", "MessageId": "msg-sig-future", "Message": json.dumps(ses_message),
+            "Timestamp": future_timestamp,
+        }
+        payload = self._sign(payload)
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        self.cert_fetch_mock.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-future')])
+        self.assertEqual(log.status, 'rejected_signature')
+
+    def test_32d_signature_unparseable_timestamp_rejected(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """A Timestamp field that isn't valid ISO 8601 at all (never a real AWS shape, but this
+        function must still fail closed rather than raise) is rejected the same way."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        payload = {
+            "Type": "Notification", "MessageId": "msg-sig-badtime", "Message": json.dumps(ses_message),
+            "Timestamp": "not-a-timestamp",
+        }
+        payload = self._sign(payload)
+
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        self.cert_fetch_mock.assert_not_called()
+
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-badtime')])
         self.assertEqual(log.status, 'rejected_signature')
 
     def test_33_fetch_sns_signing_cert_caches_by_url(self):

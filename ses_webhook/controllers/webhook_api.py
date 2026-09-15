@@ -7,7 +7,7 @@ import logging
 import json
 import re
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -78,6 +78,17 @@ _SNS_SIGNING_CERT_URL_RE = re.compile(
 # now").
 _NOTIFICATION_SIGNED_FIELDS = ('Message', 'MessageId', 'Subject', 'Timestamp', 'TopicArn', 'Type')
 _SUBSCRIBE_SIGNED_FIELDS = ('Message', 'MessageId', 'SubscribeURL', 'Timestamp', 'Token', 'TopicArn', 'Type')
+
+# Night-shift audit follow-up, 2026-09-14 (night_shift_todo.md, "genuinely still open" list):
+# a captured, previously-valid signed SNS payload could otherwise be replayed indefinitely, since
+# nothing checked the signed `Timestamp` field's own freshness -- the signature alone proves AWS
+# signed it at SOME point, not that this delivery is the original one. AWS's own SNS docs recommend
+# validating message freshness for exactly this reason. 15 minutes is generous versus SNS's actual
+# end-to-end delivery latency (seconds, occasionally low minutes under retry) while still bounding
+# how long a captured payload stays replayable; it does not need to match SNS's own multi-day retry
+# window for UNDELIVERED messages, since a delivered-and-replayed message is what this defends
+# against, not a legitimate late first delivery.
+_MAX_SNS_MESSAGE_AGE = timedelta(minutes=15)
 
 # The only payload_type values ses.webhook.log's own Selection field
 # accepts -- anything else attacker-controlled in the JSON body's "Type"
@@ -165,9 +176,10 @@ def _verify_sns_signature(payload):
 
     Fails closed: any missing required field, a `SigningCertURL` that isn't a real
     `sns.<region>.amazonaws.com` signing-cert URL, an unreachable/malformed/expired certificate,
-    an unsupported `SignatureVersion`, or an actual signature mismatch all return False. Never
-    raises -- callers get a plain boolean gate, identical in shape to the token check this
-    supplements.
+    an unsupported `SignatureVersion`, a signed `Timestamp` outside `_MAX_SNS_MESSAGE_AGE` of now
+    (replay defense -- see the module-level comment on `_MAX_SNS_MESSAGE_AGE`), or an actual
+    signature mismatch all return False. Never raises -- callers get a plain boolean gate,
+    identical in shape to the token check this supplements.
     """
     try:
         signature_b64 = payload.get('Signature')
@@ -186,6 +198,28 @@ def _verify_sns_signature(payload):
 
         string_to_sign = _build_string_to_sign(payload)
         if string_to_sign is None:
+            return False
+
+        # Replay defense: reject before spending a fetch+RSA-verify on a signed message that is
+        # already known-stale. `Timestamp` is itself one of the signed fields (see
+        # _NOTIFICATION_SIGNED_FIELDS/_SUBSCRIBE_SIGNED_FIELDS above), so an attacker replaying a
+        # captured payload cannot move this value forward without invalidating the signature this
+        # function verifies below -- checking it here first is purely an ordering choice for
+        # cheap-check-first, not a weaker guarantee than checking it after the signature.
+        try:
+            message_time = datetime.fromisoformat(payload['Timestamp'].replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            _logger.warning(
+                "SES Webhook: SNS message has an unparseable Timestamp: %r.", payload.get('Timestamp'),
+            )
+            return False
+        age = datetime.now(timezone.utc) - message_time
+        if abs(age) > _MAX_SNS_MESSAGE_AGE:
+            _logger.warning(
+                "SES Webhook: refusing a SNS message outside the %s freshness window "
+                "(Timestamp=%s, age=%s) -- likely a replayed or clock-skewed delivery.",
+                _MAX_SNS_MESSAGE_AGE, payload['Timestamp'], age,
+            )
             return False
 
         if signature_version == '1':
