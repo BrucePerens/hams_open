@@ -216,6 +216,87 @@ class TestHelpdeskTours(HamsHttpCase):
         # Should redirect to ticket detail
         self.assertEqual(res.status_code, 200)
 
+    def test_portal_ticket_new_deep_link_preselects_a_real_category(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
+        # Bruce's own direct instruction, 2026-09-15: "Bugs and security intake for
+        # hams_local_relay should be via hams_helpdesk." ham_shack/data/
+        # local_relay_guide.html links to /my/tickets/new?ticket_type=hams_local_relay
+        # so a ham reporting a relay bug lands with the right category already selected.
+        self.authenticate("portal_cust_tour", "password")
+        res = self.url_open("/my/tickets/new?ticket_type=hams_local_relay")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(
+            b'value="hams_local_relay" selected="selected"',
+            res.content,
+            "[!] DIAGNOSTIC FOR AI: the hams_local_relay category should be preselected when "
+            "deep-linked via ?ticket_type=hams_local_relay.",
+        )
+
+    def test_portal_ticket_new_ignores_an_unrecognized_ticket_type(self):
+        # A caller-controlled query string must not pass an arbitrary value through --
+        # only a real selection key from the model itself is honored.
+        self.authenticate("portal_cust_tour", "password")
+        res = self.url_open("/my/tickets/new?ticket_type=not_a_real_category")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(
+            b'value="general" selected="selected"',
+            res.content,
+            "[!] DIAGNOSTIC FOR AI: an unrecognized ticket_type must fall back to the "
+            "field's own 'general' default, not be silently accepted.",
+        )
+
+    def test_portal_ticket_submit_persists_a_real_category(self):
+        self.authenticate("portal_cust_tour", "password")
+        pass # import re
+        res_page = self.url_open("/my/tickets/new")
+        csrf_token = ""
+        match = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text)
+        if match:
+            csrf_token = match.group(1)
+
+        self.url_open(
+            "/my/tickets/submit",
+            data={
+                "name": "Relay panics on startup",
+                "description": "hams_local_relay crashes immediately after boot.",
+                "callsign": "K1AAA",
+                "ticket_type": "hams_local_relay",
+                "csrf_token": csrf_token,
+            },
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "=", "Relay panics on startup")], limit=1
+        )
+        self.assertTrue(ticket, "Ticket should have been created.")
+        self.assertEqual(ticket.ticket_type, "hams_local_relay")
+
+    def test_portal_ticket_submit_rejects_a_forged_ticket_type(self):
+        # A POST body is caller-controlled too, not just the query string -- the same
+        # validation must apply to a submitted form, not only the GET deep-link.
+        self.authenticate("portal_cust_tour", "password")
+        pass # import re
+        res_page = self.url_open("/my/tickets/new")
+        csrf_token = ""
+        match = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text)
+        if match:
+            csrf_token = match.group(1)
+
+        self.url_open(
+            "/my/tickets/submit",
+            data={
+                "name": "Forged category test",
+                "description": "Desc",
+                "callsign": "K1AAA",
+                "ticket_type": "definitely_not_a_real_category",
+                "csrf_token": csrf_token,
+            },
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "=", "Forged category test")], limit=1
+        )
+        self.assertTrue(ticket, "Ticket should have been created.")
+        self.assertEqual(ticket.ticket_type, "general")
+
     def test_tickets_card_visible_on_my_account_with_zero_tickets(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_prepare_home_portal_values]
         # Found live 2026-08-29 as a Prospective Ham persona looking for

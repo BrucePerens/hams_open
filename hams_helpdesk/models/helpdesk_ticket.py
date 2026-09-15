@@ -24,6 +24,18 @@ class HelpdeskTicket(models.Model):
     ticket_type = fields.Selection(
         selection=[
             ("general", "General Inquiry"),
+            # Bruce's own direct instruction, 2026-09-15: "Bugs and security intake for
+            # hams_local_relay should be via hams_helpdesk." hams_local_relay is the
+            # local-relay daemon (daemons/hams_local_relay in hams_com) -- this category
+            # exists so the guide/UI at ham_shack/data/local_relay_guide.html has a real,
+            # concrete place to send a ham reporting a bug or a security issue, rather
+            # than the unfilled placeholder that prove-my-language's own audit found
+            # rendering verbatim to real users. One category covers both bug reports and
+            # security issues deliberately (per Bruce's own singular "a category," not
+            # two) -- the description prompt on the portal form (see portal_templates.xml)
+            # tells the reporter to say which kind it is; splitting this into two selection
+            # values isn't needed for that.
+            ("hams_local_relay", "hams_local_relay: Bug / Security Report"),
         ],
         string="Ticket Type",
         default="general",

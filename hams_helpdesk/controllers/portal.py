@@ -151,11 +151,23 @@ class HelpdeskPortal(CustomerPortal):
         # required=True on the model field). Nothing downstream needed
         # this check; just stopped enforcing it.
         callsign = request.env.user.partner_id.callsign
+        # A caller (e.g. ham_shack/data/local_relay_guide.html's own "report a bug" link)
+        # can deep-link straight into a specific category via ?ticket_type=hams_local_relay.
+        # Validated against the model's own real selection values here, not trusted blindly
+        # from a query string -- an unrecognized value falls back to the field's own
+        # "general" default rather than being passed through to the template/create() call.
+        valid_types = dict(
+            request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection
+        )
+        requested_type = kw.get("ticket_type")
+        default_ticket_type = requested_type if requested_type in valid_types else "general"
         return request.render(
             "hams_helpdesk.portal_ticket_new",
             {
                 "page_name": "ticket_new",
                 "default_callsign": callsign,
+                "default_ticket_type": default_ticket_type,
+                "ticket_type_selection": request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection,
             },
         )
 
@@ -167,13 +179,23 @@ class HelpdeskPortal(CustomerPortal):
         website=True,
         csrf=True,
     )
-    def portal_ticket_submit(self, name=None, description=None, callsign=None, **kw):
+    def portal_ticket_submit(self, name=None, description=None, callsign=None, ticket_type=None, **kw):
         # Verified by [@ANCHOR: helpdesk_portal_tour]
         if not name:
             return request.redirect("/my/tickets/new")
 
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
+
+        # Same real-selection-value validation as portal_ticket_new's own GET handler --
+        # a portal POST body is caller-controlled, so re-check here too rather than
+        # trusting the hidden form field wasn't tampered with; an unrecognized value
+        # falls back to the model field's own "general" default.
+        valid_ticket_types = dict(
+            request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection
+        )
+        if ticket_type not in valid_ticket_types:
+            ticket_type = "general"
 
         try:
             req_website = request.website
@@ -190,6 +212,7 @@ class HelpdeskPortal(CustomerPortal):
             "name": name,
             "description": description,
             "callsign": callsign or request.env.user.partner_id.callsign,
+            "ticket_type": ticket_type,
             "partner_id": request.env.user.partner_id.id,
             "website_id": req_website.id if req_website else False,
             "company_id": company_id,

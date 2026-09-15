@@ -154,6 +154,14 @@
                                         <input type="text" name="callsign" id="callsign" class="form-control" t-att-value="default_callsign" placeholder="Your callsign (if applicable)"/>
                                     </div>
                                     <div class="mb-3">
+                                        <label for="ticket_type" class="form-label">Category</label>
+                                        <select name="ticket_type" id="ticket_type" class="form-select">
+                                            <t t-foreach="ticket_type_selection" t-as="tt">
+                                                <option t-att-value="tt[0]" t-att-selected="'selected' if tt[0] == default_ticket_type else None" t-out="tt[1]"/>
+                                            </t>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
                                         <label for="description" class="form-label">Description</label>
                                         <textarea name="description" id="description" class="form-control" rows="5" placeholder="Detailed steps to reproduce, error messages, or context..."></textarea>
                                     </div>
