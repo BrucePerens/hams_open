@@ -697,8 +697,8 @@ pub(crate) mod tests {
         // so the real assertion is a sane bound: every real LSP angle is
         // in `[0, pi]` radians, generously bracketed here in Q23.
         let lsp_back_q23 = decode_lsps_delta_scalar_fixed(&indexes);
-        let pi_q23 = (std::f32::consts::PI * (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32)
-            as i64;
+        let pi_q23 =
+            (std::f32::consts::PI * (1i64 << super::super::lpc::COEF_FRAC_BITS) as f32) as i64;
         for (i, &v) in lsp_back_q23.iter().enumerate() {
             assert!(
                 (-pi_q23..=2 * pi_q23).contains(&v),

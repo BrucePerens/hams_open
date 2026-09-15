@@ -333,7 +333,10 @@ pub(crate) fn exp2_lut(y: f32) -> f32 {
 /// analogue of an IEEE754 exponent extraction.
 // [@ANCHOR: log2_q23]
 pub(crate) fn log2_q23(x_q23: i64) -> i64 {
-    debug_assert!(x_q23 >= 0, "log2_q23: x_q23 must be non-negative, got {x_q23}");
+    debug_assert!(
+        x_q23 >= 0,
+        "log2_q23: x_q23 must be non-negative, got {x_q23}"
+    );
     // Bug-hunt fix, 2026-09-11: x_q23 == 0 is a legitimate saturated value from a real
     // signal condition (exp2_q23 underflowing a very negative y to exactly zero, or a
     // genuinely silent LPC/energy bin) -- not a caller bug the way a truly negative x_q23

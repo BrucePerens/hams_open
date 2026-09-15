@@ -2378,7 +2378,10 @@ mod levinson_durbin_fixed_tests {
                 "expected the 'no signal, no prediction' sentinel (1.0 in Q(LEVINSON_FRAC_BITS)) at index 0"
             );
             for (j, &v) in r_norm_q.iter().enumerate().skip(1) {
-                assert_eq!(v, 0, "expected r_norm_q[{j}] == 0 for an all-zero input, got {v}");
+                assert_eq!(
+                    v, 0,
+                    "expected r_norm_q[{j}] == 0 for an all-zero input, got {v}"
+                );
             }
         }
 
@@ -2410,7 +2413,11 @@ mod levinson_durbin_fixed_tests {
 
             let (ak, a_q23) = levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
 
-            assert_eq!(a_q23[0], 1i64 << COEF_FRAC_BITS, "expected the identity filter's a[0] == 1.0");
+            assert_eq!(
+                a_q23[0],
+                1i64 << COEF_FRAC_BITS,
+                "expected the identity filter's a[0] == 1.0"
+            );
             for (i, &a) in a_q23.iter().enumerate().skip(1) {
                 assert_eq!(a, 0, "expected the identity ('no prediction') filter a[{i}] == 0 for an all-silent frame, got {a}");
             }
@@ -2474,8 +2481,8 @@ mod levinson_durbin_fixed_tests {
         /// r_norm_q[1]) = q_mul(1<<F, -1<<F) = -1<<F`), so `i=2` must
         /// take the real division branch against `e_q == 0`.
         #[test]
-        fn levinson_durbin_fixed_core_from_r_norm_does_not_panic_when_k_hits_the_boundary_exactly(
-        ) {
+        fn levinson_durbin_fixed_core_from_r_norm_does_not_panic_when_k_hits_the_boundary_exactly()
+        {
             let mut r_norm_q = [0i64; LPC_ORD + 1];
             r_norm_q[0] = 1i64 << LEVINSON_FRAC_BITS;
             r_norm_q[1] = -(1i64 << LEVINSON_FRAC_BITS);

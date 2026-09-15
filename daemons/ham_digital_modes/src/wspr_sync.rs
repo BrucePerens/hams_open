@@ -922,7 +922,7 @@ pub fn decode_from_symbol_evidence(
 /// on a decode failure (`Err`), since a caller may still want to know
 /// where a low-confidence signal was found.
 #[allow(clippy::too_many_arguments)] // Each parameter is an independent, real search/decode tuning knob -- see the doc comments on find_sync()/decode_from_symbol_evidence() for what each one means; bundling them into a struct would just move the same count, not reduce it.
-// [@ANCHOR: sync_search_and_decode]
+                                     // [@ANCHOR: sync_search_and_decode]
 pub fn sync_search_and_decode(
     samples: &[i16],
     sample_rate: u32,
@@ -985,7 +985,7 @@ impl From<ConfidenceGateError> for WsprMessageError {
 /// it's surfaced (`AUTO_TUNE_AND_MODE_DETECTION.md`'s real tuning-
 /// correction use).
 #[allow(clippy::too_many_arguments)] // Same reasoning as sync_search_and_decode()'s own allow -- see its doc comment.
-// [@ANCHOR: sync_search_and_decode_message]
+                                     // [@ANCHOR: sync_search_and_decode_message]
 pub fn sync_search_and_decode_message(
     samples: &[i16],
     sample_rate: u32,
@@ -2746,7 +2746,15 @@ mod tests {
         // freq_hi_hz exactly at Nyquist -- must not be rejected (only
         // strictly ABOVE Nyquist is invalid).
         assert!(
-            find_sync(&samples, sample_rate, 100.0, sample_rate as f64 / 2.0, 100, 0.0).is_some(),
+            find_sync(
+                &samples,
+                sample_rate,
+                100.0,
+                sample_rate as f64 / 2.0,
+                100,
+                0.0
+            )
+            .is_some(),
             "freq_hi_hz exactly at Nyquist must still be accepted"
         );
     }
@@ -2770,4 +2778,3 @@ mod tests {
         assert_eq!(find_sync(&samples, 0, 0.0, 100.0, 10, 0.0), None);
     }
 }
-

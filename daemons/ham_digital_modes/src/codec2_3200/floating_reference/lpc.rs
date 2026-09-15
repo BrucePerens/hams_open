@@ -407,8 +407,8 @@ mod tests {
     /// for why this is nonetheless a real, not purely theoretical, case
     /// the same one-line guard needed to cover anyway.
     #[test]
-    fn levinson_durbin_does_not_produce_nan_when_a_reflection_coefficient_hits_the_clamp_boundary_exactly()
-     {
+    fn levinson_durbin_does_not_produce_nan_when_a_reflection_coefficient_hits_the_clamp_boundary_exactly(
+    ) {
         // Order 1: k = -(r[1])/r[0]. Choosing r[1] == -r[0] (both
         // nonzero) makes k == 1.0 exactly on the very first iteration,
         // zeroing e for iteration 2 (e *= 1.0 - 1.0*1.0 == 0.0).

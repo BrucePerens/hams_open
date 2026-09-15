@@ -155,7 +155,9 @@ impl DStarHeader {
         Self::pack_field(&self.ur_call, 8, &mut out)?;
         Self::pack_field(&self.my_call, 8, &mut out)?;
         Self::pack_field(&self.my_call_suffix, 4, &mut out)?;
-        Ok(out.try_into().expect("exactly DSTAR_HEADER_BODY_LEN bytes by construction"))
+        Ok(out
+            .try_into()
+            .expect("exactly DSTAR_HEADER_BODY_LEN bytes by construction"))
     }
 
     /// Packs this header AND appends its own real FCS, producing the full 41 bytes a real
@@ -164,14 +166,18 @@ impl DStarHeader {
     pub fn pack_with_fcs(&self) -> Result<[u8; DSTAR_HEADER_LEN], DStarHeaderError> {
         let body = self.pack()?;
         let with_fcs = dstar_checksum_append(&body);
-        Ok(with_fcs.try_into().expect("body len + 2 == DSTAR_HEADER_LEN by construction"))
+        Ok(with_fcs
+            .try_into()
+            .expect("body len + 2 == DSTAR_HEADER_LEN by construction"))
     }
 
     fn unpack_field(bytes: &[u8]) -> String {
         // Real wire padding is ASCII space (0x20); trim it from the end only -- a callsign
         // can't legitimately start with a space, but trimming both ends would silently accept
         // a malformed leading-space field as if it were a shorter, valid one.
-        String::from_utf8_lossy(bytes).trim_end_matches(' ').to_string()
+        String::from_utf8_lossy(bytes)
+            .trim_end_matches(' ')
+            .to_string()
     }
 
     /// Parses a 39-byte header body (no FCS) back into its fields. Never fails: any byte

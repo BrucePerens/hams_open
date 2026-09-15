@@ -770,8 +770,14 @@ mod tests {
         );
         // A real, standard-format grid must still pack correctly -- the fix must not have
         // narrowed acceptance below the real, documented Maidenhead field range (A-R).
-        assert!(pack_grid4_power("RR99", 33).is_some(), "'R' is the real upper field bound and must still be accepted");
-        assert!(pack_grid4_power("AA00", 33).is_some(), "'A' is the real lower field bound and must still be accepted");
+        assert!(
+            pack_grid4_power("RR99", 33).is_some(),
+            "'R' is the real upper field bound and must still be accepted"
+        );
+        assert!(
+            pack_grid4_power("AA00", 33).is_some(),
+            "'A' is the real lower field bound and must still be accepted"
+        );
     }
 
     #[test]
