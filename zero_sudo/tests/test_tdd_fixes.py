@@ -75,6 +75,69 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             bad_credential = dict(credential, login="service_batch_test@example.com")
             self.env["res.users"].authenticate(bad_credential, {"interactive": False})
 
+    def test_write_password_as_a_non_system_service_account_splits_by_flag(self):
+        # Tests [@ANCHOR: zero_sudo:res_users_write]
+        # Real bug, found 2026-09-16: the password branch of write() used
+        # self.filtered("is_service_account"), and that field is
+        # groups="base.group_system". A narrow service account with res.users
+        # write access but no system group (ham_base.user_manager_service, doing
+        # ham_onboarding's LoTW account takeover) got AccessError on every
+        # password write. The split must work for such a caller, and still
+        # keep the given password away from service accounts.
+        writer_group = self.env["res.groups"].create({"name": "Test Narrow res.users Writer"})
+        self.env["ir.model.access"].create({
+            "name": "test narrow res.users writer",
+            "model_id": self.env.ref("base.model_res_users").id,
+            "group_id": writer_group.id,
+            "perm_read": True,
+            "perm_write": True,
+            "perm_create": False,
+            "perm_unlink": False,
+        })
+        # A password write makes the mail module render and send
+        # mail.account_security_alert as the writing user. That reads the target's
+        # company and partner, and website when installed (get_base_url), so a
+        # real narrow account like ham_base.user_manager_service carries these
+        # reads. Grant the same ones here.
+        for model_name in ("res.company", "res.partner", "website"):
+            model = self.env["ir.model"]._get(model_name)
+            if model:
+                self.env["ir.model.access"].create({
+                    "name": f"test narrow writer read {model_name}",
+                    "model_id": model.id,
+                    "group_id": writer_group.id,
+                    "perm_read": True,
+                    "perm_write": False,
+                    "perm_create": False,
+                    "perm_unlink": False,
+                })
+        writer = self.env["res.users"].create({
+            "name": "Narrow Writer Service",
+            "login": "narrow_writer_service_test@example.com",
+            "is_service_account": True,
+            "group_ids": [(6, 0, [writer_group.id])],
+            "lang": "en_US",
+        })
+        self.assertFalse(writer.has_group("base.group_system"))
+        regular = self.env["res.users"].create(
+            {"name": "Narrow Target User", "login": "narrow_target_test@example.com", "lang": "en_US"}
+        )
+        service = self.env["res.users"].create(
+            {"name": "Narrow Target Service", "login": "narrow_target_service_test@example.com", "is_service_account": True, "lang": "en_US"}
+        )
+
+        (regular | service).with_user(writer).write({"password": "narrow_writer_password"})
+        self.env.cr.flush()
+
+        credential = {"login": "narrow_target_test@example.com", "password": "narrow_writer_password", "type": "password"}
+        self.assertEqual(
+            self.env["res.users"].authenticate(credential, {"interactive": False})["uid"], regular.id
+        )
+        with self.assertRaises(Exception):
+            self.env["res.users"].authenticate(
+                dict(credential, login="narrow_target_service_test@example.com"), {"interactive": False}
+            )
+
     def test_write_de_designating_a_service_account_still_forces_a_random_password(self):
         # Tests [@ANCHOR: zero_sudo:res_users_write]
 

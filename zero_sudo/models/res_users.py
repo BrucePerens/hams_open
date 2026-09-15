@@ -90,7 +90,21 @@ class ResUsersZeroSudo(models.Model):
             return res
         elif "password" in vals:
             if self.ids:
-                service_accounts = self.filtered("is_service_account")
+                # Read the flag with SQL, not self.filtered("is_service_account"): that field is
+                # groups="base.group_system", so filtering through the ORM raised AccessError
+                # whenever a non-system caller wrote a password. That includes the narrow service
+                # accounts this module exists to promote, e.g. ham_base.user_manager_service
+                # handing a squatted account to its callsign's licensee (ham_onboarding's LoTW
+                # takeover), found 2026-09-16. The same raw read as
+                # ir.http._is_service_account_cached; flush first so an is_service_account change
+                # still pending in this transaction is seen.
+                # Verified by [@ANCHOR: test_write_password_as_a_non_system_service_account_splits_by_flag]
+                self.flush_recordset(["is_service_account"])
+                self.env.cr.execute(  # Tested by [@ANCHOR: test_write_password_as_a_non_system_service_account_splits_by_flag]
+                    "SELECT id FROM res_users WHERE id = ANY(%s) AND is_service_account",
+                    (list(self.ids),),
+                )
+                service_accounts = self.env["res.users"].browse([row[0] for row in self.env.cr.fetchall()])
                 if service_accounts:
                     regular_accounts = self - service_accounts
 
