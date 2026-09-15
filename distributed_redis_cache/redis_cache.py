@@ -24,6 +24,42 @@ _logger = logging.getLogger(__name__)
 _local_cache = LRU(8192)
 LRU_LOCK = threading.Lock()
 
+# Shared, process-wide "last seen" invalidation counter for
+# poll_and_clear_local_cache() below -- deliberately a single module-level
+# value rather than one per calling model (ir.http, ir.cron), so the two
+# call sites can never each decide independently and redundantly clear the
+# cache on the same counter change; whichever call site polls first wins,
+# and the other sees latest == last_cache_counter and skips.
+_last_cache_counter = None
+_LAST_CACHE_COUNTER_LOCK = threading.Lock()
+
+
+# [@ANCHOR: distributed_redis_cache:COMM_poll_and_clear_local_cache]
+def poll_and_clear_local_cache(env):
+    """Poll Redis's global invalidation counter and clear the process-local L1
+    cache if it changed since the last poll from any call site.
+
+    This is the ONLY thing that ever clears `_local_cache`. It must run from
+    every code path that can call a `@distributed_cache()`-decorated method
+    outside of a fresh process start, or that path's L1 entries never expire
+    until the process itself recycles. `ir.http._authenticate` (the request
+    path) is one such call site; `ir.cron._process_job` (the cron-dispatch
+    path, which reaches `@distributed_cache()`-decorated code -- e.g.
+    `cloudflare`'s purge-queue cron -- without ever going through
+    `_authenticate`) is the other.
+    """
+    global _last_cache_counter
+    try:
+        r = get_redis_connection(env)
+        latest = r.get("global_cache_invalidation_counter")
+        with _LAST_CACHE_COUNTER_LOCK:
+            if latest and latest != _last_cache_counter:
+                with LRU_LOCK:
+                    _local_cache.clear()
+                _last_cache_counter = latest
+    except redis.RedisError as e:
+        _logger.warning("Failed to execute stateless Redis poll: %s", e)
+
 # _raw_crypto_secret() is called on every single cache sign/verify (it
 # isn't itself cached), so an unconfigured deployment would otherwise log
 # an ERROR line on every cache hit/miss -- loud, but not useful past the

@@ -163,10 +163,17 @@ class TestB2Fixes(HamsTransactionCase):
         )
 
     def test_b2_3_banned_local_imports(self):
-
+        # bug-hunt (2026-09-15): ir_http.py's _authenticate no longer imports
+        # _local_cache/LRU_LOCK directly -- both call sites (ir.http and
+        # ir.cron, see COMM_cron_cache_interceptor) now share one
+        # poll_and_clear_local_cache() helper in redis_cache.py instead of
+        # duplicating the poll-and-clear logic. The anti-pattern this test
+        # guards against (an import placed inside a function body rather
+        # than at module level, so it re-executes on every call) still
+        # applies to that helper's own import.
         with open(ir_http.__file__, "r") as f:
             content = f.read()
-            
+
         tree = ast.parse(content)
         found_import = False
         inside_func = False
@@ -176,14 +183,14 @@ class TestB2Fixes(HamsTransactionCase):
                     if isinstance(child, ast.ImportFrom):
                         if child.module == "odoo.addons.distributed_redis_cache.redis_cache":
                             for name in child.names:
-                                if name.name in ("_local_cache", "LRU_LOCK"):
+                                if name.name == "poll_and_clear_local_cache":
                                     inside_func = True
             elif isinstance(node, ast.ImportFrom):
                 if node.module == "odoo.addons.distributed_redis_cache.redis_cache":
                     for name in node.names:
-                        if name.name in ("_local_cache", "LRU_LOCK"):
+                        if name.name == "poll_and_clear_local_cache":
                             found_import = True
-                            
+
         self.assertTrue(found_import, "Imports must be present")
         self.assertFalse(inside_func, "Imports must be at module level")
 

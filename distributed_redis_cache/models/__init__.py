@@ -3,7 +3,8 @@
 
 # -*- coding: utf-8 -*-
 
-__all__ = ["ir_http", "distributed_cache_config", "res_config_settings"]
+__all__ = ["ir_cron", "ir_http", "distributed_cache_config", "res_config_settings"]
 from . import distributed_cache_config
+from . import ir_cron
 from . import ir_http
 from . import res_config_settings
