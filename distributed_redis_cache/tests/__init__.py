@@ -8,6 +8,7 @@ from . import test_cm_leak
 from . import test_fixes
 from . import test_b2_fixes
 from . import test_hooks
+from . import test_cron_cache_interceptor
 
 __all__ = [
     "test_distributed_cache",
@@ -16,4 +17,5 @@ __all__ = [
     "test_fixes",
     "test_b2_fixes",
     "test_hooks",
+    "test_cron_cache_interceptor",
 ]

@@ -31,7 +31,6 @@ def _dummy_cron_vals(env):
         "active": True,
         "interval_number": 1,
         "interval_type": "days",
-        "numbercall": 1,
     }
 
 
