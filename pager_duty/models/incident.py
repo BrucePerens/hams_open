@@ -467,7 +467,16 @@ class PagerIncident(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_incident_creator"
         )
-        return self.with_user(svc_uid).create(data)
+        incident = self.with_user(svc_uid).create(data)
+        # A human email always gets a helpdesk ticket. create()'s severity
+        # gate (incident_ticket_adapter.py) skips "low"/"medium" incidents
+        # so monitoring signals go through trend detection instead of
+        # paging, and email incidents default to "low" -- so without this
+        # explicit call, info@/postmaster@ mail silently stopped producing
+        # tickets once that gate landed (5b9606ac). The adapter method is
+        # deliberately left ungated for direct calls like this one.
+        incident.action_generate_helpdesk_ticket()
+        return incident
 
     @api.model
     def auto_resolve_incidents(self, source, website_id=None):

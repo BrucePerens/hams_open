@@ -113,6 +113,10 @@ class TestMailIngestIncident(HamsTransactionCase):
         incident = self.env["pager.incident"].search([], order="id desc", limit=1)
         self.assertIn("other-admin@example.net", incident.source)
         self.assertEqual(incident.severity, "medium")
+        # "medium" is also skipped by create()'s severity gate, so this
+        # only holds because message_new() requests the ticket explicitly.
+        self.assertTrue(incident.helpdesk_ticket_id, "A postmaster@ email must still produce a helpdesk ticket.")
+        self.assertEqual(incident.helpdesk_ticket_model, "hams_helpdesk.ticket")
 
     # Whether a vacation/unsubscribe/bounce message to postmaster@ gets
     # dropped before it ever reaches this alias is hams_base's own
