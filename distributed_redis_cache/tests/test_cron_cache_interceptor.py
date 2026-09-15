@@ -14,7 +14,7 @@ real cron dispatch does, rather than calling the new override function directly.
 """
 import secrets
 
-from odoo import fields
+from odoo import fields, tools
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, LRU_LOCK
@@ -55,8 +55,23 @@ class TestCronCacheInterceptor(HamsTransactionCase):
         self.assertIsNotNone(job, "setup bug: could not acquire the job we just created")
         return cron, job
 
+    def _patch_config_as_a_serving_process(self):
+        """`hams_shared/tools/test.py` runs Odoo with `-u <module> --stop-after-init`, so for this
+        whole test process `update` and `stop_after_init` are set, and the override's install/
+        upgrade gate (see test_cron_dispatch_skips_the_poll_during_stop_after_init) skips the poll.
+        A cron worker serving a database has none of the three set. Clear only those keys; every
+        other config lookup still reads the real value."""
+        real_get = tools.config.get
+        self.safe_patch(
+            "odoo.addons.distributed_redis_cache.models.ir_cron.tools.config.get",
+            side_effect=lambda key, default=None: (
+                None if key in ("init", "update", "stop_after_init") else real_get(key, default)
+            ),
+        )
+
     def test_cron_dispatch_polls_before_running_the_job(self):
         """The override must run the poll on every real per-job dispatch, not just on paper."""
+        self._patch_config_as_a_serving_process()
         calls = []
         orig_poll = redis_cache.poll_and_clear_local_cache
 
@@ -81,6 +96,7 @@ class TestCronCacheInterceptor(HamsTransactionCase):
         """End-to-end: a changed Redis counter must clear _local_cache via the cron path alone,
         with no HTTP request (_authenticate) ever involved -- this is the exact production gap
         (a WorkerCron-only process, e.g. the cloudflare purge-queue cron) this override closes."""
+        self._patch_config_as_a_serving_process()
 
         class FakeRedis:
             def get(self, key):
