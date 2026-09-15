@@ -169,15 +169,37 @@ class TestBackupSecurity(RealTransactionCase):
         # Note: In Odoo, 'groups' on fields are enforced at the view and RPC level.
         # We check if the field has the group attribute set.
 
-        kopia_pass_field = self.BackupConfig._fields["kopia_password"]
-        self.assertEqual(
-            kopia_pass_field.groups, "backup_management.group_backup_admin"
-        )
+        # Exactly these two groups and no others (2026-09-14 service-account
+        # privilege audit): the human admin group, plus the backup service
+        # account's OWN group, which replaced that account's former membership
+        # in the admin group. Anything else showing up here is a real widening.
+        expected = {
+            "backup_management.group_backup_admin",
+            "backup_management.group_backup_service_account",
+        }
+        for field_name in ("kopia_password", "kopia_password_crypt", "access_key",
+                           "secret_key", "secret_key_crypt"):
+            field = self.BackupConfig._fields[field_name]
+            self.assertEqual(
+                set(field.groups.split(",")), expected, field_name
+            )
 
-        secret_key_field = self.BackupConfig._fields["secret_key"]
-        self.assertEqual(
-            secret_key_field.groups, "backup_management.group_backup_admin"
-        )
+    def test_service_account_not_in_human_admin_group(self):
+        # Tests [@ANCHOR: backup_management:COMM_publish_to_worker]
+        # 2026-09-14 service-account privilege audit: user_backup_service_internal
+        # must not share the human-facing Backup Administrator group (any future
+        # admin-UI grant would otherwise be silently inherited by a daemon-key-
+        # bound account), yet must still get through _publish_to_worker()'s own
+        # gate on its own group, since cron_sync_all_backups() runs as it.
+        svc = self.env.ref("backup_management.user_backup_service_internal")
+        self.assertFalse(svc.has_group("backup_management.group_backup_admin"))
+        self.assertTrue(svc.has_group("backup_management.group_backup_service_account"))
+        # The gate itself: the service account may queue a job; a user holding
+        # neither group may not.
+        job = self.config.with_user(svc)._publish_to_worker("sync_snapshots")
+        self.assertTrue(job)
+        with self.assertRaises(AccessError):
+            self.config.with_user(self.user_no_group)._publish_to_worker("sync_snapshots")
 
     def test_restore_wizard_security(self):
         # Tests [@ANCHOR: backup_management:COMM_test_restore_action]

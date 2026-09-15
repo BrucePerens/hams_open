@@ -27,11 +27,6 @@
             <field name="privilege_id" ref="privilege_zero_sudo"/>
         </record>
 
-        <record id="group_cache_invalidator" model="res.groups">
-            <field name="name">Central Cache Invalidation Group</field>
-            <field name="privilege_id" ref="privilege_zero_sudo"/>
-        </record>
-
         <!-- Referenced (as "zero_sudo.gdpr_service_internal") by
              user_websites/models/res_users.py's _execute_gdpr_erasure()
              override, but never actually defined anywhere, so every call to
@@ -142,17 +137,6 @@
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_config_service')])]"/>
-        </record>
-
-        <record id="cache_invalidation_service_internal" model="res.users">
-            <field name="name">Central Cache Invalidation Service Account</field>
-            <field name="login">cache_invalidation_service_internal</field>
-            <field name="company_id" ref="base.main_company"/>
-            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
-            <field name="notification_type">email</field>
-            <field name="is_service_account" eval="True"/>
-            <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_cache_invalidator')])]"/>
         </record>
 
         <record id="user_lockout_service_internal" model="res.users">

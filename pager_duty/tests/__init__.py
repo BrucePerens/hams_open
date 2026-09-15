@@ -8,6 +8,7 @@ from . import test_generalized_config
 from . import test_generalized_monitor
 from . import test_helpdesk_adapter
 from . import test_incident
+from . import test_incident_creator_privilege
 from . import test_incident_edge_cases
 from . import test_journeys_stories
 from . import test_log_analyzer

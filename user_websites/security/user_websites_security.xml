@@ -48,8 +48,34 @@
             <field name="user_ids" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
         </record>
 
+        <!-- Service-account privilege audit, 2026-09-14 (bug-hunt): a
+             capability-only group carrying NO ir.model.access rows and NO
+             ir.rule of its own, anywhere. Its one and only meaning is the
+             boolean UserWebsitesOwnedMixin checks in
+             _check_proxy_ownership_create()/_check_proxy_ownership_write():
+             "this actor may create a record owned by someone else / with no
+             owner, and may change owner_user_id/user_websites_group_id after
+             creation." Before this group existed, the only way for a service
+             account in another module (GDPR erasure, DNS zone provisioning,
+             public event-issue and repeater-report intake) to get that one
+             bypass was to join group_user_websites_service_account below,
+             which also carries full create/write/unlink on res.groups,
+             ir.ui.view, website.rewrite, mail.followers, discuss.channel.member
+             and more (see ir.model.access.csv). Those accounts now hold this
+             group instead. test_ownership_bypass_group.py enforces the
+             "no grants of its own" invariant mechanically. -->
+        <record id="group_user_websites_ownership_bypass" model="res.groups">
+            <field name="name">Service Capability: Proxy Ownership Bypass</field>
+        </record>
+
         <record id="group_user_websites_service_account" model="res.groups">
             <field name="name">Service Account: User Websites Provisioning</field>
+            <!-- Its implied_ids link to the bypass group lives in the
+                 noupdate="0" block at the end of this file, NOT here: this
+                 whole block is noupdate="1", so a link added here would be
+                 created on a fresh install but silently skipped on an upgrade
+                 of any existing database, leaving every account that relies
+                 on the implication without the mixin bypass. -->
         </record>
 
         <record id="website_page_svc_rule" model="ir.rule">
@@ -391,5 +417,25 @@
             <field name="perm_create" eval="True"/>
             <field name="perm_unlink" eval="True"/>
         </record>
+    </data>
+    <data noupdate="0">
+        <!-- Service-account privilege audit, 2026-09-14: the full provisioning
+             group implies the capability-only bypass group, so
+             user_websites_service_account itself (and any account that
+             legitimately needs the whole provisioning ACL) keeps the
+             UserWebsitesOwnedMixin bypass without a second explicit
+             membership. Kept in its own noupdate="0" block so the link is
+             applied on upgrade of an existing database too, not only on a
+             fresh install (see the group's own comment above). -->
+        <!-- A <function> write rather than a <record>: convert.py's function tag
+             binds the first <value> (the group's own id) as the receiver and
+             passes the second as write()'s vals, the same shape
+             ham_dns/security/security_data.xml already uses for a res.users
+             membership change, and it re-runs on every upgrade, which a
+             <record> in a noupdate="1" block would not. -->
+        <function model="res.groups" name="write">
+            <value eval="[ref('user_websites.group_user_websites_service_account')]"/>
+            <value eval="{'implied_ids': [(4, ref('user_websites.group_user_websites_ownership_bypass'))]}"/>
+        </function>
     </data>
 </odoo>

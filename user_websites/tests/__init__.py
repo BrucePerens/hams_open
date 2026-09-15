@@ -16,6 +16,7 @@ from . import test_group_moderation
 from . import test_lifecycle_and_groups
 from . import test_moderation
 from . import test_orm_security
+from . import test_ownership_bypass_group
 from . import test_page_limits
 from . import test_performance_regressions
 from . import test_privacy_gdpr

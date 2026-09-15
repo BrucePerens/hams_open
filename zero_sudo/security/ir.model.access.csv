@@ -1,15 +1,14 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_mail_message_mail_svc,mail.message mail svc,mail.model_mail_message,zero_sudo.group_mail_service,1,1,1,0
 access_mail_mail_mail_svc,mail.mail mail svc,mail.model_mail_mail,zero_sudo.group_mail_service,1,1,1,0
-access_mail_followers_mail_svc,mail.followers mail svc,mail.model_mail_followers,zero_sudo.group_mail_service,1,1,1,1
+access_mail_followers_mail_svc,mail.followers mail svc,mail.model_mail_followers,zero_sudo.group_mail_service,1,1,1,0
 access_mail_template_mail_svc,mail.template mail svc,mail.model_mail_template,zero_sudo.group_mail_service,1,1,1,0
-access_res_partner_mail_svc,res.partner mail svc,base.model_res_partner,zero_sudo.group_mail_service,1,1,1,0
+access_res_partner_mail_svc,res.partner mail svc,base.model_res_partner,zero_sudo.group_mail_service,1,1,0,0
 access_res_users_mail_svc,res.users mail svc,base.model_res_users,zero_sudo.group_mail_service,1,0,0,0
 access_res_company_mail_svc,res.company mail svc,base.model_res_company,zero_sudo.group_mail_service,1,0,0,0
 access_mail_alias_domain_mail_svc,mail.alias.domain mail svc,mail.model_mail_alias_domain,zero_sudo.group_mail_service,1,0,0,0
 access_zero_sudo_kv_facility,zero_sudo.kv,model_zero_sudo_kv,zero_sudo.group_odoo_facility_service,1,1,1,1
 access_ir_config_parameter_config_svc,ir.config_parameter config svc,base.model_ir_config_parameter,zero_sudo.group_config_service,1,1,1,1
-access_ir_model_cache_invalidator,ir.model cache invalidator,base.model_ir_model,zero_sudo.group_cache_invalidator,1,0,0,0
 access_zero_sudo_daemon_utils,zero_sudo.daemon.utils,model_zero_sudo_daemon_utils,base.group_system,1,1,1,1
 access_zero_sudo_noisy_table,zero_sudo.noisy_table,model_zero_sudo_noisy_table,base.group_system,1,1,1,1
 access_zero_sudo_security_log_system,zero_sudo.security.log system,model_zero_sudo_security_log,base.group_system,1,0,1,0

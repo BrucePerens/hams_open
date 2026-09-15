@@ -44,6 +44,12 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         """Validates that the current user is legally allowed to assign the provided ownership, enforces mandatory ownership, and prevents dual ownership."""
 
         user_id = self.env.user.id
+        # group_user_websites_ownership_bypass, not
+        # group_user_websites_service_account: the bypass is a capability-only
+        # group (no ACL/ir.rule of its own) that the full provisioning group
+        # implies, so the provisioning account still passes here while other
+        # modules' service accounts no longer need the whole provisioning ACL
+        # just to get this one boolean. See security/user_websites_security.xml.
         is_admin = (
             self.env.su
             or self.env.user.has_group("base.group_system")
@@ -51,7 +57,7 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
                 "user_websites.group_user_websites_administrator"
             )
             or self.env.user.has_group(
-                "user_websites.group_user_websites_service_account"
+                "user_websites.group_user_websites_ownership_bypass"
             )
         )
 
@@ -137,6 +143,7 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
 
         # # Verified by [@ANCHOR: test_api_armor_mutual_exclusion]
         """Prevents malicious actors from spoofing or transferring ownership after creation, and prevents admins from creating dual-owned corrupted states."""
+        # Same capability-only group as _check_proxy_ownership_create() above.
         if (
             self.env.su
             or self.env.user.has_group("base.group_system")
@@ -144,7 +151,7 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
                 "user_websites.group_user_websites_administrator"
             )
             or self.env.user.has_group(
-                "user_websites.group_user_websites_service_account"
+                "user_websites.group_user_websites_ownership_bypass"
             )
         ):
             if "owner_user_id" in vals or "user_websites_group_id" in vals:

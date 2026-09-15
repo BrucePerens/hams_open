@@ -7,6 +7,8 @@ access_backup_snapshot_system,backup.snapshot system,model_backup_snapshot,base.
 access_backup_job_admin,backup.job admin,model_backup_job,group_backup_admin,1,1,1,1
 access_backup_job_system,backup.job system,model_backup_job,base.group_system,1,1,1,1
 access_backup_job_mail_svc,backup.job mail svc,model_backup_job,zero_sudo.group_mail_service,1,1,0,0
+access_backup_config_backup_svc,backup.config backup svc,model_backup_config,group_backup_service_account,1,1,0,0
+access_backup_job_backup_svc,backup.job backup svc,model_backup_job,group_backup_service_account,1,1,1,0
 access_res_partner_backup_svc,res.partner svc,base.model_res_partner,group_backup_service_account,1,1,0,0
 access_res_users_backup_svc,res.users svc,base.model_res_users,group_backup_service_account,1,0,0,0
 access_res_company_backup_svc,res.company svc,base.model_res_company,group_backup_service_account,1,0,0,0

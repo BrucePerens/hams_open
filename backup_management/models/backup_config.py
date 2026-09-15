@@ -38,14 +38,25 @@ class BackupConfig(models.Model):
         help="Triggers a Pager Duty alert if a new snapshot is smaller than this.",
     )
 
+    # Field-level groups= on the five secret-bearing fields below name BOTH the
+    # human admin group and the backup service account's own group: the worker
+    # daemon (daemon/main.py, authenticated as user_backup_service_internal)
+    # and _publish_to_worker() below both have to read these to build the job
+    # payload, and that account no longer holds group_backup_admin (see
+    # security/security.xml, 2026-09-14 service-account privilege audit).
+    _SECRET_FIELD_GROUPS = (
+        "backup_management.group_backup_admin,"
+        "backup_management.group_backup_service_account"
+    )
+
     kopia_password_crypt = fields.Char(
-        string="Encrypted Kopia Password", groups="backup_management.group_backup_admin"
+        string="Encrypted Kopia Password", groups=_SECRET_FIELD_GROUPS
     )
     kopia_password = fields.Char(
         string="Kopia Password",
         compute="_compute_kopia_password",
         inverse="_inverse_kopia_password",
-        groups="backup_management.group_backup_admin",
+        groups=_SECRET_FIELD_GROUPS,
     )
 
     storage_type = fields.Selection(
@@ -56,17 +67,15 @@ class BackupConfig(models.Model):
     )
     bucket_name = fields.Char(string="Bucket Name")
     endpoint_url = fields.Char(string="Endpoint URL")
-    access_key = fields.Char(
-        string="Access Key", groups="backup_management.group_backup_admin"
-    )
+    access_key = fields.Char(string="Access Key", groups=_SECRET_FIELD_GROUPS)
     secret_key_crypt = fields.Char(
-        string="Encrypted Secret Key", groups="backup_management.group_backup_admin"
+        string="Encrypted Secret Key", groups=_SECRET_FIELD_GROUPS
     )
     secret_key = fields.Char(
         string="Secret Key",
         compute="_compute_secret_key",
         inverse="_inverse_secret_key",
-        groups="backup_management.group_backup_admin",
+        groups=_SECRET_FIELD_GROUPS,
     )
 
     keep_daily = fields.Integer(string="Keep Daily", default=7)
@@ -246,8 +255,18 @@ class BackupConfig(models.Model):
         """
         Internal helper to offload tasks to the RabbitMQ Bastion.
         """
-        if not self.env.su and not self.env.user.has_group(
-            "backup_management.group_backup_admin"
+        # Two legitimate callers, not one: a human Backup Administrator clicking
+        # an action_* button, and user_backup_service_internal itself, which
+        # reaches here from cron_sync_all_backups() (data/cron.xml runs that
+        # cron as the service account) via action_sync_snapshots() and
+        # _execute_restore_drill(). The service account used to pass this gate
+        # only because it ALSO held group_backup_admin; since the 2026-09-14
+        # service-account privilege audit it holds only its own group, so that
+        # group is named here explicitly -- the set of actors allowed through
+        # is exactly what it was before, minus nothing and plus nothing.
+        if not self.env.su and not self.env.user.has_groups(
+            "backup_management.group_backup_admin,"
+            "backup_management.group_backup_service_account"
         ):
             raise AccessError(
                 _("Only Backup Administrators can trigger backup operations.")
