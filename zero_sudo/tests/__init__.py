@@ -45,9 +45,13 @@ _original_test_cursor_execute = TestCursor.execute
 
 
 # [@ANCHOR: zero_sudo:monitored_test_execute]
-def _monitored_test_execute(self, query, params=None):
+def _monitored_test_execute(self, *args, **kwargs):
+    # Pass everything through, as TestCursor.execute itself does. Odoo core
+    # passes log_exceptions by keyword (ir.cron._acquire_one_job does), and
+    # the old (query, params=None) signature turned every such call into a
+    # TypeError under test.
     try:
-        return _original_test_cursor_execute(self, query, params)
+        return _original_test_cursor_execute(self, *args, **kwargs)
     except psycopg2.Error as e:
         # 40001: SerializationFailure (Concurrent Update Deadlock)
         # 55P03: LockNotAvailable (Row-level lock held by another thread)
