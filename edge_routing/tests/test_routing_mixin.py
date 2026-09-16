@@ -149,7 +149,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
     def test_get_record_by_slug_no_longer_accepts_a_caller_supplied_service_uid(self):
         """
         Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
-        get_record_by_slug() (and get_record_by_domain()/
+        get_record_by_slug() (and the since-deleted get_record_by_domain()/
         get_target_slug_by_domain()) used to accept a caller-supplied
         `override_svc_uid` and run self.with_user(override_svc_uid).env
         with zero validation -- any authenticated RPC caller (this method
@@ -165,13 +165,6 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         with self.assertRaises(TypeError):
             self.env["user.websites.group"].get_record_by_slug(
                 "some-slug", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
-            )
-
-    def test_get_record_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):
-        # Tests [@ANCHOR: edge_routing:COMM_get_record_by_domain]
-        with self.assertRaises(TypeError):
-            self.env["user.websites.group"].get_record_by_domain(
-                "example.com", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
             )
 
     def test_get_target_slug_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):

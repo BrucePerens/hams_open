@@ -214,23 +214,6 @@ class EdgeRoutingMixin(models.AbstractModel):
         )
         return record.id if record else False
 
-    # [@ANCHOR: edge_routing:COMM_get_record_by_domain]
-    @api.model
-    def get_record_by_domain(self, domain):
-        """
-        Helper to map a custom domain directly to a record ID.
-        Uses the edge.routing.domain distributed cache to resolve the slug,
-        and then uses get_record_by_slug to resolve the record.
-        """
-        if not domain:
-            return False
-
-        slug = self.env["edge.routing.domain"].get_target_slug_by_domain(domain)
-        if not slug:
-            return False
-
-        return self.get_record_by_slug(slug)
-
     # [@ANCHOR: edge_routing:COMM_mixin_create]
     @api.model_create_multi
     def create(self, vals_list):
