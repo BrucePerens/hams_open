@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from odoo import api, models, tools
+from odoo import api, models
 
-from odoo.addons.distributed_redis_cache.redis_cache import poll_and_clear_local_cache
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    poll_and_clear_local_cache,
+    should_poll_for_invalidation,
+)
 
 
 class IrCron(models.Model):
@@ -34,11 +37,13 @@ class IrCron(models.Model):
         this is the one cron-dispatch point every `_inherit`-based override
         actually reaches, in single-process and multi-worker mode alike.
         """
-        init_mode = tools.config.get("init")
-        update_mode = tools.config.get("update")
-        stop_after_init = tools.config.get("stop_after_init")
-
-        if not (init_mode or update_mode or stop_after_init):
+        # `cls.pool` is this cron worker's own registry (every registry-composed
+        # model class carries one). See COMM_should_poll_for_invalidation for
+        # why the gate is the registry's own loading state and not
+        # `tools.config`'s never-cleared `init`/`update` flags -- a cron worker
+        # in a server started with `-u` used to skip this poll for its entire
+        # lifetime.
+        if should_poll_for_invalidation(cls.pool):
             # `cls` here is the registry-composed model CLASS, not a
             # recordset instance, so it has no `.env` of its own -- build a
             # throwaway one the same way the base implementation does for

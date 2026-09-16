@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 
-from odoo import models, tools
+from odoo import models
 from odoo.http import request
 
-from odoo.addons.distributed_redis_cache.redis_cache import poll_and_clear_local_cache
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    poll_and_clear_local_cache,
+    should_poll_for_invalidation,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -18,11 +21,11 @@ class IrHttp(models.AbstractModel):
         """
         Intercepts request lifecycle to check cache invalidation.
         """
-        init_mode = tools.config.get("init")
-        update_mode = tools.config.get("update")
-        stop_after_init = tools.config.get("stop_after_init")
-
-        if not (init_mode or update_mode or stop_after_init):
+        # `cls.pool` is this request's own registry (every registry-composed
+        # model class carries one). See COMM_should_poll_for_invalidation for
+        # why the gate is the registry's own loading state and not
+        # `tools.config`'s never-cleared `init`/`update` flags.
+        if should_poll_for_invalidation(cls.pool):
             poll_and_clear_local_cache(request.env)
 
         return super()._authenticate(endpoint)

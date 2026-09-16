@@ -9,6 +9,7 @@ from . import test_fixes
 from . import test_b2_fixes
 from . import test_hooks
 from . import test_cron_cache_interceptor
+from . import test_poll_gate
 
 __all__ = [
     "test_distributed_cache",
@@ -18,4 +19,5 @@ __all__ = [
     "test_b2_fixes",
     "test_hooks",
     "test_cron_cache_interceptor",
+    "test_poll_gate",
 ]

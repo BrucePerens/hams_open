@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-"""Regression coverage for [@ANCHOR: distributed_redis_cache:COMM_cron_cache_interceptor].
+"""Regression coverage for `ir.cron._process_job`'s cache-invalidation poll.
 
 `ir.http._authenticate`'s poll-and-clear (COMM_redis_cache_interceptor) only ever runs on the HTTP
 request path. `odoo/service/server.py`'s cron dispatch -- both the single-process `cron%d` thread
@@ -13,6 +13,10 @@ registry, specifically to reach per-job overrides -- these tests exercise that e
 real cron dispatch does, rather than calling the new override function directly.
 """
 import secrets
+
+# Tests [@ANCHOR: COMM_cron_cache_interceptor]
+
+# Tests [@ANCHOR: COMM_should_poll_for_invalidation]
 
 from odoo import fields, tools
 from odoo.tests.common import tagged
@@ -55,23 +59,37 @@ class TestCronCacheInterceptor(HamsTransactionCase):
         self.assertIsNotNone(job, "setup bug: could not acquire the job we just created")
         return cron, job
 
-    def _patch_config_as_a_serving_process(self):
-        """`hams_shared/tools/test.py` runs Odoo with `-u <module> --stop-after-init`, so for this
-        whole test process `update` and `stop_after_init` are set, and the override's install/
-        upgrade gate (see test_cron_dispatch_skips_the_poll_during_stop_after_init) skips the poll.
-        A cron worker serving a database has none of the three set. Clear only those keys; every
-        other config lookup still reads the real value."""
-        real_get = tools.config.get
-        self.safe_patch(
-            "odoo.addons.distributed_redis_cache.models.ir_cron.tools.config.get",
-            side_effect=lambda key, default=None: (
-                None if key in ("init", "update", "stop_after_init") else real_get(key, default)
-            ),
-        )
-
     def test_cron_dispatch_polls_before_running_the_job(self):
-        """The override must run the poll on every real per-job dispatch, not just on paper."""
-        self._patch_config_as_a_serving_process()
+        """The override must run the poll on every real per-job dispatch, not just on paper.
+
+        Nothing about the gate is patched here. This process still carries Odoo's loading flags
+        from the command line that started it, and its registry is ready anyway -- the exact
+        production shape the old `init`/`update`/`stop_after_init` gate skipped for a process's
+        whole lifetime. COMM_should_poll_for_invalidation asks the registry instead, so the poll
+        runs.
+        """
+        # The premise the whole fix rests on, asserted here rather than argued from source
+        # reading: Odoo's loading flags are still set in this process, and the registry is
+        # nevertheless ready. That is exactly the production shape the old gate refused on, and
+        # this process is in it. On this box the still-set flags are `init` (hams_shared/tools/
+        # test.py invokes odoo with `-i`, not `-u`) and `stop_after_init` (forced by
+        # `--test-enable`); asserting "at least one" rather than naming one keeps this honest if
+        # that invocation changes.
+        still_set = {
+            flag: tools.config.get(flag)
+            for flag in ("init", "update", "stop_after_init")
+            if tools.config.get(flag)
+        }
+        self.assertTrue(
+            still_set,
+            "premise: at least one of Odoo's loading flags is still set after loading finished -- "
+            "if this ever fails, Odoo started clearing them and the bug this gate fixes is gone",
+        )
+        self.assertTrue(
+            self.registry.ready,
+            "premise: post_install suites are built from an already-loaded registry, so the flags "
+            f"above are set on a registry that IS serving. Still set: {still_set}",
+        )
         calls = []
         orig_poll = redis_cache.poll_and_clear_local_cache
 
@@ -96,7 +114,6 @@ class TestCronCacheInterceptor(HamsTransactionCase):
         """End-to-end: a changed Redis counter must clear _local_cache via the cron path alone,
         with no HTTP request (_authenticate) ever involved -- this is the exact production gap
         (a WorkerCron-only process, e.g. the cloudflare purge-queue cron) this override closes."""
-        self._patch_config_as_a_serving_process()
 
         class FakeRedis:
             def get(self, key):
@@ -120,22 +137,45 @@ class TestCronCacheInterceptor(HamsTransactionCase):
             "a changed invalidation counter must clear the L1 cache via the cron dispatch path",
         )
 
-    def test_cron_dispatch_skips_the_poll_during_stop_after_init(self):
-        """Matches ir.http._authenticate's own skip during init/update/stop_after_init -- a Redis
-        dependency during module install/upgrade/shutdown-after-init would be a real regression,
-        not a safety improvement."""
+    def test_cron_dispatch_skips_the_poll_when_the_gate_refuses(self):
+        """Replaces test_cron_dispatch_skips_the_poll_during_stop_after_init.
+
+        The install/upgrade protection that old test covered now lives in
+        COMM_should_poll_for_invalidation, which refuses whenever the registry is still being
+        built -- a failed upgrade because Redis was unreachable would be a real regression, not
+        a safety improvement. The old `init`/`update`/`stop_after_init` form of that protection
+        is what broke: Odoo 19 never clears those flags once loading finishes, so a serving `-u`
+        process was held back forever.
+
+        The gate's own verdict for a loading registry is asserted against a stub in
+        tests/test_poll_gate.py. What belongs here is the other half: that this call site
+        actually consults the gate, passes its own registry, and honours a refusal."""
         calls = []
         self.safe_patch(
             "odoo.addons.distributed_redis_cache.models.ir_cron.poll_and_clear_local_cache",
             side_effect=lambda env: calls.append(env),
         )
+        # The gate's own answer for a loading registry is asserted directly, against a stub, in
+        # tests/test_poll_gate.py -- the live registry this test runs on is genuinely ready and
+        # must not be told otherwise, since Odoo reads `ready` for its own dispatch decisions.
+        # What this test covers is the call site: `_process_job` must honour a refusal.
+        seen = []
+
+        def refuse(registry):
+            seen.append(registry)
+            return False
+
         self.safe_patch(
-            "odoo.addons.distributed_redis_cache.models.ir_cron.tools.config.get",
-            side_effect=lambda key, default=None: True if key == "stop_after_init" else default,
+            "odoo.addons.distributed_redis_cache.models.ir_cron.should_poll_for_invalidation",
+            side_effect=refuse,
         )
 
         with self.enter_registry_test_mode(), self.registry.cursor() as cr:
             cron, job = self._acquire_real_job(cr)
             self.registry["ir.cron"]._process_job(cr, job)
 
-        self.assertEqual(calls, [], "must not poll Redis while stop_after_init is set")
+        self.assertEqual(calls, [], "must not poll Redis while the registry is still loading")
+        self.assertEqual(
+            seen, [self.registry],
+            "the gate must be consulted with this cron worker's own registry (`cls.pool`)",
+        )

@@ -60,6 +60,40 @@ def poll_and_clear_local_cache(env):
     except redis.RedisError as e:
         _logger.warning("Failed to execute stateless Redis poll: %s", e)
 
+
+# [@ANCHOR: distributed_redis_cache:COMM_should_poll_for_invalidation]
+def should_poll_for_invalidation(registry):
+    """Whether this process should poll Redis for cache invalidation right now.
+
+    The poll must NOT run while a registry is still being built: module install and upgrade
+    (`-i`/`-u`) load a half-constructed registry, and letting that depend on Redis would turn an
+    unreachable cache into a failed upgrade. It MUST run for the entire life of a process that is
+    actually serving, which is the half that was broken.
+
+    This deliberately does not consult `tools.config`'s `init`/`update`/`stop_after_init` flags,
+    which is what both poll sites used to do. Odoo 19 never clears them: `odoo/tools/config.py`
+    sets them from the command line, and nothing in `odoo/modules/loading.py`,
+    `odoo/orm/registry.py`, `odoo/service/server.py` or `odoo/cli/server.py` resets them once
+    loading finishes (older Odoo reset `tools.config[kind] = {}` at the end of `load_modules`;
+    this version does not). So an Odoo started as `odoo -u some_module` that then went on to serve
+    -- the common one-step "deploy the upgrade and restart" -- kept `update` truthy for its whole
+    lifetime, and every HTTP worker and cron worker in it served its process-local L1
+    `_local_cache` forever without ever reading `global_cache_invalidation_counter`. That is
+    indefinitely stale cached data on a live server, and it is the bug this gate replaces.
+
+    `registry.ready` asks the question those flags were only ever standing in for. `Registry.new()`
+    sets it True only after `load_modules()` has returned, and `Registry.init()` sets it False
+    again for a reload, so it is False for exactly the window that needed protecting -- however the
+    process was started.
+
+    A test process is deliberately NOT excluded. `post_install` suites run against an already-ready
+    registry, so they poll exactly as a serving worker does; that is the point. Making this gate
+    probe `test_enable` would be the test-evasion pattern `check_burn_list.py` forbids outright,
+    and would leave the production path untested by construction.
+    """
+    return registry is not None and registry.ready
+
+
 # _raw_crypto_secret() is called on every single cache sign/verify (it
 # isn't itself cached), so an unconfigured deployment would otherwise log
 # an ERROR line on every cache hit/miss -- loud, but not useful past the
