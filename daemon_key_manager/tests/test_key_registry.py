@@ -28,6 +28,22 @@ class TestKeyRegistry(RealTransactionCase):
             "/opt/hams/etc/keys/api_test.env",
             "/opt/hams/etc/keys/force_provision.env",
             "/opt/hams/etc/keys/unauthorized.env",
+            "/opt/hams/etc/keys/exception_test.env",
+        ]
+
+        # Directories this suite creates inside the REAL production key
+        # directory, which `_cleanup_test_files` cannot remove because
+        # `os.remove` does not take directories. They were previously
+        # cleaned only by an inline call placed AFTER the assertion that
+        # each test exists to make -- so a failing assertion left them
+        # behind permanently, inside the directory that holds every
+        # daemon's real credentials. `parent_test` is the worst of them:
+        # it is deliberately chmod 000, so what a failure leaves behind
+        # is an unreadable directory in the credential store.
+        self.test_env_dirs = [
+            "/opt/hams/etc/keys/trusted",
+            "/opt/hams/etc/keys/parent_test",
+            "/opt/hams/etc/keys/test_os_error_dir",
         ]
 
         # Ensure a clean slate before each test runs to prevent state collision
@@ -64,10 +80,25 @@ class TestKeyRegistry(RealTransactionCase):
     def _cleanup_test_files(self):
         for path in self.test_env_paths:
             try:
-                if os.path.exists(path):
+                # `lexists`, not `exists`: `test_security_constraints`
+                # plants a symlink to prove the model refuses to follow
+                # one out of the allowed prefix, and `exists` answers for
+                # the TARGET. A symlink whose target has gone reads as
+                # absent and would be left in the credential directory.
+                if os.path.lexists(path):
                     os.remove(path)
             except OSError as e:
                 _logger.warning("Cleanup error for %s: %s", path, e)
+        for directory in self.test_env_dirs:
+            try:
+                if os.path.lexists(directory):
+                    # `parent_test` is deliberately left chmod 000 by the
+                    # test that creates it, so rmtree cannot descend into
+                    # it until it is readable again.
+                    os.chmod(directory, 0o700)
+                    shutil.rmtree(directory)
+            except OSError as e:
+                _logger.warning("Cleanup error for %s: %s", directory, e)
 
     def test_security_constraints(self):
         """Test that only service accounts and valid paths can be used."""
@@ -102,6 +133,11 @@ class TestKeyRegistry(RealTransactionCase):
 
         # Test symlink attack prevention
         # Create a directory that is within the allowed prefix
+        # Tracked in `self.test_env_dirs` (see setUp), so the directory
+        # and the symlink inside it are removed even if an assertion
+        # below fails. Before that, a failure here left a dangling
+        # `evil.env -> /etc/passwd` symlink in the real key directory
+        # permanently.
         allowed_dir = "/opt/hams/etc/keys/trusted"
         if not os.path.exists(allowed_dir):
             os.makedirs(allowed_dir, mode=0o700, exist_ok=True)
@@ -461,15 +497,13 @@ class TestKeyRegistry(RealTransactionCase):
         with self.assertRaises(PermissionError):
             registry._write_secure_env_file(f"{parent_dir}/child/test.env", "login", "key")
             
-        if os.path.exists(parent_dir):
-            os.chmod(parent_dir, 0o700)
-            pass # import shutil
-            # shutil is needed here, so let's import it safely at top? No, I will just do:
-            shutil.rmtree(parent_dir)
+        # `parent_dir` and `test_os_error_dir` are both tracked in
+        # `self.test_env_dirs` (see setUp) and removed by tearDown on
+        # every path, including a failing one. They used to be cleaned
+        # inline, after the assertion each one exists to make.
         os.makedirs("/opt/hams/etc/keys/test_os_error_dir", exist_ok=True)
         with self.assertRaises(OSError):
             registry._write_secure_env_file("/opt/hams/etc/keys/test_os_error_dir", "login", "key")
-        os.rmdir("/opt/hams/etc/keys/test_os_error_dir")
 
     def test_write_secure_env_file_refuses_to_write_a_credential_when_fchmod_fails(self):
         """Real, CRITICAL fix, found by an adversarial security review,
