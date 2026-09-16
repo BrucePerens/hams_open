@@ -180,7 +180,9 @@ pub fn required_window_samples(sample_rate: u32) -> usize {
 // [@ANCHOR: decimate_4x_box_average]
 pub fn decimate_4x_box_average(samples: &[i16]) -> Vec<i16> {
     samples
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|chunk| {
             let sum: i32 = chunk.iter().map(|&s| s as i32).sum();
             (sum / 4) as i16

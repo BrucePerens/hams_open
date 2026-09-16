@@ -1719,7 +1719,9 @@ mod tests {
                     // (and its own FFT-planning dependencies) into an rtty.rs-only test for one
                     // four-sample average is real, avoidable coupling across this crate's own
                     // module boundaries -- the identical box-average computation, inlined.
-                    mono.chunks_exact(4)
+                    mono.as_chunks::<4>()
+                        .0
+                        .iter()
                         .map(|c| (c.iter().map(|&s| s as i32).sum::<i32>() / 4) as i16)
                         .collect()
                 };

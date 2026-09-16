@@ -26,7 +26,9 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
         "{path}: not a standard 44-byte-header PCM WAV"
     );
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect()
 }

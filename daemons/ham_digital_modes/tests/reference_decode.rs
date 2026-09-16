@@ -47,7 +47,9 @@ fn read_wav_mono_i16(path: &Path) -> Vec<f32> {
         "expected a standard 44-byte-header PCM WAV from ft8sim"
     );
     let data = &bytes[44..];
-    data.chunks_exact(2)
+    data.as_chunks::<2>()
+        .0
+        .iter()
         .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
         .collect()
 }

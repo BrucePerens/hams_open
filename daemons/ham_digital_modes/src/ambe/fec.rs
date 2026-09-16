@@ -124,7 +124,7 @@ pub fn hamming_decode(received: u16) -> (u16, u32) {
     let mut best_data = 0u16;
     let mut best_distance = u32::MAX;
     for data in 0u16..2048 {
-        let distance = (hamming_encode(data) ^ received).count_ones() as u32;
+        let distance = (hamming_encode(data) ^ received).count_ones();
         if distance < best_distance {
             best_distance = distance;
             best_data = data;

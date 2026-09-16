@@ -676,7 +676,7 @@ mod tests {
         let mut low_energy = 0.0f64;
         let mut high_energy = 0.0f64;
         let mut windows = 0usize;
-        for chunk in pcm_16k.chunks_exact(WIN) {
+        for chunk in pcm_16k.as_chunks::<WIN>().0 {
             let mut buf: Vec<rustfft::num_complex::Complex32> = chunk
                 .iter()
                 .map(|&s| rustfft::num_complex::Complex32::new(s, 0.0))
@@ -807,7 +807,7 @@ mod tests {
         let mut low_energy = 0.0f64;
         let mut high_energy = 0.0f64;
         let mut windows = 0usize;
-        for chunk in pcm_16k.chunks_exact(WIN) {
+        for chunk in pcm_16k.as_chunks::<WIN>().0 {
             let mut buf: Vec<rustfft::num_complex::Complex32> = chunk
                 .iter()
                 .map(|&s| rustfft::num_complex::Complex32::new(s, 0.0))
@@ -897,7 +897,9 @@ mod tests {
             rust_pcm.extend_from_slice(&decoder.decode(&frame));
         }
         let ref_pcm: Vec<i16> = pcm_data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| i16::from_le_bytes([b[0], b[1]]))
             .collect();
 
@@ -963,7 +965,9 @@ mod tests {
             fixed_pcm.extend_from_slice(&decoder.decode(&frame));
         }
         let ref_pcm: Vec<i16> = pcm_data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| i16::from_le_bytes([b[0], b[1]]))
             .collect();
 
