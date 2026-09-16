@@ -59,6 +59,8 @@ The testing facility provides a safe environment.
 
 - **Tour Runner** `[@ANCHOR: zero_sudo:hams_http_case_start_tour]` **/ browser_js Wrapper** `[@ANCHOR: zero_sudo:hams_http_case_browser_js]`: `start_tour` optionally forces a `debug=` query param (via `HAMS_TOUR_TOUR_DEBUG`) before delegating to core Odoo, which in turn calls this class's own `browser_js` override to actually drive the tour through the DevTools protocol.
 
+- **Empty-Run Guard** `[@ANCHOR: zero_sudo:hoot_empty_run_detector_emit]`: A logging handler the `browser_js` wrapper attaches to the browser-console logger for the duration of each run, so that a hoot suite which executed NO tests fails instead of passing silently. Hoot reports an empty run as `Passed 0 tests` followed by `Test suite succeeded` -- and `Test suite succeeded` is exactly the signal `browser_js` waits for, so before this guard a wrapper over an empty suite passed every time while testing nothing. A deliberately empty run must say so by passing `expect_empty=True`; see the `linter-compliance` skill's own hoot rules for why deleting the wrapper is usually the better answer. Note this guard lives on `HamsHttpCase`'s override and therefore does NOT cover the separate module-level patch immediately below, which `RealTransactionCase` reaches instead.
+
 - **Global HttpCase.browser_js Patch** `[@ANCHOR: zero_sudo:patched_browser_js]`: A SEPARATE, module-level monkeypatch applied directly to core Odoo's `HttpCase.browser_js` (not `HamsHttpCase`'s own override above) -- reached specifically by `RealTransactionCase`, which extends `HttpCase` directly rather than `HamsHttpCase`, so it has no subclass override of its own to shadow the patched parent method.
 
 ## Chrome/DevTools Protocol Monkeypatches

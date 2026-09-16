@@ -822,6 +822,61 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         return process
 
 
+class _HootEmptyRunDetector(logging.Handler):
+    """Watches browser console output for hoot's own "Passed 0 tests" line.
+
+    Keyed on "Passed 0 tests" rather than hoot's "no tests to run": the
+    latter fires only when NO jobs were registered at all
+    (hoot/core/runner.js), which under a run without the `headless` URL
+    parameter misses a suite whose tests are all skipped -- that path
+    increments `skipped` and `tests` but never `passed`, so it still prints
+    "Passed 0 tests" and "Test suite succeeded" while having registered
+    jobs. Every wrapper in this codebase passes `headless` today, but a
+    hand-written URL or a future harness that omits it lands exactly there,
+    and no static checker can see that.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.saw_empty_run = False
+
+    # [@ANCHOR: zero_sudo:hoot_empty_run_detector_emit]
+    # (comment kept between the two anchor lines -- adjacent anchor lines are
+    # the "stacked anchors" shape verify_anchors.py rejects, and a line here
+    # also excludes the base anchor above from check_function_test_anchors.py's
+    # own lookback, matching the idiom used throughout daemons/)
+    # Verified by [@ANCHOR: test_hoot_guard_fails_a_suite_that_runs_no_tests]
+    def emit(self, record):
+        try:
+            message = record.getMessage()
+        except Exception:  # audit-ignore-catch-all
+            # A logging handler must never raise into the code being logged:
+            # letting an unformattable record propagate would turn a cosmetic
+            # logging issue into a failure in whatever unrelated suite emitted
+            # it. Reported, never swallowed, two ways -- this module's own
+            # logger, and logging.Handler.handleError(), the stdlib's
+            # designated hook for a failure inside emit().
+            #
+            # Logging from inside a handler's emit() is normally a recursion
+            # hazard, and it is safe here for a specific reason worth stating:
+            # this handler is attached ONLY to
+            # self._logger.getChild("browser"), while _logger below is this
+            # module's own logger, in an unrelated part of the logger tree.
+            # Records propagate from a logger to its ANCESTORS, never down to
+            # unrelated descendants, so a record emitted on _logger can never
+            # reach this handler.
+            _logger.warning(
+                "Hoot empty-run detector could not format a browser console "
+                "record; that record is not being checked for 'Passed 0 "
+                "tests', so an empty hoot run could go undetected here.",
+                exc_info=True,
+            )
+            self.handleError(record)
+            return
+        if "Passed 0 tests" in message:
+            self.saw_empty_run = True
+
+
 class HamsHttpCase(HttpCase, SafePatchMixin):
     # [@ANCHOR: zero_sudo:COMM_hams_http_case]
     _hams_tour_failed = False
@@ -1339,8 +1394,19 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
 
     # [@ANCHOR: zero_sudo:hams_http_case_browser_js]
-    def browser_js(self, *args, **kwargs):
+    def browser_js(self, *args, expect_empty=False, **kwargs):
         _logger.info("TRACING: Entering browser_js wrapper.")
+        # Watch the browser console for hoot's own "Passed 0 tests" line.
+        # Odoo core's ChromeBrowser._handle_console logs every console
+        # message to test_case._logger.getChild("browser")
+        # (odoo/tests/common.py, taking the logger from the test case
+        # itself), so attaching here sees hoot's run summary without
+        # patching core. browser_js() returns nothing and the line appears
+        # in no exception, so observing the log is the only mechanism
+        # available. Detached in this method's own finally, below.
+        empty_run_detector = _HootEmptyRunDetector()
+        browser_logger = self._logger.getChild("browser")
+        browser_logger.addHandler(empty_run_detector)
         try:
             # The Jules Headless Chrome Watchdog Suppressions
             jules_protections = """
@@ -1626,7 +1692,41 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 ) from None
             else:
                 raise e from None
+        else:
+            # An empty hoot run is indistinguishable from a green one in the
+            # log: hoot prints "Passed 0 tests" and then "Test suite
+            # succeeded", which is exactly the string browser_js() waits for.
+            # Five ham_shack suites passed that way for weeks while executing
+            # nothing; when they were finally bundled (hams_com bb25842d) 24
+            # tests ran for the first time and 6 of them failed.
+            #
+            # Deliberately in `else:` rather than in the `try:` body. The
+            # except clause above is the TOUR-failure handler -- it sets
+            # _hams_tour_failed (suppressing tearDown's V8-log truncation),
+            # walks the __context__ chain for a severed-websocket signature
+            # and screenshots the browser when it finds none. An empty run is
+            # not a tour failure and must take none of those paths. An
+            # exception raised in `else` is not caught by this statement's
+            # own except clause, so this surfaces as the clean AssertionError
+            # it is.
+            if empty_run_detector.saw_empty_run and not expect_empty:
+                raise AssertionError(
+                    "[!] DIAGNOSTIC FOR AI: this hoot run executed ZERO tests "
+                    "('Passed 0 tests'), which hoot reports as 'Test suite "
+                    "succeeded' -- so this wrapper would otherwise have passed "
+                    "while testing nothing. Usual causes: the .test.js file is "
+                    "not listed in any manifest's web.assets_unit_tests bundle; "
+                    "no describe() declares the tag this wrapper asks for; the "
+                    "describe block contains no test(); or every test in it is "
+                    "skipped at runtime. Run check_hoot_runner_coverage.py, "
+                    "which catches the three static shapes. If a run with no "
+                    "tests is genuinely intended, pass expect_empty=True to "
+                    "browser_js() deliberately -- see the linter-compliance "
+                    "skill's own hoot rules for why deleting the wrapper is "
+                    "usually the better answer."
+                )
         finally:
+            browser_logger.removeHandler(empty_run_detector)
             _logger.info("TRACING: Exiting browser_js wrapper.")
 
     # [@ANCHOR: zero_sudo:hams_http_case_start_tour]
