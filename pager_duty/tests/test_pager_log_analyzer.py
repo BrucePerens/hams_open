@@ -82,14 +82,20 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         )
         thread.start()
         try:
-            deadline = time.time() + 5
-            while time.time() < deadline and not thread.is_alive():
-                time.sleep(0.05)
-            with open(tmp_path, "a") as f:
-                f.write("System ran Out Of Memory during allocation\n")
-                f.flush()
+            # thread.is_alive() is true long before tail_file() has opened the file and
+            # seeked to its end, which is where a real tail starts reading. A line appended
+            # before that seek lands behind the read position and is never seen, so a single
+            # append made this test fail intermittently. Keep appending until the line is
+            # detected: every append after the seek is a genuine "line written after the
+            # tail started", which is exactly the behaviour under test.
+            deadline = time.time() + 10
+            while time.time() < deadline and not stop_event.is_set():
+                with open(tmp_path, "a") as f:
+                    f.write("System ran Out Of Memory during allocation\n")
+                    f.flush()
+                stop_event.wait(timeout=0.2)
             self.assertTrue(
-                stop_event.wait(timeout=5),
+                stop_event.is_set(),
                 "tail_file() must detect a real appended line matching the pattern.",
             )
         finally:
