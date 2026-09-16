@@ -407,6 +407,23 @@
              perm_write/create/unlink stay 0 for both groups regardless of this rule's own
              all-True perm flags (ir.rule can only narrow which records are visible, never grant an
              operation the ACL itself doesn't already allow). -->
+        <!-- The provisioning service account is not in base.group_user, so
+             user_websites_group_multi_company_rule above never applied to it
+             on its own. It only looked company-scoped while the account also
+             held group_user_websites_administrator, which implies
+             base.group_user. Without a rule of its own, no group rule would
+             match it and it would read and write every company's groups. -->
+        <record id="user_websites_group_service_account_rule" model="ir.rule">
+            <field name="name">User Websites Group Service Account Rule</field>
+            <field name="model_id" ref="model_user_websites_group"/>
+            <field name="groups" eval="[(4, ref('user_websites.group_user_websites_service_account'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
         <record id="user_websites_group_multi_company_rule_portal_public" model="ir.rule">
             <field name="name">User Websites Group Multi-Company Rule (Portal/Public)</field>
             <field name="model_id" ref="model_user_websites_group"/>

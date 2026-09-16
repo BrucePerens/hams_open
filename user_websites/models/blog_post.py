@@ -216,6 +216,9 @@ class BlogPost(models.Model):
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
             )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
+            )
         ):
             allowed = {
                 "name",
@@ -309,6 +312,9 @@ class BlogPost(models.Model):
             or self.env.user.has_group("base.group_system")
             or self.env.user.has_group(
                 "user_websites.group_user_websites_administrator"
+            )
+            or self.env.user.has_group(
+                "user_websites.group_user_websites_service_account"
             )
         ):
             allowed = {

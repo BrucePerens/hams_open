@@ -10,29 +10,20 @@
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
             <!--
-                night_shift_todo.md "saving ANY Settings page can crash with
-                an AccessError": this account's membership in
-                group_user_websites_administrator used to be a side effect
-                of res_config_settings.py's own set_values() re-adding it on
-                every Settings save (removed, see that file's own
-                comment). Seeding it here directly, instead, means a fresh
-                install (or one where nobody has ever touched Settings)
-                doesn't silently leave this service account without the
-                administrator-tier group any has_group() check in this
-                module might expect it to hold when it acts with_user(this
-                account).
+                No group_user_websites_administrator membership. 3cd17299
+                seeded it defensively, in case some has_group() check needed
+                it, but that human moderation group implies base.group_user
+                and carries unconditional [(1, '=', 1)] ir.rules. Those rules
+                OR-dominated this account's own company-scoped ones and leaked
+                other companies' content violation reports into the pending-
+                report cron (test_audit_edge_cases.py::test_10). The one
+                admin-only check this account passes through as the acting
+                user, blog_post's field allowlist, now accepts
+                group_user_websites_service_account like blog_blog and
+                website_page already did. (3, ...) unlinks the membership that
+                databases created since 3cd17299 already hold.
             -->
-            <!-- audit-ignore-service-account-admin-group: the 2026-09-14
-                 service-account privilege audit flagged this membership (a
-                 daemon-facing provisioning account holding the human
-                 Administrator group, whose own cross-company ir.rules
-                 OR-dominate this account's company-scoped ones, see
-                 user_websites/tests/test_audit_edge_cases.py::test_10). It was
-                 seeded deliberately the same day (Settings-page crash fix
-                 above) and is tracked in hams_com/night_shift_todo.md for a
-                 proper split into a service-only group; not silently removed
-                 here. -->
-            <field name="group_ids" eval="[(4, ref('user_websites.group_user_websites_service_account')), (4, ref('user_websites.group_user_websites_administrator')), (4, ref('website.group_multi_website'))]"/>
+            <field name="group_ids" eval="[(4, ref('user_websites.group_user_websites_service_account')), (3, ref('user_websites.group_user_websites_administrator')), (4, ref('website.group_multi_website'))]"/>
         </record>
     </data>
     <data noupdate="1">
