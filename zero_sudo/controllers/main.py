@@ -113,7 +113,45 @@ class ZeroSudoSession(Session):
     # is now actually load-bearing -- the rotated/logged-out session gets
     # saved -- not defense-in-depth-only as an earlier draft of this
     # comment claimed).)
+    #
+    # 2026-09-16: `super().authenticate()` itself builds and returns the
+    # `session_info()` payload before this method ever sees the result, and
+    # `session_info()` reads `web.max_file_upload_size` via `ir_config_parameter.
+    # get_param()`. `ham_base`'s get_param() refuses any key not on its
+    # allow lists for an `is_service_account` user, so that read raised
+    # AccessError from inside super() -- the service account was still
+    # blocked, but by the wrong mechanism (a 500-mapped AccessError instead
+    # of this interceptor's own `{"uid": None}` denial and audit-log row),
+    # whenever ham_base was installed alongside zero_sudo. Checking
+    # `is_service_account` by LOGIN before calling super() at all keeps the
+    # fail-fast refusal at the request boundary and never lets
+    # session_info() run for a service account, regardless of whether the
+    # password given is correct -- which leaks no more than the existing
+    # post-super() check already did. The post-super() check below stays as
+    # defense in depth (e.g. a login string that doesn't exact-match here).
     def authenticate(self, db, login, password, base_location=None):
+        if login:
+            request.env.cr.execute(  # audit-ignore-sql: Tested by [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]  # fmt: skip
+                "SELECT id, is_service_account FROM res_users WHERE login = %s",
+                (login,),
+            )
+            res = request.env.cr.fetchone()
+            if res and res[1]:
+                utils = request.env["zero_sudo.security.utils"]
+                facility_env = utils._get_service_env(
+                    "zero_sudo.odoo_facility_service_internal"
+                )
+                facility_env["zero_sudo.security.log"].create(
+                    {
+                        "user_id": res[0],
+                        "login": login,
+                        "ip_address": request.httprequest.remote_addr,
+                        "user_agent": request.httprequest.user_agent.string,
+                        "reason": "service_account_blocked",
+                    }
+                )
+                return {"uid": None}
+
         result = super().authenticate(db, login, password, base_location=base_location)
 
         if request.session.uid:
