@@ -47,7 +47,7 @@ if os.path.exists(DB_ENV_FILE):
     # whether its values actually took effect.
     load_dotenv(DB_ENV_FILE, override=True)
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_HOST = os.getenv("DB_HOST", "localhost")  # burn-ignore-env: cache-manager.service runs beside local postgresql.service (Requires=), and provision_cache_manager_db_role.py writes DB_HOST into its env file
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "odoo")
 # This daemon only ever LISTENs on one Postgres channel and runs a
@@ -79,7 +79,7 @@ if not os.path.exists(DB_ENV_FILE):
 if os.getenv("PGHOST"):
     DB_HOST = os.getenv("PGHOST")
 
-REDIS_HOST = os.getenv("REDIS_HOST", os.getenv("redis_host", "localhost"))
+REDIS_HOST = os.getenv("REDIS_HOST", os.getenv("redis_host", "localhost"))  # burn-ignore-env: cache-manager.service runs beside local redis-server.service (Requires=); containers set REDIS_HOST
 REDIS_PORT = int(os.getenv("REDIS_PORT", os.getenv("redis_port", "6379")))
 REDIS_PASS = os.getenv("REDIS_PASSWORD", os.getenv("redis_password"))
 
