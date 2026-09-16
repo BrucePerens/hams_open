@@ -1,13 +1,24 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import collections
+import logging
+import http.server
+import threading
 import requests
 from unittest.mock import MagicMock
 from odoo.exceptions import AccessError
 from odoo.tools import mute_logger
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.addons.cloudflare.utils.cloudflare_api import purge_urls, purge_tags
+from odoo.addons.cloudflare.utils.cloudflare_api import (
+    purge_urls,
+    purge_tags,
+    retry_strategy,
+    session,
+)
+
+_logger = logging.getLogger(__name__)
 
 
 @tagged("post_install", "-at_install")
@@ -353,3 +364,123 @@ class TestCloudflareAPIs(HamsTransactionCase):
 
         with mute_logger("odoo.addons.cloudflare.utils.cloudflare_api"):
             self.assertFalse(purge_tags(["tag1"], "tok1", "zone1"))
+
+
+@tagged("post_install", "-at_install")
+class TestCloudflareRetryIdempotency(HamsTransactionCase):
+    """The shared `requests` session must not replay a request Cloudflare may
+    already have applied.
+
+    The session used to retry every method on 429 and on 500/502/503/504 alike,
+    so a 502 arriving after Cloudflare had already created a DNS record, a
+    firewall access rule or a tunnel route sent the same create again -- up to
+    three more times. These tests pin the split that fixes it.
+
+    They drive a real HTTP server on loopback rather than a hand-built fixture,
+    because the property under test lives in urllib3's retry machinery and not
+    in our own code: a fixture written from how that machinery is documented to
+    behave could only ever confirm the mental model the fix was written from.
+    Odoo's test-mode request handler permits loopback requests, which is what
+    makes this possible inside the suite.
+    """
+
+    def _serve(self, status, retry_after=None):
+        """Run a loopback server answering `status`, and count requests by method.
+
+        Follows the pattern `zero_sudo/tests/test_ssrf_safe_fetch.py` already
+        established for an in-suite local server: bind port 0, serve on a thread
+        that is explicitly shut down and joined rather than merely left daemonic,
+        and clean up through `addCleanup` so a failing assertion still tears the
+        server down.
+        """
+        counts = collections.Counter()
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def _respond(self):
+                counts[self.command] += 1
+                self.send_response(status)
+                if retry_after is not None:
+                    self.send_header("Retry-After", str(retry_after))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            do_GET = do_PUT = do_DELETE = do_POST = do_PATCH = _respond
+
+            def log_message(self, *args):
+                """Keep the suite's output clean; the counter is the record we read."""
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)  # burn-ignore-self-hosted-server: this test spawns its own local server and connects to it in the same process
+        thread = threading.Thread(target=server.serve_forever, daemon=True)  # burn-ignore-test-daemon-thread: explicitly shut down and joined by the cleanups registered below
+        thread.start()
+        self.addCleanup(thread.join, 5.0)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        port = server.server_address[1]
+        return f"http://127.0.0.1:{port}/probe", counts  # burn-ignore-self-hosted-server: the local server started immediately above, in this same process
+
+    def _attempts(self, method, status, retry_after=None):
+        """Send one request and report how many attempts actually reached the server.
+
+        Both outcomes are deliberately accepted, because which one happens is
+        the very thing under test: a request retried to exhaustion surfaces as a
+        `RetryError`, while one that is not retried at all simply returns its
+        error response. Asserting on the exception would assert the answer
+        instead of measuring it -- which is what the first draft of this helper
+        did, making every non-retried case fail for the wrong reason.
+        """
+        url, counts = self._serve(status, retry_after)
+        try:
+            getattr(session, method.lower())(url, timeout=10)
+        except requests.exceptions.RequestException as exc:
+            _logger.info("Probe %s expectedly ended in %s: %s", method, type(exc).__name__, exc)
+        return counts[method]
+
+    def test_08_retry_policy_excludes_non_idempotent_methods(self):
+        # [@ANCHOR: test_cf_retry_policy_excludes_non_idempotent_methods]
+
+        # Tests [@ANCHOR: cloudflare:COMM_idempotency_aware_retry]
+        """POST and PATCH are retryable on 429 only; the rest keep the 5xx list."""
+        self.assertNotIn("POST", retry_strategy.allowed_methods)
+        self.assertNotIn("PATCH", retry_strategy.allowed_methods)
+        self.assertTrue(retry_strategy.respect_retry_after_header)
+
+        for method in ("GET", "HEAD", "OPTIONS", "PUT", "DELETE"):
+            for status in (429, 500, 502, 503, 504):
+                self.assertTrue(
+                    retry_strategy.is_retry(method, status),
+                    f"{method} {status} should be retried: it cannot be applied twice",
+                )
+
+        for method in ("POST", "PATCH"):
+            self.assertTrue(
+                retry_strategy.is_retry(method, 429),
+                f"{method} 429 should be retried: a rate-limit refusal is never applied",
+            )
+            for status in (500, 502, 503, 504):
+                self.assertFalse(
+                    retry_strategy.is_retry(method, status),
+                    f"{method} {status} must NOT be retried: Cloudflare may have applied it",
+                )
+
+    def test_09_a_post_answered_with_502_reaches_the_server_once(self):
+        # [@ANCHOR: test_cf_post_502_is_not_resent]
+        """A 502 must not replay a POST, while an idempotent method still retries."""
+        self.assertEqual(
+            self._attempts("POST", 502),
+            1,
+            "a POST answered 502 was re-sent; Cloudflare may already have applied it",
+        )
+        self.assertEqual(
+            self._attempts("GET", 502),
+            4,
+            "the idempotent path lost its retries; this fix must not disable them",
+        )
+
+    def test_10_a_rate_limited_post_is_still_retried(self):
+        # [@ANCHOR: test_cf_post_429_is_retried]
+        """429 is refused before it is applied, so replaying a POST is safe."""
+        self.assertEqual(
+            self._attempts("POST", 429, retry_after=0),
+            4,
+            "a rate-limited POST should be retried rather than dropped",
+        )

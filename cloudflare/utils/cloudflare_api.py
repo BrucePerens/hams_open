@@ -18,11 +18,58 @@ def _handle_api_error(context_msg, exception):
         _logger.error("%s: %s", context_msg, exception)
 
 
+# Methods that are safe to replay because repeating them cannot change the
+# result beyond what the first attempt already did. Everything else -- POST and
+# PATCH against this API -- may have been applied by Cloudflare before the error
+# reached us, so replaying it can create a duplicate DNS record, a duplicate
+# firewall access rule, or a duplicate tunnel route.
+IDEMPOTENT_METHODS = frozenset({"HEAD", "GET", "OPTIONS", "PUT", "DELETE"})
+
+# The statuses worth retrying for an idempotent method: rate limiting plus the
+# transient server-side failures.
+IDEMPOTENT_RETRY_STATUSES = [429, 500, 502, 503, 504]
+# # Verified by [@ANCHOR: test_cf_post_502_is_not_resent]
+
+# The only status worth retrying for a non-idempotent method. A 429 is refused
+# by Cloudflare's rate limiter before the request is applied, so replaying it
+# cannot duplicate anything; a 5xx carries no such guarantee.
+NON_IDEMPOTENT_RETRY_STATUSES = frozenset({429})
+# # Verified by [@ANCHOR: test_cf_post_429_is_retried]
+
+
+class IdempotencyAwareRetry(Retry):
+    """Retry 5xx only for idempotent methods; retry POST/PATCH only on 429.
+
+    urllib3 decides retries from one ``status_forcelist`` shared by every
+    method, gated by ``allowed_methods``. That is too coarse here: we want the
+    full transient-failure list for GET and friends, and only a rate-limit
+    refusal for POST and PATCH. Overriding ``is_retry`` is what splits the two,
+    and ``Retry.new()`` constructs ``type(self)``, so the subclass survives
+    every retry in a sequence rather than degrading to the base class.
+
+    ``allowed_methods`` deliberately stays restricted to the idempotent set so
+    that urllib3's own read-error handling keeps refusing to replay a POST whose
+    response was lost in transit -- that request may well have been applied.
+    A connection error is exempt in urllib3 regardless of method, correctly:
+    the request was never delivered.
+    """
+
+    # [@ANCHOR: cloudflare:COMM_idempotency_aware_retry]
+    def is_retry(self, method, status_code, has_retry_after=False):
+        # # Verified by [@ANCHOR: test_cf_retry_policy_excludes_non_idempotent_methods]
+        if method.upper() in IDEMPOTENT_METHODS:
+            return super().is_retry(method, status_code, has_retry_after)
+        return status_code in NON_IDEMPOTENT_RETRY_STATUSES
+
+
 session = requests.Session()
-retry_strategy = Retry(
+retry_strategy = IdempotencyAwareRetry(
     total=3,
-    status_forcelist=[429, 500, 502, 503, 504],
-    allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "DELETE", "PUT", "PATCH"],
+    status_forcelist=IDEMPOTENT_RETRY_STATUSES,
+    allowed_methods=sorted(IDEMPOTENT_METHODS),
+    # Honour Retry-After when Cloudflare sends one; this is urllib3's default
+    # and is named explicitly because the 429-on-POST path depends on it.
+    respect_retry_after_header=True,
 )
 adapter = HTTPAdapter(max_retries=retry_strategy)
 session.mount("https://", adapter)
