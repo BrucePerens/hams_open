@@ -25,6 +25,7 @@ from . import test_robustness_and_boundaries
 from . import test_sdk_extensibility
 from . import test_security_edge_cases
 from . import test_simulation
+from . import test_slug_resolution_cache_and_filters
 from . import test_subscriptions
 from . import test_tdd_fixes
 from . import test_ui_personas

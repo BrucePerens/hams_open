@@ -12,7 +12,10 @@ import odoo
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    distributed_cache,
+    notify_model_invalidation,
+)
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
@@ -294,6 +297,47 @@ class ResUsers(models.Model):
             if "website_slug" in constraint_name:
                 raise ValidationError(_("The Website Slug must be unique and valid."))
             raise
+
+        # --- Slug-resolution cache invalidation ---
+        # _get_user_id_by_slug() is @distributed_cache()-decorated: an
+        # unbounded-lifetime L1 process cache consulted before Redis's own
+        # 24h TTL. Its answer is the content routing view's answer, which
+        # depends on exactly these four columns (see
+        # [@ANCHOR: user_websites:COMM_content_routing_view_init]). Nothing
+        # invalidated that cache when any of them changed.
+        #
+        # This was recorded as latent in the function's own bug-hunt claim
+        # ("no production caller today"), which had grepped hams_open only.
+        # hams_com's public logbook and profile widget routes call it on
+        # every request, so each gap is live:
+        #
+        #  * a slug rename left old_slug -> old_user_id cached. write()
+        #    below creates a 301 for the old slug, but the redirect only
+        #    covers page-serving URLs -- the widget routes resolve the raw
+        #    slug directly. Once the freed slug was claimed by a DIFFERENT
+        #    user, visitors saw the wrong person's logbook for up to 24h.
+        #  * a suspension, an archival, or a service-account promotion
+        #    removes the row from the view, but a worker that had already
+        #    resolved the slug kept serving the id -- the same "an admin
+        #    believes the account is locked down and it is not" shape
+        #    zero_sudo's own is_service_account write() fixed for
+        #    ir.http._is_service_account_cached.
+        #
+        # Placed after a successful super().write() (not before, and not on
+        # vals alone) so a write that the ACLs rejected, or that a later
+        # IntegrityError rolled back, never evicts a still-valid entry --
+        # matching the two blocks below, and notify_model_invalidation()'s
+        # own postcommit deferral.
+        if any(
+            field in vals
+            for field in (
+                "website_slug",
+                "active",
+                "is_suspended_from_websites",
+                "is_service_account",
+            )
+        ):
+            notify_model_invalidation(self.env, "res.users")
 
         # --- Content Lifecycle Policy ---
         # Adversarial security review, 2026-09-09: this block used to run

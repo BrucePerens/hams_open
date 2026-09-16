@@ -68,6 +68,32 @@ class UserWebsitesContentRoutingView(models.Model):
 
     # [@ANCHOR: user_websites:COMM_content_routing_view_init]
     def init(self):
+        # This view is the sole backing store for _get_user_id_by_slug()
+        # (res_users.py), which hams_com's public logbook and profile
+        # widget routes now call on every request. Until 2026-09-15 it
+        # filtered on u.active alone, so two categories of row that no
+        # page-serving route will render still resolved to a real user id:
+        #
+        #  * service accounts. Every one of them is a res.users row, and
+        #    zero_sudo's own provisioning gives several of them a name a
+        #    slug could be derived from. The sibling
+        #    public_directory_view_init already excludes them explicitly
+        #    rather than relying on an unrelated privacy field to happen
+        #    to be unset; the same reasoning applies here, more sharply,
+        #    because this view feeds an id straight into a public route.
+        #  * suspended users and suspended groups. Every real page-serving
+        #    route checks is_suspended_from_websites and 404s, but the
+        #    widget callers browse the resolved id as
+        #    ham_base.user_public_router and render QSOs without
+        #    rechecking suspension -- so a suspended user's logbook widget
+        #    stayed publicly readable through them. Filtering here fixes
+        #    every caller at once, instead of asking each new caller to
+        #    remember the recheck.
+        #
+        # The group half of the UNION has no consumer today
+        # (_get_user_id_by_slug hardcodes res_model = 'res.users'), but it
+        # gets the same suspension filter so a future group-slug caller
+        # does not inherit the gap this fix just closed for users.
         tools.drop_view_if_exists(self.env.cr, self._table)
         with self.env.cr.savepoint():
             self.env.cr.execute(
@@ -82,6 +108,8 @@ class UserWebsitesContentRoutingView(models.Model):
                 WHERE u.active IS TRUE
                 AND u.website_slug IS NOT NULL
                 AND u.website_slug != ''
+                AND u.is_service_account IS NOT TRUE
+                AND u.is_suspended_from_websites IS NOT TRUE
 
                 UNION ALL
 
@@ -93,6 +121,7 @@ class UserWebsitesContentRoutingView(models.Model):
                 FROM user_websites_group
                 WHERE website_slug IS NOT NULL
                 AND website_slug != ''
+                AND is_suspended_from_websites IS NOT TRUE
             )
         """
         )
