@@ -188,6 +188,45 @@ class TestKeyRegistry(RealTransactionCase):
         self.addCleanup(self._silent_remove, symlink_path)
         self.addCleanup(self._silent_rmdir, allowed_dir)
 
+    def test_check_user_is_service_account_as_a_narrow_service_account(self):
+        """`_check_user_is_service_account` reads `record.user_id.is_service_account` directly
+        through the ORM, and that field is `groups="base.group_system"` (zero_sudo/models/
+        res_users.py). Reading a group-restricted field through the ORM on a record OTHER than
+        `self.env.user` normally raises AccessError for a caller without that group -- confirmed
+        directly (a throwaway probe against `browse()`/`.filtered()` on a non-`env.user` record,
+        2026-09-16) and the reason the already-fixed zero_sudo res.users.write() password branch
+        needed a raw-SQL read instead. `manager_user` (daemon_key_manager.
+        user_daemon_key_manager_service, the account register_daemon() actually elevates to) is
+        exactly such a narrow, non-system service account.
+
+        Verified here, also directly, that this specific case does NOT hit that AccessError:
+        `@api.constrains` validation runs without enforcing the field's own group restriction, so
+        `record.user_id.is_service_account` inside a constrains method is safe even though the
+        identical read as plain runtime code (e.g. inside write()/an action method) would not be.
+        Both directions are asserted so a future Odoo upgrade that changes this constrains
+        behavior is caught either way: a real service account target must still be accepted, and
+        a non-service-account target must still be refused with the real UserError, not an
+        AccessError or a silent pass."""
+        record = self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+            {
+                "name": "Narrow Caller Accepts Real Service Account",
+                "user_id": self.service_user.id,
+                "env_file_path": self.test_env_paths[0],
+            }
+        )
+        self.assertTrue(record.exists())
+
+        with self.assertRaises(UserError) as cm:
+            self.env["daemon.key.registry"].with_user(self.manager_user.id).create(
+                {
+                    "name": "Narrow Caller Rejects Non Service Account",
+                    "user_id": self.regular_user.id,
+                    "env_file_path": self.test_env_paths[1],
+                }
+            )
+        self.assertNotIsInstance(cm.exception, AccessError)
+        self.assertIn("must be a service account", str(cm.exception))
+
     def test_env_file_path_rejects_literal_directory_traversal(self):
         """_check_env_file_path's ".." check runs on the raw path, before
         os.path.normpath/os.path.realpath -- a distinct, earlier branch
