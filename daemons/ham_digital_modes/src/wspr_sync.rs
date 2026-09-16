@@ -241,30 +241,58 @@ fn spectrum_matrix(
     if bin_hi_inclusive < bin_lo || bin_hi_inclusive >= spsym {
         return None;
     }
-    let two_pi = std::f64::consts::TAU;
-    let nbins = bin_hi_inclusive - bin_lo + 1;
-
-    let mut mat = vec![vec![0.0f64; nbins]; WSPR_NUM_SYMBOLS];
-    for (sym, row) in mat.iter_mut().enumerate() {
-        let block_start = start_sample + sym * spsym;
-        let mut buf: Vec<Complex64> = (0..spsym)
-            .map(|n| {
-                let sample = samples[block_start + n] as f64;
-                let phase = -two_pi * sub_bin_hz_offset * (n as f64) / (sample_rate as f64);
-                Complex64::new(sample * phase.cos(), sample * phase.sin())
+    Some(
+        (0..WSPR_NUM_SYMBOLS)
+            .map(|sym| {
+                block_spectrum(
+                    samples,
+                    sample_rate,
+                    fft,
+                    bin_lo,
+                    bin_hi_inclusive,
+                    sub_bin_hz_offset,
+                    start_sample + sym * spsym,
+                )
             })
-            .collect();
-        fft.process(&mut buf);
-        for (j, bin) in (bin_lo..=bin_hi_inclusive).enumerate() {
-            row[j] = buf[bin].norm();
-        }
-    }
-    Some(mat)
+            .collect(),
+    )
+}
+
+/// One row of `spectrum_matrix()`: the `[bin_lo, bin_hi_inclusive]` magnitudes of the
+/// `samples_per_symbol()`-point block starting at `block_start`, down-converted by
+/// `sub_bin_hz_offset`. The down-conversion's phase restarts at zero for every block, so the
+/// result depends only on `block_start` and `sub_bin_hz_offset`, never on which candidate start
+/// offset or symbol index asked for it. `find_sync()` relies on that to compute each block once.
+/// Callers must already have checked that the block lies inside `samples` and the bin range
+/// inside the transform, as `spectrum_matrix()` does.
+// [@ANCHOR: block_spectrum]
+fn block_spectrum(
+    samples: &[i16],
+    sample_rate: u32,
+    fft: &dyn rustfft::Fft<f64>,
+    bin_lo: usize,
+    bin_hi_inclusive: usize,
+    sub_bin_hz_offset: f64,
+    block_start: usize,
+) -> Vec<f64> {
+    let spsym = samples_per_symbol(sample_rate);
+    let two_pi = std::f64::consts::TAU;
+    let mut buf: Vec<Complex64> = (0..spsym)
+        .map(|n| {
+            let sample = samples[block_start + n] as f64;
+            let phase = -two_pi * sub_bin_hz_offset * (n as f64) / (sample_rate as f64);
+            Complex64::new(sample * phase.cos(), sample * phase.sin())
+        })
+        .collect();
+    fft.process(&mut buf);
+    (bin_lo..=bin_hi_inclusive)
+        .map(|bin| buf[bin].norm())
+        .collect()
 }
 
 // [@ANCHOR: tone_magnitudes_from_matrix]
-fn tone_magnitudes_from_matrix(
-    mat: &[Vec<f64>],
+fn tone_magnitudes_from_matrix<Row: AsRef<[f64]>>(
+    mat: &[Row],
     bin_lo: usize,
     base_bin: usize,
 ) -> [[f64; 4]; WSPR_NUM_SYMBOLS] {
@@ -272,7 +300,7 @@ fn tone_magnitudes_from_matrix(
     let j0 = base_bin - bin_lo;
     for sym in 0..WSPR_NUM_SYMBOLS {
         for (tone, slot) in out[sym].iter_mut().enumerate() {
-            *slot = mat[sym][j0 + tone];
+            *slot = mat[sym].as_ref()[j0 + tone];
         }
     }
     out
@@ -471,22 +499,48 @@ pub fn find_sync(
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(spsym);
 
+    // Consecutive start offsets are `time_step` apart and `time_step` divides `spsym`, so symbol
+    // blocks from different start offsets land on the same sample positions over and over: a
+    // 120s window at 12kHz has about 17,800 (start offset, symbol) pairs per sub-bin offset but
+    // only about 1,440 distinct blocks. `block_spectrum()`'s result depends only on the block's
+    // position and sub-bin offset, so each is computed once here and reused. Measured
+    // 2026-09-16 on a Raspberry Pi 400, before this cache: 110s of `find_sync()` per 120s WSPR
+    // slot (hams_com `docs/proposals/RASPBERRY_PI_400_500_QUALIFICATION.md` Phase 9). The
+    // search order, and so tie-breaking between equal scores, is unchanged, and
+    // `find_sync_matches_the_uncached_reference_search` checks the result is identical.
+    // Blocks behind the current start offset are never needed again and are dropped.
+    let mut block_cache: Vec<std::collections::HashMap<usize, Vec<f64>>> =
+        vec![std::collections::HashMap::new(); sub_bin_steps];
     let mut best: Option<SyncResult> = None;
     let mut start_sample = 0usize;
     loop {
-        for sub in 0..sub_bin_steps {
+        for (sub, cache) in block_cache.iter_mut().enumerate() {
             let sub_bin_hz_offset = (sub as f64) * bin_hz / (sub_bin_steps as f64);
-            let Some(mat) = spectrum_matrix(
-                samples,
-                sample_rate,
-                fft.as_ref(),
-                bin_lo,
-                bin_hi,
-                sub_bin_hz_offset,
-                start_sample,
-            ) else {
+            // Same preconditions `spectrum_matrix()` checks before touching a block.
+            if start_sample + WSPR_NUM_SYMBOLS * spsym > samples.len()
+                || bin_hi < bin_lo
+                || bin_hi >= spsym
+            {
                 continue;
-            };
+            }
+            cache.retain(|&block_start, _| block_start >= start_sample);
+            for sym in 0..WSPR_NUM_SYMBOLS {
+                let block_start = start_sample + sym * spsym;
+                cache.entry(block_start).or_insert_with(|| {
+                    block_spectrum(
+                        samples,
+                        sample_rate,
+                        fft.as_ref(),
+                        bin_lo,
+                        bin_hi,
+                        sub_bin_hz_offset,
+                        block_start,
+                    )
+                });
+            }
+            let mat: Vec<&Vec<f64>> = (0..WSPR_NUM_SYMBOLS)
+                .map(|sym| &cache[&(start_sample + sym * spsym)])
+                .collect();
             for base_bin in bin_lo..=(bin_hi - 3) {
                 let tone_mags = tone_magnitudes_from_matrix(&mat, bin_lo, base_bin);
                 let tt = sync_statistic(&tone_mags);
@@ -1243,6 +1297,138 @@ mod tests {
     /// offset `find_sync()` is NOT told in advance (only a surrounding
     /// range), across a real multi-bin/multi-offset grid -- confirms
     /// the search itself (not just the mapping) finds the right answer.
+    /// `find_sync()` before its block cache: every (start offset, sub-bin offset) pair
+    /// recomputes its whole 162-block `spectrum_matrix()`. Kept as the reference the cached
+    /// search must match exactly.
+    fn find_sync_uncached_reference(
+        samples: &[i16],
+        sample_rate: u32,
+        freq_lo_hz: f64,
+        freq_hi_hz: f64,
+        max_start_sample: usize,
+        min_sync_score: f64,
+    ) -> Option<SyncResult> {
+        let bin_hz = WSPR_SYMBOL_RATE_HZ;
+        let bin_lo = (freq_lo_hz / bin_hz).floor() as usize;
+        let bin_hi = (freq_hi_hz / bin_hz).ceil() as usize + 3;
+        let spsym = samples_per_symbol(sample_rate);
+        let sub_bin_steps = 8usize;
+        let time_step = (spsym / 8).max(1);
+        let pattern = sync_pattern();
+        let mut planner = FftPlanner::<f64>::new();
+        let fft = planner.plan_fft_forward(spsym);
+        let mut best: Option<SyncResult> = None;
+        let mut start_sample = 0usize;
+        loop {
+            for sub in 0..sub_bin_steps {
+                let sub_bin_hz_offset = (sub as f64) * bin_hz / (sub_bin_steps as f64);
+                let Some(mat) = spectrum_matrix(
+                    samples,
+                    sample_rate,
+                    fft.as_ref(),
+                    bin_lo,
+                    bin_hi,
+                    sub_bin_hz_offset,
+                    start_sample,
+                ) else {
+                    continue;
+                };
+                for base_bin in bin_lo..=(bin_hi - 3) {
+                    let tone_mags = tone_magnitudes_from_matrix(&mat, bin_lo, base_bin);
+                    let score = cosine_score(&sync_statistic(&tone_mags), &pattern);
+                    if best.as_ref().is_none_or(|b| score > b.sync_score) {
+                        best = Some(SyncResult {
+                            base_hz: (base_bin as f64) * bin_hz + sub_bin_hz_offset,
+                            start_sample,
+                            sync_score: score,
+                        });
+                    }
+                }
+            }
+            if start_sample >= max_start_sample {
+                break;
+            }
+            start_sample = (start_sample + time_step).min(max_start_sample);
+        }
+        best.filter(|b| b.sync_score >= min_sync_score)
+    }
+
+    /// The block cache in `find_sync()` must not change its answer at all: same start offset,
+    /// same frequency, and the same score to the bit, because each cached block is the same
+    /// samples through the same down-conversion and transform. Covers a noisy signal, noise
+    /// alone (with the score gate lowered so a best candidate is still returned), a final start
+    /// offset clamped off the `time_step` grid, and a `max_start_sample` past the end of the
+    /// audio, where both versions must skip the offsets that don't fit.
+    #[test]
+    // Tests [@ANCHOR: find_sync]
+    // Tests [@ANCHOR: block_spectrum]
+    fn find_sync_matches_the_uncached_reference_search() {
+        let sample_rate = 12000u32;
+        let spsym = samples_per_symbol(sample_rate);
+        let time_step = spsym / 8;
+        let window = required_window_samples(sample_rate);
+
+        let symbols = wspr_encode_symbols("K1ABC", "EM10", 23).unwrap();
+        let mut signal = vec![0i16; 2 * time_step + 300];
+        signal.extend(wspr_modulate(&symbols, 1502.7, sample_rate));
+        signal.extend(vec![0i16; 5 * time_step]);
+        let noisy_signal = add_awgn(&signal, -8.0, 7);
+        let noise_only = add_awgn(&vec![1000i16; signal.len()], -30.0, 11);
+
+        // Off the time_step grid, so the last start offset is a clamped one.
+        let clamped_max = signal.len() - window - 517;
+        let past_the_end = signal.len() - window + 3 * time_step;
+        for (label, audio, max_start, min_score) in [
+            ("noisy signal", &noisy_signal, clamped_max, MIN_SYNC_SCORE),
+            ("noise only", &noise_only, clamped_max, -1.0),
+            (
+                "noise only, gated",
+                &noise_only,
+                clamped_max,
+                MIN_SYNC_SCORE,
+            ),
+            (
+                "max start past the end",
+                &noisy_signal,
+                past_the_end,
+                MIN_SYNC_SCORE,
+            ),
+        ] {
+            let cached = find_sync(audio, sample_rate, 1480.0, 1520.0, max_start, min_score);
+            let reference = find_sync_uncached_reference(
+                audio,
+                sample_rate,
+                1480.0,
+                1520.0,
+                max_start,
+                min_score,
+            );
+            assert_eq!(
+                cached, reference,
+                "{label}: cached search diverged from the reference"
+            );
+            if let (Some(c), Some(r)) = (cached, reference) {
+                assert_eq!(
+                    c.sync_score.to_bits(),
+                    r.sync_score.to_bits(),
+                    "{label}: score differs in its bits"
+                );
+            }
+        }
+        assert!(
+            find_sync(
+                &noisy_signal,
+                sample_rate,
+                1480.0,
+                1520.0,
+                clamped_max,
+                MIN_SYNC_SCORE
+            )
+            .is_some(),
+            "the noisy-signal case must actually find the signal, or it compares two Nones"
+        );
+    }
+
     #[test]
     // Tests [@ANCHOR: find_sync]
     fn find_sync_recovers_the_real_frequency_and_start_offset() {
