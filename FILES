@@ -640,7 +640,6 @@ hams_shared/docs/modules/user_websites_seo.md
 hams_shared/docs/modules/zero_sudo.md
 hams_shared/docs/service_accounts.md
 hams_shared/tools/find_cycle.py
-hams_shared/tools/extract_skill_docs.py
 hams_shared/tools/extract_burn_docs.py
 hams_shared/tools/linter_rules.md
 hams_shared/tools/test.py
