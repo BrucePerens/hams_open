@@ -15,38 +15,46 @@ class TestPagerDutyHooks(HamsTransactionCase):
         super().setUp()
         
     def test_post_init_hook_daemon_registration(self):
-        """
-        Test that post_init_hook properly registers the daemon with the admin user
-        to avoid Zero-Sudo architecture constraints.
-        """
+        # [@ANCHOR: pager_duty:test_post_init_hook_registers_as_own_service_account]
+        """post_init_hook registers pager_duty's daemon key as its own service
+        account, never as base.user_admin (zero-sudo, least privilege).
 
+        This test used to assert the opposite -- that the hook elevated to
+        base.user_admin -- and mocked register_daemon out entirely, so it
+        could not show that a narrower identity would even be authorized.
+        Now the real register_daemon() runs, including its authorization
+        check (a service account may provision a key only for itself); only
+        the final key rotation, which writes under /opt/hams/etc/keys, is
+        replaced.
+        """
+        registry_cls = type(self.env["daemon.key.registry"])
+        original_register = registry_cls.register_daemon
+        caller_uids = []
 
-        # Mock register_daemon to ensure it is called with the expected user
-        original_register = type(self.env["daemon.key.registry"]).register_daemon
-        
-        called_with_user_id = None
-        
-        def mock_register_daemon(registry_self, *args, **kwargs):
-            nonlocal called_with_user_id
-            called_with_user_id = registry_self.env.user.id
-            # Don't actually run it to avoid side effects
-            pass
-        
-        type(self.env["daemon.key.registry"]).register_daemon = mock_register_daemon
-        
-        try:
-            # The test case typically runs with test user or system. 
-            # We want to make sure post_init_hook elevates to base.user_admin
-            post_init_hook(self.env)
-            
-            admin_user = self.env.ref("base.user_admin")
-            self.assertEqual(
-                called_with_user_id,
-                admin_user.id,
-                "register_daemon should be called with the admin user context."
-            )
-        finally:
-            type(self.env["daemon.key.registry"]).register_daemon = original_register
+        def spy_register_daemon(registry_self, *args, **kwargs):
+            caller_uids.append(registry_self.env.uid)
+            return original_register(registry_self, *args, **kwargs)
+
+        self.safe_patch_object(registry_cls, "register_daemon", new=spy_register_daemon)
+        rotate = self.safe_patch_object(registry_cls, "_rotate_key_and_write_file")
+
+        post_init_hook(self.env)
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "pager_duty.user_pager_service_internal"
+        )
+        self.assertEqual(
+            caller_uids,
+            [svc_uid],
+            "[!] DIAGNOSTIC FOR AI: pager_duty must register its daemon key as its "
+            "own service account.",
+        )
+        self.assertNotIn(self.env.ref("base.user_admin").id, caller_uids)
+        self.assertTrue(rotate.called, "register_daemon must reach key rotation.")
+        registry = self.env["daemon.key.registry"].search(
+            [("name", "=", "Pager Duty - Generalized Monitor")]
+        )
+        self.assertEqual(registry.user_id.id, svc_uid)
 
     def test_claims_info_alias_when_free(self):
         # Tests [@ANCHOR: pager_duty_info_alias_claim]

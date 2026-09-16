@@ -220,8 +220,15 @@ def post_init_hook(env):
             _logger.exception("An error occurred during autodiscovery:")
 
     # Register Daemons for Automated Key Vault Provisioning
+    # Registered as pager_duty's own service account, which register_daemon()
+    # authorizes to provision a key for itself -- not as base.user_admin, which
+    # this hook used until 2026-09-16 against the zero-sudo design.
+    # Verified by [@ANCHOR: pager_duty:test_post_init_hook_registers_as_own_service_account]
     if "daemon.key.registry" in env:
-        env["daemon.key.registry"].with_user(env.ref("base.user_admin")).register_daemon(
+        svc_uid = env["zero_sudo.security.utils"]._get_service_uid(
+            "pager_duty.user_pager_service_internal"
+        )
+        env["daemon.key.registry"].with_user(svc_uid).register_daemon(
             daemon_name="Pager Duty - Generalized Monitor",
             user_xml_id="pager_duty.user_pager_service_internal",
             env_file_path="/opt/hams/etc/keys/pager_duty.env",
