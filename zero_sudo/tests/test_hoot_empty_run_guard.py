@@ -35,6 +35,8 @@ _EMPTY_RUN_URL = (
 @tagged("post_install", "-at_install")
 class TestHootEmptyRunGuard(HamsHttpCase):
     # Tests [@ANCHOR: zero_sudo:hams_http_case_browser_js]
+    # (line kept between the two anchors -- adjacent anchor lines are the
+    # "stacked anchors" shape verify_anchors.py rejects)
     # Tests [@ANCHOR: zero_sudo:hoot_empty_run_detector_emit]
     def test_hoot_guard_fails_a_suite_that_runs_no_tests(self):
         """A hoot run that executes zero tests must fail, not pass silently."""

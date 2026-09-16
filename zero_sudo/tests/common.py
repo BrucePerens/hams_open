@@ -836,9 +836,14 @@ class _HootEmptyRunDetector(logging.Handler):
     and no static checker can see that.
     """
 
-    def __init__(self):
-        super().__init__()
-        self.saw_empty_run = False
+    # Class attribute rather than an __init__ assignment: logging.Handler's
+    # own __init__ is inherited and does everything this needs (level, lock),
+    # and emit()'s `self.saw_empty_run = True` shadows this per instance, so
+    # an override here would add a function with no behaviour of its own --
+    # which ADR 0090's check_function_test_anchors.py correctly flags as a new
+    # unanchored function. A fresh detector is built per browser_js() call, so
+    # the False default is read before any write every time.
+    saw_empty_run = False
 
     # [@ANCHOR: zero_sudo:hoot_empty_run_detector_emit]
     # (comment kept between the two anchor lines -- adjacent anchor lines are
