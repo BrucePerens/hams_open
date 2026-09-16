@@ -112,7 +112,18 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         while time.time() - start_time < timeout:
             try:
                 req = urllib.request.Request(url, method="HEAD")
-                with urllib.request.urlopen(req, timeout=interval) as response:
+                # This polls a LOCAL daemon's own health
+                # endpoint, so `urlopen_ssrf_safe` -- which the OUTBOUND FETCH rule
+                # otherwise recommends -- is the wrong fix here and would break it:
+                # its validator rejects loopback, private and link-local addresses
+                # (ssrf_safe_fetch.py's own `not ip_obj.is_loopback` check), which is
+                # exactly the set of addresses this method is FOR. The real exposure
+                # is bounded separately and was already reviewed: the scheme check a
+                # few lines up rejects file:// and friends, this method is private and
+                # RPC-unreachable (asserted by test_daemon_utils_rpc_security's own
+                # "prevent SSRF via RPC" test), and every real caller today passes a
+                # hardcoded localhost string.
+                with urllib.request.urlopen(req, timeout=interval) as response:  # audit-ignore-outbound-fetch
                     if response.status == 200:
                         _logger.info("Health check %s passed.", url)
                         return True
