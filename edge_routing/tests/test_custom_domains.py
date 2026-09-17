@@ -9,9 +9,6 @@ from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 
 
-from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
-
-
 @tagged("post_install", "-at_install")
 class TestCustomDomains(HamsTransactionCase):
 
@@ -44,7 +41,7 @@ class TestCustomDomains(HamsTransactionCase):
                 domain_cls, "_create_cloudflare_custom_hostname_batch"
             )
 
-    def test_01_domain_crud_and_resolution(self):
+    def test_01_domain_crud(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_create]
 
         # Tests [@ANCHOR: edge_routing:COMM_domain_write]
@@ -53,7 +50,10 @@ class TestCustomDomains(HamsTransactionCase):
 
         # Tests [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
 
-        # Tests [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
+        # 2026-09-16: this used to also verify get_target_slug_by_domain() resolution around
+        # each CRUD step -- deleted along with that method once a repo-wide grep confirmed it
+        # had no production caller left (see night_shift_history.md). Real custom-domain
+        # traffic is routed by Odoo core's website.domain, not this table's own lookup.
         domain = self.domain_model.create(
             {"name": "WWW.TESTCLUB.ORG ", "target_slug": "testclub"}
         )
@@ -61,18 +61,12 @@ class TestCustomDomains(HamsTransactionCase):
         self.assertEqual(domain.name, "www.testclub.org")
         self.assertEqual(domain.target_slug, "testclub")
 
-        resolved_slug = self.domain_model.get_target_slug_by_domain("www.testclub.org")
-        self.assertEqual(resolved_slug, "testclub")
-
         domain.write({"target_slug": "newslug"})
-        invalidate_model_cache(self.env, "edge.routing.domain")
-        resolved_slug = self.domain_model.get_target_slug_by_domain("www.testclub.org")
-        self.assertEqual(resolved_slug, "newslug")
+        self.assertEqual(domain.target_slug, "newslug")
 
+        domain_id = domain.id
         domain.unlink()
-        invalidate_model_cache(self.env, "edge.routing.domain")
-        resolved_slug = self.domain_model.get_target_slug_by_domain("www.testclub.org")
-        self.assertFalse(resolved_slug)
+        self.assertFalse(self.domain_model.browse(domain_id).exists())
 
     def test_02_domain_without_a_dot_is_rejected(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_check_name]

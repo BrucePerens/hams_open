@@ -167,13 +167,6 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
                 "some-slug", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
             )
 
-    def test_get_target_slug_by_domain_no_longer_accepts_a_caller_supplied_service_uid(self):
-        # Tests [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
-        with self.assertRaises(TypeError):
-            self.env["edge.routing.domain"].get_target_slug_by_domain(
-                "example.com", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
-            )
-
     def test_edge_routing_service_account_sql_check(self):
         # [@ANCHOR: test_edge_routing_service_account_sql_check]
         """

@@ -7,9 +7,6 @@
 from odoo import models, fields, api, exceptions, _
 from odoo.tools import config
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
-from odoo.addons.distributed_redis_cache.redis_cache import (
-    distributed_cache,
-)
 import logging
 import requests
 
@@ -73,8 +70,7 @@ class EdgeRoutingDomain(models.Model):
             if "ham.dns.zone" in env_svc:
                 try:
                     # bug-hunt (2026-09-09): savepoint is load-bearing, not
-                    # decorative -- see the identical note on
-                    # get_target_slug_by_domain below. _get_service_env()'s
+                    # decorative. _get_service_env()'s
                     # own SQL-backed uid lookup can raise a real Postgres
                     # `RAISE EXCEPTION`, which aborts the transaction; the
                     # outer `except Exception` here already recovers this
@@ -133,24 +129,15 @@ class EdgeRoutingDomain(models.Model):
             _logger.warning("Failed to sync domains to PagerDuty: %s", e)
 
     # [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
-    def _invalidate_cache(self, names):
-        valid_names = [n for n in names if n]
-        if valid_names:
-            try:
-                self.env["zero_sudo.security.utils"]._notify_cache_invalidation(
-                    self._name, valid_names
-                )
-            except Exception as e:  # audit-ignore-catch-all
-                # bug-hunt (2026-09-09): _notify_cache_invalidation() issues
-                # a raw `self.env.cr.execute("SELECT pg_notify(...)")` --
-                # any DB/connection-level failure there raises a psycopg2
-                # error, not KeyError/ValueError. A transient DB hiccup
-                # during cache-invalidation notification would have
-                # propagated uncaught out of create()/write()/unlink(),
-                # aborting the whole record mutation over what should be a
-                # best-effort cache ping. Class 20.
-                _logger.warning("Failed to notify cache invalidation: %s", e)
-
+    def _trigger_pager_duty_sync(self):
+        # 2026-09-16: this used to also notify a distributed-cache invalidation for
+        # get_target_slug_by_domain() (a @distributed_cache()-decorated lookup this method fed
+        # on every create()/write()/unlink()) -- deleted along with that method once a repo-wide
+        # grep confirmed its only callers left were its own tests (real custom-domain traffic is
+        # routed by Odoo core's website.domain, and push_all_to_pager_duty() below, the real
+        # consumer of this table, doesn't call it either). Only the PagerDuty sync trigger
+        # remains; the `names` parameter existed solely for the cache-invalidation call, so it's
+        # dropped too.
         try:
             # Trigger cron to run asynchronously, avoiding thread exhaustion and batching O(N) fetches
             cron = self.env.ref('edge_routing.ir_cron_push_pager_duty', raise_if_not_found=False)
@@ -171,7 +158,7 @@ class EdgeRoutingDomain(models.Model):
                 vals["name"] = vals["name"].lower().strip()
 
         records = super(EdgeRoutingDomain, self).create(vals_list)
-        self._invalidate_cache([r.name for r in records])
+        self._trigger_pager_duty_sync()
         return records
 
     # [@ANCHOR: edge_routing:COMM_domain_write]
@@ -179,83 +166,13 @@ class EdgeRoutingDomain(models.Model):
         if "name" in vals and vals["name"]:
             vals["name"] = vals["name"].lower().strip()
 
-        old_names = [r.name for r in self]
         res = super(EdgeRoutingDomain, self).write(vals)
 
-        self._invalidate_cache(old_names + [r.name for r in self])
+        self._trigger_pager_duty_sync()
         return res
 
     # [@ANCHOR: edge_routing:COMM_domain_unlink]
     def unlink(self):
-        names = [r.name for r in self]
         res = super(EdgeRoutingDomain, self).unlink()
-        self._invalidate_cache(names)
+        self._trigger_pager_duty_sync()
         return res
-
-    # [@ANCHOR: edge_routing:COMM_domain_get_target_slug_by_domain]
-    @api.model
-    @distributed_cache()
-    def get_target_slug_by_domain(self, domain):
-        """
-        High-performance RAM cache for domain to slug resolution.
-        """
-        if not domain:
-            return False
-        domain = str(domain).lower().strip()
-
-        # Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
-        # this method is public (no leading underscore), directly callable
-        # via /web/dataset/call_kw. It used to accept a caller-supplied
-        # `override_svc_uid` and do self.with_user(override_svc_uid).env
-        # with zero validation -- letting any authenticated caller pick an
-        # arbitrary uid to run this search as. No real caller anywhere in
-        # the codebase (Python or tests) ever passed this parameter, so
-        # removing it closes the gap with no loss of real functionality,
-        # matching the fix already applied once to this exact shape
-        # (cloudflare.waf.ban_ip(), pre-2026-09-03).
-        if self.env.registry.loaded:
-            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-            if self.env.cr.fetchone():
-                try:
-                    # bug-hunt (2026-09-09): the savepoint is load-
-                    # bearing, not decorative -- _get_service_uid()'s
-                    # own SQL-backed uid lookup does a real Postgres
-                    # `RAISE EXCEPTION` (see
-                    # zero_sudo_get_service_uid() in
-                    # zero_sudo/data/postgres_procedures.xml) on a
-                    # missing/disabled/non-service account. A raw SQL
-                    # RAISE EXCEPTION aborts the CURRENT transaction --
-                    # without a savepoint to roll back to, the
-                    # `target_env = self.env` fallback below would
-                    # still be caught here, but the very next line's
-                    # `target_env[self._name].search(...)` would then
-                    # raise `InFailedSqlTransaction` uncaught, since
-                    # every statement on a poisoned transaction fails
-                    # until it's rolled back to a savepoint (or the
-                    # whole transaction). Class 20, one level deeper.
-                    with self.env.cr.savepoint():
-                        target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                            "edge_routing.edge_routing_service_account"
-                        )
-                except Exception:  # audit-ignore-catch-all
-                    # bug-hunt (2026-09-09): _get_service_env() raises
-                    # AccessError (not KeyError/ValueError) on a bad
-                    # xml_id, plus a possible psycopg2 error from the
-                    # SQL-backed uid lookup -- this fallback-to-self
-                    # path only actually triggered for a KeyError/
-                    # ValueError, so a real service-account resolution
-                    # failure would have crashed domain resolution
-                    # instead of degrading to self.env. Class 20.
-                    _logger.warning("Failed to get service env")
-                    target_env = self.env
-            else:
-                target_env = self.env
-        else:
-            target_env = self.env
-
-        record = (
-            target_env[self._name]
-            .with_context(active_test=False)
-            .search([("name", "=", domain)], limit=1)
-        )
-        return record.target_slug if record else False
