@@ -1692,7 +1692,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 raise AssertionError(
                     "Tour failed due to severed/unresponsive Chrome "
                     "websocket (root cause not yet diagnosed -- see "
-                    "night_shift_todo.md's tour-hang investigation): "
+                    "hams_com night_shift_todo/medium/"
+                    "tour-cdp-websocket-hang-root-cause-1c05ee76.md): "
                     f"{e!r}"
                 ) from None
             else:
