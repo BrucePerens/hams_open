@@ -53,27 +53,40 @@ DB_NAME = os.getenv("DB_NAME", "odoo")
 # This daemon only ever LISTENs on one Postgres channel and runs a
 # constant-expression health check (`SELECT 1`) -- neither touches any
 # table, so it needs no read/write privilege at all, only CONNECT on
-# DB_NAME. Deliberately NOT hard-failing when DB_ENV_FILE is absent and
-# this falls back to the full-privilege "odoo" role, despite this
-# codebase's own fail-fast-over-silent-fallback rule: unlike a corrupted
-# or partial config that would silently produce WRONG behavior, this
-# fallback is functionally correct (the daemon still does exactly what
-# it's supposed to, just with more privilege than it needs) and is the
-# ONLY behavior every existing deployment/test run has ever had -- hard-
-# failing here would brick every install that hasn't been through the
-# brand-new scripts/provision_cache_manager_db_role.py yet, the exact
-# "auto-update-and-warn over hard-bricking" tradeoff this codebase makes
-# elsewhere for safety mechanisms. Log loudly instead, once, so the gap
-# is visible rather than silent.
-DB_USER = os.getenv("DB_USER", "odoo")
-DB_PASS = os.getenv("DB_PASS", "odoo")  # burn-ignore-env: deliberate no-bricking fallback documented above; tracked in night_shift_todo/low/cache-manager-odoo-password-fallback
+# DB_NAME. No fallback password: a missing or misnamed DB_ENV_FILE (the
+# systemd unit uses EnvironmentFile=-, which tolerates that) must stop the
+# daemon, not quietly log in as the full-privilege "odoo" superuser role
+# with a guessable literal password -- see _require_db_credentials().
+# infrastructure.py's own provision_environment() now provisions this
+# role and writes DB_ENV_FILE automatically on every run (night_shift_todo/
+# low/cache-manager-odoo-password-fallback-0ea55461.md: confirmed no prior
+# automated flow ever called scripts/provision_cache_manager_db_role.py,
+# so this file's own absence was the normal case on every deployment,
+# not an edge case); scripts/provision_cache_manager_db_role.py remains
+# available for a remote/manually-administered Postgres host that
+# infrastructure.py's own local-peer-auth provisioning can't reach.
+DB_USER = os.getenv("DB_USER", "")
+DB_PASS = os.getenv("DB_PASS", "")
 if not os.path.exists(DB_ENV_FILE):
     logger.warning(
-        "%s not found -- connecting to Postgres as '%s' with no privilege "
-        "scoping. Run scripts/provision_cache_manager_db_role.py once for "
-        "this deployment to restrict this daemon to CONNECT-only access.",
-        DB_ENV_FILE, DB_USER,
+        "%s not found -- this daemon will refuse to start until it exists. "
+        "Re-run infrastructure.py's own provisioning, or "
+        "scripts/provision_cache_manager_db_role.py directly for a remote "
+        "Postgres host, to create it.",
+        DB_ENV_FILE,
     )
+
+
+# [@ANCHOR: COMM_cache_manager_require_db_credentials]
+# Verified by [@ANCHOR: test_main_refuses_to_start_without_a_database_password]
+def _require_db_credentials():
+    if not DB_USER or not DB_PASS:
+        raise RuntimeError(
+            "DB_USER and DB_PASS must both be set -- refusing to connect to "
+            "PostgreSQL without real, scoped credentials. Run "
+            "scripts/provision_cache_manager_db_role.py (or infrastructure.py's "
+            "own provisioning) for this deployment first."
+        )
 
 # Use PGHOST if provided (e.g. for pgsock in VM)
 if os.getenv("PGHOST"):
@@ -133,6 +146,7 @@ def postgres_notify_handler(connection, pid, channel, payload):
 async def main():
     global redis_client
     logger.info("Initializing Distributed Cache Manager Daemon...")
+    _require_db_credentials()
 
     # 1. Connect to Redis
     #
