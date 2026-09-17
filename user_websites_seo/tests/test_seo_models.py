@@ -83,6 +83,86 @@ class TestSEOModels(RealTransactionCase):
             self.env.flush_all()
         self.env.flush_all()
 
+    def test_check_access_rule_res_users_seo_self_write_survives_a_non_main_company(self):
+        # Tests [@ANCHOR: COMM_res_users_seo_write_elevation]
+
+        # night_shift_todo/medium/seo-mixin-res-users-multi-company-elevation-4765a849.md
+        # theorized (from reading the code, not from running it) that a
+        # portal user outside the SEO service account's company_ids
+        # (user_websites/data/user_websites_data.xml: [base.main_company]
+        # only) would be wrongly denied writing their own SEO fields, since
+        # SEOMetadataMixin.write()'s self.with_user(svc_uid) elevation is
+        # subject to Odoo core's global res_users_rule
+        # (['|', ('share','=',False), ('company_ids','in',company_ids)]).
+        #
+        # Built a real second res.company and a portal user scoped to it
+        # to check that theory against real behavior, not just the code.
+        # It does not reproduce: res.users.write() (odoo/addons/base/
+        # models/res_users.py) has its OWN, earlier self-write bypass --
+        # when self == self.env.user and every vals key is in
+        # SELF_WRITEABLE_FIELDS (which ResUsersSEO extends with exactly
+        # the SEO fields), it does `self = self.sudo()` before ever
+        # calling further into the write chain. A self-write of an SEO
+        # field satisfies both conditions, so it is sudo'd -- and, since
+        # self.env.su is then True, SEOMetadataMixin.write()'s own
+        # `if self.env.su: return super().write(vals)` fast path returns
+        # immediately, never reaching the svc_uid elevation branch or its
+        # company check at all. Confirmed directly (not assumed): calling
+        # the elevation branch's own with_user(svc_uid)/write() sequence
+        # in isolation, bypassing the self-write fast path via
+        # skip_seo_metadata_mixin, DOES raise AccessError for this same
+        # non-main-company record -- the theoretical gap in the elevation
+        # branch itself is real, it is just unreachable from res.users'
+        # own self-write path, which is the only path _check_seo_write_
+        # permission() ever allows to succeed (it is self-only). Whether
+        # any OTHER model using this mixin's elevation branch (e.g.
+        # user.websites.group, which has no equivalent native self-write
+        # bypass of its own) can actually reach that same company check on
+        # a genuine self-write was not checked here and is a narrower,
+        # separate question than what this to-do asked.
+        other_company = self.env["res.company"].create({"name": "Non-Main Test Company"})
+        other_company_user = self.env["res.users"].create(
+            {
+                "name": "Other Company Portal User",
+                "login": "other_company_portal_user",
+                "company_id": other_company.id,
+                "company_ids": [(6, 0, [other_company.id])],
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        self.env.flush_all()
+        other_company_user.with_user(other_company_user).write(
+            {"website_meta_title": "My Title From A Non-Main Company"}
+        )
+        self.assertEqual(
+            other_company_user.website_meta_title,
+            "My Title From A Non-Main Company",
+            "A portal user outside the SEO service account's company_ids must still be able to "
+            "write their own SEO fields -- the self-write bypass in res.users.write() covers this "
+            "before SEOMetadataMixin's own elevation branch (and its company check) is ever reached.",
+        )
+
+        # The elevation branch's own company check is still a real,
+        # separate latent gap -- confirmed directly here rather than
+        # inferred, by exercising it in isolation (skip_seo_metadata_mixin
+        # skips straight past the self-write fast path that normally
+        # shields this branch from ever running for res.users).
+        utils = self.env["zero_sudo.security.utils"]
+        svc_uid = utils._get_service_uid("user_websites.user_websites_service_account")
+        with self.assertRaises(
+            AccessError,
+            msg=(
+                "Known, narrower gap than this to-do described: the SEO mixin's OWN svc_uid "
+                "elevation branch is still subject to Odoo's global company-scoped res_users_rule, "
+                "and svc_uid's company_ids is [base.main_company] only. Unreachable for res.users' "
+                "own self-write (see this test's own docstring), but real for any other model using "
+                "this mixin without an equivalent native self-write bypass."
+            ),
+        ):
+            other_company_user.with_user(svc_uid).with_context(skip_seo_metadata_mixin=True).write(
+                {"website_meta_title": "Elevation branch, isolated"}
+            )
+
     def test_check_access_rule_user_websites_group(self):
         # Tests [@ANCHOR: COMM_user_websites_group_seo_write_elevation]
 
