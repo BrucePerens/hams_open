@@ -42,7 +42,7 @@ class TestDistributedCacheTour(HamsHttpCase):
         """
         Executes the UI tour for the Distributed Redis Cache Manager.
         - Standard Mode: Mocks the backend RPCs to simulate success without network calls.
-        - Integration Mode: Hits the real Redis daemon running in the Jules VM.
+        - Integration Mode: Hits the real Redis daemon running in this test environment.
         """
         is_integration = os.environ.get("HAMS_INTEGRATION_MODE") == "1"
 

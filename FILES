@@ -517,7 +517,7 @@ hams_helpdesk/tests/test_helpdesk_multi_website.py
 hams_helpdesk/tests/test_ui_tours.py
 hams_helpdesk/__init__.py
 hams_helpdesk/hooks.py
-hams_helpdesk/docs/JULES_ISSUES.md
+hams_helpdesk/docs/KNOWN_TEST_ISSUES.md
 hams_helpdesk/docs/journeys/incident_resolution.md
 hams_helpdesk/docs/journeys/shift_handoff_protocol.md
 hams_helpdesk/docs/stories/helpdesk_ticket_creation.md

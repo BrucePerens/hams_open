@@ -53,10 +53,10 @@ If you already had a page at `/privacy` before installing this module, we won't 
 
 ## 🧪 Testing
 
-To run the tests for this module in the Jules VM environment:
+To run the tests for this module:
 
 ```bash
-IN_JULES_VM=1 python3 tools/test.py -u compliance --already-provisioned
+sudo -u odoo env HAMS_ISOLATED_NS=1 python3 hams_shared/tools/test.py -u compliance
 ```
 
 ## 🛠️ Installation
