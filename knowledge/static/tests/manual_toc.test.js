@@ -32,8 +32,11 @@ describe("manual_toc", () => {
         const articleBody = document.createElement("div");
         articleBody.innerHTML = "<h2>Section</h2>";
         instance.el = articleBody;
-        // Must not throw even with no #manual_toc_container anywhere.
-        instance.start();
+        // Must not throw even with no #manual_toc_container anywhere. A bare
+        // call with no expect() is a vacuous hoot test -- caught the first
+        // time this suite actually ran (browser_js(), 2026-09-17): "expected
+        // at least 1 assertion or query event, but none were run."
+        expect(() => instance.start()).not.toThrow();
     });
 
     test("start() does nothing (leaves the container untouched) when the body has no h2/h3 headings", () => {

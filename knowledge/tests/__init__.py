@@ -12,3 +12,4 @@ from . import test_ui_enhancements
 from . import test_ui_personas
 from . import test_ui_tours
 from . import test_website_search
+from . import test_knowledge_hoot
