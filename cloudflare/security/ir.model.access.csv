@@ -32,3 +32,7 @@ access_cloudflare_zone_settings_admin,cloudflare.zone.settings admin,model_cloud
 access_cloudflare_rate_limit_admin,cloudflare.rate.limit admin,model_cloudflare_rate_limit,base.group_system,1,1,1,1
 access_cloudflare_cache_rule_admin,cloudflare.cache.rule admin,model_cloudflare_cache_rule,base.group_system,1,1,1,1
 access_cloudflare_zero_trust_policy_admin,cloudflare.zero.trust.policy admin,model_cloudflare_zero_trust_policy,base.group_system,1,1,1,1
+access_cloudflare_tenant_key_admin,cloudflare.tenant.key admin,model_cloudflare_tenant_key,base.group_system,1,1,1,1
+access_cloudflare_tenant_key_purge_svc,cloudflare.tenant.key purge svc,model_cloudflare_tenant_key,cloudflare.group_cloudflare_purge,1,0,1,0
+access_cloudflare_tenant_key_waf_svc,cloudflare.tenant.key waf svc,model_cloudflare_tenant_key,cloudflare.group_cloudflare_waf,1,0,1,0
+access_cloudflare_tenant_key_tunnel_svc,cloudflare.tenant.key tunnel svc,model_cloudflare_tenant_key,cloudflare.group_cloudflare_tunnel,1,0,1,0

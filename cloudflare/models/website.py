@@ -3,7 +3,7 @@
 from odoo import models, fields, api
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 import logging
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import InvalidToken
 
 
 class WebsiteCloudflare(models.Model):
@@ -61,33 +61,20 @@ class WebsiteCloudflare(models.Model):
         # `test_02_turnstile_secret_fetch` only ever looked like it passed
         # because it read back its own uninvalidated ORM write-buffer cache
         # within the same test method (see cloudflare-three-preexisting-
-        # test-failures-035f2dfc.md). Use the same project-wide crypto
-        # secret resolver `ham_logbook`'s analogous _get_fernet_cipher()
-        # and user_websites already use (`zero_sudo` is already a manifest
-        # dependency of this module). The per-company-key isolation this
-        # method used to gesture at in a comment doesn't apply yet -- there
-        # is only one company in any deployment today -- and is tracked
-        # separately in night_shift_todo/low/cloudflare-per-tenant-
-        # encryption-key-if-multitenancy-lands.md if that ever changes.
-        key = self.env["zero_sudo.security.utils"]._get_crypto_secret()
-        if not key:
-            return None
-        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): a corrupted/malformed
-        # key row (wrong length, not valid url-safe base64) previously raised
-        # ValueError straight out of this method, uncaught -- crashing any
-        # compute (_compute_cf_api_token/_compute_cf_turnstile_secret) that
-        # calls it, since those are @api.depends compute methods with no
-        # try/except of their own. Fail closed to "no Fernet available"
-        # instead, which _crypt_field below already treats the same as "no
-        # key configured" (falls through to its own False/`***ERROR***`
-        # handling rather than raising).
-        try:
-            return Fernet(key.encode("utf-8"))
-        except ValueError as e:
-            logging.getLogger(__name__).warning(
-                "Cloudflare encryption key is malformed: %s", e
-            )
-            return None
+        # test-failures-035f2dfc.md).
+        #
+        # Design update (night-watch, 2026-09-17, per Bruce -- "this module
+        # is for the open source community. Assume some of them will be
+        # multi-tenant. Design it to work for them."): rather than one
+        # shared Fernet key for every company on the instance, each
+        # company gets its own independently-generated key, envelope-
+        # encrypted (see cloudflare.tenant.key) under the single
+        # deployment-wide crypto secret. A compromised or rotated
+        # deployment secret, or a leaked key for one company, never
+        # exposes another company's Turnstile secret or API token.
+        self.ensure_one()
+        company = self.company_id or self.env.company
+        return self.env["cloudflare.tenant.key"]._get_or_create_fernet(company)
 
     # [@ANCHOR: cloudflare:COMM_crypt_field]
     def _crypt_field(self, value, decrypt=False):

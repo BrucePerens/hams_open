@@ -13,6 +13,7 @@ from . import ir_http
 from . import purge_queue
 from . import purge_wizard
 from . import res_config_settings
+from . import tenant_key
 from . import tunnel
 from . import tunnel_route
 from . import tunnel_wizard
