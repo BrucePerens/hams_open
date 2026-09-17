@@ -189,21 +189,41 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         mock_push.assert_called_once()
         _account_id, _token, _cf_tunnel_id, payload = mock_push.call_args[0]
         ingress = payload["config"]["ingress"]
-        self.assertEqual(
-            [rule.get("hostname") for rule in ingress],
-            [
-                "global.example.com",
-                "api.example.com",
-                "ssh.push-config-test.example.com",
-                None,
-            ],
+        # Bug fix (night-watch, 2026-09-17): this used to assertEqual the
+        # *entire* hostname list, which silently assumed this test's two
+        # routes were the only tunnel_id=False global routes in the whole
+        # database. That's false as soon as ham_base is also installed --
+        # ham_base/data/cloudflare_routes.xml ships four real, intentional,
+        # noupdate=1 global template routes of its own (cf_route_relay_
+        # bridge/simulated_band/adif_processor/gdpr_export, sequence
+        # 20-50, no hostname), for other real hams.com backend services.
+        # Those aren't test pollution or a leak to isolate -- they're
+        # legitimate production config that's just as present in any real
+        # deployment as in a combined `-u ham_base,...,cloudflare` test
+        # run, which is exactly when this test used to fail (see
+        # cloudflare-three-preexisting-test-failures-035f2dfc.md item 3).
+        # Assert the real behavior under test -- merging, sequence-sort
+        # ordering, and the mandatory trailing SSH/catch-all -- without
+        # assuming this test owns every global route in the database.
+        hostnames = [rule.get("hostname") for rule in ingress]
+        self.assertIn("global.example.com", hostnames)
+        self.assertIn("api.example.com", hostnames)
+        self.assertLess(
+            hostnames.index("global.example.com"),
+            hostnames.index("api.example.com"),
             "Global route (sequence 5) must sort before the tunnel's own "
-            "route (sequence 10), followed by the SSH route, followed by "
-            "the hostname-less catch-all.",
+            "route (sequence 10).",
+        )
+        self.assertEqual(
+            hostnames[-2:],
+            ["ssh.push-config-test.example.com", None],
+            "The SSH route and the hostname-less catch-all must always be "
+            "the last two ingress entries, appended after every routed "
+            "sequence.",
         )
         # burn-ignore-cloudflared-ingress: asserting on the same real,
         # architecturally correct localhost targets tunnel.py's own
         # ingress config uses (cloudflared runs on the same host as the
         # services it proxies to).
-        self.assertEqual(ingress[2]["service"], "ssh://localhost:22")  # burn-ignore-cloudflared-ingress
-        self.assertEqual(ingress[3]["service"], "http://localhost:8069")  # burn-ignore-cloudflared-ingress
+        self.assertEqual(ingress[-2]["service"], "ssh://localhost:22")  # burn-ignore-cloudflared-ingress
+        self.assertEqual(ingress[-1]["service"], "http://localhost:8069")  # burn-ignore-cloudflared-ingress
