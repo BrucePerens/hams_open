@@ -13,6 +13,7 @@ from odoo.addons.distributed_redis_cache.redis_pool import (
     redis,
     redis_pool,
     get_redis_connection,
+    clear_db_config_cache,
 )
 import threading
 from odoo.tools.lru import LRU
@@ -39,14 +40,18 @@ def poll_and_clear_local_cache(env):
     """Poll Redis's global invalidation counter and clear the process-local L1
     cache if it changed since the last poll from any call site.
 
-    This is the ONLY thing that ever clears `_local_cache`. It must run from
-    every code path that can call a `@distributed_cache()`-decorated method
-    outside of a fresh process start, or that path's L1 entries never expire
-    until the process itself recycles. `ir.http._authenticate` (the request
-    path) is one such call site; `ir.cron._process_job` (the cron-dispatch
-    path, which reaches `@distributed_cache()`-decorated code -- e.g.
-    `cloudflare`'s purge-queue cron -- without ever going through
-    `_authenticate`) is the other.
+    This is the ONLY thing that ever clears `_local_cache`, and (see
+    `night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md`) the
+    ONLY thing that clears `redis_pool._db_configs` on a worker OTHER than the
+    one that saved new Redis settings -- `res_config_settings.set_values()`
+    bumps this same counter via `pg_notify`/`cache_manager.py` for exactly this
+    reason. It must run from every code path that can call a
+    `@distributed_cache()`-decorated method outside of a fresh process start,
+    or that path's L1 entries never expire until the process itself recycles.
+    `ir.http._authenticate` (the request path) is one such call site;
+    `ir.cron._process_job` (the cron-dispatch path, which reaches
+    `@distributed_cache()`-decorated code -- e.g. `cloudflare`'s purge-queue
+    cron -- without ever going through `_authenticate`) is the other.
     """
     global _last_cache_counter
     try:
@@ -56,6 +61,7 @@ def poll_and_clear_local_cache(env):
             if latest and latest != _last_cache_counter:
                 with LRU_LOCK:
                     _local_cache.clear()
+                clear_db_config_cache(env.cr.dbname)
                 _last_cache_counter = latest
     except redis.RedisError as e:
         _logger.warning("Failed to execute stateless Redis poll: %s", e)

@@ -35,6 +35,18 @@ _custom_pools = {}
 # Registry to cache DB configs to avoid repeated queries
 _db_configs: dict[str, tuple[str, int, str | None]] = {}
 
+
+# [@ANCHOR: distributed_redis_cache:clear_db_config_cache]
+def clear_db_config_cache(dbname):
+    """Drops `dbname`'s cached (host, port, password) tuple, forcing the next
+    `get_redis_connection(env)` call to re-read the real, current
+    `res.config.settings` values. Called by `res_config_settings.set_values()`
+    for the saving worker itself, and by `redis_cache.poll_and_clear_local_cache()`
+    for every OTHER worker once the cross-worker invalidation signal reaches it --
+    see that function's own doc comment."""
+    with POOL_LOCK:
+        _db_configs.pop(dbname, None)
+
 # [@ANCHOR: distributed_redis_cache:COMM_get_redis_connection]
 def get_redis_connection(env=None):
     """

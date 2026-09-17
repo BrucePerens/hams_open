@@ -3,6 +3,7 @@
 
 import datetime
 import ast
+import json
 import os
 from unittest.mock import MagicMock
 
@@ -312,4 +313,74 @@ class TestB2Fixes(HamsTransactionCase):
             dbname, redis_pool._db_configs,
             "Saving Redis settings must invalidate this worker's cached "
             "connection config, not leave the stale tuple in place.",
+        )
+
+    def test_b2_11_settings_save_also_notifies_other_workers(self):
+        # Tests [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
+        # night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md: test_b2_10 above
+        # only proves the SAME worker's own _db_configs entry is cleared. Before this fix, that
+        # was the entire effect -- every OTHER worker process kept the stale tuple until it
+        # happened to be restarted. Proves set_values() also fires the real cross-worker
+        # invalidation signal (pg_notify on the same "distributed_cache_invalidation" channel
+        # notify_model_invalidation() uses for real model-cache invalidation, relayed by the real
+        # cache_manager.py daemon -- proven end to end in test_cache_manager_real.py, not
+        # re-proven here) with a payload shape that daemon actually accepts (a truthy "model" and
+        # "dbname", the only two things it validates -- see cache_manager.py's own
+        # broadcast_to_redis()).
+        settings = self.env["res.config.settings"].create({
+            "redis_host": "fresh-host-2",
+            "redis_port": 6381,
+            "redis_password": "fresh-pass-2",
+        })
+        notify_calls = []
+        real_execute = type(self.env.cr).execute
+
+        def spy_execute(cr_self, query, params=None, **kwargs):
+            if params and params[0] == "distributed_cache_invalidation":
+                notify_calls.append(params)
+            return real_execute(cr_self, query, params, **kwargs)
+
+        self.safe_patch_object(type(self.env.cr), "execute", new=spy_execute)
+
+        settings.set_values()
+
+        self.assertEqual(
+            len(notify_calls), 1,
+            "set_values() must fire exactly one pg_notify on the "
+            "distributed_cache_invalidation channel for other workers to relay.",
+        )
+        payload = json.loads(notify_calls[0][1])
+        self.assertTrue(payload.get("model"), "cache_manager.py's broadcast_to_redis() drops any payload with a falsy 'model'.")
+        self.assertEqual(payload.get("dbname"), self.env.cr.dbname)
+
+    def test_b2_12_poll_and_clear_local_cache_also_clears_another_workers_stale_db_config(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_poll_and_clear_local_cache]
+        # night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md: the OTHER half of
+        # the cross-worker fix -- once the invalidation signal above reaches Redis (via the real
+        # daemon, proven separately), every OTHER worker's own next poll_and_clear_local_cache()
+        # call (already running on every request/cron dispatch) must notice the counter changed
+        # and clear ITS OWN stale _db_configs entry too, not just _local_cache. Uses a fake Redis
+        # client so the counter change is deterministic, matching
+        # test_cron_dispatch_actually_clears_a_stale_l1_entry's own established style in
+        # test_cron_cache_interceptor.py.
+        dbname = self.env.cr.dbname
+        redis_pool._db_configs[dbname] = ("stale-host", 1234, "stale-pass")
+        redis_cache._last_cache_counter = "old-counter-value"
+
+        class FakeRedis:
+            def get(self, key):
+                assert key == "global_cache_invalidation_counter"
+                return "new-counter-value"
+
+        self.safe_patch(
+            "odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection",
+            return_value=FakeRedis(),
+        )
+
+        redis_cache.poll_and_clear_local_cache(self.env)
+
+        self.assertNotIn(
+            dbname, redis_pool._db_configs,
+            "a changed invalidation counter must clear this worker's stale _db_configs entry too, "
+            "the same as it already clears _local_cache.",
         )

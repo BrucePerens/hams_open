@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import json
+
 from odoo import fields, models
 
 from odoo.addons.distributed_redis_cache import redis_pool as _redis_pool_module
@@ -37,20 +39,25 @@ class ResConfigSettings(models.TransientModel):
         # is to verify the config an admin just changed, but which would
         # silently keep testing the OLD cached config instead.
         #
-        # KNOWN LIMITATION, left as-is deliberately rather than solved
-        # here: `_db_configs` is a plain process-local dict, not a
-        # cross-worker cache. Popping this worker's own entry only fixes
-        # the request that lands on the SAME worker that handled the
-        # save; other worker processes still hold the stale tuple until
-        # they happen to be restarted. This module already accepts an
-        # equivalent restart-required caveat for the cache_manager.py
-        # daemon itself (see hooks.py's post_init_hook comment) -- fixing
-        # this cross-worker for real would mean propagating the change
-        # via the existing pg_notify/global-counter mechanism
-        # (notify_model_invalidation) and is a bigger change than this
-        # bug-hunt pass's scope; still a strict improvement over "never,
-        # on any worker, until every worker is restarted."
+        # night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md: `_db_configs` is
+        # a plain process-local dict, not a cross-worker cache -- popping this worker's own entry
+        # only fixed the request that landed on the SAME worker that handled the save; other
+        # worker processes kept the stale tuple until they happened to be restarted. Propagated
+        # cross-worker via the same pg_notify -> cache_manager.py -> Redis
+        # global_cache_invalidation_counter path `notify_model_invalidation()` uses for real
+        # model-cache invalidation. Not `notify_model_invalidation()` itself: it requires a real
+        # Odoo model name (`model_name not in env` is a hard fail), and `_db_configs` isn't
+        # model-backed data at all -- this fires the identical raw pg_notify shape by hand
+        # instead. `poll_and_clear_local_cache()` (redis_cache.py) is what every OTHER worker
+        # already runs on every request/cron dispatch to notice the counter changed; it now also
+        # clears `_db_configs` there, not just `_local_cache`.
         res = super().set_values()
-        with _redis_pool_module.POOL_LOCK:
-            _redis_pool_module._db_configs.pop(self.env.cr.dbname, None)
+        dbname = self.env.cr.dbname
+        _redis_pool_module.clear_db_config_cache(dbname)
+        payload = json.dumps(
+            {"model": "distributed_redis_cache.res_config_settings", "dbname": dbname}
+        )
+        self.env.cr.execute(
+            "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
+        )
         return res
