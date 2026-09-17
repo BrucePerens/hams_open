@@ -163,7 +163,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         method signature.
         """
         with self.assertRaises(TypeError):
-            self.env["user.websites.group"].get_record_by_slug(
+            self.User.get_record_by_slug(
                 "some-slug", override_svc_uid=SUPERUSER_ID  # burn-ignore-superuser-rejection-test
             )
 
