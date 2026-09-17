@@ -54,6 +54,19 @@ class TestCloudflareAPIs(HamsTransactionCase):
 
         website = self.env["website"].get_current_website()
         website.write({"cloudflare_turnstile_secret": "my_super_secret_key"})
+        # Bug fix (night-watch, 2026-09-17): without this, the write above
+        # leaves "my_super_secret_key" sitting in this record's ORM cache
+        # from the inverse method's own setattr, and the read below can be
+        # satisfied straight out of that cache without ever re-running
+        # _compute_cf_turnstile_secret -- i.e. without ever exercising a
+        # real decrypt. That let this test pass for a long time even while
+        # the underlying encrypt/decrypt mechanism was completely broken
+        # (see cloudflare-three-preexisting-test-failures-035f2dfc.md).
+        # Force a fresh compute so this test actually proves a real
+        # encrypt-then-decrypt round trip.
+        website.invalidate_recordset(
+            ["cloudflare_turnstile_secret", "cloudflare_turnstile_secret_crypt"]
+        )
 
         mock_post = self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_api.session.post"
@@ -70,6 +83,44 @@ class TestCloudflareAPIs(HamsTransactionCase):
         called_data = mock_post.call_args[1]["data"]
         self.assertEqual(called_data["secret"], "my_super_secret_key")
         self.assertEqual(called_data["response"], "fake_token_123")
+
+    def test_02c_get_fernet_round_trip(self):
+        # Tests [@ANCHOR: cloudflare:COMM_get_fernet]
+        # Tests [@ANCHOR: cloudflare:COMM_crypt_field]
+        # Pins the encryption mechanism directly, independent of the
+        # compute/inverse field machinery: _get_fernet() must resolve a
+        # real key (HamsTransactionCase's own setUp already provisions
+        # HAMS_CRYPTO_KEY for every test) and _crypt_field must round-trip
+        # a plaintext through encrypt then decrypt unchanged. Added
+        # night-watch, 2026-09-17 alongside the fix that made _get_fernet
+        # use zero_sudo's shared _get_crypto_secret() resolver instead of
+        # a nonexistent field on daemon.key.registry.
+        website = self.env["website"].get_current_website()
+
+        fernet = website._get_fernet()
+        self.assertIsNotNone(
+            fernet, "_get_fernet() must resolve a real key under HAMS_CRYPTO_KEY"
+        )
+
+        encrypted = website._crypt_field("plaintext-value")
+        self.assertTrue(encrypted)
+        self.assertNotEqual(encrypted, "plaintext-value")
+        decrypted = website._crypt_field(encrypted, decrypt=True)
+        self.assertEqual(decrypted, "plaintext-value")
+
+    def test_02d_get_fernet_none_without_crypto_secret(self):
+        # Tests [@ANCHOR: cloudflare:COMM_get_fernet]
+        # Fail-closed check: if the shared crypto secret resolver can't
+        # produce a key, _get_fernet() must return None rather than
+        # raising or fabricating one.
+        mock_secret = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils"
+            "._get_crypto_secret"
+        )
+        mock_secret.return_value = ""
+
+        website = self.env["website"].get_current_website()
+        self.assertIsNone(website._get_fernet())
 
     def test_02b_verify_token_works_for_an_unprivileged_caller(self):
         # Tests [@ANCHOR: COMM_cf_turnstile_verify]

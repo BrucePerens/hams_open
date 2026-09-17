@@ -49,12 +49,27 @@ class WebsiteCloudflare(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_get_fernet]
     def _get_fernet(self):
-        # The key MUST be retrieved securely.
-        # In multi-tenant systems, environment variables are shared and break isolation.
-        # We enforce fetching from the daemon key registry.
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_tunnel")
-        key_record = self.env["daemon.key.registry"].with_user(svc_uid).search([("name", "=", "cloudflare_encryption_key")], limit=1)
-        key = key_record.value if key_record else None
+        # Bug fix (night-watch, 2026-09-17): this used to search
+        # `daemon.key.registry` for a `cloudflare_encryption_key` row and
+        # read `.value` off it. That model has no `value` field at all --
+        # it's a write-only-to-disk API-key rotation registry for daemons
+        # (name/user_id/env_file_path/company_id/last_rotated), not a
+        # key-value secret store. Since no such row was ever created in any
+        # environment (there is nowhere to create one from), the search
+        # always returned empty and this always fell through to `None`,
+        # silently disabling Turnstile/API-token encryption everywhere --
+        # `test_02_turnstile_secret_fetch` only ever looked like it passed
+        # because it read back its own uninvalidated ORM write-buffer cache
+        # within the same test method (see cloudflare-three-preexisting-
+        # test-failures-035f2dfc.md). Use the same project-wide crypto
+        # secret resolver `ham_logbook`'s analogous _get_fernet_cipher()
+        # and user_websites already use (`zero_sudo` is already a manifest
+        # dependency of this module). The per-company-key isolation this
+        # method used to gesture at in a comment doesn't apply yet -- there
+        # is only one company in any deployment today -- and is tracked
+        # separately in night_shift_todo/low/cloudflare-per-tenant-
+        # encryption-key-if-multitenancy-lands.md if that ever changes.
+        key = self.env["zero_sudo.security.utils"]._get_crypto_secret()
         if not key:
             return None
         # Bug fix (bug-hunt, review_tier 1, 2026-09-09): a corrupted/malformed
