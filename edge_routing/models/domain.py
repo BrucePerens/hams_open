@@ -144,8 +144,7 @@ class EdgeRoutingDomain(models.Model):
             if cron:
                 cron._trigger()
         except Exception as e:  # audit-ignore-catch-all
-            # bug-hunt (2026-09-09): broadened alongside the cache-invalidation
-            # guard above -- cron._trigger() is a DB write (ir.cron.trigger)
+            # bug-hunt (2026-09-09): cron._trigger() is a DB write (ir.cron.trigger)
             # that can fail for reasons beyond KeyError/ValueError; this path
             # is explicitly "best effort, don't block the CRUD op." Class 20.
             _logger.warning("Failed to trigger PagerDuty sync cron: %s", e)
