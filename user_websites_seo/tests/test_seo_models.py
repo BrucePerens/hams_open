@@ -182,6 +182,62 @@ class TestSEOModels(RealTransactionCase):
             self.env.flush_all()
         self.env.flush_all()
 
+    def test_check_access_rule_user_websites_group_seo_self_write_denied_for_a_non_main_company(self):
+        # Tests [@ANCHOR: COMM_user_websites_group_seo_write_elevation]
+
+        # night_shift_todo/medium/seo-mixin-group-company-elevation-b12c2366.md: the narrower,
+        # not-yet-confirmed sibling of
+        # test_check_access_rule_res_users_seo_self_write_survives_a_non_main_company above.
+        # That test found res.users' own self-write is SHIELDED from
+        # SEOMetadataMixin's svc_uid-elevation company check by an earlier,
+        # unrelated bypass in res.users.write() itself (SELF_WRITEABLE_FIELDS
+        # -> self.sudo()). user.websites.group has no such bypass (confirmed
+        # by reading write() in user_websites/models/user_websites_groups.py:
+        # it wraps super().write() in a savepoint for slug-constraint error
+        # relabeling only, nothing self/sudo related), so a genuine member's
+        # self-write of their own group's SEO fields should reach the
+        # mixin's elevation branch for real, and from there the same global
+        # res_users_rule company check confirmed real (in isolation) by the
+        # test above -- svc_uid's company_ids is [base.main_company] only.
+        # Built a real second res.company and a group actually scoped to it
+        # (company_id is a required Many2one, default self.env.company, so
+        # must be passed explicitly at create time) to check this for real,
+        # not by re-applying the res.users result: confirmed to reproduce.
+        other_company = self.env["res.company"].create({"name": "Non-Main Test Company 2"})
+        other_company_member = self.env["res.users"].create(
+            {
+                "name": "Other Company Group Member",
+                "login": "other_company_group_member",
+                "company_id": other_company.id,
+                "company_ids": [(6, 0, [other_company.id])],
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        other_company_group = self.env["user.websites.group"].create(
+            {
+                "name": "Other Company Test SEO Group",
+                "website_slug": "other-company-test-seo-group",
+                "company_id": other_company.id,
+                "member_ids": [(6, 0, [other_company_member.id])],
+            }
+        )
+        self.env.flush_all()
+        with self.assertRaises(
+            AccessError,
+            msg=(
+                "This is the real, non-latent gap seo-mixin-group-company-elevation-b12c2366.md "
+                "asked to confirm: a user.websites.group member, self-writing their own group's "
+                "SEO fields, has no native self-write bypass shielding them from "
+                "SEOMetadataMixin's svc_uid elevation, and svc_uid's company_ids "
+                "([base.main_company] only) does not cover this group's own non-main company."
+            ),
+        ):
+            other_company_group.with_user(other_company_member).write(
+                {"website_meta_title": "Group Title From A Non-Main Company"}
+            )
+            self.env.flush_all()
+        self.env.flush_all()
+
     def test_xpath_rendering_res_users(self):
         # [@ANCHOR: COMM_test_xpath_rendering_res_users]
         """Prove that the SEO notebook page correctly renders in res.users."""
