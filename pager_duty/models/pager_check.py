@@ -791,7 +791,6 @@ class PagerCheck(models.Model):
     def update_lets_encrypt_domains(self, domains):
         """
         Updates the target of the 'certbot' pager checks to monitor the provided domains.
-        Soft-depends on ham_dns.
         """
         certbot_checks = self.env["pager.check"].search(
             [("check_type", "=", "certbot")], limit=1
@@ -810,34 +809,17 @@ class PagerCheck(models.Model):
         else:
             certbot_checks.write({"target": ",".join(domains)})
 
-        # Soft-depend on ham_dns. Deliberately kept soft, not a real
-        # __manifest__.py dependency (asked and confirmed with Bruce
-        # 2026-09-12): this is a pure convenience integration (auto-create
-        # a DNS record for a domain being registered for certbot
-        # monitoring) on top of this method's own real job, which needs
-        # nothing from ham_dns at all -- and ham_dns lives in hams_com
-        # while pager_duty lives in hams_open, so a hard dependency would
-        # mean hams_open could no longer be installed/tested standalone.
-        HamDnsRecord = self.env["ham.dns.record"] if "ham.dns.record" in self.env else None  # burn-ignore-env burn-ignore-optional-cross-repo-dep
-        if HamDnsRecord is not None:
-            # Reconfigure DNS if ham_dns is installed
-            try:
-                existing_records = HamDnsRecord.search(
-                    [("name", "in", domains)], limit=1000
-                ).mapped("name")
-                new_domains = [d for d in domains if d not in existing_records]
-                for domain in new_domains:
-                    HamDnsRecord.create(
-                        {
-                            "name": domain,
-                            "record_type": "A",
-                            # Typically the IP would be determined from the environment
-                        }
-                    )
-            except (KeyError, ValueError) as e:  # audit-ignore-catch-all
-                _logger.warning("Failed to auto-configure ham_dns: %s", e)
-
-        # Push changes to JSON so the daemon picks it up
+        # night_shift_todo/medium/pager-check-lets-encrypt-dns-access-error-7c4e17ae.md: this
+        # method used to also soft-depend on ham_dns to auto-create a matching A record when
+        # ham_dns happened to be installed. Removed rather than fixed: the calling account
+        # (user_pager_service_internal) had no ACL grant on ham.dns.record, the except clause
+        # didn't even catch the resulting AccessError, and the create() itself was missing two
+        # other required fields (zone_id, content) that this method never had a real way to
+        # supply -- content's own comment admitted "Typically the IP would be determined from
+        # the environment", never implemented. Auto-configuring a real DNS record needs a real
+        # zone to put it in and a real public address to give it; neither exists in this
+        # method's own scope today, so this stays pager_duty's own job (update the certbot
+        # check's target) with no ham_dns side effect at all.
         self.action_push_to_json()
 
     @api.constrains("parent_check_id")

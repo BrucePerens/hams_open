@@ -185,6 +185,26 @@ class TestPagerControllers(HamsHttpCase):
         self.assertTrue(check, "update_domains must create/find the certbot pager.check.")
         self.assertEqual(check.target, "example.com,hams.com")
 
+    def test_06b_update_domains_does_not_touch_ham_dns_even_when_it_is_installed(self):
+        # Tests [@ANCHOR: pager_duty:update_lets_encrypt_domains]
+        # night_shift_todo/medium/pager-check-lets-encrypt-dns-access-error-7c4e17ae.md:
+        # update_lets_encrypt_domains() used to also try to auto-create a ham.dns.record as
+        # user_pager_service_internal, which has no ACL grant on that model -- an uncaught
+        # AccessError whenever ham_dns happened to be installed alongside pager_duty. The
+        # auto-configure branch was removed rather than fixed (it also created records missing
+        # two other required fields it never had a real way to supply). Only meaningful under
+        # `test.py -u pager_duty,ham_dns` together; harmless (and equivalent to re-checking
+        # test_06's own assertion) if ham_dns isn't installed in this run.
+        self.env["pager.check"].update_lets_encrypt_domains(["example.org"])
+        check = self.env["pager.check"].search([("check_type", "=", "certbot")], limit=1)
+        self.assertTrue(check)
+        self.assertEqual(check.target, "example.org")
+        if "ham.dns.record" in self.env:  # burn-ignore-optional-cross-repo-dep: test-only, checks whether ham_dns happens to be installed in this run
+            self.assertFalse(
+                self.env["ham.dns.record"].search([("name", "=", "example.org")]),
+                "update_lets_encrypt_domains must not create a ham.dns.record as a side effect.",
+            )
+
     def test_07_update_domains_increments_the_failed_attempt_counter_on_a_wrong_secret(self):
         # Tests [@ANCHOR: pager_duty:update_domains]
         # update_domains previously had no rate limit at all on repeated
