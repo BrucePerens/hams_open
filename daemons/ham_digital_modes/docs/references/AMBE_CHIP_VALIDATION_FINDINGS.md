@@ -1806,6 +1806,39 @@ script are committed at `docs/references/ratet27_captures/analyze_g0_pitch_hypot
 hypothesis with denser, purely in-voice-range frequency sampling rather than re-deriving it from
 scratch.
 
+**Follow-up, upgraded from lead to confirmed finding: `g0` genuinely carries a real pitch-related
+quantizer in FEC mode.** The messy result above used single sine-tone captures at scattered
+frequencies (including several outside AMBE's own voice-pitch range); a focused follow-up
+(`examples/p25_ratet27_capture_dense_pitch_sweep.rs`) instead swept 20 frequencies *strictly within*
+the documented 57-444Hz range at 20Hz steps, using the **sawtooth** signal (already established
+elsewhere in this investigation as far more reliable than sine for convergence), with 60 settling
+frames and 8 captured frames per frequency. Result: **19 of the 20 frequencies gave a perfectly
+stable, single repeated `g0` value across all 8 captured frames** (only 80Hz showed the same kind of
+low-frequency bistable oscillation already documented elsewhere in this investigation for D-STAR
+and this crate's own encoder), and those 19 stable values form a clean, almost perfectly monotonic
+decreasing staircase as frequency increases: `60->3945, 100->3065, 120->2745, 140->2237 (=160),
+180->1085, 200->1597 (=220), 240->1149 (=260), 280->765 (=300=320), 340->445 (=360=380),
+400->125 (=420), 440->61`. **Spearman rank correlation with frequency: -0.952.** The value
+*decreasing* with increasing frequency matches the textbook `quantize_fundamental_frequency`
+formula's own sign convention (`floor(4*pi/omega0_hat - 39)`, which decreases as frequency/omega0
+increases), and the coarsening step size at high frequency versus finer steps at low frequency (a
+real signature of any quantizer that's uniform in *period*, i.e. `1/frequency`, rather than in
+frequency itself) matches the qualitative shape a genuine AMBE-family pitch quantizer should have.
+One real anomaly, disclosed rather than smoothed over: 180Hz's value (1085) dips below both its
+neighbors (140/160's 2237 and 200/220's 1597), breaking strict monotonicity at that single point --
+plausibly a quantizer-boundary interaction with the discrete `L_hat`/`K_hat` harmonics-count step
+function rather than a measurement error (every other point was perfectly frame-stable), but not
+yet explained. **This does not need Gray-decoding to show the relationship** (unlike NOFEC mode's
+own `u2` field, per §9) -- plain binary `g0` already correlates cleanly, a real, disclosed structural
+difference between how the two modes' pitch-related fields are quantized/coded, not an
+inconsistency in this investigation's own analysis. Taken together with `g0`'s already-confirmed
+bit-for-bit identity to `fec.rs`'s Golay code, this is the strongest, most concrete semantic-layer
+result of the session: **RATET(27) FEC mode's pitch-related parameter lives in `g0`** (wire
+positions `{0,1,12,13,24,25,36,37,48,49,60,61,72,73,84,85,96,97,108,109,120,121,132}`), plain
+binary, monotonically decreasing with frequency. The exact quantizer formula (bin edges, whether it
+matches `quantize_fundamental_frequency`'s literal constants or a chip-specific variant) remains
+unfit -- a natural next step given this clean staircase data is now committed and reproducible.
+
 **D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
 both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
 dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
