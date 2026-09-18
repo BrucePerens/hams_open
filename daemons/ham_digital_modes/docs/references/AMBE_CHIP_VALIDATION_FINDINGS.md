@@ -946,31 +946,68 @@ flipped, by 22.18 dB, ~58x above the noise floor, with zero ambiguity anywhere e
 position matches the noise-floor cycle exactly, to two decimal places). Bit 143 is the very last bit
 of the 144-bit frame; bit 131 is 12 bits before it (byte 16, bit-value `0x10`, versus byte 17's LSB).
 
-**Only 2 found, not the up to 7 textbook IMBE would predict for its unprotected raw bits**: read as a
-real, informative negative rather than a limitation of the method -- a pure, clean, low-frequency
-voiced tone likely carries near-zero energy in whatever parameters the *other* unprotected bits
-control (plausibly unvoiced-band amplitude, given a clean sinusoid has essentially no unvoiced
-spectral content), so flipping them has no detectable effect on *this specific* test signal's output,
-independent of whether they're FEC-protected. This does not contradict the two clean positive hits --
-it means a spectrally richer test signal is needed to find the rest. Next step: repeat this oracle
-with a test signal that has genuine broadband/unvoiced content (e.g. filtered noise, or a signal
-straddling the voiced/unvoiced classification boundary) to try to surface the remaining unprotected
-positions, then pair-flip among the identified FEC-protected positions to empirically discover
-codeword boundaries (two flips in the same Hamming(15,11) codeword should change output; two flips in
-the same Golay(23,12) codeword should still be corrected, since Golay corrects up to 3 errors) --
-this would recover the real interleave table empirically, without needing to guess any convention.
+**Correction (caught on review before over-reading this): 2 is exactly the textbook-predicted count
+here, not a shortfall.** This crate's own, independently-verified `bit_prioritization::
+extract_fundamental_frequency_quantizer` (cross-checked against GopherTrunk's own implementation) is
+`b_hat_0 = ((u[0]>>6)<<2) | ((u[7]>>1)&0b11)` -- two of the pitch quantizer's bits live in `u[7]`
+(`c7`, the 7 raw/unprotected bits), at `c7`'s own internal bit-index 1 and 2. For a steady 200 Hz
+voiced tone, flipping either pitch bit shifts every harmonic, which is exactly the 22 dB effect found.
+The other 5 raw bits are low-order spectral-amplitude LSBs; for a clean sinusoid whose non-fundamental
+bands are already near the amplitude floor, flipping those has no detectable effect on *this specific*
+test signal -- independent of whether they're FEC-protected. So 131 and 143 are almost certainly
+`c7`'s own two pitch-LSB positions on the wire -- a strong, named ground-truth constraint, not merely
+"2 out of 7 found so far". Next step: use these two known positions to test which framing convention
+(interleave direction, dibit order, codeword-bit-index direction, byte/bit order) places `c7`'s
+bit-index-1 and bit-index-2 at exactly wire positions 131 and 143 -- zero additional chip time needed,
+since this is a pure combinatorial check against already-published table data (see below).
 
 **Tried, and a genuine methodological limit found**: re-ran the same oracle with a tone-plus-fixed-
 noise test signal (`tone_noise` mode), hoping the added broadband content would activate whatever
-the other ~5 expected unprotected bits control. Result: the noise floor itself jumps to 5-11 dB
-(versus the pure tone's 0.38 dB), and the two already-confirmed hits (131, 143) no longer stand out
-at all -- both land squarely inside that same 5-11 dB range. This isn't a bug in the harness: it
-reveals a real, sensible property of the chip's own synthesis -- voiced bands are reconstructed
-deterministically (a continuous, phase-tracked sinusoid, hence the tiny sub-dB floor), while unvoiced
-bands are synthesized from the decoder's own internal noise generator, which is genuinely stochastic
-frame to frame even for byte-identical encoded parameters (the correct design choice for natural-
-sounding comfort noise, but it means this decode-comparison oracle can only cleanly probe parameters
-that voiced synthesis actually exercises). Any remaining unprotected bits that control unvoiced-band
-amplitude are therefore not resolvable by this specific method; a different oracle (e.g. comparing
-long-run average energy per critical band across many decodes, rather than a single decode's
-spectrum) would be needed to reach them.
+the other ~5 raw bits (spectral-amplitude LSBs) control. Result: the noise floor itself jumps to
+5-11 dB (versus the pure tone's 0.38 dB), and the two already-confirmed hits (131, 143) no longer
+stand out at all -- both land squarely inside that same 5-11 dB range. This isn't a bug in the
+harness: it reveals a real, sensible property of the chip's own synthesis -- voiced bands are
+reconstructed deterministically (a continuous, phase-tracked sinusoid, hence the tiny sub-dB floor),
+while unvoiced bands are synthesized from the decoder's own internal noise generator, which is
+genuinely stochastic frame to frame even for byte-identical encoded parameters (the correct design
+choice for natural-sounding comfort noise, but it means this decode-comparison oracle can only
+cleanly probe parameters that voiced synthesis actually exercises). Any remaining unprotected bits
+are therefore not resolvable this way; a different oracle (e.g. comparing long-run average energy
+per critical band across many decodes, rather than a single decode's spectrum) would be needed.
+
+**An 8-anchor pair-flip sweep for Hamming(15,11) codeword membership, and why its clean-negative
+result is inconclusive, not a finding against Hamming being present**
+(`examples/p25_ratet27_pairflip_anchor_sweep.rs`): picked 8 positions spread across the frame and,
+for each, flipped it together with every one of the other 141 non-raw candidates, checking for a
+dB-spectral change beyond a calibrated threshold -- a Hamming(15,11) codeword corrects only 1 error,
+so two flips sharing one should be uncorrectable and change the output, while two flips sharing a
+Golay(23,12) codeword (which corrects up to 3) or landing in different codewords entirely should
+still show no effect. **Result: all 8 anchors x 141 partners (1128 pairs) came back clean, zero
+detected effect.** Read carefully rather than as "no Hamming codewords exist here": this test has
+the exact same inert-parameter blind spot as the single-bit oracle -- `c4-c6` (the next-lowest-
+priority spectral-amplitude bits, per textbook IMBE) would show the same near-zero effect on a clean
+tone that the other 5 raw bits did, whether or not a Hamming miscorrection actually occurred. The
+pair threshold (5x the 0.38 dB tone-only noise floor, so 5.00 dB) would also miss any genuine but
+modest 1-4 dB Hamming effect. This result belongs in the record as "inconclusive for Hamming
+membership under a pure tone", not as evidence against a Hamming-coded structure being present --
+and a full exhaustive C(142,2) pairing (~40 minutes of chip time) was deliberately *not* run given
+this same blind spot would limit it too.
+
+**A zero-chip-time convention search using {131, 143} as ground truth**
+(`examples/p25_ratet27_c7_pitch_bit_convention_search.rs`): rather than spend more chip time, used
+the two known `c7` pitch-bit wire positions as a hard constraint against every plausible framing
+convention -- byte order x bit direction (this investigation's usual 4 hypotheses), Table 5-1's own
+dibit convention (swapped or not), `TIA_INDEX`'s MSB-first convention (reversed or not), and whether
+the chip's raw serial data is OTA-interleaved via Table 5-1 at all versus natural contiguous
+codeword order (already ruled out for general Golay validity by the sliding-window scan, §13, but
+cheap to also check here). **Result: a clean negative across all 24 systematically-tried
+combinations** -- no single consistent convention places both `c7[1]` and `c7[2]` at exactly
+`{131, 143}` (one near-miss noted for transparency: two *different*, mutually incompatible
+sub-variants each land exactly on one of the two positions individually -- `dibit_swap=true,
+reverse_bytes=false, lsb_first=false` gives `c7[2]=131`, and the same dibit_swap/reverse_bytes with
+`lsb_first=true` gives `c7[1]=143` -- but no *single* convention produces both simultaneously, and
+with 24 variants x 2 positions each, a couple of incidental individual matches are not surprising by
+chance). This means the chip's real interleave (if Table 5-1 applies to its raw serial data at all)
+differs from every tried convention, or genuinely isn't Table 5-1-based -- but `{131, 143}` stands as
+a real, hard, reusable constraint for testing any future candidate table, a first for this whole
+RATET(27) investigation.
