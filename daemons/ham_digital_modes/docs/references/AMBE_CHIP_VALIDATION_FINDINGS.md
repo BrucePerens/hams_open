@@ -1924,3 +1924,35 @@ now-stale `ambe_chip_validate_p25_wireformat.rs` (a search harness built on the 
 that RATET(27) uses PRN whitening, since disproven by this session's GF(2) rank analysis) and is
 the concrete "duplicated in software, validated against the chip" deliverable for RATET(27)'s FEC
 layer this whole session's work has been building toward.
+
+## 24. First real signal on `g1`/`g2`'s semantic content: a moderate correlation with harmonic count, zero chip time
+
+With `g0` now understood as a gain/energy quantizer (section 23), the next open semantic question is
+what `g1` and `g2` (the second and third Golay blocks) carry. A zero-chip-time re-analysis of the
+already-committed dense pitch sweep (`dense_pitch_sweep_57to444hz.tsv`, §23) against this crate's own
+`vuv::harmonics_count` (`L_hat`) and `vuv::frequency_bands_count` (`K_hat`) -- both deterministic,
+purely-pitch-derived integer step functions already implemented and tested in this codebase -- found
+a real, if imperfect, correlation:
+
+| block | Spearman vs `L_hat` | Spearman vs `K_hat` |
+|---|---|---|
+| `g1` | 0.558 | 0.508 |
+| `g2` | 0.689 | 0.650 |
+
+Neither is as clean as `g0`'s own -0.952 against frequency, but both are real, reproducible signals
+(computed once, deterministically, from already-captured data -- see
+`analyze_g1_g2_lhat_khat_correlation.py`). The raw values show a genuine staircase-like structure:
+`g1` sits near a stable ~3410 for most of the mid-range (100-260Hz, `L_hat` 37 down to 13) then drops
+sharply to ~1360 for the whole 320-440Hz range (`L_hat` 11 down to 8), with different values again at
+the very lowest frequencies (60/80Hz, `L_hat` 61/46). `g2` shows a similar multi-stage pattern (values
+cluster around 1506/2530-ish for `L_hat` in the low-to-mid teens/twenties, drop to ~480 for `L_hat`
+around 11-12, drop again to ~34 for `L_hat` 9-10, and drop to ~2 for `L_hat` 8-9). **This is real,
+new information about previously-unknown semantic content** (a moderate, genuine relationship to
+harmonic count, not the null result this investigation would show if `g1`/`g2` were unrelated to
+pitch structure at all) but does not yet pin down an exact formula or confirm `L_hat`/`K_hat` as the
+literal encoded quantity rather than some other pitch-derived parameter that happens to correlate
+with them (e.g. a genuine higher-order spectral/gain-vector coefficient, whose own natural range
+also depends on `L_hat` per this crate's own `tables::block_lengths_for_l`). A natural next step,
+requiring more chip time this session didn't spend: a systematic sweep specifically targeting the
+`L_hat`/`K_hat` step-boundary frequencies (rather than the 20Hz-even grid used here, which mostly
+missed them) to see whether `g1`/`g2` jump in lock-step with `L_hat`'s own exact transition points.
