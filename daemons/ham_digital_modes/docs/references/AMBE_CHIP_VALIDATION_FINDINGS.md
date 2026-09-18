@@ -1551,3 +1551,31 @@ field) is added entirely by the surrounding radio/modem framing, external to the
 chip's own channel bitstream is 100% voice+FEC, confirming there is no host-exposed pass-through path
 that would have let this investigation bypass vocoder synthesis directly (the sawtooth-signal fix in
 §19/§20 remains the real, practical workaround for that problem).
+
+## 22. Closing the loop: the original 6-hit pair sweep (task `b6tc68au3`, §15) cross-validated against the now-complete block map
+
+Per a direct request to check on this task: it completed hours before this session's §17-21 work
+even began (833.2s runtime, exit code 0, output already on disk), and its 6 confirmed hits --
+`(8,92)`, `(8,127)`, `(32,127)`, `(68,103)`, `(103,127)`, `(128,139)` -- are exactly what §15 already
+documented and analyzed at the time. That analysis is not being redone here; what's new is checking
+those 6 pairs against the fully-mapped 8-block structure §§18-21 established using a completely
+different, more reliable methodology (fresh-process checksum equality instead of dB-threshold
+sweeping on one long-lived connection).
+
+**Every one of the 6 hits falls entirely within `u4`'s exact confirmed 15-member set**
+(`{8, 20, 32, 44, 56, 68, 80, 92, 103, 104, 115, 116, 127, 128, 139}`) -- both positions of all 6
+pairs are `u4` members, with zero exceptions. This is a clean, independent cross-validation: a
+dataset collected hours earlier, with a since-shown-unreliable methodology (dB-threshold, no
+sawtooth signal, single long connection), landed 100% inside the block this session went on to map
+completely and independently through a different technique.
+
+**It also retroactively explains this session's central obstacle.** The old sweep tested all
+C(142,2) pairs across the *entire* 144-bit frame but found real effects *only* within `u4` -- not
+because the other 7 sub-blocks (3 more Hamming blocks' worth of pairs, 4 Golay blocks' worth, and
+`c7`'s own raw bits) don't exist or don't matter, but because none of their codewords happened to be
+audible on the plain 200 Hz sine test signal that sweep used. This is precisely the "pure tone is
+blind to most of the wire format" problem diagnosed and fixed in §§19-20 with the sawtooth signal,
+visible in hindsight all the way back in this much earlier dataset. `u4` was simply the one block
+whose confirmed codewords all happened to be audible on a sine tone -- the lucky block, not a
+special one -- which is exactly what let this whole investigation get started in the first place
+(§15) before the real, larger structure came into view (§§17-21).
