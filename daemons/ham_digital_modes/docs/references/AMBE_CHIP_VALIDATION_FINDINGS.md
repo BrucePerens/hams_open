@@ -2155,3 +2155,20 @@ how. A natural next step: repeat this test with several different *levels* of ba
 (not just true silence) to see which of `g0`/`g2`/`c7` moves with noise level -- the same kind of
 targeted follow-up that turned the DTMF discovery into a fully decoded, implemented, chip-validated
 software module in section 25. Full dataset committed (`dtx_silence_sweep.tsv`).
+
+**Direct follow-up: does `g0`/`g2`/`c7` track actual noise *level* within DTX/comfort-noise mode, or
+just silence-vs-not?** `examples/p25_ratet27_capture_dtx_noise_levels.rs` fed 8 increasing
+low-amplitude noise peaks (0 through 300, all well under 1% of full scale, `DTX_ENABLE=1`
+throughout). **Result: a clean classification threshold between peak 50 and peak 100, not a smooth
+noise-level quantizer.** `g0` reads a rock-solid constant `3841` for every peak from 0 through 50,
+then jumps to `1045` at peak 100 and climbs slightly (`1045, 1049, 1053, 1057`) through peak 300;
+`g2` and `c7` show the same qualitative split (a tight, low-variance cluster below the threshold,
+a different cluster above it). This is best read as the VAD's own silence-vs-voice classification
+boundary (DVSI's manual states this threshold is -25 dBm0) rather than evidence that `g0` smoothly
+tracks background noise level *within* confirmed comfort-noise mode -- every peak this test tried
+below the threshold read the identical `g0` constant, with no gradation at all. **This does not
+confirm DVSI's "background noise level" claim as cleanly as hoped**: either the tested peak range
+(0-50) was too narrow/low-resolution to show real noise-level gradation, or the noise-level
+parameter lives somewhere this test didn't isolate (a different block, or a combination). A
+finer-grained sweep concentrated just below the threshold (e.g. peaks 0, 5, 10, ..., 50 in small
+steps) is the natural next attempt. Full dataset committed (`dtx_noise_levels_sweep.tsv`).
