@@ -675,3 +675,58 @@ sliding-window diagnostic already uses for FEC-mode Golay/Hamming windows); (3) 
 wire-format mystery (§3, §7) with this new information -- if DVSI's chip really does relabel/Gray-code
 its own parameters relative to the published IMBE spec, the FEC-mode `c0..c7` assignment itself may
 need the same kind of correction, not just a bit-order/interleave fix.
+
+## 10. A real, independent cross-check: GopherTrunk's pure-Go IMBE/AMBE+2, and a clean negative for the textbook `b_hat_0` formula
+
+Bruce raised a sharp, well-founded challenge to the whole "DVSI's chip diverges from the published
+spec" line of reasoning: DVSI co-designed the underlying algorithm TIA standardized as IMBE, so a
+wholesale divergence between the chip and what DVSI itself told APCO/TIA seemed implausible -- maybe
+the chip is simply *configured* wrong, not running something exotic. Investigated directly rather than
+assumed either way, using a real, independent, actively-developed open-source reference: **GopherTrunk**
+(`github.com/MattCheramie/GopherTrunk`, Apache 2.0, a pure-Go SDR trunking-radio decoder with its own
+from-scratch IMBE and AMBE+2 vocoder implementations, no DVSI/mbelib dependency).
+
+**A striking, independent confirmation of this crate's own `bit_prioritization.rs`**: GopherTrunk's own
+`internal/voice/imbe/doc.go` states directly, from its own from-scratch reading of TIA-102.BABA, that
+"the `b_0` fundamental-frequency parameter lives at scattered positions `{0..5, 85, 86}`" within the
+88-bit information vector -- i.e. **not** a simple contiguous first-12-bits field. This crate's own
+`bit_prioritization.rs` (built independently, months earlier, from the same TIA-102.BABA text) already
+implements exactly this: `prioritize_bits`'s own Step 1 places `b_hat_0`'s top 6 bits at the very front
+(`u_hat_0`'s own top 6 of 12 bits) and Step 8 places its bottom 2 bits in the last 4 bits of the whole
+88-bit stream (`u_hat_7`'s bits 1-2) -- and `extract_fundamental_frequency_quantizer(u)` already exists
+as the direct, already-tested inverse: `((u[0] >> 6) << 2) | ((u[7] >> 1) & 0b11)`. Two independent
+implementations of the same published spec landing on the identical scatter pattern is real, strong
+evidence this crate's own *software* implementation of the published algorithm is correct -- the
+mystery genuinely is about what the *chip* does, not a bug in this codebase's own reading of the
+standard.
+
+**Applying the real, correct formula to the real chip's NOFEC captures (§9) is a clean negative,
+across every byte/bit-order hypothesis.** Naive `u0`-only extraction was always going to be wrong once
+`bit_prioritization.rs`'s own scatter pattern was accounted for -- but running the *actual* formula
+(`top 6 of u0`, `bits 1-2 of u7`, both binary and Gray-decoded) against the same 6 real, fully-converged
+NOFEC frames (200/250/400/500/800/1000Hz) shows **no correlation with frequency under any of the 4
+byte-order x bit-direction combinations** -- `b_hat_0` comes back completely constant under 2 of the 4,
+and near-constant-with-noise under the other 2. This is a real, decisive result, not a step backward:
+it means the chip's raw NOFEC bits are **not** simply "the textbook-prioritized IMBE information bits,
+just in an unknown byte/bit order" -- ruling out the most natural remaining "maybe it's just configured
+slightly wrong" explanation for NOFEC mode specifically. The `u2`-Gray-decoded correlation found in §9
+(spearman 0.976) remains the strongest real, empirical signal so far, and it does *not* correspond to
+where the textbook algorithm would put pitch -- consistent with the chip genuinely using a different
+internal parameter layout, not a configuration mistake in this investigation's own test harness.
+
+**A further real clue GopherTrunk surfaces, worth chasing next**: its separate `internal/voice/ambe2`
+package (AMBE+2, used for P25 *Phase 2*, DMR, and NXDN -- a different, 49-bit-information, 2400 bps
+frame, citing the exact same `szechyjs/mbelib` `ambe3600x2400.c` source this codebase's own
+`ambe_dstar` module (§4-§8) was independently built from) documents `b_0`'s own AMBE+2-family scatter
+and gain/PRBA/HOC structure as visibly different in *character* from IMBE's (matching this repository's
+own D-STAR findings: Gray-coding-adjacent quantization, scattered small parameter fields, a
+content-dependent PRN whitening keyed on `b_0`). Given (a) the `u2`-Gray finding just confirmed the real
+P25 chip's NOFEC pitch parameter is genuinely Gray-coded (unlike textbook IMBE, which uses a plain
+index) and (b) DVSI's own rate table groups the P25 rate used here under an "AMBE-2000/3000 Rates"
+section header rather than an "IMBE" one (§1), the working hypothesis is now more concrete than
+"probably AMBE+2" in the abstract: **the real DVSI P25 chip likely exposes an AMBE-family (not
+textbook-IMBE) parameter layout even in its nominally "P25 IMBE" rate configurations**, and the D-STAR
+generation's own real, source-verified quantizer/whitening conventions (`ambe_dstar/tables.rs`,
+`ambe_dstar/whitening.rs`) -- not the published TIA-102.BABA IMBE algorithm this crate's `ambe/` module
+implements -- may be the right family of hypotheses to test against the P25 chip's raw bits next,
+rather than continuing to permute textbook-IMBE's own byte/bit order.
