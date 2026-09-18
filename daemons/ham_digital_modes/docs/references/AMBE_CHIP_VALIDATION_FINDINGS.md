@@ -1933,6 +1933,17 @@ the 7 confirmed blocks.** This is a substantially stronger validation claim than
 alone: real speech's non-stationary, wideband spectral content exercises far more of the FEC
 codeword space than any fixed set of test tones could.
 
+**The same real-speech improvement was applied to the D-STAR and AMBE+2 half-rate harnesses too,
+for consistency across all three validated chip modes.** `ambe_chip_validate_dstar.rs`: **PASS,
+800/800 real-speech frames** (2 recordings) Golay-decode with zero errors on both `C0`/`C1`, on top
+of the existing 8-frequency synthetic-tone coverage. `ambe_chip_validate_ambe_plus_2.rs`: **PASS,
+800/800 real-speech frames** zero-error under the confirmed "Annex H deinterleaved" framing for
+RATET(33) -- this file also got a retry-on-`WouldBlock` wrapper added to its send/recv round trip
+(it had none, and hit this investigation's well-documented transient chip timeout twice in three
+runs while testing this exact change), matching the robustness already built into every other
+capture tool this session wrote. All three chip modes -- D-STAR, AMBE+2 half-rate, and RATET(27) --
+now have real, live, real-speech-validated PASS/FAIL harnesses on equal footing.
+
 ## 24. First real signal on `g1`/`g2`'s semantic content: a moderate correlation with harmonic count, zero chip time
 
 With `g0` now understood as a gain/energy quantizer (section 23), the next open semantic question is
