@@ -1925,6 +1925,14 @@ that RATET(27) uses PRN whitening, since disproven by this session's GF(2) rank 
 the concrete "duplicated in software, validated against the chip" deliverable for RATET(27)'s FEC
 layer this whole session's work has been building toward.
 
+**Extended immediately with real recorded speech**, matching what a real deployment would actually
+see rather than only synthetic tones (the same OSR speech fixtures used elsewhere in this
+investigation, two different speakers, 400 frames -- 8 seconds -- each). **Live result: PASS, all
+920 frames (120 synthetic-tone + 800 real-speech) decode with zero corrected errors on every one of
+the 7 confirmed blocks.** This is a substantially stronger validation claim than synthetic tones
+alone: real speech's non-stationary, wideband spectral content exercises far more of the FEC
+codeword space than any fixed set of test tones could.
+
 ## 24. First real signal on `g1`/`g2`'s semantic content: a moderate correlation with harmonic count, zero chip time
 
 With `g0` now understood as a gain/energy quantizer (section 23), the next open semantic question is
