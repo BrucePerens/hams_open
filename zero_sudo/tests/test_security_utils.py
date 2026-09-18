@@ -546,6 +546,45 @@ class TestSecurityUtils(HamsTransactionCase):
         # ADR-0001: Ensure background context overrides exist to prevent nested cache faults
         self.assertTrue(env_svc.context.get("mail_notrack"))
 
+    def test_10b_get_service_env_resets_company_context_not_caller_leak(self):
+        """Bug-hunt fix, 2026-09-18, per Bruce's own answer in
+        night_shift_questions/answered/
+        zero-sudo-get-service-env-company-context-carryover-a133d1a3.md: _get_service_env
+        used to inherit whatever allowed_company_ids the CALLER's own ambient context had
+        (via with_user() alone), rather than resetting to the impersonated service
+        account's own default company (ADR-0083 decision 1: .with_company() is the
+        architecturally mandated abstraction). A caller acting under a child company must
+        not leak that company into the returned service env."""
+        # Tests [@ANCHOR: zero_sudo:get_service_env]
+        child_company = self.env["res.company"].create({"name": "Child Co (test)"})
+        utils = self.env["zero_sudo.security.utils"]
+        svc_xml_id = "zero_sudo.mail_service_internal"
+        service_uid = utils._get_service_uid(svc_xml_id)
+        service_default_company = (
+            self.env["res.users"].browse(service_uid).company_id
+        )
+        self.assertNotEqual(
+            child_company.id,
+            service_default_company.id,
+            "test setup requires a company distinct from the service account's own default",
+        )
+
+        caller = utils.with_company(child_company.id)
+        env_svc = caller._get_service_env(svc_xml_id)
+
+        self.assertEqual(
+            env_svc.company.id,
+            service_default_company.id,
+            "the service env's company must be the service account's own default, not "
+            "the calling env's child company",
+        )
+        self.assertNotIn(
+            child_company.id,
+            env_svc.context.get("allowed_company_ids") or [],
+            "the caller's own child company must not leak into the service env's "
+            "allowed_company_ids",
+        )
+
     def test_11_ensure_executable(self):
         # Tests [@ANCHOR: zero_sudo:ensure_executable]
         """Verify the fallback system for auto-installing binary manifests."""

@@ -224,7 +224,36 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         service account.
         """
         uid = self._get_service_uid(xml_id)
-        env = self.with_user(uid).env
+        service_record = self.with_user(uid)
+        # ADR-0083 fix (2026-09-18, per Bruce's own answer in
+        # night_shift_questions/answered/
+        # zero-sudo-get-service-env-company-context-carryover-a133d1a3.md):
+        # with_user() swaps the acting uid but otherwise inherits whatever
+        # allowed_company_ids the CALLER's own ambient context already had --
+        # which can mismatch this service account's own company scope (every
+        # service account here is scoped to base.main_company only, while
+        # ADR-0083 documents this project's real deployment shape as
+        # decentralized requests running under dynamically provisioned child
+        # companies). Reset to the impersonated account's own default
+        # company via .with_company(), the architecturally mandated
+        # abstraction (ADR-0083 decision 1) -- not a manual
+        # allowed_company_ids context injection.
+        #
+        # .with_company() alone is NOT enough here: its own real semantics
+        # are "switch to this company IN ADDITION to whatever's already
+        # allowed" (it inserts/reorders, it doesn't replace), confirmed
+        # directly -- a caller whose own ambient context already carried a
+        # DIFFERENT company (e.g. a child company from ADR-0083's own
+        # decentralized request shape) would still have BOTH companies in
+        # the resulting allowed_company_ids, and the service account isn't
+        # authorized for the caller's leftover one, so simply touching
+        # env.company on the result raises AccessError -- a real, different
+        # failure mode from the one this fix set out to close, caught by
+        # this function's own regression test. Clear the inherited context
+        # first so .with_company() starts from a clean slate and actually
+        # resets to a single company, rather than accumulating one.
+        service_record = service_record.with_context(allowed_company_ids=None)
+        env = service_record.with_company(service_record.env.user.company_id).env
         ctx = dict(env.context)
         ctx["mail_notrack"] = True
         if context:
