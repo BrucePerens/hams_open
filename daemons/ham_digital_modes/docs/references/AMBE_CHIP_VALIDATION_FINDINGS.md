@@ -203,7 +203,49 @@ stage), pulling in the real mbelib table *values* (not code), implementing the G
 C1 descrambling step, and validating it against the chip via the confirmed D-STAR RCW the same way
 `ambe_chip_validate_p25.rs` already does for the P25 path.
 
-## 5. Reproducing this work
+## 5. D-STAR live validation: frame size confirmed, exact bit mapping not yet
+
+Per Bruce's own direction ("do D-STAR first, then P25 -- maybe we will learn something from how
+AMBE works for D-STAR"), the `ambe_dstar` module (see its own doc comment for the full frame
+structure and mbelib provenance) was built and validated against the live chip before returning to
+the P25 mystery above. Two real things were learned that generalize back to P25:
+
+- **The same content-dependent PRN whitening construction (LCG: multiplier 173, increment 13849,
+  modulus 65536) is used by both generations** -- confirmed independently in mbelib's real D-STAR
+  source and in AMBETools' real P25 IMBE source (`Common/IMBEFEC.cpp`, found during the P25
+  investigation above). This is genuine, useful cross-generation evidence for the DVSI-family
+  whitening scheme as a whole, not something to re-derive per mode.
+- **D-STAR's Golay(23,12,7) code is the exact same perfect code the P25 investigation already found
+  ambiguous to validate with** (confirmed by reusing `super::ambe::fec::golay_encode`/`golay_decode`
+  directly, without needing a second implementation) -- so the same "a low corrected-error count
+  isn't by itself proof of correct framing" caveat applies here too, documented directly in
+  `ambe_dstar::decode`'s own doc comment (after catching and fixing a first draft that had this
+  backwards).
+
+**Live validation, using the confirmed D-STAR RATEP configuration** (`0x0130 0x0763 0x4000 0x0000
+0x0000 0x0048`, `examples/ambe_dstar_chip_check.rs`):
+
+- Configuring the real chip with this exact RCW and encoding a test tone returns **exactly 72 bits
+  (9 bytes)** every time -- confirms the frame *size* is right, live, not just on paper.
+- A stationary tone's real chip output converges to a fixed value after 2 settling frames, the same
+  behavior the P25 investigation found -- confirmed at 100/200/400/800 Hz test tones.
+- **Feeding the real chip's own steady-state output through `ambe_dstar::decode` does not yet
+  recover a pitch that tracks the input frequency correctly**: decoded `f0` came back as
+  113.8/118.9/93.9/241.8 Hz for 100/200/400/800 Hz inputs respectively -- non-monotonic for the
+  three lower frequencies (400 Hz input decoding to a *lower* `f0` than 100 Hz input), though the
+  800 Hz case does decode noticeably higher than the others, a weak but real directional signal.
+  This means the bit-level `b0..b8` mapping traced from mbelib (`mod.rs`'s own doc-comment table) is
+  not yet confirmed to match this specific chip's own real bit layout, the same open question the
+  P25 investigation is still working through for its own frame. Reconstructed spectral amplitudes
+  (`Ml`) do come back as plausible, finite, correctly-scaled positive numbers in all cases -- not
+  obviously garbage, just not yet confirmed *correct*.
+- **Real next step**: the same pitch-perturbation bit-XOR technique that found P25's real stride-12
+  clue (§3 above) applies directly here and hasn't been run yet for D-STAR -- capture several nearby
+  frequencies' steady-state frames and look for which of the 72 raw bits actually change, then
+  compare that against where `mod.rs`'s own `b0` mapping (`d[0..6)` + `d[48]`, landing in `C0`'s data
+  and `C3`'s last bit) predicts pitch should live.
+
+## 6. Reproducing this work
 
 - AMBEServer3003 runs as a systemd service on `pi500-1` (`192.168.10.189`), already configured and
   enabled at boot. **Never trigger this specific chip's UART BREAK/hard-reset** -- confirmed this
@@ -211,8 +253,14 @@ C1 descrambling step, and validating it against the chip via the confirmed D-STA
   itself never does this, and neither should any future test code.
 - `cargo run --example ambe_chip_validate_p25 -- 192.168.10.189 2460` from
   `hams_open/daemons/ham_digital_modes/` reproduces the P25-path finding above.
-- Research artifacts (extracted DVSI manual text, mbelib source, full D-STAR bit-mapping detail) are
-  saved under the session scratchpad this was produced in; worth pulling the small mbelib tables
-  (pitch/VUV/gain/PRBA/HOC arrays, all well under a few hundred values each) into this repo directly
-  once the D-STAR module's own `tables.rs`-equivalent is being written, rather than re-deriving them
-  from mbelib a second time.
+- `cargo run --example ambe_dstar_chip_check -- <18-hex-char frame>` decodes a real captured 9-byte
+  D-STAR frame through `ambe_dstar::decode` and prints the recovered parameters -- the tool used to
+  produce §5's own findings. The RATEP configuration itself (`0x0130 0x0763 0x4000 0x0000 0x0000
+  0x0048`) and the actual UDP capture loop are in this session's own scratchpad
+  (`ambe_udp_client.py`); worth promoting into a proper `examples/ambe_chip_validate_dstar.rs`
+  (mirroring `ambe_chip_validate_p25.rs`'s own structure) as the next real step, rather than
+  continuing to drive it from a throwaway Python script.
+- The mbelib tables themselves (pitch/VUV/gain/PRBA/HOC arrays) are already pulled into this repo
+  directly, in `src/ambe_dstar/tables.rs`/`tables_prba.rs`/`tables_hoc.rs` -- generated
+  programmatically from mbelib's own C header (not hand-transcribed) to avoid transcription error;
+  this caught and fixed two real bugs during that process (see that commit's own message for detail).
