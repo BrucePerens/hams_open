@@ -1734,6 +1734,31 @@ audio-stimulus search expecting a different result.
   identical output samples. Recording this now so the eventual semantic-mapping work is scoped
   honestly from the start rather than discovering the ceiling at the end.
 
+**A first, concrete probe at the semantic (u-vector) remapping question, negative but informative.**
+`ambe::mod.rs`'s `encode_frame` was refactored (no behavior change -- verified by the full 190-test
+`ambe` module suite passing unchanged) to expose its own pre-FEC `u_hat_0..u_hat_7` via a new public
+`encode_prioritized_bits`, specifically to let real-chip validation work compare this crate's own
+textbook `u_hat` semantics against the real chip's decoded data. The natural first hypothesis: since
+`bit_prioritization`'s own block widths `[12,12,12,12,11,11,11,7]` exactly match the chip's real
+`g0..g3`/`u4..u6`/`c7` sizes and natural order, maybe `u_hat_0` corresponds directly to `g0`'s
+decoded data, `u_hat_1` to `g1`'s, and so on, with no further block-level relabeling needed.
+`examples/ratet27_compare_textbook_u_vectors_to_chip.rs` tests this directly: for a known-frequency
+pure sine, feed the *exact* pitch (not an estimate) through `encode_prioritized_bits` to get this
+crate's own `u_hat_0`, and decode a real captured chip frame at the same frequency's `g0` block via
+`ratet27_fec::decode_block`. **The top 6 bits did not match at any of 4 tested frequencies
+(100/200/250/400 Hz)** -- and, notably, the chip's own decoded `g0` value saturated to the same
+all-1s top-6-bits pattern (`0b111111`) at 200, 250, and 400 Hz while showing a distinct value at 100
+Hz, which does not resemble the textbook fundamental-frequency quantizer's own smoothly-varying
+`floor(4*pi/omega0 - 39)` output for those same frequencies. This rules out the simplest possible
+`u0=g0` direct-correspondence hypothesis, at least for the fundamental-frequency field specifically,
+and hints that the real chip's own pitch estimation/quantization convention may differ substantially
+from the textbook's (not just its bit ordering) -- consistent with, and now a second independent
+data point supporting, §9's earlier finding that the textbook's pitch-bit assumptions don't carry
+over to this chip. This negative result is recorded so a future session doesn't re-attempt the same
+simple hypothesis; the semantic-mapping question remains genuinely open and likely requires
+understanding the chip's own pitch estimator (a substantial, separate reverse-engineering task) more
+than further trial-and-error block-correspondence guessing.
+
 **D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
 both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
 dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8

@@ -284,6 +284,29 @@ pub fn encode_frame(
     previous_state: &FrameState,
     sync_bit: bool,
 ) -> Option<([u32; 8], FrameState)> {
+    let (u, state) =
+        encode_prioritized_bits(frame, omega0_hat, initial_pitch_error, previous_state, sync_bit)?;
+    Some((encode_code_vectors(u), state))
+}
+
+/// The same pipeline as [`encode_frame`], stopping one stage earlier: returns the prioritized bit
+/// vectors `u_hat_0..u_hat_7` (Fig. 22) themselves, before FEC ([`fec`]) and modulation
+/// ([`modulation`]) are applied -- exposed as its own function (rather than only reachable inside
+/// `encode_frame`) so real-chip validation work can compare this crate's own `u_hat` semantics
+/// against a real chip's decoded values for the same input PCM, without duplicating this whole
+/// pipeline in a separate tool. See `docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` section 23's
+/// scope notes for why this comparison matters: the textbook TIA-102 interleave this crate's own
+/// [`interleave`] module implements is confirmed *not* to match the real RATET(27) chip's wire
+/// format, so any semantic claim about which `u_hat` vector or bit carries which parameter (e.g.
+/// section 9's "pitch is in `u2`") needs re-checking against the real chip's own
+/// [`ratet27_wire_format`]/[`ratet27_fec`] deinterleave, not assumed to still hold.
+pub fn encode_prioritized_bits(
+    frame: &pitch_refinement::RefinementFrame,
+    omega0_hat: f64,
+    initial_pitch_error: f64,
+    previous_state: &FrameState,
+    sync_bit: bool,
+) -> Option<([u32; 8], FrameState)> {
     let l_hat = vuv::harmonics_count(omega0_hat);
     // Reject an out-of-range `l_hat` *before* any of the l_hat-sized work below runs --
     // `quantize::partition_into_blocks` (called further down this same function) already checks
@@ -346,8 +369,6 @@ pub fn encode_frame(
         sync_bit,
     )?;
 
-    let c = encode_code_vectors(u);
-
     // Real reconstructed history for the *next* frame's own prediction (Eq. 54 needs "what the
     // decoder will have," not this frame's own unquantized estimate above) -- reruns this frame's
     // own quantizer values back through dequantization and the inverse DCTs.
@@ -363,7 +384,7 @@ pub fn encode_frame(
     )?;
 
     Some((
-        c,
+        u,
         FrameState {
             xi_max,
             l_hat,
