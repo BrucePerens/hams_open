@@ -2079,3 +2079,21 @@ a concrete, bounded lead for a future session (test real DTMF tone pairs, e.g. 6
 with `TS_ENABLE` left at its own default so the chip's own detection decides when to substitute,
 rather than forcing it unconditionally). Both datasets committed
 (`tone_detect_disabled_sweep.tsv`, `tone_send_forced_sweep.tsv`).
+
+**Direct follow-up: real ITU-T Q.23 DTMF digit tones, with `ECMODE_IN` left at its default (not
+forced), letting the chip's own tone-classification logic decide.** `examples/p25_ratet27_capture_
+real_dtmf.rs` fed all 16 real DTMF digit tone pairs (row 697/770/852/941Hz + column
+1209/1336/1477/1633Hz, per ITU-T Q.23 -- the actual standard frequency pairs, not the arbitrary
+dual-tone pairs `p25_ratet27_capture_exotic_stimuli.rs` tried earlier). **Result: none of the 16
+digits produced the fixed placeholder pattern from the forced-`TS_ENABLE` test above, but the wire
+output shows unmistakable, systematic row/column structure** -- e.g. digits sharing the row 697Hz
+(`1`,`2`,`3`,`A`) all share one wire pattern prefix, digits sharing row 941Hz (`*`,`0`,`#`,`D`)
+share a different one, with column identity determining the remaining bytes. This is qualitatively
+different from ordinary voice-tone encoding (which showed no such simple prefix grouping anywhere
+else in this investigation) and is real, positive evidence that the chip's built-in DTMF
+classification is genuinely active and does encode DTMF content specially -- just not via the
+constant placeholder the forced flag alone produced. Full characterization (whether this is a
+distinct frame *format* entirely, or the normal FEC/interleave format carrying a much lower-entropy
+DTMF-specific parameter set) is not yet done and is a concrete, bounded next step; the complete
+16-digit dataset is committed (`real_dtmf_sweep.tsv`) so a future session can pick this up directly
+rather than re-capturing it.
