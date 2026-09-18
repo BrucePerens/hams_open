@@ -87,7 +87,7 @@ class OdooClient:
 def _get_client():
     url = os.environ.get("ODOO_URL") or "http://odoo:8069"
     db = os.environ.get("ODOO_DB") or "odoo"
-    # burn-ignore-env: a real Odoo API key for
+    # A real Odoo API key for
     # pager_duty.user_pager_mcp_triage_service, not a plaintext account
     # password -- see hams-secrets-directory-convention (~/.secrets, never
     # a plain env default) for how this gets provisioned in a real

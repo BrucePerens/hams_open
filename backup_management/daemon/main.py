@@ -24,7 +24,7 @@ ODOO_HOST = os.environ.get("ODOO_HOST", "odoo")
 ODOO_URL = os.environ.get("ODOO_URL", f"http://{ODOO_HOST}:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
-ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 # Matches the RMQ_USER/RMQ_PASS keys infrastructure.py's rabbitmq.env
@@ -32,7 +32,7 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 # never matched, so a real deployment's credentials were never read at
 # all and this daemon always silently connected as guest/guest.
 RMQ_USER = os.environ.get("RMQ_USER")
-RMQ_PASS = os.environ.get("RMQ_PASS")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+RMQ_PASS = os.environ.get("RMQ_PASS")  # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 
 # [@ANCHOR: backup_management:COMM_require_rabbitmq_credentials]

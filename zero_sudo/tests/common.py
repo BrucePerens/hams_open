@@ -326,14 +326,14 @@ def _patched_save_test_file(
     *args,
     **kwargs,
 ):
-    if os.environ.get("SAVE_LOGS") != "1":  # burn-ignore-env
+    if os.environ.get("SAVE_LOGS") != "1":
         return
 
     pid = os.getpid()
     host_tmp = (
         "/opt/hams/test"
-        if os.environ.get("HAMS_ISOLATED_NS") == "1"  # burn-ignore-env
-        else os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")  # burn-ignore-env
+        if os.environ.get("HAMS_ISOLATED_NS") == "1"
+        else os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")
     )
 
     try:
@@ -371,7 +371,7 @@ def _patched_save_test_file(
             else:
                 host_path.write_bytes(content)
 
-            orig_user = os.environ.get("SUDO_USER", "odoo")  # burn-ignore-env
+            orig_user = os.environ.get("SUDO_USER", "odoo")
             user_info = next(
                 (u for u in pwd.getpwall() if u.pw_name == orig_user), None
             )
@@ -407,7 +407,7 @@ original_chrome_init = ChromeBrowser.__init__
 
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
-    if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":  # burn-ignore-env
+    if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
         self.__class__.remote_debugging_port = 9222
 
     retries = 3
@@ -568,7 +568,7 @@ def _patched_browser_js(self, *args, **kwargs):
     try:
         return original_browser_js(self, *args, **kwargs)
     except Exception as e:  # audit-ignore-catch-all
-        if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":  # burn-ignore-env
+        if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
             _logger.error(
                 "🛑 TOUR FAILED! Pausing indefinitely (--pause-on-fail active). Connect DevTools MCP to port 9222.\nError: %s",
                 repr(e),
@@ -705,7 +705,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin):
         # test secret too, or every caller that checks `if not
         # db_secret:` (blog_post.py's weekly digest, etc.) silently skips
         # its own feature in every test.
-        os.environ.setdefault("HAMS_CRYPTO_KEY", cls._hams_test_crypto_key)  # burn-ignore-env
+        os.environ.setdefault("HAMS_CRYPTO_KEY", cls._hams_test_crypto_key)
         super().setUpClass()
         with cls.registry.cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
@@ -931,7 +931,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         # needed: zero_sudo.security.utils._get_crypto_secret() is a
         # separate secret source from read_secret() above, and now fails
         # closed instead of using a hardcoded insecure fallback.
-        os.environ.setdefault("HAMS_CRYPTO_KEY", cls._hams_test_crypto_key)  # burn-ignore-env
+        os.environ.setdefault("HAMS_CRYPTO_KEY", cls._hams_test_crypto_key)
 
         # 🚨 THE ANTI-HANG INJECTION 🚨
         original_start = threading.Thread.start
@@ -1373,7 +1373,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                     ws_thread.join = lambda *args, **kwargs: None
 
             if not self.__class__._hams_tour_failed:
-                host_tmp = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")  # burn-ignore-env
+                host_tmp = os.environ.get("HAMS_REAL_LOG_DIRECTORY", "/opt/hams/test")
                 for log_file in glob.glob(os.path.join(host_tmp, "v8_hang*.log")):
                     try:
                         open(log_file, "w").close()
@@ -1739,7 +1739,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     def start_tour(self, *args, **kwargs):
         args_list = list(args)
 
-        tour_debug = os.environ.get("HAMS_TOUR_TOUR_DEBUG")  # burn-ignore-env
+        tour_debug = os.environ.get("HAMS_TOUR_TOUR_DEBUG")
         if tour_debug and args_list and isinstance(args_list[0], str):
             url_path = args_list[0]
             if "debug=" in url_path:

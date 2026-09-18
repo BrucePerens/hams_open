@@ -291,7 +291,7 @@ class PagerCheck(models.Model):
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "binary_downloader.user_binary_downloader_service"
             )
-            path = self.env["binary.manifest"].with_user(svc_uid).ensure_executable(cmd_name)  # burn-ignore-env
+            path = self.env["binary.manifest"].with_user(svc_uid).ensure_executable(cmd_name)
             return {"status": "ok", "path": path}
         except (ValueError, FileNotFoundError, PermissionError, UserError) as e:
             # UserError is what binary_manifest.ensure_executable() actually

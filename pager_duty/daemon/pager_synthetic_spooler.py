@@ -77,7 +77,7 @@ def _assert_host_is_ssrf_safe(hostname, context):
 # system path -- matching check_cloudflare_token_expiry.py's/
 # pager_smart_spooler.py's own established HAMS_*_PATH override
 # convention.
-SPOOL_FILE = os.environ.get("HAMS_SYNTHETIC_SPOOL_PATH") or "/var/log/pager_synthetic_spool.json"  # burn-ignore-env
+SPOOL_FILE = os.environ.get("HAMS_SYNTHETIC_SPOOL_PATH") or "/var/log/pager_synthetic_spool.json"
 
 # Bug-hunt fix, 2026-09-14: hard ceiling on a single sandbox_downloads fetch.
 # Module-level (not a local constant) so a test can override it without a

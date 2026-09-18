@@ -468,20 +468,20 @@ class TestSecurityUtils(HamsTransactionCase):
 
         # 1. Test environment variable resolution
         env_dict = {"HAMS_CRYPTO_KEY": "test_env_key"}
-        original_env = os.environ.copy()  # burn-ignore-env
-        os.environ.update(env_dict)  # burn-ignore-env
+        original_env = os.environ.copy()
+        os.environ.update(env_dict)
         try:
             self.assertEqual(utils._get_crypto_secret(), "test_env_key")
         finally:
-            os.environ.clear()  # burn-ignore-env
-            os.environ.update(original_env)  # burn-ignore-env
+            os.environ.clear()
+            os.environ.update(original_env)
 
         invalidate_model_cache(utils.env, "zero_sudo.security.utils")
         utils.env.registry.clear_cache()
 
         # 2. Test file fallback
-        original_env = os.environ.copy()  # burn-ignore-env
-        os.environ.clear()  # burn-ignore-env
+        original_env = os.environ.copy()
+        os.environ.clear()
         try:
             self.safe_patch("os.path.exists", return_value=True)
             self.safe_patch("builtins.open", mock_open(read_data="test_file_key\n"))
@@ -496,8 +496,8 @@ class TestSecurityUtils(HamsTransactionCase):
             )
             self.assertEqual(utils._get_crypto_secret(), "test_config_key")
         finally:
-            os.environ.clear()  # burn-ignore-env
-            os.environ.update(original_env)  # burn-ignore-env
+            os.environ.clear()
+            os.environ.update(original_env)
 
     def test_09_get_crypto_secret_fails_closed_when_unconfigured(self):
         """
@@ -514,8 +514,8 @@ class TestSecurityUtils(HamsTransactionCase):
         invalidate_model_cache(utils.env, "zero_sudo.security.utils")
         utils.env.registry.clear_cache()
 
-        original_env = os.environ.copy()  # burn-ignore-env
-        os.environ.clear()  # burn-ignore-env
+        original_env = os.environ.copy()
+        os.environ.clear()
         try:
             self.safe_patch("os.path.exists", return_value=False)
             self.safe_patch_object(odoo.tools.config, "get", return_value=None)
@@ -527,8 +527,8 @@ class TestSecurityUtils(HamsTransactionCase):
             )
             self.assertNotEqual(secret, "default_insecure_secret_fallback")
         finally:
-            os.environ.clear()  # burn-ignore-env
-            os.environ.update(original_env)  # burn-ignore-env
+            os.environ.clear()
+            os.environ.update(original_env)
 
     def test_10_get_service_env(self):
         # Tests [@ANCHOR: zero_sudo:get_service_env]

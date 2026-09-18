@@ -120,7 +120,7 @@ def get_odoo_client(logger, config):
     # so a misconfigured password would have silently disabled all paging
     # instead of halting the daemon at boot the way a missing dependency or
     # a missing config file already does.
-    password = os.environ.get("ODOO_PASSWORD")  # burn-ignore-env
+    password = os.environ.get("ODOO_PASSWORD")
     if not password:
         logger.critical(
             "ODOO_PASSWORD is not set -- refusing to start with an "
@@ -276,14 +276,14 @@ def is_in_maintenance(check):
 
 # [@ANCHOR: pager_duty:fallback_notify]
 def fallback_notify(source, msg, severity):
-    fallback_email = os.environ.get("PAGER_FALLBACK_EMAIL")  # burn-ignore-env
-    smtp_host = os.environ.get("SMTP_HOST")  # burn-ignore-env
+    fallback_email = os.environ.get("PAGER_FALLBACK_EMAIL")
+    smtp_host = os.environ.get("SMTP_HOST")
     smtp_port = int(os.environ.get("SMTP_PORT") or 587)
-    smtp_user = os.environ.get("SMTP_USER")  # burn-ignore-env
-    smtp_pass = os.environ.get("SMTP_PASS")  # burn-ignore-env
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
     from_email = (
         os.environ.get("SMTP_FROM") or "pager-daemon@example.com"
-    )  # burn-ignore-env
+    )
 
     if not fallback_email or not smtp_host:
         logger.critical(
@@ -313,7 +313,7 @@ def fallback_notify(source, msg, severity):
 
 def report(client, source, msg, severity="high", website_id=False):
     # [@ANCHOR: daemon_report_incident]
-    webhook_url = os.environ.get("PAGER_WEBHOOK_URL")  # burn-ignore-env
+    webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url:
         try:
             payload = {

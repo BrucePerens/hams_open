@@ -26,14 +26,14 @@ class TestBackupCrypto(HamsTransactionCase):
                 ]
             }
         )
-        self._original_env = os.environ.copy()  # burn-ignore-env
-        os.environ["ODOO_BACKUP_CRYPTO_KEY"] = Fernet.generate_key().decode(  # burn-ignore-env
+        self._original_env = os.environ.copy()
+        os.environ["ODOO_BACKUP_CRYPTO_KEY"] = Fernet.generate_key().decode(
             "utf-8"
         )
 
     def tearDown(self):
-        os.environ.clear()  # burn-ignore-env
-        os.environ.update(self._original_env)  # burn-ignore-env
+        os.environ.clear()
+        os.environ.update(self._original_env)
         super().tearDown()
 
     def test_kopia_password_round_trips_through_real_encryption(self):

@@ -38,7 +38,7 @@ def generate_smart_spool():
         # doesn't have to write into the real, hardcoded system path --
         # matching check_cloudflare_token_expiry.py's own established
         # HAMS_*_PATH override convention.
-        spool_file = os.environ.get("HAMS_SMART_SPOOL_PATH") or "/var/log/pager_smart_spool.json"  # burn-ignore-env
+        spool_file = os.environ.get("HAMS_SMART_SPOOL_PATH") or "/var/log/pager_smart_spool.json"
 
         # Atomic Write: Write to a tmp file and rename to prevent the main daemon from reading a partial write
         fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(spool_file))

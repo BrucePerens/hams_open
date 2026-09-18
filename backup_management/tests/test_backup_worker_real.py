@@ -77,7 +77,7 @@ class TestRealBackupWorker(RealTransactionCase):
         creds = pika.PlainCredentials(
             os.environ.get("RMQ_USER", "guest"),
             os.environ.get("RMQ_PASS", "guest"),  # burn-ignore-env
-        )  # burn-ignore-env  # fmt: skip
+        )  # fmt: skip
         conn = pika.BlockingConnection(  # burn-ignore-pika  # fmt: skip
             pika.ConnectionParameters(host=rmq_host, credentials=creds)
         )
