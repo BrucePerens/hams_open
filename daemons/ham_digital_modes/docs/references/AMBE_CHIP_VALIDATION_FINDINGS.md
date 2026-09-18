@@ -101,6 +101,40 @@ interleaves. So this probably isn't the missing piece for comparing against the 
 output directly, but it's the right place to look once channel-frame-level work (a real, separate,
 already-disclosed scope boundary per `mod.rs`'s own doc comment) is in scope.
 
+**Update, same session, after the pitch-perturbation test below**: captured the chip's real output at
+six nearby tones (150/175/200/225/250/300 Hz) and XORed each against the 200Hz baseline. The bit
+positions that actually change for the four close frequencies (150/225/250, all within ~7-12 bits of
+200's frame) cluster in a clean arithmetic sequence with **stride exactly 12** (e.g. `15, 27, 39, 51,
+63, 75, 87, 99, 123, 135`) -- a real, structural signal, not noise, and consistent with some kind of
+block-interleave with a 12-wide period (`144 / 12 = 12`). Tried deinterleaving the captured frame
+through **eight** different concrete hypotheses before decoding: this crate's own real Annex H
+dibit-interleave table, a real working reference implementation's own interleave table (AMBETools'
+`IMBE_INTERLEAVE[144]`, tried both bit-numbering conventions), plus the five bit/byte/field-order
+permutations from the previous update. **All eight still fail.** Checked precisely what "fail" means
+here, since it matters: `golay_decode`'s own brute-force nearest-codeword search means `epsilon_0`
+can never exceed 3 for *any* input at all -- Golay(23,12,7) is a **perfect code** (covering radius
+equals packing radius, exactly 3), so literally every possible 23-bit pattern sits within distance 3
+of some codeword. Every single one of the eight hypotheses above scored exactly `epsilon_0 = 3`, the
+theoretical maximum -- meaning none of them found real structure; this isn't "close but not quite,"
+it's indistinguishable from feeding the decoder pure noise.
+
+**Honest assessment before continuing further**: the 300Hz frame's own huge bit-count jump (76 of
+144 bits differ from 200Hz, versus single digits for the four closer frequencies) shows the chip's
+real output *is* behaving like a genuine, well-structured vocoder -- pitch changes cause small,
+localized differences until a harmonic-count-bucket boundary is crossed, then a large structural
+change, exactly as this codec's own `L_hat`-dependent bit allocation would predict. So the chip is
+producing real, meaningful, non-random output; the problem is specifically that this codec's own
+assumed field/FEC layout (four Golay(23,12) + three Hamming(15,11) + 7 raw, in `c0..c7` order) has not
+yet been matched to whatever layout DVSI's chip actually uses at this rate, despite the aggregate bit
+budget being an exact, independently-confirmed match. The stride-12 clue is real and worth pursuing
+further, but cracking DVSI's undocumented proprietary bit layout from here on is a genuine, patient
+reverse-engineering project -- closer in kind to what the mbelib community did for D-STAR/DMR/NXDN
+over real calendar time via captured-traffic analysis, not something a few more guesses will resolve.
+A systematic, automated search (score every plausible field-order/bit-direction/rotation combination
+against `epsilon_0` across *many* captured frames at once, to avoid a lucky-looking low score on just
+one frame) is the right next tool if this is worth continuing, rather than further hand-picked
+hypotheses.
+
 **Real next steps, in order:**
 1. **A more powerful empirical technique than guessing bit-order permutations further**: capture the
    chip's real output for *two slightly different* stationary tones (e.g. 200Hz and 220Hz) and XOR the
