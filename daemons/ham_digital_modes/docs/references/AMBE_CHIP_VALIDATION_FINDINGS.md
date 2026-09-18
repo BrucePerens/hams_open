@@ -874,3 +874,103 @@ separate question this authorization did not address, so the more cautious defau
 elsewhere in this crate for audio of uncertain redistribution status) stays in place for those
 specific files. Only this crate's own, independently-written Rust code and this findings summary are
 committed.
+
+## 13. Returning to RATET(27) full-rate: a sliding Golay-window scan, and what it does/doesn't rule out
+
+With AMBE+2 resolved, this session returned to the still-open RATET(27) full-rate mystery (§§3, 7-10)
+armed with one new idea from the AMBE+2 work: what if full-rate IMBE's real wire format, like AMBE+2's,
+differs from the textbook `BAAA-A` spec in ways this investigation hadn't tried?
+
+**Sliding 23-bit Golay-window scan** (`examples/p25_ratet27_sliding_golay_scan.rs`): rather than
+assuming the textbook `c0..c7` block positions, this scans every possible 23-bit starting position
+across 26 unique real captured RATET(27)-FEC frames (8 test tones, settled), under all 4 byte-
+order/bit-direction hypotheses, checking each window's Golay(23,12) validity rate. **Result: a clean
+negative** -- no window position scores above 3.8% validity (best: 1/26) under any hypothesis, versus
+the ~2048x-random-chance signal a real byte-aligned Golay codeword would produce.
+
+**What this precisely does and doesn't rule out** (caught before over-reading the result): P25 IMBE's
+real bit modulation XORs `c1-c6` with a PN sequence seeded from `u0` before transmission, and
+interleaves all codewords' bits across the frame -- so even the textbook-correct format would show
+*at most one* clean window (`c0`, the only unmodulated, unspread codeword), not four, and this scan
+cannot see through either the PN whitening or an unknown interleave (which scatters each codeword's
+23 bits to non-contiguous positions). What it does rule out: any format where a full 23-bit Golay
+codeword sits contiguously, byte-aligned, unmodulated, anywhere in the raw 144 bits, under a simple
+byte/bit-order transform. A genuine interleaved-and-whitened format is not excluded by this test.
+
+**Also revisited**: the NOFEC-mode "pitch is Gray-coded at raw bits [29..36)" finding from §9 was
+initially flagged as needing re-verification, on the concern that RATEP's NOFEC control word
+(`RCW2=0x0000`) might select a different underlying vocoder rather than "the same codec, FEC off".
+Checked directly against the manual: Table 8/9 explicitly label *both* the FEC and No-FEC RATEP
+examples "APCO Project 25 full-rate" -- distinct from the separately-labeled "APCO Project 25
+half-rate" AMBE+2 rates (Table 10/11) -- confirming they are the same underlying vocoder family, so
+the §9 Gray-coding finding stands as evidence about full-rate IMBE's own real parameter layout.
+
+## 14. A working oracle: the chip's own decoder finds two real unprotected wire bits by direct experiment
+
+Given the sliding-scan negative couldn't see through PN-modulation or interleaving, the next approach
+(suggested during a design review) uses the chip's own DECODER as a ground-truth oracle instead of
+guessing a table: capture one real encoded frame `R`, flip one wire bit at a time, and check whether
+the decoded output changes. A bit's membership in "some FEC-protected codeword, corrected on decode"
+survives *any* interleave, PN-modulation, or byte/bit-order convention, since a single flipped wire
+bit always flips exactly one bit of whatever codeword it maps to, however that mapping works --
+sidestepping every open convention question from §13 at once.
+
+**Two real dead ends found while building this, both left in
+`examples/p25_ratet27_bitflip_oracle.rs`'s own doc comment as a durable warning**:
+1. **Raw time-domain PCM comparison, using a voiced 200 Hz test tone for `R`, doesn't work** -- not
+   because the decoder is non-deterministic, but because it correctly, continuously tracks pitch
+   phase across frames for smooth voiced synthesis. Two consecutive decodes of the exact same
+   unmodified frame produced a real measured RMS difference of ~8500 -- both were clearly the same
+   frequency and amplitude, just at different phases. Comparing raw samples flagged all 144 bits as
+   "changes decode".
+2. **Switching `R` to digital silence** (suggested directly by Bruce, to sidestep phase entirely)
+   does fix determinism -- residual RMS drops to ~2, a small comfort-noise/dither floor, not exact
+   zero -- but then flipping *any* of the 144 bits shows zero effect. The likely explanation: for a
+   silence-classified frame, the decoder evidently ignores nearly all of the other encoded parameters
+   and just synthesizes a fixed low-level comfort-noise pattern from the classification field alone.
+   Silence isn't a stronger test vehicle here, it's the wrong one -- it makes almost every bit
+   semantically irrelevant to the output, independent of FEC protection.
+
+**The working method**: use a voiced 200 Hz tone for `R` (so every parameter is actually exercised),
+but compare **dB-magnitude spectra** (via FFT) instead of raw samples -- phase-invariant, and far
+more sensitive across the dynamic range than a linear-magnitude spectral distance (which is dominated
+by the fundamental peak). Protocol per bit: re-converge the decoder to `R`'s steady state (resend `R`
+four times, discarding output), decode `R` with that one bit flipped, and compare its dB spectrum to
+a calibrated baseline. The natural noise floor (8 repeats of unmodified `R`, same re-priming protocol)
+is a tiny, perfectly deterministic 4-cycle pattern (`0.35, 0.10, 0.38, 0.00` dB, repeating exactly --
+itself a real, minor residual of the same phase-tracking behavior, small enough here not to matter),
+giving a clean noise floor of 0.38 dB.
+
+**Result: exactly 2 of 144 wire bit positions -- 131 and 143 -- change the decoded spectrum when
+flipped, by 22.18 dB, ~58x above the noise floor, with zero ambiguity anywhere else** (every other
+position matches the noise-floor cycle exactly, to two decimal places). Bit 143 is the very last bit
+of the 144-bit frame; bit 131 is 12 bits before it (byte 16, bit-value `0x10`, versus byte 17's LSB).
+
+**Only 2 found, not the up to 7 textbook IMBE would predict for its unprotected raw bits**: read as a
+real, informative negative rather than a limitation of the method -- a pure, clean, low-frequency
+voiced tone likely carries near-zero energy in whatever parameters the *other* unprotected bits
+control (plausibly unvoiced-band amplitude, given a clean sinusoid has essentially no unvoiced
+spectral content), so flipping them has no detectable effect on *this specific* test signal's output,
+independent of whether they're FEC-protected. This does not contradict the two clean positive hits --
+it means a spectrally richer test signal is needed to find the rest. Next step: repeat this oracle
+with a test signal that has genuine broadband/unvoiced content (e.g. filtered noise, or a signal
+straddling the voiced/unvoiced classification boundary) to try to surface the remaining unprotected
+positions, then pair-flip among the identified FEC-protected positions to empirically discover
+codeword boundaries (two flips in the same Hamming(15,11) codeword should change output; two flips in
+the same Golay(23,12) codeword should still be corrected, since Golay corrects up to 3 errors) --
+this would recover the real interleave table empirically, without needing to guess any convention.
+
+**Tried, and a genuine methodological limit found**: re-ran the same oracle with a tone-plus-fixed-
+noise test signal (`tone_noise` mode), hoping the added broadband content would activate whatever
+the other ~5 expected unprotected bits control. Result: the noise floor itself jumps to 5-11 dB
+(versus the pure tone's 0.38 dB), and the two already-confirmed hits (131, 143) no longer stand out
+at all -- both land squarely inside that same 5-11 dB range. This isn't a bug in the harness: it
+reveals a real, sensible property of the chip's own synthesis -- voiced bands are reconstructed
+deterministically (a continuous, phase-tracked sinusoid, hence the tiny sub-dB floor), while unvoiced
+bands are synthesized from the decoder's own internal noise generator, which is genuinely stochastic
+frame to frame even for byte-identical encoded parameters (the correct design choice for natural-
+sounding comfort noise, but it means this decode-comparison oracle can only cleanly probe parameters
+that voiced synthesis actually exercises). Any remaining unprotected bits that control unvoiced-band
+amplitude are therefore not resolvable by this specific method; a different oracle (e.g. comparing
+long-run average energy per critical band across many decodes, rather than a single decode's
+spectrum) would be needed to reach them.
