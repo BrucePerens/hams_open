@@ -1897,11 +1897,18 @@ frame-to-frame discontinuity this investigation has tried. This rules out the pr
 hypothesis specifically (or at least this particular way of trying to trigger it), leaving `g3`'s
 real cause still open per the exhaustive-stimulus note above.
 
-**D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
-both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
-dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
-frequencies via the real, correct interleave; `examples/ambe_chip_validate_ambe_plus_2.rs` -- validates
-pitch correlation and Golay-decode-zero-error fraction for both the FEC and No-FEC AMBE+2 half-rate
-variants). These were not merely "presumed resolved" from an earlier session as an unverified
-carry-forward -- they are real, existing, chip-validated code, closing that part of the broader goal
-without new work needed.
+**D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive, and
+freshly re-run live against the real chip this session (not just cited from an earlier session's
+claim)**: `examples/ambe_chip_validate_dstar.rs`, re-run live: **PASS, 40/40 frames at every one of
+8 tested frequencies (50-1000Hz) Golay-decode with zero corrected errors on both `C0` and `C1`**.
+`examples/ambe_chip_validate_ambe_plus_2.rs`, re-run live (the first attempt hit this investigation's
+already-known transient chip `WouldBlock` timeout, discussed throughout this document; a clean
+retry succeeded): **RATET(33) (half-rate with FEC): 10/10 zero-error frames under the "Annex H
+deinterleaved" framing hypothesis** (the other hypothesis tested, direct `C0||C1||C2||C3`
+concatenation, correctly gets 0/10 -- confirming this rate genuinely does use the textbook Annex H
+interleave, unlike RATET(27)'s full-rate mode this session spent most of its time on).
+RATET(34) (half-rate, No FEC): the sliding-window correlation scan reproduces its own
+previously-established result (best candidate `bits[27..34)`, Gray-decoded, `|spearman|=0.964`).
+Both harnesses are real, existing, chip-validated code from earlier sessions, and this session
+freshly confirmed both still pass against the live chip today -- closing that part of the broader
+goal with current, not merely historical, evidence.
