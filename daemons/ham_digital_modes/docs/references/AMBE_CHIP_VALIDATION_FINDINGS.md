@@ -1334,7 +1334,7 @@ other 2 Hamming blocks and 4 Golay(23,12) blocks land among the remaining 129 wi
 continuing the anchor-sweep technique on other columns (per the stride-12 hypothesis) is the natural
 next step for whoever continues this investigation.
 
-## 19. Anchor-9 sweep: the stride-12 pattern's extended prediction is falsified, but the block-interleaver transform itself remains solid
+## 19. A second Hamming block predicted by the transform, hidden from the pure-tone oracle, confirmed with a richer test signal
 
 §18's stride-12 observation was extended (analytically, zero chip time) into a specific transform
 hypothesis: the wire (transmitted) format is a 12x12 block interleaver over a natural bit order where
@@ -1345,35 +1345,57 @@ transform to the confirmed 15-member block's own wire positions gives natural po
 only this specific write-by-column/read-by-row structure would keep a real FEC block's bits
 contiguous in natural order after this kind of interleaving.
 
-Extending this with the further (unverified) guess that the 8 FEC sub-blocks are simply concatenated
-in natural order as `u0..u3` (Golay x4, 23 bits each, natural 0-91), `u4..u6` (Hamming x3, 15 bits
-each, natural 92-136), `u7` (raw, 7 bits, natural 137-143) -- matching the confirmed block to `u4`
--- predicts the *next* Hamming block `u5` at natural 107-121, which transforms back to wire positions
-**{9, 10, 21, 22, 33, 45, 57, 69, 81, 93, 105, 117, 129, 140, 141}**.
+Extending this with the further guess that the 8 FEC sub-blocks are simply concatenated in natural
+order as `u0..u3` (Golay x4, 23 bits each, natural 0-91), `u4..u6` (Hamming x3, 15 bits each, natural
+92-136), `u7` (raw, 7 bits, natural 137-143) -- matching the confirmed block to `u4`, and noting this
+is the *only* way to partition 144 into `[23,23,23,23,15,15,15,7]` consistent with `u4` at 92-106 and
+`c7` at 137-143 (the latter independently confirmed: `natural(131)=142`, `natural(143)=143`, both
+inside 137-143) -- predicts the *next* Hamming block `u5` at natural 107-121, transforming back to
+wire positions **{9, 10, 21, 22, 33, 45, 57, 69, 81, 93, 105, 117, 129, 140, 141}**.
 
-**This specific extended prediction is falsified.** An anchor sweep on wire bit 9 (one fresh process
-per candidate, same technique as §18) found **no Hamming-block partners at all** -- the only non-
-baseline hits were `flip{9,131}` and `flip{9,143}`, both reproducing the already-known `27332c18...`
-checksum (§14's confirmed unprotected `c7` pitch bits, which show their own effect regardless of what
-else is flipped alongside them). Every other candidate, including several of the specifically
-predicted partners (10, 21, 22, 33, 45, 57, 69, 81 -- all within the tested range), came back null.
-This is consistent with bit 9 sitting in a Golay(23,12) block instead (Golay's minimum distance of 7
-means a 2-bit error is never "corrected" onto a visible third bit, so an all-null anchor sweep is
-exactly what a Golay-block anchor should produce) -- but it directly contradicts the "u4 immediately
-followed by u5" natural-ordering guess, since natural position 108 (bit 9's own natural position
-under the transform) was predicted to fall inside a Hamming block and evidently does not.
+**First attempt looked like a clean falsification, and was not.** An anchor sweep on wire bit 9 with
+the usual 200 Hz sine (one fresh process per candidate, same technique as §18) found no partners at
+all among the predicted `u5` set -- only `flip{9,131}` and `flip{9,143}` showed any effect (the
+already-known unprotected `c7` bits, which register regardless of what else is flipped). Follow-up
+pairwise tests within the predicted set (`{9,21}`, `{9,10}`, `{21,22}`, `{10,22}`, `{9,33}`,
+`{9,141}`), a 4-flip (`{9,21,33,45}`), and a 5-flip (`{9,21,33,45,57}`) were *all* null too.
 
-**What this leaves standing vs. what's now retracted**: the 12x12 write-by-column/read-by-row
-transform itself, and the single confirmed block's natural contiguity under it (92-106), remain solid
--- that part doesn't depend on the natural block-ordering guess. What's retracted is the *specific*
-guess about which natural range each of the other 6 FEC sub-blocks occupies; "3 Hamming blocks land
-consecutively right after the 4 Golay blocks" is wrong, or at least this particular anchor (9) isn't
-in a Hamming block as that guess would require. Determining the true natural-order placement of the
-remaining 6 sub-blocks needs more anchor sweeps on further candidate positions -- each costs one
-fresh process per one of ~143 candidates (~30-40 minutes) and only tests one candidate natural
-position at a time, so this is a genuinely open, costly-per-attempt search, not a quick follow-up.
+**But an all-null result under every flip pattern does not discriminate between competing
+explanations, and this session had already shown why**: §18's own confirmed `u4` block has null-
+under-pairwise-flip members too (`{44,80}`, `{44,115}`, `{44,116}`), simply because those specific
+codewords happen to change something the 200 Hz sine doesn't render (a pure tone puts energy in one
+harmonic; most of IMBE's per-band amplitude bits sit at the noise floor for it, so their codewords
+are audibly inert). An all-null column-9 sweep is equally consistent with "Hamming block with 7
+tone-inaudible codewords," "Golay block with a tone-inaudible weight-7 codeword," or "column 9 spans
+multiple blocks" -- the oracle itself was blind, not necessarily the hypothesis wrong.
 
-This is an honest negative result, not a discouraging one: two anchor sweeps in one night (§18, §19)
-have already produced the first real internal wire-format structure (one full FEC block's exact
-membership and codeword layout) this entire investigation has found, plus a validated interleaver
-transform for that one block. Pinning down the rest is future work.
+**Fix: switch to a harmonic-rich reference signal.** Added a 200 Hz sawtooth alternative (same
+fundamental, so pitch/voicing structure carries over, but energy spread across many harmonics
+instead of one) to `p25_ratet27_hamming_block_falsification_test.rs` (`--signal sawtooth`). Verified
+determinism first (two fresh processes, `flip{0,0}`, identical checksums) and re-verified the
+confirmed `u4` triple `{8,92,127}` still holds (all four combinations byte-identical under the new
+signal). Then re-tested the predicted `u5` pairs: **`flip{9,21}` and `flip{9,10}` produce
+byte-identical PCM, while `flip{21,22}` and `flip{10,22}` each produce their own distinct non-null
+effect** -- exactly the structure the pure tone was blind to. **This confirms the transform and the
+natural-order prediction: `u5` is real.** A full anchor-9 sweep with the sawtooth signal was launched
+to map its complete membership the same way `u4` was mapped in §18 -- see the next section for its
+result.
+
+Separately (zero chip time): layering the same 12x12 transform onto Table 5-1's own row numbering,
+in both orders (transform-then-byte-convention and byte-convention-then-transform) across all 4
+byte/bit-order hypotheses, still does not place the confirmed 15-member block in one Hamming slot
+together with both known `c7` bits in block 7 -- reinforcing that this chip's host-interface
+"channel" packing is a genuinely different, proprietary format, not Table 5-1 plus a simple
+transpose layer.
+
+**Lesson for the rest of this investigation**: a null result from the 200 Hz sine test signal is not
+reliable evidence of "no relationship" -- it only shows no relationship *audible on a pure tone*. Any
+future anchor sweep that comes back all-null should be re-run with the sawtooth signal before being
+treated as a real negative.
+
+Separately (zero chip time): layering the same 12x12 transform onto Table 5-1's own row numbering,
+in both orders (transform-then-byte-convention and byte-convention-then-transform) across all 4
+byte/bit-order hypotheses, still does not place the confirmed 15-member block in one Hamming slot
+together with both known `c7` bits in block 7 -- reinforcing that this chip's host-interface
+"channel" packing is a genuinely different, proprietary format, not Table 5-1 plus a simple
+transpose layer.

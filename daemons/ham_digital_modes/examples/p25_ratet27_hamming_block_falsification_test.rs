@@ -79,6 +79,20 @@ fn test_tone(freq: f64) -> Vec<i16> {
         .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
         .collect()
 }
+// Harmonic-rich alternative to the pure sine: a pure sine puts energy in only one harmonic, so
+// most of IMBE's per-band amplitude bits sit at the noise floor and their codewords change nothing
+// the synthesizer renders (see AMBE_CHIP_VALIDATION_FINDINGS.md's discussion of tone-inaudible
+// info bits). A sawtooth at the same fundamental keeps voicing/pitch structure comparable while
+// putting energy across many harmonics, so amplitude-bit changes become audible/byte-visible too.
+fn test_sawtooth(freq: f64) -> Vec<i16> {
+    let period = SAMPLE_RATE / freq;
+    (0..FRAME_SAMPLES)
+        .map(|n| {
+            let phase = (n as f64 % period) / period; // 0..1
+            (6000.0 * (2.0 * phase - 1.0)) as i16
+        })
+        .collect()
+}
 fn digital_silence() -> Vec<i16> {
     vec![0i16; FRAME_SAMPLES]
 }
@@ -88,10 +102,13 @@ fn main() {
     let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let positions: Vec<usize> = args
         .get(2)
-        .expect("usage: <host:port> <pos1,pos2,...>")
+        .expect("usage: <host:port> <pos1,pos2,...> [sine|sawtooth]")
         .split(',')
         .map(|s| s.parse().expect("integer bit position"))
         .collect();
+    // "sawtooth": harmonic-rich alternative to the default pure sine, needed to make amplitude-bit
+    // changes (as opposed to only pitch-bit changes) audible/byte-visible -- see test_sawtooth's doc.
+    let signal = args.get(3).cloned().unwrap_or_else(|| "sine".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
     sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
@@ -102,7 +119,7 @@ fn main() {
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
-    let samples = test_tone(TEST_FREQ_HZ);
+    let samples = if signal == "sawtooth" { test_sawtooth(TEST_FREQ_HZ) } else { test_tone(TEST_FREQ_HZ) };
     let mut r: Vec<u8> = Vec::new();
     for i in 0..SETTLING_FRAMES {
         sock.send(&build_speech(&samples)).expect("send speech");
