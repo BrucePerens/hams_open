@@ -1976,3 +1976,27 @@ test didn't include). **Net honest read**: `g2` remains the more promising `L_ha
 of the two; `g1` is more likely a second continuously-varying, pitch-sensitive parameter (like
 `g0`) than a discrete harmonic-count encoding. Full boundary-sweep data and analysis script
 committed for a properly controlled follow-up.
+
+**That properly controlled follow-up was run immediately, and it refutes the `g2=L_hat` reading
+above -- corrected here rather than left standing.** `examples/p25_ratet27_capture_lhat_controlled_
+test.rs` tests three matched-5Hz-spacing frequency triples around three different `L_hat`
+boundaries, giving both a same-`L_hat` control pair and a crossing pair at identical spacing for
+each: `(150,155,160)Hz` around the 155.4Hz boundary (`L_hat` 24->23), `(195,200,205)Hz` around
+202.6Hz (`L_hat` 18->17), and `(266,271,276)Hz` around 271.2Hz (`L_hat` 13->12). **If `g2` genuinely
+encoded `L_hat`, every same-`L_hat` pair should match exactly and only the crossing pairs should
+differ. Instead, `g2` changed in 2 of the 3 same-`L_hat` pairs** (`195/200Hz`, both `L_hat`=18:
+`g2` 1506->2529; `266/271Hz`, both `L_hat`=13: `g2` 2530->2518) -- changes of similar character to
+the crossing pairs, not the "held exactly constant" behavior the hypothesis predicts. This
+decisively rules out `g2` as a direct `L_hat`/`K_hat` encoding: the moderate correlation found in
+this section's own opening analysis was almost certainly a **confound**, not a causal link --
+`L_hat` and raw pitch are both monotonic-ish functions of frequency, so any genuinely continuous,
+pitch-sensitive parameter (the same character already established for `g0`) will show *some*
+correlation with `L_hat` as a side effect, without actually encoding it. **The corrected, more
+likely reading, consistent with everything found this session**: `g0`, `g1`, and `g2` are probably
+all continuously-varying gain/spectral-amplitude-related coefficients (this crate's own textbook
+pipeline has a real 5-element `gain_vector`, `g_hat[0..5)`, feeding separate quantizers -- a
+structurally plausible home for several distinct-but-correlated pitch-and-amplitude-sensitive
+parameters), not a mix of a gain field and a discrete harmonic-count field. Disentangling which
+specific coefficient each block carries -- if any single clean 1:1 correspondence exists at all --
+remains open, and this specific `L_hat`-encoding hypothesis is now closed off rather than left
+ambiguous. Full controlled-test data and script committed.
