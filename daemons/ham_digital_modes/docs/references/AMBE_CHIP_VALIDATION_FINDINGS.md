@@ -1449,3 +1449,105 @@ A quick spot-check of 4 predicted `u6` pairs (`{11,23}`, `{34,35}`, `{11,35}`, `
 signal, fresh process each) found all 4 non-null with distinct checksums -- consistent with `u6`
 being real (not yet full-membership-mapped; a complete anchor-11 sweep was launched the same way as
 `u4`/`u5` to confirm it fully -- see the next section for its result).
+
+## 21. Third Hamming block confirmed with zero mismatches, and all 4 Golay-block boundaries confirmed directly
+
+The anchor-11 sawtooth sweep (predicted `u6`, per §20's transform) resolved into exactly the
+predicted structure, same as `u4` and `u5`: 7 matched pairs plus the same 7 `c7` singles.
+
+| checksum | members |
+|---|---|
+| `64fc65ff...` | 23, 118 |
+| `4aaab9b1...` | 34, 94 |
+| `5c0a77b5...` | 35, 82 |
+| `5d26390b...` | 46, 70 |
+| `ca72415a...` | 47, 59 |
+| `72f4ab71...` | 58, 130 |
+| `d58854aa...` | 106, 142 |
+
+Combined with anchor 11: **u6 = {11, 23, 34, 35, 46, 47, 58, 59, 70, 82, 94, 106, 118, 130, 142}**
+-- identical, position for position, to §20's transform prediction (natural range 122-136). Zero
+mismatches, the third Hamming block in a row.
+
+**A Golay(23,12) block was then directly confirmed too**, using the predicted `g0` membership
+(`{0, 1, 12, 13, 24, 25, 36, 37, 48, 49, 60, 61, 72, 73, 84, 85, 96, 97, 108, 109, 120, 121, 132}`,
+natural range 0-22): a 3-bit in-block flip (`{0,1,12}`) is null (Golay's minimum distance of 7
+corrects any error of weight <=3 perfectly, exactly reproducing the original), while two *different*
+4-bit in-block flips (`{0,1,12,13}` and `{0,1,24,25}`) each produce their own distinct non-null
+effect -- exactly the Golay signature predicted in §18's original advisor review, now confirmed
+directly against the chip for the first time this entire investigation.
+
+**All 4 Golay-block boundaries were then confirmed directly, per advisor review** (a single in-block
+Golay signature isn't proof of the *exact* predicted membership, since a null 3-flip is also what
+three bits scattered across three different blocks would produce). For each adjacent pair of
+predicted Golay blocks, one 4-flip fully inside the first block was compared against one 4-flip
+straddling the boundary (2 bits from each side): `g0`/`g1` (`{0,1,12,13}` non-null vs `{0,1,2,3}`
+null), `g1`/`g2` (`{2,3,14,15}` non-null vs `{2,3,4,5}` null), `g2`/`g3` (`{4,5,16,17}` non-null vs
+`{4,5,6,7}` null) -- every straddle is null (two independent 2-bit errors, each within its own
+Golay block's 3-error correction radius, each self-corrects back to the original) while every
+in-block 4-flip is non-null, confirming each boundary exactly. `g3`'s own in-block signature
+(`{6,7,18,19}`) was null on the first three subsets tried (`{6,7,18,19}`, `{6,7,30,31}`,
+`{6,7,42,43}`, `{18,19,30,31}`) -- consistent with §18's already-established finding that many real
+codewords are inaudible on any given test signal, not evidence against `g3` -- and a wider-spread
+subset (`{7,55,79,113}`, matching `{6,7,113,114}`'s checksum) confirmed a real, audible `g3`
+codeword. All 4 Golay blocks are now structurally confirmed, completing direct verification of
+every one of the 8 FEC sub-blocks' existence and boundaries (4 fully bit-mapped, 4 boundary-and-
+signature confirmed).
+
+**Primary-source confirmation, found while researching a separate question from Bruce about whether
+this chip supports a voice/data split mode (it does not -- see the answer recorded below)**: DVSI's
+own AMBE-3000R Vocoder Chip Users Manual (Section 6.9, CHAND field description) states directly:
+*"Chand[0] contains the bits which are most sensitive to bit errors... Chand[(Bits-1)/8] contain the
+bits which are least sensitive to bit errors."* This is DVSI's own documented design principle
+matching, exactly, the natural-order assumption this investigation inferred empirically (4 Golay
+blocks first -- Golay is the strongest protection, minimum distance 7 -- then 3 Hamming blocks --
+minimum distance 3, weaker -- then the unprotected raw `c7` bits last). What was an inferred
+convention that happened to fit the data is now a documented DVSI design principle independently
+corroborating it.
+
+**Where this leaves the RATET(27) wire format**: of the 8 total FEC sub-blocks, 4 are now fully,
+exactly mapped by direct chip experiment (`u4`, `u5`, `u6`, `c7` -- 52 of 144 wire positions with
+zero prediction errors across all of them), and all 4 Golay blocks (`g0`-`g3`, 92 more positions)
+have their exact predicted boundaries directly confirmed via the in-block-vs-straddle 4-flip test
+above, though their individual bit-for-bit membership (unlike the Hamming blocks) hasn't been
+walked position-by-position the way an anchor sweep would. The transform itself: **wire position
+`m` corresponds to natural (pre-interleave) position `12*(m mod 12) + (m div 12)`**, with the
+natural bit stream simply being the 8 FEC sub-blocks concatenated in decreasing-protection order
+(`g0..g3` at natural 0-91, `u4..u6` at natural 92-136, `c7` at natural 137-143) -- a full,
+falsifiable, and now extensively chip-verified model of this chip's real host-interface wire format,
+found entirely by black-box experimentation with zero access to DVSI's proprietary interleave
+specification.
+
+**One open question checked and left genuinely unresolved**: §19 flagged that under the transform,
+`131`->natural 142 and `143`->natural 143 (`c7` offsets 5 and 6), which doesn't cleanly match this
+crate's own `extract_fundamental_frequency_quantizer` formula (`(u[7]>>1)&0b11`, wanting `c7` bits 1
+and 2) under either an MSB-first or LSB-first storage convention -- under MSB-first, that formula
+would instead want offsets 4 and 5 (wire 119 and 131). Tested directly: `flip{107}`, `flip{119}`,
+`flip{131}`, `flip{143}` each alone (sawtooth signal) all show their own distinct, roughly
+comparable non-null effect (4.5-5.7 dB range) -- no clear "two strong pitch-class bits vs two weak
+amplitude-class bits" split emerged that would discriminate which pair is really the pitch field
+under this chip's actual bit-index convention. This remains an open, unresolved constraint on any
+final decoder for this chip's `c7` field; the original finding that only `131`/`143` (not the other
+5) show any effect under a *pure tone* still stands as the most specific evidence available, but
+doesn't by itself resolve the formula's exact bit-index convention.
+
+**A capability found but not used tonight, for whoever continues this**: the manual documents
+`CHAND4` (field ID `0x17`), a soft-decision decode mode (4-bit confidence values, 2 per byte,
+instead of hard 0/1 bits). A future investigator could feed maximal-uncertainty ("don't know")
+soft values to every bit outside the block currently under test, which may suppress cross-block
+miscorrection noise entirely rather than needing to reason about it after the fact -- not tried
+this session, but a real, documented feature worth exploring.
+
+**Answer to Bruce's question: does this chip support a "data mode" or voice/data split, separate
+from the vocoder's own compressed voice bits?** No. A careful read of both DVSI's USB-3000 Family
+manual and the full AMBE-3000R Vocoder Chip Users Manual found: only 3 packet types exist
+(`CONTROL`, `CHANNEL`, `SPEECH`); the channel packet's only data-carrying fields are `CHAND`/`CHAND4`
+(compressed voice bits, hard/soft-decision), `SAMPLES`, `CMODE`, and `TONE`; and the encoder/decoder
+feature-flag words (`ECMODE_IN`, `DCMODE_IN`/`DCMODE_OUT`) are entirely audio-processing toggles
+(noise suppression, echo cancellation, companding, DTX/silence detection, tone detect/send, frame
+repeat, comfort noise) with no data-channel concept anywhere. Whatever "data" a real over-the-air
+protocol carries alongside voice (P25's embedded Link Control/Low Speed Data, D-STAR's slow-data
+field) is added entirely by the surrounding radio/modem framing, external to the vocoder chip -- the
+chip's own channel bitstream is 100% voice+FEC, confirming there is no host-exposed pass-through path
+that would have let this investigation bypass vocoder synthesis directly (the sawtooth-signal fix in
+§19/§20 remains the real, practical workaround for that problem).
