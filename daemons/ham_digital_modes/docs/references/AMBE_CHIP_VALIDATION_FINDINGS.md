@@ -2328,3 +2328,39 @@ Golay capacity, and what real-world voice/signal parameter (if any single one) t
 represents -- the FEC/interleave layer is now completely and validatedly duplicated in software;
 the deeper semantic/parameter-mapping question for `g3` (and for `g0`-`g2`/`u4`-`u6`'s own specific
 parameter identities, per sections 23-24) remains a separate, further piece of work.
+
+## 30. First semantic signal on the Hamming blocks: `u6` is the cleanest pitch-correlated candidate found this session, zero new chip time
+
+Every semantic-layer investigation so far (sections 23-24) focused on the four Golay blocks;
+`u4`-`u6` had only their FEC-layer correctness validated, never a semantic look. A zero-chip-time
+re-analysis of already-committed data (the RMS-normalized dense pitch sweep and the clean amplitude
+sweep, both from section 23) finds a real, and notably *cleaner*, pitch-correlated candidate:
+
+| block | Spearman vs frequency (RMS-normalized) | Spearman vs amplitude |
+|---|---|---|
+| `u4` | 0.350 | (not tested) |
+| `u5` | -0.323 | (not tested) |
+| `u6` | **-0.773** | **0.029** |
+
+`u6` shows a strong frequency correlation that survives genuine RMS normalization (ruling out the
+amplitude confound that complicated `g0`'s own reading), **and, uniquely among every parameter this
+session has tested, essentially zero correlation with signal amplitude** (`0.029`, indistinguishable
+from noise) -- checked directly against the clean single-frequency amplitude sweep. This is the
+cleanest single-variable-dependent candidate found all session: `g0`/`g1`/`g2` all show real
+dependence on *both* pitch and amplitude (consistent with gain/spectral-energy quantizers, section
+23), while `u6` appears genuinely pitch-only.
+
+**Tested against the same disciplined same-`L_hat`-vs-crossing control used to refute `g2`'s own
+`L_hat` hypothesis (section 24)**: `u6` changes at *every* tested point, both same-`L_hat` pairs and
+crossing pairs, at fine 5Hz resolution -- ruling out a discrete `L_hat`-encoding explanation the same
+way it was ruled out for `g1`/`g2`, and instead supporting a genuinely continuous, fine-grained pitch
+quantizer (the same general character as `g0`, but without `g0`'s confounding amplitude
+sensitivity). **This is the strongest, cleanest candidate this investigation has found for "the real
+RATET(27) FEC-mode pitch parameter"** -- stated as a strong candidate, not a proven identification,
+since (per this whole section's own recurring lesson) a promising correlation deserves the same
+skepticism before being called confirmed. A natural next step: the same rigorous confound-elimination
+sequence already applied to `g0` (RMS-normalized dense sweep specifically targeting `u6`, silence-
+frame corroboration, and a direct comparison against the textbook `dequantize_fundamental_frequency`
+formula's own shape) would either confirm or refute this candidacy with the same rigor `g0`'s gain
+identification received. Scripts committed (`analyze_u456_pitch_correlation.py`,
+`analyze_u6_amplitude.py`), reproducible from already-committed data with zero new chip time.
