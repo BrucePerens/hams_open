@@ -13,11 +13,16 @@ use super::tables;
 use crate::ambe::fec::golay_decode;
 
 /// The real FEC/whitening outcome of parsing one raw 72-bit frame: the 49 decoded data bits plus
-/// both Golay blocks' own corrected-error counts (useful for the same kind of chip-validation
-/// diagnostic `super::ambe`'s own `FrameErrors` supports -- a real, meaningful signal here too,
-/// since `[23,12,7]` Golay is *not* a perfect code the way `super::ambe`'s off-the-shelf comparison
-/// found P25's own FEC layer to be surprising about; D-STAR's Golay still corrects up to 3 errors
-/// reliably, and a low count here is real evidence the frame parsed correctly).
+/// both Golay blocks' own corrected-error counts. **The same caveat the P25 chip-validation
+/// investigation found applies here too, since this reuses the identical `[23,12,7]` Golay code**:
+/// it is a genuine perfect code (covering radius equals packing radius, exactly 3), so *every*
+/// possible 23-bit input decodes to *some* codeword within distance <=3 -- `epsilon_c0`/`epsilon_c1`
+/// can never exceed 3 regardless of whether the input was ever a real, intentionally-encoded
+/// codeword. A single frame's own low corrected-error count is therefore not, by itself, strong
+/// evidence of correct framing (see `AMBE_CHIP_VALIDATION_FINDINGS.md`'s own account of exactly this
+/// trap) -- real validation needs either a genuine round trip against known data (this module's own
+/// tests do that) or the same kind of multi-frame, perturbation-based empirical check the P25
+/// investigation used against the real chip.
 pub struct ParsedFrame {
     /// The 49 decoded data bits, packed MSB-first into a `u64` (bit 48 down to bit 0).
     pub d: u64,
