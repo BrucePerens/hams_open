@@ -1333,3 +1333,47 @@ remains an open question which of the chip's 3 total Hamming(15,11) blocks this 
 other 2 Hamming blocks and 4 Golay(23,12) blocks land among the remaining 129 wire positions --
 continuing the anchor-sweep technique on other columns (per the stride-12 hypothesis) is the natural
 next step for whoever continues this investigation.
+
+## 19. Anchor-9 sweep: the stride-12 pattern's extended prediction is falsified, but the block-interleaver transform itself remains solid
+
+§18's stride-12 observation was extended (analytically, zero chip time) into a specific transform
+hypothesis: the wire (transmitted) format is a 12x12 block interleaver over a natural bit order where
+the wire position `m` corresponds to natural position `n(m) = 12*(m mod 12) + (m div 12)` (a matrix
+transpose: write the natural stream down 12 columns, read it back out across 12 rows). Applying this
+transform to the confirmed 15-member block's own wire positions gives natural positions
+**92 through 106, exactly 15 consecutive values** -- strong support for the transform itself, since
+only this specific write-by-column/read-by-row structure would keep a real FEC block's bits
+contiguous in natural order after this kind of interleaving.
+
+Extending this with the further (unverified) guess that the 8 FEC sub-blocks are simply concatenated
+in natural order as `u0..u3` (Golay x4, 23 bits each, natural 0-91), `u4..u6` (Hamming x3, 15 bits
+each, natural 92-136), `u7` (raw, 7 bits, natural 137-143) -- matching the confirmed block to `u4`
+-- predicts the *next* Hamming block `u5` at natural 107-121, which transforms back to wire positions
+**{9, 10, 21, 22, 33, 45, 57, 69, 81, 93, 105, 117, 129, 140, 141}**.
+
+**This specific extended prediction is falsified.** An anchor sweep on wire bit 9 (one fresh process
+per candidate, same technique as §18) found **no Hamming-block partners at all** -- the only non-
+baseline hits were `flip{9,131}` and `flip{9,143}`, both reproducing the already-known `27332c18...`
+checksum (§14's confirmed unprotected `c7` pitch bits, which show their own effect regardless of what
+else is flipped alongside them). Every other candidate, including several of the specifically
+predicted partners (10, 21, 22, 33, 45, 57, 69, 81 -- all within the tested range), came back null.
+This is consistent with bit 9 sitting in a Golay(23,12) block instead (Golay's minimum distance of 7
+means a 2-bit error is never "corrected" onto a visible third bit, so an all-null anchor sweep is
+exactly what a Golay-block anchor should produce) -- but it directly contradicts the "u4 immediately
+followed by u5" natural-ordering guess, since natural position 108 (bit 9's own natural position
+under the transform) was predicted to fall inside a Hamming block and evidently does not.
+
+**What this leaves standing vs. what's now retracted**: the 12x12 write-by-column/read-by-row
+transform itself, and the single confirmed block's natural contiguity under it (92-106), remain solid
+-- that part doesn't depend on the natural block-ordering guess. What's retracted is the *specific*
+guess about which natural range each of the other 6 FEC sub-blocks occupies; "3 Hamming blocks land
+consecutively right after the 4 Golay blocks" is wrong, or at least this particular anchor (9) isn't
+in a Hamming block as that guess would require. Determining the true natural-order placement of the
+remaining 6 sub-blocks needs more anchor sweeps on further candidate positions -- each costs one
+fresh process per one of ~143 candidates (~30-40 minutes) and only tests one candidate natural
+position at a time, so this is a genuinely open, costly-per-attempt search, not a quick follow-up.
+
+This is an honest negative result, not a discouraging one: two anchor sweeps in one night (§18, §19)
+have already produced the first real internal wire-format structure (one full FEC block's exact
+membership and codeword layout) this entire investigation has found, plus a validated interleaver
+transform for that one block. Pinning down the rest is future work.
