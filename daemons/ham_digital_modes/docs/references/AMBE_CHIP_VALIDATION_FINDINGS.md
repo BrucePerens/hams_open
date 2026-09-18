@@ -1579,3 +1579,146 @@ visible in hindsight all the way back in this much earlier dataset. `u4` was sim
 whose confirmed codewords all happened to be audible on a sine tone -- the lucky block, not a
 special one -- which is exactly what let this whole investigation get started in the first place
 (§15) before the real, larger structure came into view (§§17-21).
+
+## 23. The labeling question is provably unsolvable by relational testing alone -- pivoting to direct chip-frame sampling resolves 7 of 8 FEC blocks completely, with a real software duplicate now committed
+
+Following the `/goal` directive to continue until the RATET(27) format is fully known and duplicated
+in software, this session attempted to resolve the one remaining open question from §21: given a
+block's confirmed wire-bit *membership* (now complete for all 8 sub-blocks), what is the actual
+bit-index-within-codeword *permutation* -- i.e. which physical wire bit is `fec.rs`'s codeword bit
+14 vs. bit 3 vs. bit 0?
+
+**This turned out to be mathematically unsolvable by any amount of black-box weight-3/weight-7
+relational testing, proven directly rather than merely suspected.** A brute-force Python constraint
+solver was built representing each wire position as an unknown column vector in GF(2)^4 (matching
+`fec.rs`'s own `HAMMING_PARITY` column structure), with one constraint per confirmed weight-3
+codeword (`column(a) XOR column(b) XOR column(c) = 0`). Using all 18 of `u4`'s confirmed triples
+(three independent anchors: 127, 8, 92 -- the latter two swept fresh specifically to break the
+degeneracy an earlier single-anchor attempt hit), the solver still found over 20,000 consistent
+candidate permutations (search capped there for runtime, but the true count is almost certainly
+much higher). Merging in `u5`'s and `u6`'s own 7 triples each (32 total constraints across three
+independently-derived Hamming blocks) made no difference -- still capped at 20,001 solutions.
+
+**The reason is structural, not a data shortage**: every constraint of the form `col(a) XOR col(b)
+XOR col(c) = 0` is invariant under *any* linear automorphism `T` of GF(2)^4 applied simultaneously
+to every column, since `T(col(a)) XOR T(col(b)) XOR T(col(c)) = T(0) = 0` for any linear `T`. The
+Hamming(15,11) code's automorphism group has order `|GL(4,2)| = 20160`; the Golay(23,12) code's is
+larger still (order roughly 10^7, related to the Mathieu group `M23`). No number of anchor bits or
+flip-sweep triples can ever break this symmetry -- confirmed here computationally, not just argued
+abstractly, and worth recording so no future session re-attempts the same approach expecting more
+data to eventually resolve it.
+
+**The fix: stop asking "which physical bit is codeword index N" and instead sample the code
+directly.** The chip's own encoder emits real, valid codewords on every live frame. Two new
+committed tools do this:
+
+- `examples/p25_ratet27_capture_frames.rs` -- streams a wide variety of stimuli (9 voice-range
+  frequencies as both sine and sawtooth, an amplitude ramp, silence, and 60+ pseudo-random LCG-noise
+  frames at varying peak amplitude) through the real chip, dumping each response's raw 18-byte
+  CHAND payload as a hex line. Includes a retry-with-backoff wrapper around the send/recv round
+  trip, since this session had already hit several transient `WouldBlock` UDP timeouts under
+  sustained chip load (previously fatal to long-running sweeps).
+- `examples/p25_ratet27_capture_noise_burst.rs` -- a focused follow-up: more pseudo-random noise at
+  8 fixed peak amplitudes (500 through 16000), for topping up coverage on whichever block needed
+  more distinct samples.
+- `examples/p25_ratet27_capture_real_speech.rs` -- streams real recorded speech (the already-cleared
+  Open Speech Repository fixtures at `tests/fixtures/osr_speech/`, 8kHz mono, this codec's native
+  rate) through the chip 160 samples at a time. Added specifically because synthetic noise alone
+  plateaued on one block (see below) -- real speech has far richer, non-stationary spectral content
+  than any synthetic signal this investigation had tried.
+
+Across all three tools, **~2200 total captured frames, 1490 of them bit-for-bit distinct**, were
+deinterleaved via the validated `natural_position` transform and split into the 8 sub-blocks.
+Treating each block's own observed natural-order bit patterns as vectors in a GF(2) linear code and
+computing GF(2) rank (Gaussian elimination) gives a direct, assumption-free answer to "is this
+really an unwhitened FEC codeword, and if so, what's its generator matrix":
+
+| block | rank found | expected (pure codeword) | verdict |
+|---|---|---|---|
+| `g0` | 12 | 12 | full rank -- pure Golay(23,12) codeword |
+| `g1` | 12 | 12 | full rank -- pure Golay(23,12) codeword |
+| `g2` | 12 | 12 | full rank -- pure Golay(23,12) codeword |
+| `g3` | **8** | 12 | **short -- see below, unresolved** |
+| `u4` | 11 | 11 | full rank -- pure Hamming(15,11) codeword |
+| `u5` | 11 | 11 | full rank -- pure Hamming(15,11) codeword |
+| `u6` | 11 | 11 | full rank -- pure Hamming(15,11) codeword |
+| `c7` | 7 | 7 | full rank -- genuinely raw/unprotected, confirms DVSI's own description |
+
+Full rank on 7 of 8 blocks is itself a real, standalone finding: it directly answers a question this
+investigation had left open since §17 (whether the chip mixes any data-dependent whitening/PRN into
+the wire bits, the way the textbook IMBE encoder's own `modulation` stage does) -- **it does not**,
+for every block reaching full rank. The wire bits genuinely are the FEC codewords themselves.
+
+**`g0`/`g1`/`g2`'s row-reduced generator basis turned out to be bit-for-bit identical to `fec.rs`'s
+own systematic Golay(23,12) construction** -- same data/parity split (natural offsets 0-11 as free
+data-bit positions, 12-22 as determined parity, an exact match in all 3 x 12 = 36 compared rows),
+same `GOLAY_PARITY` values, same bit order (natural offset ascending = codeword bit descending,
+MSB-first). This chip's real Golay code needs **no new implementation at all**: `fec.rs`'s existing
+`golay_encode`/`golay_decode` apply directly to each Golay block's natural-order bits, verified with
+a real round-trip test (`decode_block_round_trips_g0_with_the_real_golay_code`).
+
+**`u4`/`u5`/`u6` all share one identical row-reduced generator basis** (one Hamming FEC routine used
+three times, exactly as expected), but this basis's parity submatrix is a **different, though
+equally valid, labeling** of the same 11 nonzero 4-bit column values `fec.rs`'s own
+`HAMMING_PARITY` uses -- confirmed the columns are the same *set* (`chip_hamming_parity_uses_the_
+same_15_nonzero_columns_as_fec_rs`), just assigned to different data-bit positions. This chip-real
+table, `HAMMING_PARITY_CHIP = [0b1001, 0b1101, 0b1111, 0b1110, 0b0111, 0b1010, 0b0101, 0b1011,
+0b1100, 0b0110, 0b0011]`, was **cross-validated against all 32 of this session's independently
+gathered empirical weight-3 relationships** (18 from anchor 127, 7 from anchor 9, 7 from anchor 11 --
+the very data the relational-testing approach above proved could never uniquely determine a
+permutation) and every single one holds exactly, with zero mismatches. The permutation-degeneracy
+result above and this validation are not in tension: many permutations satisfy those 32 relational
+constraints, but the *one this session actually derived by sampling real codewords* is confirmed
+consistent with all of them, which is the strongest evidence available that it's the chip's real
+table (not merely "a" table that happens to work).
+
+**New committed code**: `src/ambe/ratet27_wire_format.rs` (the validated 12x12 transform, the 8
+sub-block boundaries, and `block_wire_members` computing each block's exact wire membership
+programmatically from the transform rather than as separately hand-maintained lists -- regression-
+tested against every directly chip-confirmed set from §§18-21 with zero mismatches) and
+`src/ambe/ratet27_fec.rs` (the chip-real Golay reuse of `fec.rs`, the new `HAMMING_PARITY_CHIP`
+table and its encode/decode functions, a unified `decode_block` entry point, and the full validation
+test suite described above -- 19 tests total across both files, all passing). This is a genuine,
+tested, chip-validated software duplicate of RATET(27)'s FEC layer for 7 of its 8 sub-blocks, not
+just documentation of the format.
+
+**`g3` remains open, and this is a real finding, not a sampling gap.** Despite the same ~2200-frame,
+1490-distinct-frame capture spanning pure tones, 8 different noise amplitudes, and 16 seconds of
+real recorded speech, `g3`'s observed wire bits plateau at exactly GF(2) rank 8 (not 12), with 4 of
+its 23 natural-order bits (offsets 2-5, transforming to natural positions 71-74) staying **exactly
+zero in every single one of the 1490 distinct captured frames** -- not merely rare, literally never
+observed as 1. More than 100x the frame count that reached full rank on every other block failed to
+move `g3` past rank 8, across wildly different stimulus types, which rules out "just needs more
+samples" as the explanation. The most plausible reading is that `g3` carries a parameter tied to
+some speech characteristic none of this investigation's stimuli (or, apparently, ordinary read-aloud
+English sentences) ever produce -- deliberately extreme pitch, a specific voicing pattern, or very-
+high-order spectral content are candidates, but this needs either different stimulus material or a
+from-spec understanding of exactly which IMBE parameter lands in the highest-index Golay block to
+know what to specifically provoke. `decode_block` deliberately panics if called on `g3` rather than
+silently assuming it matches `g0`-`g2`'s already-confirmed generator.
+
+**Two scope notes for whoever continues this work, stated now rather than discovered later:**
+
+- §9's finding that pitch lives in `u2`, Gray-coded, was derived through the *textbook* TIA-102
+  Annex H deinterleave -- which this entire investigation (§§15-22 and this section) has since shown
+  does not match this chip's real wire format. That specific claim needs re-deriving through the
+  correct `ratet27_wire_format` deinterleave plus an empirical decode before anything semantic gets
+  built on top of it; it should not be assumed to still hold.
+- Byte-exact PCM reproduction of the chip's own *synthesis* output is almost certainly unreachable
+  regardless of how completely the FEC/interleave layer above gets nailed down -- DVSI's manual
+  documents proprietary post-processing (noise suppression, spectral enhancement variants, comfort
+  noise) in the synthesis path that this crate's from-spec `src/ambe/` implementation was never
+  going to reproduce bit-for-bit. The realistic, achievable validation bar for the semantic
+  (voice-parameter) layer, once attempted, is parameter-level agreement -- decoded pitch/voicing/
+  amplitude values matching what this crate's own encoder produces for the same input PCM -- not
+  identical output samples. Recording this now so the eventual semantic-mapping work is scoped
+  honestly from the start rather than discovering the ceiling at the end.
+
+**D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
+both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
+dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
+frequencies via the real, correct interleave; `examples/ambe_chip_validate_ambe_plus_2.rs` -- validates
+pitch correlation and Golay-decode-zero-error fraction for both the FEC and No-FEC AMBE+2 half-rate
+variants). These were not merely "presumed resolved" from an earlier session as an unverified
+carry-forward -- they are real, existing, chip-validated code, closing that part of the broader goal
+without new work needed.
