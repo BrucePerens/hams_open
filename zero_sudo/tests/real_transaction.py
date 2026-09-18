@@ -28,6 +28,26 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     exactly like a live production environment.
     """
 
+    # night_shift_todo/high/test-runner-hangs-before-any-tour-starts-9a60a362.md's own root
+    # cause: odoo/tests/suite.py's TestSuite.run() sets odoo.modules.module.current_test to a
+    # freshly-constructed (but not yet setUp()'d) test instance BEFORE this class's own
+    # setUpClass() runs -- and setUpClass() below does a real committed INSERT, real wall-clock
+    # time. Any external HTTP request landing during that whole window (an /odoo/health poll from
+    # this project's own test harness, confirmed live -- this is the exact class
+    # TestSettingsAndCache, a real subclass, was caught mid-setUpClass() in) hits Odoo core's
+    # assertCanOpenTestCursor(), which reads self.http_request_allow_all -- normally set only in
+    # BaseCase.setUp() (instance-level, once per TEST METHOD), which hasn't run yet for a
+    # class-level health-check request. That crashes with AttributeError, which _serve_db
+    # silently swallows and serves the request without a real cursor (a 302 instead of the
+    # expected health-check response), which Odoo core's own internal health-check retry loop
+    # never recognizes as ready -- until this project's OWN test-runner watchdog gives up and
+    # kills the whole run after several minutes of apparent silence. These two class-level
+    # defaults close the gap: read only during the vulnerable pre-setUp() window, unconditionally
+    # overwritten by BaseCase.setUp() the moment a real test method starts, so this changes
+    # nothing about normal, non-racing test execution.
+    http_request_key = ""
+    http_request_allow_all = False
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()

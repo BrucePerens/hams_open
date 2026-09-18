@@ -889,6 +889,26 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     server = None
     browser = None
     _socat_proc = None
+    # night_shift_todo/high/test-runner-hangs-before-any-tour-starts-9a60a362.md's own root
+    # cause: odoo/tests/suite.py's TestSuite.run() sets odoo.modules.module.current_test to a
+    # freshly-constructed (but not yet setUp()'d) test instance BEFORE running this class's own
+    # setUpClass(), and setUpClass() can take real wall-clock time (crypto key generation,
+    # patching, in RealTransactionCase's sibling case a real committed INSERT). Any external
+    # HTTP request landing during that whole window -- an /odoo/health poll from this project's
+    # own test harness, confirmed live -- hits Odoo core's assertCanOpenTestCursor(), which reads
+    # self.http_request_allow_all. That attribute is normally set only in BaseCase.setUp()
+    # (instance-level, once per TEST METHOD), which hasn't run yet for a class-level health-check
+    # request -- crashing with AttributeError, which _serve_db silently swallows and serves the
+    # request without a real cursor (a 302 instead of the expected health-check response), which
+    # Odoo core's own internal health-check retry loop doesn't recognize as ready and keeps
+    # polling until this project's OWN test-runner watchdog gives up and kills the whole run
+    # after several minutes of apparent silence. These two class-level defaults close the gap
+    # entirely: they are read (falling back from the missing instance attribute) during the
+    # vulnerable pre-setUp() window, and are unconditionally overwritten by BaseCase.setUp()
+    # itself the moment a real test method actually starts, so this changes nothing about normal,
+    # non-racing test execution -- purely a safe fallback for the narrow timing window.
+    http_request_key = ""
+    http_request_allow_all = False
 
     # [@ANCHOR: zero_sudo:hams_http_case_url_open]
     def url_open(
