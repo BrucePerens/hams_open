@@ -1944,6 +1944,28 @@ runs while testing this exact change), matching the robustness already built int
 capture tool this session wrote. All three chip modes -- D-STAR, AMBE+2 half-rate, and RATET(27) --
 now have real, live, real-speech-validated PASS/FAIL harnesses on equal footing.
 
+## 24a. `c7`'s 5 previously "inert" raw bits actually carry real signal -- refining, not overturning, an earlier session's finding
+
+An earlier session's §14 found only 2 of `c7`'s 7 raw bits showed any audible effect on a plain 200Hz
+sine test signal, and §18 (this session) repeated that observation on the same signal type. A
+zero-chip-time re-check against this session's much larger, more varied captured dataset (2973
+frames spanning tones, noise, real speech, dual-tones, and chirps) finds real per-bit variance on
+**all 7** `c7` bits (43-60% ones each, none constant) and moderate frequency correlation on several
+of them simultaneously (natural offsets 137/139/143 showing `|Spearman|` 0.37-0.46 on the mixed
+frequency-labeled subset). **This refines rather than overturns the earlier finding**: the original
+conclusion was scoped explicitly to "no effect on this specific test signal" (a plain sine), and a
+richer stimulus set was always expected to reveal more, exactly as happened repeatedly elsewhere in
+this investigation (the u5/u6 sine-blindness fix, section 19). A follow-up check against the clean,
+single-waveform (sawtooth-only) dense pitch sweep found an even stronger single-bit correlation
+(natural offset 138, `Spearman=0.880`) -- but with the opposite sign from the mixed-waveform
+dataset's own reading of a *different* bit, which is itself informative: it suggests `c7`'s content
+may be sensitive to waveform *shape* (sine vs. sawtooth), not purely fundamental frequency, since
+mixing waveform types in the first dataset would scramble a shape-dependent signal in exactly this
+way. **Real, useful expansion of known content** (5 more bits confirmed non-inert than previously
+documented), but the exact relationship remains complex and not yet reduced to a specific formula --
+left open for a future session with the two saved analysis scripts
+(`analyze_c7_bits.py`, `analyze_c7_dense_pitch_sweep.py`) as a starting point.
+
 ## 24. First real signal on `g1`/`g2`'s semantic content: a moderate correlation with harmonic count, zero chip time
 
 With `g0` now understood as a gain/energy quantizer (section 23), the next open semantic question is
