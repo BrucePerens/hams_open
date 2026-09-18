@@ -2122,3 +2122,36 @@ second, cleanly-decoded, real-world semantic meaning distinct from its already-f
 FEC role -- the chip clearly repurposes the same wire positions for different content depending on
 what it classifies the input as. `decode_dtmf.py`'s own output and this table are fully
 reproducible from the committed `real_dtmf_sweep.tsv` with zero chip time.
+
+## 26. `DTX_ENABLE` genuinely changes silence-frame encoding, confirming DVSI's own "background noise level" claim; `g3` unaffected
+
+Continuing the same primary-source-motivated ECMODE testing that found the DTMF encoding mode
+(section 25), tested `DTX_ENABLE` (`ECMODE_IN` bit 11, Discontinuous Transmission / Voice Activity
+Detection, hardware-pin-dependent default). DVSI's manual makes a specific, testable claim: with
+VAD/DTX enabled, "the encoder will output a silence frame (in-band)... [which] contains information
+regarding the level of background noise" for the decoder's Comfort Noise synthesis.
+
+**Confirmed directly.** `examples/p25_ratet27_capture_dtx_silence.rs` captures pure digital silence
+(and, as a control, a steady tone and two noise levels) with `ECMODE_IN`'s `DTX_ENABLE` explicitly
+off (`0x0000`) and explicitly on (`0x0800`). For silence specifically, three blocks change from
+variable-and-different to a **clean, near-constant value** under `DTX_ENABLE=1`:
+
+| block | DTX off (3 sample frames) | DTX on (3 sample frames) |
+|---|---|---|
+| `g0` | `1025, 1025, 1025` | `3841, 3841, 3841` (constant, but a different constant) |
+| `g2` | `2530, 2526, 2526` | `478, 478, 478` (tightly constant) |
+| `c7` | `27, 95, 27` (varies) | `92, 92, 92` (constant) |
+
+`g1` and `u4`-`u6` show comparable ranges either way; **`g3` continues oscillating between `1024`
+and `2048` under both settings**, unaffected by `DTX_ENABLE` -- consistent with, and a further
+independent confirmation of, section 23's own low-frequency/low-signal bistable-oscillation pattern
+already documented elsewhere, and one more negative data point for `g3`'s own root cause (DTX/
+comfort-noise mode is not it either). The clean, tight constancy of `g0`/`g2`/`c7` under `DTX_ENABLE`
+is real, positive evidence that a genuine, distinct "comfort noise" silence-frame encoding exists
+and is reachable exactly as DVSI's manual describes -- plausibly `g0` and/or `g2` carry the
+"background noise level" parameter the manual mentions, though this session did not vary the actual
+background noise level (only true digital silence was tested) to confirm which field tracks it or
+how. A natural next step: repeat this test with several different *levels* of background noise
+(not just true silence) to see which of `g0`/`g2`/`c7` moves with noise level -- the same kind of
+targeted follow-up that turned the DTMF discovery into a fully decoded, implemented, chip-validated
+software module in section 25. Full dataset committed (`dtx_silence_sweep.tsv`).
