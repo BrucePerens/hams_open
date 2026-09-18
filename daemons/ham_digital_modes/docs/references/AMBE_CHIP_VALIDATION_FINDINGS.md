@@ -2382,3 +2382,27 @@ candidate found this session" overstated how usable `u6`'s individual readings a
 downgraded here to "a real, amplitude-independent frequency-correlated signal, but noisy/unreliable
 per-frame below ~280Hz," a more accurate characterization pending a proper multi-frame-averaged or
 majority-vote re-analysis.
+
+**A further, more complete correction after actually testing the "converged region" hypothesis
+directly, rather than assuming it.** The previous correction speculated that `u6` might be reliable
+above ~280-340Hz, based on the tail of the original 8-frame-per-point sweep. A dedicated follow-up
+(`examples/p25_ratet27_capture_u6_converged_range.rs`) tested 15 frequencies from 280Hz through
+1000Hz with 20 captured frames each (300 frames total) specifically to check this. **The honest
+result is messier than either the original claim or the first correction**: `u6` is genuinely
+frame-stable *only* in a narrow island, 340-440Hz (cleanly `~8` at 340-380Hz, exactly `0` at
+400-440Hz, all 20/20 frames agreeing) -- but is highly unstable again both **below 280Hz and above
+440Hz**, including well above AMBE's documented pitch range (600Hz: 15 distinct values across 20
+frames; 800-1000Hz: 5-8 distinct values). This is not the shape a simple monotonic pitch quantizer
+would produce (which should stay stable-though-varying throughout, or at worst saturate cleanly at
+one end) -- it looks more like `u6` is stable specifically near/at a boundary condition (plausibly
+where some other quantity, like `L_hat`, bottoms out or a related computation saturates) and
+unstable everywhere else, consistent with a genuinely adaptive or multi-frame-state-dependent
+quantity rather than a clean single-frame pitch computation. **The "cleanest pitch candidate"
+framing from earlier in this section is retracted, not merely qualified**: `u6`'s real behavior,
+tested properly rather than assumed, does not support a simple pitch-quantizer identification at
+all. What remains solid from this section: `u6` is real, chip-confirmed, amplitude-independent
+signal content (the single-well-converged-tone amplitude test still stands), but what it actually
+represents is genuinely unresolved, and this specific investigative thread is closed rather than
+left as an open "probably right" lead. Full 300-frame dataset committed
+(`u6_converged_range_sweep.tsv`) so a future session sees this exact result rather than re-deriving
+it.
