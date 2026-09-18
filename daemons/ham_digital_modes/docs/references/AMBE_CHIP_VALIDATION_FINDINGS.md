@@ -1697,6 +1697,26 @@ from-spec understanding of exactly which IMBE parameter lands in the highest-ind
 know what to specifically provoke. `decode_block` deliberately panics if called on `g3` rather than
 silently assuming it matches `g0`-`g2`'s already-confirmed generator.
 
+**`g3`'s rank-8 plateau confirmed exhaustively, not just under the original stimulus set.** Three
+follow-up capture rounds specifically targeted `g3`: two more real-speech recordings from different
+OSR speakers (1000 more frames), and a dedicated exotic-stimulus tool
+(`examples/p25_ratet27_capture_exotic_stimuli.rs`) covering 5 dual-tone/DTMF-style two-sinusoid
+mixes, 5 fast intra-frame linear chirps sweeping the full pitch range in both directions, and 7
+sine tones at and beyond the edges of AMBE's documented 57-444Hz pitch range (down to 30Hz, up to
+800Hz). None of it moved the needle even slightly: **2687 total distinct captured frames (spanning
+tones, ramps, 8 noise amplitudes, 3 real speakers' worth of recorded English speech, dual tones,
+chirps, and extreme pitch) all land in the exact same GF(2) rank-8 subspace**, with the exact same 4
+of 23 natural-order bits staying exactly zero throughout. This is about as thorough an audio-domain
+stimulus search as is practical, and the finding held with zero exceptions across all of it -- strong
+evidence that whatever `g3` encodes is not reachable by any single-frame audio stimulus at all, and
+more likely depends on either multi-frame encoder history/adaptive state that builds up over many
+frames of specific dynamics (not reachable in a short capture window), or an encoder feature/mode
+this investigation's SPEECH-packet-only testing never engages (frame-repeat, DTX, or another
+documented `ECMODE`/`DCMODE` flag). Resolving this now needs a from-spec understanding of exactly
+which IMBE parameter and bit-history dependency lands in the highest-index Golay block, not more
+undirected stimulus variety -- recorded here so a future session doesn't repeat the same broad
+audio-stimulus search expecting a different result.
+
 **Two scope notes for whoever continues this work, stated now rather than discovered later:**
 
 - §9's finding that pitch lives in `u2`, Gray-coded, was derived through the *textbook* TIA-102
