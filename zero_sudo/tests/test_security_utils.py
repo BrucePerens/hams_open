@@ -671,7 +671,17 @@ class TestSecurityUtils(HamsTransactionCase):
 
     @mute_logger("odoo.sql_db")
     def test_13_service_uid_error_paths(self):
-        """Audit all rejection branches within the service account lookup logic."""
+        """Audit all rejection branches within the service account lookup logic.
+
+        Bug-hunt re-verification, 2026-09-18 (night_shift_todo/medium/get-service-uid-raise-
+        exception-uncaught-across-callsites-e94d940f.md): this used to tolerate a raw
+        psycopg2.errors.RaiseException here too, which would have let a regression of the
+        2026-09-09 fix below pass silently -- every caller across both repos writes `except
+        AccessError` around _get_service_uid() specifically because it's documented to always
+        raise that, never the raw Postgres exception (see _get_service_uid's own
+        `except psycopg2.errors.RaiseException as e: raise AccessError(...) from e` -- confirmed
+        still present and correct by reading the current source directly, not assumed from this
+        test alone). Asserting only AccessError here is what actually proves that promise holds."""
         utils = self.env["zero_sudo.security.utils"]
 
         # 1. Invalid XML ID Format
@@ -679,7 +689,7 @@ class TestSecurityUtils(HamsTransactionCase):
             with self.env.cr.savepoint():
                 utils._get_service_uid("invalid_format_no_dot")
             self.fail("Expected exception")
-        except (AccessError, UserError, psycopg2.errors.RaiseException):
+        except AccessError:
             _logger.info("Caught expected exception for missing UID")
 
         # 2. Account Not Found
@@ -687,7 +697,7 @@ class TestSecurityUtils(HamsTransactionCase):
             with self.env.cr.savepoint():
                 utils._get_service_uid("base.non_existent_xml_id")
             self.fail("Expected exception")
-        except (AccessError, UserError, psycopg2.errors.RaiseException):
+        except AccessError:
             _logger.info("Caught expected exception for Account Not Found")
 
         # 3. Deny Human Admin Pass-through
@@ -695,7 +705,7 @@ class TestSecurityUtils(HamsTransactionCase):
             with self.env.cr.savepoint():
                 utils._get_service_uid("base.user_admin")
             self.fail("Expected exception")
-        except (AccessError, UserError, psycopg2.errors.RaiseException):
+        except AccessError:
             _logger.info("Caught expected exception for human admin pass-through")
 
         # 4. Deny Disabled Accounts
@@ -719,7 +729,7 @@ class TestSecurityUtils(HamsTransactionCase):
             with self.env.cr.savepoint():
                 utils._get_service_uid("test_module.disabled_sa_xml")
             self.fail("Expected exception")
-        except (AccessError, UserError, psycopg2.errors.RaiseException):
+        except AccessError:
             _logger.info("Caught expected exception for disabled accounts")
 
     def test_14_service_account_password_generation(self):
