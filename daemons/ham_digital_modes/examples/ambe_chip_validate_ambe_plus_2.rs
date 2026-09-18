@@ -92,6 +92,24 @@ fn test_tone(freq: f64) -> Vec<i16> {
         .collect()
 }
 
+/// Retries a send+recv round trip on transient `WouldBlock` timeouts -- this investigation has
+/// repeatedly hit intermittent UDP timeouts under sustained chip load (see
+/// `AMBE_CHIP_VALIDATION_FINDINGS.md`), which previously crashed this harness outright.
+fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 256], pkt: &[u8]) -> usize {
+    for attempt in 0..8 {
+        sock.send(pkt).expect("send");
+        match sock.recv(buf) {
+            Ok(n) => return n,
+            Err(e) if attempt < 7 => {
+                eprintln!("retrying after {e}");
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Err(e) => panic!("recv channel after retries: {e}"),
+        }
+    }
+    unreachable!()
+}
+
 /// Captures one settled frame per test frequency at the currently-configured rate, returning
 /// `(true_freq_hz, raw_bits, num_bits)` for each.
 fn capture_settled_frames(sock: &UdpSocket) -> Vec<(f64, Vec<u8>, usize)> {
@@ -102,8 +120,7 @@ fn capture_settled_frames(sock: &UdpSocket) -> Vec<(f64, Vec<u8>, usize)> {
         let mut num_bits = 0usize;
         let mut last_frame = Vec::new();
         for _ in 0..(SETTLING_FRAMES + CAPTURED_FRAMES) {
-            sock.send(&build_speech(&samples)).expect("send speech");
-            let n = sock.recv(&mut buf).expect("recv channel");
+            let n = send_recv_retrying(sock, &mut buf, &build_speech(&samples));
             let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
             assert_eq!(ptype, TYPE_CHANNEL, "expected a CHANNEL response");
             num_bits = payload[1] as usize;
@@ -319,6 +336,61 @@ fn run_fec_test(sock: &UdpSocket) {
     }
 }
 
+fn read_wav_mono_i16(path: &str) -> Vec<i16> {
+    let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
+    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
+    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+}
+
+/// Real-speech validation of the FEC rate (33), using the already-confirmed-correct "Annex H
+/// deinterleaved" framing (see `run_fec_test`'s own diagnostic output) -- a more representative
+/// test than synthetic tones alone. Returns `true` if every captured frame Golay-decoded with zero
+/// corrected errors.
+fn run_fec_real_speech_test(sock: &UdpSocket) -> bool {
+    println!("\n=== RATET({RATET_HALF_RATE_FEC}) real recorded speech ===");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC)).expect("send RATET config");
+    let mut buf = [0u8; 256];
+    let n = sock.recv(&mut buf).expect("RATET config response");
+    parse_packet(&buf[..n]).expect("valid RATET ack");
+
+    let speech_files = [
+        "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav",
+        "tests/fixtures/osr_speech/OSR_us_000_0011_8k.wav",
+    ];
+    let mut all_ok = true;
+    for path in speech_files {
+        let pcm = read_wav_mono_i16(path);
+        let n_frames = (pcm.len() / FRAME_SAMPLES).min(400);
+        let mut zero_error_count = 0usize;
+        for i in 0..n_frames {
+            let frame_samples = &pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES];
+            let n = send_recv_retrying(sock, &mut buf, &build_speech(frame_samples));
+            let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_CHANNEL, "expected a CHANNEL response");
+            let num_bits = payload[1] as usize;
+            if num_bits != 72 || payload.len() < 2 + 9 {
+                continue;
+            }
+            let frame_bytes = &payload[2..2 + 9];
+            let mut wire: u128 = 0;
+            for &byte in frame_bytes {
+                wire = (wire << 8) | byte as u128;
+            }
+            let logical = interleaved_to_frame(wire);
+            let parsed = parse_frame(logical);
+            if parsed.epsilon_c0 == 0 && parsed.epsilon_c1 == 0 {
+                zero_error_count += 1;
+            }
+        }
+        println!("  {path}: {zero_error_count}/{n_frames} frames zero-error (Annex H deinterleaved)");
+        if zero_error_count != n_frames {
+            all_ok = false;
+        }
+    }
+    all_ok
+}
+
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
@@ -327,4 +399,10 @@ fn main() {
 
     run_nofec_test(&sock);
     run_fec_test(&sock);
+    let speech_ok = run_fec_real_speech_test(&sock);
+    if !speech_ok {
+        eprintln!("\nFAIL: at least one real-speech frame did not decode with zero errors on RATET(33).");
+        std::process::exit(1);
+    }
+    println!("\nPASS: every real-speech frame decoded with zero errors on RATET({RATET_HALF_RATE_FEC}).");
 }
