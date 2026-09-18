@@ -10,13 +10,34 @@
 //! `hams_open/daemons/ham_digital_modes/docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` for the
 //! full research trail.
 //!
-//! # Frame structure
+//! # Wire format vs. logical frame
+//!
+//! **The real 9-byte CHAND frame exchanged with the chip is not simply `C0||C1||C2||C3`
+//! concatenated MSB-first.** An earlier version of this module assumed it was; live validation
+//! against the real chip (see `AMBE_CHIP_VALIDATION_FINDINGS.md`) found that assumption wrong in two
+//! independent ways, both now fixed:
+//!
+//! 1. **Wire-format interleave.** The 72 bits are interleaved across the four blocks in exactly the
+//!    same pattern D-STAR uses over the air (confirmed against `szechyjs/dsd`'s real `dW`/`dX`
+//!    tables) -- apparently so a repeater can relay CHAND bits to/from RF with no separate interleave
+//!    step of its own. Each byte's bits are read LSB-first. See [`interleave`] for the real tables
+//!    and the [`interleave::wire_bytes_to_frame`]/[`interleave::frame_to_wire_bytes`] conversion
+//!    functions -- use these at the actual chip/UDP boundary.
+//! 2. **`C0`'s spare bit position.** It's `C0`'s own LSB, not its MSB (confirmed against mbelib's
+//!    real `mbe_eccAmbe3600x2400C0`: `ambe_fr[0][0]` is the spare, `ambe_fr[0][23..1]` is the
+//!    codeword, MSB-first).
+//!
+//! [`decode::parse_frame`]/[`encode::build_frame`] operate on this module's own **logical frame**
+//! format -- the already-deinterleaved, correctly-oriented `C0||C1||C2||C3` concatenation described
+//! below -- not on raw wire bytes directly. Convert with [`interleave`] first.
+//!
+//! # Frame structure (logical frame, post-deinterleave)
 //!
 //! Four sub-blocks, each an MSB-first bitfield, concatenated `C0 || C1 || C2 || C3` for exactly
 //! `24 + 23 + 11 + 14 = 72` bits:
 //!
-//! - **`C0`** (24 bits): 1 spare bit (never checked by any known decoder, including mbelib's own)
-//!   followed by a 23-bit `[23,12]` Golay codeword.
+//! - **`C0`** (24 bits): a 23-bit `[23,12]` Golay codeword (MSB-first) followed by 1 spare bit as its
+//!   own LSB (never checked by any known decoder, including mbelib's own).
 //! - **`C1`** (23 bits): a second `[23,12]` Golay codeword, but -- unlike `C0` -- **whitened**: XORed
 //!   with a pseudo-random sequence seeded from `C0`'s own already-Golay-corrected 12 data bits (see
 //!   [`whiten_c1`]) both before encoding and after decoding. `C2`/`C3` are never whitened.
@@ -53,6 +74,7 @@
 
 pub mod decode;
 pub mod encode;
+pub mod interleave;
 pub mod quantize;
 pub mod tables;
 pub mod whitening;

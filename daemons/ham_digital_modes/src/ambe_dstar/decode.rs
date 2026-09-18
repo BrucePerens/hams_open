@@ -30,10 +30,12 @@ pub struct ParsedFrame {
     pub epsilon_c1: u32,
 }
 
-/// Parses a raw 72-bit D-STAR AMBE frame (packed MSB-first into the low 72 bits of `frame`, i.e.
-/// `frame`'s bit 71 is `C0`'s own first/spare bit) into its 49 real decoded data bits, applying
-/// Golay correction to `C0`/`C1` and de-whitening `C1` using `C0`'s own corrected data (in that
-/// order -- see `mod.rs`'s own doc comment for why the order matters).
+/// Parses a raw 72-bit D-STAR AMBE frame (this crate's own logical frame layout -- see
+/// `interleave::wire_bytes_to_frame` for converting real 9-byte chip/wire data into this format --
+/// packed MSB-first into the low 72 bits of `frame`, i.e. `frame`'s bit 71 is `C0`'s own first data
+/// bit) into its 49 real decoded data bits, applying Golay correction to `C0`/`C1` and de-whitening
+/// `C1` using `C0`'s own corrected data (in that order -- see `mod.rs`'s own doc comment for why the
+/// order matters).
 pub fn parse_frame(frame: u128) -> ParsedFrame {
     let frame = frame & ((1u128 << 72) - 1);
     let c0 = ((frame >> 48) & 0xFF_FFFF) as u32; // top 24 bits
@@ -41,9 +43,14 @@ pub fn parse_frame(frame: u128) -> ParsedFrame {
     let c2 = ((frame >> 14) & 0x7FF) as u32; // next 11 bits
     let c3 = (frame & 0x3FFF) as u32; // low 14 bits
 
-    // C0: bit 23 (the field's own MSB) is the spare bit, never checked; bits 22..0 are the Golay
-    // codeword, MSB-first.
-    let c0_codeword = c0 & 0x7F_FFFF;
+    // C0: bit 0 (the field's own LSB) is the spare bit, never checked; bits 23..1 are the Golay
+    // codeword, MSB-first -- confirmed against mbelib's real `mbe_eccAmbe3600x2400C0`
+    // (`in[j] = ambe_fr[0][j+1]`, so `ambe_fr[0][0]` is the spare, not `ambe_fr[0][23]`). Shifting
+    // right (not masking off the top bit) is the fix: the earlier, wrong version of this line kept
+    // the spare and dropped the true codeword MSB instead, which happened to still Golay-decode
+    // "successfully" on some frames by coincidence, to the wrong data -- corrupting every C1
+    // whitening seed downstream. See `interleave.rs`'s own doc comment for the full story.
+    let c0_codeword = c0 >> 1;
     let (c0_data, epsilon_c0) = golay_decode(c0_codeword);
 
     // De-whiten C1 using C0's own corrected data, then Golay-decode the result.
@@ -145,7 +152,11 @@ pub struct DStarParameters {
 /// guessed.
 // [@ANCHOR: dequantize]
 pub fn dequantize(raw: &RawParameters, state: &mut DStarDecoderState) -> DStarParameters {
-    let l = tables::L_TABLE[raw.b0 as usize];
+    // b0 is a 7-bit field (0..=127) but only 126 pitch codes are defined -- 126/127 are reserved
+    // combinations a real encoder never emits. A corrupted-but-Golay-accepted frame from a lossy
+    // radio channel could still produce one, so this is a real system-boundary input, not
+    // internal logic -- clamp rather than panic.
+    let l = tables::L_TABLE[(raw.b0 as usize).min(tables::L_TABLE.len() - 1)];
     // f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5)); w0 = 2*pi*f0 -- mbelib's own "w0 guess" formula
     // (its own comment notes two other candidate formulas from the spec text and patent filings; this
     // is the one mbelib's real, working decoder actually uses).
@@ -315,8 +326,8 @@ mod tests {
         let c1_codeword = golay_encode(c1_data);
         let c1_whitened = whiten_c1(c1_codeword, c0_data);
 
-        // C0 field: 1 spare bit (0) + 23-bit codeword.
-        let c0_field = c0_codeword & 0x7F_FFFF;
+        // C0 field: 23-bit codeword (MSB-first) followed by 1 spare bit (0) as its own LSB.
+        let c0_field = c0_codeword << 1;
         let frame: u128 = ((c0_field as u128) << 48)
             | ((c1_whitened as u128) << 25)
             | ((c2 as u128) << 14)

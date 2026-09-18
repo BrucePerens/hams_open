@@ -39,37 +39,28 @@ pub fn pack_raw_parameters(raw: &RawParameters) -> u64 {
     d
 }
 
-/// Builds the full transmittable 72-bit frame (packed MSB-first into the low 72 bits of the return
-/// value, matching `decode::parse_frame`'s own input convention) from the 49-bit `d[]` layout:
-/// Golay-encodes `C0`'s 12 data bits (with a `0` spare bit prepended), whitens and Golay-encodes
-/// `C1`'s 12 data bits using `C0`'s own data as the whitening seed, and carries `C2`/`C3` raw.
+/// Builds the full transmittable 72-bit logical frame (packed MSB-first into the low 72 bits of the
+/// return value, matching `decode::parse_frame`'s own input convention -- see `interleave.rs` for
+/// converting this into real 9-byte chip/wire data) from the 49-bit `d[]` layout: Golay-encodes
+/// `C0`'s 12 data bits (with a `0` spare bit appended as `C0`'s own LSB, per `mbe_eccAmbe3600x2400C0`
+/// -- `ambe_fr[0][0]` is the spare, not `ambe_fr[0][23]`), whitens and Golay-encodes `C1`'s 12 data
+/// bits using `C0`'s own data as the whitening seed, and carries `C2`/`C3` raw.
 pub fn build_frame(d: u64) -> u128 {
     let c0_data = ((d >> 37) & 0xFFF) as u16;
     let c1_data = ((d >> 25) & 0xFFF) as u16;
     let c2 = ((d >> 14) & 0x7FF) as u32;
     let c3 = (d & 0x3FFF) as u32;
 
-    let c0_codeword = golay_encode(c0_data); // 23 bits, spare bit (0) is implicit as the 24th
+    let c0_codeword = golay_encode(c0_data); // 23 bits
     let c1_codeword = golay_encode(c1_data);
     let c1_whitened = super::whiten_c1(c1_codeword, c0_data);
 
-    ((c0_codeword as u128) << 48)
+    // C0's 24-bit field is the 23-bit codeword (MSB-first) followed by a spare `0` bit as its own
+    // LSB -- shift left by 49, not 48, to leave that spare bit position open at the bottom.
+    ((c0_codeword as u128) << 49)
         | ((c1_whitened as u128) << 25)
         | ((c2 as u128) << 14)
         | (c3 as u128)
-}
-
-/// Packs a raw byte buffer (9 bytes, MSB-first, matching the real over-the-wire/serial convention)
-/// from a 72-bit frame value.
-pub fn frame_to_bytes(frame: u128) -> [u8; 9] {
-    let mut out = [0u8; 9];
-    // A 72-bit value spread across 9 bytes MSB-first: byte 0 covers bits 71..64 (shift 64), byte 8
-    // covers bits 7..0 (shift 0) -- `i` never exceeds 8 here, so `64 - i*8` never underflows.
-    for (i, slot) in out.iter_mut().enumerate() {
-        let shift = 64 - i * 8;
-        *slot = ((frame >> shift) & 0xFF) as u8;
-    }
-    out
 }
 
 #[cfg(test)]
@@ -121,17 +112,37 @@ mod tests {
         assert_eq!(recovered.b8, original.b8, "b8");
     }
 
-    /// A real structural check on `frame_to_bytes`: the 9 bytes, read back MSB-first, must
-    /// reconstruct exactly the original 72-bit frame value -- catches an off-by-one in the shift
-    /// arithmetic that a single hand-picked example alone might not exercise at every byte boundary.
+    /// The full real-world round trip: pack parameters, build the logical frame, convert to the
+    /// real 9-byte chip/wire format and back (`interleave.rs`), and confirm parsing the result still
+    /// recovers a zero-error, exactly-matching frame -- catches a mismatch between `build_frame`'s
+    /// own spare-bit convention and `interleave::frame_to_wire_bytes`'s that a purely-logical round
+    /// trip (which never leaves `u128` frame space) wouldn't exercise.
     #[test]
-    fn frame_to_bytes_round_trips_via_msb_first_reconstruction() {
-        let frame: u128 = 0x1234_5678_9ABC_DEF0_12u128 & ((1u128 << 72) - 1);
-        let bytes = frame_to_bytes(frame);
-        let mut reconstructed: u128 = 0;
-        for &b in &bytes {
-            reconstructed = (reconstructed << 8) | b as u128;
-        }
-        assert_eq!(reconstructed, frame);
+    fn build_frame_round_trips_through_real_wire_bytes() {
+        use crate::ambe_dstar::interleave::{frame_to_wire_bytes, wire_bytes_to_frame};
+
+        let original = RawParameters {
+            b0: 0b101_0110,
+            b1: 0b1010,
+            b2: 0b10_1101,
+            b3: 0b1_0110_1101,
+            b4: 0b101_1010,
+            b5: 0b1101,
+            b6: 0b0110,
+            b7: 0b1001,
+            b8: 0b1010,
+        };
+        let d = pack_raw_parameters(&original);
+        let frame = build_frame(d);
+
+        let wire_bytes = frame_to_wire_bytes(frame);
+        let frame_back = wire_bytes_to_frame(&wire_bytes);
+        assert_eq!(frame_back, frame, "wire byte conversion must be lossless");
+
+        let parsed = parse_frame(frame_back);
+        assert_eq!(parsed.epsilon_c0, 0);
+        assert_eq!(parsed.epsilon_c1, 0);
+        let recovered = extract_raw_parameters(parsed.d);
+        assert_eq!(recovered.b0, original.b0, "b0");
     }
 }

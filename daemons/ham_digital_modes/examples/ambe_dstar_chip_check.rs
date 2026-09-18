@@ -6,6 +6,7 @@
 use ham_digital_modes::ambe_dstar::decode::{
     dequantize, extract_raw_parameters, parse_frame, DStarDecoderState,
 };
+use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -18,11 +19,9 @@ fn main() {
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
         .collect();
     assert_eq!(bytes.len(), 9, "D-STAR frame must be 9 bytes");
+    let bytes: [u8; 9] = bytes.try_into().unwrap();
 
-    let mut frame: u128 = 0;
-    for &b in &bytes {
-        frame = (frame << 8) | b as u128;
-    }
+    let frame = wire_bytes_to_frame(&bytes);
 
     let parsed = parse_frame(frame);
     println!(
