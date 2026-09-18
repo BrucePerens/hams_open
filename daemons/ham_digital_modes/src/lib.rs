@@ -7,6 +7,7 @@
 //! dependencies; a proprietary/trade-secret one cannot.
 
 pub mod ambe;
+pub mod ambe_dstar;
 pub mod codec2_1600;
 pub mod codec2_3200;
 pub mod dstar;

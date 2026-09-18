@@ -96,9 +96,15 @@ fn main() {
     // (1) MSB-first overall stream, c0..c7 in order.
     try_decode("1 msb-first, c0..c7", pack_fields(&msb_bits, &widths_fwd));
     // (2) LSB-first within each byte, byte order unchanged, c0..c7 in order.
-    try_decode("2 lsb-first-per-byte, c0..c7", pack_fields(&lsb_bits, &widths_fwd));
+    try_decode(
+        "2 lsb-first-per-byte, c0..c7",
+        pack_fields(&lsb_bits, &widths_fwd),
+    );
     // (3) Whole 144-bit stream reversed (last bit first), c0..c7 in order.
-    try_decode("3 whole-stream-reversed, c0..c7", pack_fields(&msb_bits_reversed, &widths_fwd));
+    try_decode(
+        "3 whole-stream-reversed, c0..c7",
+        pack_fields(&msb_bits_reversed, &widths_fwd),
+    );
     // (4) MSB-first overall stream, fields in reverse order (c7..c0).
     {
         let c = pack_fields(&msb_bits, &widths_rev);
@@ -110,7 +116,10 @@ fn main() {
         let mut rev_bytes = bytes;
         rev_bytes.reverse();
         let bits = bits_msb_first(&rev_bytes);
-        try_decode("5 byte-order-reversed, msb-first, c0..c7", pack_fields(&bits, &widths_fwd));
+        try_decode(
+            "5 byte-order-reversed, msb-first, c0..c7",
+            pack_fields(&bits, &widths_fwd),
+        );
     }
     // (6) Treat the raw bytes as this crate's own Annex H dibit-interleaved form (MSB-first bits,
     // grouped into 72 two-bit symbols) and deinterleave via this crate's own real
@@ -134,16 +143,20 @@ fn main() {
             0, 7, 12, 19, 24, 31, 36, 43, 48, 55, 60, 67, 72, 79, 84, 91, 96, 103, 108, 115, 120,
             127, 132, 139, 1, 6, 13, 18, 25, 30, 37, 42, 49, 54, 61, 66, 73, 78, 85, 90, 97, 102,
             109, 114, 121, 126, 133, 138, 2, 9, 14, 21, 26, 33, 38, 45, 50, 57, 62, 69, 74, 81, 86,
-            93, 98, 105, 110, 117, 122, 129, 134, 141, 3, 8, 15, 20, 27, 32, 39, 44, 51, 56, 63, 68,
-            75, 80, 87, 92, 99, 104, 111, 116, 123, 128, 135, 140, 4, 11, 16, 23, 28, 35, 40, 47, 52,
-            59, 64, 71, 76, 83, 88, 95, 100, 107, 112, 119, 124, 131, 136, 143, 5, 10, 17, 22, 29,
-            34, 41, 46, 53, 58, 65, 70, 77, 82, 89, 94, 101, 106, 113, 118, 125, 130, 137, 142,
+            93, 98, 105, 110, 117, 122, 129, 134, 141, 3, 8, 15, 20, 27, 32, 39, 44, 51, 56, 63,
+            68, 75, 80, 87, 92, 99, 104, 111, 116, 123, 128, 135, 140, 4, 11, 16, 23, 28, 35, 40,
+            47, 52, 59, 64, 71, 76, 83, 88, 95, 100, 107, 112, 119, 124, 131, 136, 143, 5, 10, 17,
+            22, 29, 34, 41, 46, 53, 58, 65, 70, 77, 82, 89, 94, 101, 106, 113, 118, 125, 130, 137,
+            142,
         ];
         let mut deint_bits = vec![false; 144];
         for i in 0..144 {
             deint_bits[i] = msb_bits[IMBE_INTERLEAVE[i]];
         }
-        try_decode("7 AMBETools IMBE_INTERLEAVE, msb-first, c0..c7", pack_fields(&deint_bits, &widths_fwd));
+        try_decode(
+            "7 AMBETools IMBE_INTERLEAVE, msb-first, c0..c7",
+            pack_fields(&deint_bits, &widths_fwd),
+        );
 
         // (7b) Same, but with lsb-first-per-byte source bits, in case the interleave table's own
         // implicit bit numbering (MSB=bit 0 of each byte, per its own WRITE_BIT/READ_BIT macros)
@@ -152,6 +165,9 @@ fn main() {
         for i in 0..144 {
             deint_bits2[i] = lsb_bits[IMBE_INTERLEAVE[i]];
         }
-        try_decode("7b AMBETools IMBE_INTERLEAVE, lsb-first-per-byte, c0..c7", pack_fields(&deint_bits2, &widths_fwd));
+        try_decode(
+            "7b AMBETools IMBE_INTERLEAVE, lsb-first-per-byte, c0..c7",
+            pack_fields(&deint_bits2, &widths_fwd),
+        );
     }
 }

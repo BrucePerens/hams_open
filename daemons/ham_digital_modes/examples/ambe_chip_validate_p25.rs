@@ -89,6 +89,10 @@ fn hamming_distance(a: &[u8], b: &[u8]) -> u32 {
         .sum()
 }
 
+// `i` is used both to index `our_frames` and, via `i as i32 + offset`, to compute an independent
+// index into `chip_frames` -- the offset arithmetic genuinely needs it as an integer, so clippy's
+// suggested `enumerate()` rewrite doesn't fit.
+#[allow(clippy::needless_range_loop)]
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let host = args.get(1).map(|s| s.as_str()).unwrap_or("192.168.10.189");
@@ -153,7 +157,11 @@ fn main() -> std::io::Result<()> {
     // Search a small offset window for the best-agreeing alignment between the two streams, rather
     // than assuming naive index-for-index alignment (real chips commonly have their own algorithmic
     // lookahead/delay).
-    println!("\nOffset search (comparing frames {}..{}):", COMPARE_FROM, NUM_FRAMES - 4);
+    println!(
+        "\nOffset search (comparing frames {}..{}):",
+        COMPARE_FROM,
+        NUM_FRAMES - 4
+    );
     let mut best_offset = 0i32;
     let mut best_bits_matched = 0u32;
     for offset in -4i32..=4 {
@@ -179,7 +187,10 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    println!("\nBest offset: {:+} ({} bits matched)", best_offset, best_bits_matched);
+    println!(
+        "\nBest offset: {:+} ({} bits matched)",
+        best_offset, best_bits_matched
+    );
     println!("\nPer-frame hex dump at best offset:");
     for i in COMPARE_FROM..NUM_FRAMES - 4 {
         let j = i as i32 + best_offset;

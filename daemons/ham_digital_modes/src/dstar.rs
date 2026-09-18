@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-//! D-STAR protocol-level framing (as distinct from the shared AMBE-2000 vocoder in
-//! [`crate::ambe`], which both D-STAR and Project 25 use per
-//! `AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md`'s own "The decision" section).
+//! D-STAR protocol-level framing (header/checksum) -- a separate concern from the vocoder itself.
+//!
+//! **Correction, 2026-09-18**: this doc comment used to say D-STAR shares [`crate::ambe`]'s vocoder
+//! (P25's own, built from TIA-102.BABA) with Project 25. That was wrong, not merely superseded --
+//! two independent primary sources (DVSI's own USB-3000 Manual and G4KLX's AMBETools source) confirm
+//! D-STAR's real on-chip configuration is a 72-bit frame (3600/2400/1200 bps), not [`crate::ambe`]'s
+//! 144-bit one (7200/4400/2800 bps, an exact match to DVSI's own rate-table index 27). D-STAR's own
+//! vocoder is implemented separately, in [`crate::ambe_dstar`] -- see that module's own doc comment
+//! for the full frame structure and provenance, and
+//! `hams_open/daemons/ham_digital_modes/docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` for the
+//! validation trail. This module's own header/checksum logic below is unaffected by the correction
+//! -- it never depended on which vocoder generation D-STAR actually uses.
 //!
 //! The header checksum and the 39-byte routing header's own pack/unpack are implemented here.
 //! The slow-data block/interleaving state machine is real, separately-scoped follow-on work
