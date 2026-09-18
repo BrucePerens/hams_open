@@ -1875,6 +1875,28 @@ specific parameter first guessed. Disentangling gain from pitch fully would need
 both, e.g. log-energy at the fundamental) -- a concrete, bounded next step, with all three
 datasets (dense pitch sweep, amplitude sweep, RMS-normalized sweep) committed for it.
 
+**A small, independent corroboration of the gain interpretation, and a real negative result for
+`g3`'s prediction-residual hypothesis.** Comparing already-captured silence frames against 200Hz
+voiced frames across all 4 Golay blocks: `g0`'s silence value (1025) sits almost exactly at the
+bottom of the range the amplitude sweep independently established (quietest tested amplitude gave
+1045) -- a real, unforced consistency check supporting `g0` as a genuine gain/energy quantizer
+(silence naturally reads as "near-minimum energy"). `g0`, `g1`, and `g3` all show *zero* overlap
+between their silence-frame and voiced-frame value sets (consistent with several parameters all
+being energy-sensitive, not necessarily each independently encoding "voicing" as a dedicated
+decision); `g2` shows partial overlap. Separately, `g3`'s own rank-8 plateau was tested against one
+more concrete hypothesis: since this crate's own encode pipeline includes a real frame-to-frame
+*prediction residual* stage (differential encoding against previous-frame history,
+`src/ambe/prediction.rs`), maybe `g3` carries part of a similar residual that only shows real
+variation under large frame-to-frame discontinuities -- untested by this session's earlier
+stimuli (steady tones, per-frame-independent noise, and *smoothly*-varying real speech).
+`examples/p25_ratet27_capture_abrupt_transitions.rs` fed 2400 frames abruptly alternating between
+maximally different states every single frame (loud-high-pitch / silence / loud-low-pitch /
+quiet-high-pitch / noise / quiet-low-pitch, cycling). **Result: zero new distinct `g3` values
+appeared** -- the same 149 distinct values already on record, even under the most aggressive
+frame-to-frame discontinuity this investigation has tried. This rules out the prediction-residual
+hypothesis specifically (or at least this particular way of trying to trigger it), leaving `g3`'s
+real cause still open per the exhaustive-stimulus note above.
+
 **D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
 both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
 dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
