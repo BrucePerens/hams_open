@@ -1783,6 +1783,29 @@ future session can pick up exactly where this one left off (re-analyze with a di
 correlation technique) instead of re-running the same real-speech capture against the chip from
 scratch.
 
+**A third semantic-layer lead, prompted by re-reading this document's own earlier §9**: that section
+found NOFEC mode's pitch parameter sits in the raw stream's third 12-bit slice (`u2` under NOFEC's own
+contiguous convention), Gray-coded, with a distinctive "increases then saturates at a quantizer
+ceiling" shape across frequency. Re-running that exact shape-check against FEC mode's own `g0`
+(natural offsets 0-22, the *first* Golay block, decoded via `golay_decode` -- the block already
+proven bit-for-bit identical to `fec.rs`) across the 16 frequencies already captured this session
+(30-800 Hz, one converged frame each) finds a real, but weaker and messier, echo of the same shape:
+Spearman rank correlation with frequency is a strong 0.897 across all 16 points, and `g0`'s decoded
+value visibly separates into "generally lower, noisier" below ~200 Hz and "clustered near a ceiling
+around 4040-4047" above it -- the same qualitative saturation signature as NOFEC's `u2`. **This is a
+real lead, not a confirmed mapping**: restricted to frequencies inside AMBE's own documented 57-444
+Hz voice-pitch range, the values are not cleanly monotonic (57->2853, 80->3045, 100->3041,
+125->3938, 160->2217, 200->4042, 250->4040, 320->3946, 400->4041, 444->4043) -- a real dip at 160 Hz
+and an early plateau by 200 Hz rather than a smooth curve -- so this could equally reflect several
+parameters simultaneously destabilizing outside/at the edge of the vocoder's normal operating
+assumptions (most of the tested frequencies are below or at the edge of the documented voice range)
+rather than `g0` specifically carrying pitch. `g1` and `g2` show much weaker correlations (Spearman
+-0.35 and -0.49) over the same data, for comparison. The full 16-frequency dataset and the analysis
+script are committed at `docs/references/ratet27_captures/analyze_g0_pitch_hypothesis.py` (reads
+`captured_frames_all5`-equivalent capture data) so a future session can re-test this specific
+hypothesis with denser, purely in-voice-range frequency sampling rather than re-deriving it from
+scratch.
+
 **D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
 both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
 dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
