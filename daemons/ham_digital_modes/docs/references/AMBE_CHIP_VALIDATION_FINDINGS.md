@@ -823,3 +823,54 @@ tones lands in 120-123 every time, not intermittently) -- consistent with a genu
 low-confidence/erasure declaration on non-voice-like pure-tone input outside its designed ~65-400Hz
 working range (matching `W0_TABLE`'s own real endpoints, `b0=119` -> `f0~=65Hz` and `b0=0` ->
 `f0~=400Hz`), not a remaining decode bug.
+
+## 12. Real-speech validation: 1274/1274 (100%) Golay-clean frames on DVSI's own reference test speech
+
+Bruce authorized using DVSI's own bundled USB-3000 software package directly (the manual was
+downloaded from DVSI's own public download page, so a trade-secret claim would not be enforceable;
+the specific patents named in that package's source headers were all issued in the 1990s/2001, whose
+20-year terms have long since expired) -- "proceed with the implementation of all options, and make
+the API operate as it does in the AMBE manual." That package's `usb3k-linux.tar.gz` (a Linux
+reference client) bundles `in.dat`, a real ~25-second speech recording, and hardcodes `RATET(33)` --
+the exact AMBE+2 half-rate FEC configuration this session already validated live with synthetic
+tones (§11) -- as its own smoke-test rate.
+
+**Built `examples/ambe_plus_2_dvsi_reference_replay.rs`**: configures the real chip for `RATET(33)`,
+feeds it DVSI's own real reference speech frame by frame, and decodes every real encoded frame
+through `ambe_plus_2::decode` with the Annex H framing already confirmed correct. **A real bug found
+and fixed while building this**: an early version configured the chip with a RATEP custom word
+copied from the wrong section of DVSI's manual (Figure 20's *full-rate* P25 example -- the same word
+already used for the still-unresolved RATET-27 mystery, §§3, 7-10) instead of the simple `RATET(33)`
+index already proven correct. This silently made the chip respond with 144-bit full-rate frames
+instead of AMBE+2's own 72-bit ones -- caught by checking the actual returned bit count directly
+rather than assuming the configuration took effect, once 0% Golay-clean on what should have been
+working real speech looked wrong. Also found and abandoned: an attempt to replicate DVSI's own
+pipelined (3-frame-lookahead) encode/decode protocol, traced directly from the bundled reference
+client's real source, does not survive cleanly through AMBEServer3003's own UDP relay (responses
+arrived out of the expected order) -- a real, disclosed limitation; a simple synchronous
+per-frame protocol was used instead, which sacrifices an exact frame-aligned PCM comparison against
+DVSI's own official reference output but is sufficient for what actually matters here (Golay
+validity and semantic plausibility).
+
+**Result: 1274 of 1274 real frames (100.0%) Golay-decode with zero corrected errors on both
+protected codewords** -- every single frame of DVSI's own ~25-second reference speech recording,
+not just synthetic test tones. All 1274 frames also classify as genuine `Speech` (zero
+erasure/silence/tone) -- unlike the earlier synthetic-tone tests, where several out-of-vocal-range
+pure tones legitimately triggered erasure (§11); real, continuously-spoken human speech content
+never does. The recovered pitch trajectory shows real, smooth, speech-like variation (e.g. `100, 115,
+107, 107, 107, 77, 75, 75, 75, 79, 79, 78, 79, 79, 77, 77, 75, 91, 91, 90, ...`) -- gradual drift
+punctuated by occasional larger jumps consistent with real voiced/unvoiced or word-boundary
+transitions, not random noise. This is a stronger, more decisive validation than the earlier
+pure-tone tests: 1274 independent real frames all landing on zero Golay error, using DVSI's own
+official reference test material (not this investigation's own synthetic stimuli), on real
+continuous speech content the codec was actually designed for.
+
+**Note on provenance, deliberately not changed by this authorization**: `in.dat`/`cmp.dat`
+themselves, and the reference client's own confidential source code used to understand the
+pipelined protocol, are kept local (this session's own scratchpad) rather than committed to this
+public repository -- the patent-expiration reasoning above clears using this material for
+understanding/testing, but redistributing DVSI's own bundled test audio and source code here is a
+separate question this authorization did not address, so the more cautious default (already used
+elsewhere in this crate for audio of uncertain redistribution status) stays in place for those
+specific files. Only this crate's own, independently-written Rust code and this findings summary are
+committed.

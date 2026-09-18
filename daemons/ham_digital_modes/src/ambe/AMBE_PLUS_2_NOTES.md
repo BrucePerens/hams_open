@@ -486,3 +486,14 @@ margin. The two new points fill in the trend cleanly: `b0` goes 118 (50Hz) -> 91
 the erasure is the chip's own genuine low-confidence response to a pure-tone stimulus outside its
 designed vocal-pitch range, not a remaining decode bug. See
 `docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md`'s §11 addendum for the full detail.
+
+**Even stronger, same night: 1274/1274 (100%) Golay-clean on DVSI's own real reference speech**, not
+just synthetic tones -- replaying `in.dat` (DVSI's own bundled ~25-second test recording,
+`examples/ambe_plus_2_dvsi_reference_replay.rs`) at `RATET(33)` decodes every single real frame with
+zero corrected errors, all correctly classified as genuine speech (never erasure/silence/tone, unlike
+several of the out-of-range synthetic tones above), with a smoothly-varying, realistic pitch
+trajectory. Found and fixed a real bug in this test itself along the way: an early version
+misconfigured the chip with a RATEP word meant for full-rate P25, not AMBE+2 half-rate, which
+silently produced 144-bit frames instead of 72-bit ones until the actual bit count was checked
+directly. See `docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md`'s §12 for the full account,
+including why `in.dat`/DVSI's own reference client source stay local rather than committed here.

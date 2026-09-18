@@ -59,3 +59,7 @@ ambe_plus_2 = []
 [[example]]
 name = "ambe_chip_validate_ambe_plus_2"
 required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_plus_2_dvsi_reference_replay"
+required-features = ["ambe_plus_2"]
