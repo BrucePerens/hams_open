@@ -1056,14 +1056,34 @@ samples). So does `(92, 127)`, which the unconditioned sweep had missed entirely
 concrete proof the unconditioned sweep's results could not be trusted and needed re-running).
 Flipping all three, `{8, 92, 127}`, together *also* produces that exact same PCM. Independently,
 `(68, 103)`, `(103, 127)`, and `(68, 127)` all produce another shared identical PCM, and flipping
-`{68, 103, 127}` together matches it too. **This is the decisive signature of a genuine 3-way
-redundancy/majority-vote structure protecting two distinct logical bits**: any single member alone
-shows no effect (consistent with the single-bit oracle, §14), any 2-of-3 combination flips the
-majority vote the same way regardless of which two, and all 3 together does too -- a real, previously
-undocumented property of this rate's wire format, found empirically with no assumption about
-interleave, byte order, or PN-modulation convention. Bit 127 is shared between both confirmed
-triples; cross-pairs between the two groups (`(8, 68)`, `(92, 103)`) show no effect, confirming the
-two groups are otherwise distinct, not one larger connected structure.
+`{68, 103, 127}` together matches it too.
+
+**Correction (per advisor review): this is not a 3-way majority vote -- IMBE has no repetition
+code.** It is the signature of a **weight-3 codeword of a Hamming(15,11) block**. Hamming(15,11) has
+minimum distance 3, so a 2-bit error is always "corrected" by the decoder rather than reported: for
+three parity-check columns `h_a, h_b, h_c` with `h_a XOR h_b XOR h_c = 0` (a weight-3 codeword),
+flipping any 2 of the 3 produces a syndrome equal to the third column, so the decoder "corrects" the
+bit that was *not* flipped, always landing on `original XOR e_a XOR e_b XOR e_c` regardless of which
+2 (or all 3) were actually flipped on the wire -- exactly the byte-identical-PCM pattern observed.
+Golay(23,12), used for the other four protected blocks, has minimum distance 7 and cannot produce
+this behavior for a 2-bit error, so this pins both triples to one of the three 15-bit Hamming blocks.
+Since bit 127 is shared between both, and a wire bit belongs to exactly one FEC block, **all five
+bits {8, 68, 92, 103, 127} must live in the same 15-bit Hamming block** -- a hard constraint on any
+future candidate interleave table. Cross-pairs between the two groups (`(8, 68)`, `(92, 103)`) show
+no effect, confirming the two groups are otherwise distinct codewords within that one block, not one
+larger connected structure.
+
+**Both triples independently re-confirmed later the same night via a stronger test (§17): one
+flip-decode per FRESH process** (not sequential decodes on one connection, which by that point in
+the investigation was known to be an unreliable protocol -- see the encoder-feedback finding below).
+`flip{92,127}`, `flip{8,127}`, `flip{8,92}`, and `flip{8,92,127}` each run in their own fresh process
+produced byte-for-byte identical PCM (checksum `e5b52df714b6e2ad`) with no dB threshold or baseline-
+in-connection involved at all. The same was done for `{68,103,127}` (checksum `b63f63e98f205c13`,
+all four combinations identical). This is the strongest evidence for either triple in the whole
+investigation, and it also revealed a new, better oracle: **exact PCM/checksum equality between two
+fresh-process single-flip-decodes is a threshold-free, drift-free membership test** -- no dB metric,
+no in-connection baseline, and no exposure to the busy-history degradation problem, since each test
+is exactly one decode per fresh connection.
 
 **Consequence: the full exhaustive sweep needed re-running with proper silence conditioning**
 (`examples/p25_ratet27_pairflip_full_sweep.rs`, updated in place), since the unconditioned version
@@ -1139,3 +1159,109 @@ testing. Recovering a fully general, history-independent reset procedure -- or a
 running sweeps in favor of many short, independently-conditioned connections (fresh RATEP
 configuration per test, accepting the added per-test connection-setup cost) -- is the next step for
 whoever continues this investigation.
+
+## 16. Sweeping the busy-history recovery frame count, per Bruce's suggestion -- no simple rule found, but a clean protocol conclusion
+
+Per Bruce: "You might try sweeping the number of silence frames to determine how many are
+consistently effective," refined by "There need to be enough silence frames to prime both the
+encoder and decoder. That may be 6 rather than three." The §15 recovery pass (3 silence decodes +
+`PRIME_REPEATS` tone decodes, appended after normal conditioning) was tested only at N=3; this
+follows up by varying N.
+
+**Methodological trap found first**: an initial sweep tool (`p25_ratet27_recovery_frame_count_sweep.rs`)
+ran multiple (busy-history, recovery, measure) trials back-to-back within *one* continuous
+connection. This produced high variance *within* a single N's own repeated trials (e.g. N=0:
+`[4.28, 4.80, 10.51]` dB) -- proof that sequential trials sharing one connection do not share a
+common baseline; each trial's starting state depends on all the prior trials in that same session,
+not just the fixed busy-history replay before it. Confirms again (see §15) that only a genuinely
+fresh process/connection per measurement is a trustworthy protocol here.
+
+**Fixed with `p25_ratet27_recovery_n_single_trial.rs`**: exactly one measurement per fresh process,
+intended to be invoked repeatedly from a bash loop. Getting this tool to reproduce the known-good
+11.03 dB value at N=3 took two real bug fixes, both instructive about how exact-sequence-sensitive
+this chip's state is:
+
+1. Its `condition()` was missing the encoder-silence pass (`send_speech_get_channel` over live
+   silent PCM) that `p25_ratet27_pairflip_diagnose_hit.rs`'s `condition()` always included --
+   without it, N=3 measured 3.81-6.13 dB, not 11.03.
+2. `diagnose_hit.rs`'s actual sequence runs the fixed-seed busy history in **two separate rounds of
+   100 flips each**, with a `condition()` call and an (unused-for-the-final-result) intermediate
+   measurement between them, and the LCG state **continues** across both rounds rather than
+   resetting -- the 11.03 dB value was measured after 200 cumulative busy flips, not 100. Matching
+   this exactly was what finally reproduced 11.03 dB precisely.
+
+**Swept N in {0, 1, 2, 3, 4, 5, 6, 8, 10}, both `mode=decode_only` and `mode=both` (extra live
+encoder-silence frames during the recovery pass itself), 2 fresh-process trials each, target pair
+`(68, 103)`:**
+
+| N  | distance (dB), both modes identical |
+|----|----|
+| 0  | 5.64 |
+| 1  | 4.11 |
+| 2  | 6.36 |
+| 3  | 11.03 |
+| 4  | 5.06 |
+| 5  | 5.28 |
+| 6  | 9.88 |
+| 8  | 26.79 |
+| 10 | 4.39 |
+
+Three findings, all solid:
+
+- **Fresh-process determinism is exact**: both trials at every single N produced byte-identical
+  distances (and, on spot-check, identical PCM). This reconfirms fresh-process single-measurement as
+  fully deterministic and reliable.
+- **`mode` makes zero difference at every N.** Extra live encoder-silence frames during the small
+  recovery pass changed nothing, because `condition()` (run right before the recovery pass in every
+  trial) already does 20 rounds of encoder-silence priming -- Bruce's "prime both paths" requirement
+  is already satisfied by `condition()` itself, so the recovery pass only ever needed to address the
+  decoder side.
+- **No N gives consistent recovery.** The relationship is non-monotonic (5.64, 4.11, 6.36, 11.03,
+  5.06, 5.28, 9.88, 26.79, 4.39) with no threshold-like "N or more works" structure, and N=8's 26.79
+  dB *exceeds* the undisturbed fresh-boot reference (~12.41 dB) -- proof that this distance-from-a-
+  fixed-baseline metric, after 200 busy flips plus N recovery frames, is measuring some mix of
+  decoder-state drift and the flip effect, not a clean "recovered vs not" signal. There is no simple
+  N to recommend.
+
+**Conclusion for the exhaustive-sweep question**: don't chase a general busy-history recovery
+recipe further. The only protocol shown reliable all night is a single measurement from a fresh
+process; that is the actual answer to "how do you get a trustworthy reading on this chip," not a
+particular recovery frame count layered on top of a long, busy connection.
+
+## 17. Weight-3 Hamming-codeword interleave search -- a 4-of-5 near miss, cleanly falsified
+
+Following §15's correction (weight-3 Hamming(15,11) codewords, not majority vote), the confirmed
+constraint "{8, 68, 92, 103, 127} all share one 15-bit Hamming block" is far more discriminating than
+§14's 2-bit `c7`-pitch-LSB check (which found no matching convention at all). This is a zero-chip-time
+search: `p25_ratet27_hamming_block_convention_search.rs` re-uses the same convention space (TIA-
+102.BAAA-A Table 5-1 OTA-interleave hypotheses -- dibit-row swap, index direction, byte order, bit
+direction -- plus natural contiguous-codeword order) and checks whether any convention places all
+five confirmed bits in the same `TIA_BLOCK` (4, 5, or 6).
+
+**No convention places all five together.** But one convention -- `dibit_swap=true,
+reverse_bytes=true, lsb_first=false` (index-direction either way, since it only changes offset within
+a block) -- places **four of five** (68, 92, 103, 127) in the same block (`TIA_BLOCK`=6), with only
+bit 8 landing elsewhere (`TIA_BLOCK`=3, a 23-bit Golay block).
+
+**Falsified directly, decisively, using the new fresh-process checksum oracle (§15's `e5b5...`/
+`b63f...` re-confirmation, generalized here as `p25_ratet27_hamming_block_falsification_test.rs`)**:
+if bit 8 really sat in a Golay(23,12) block (minimum distance 7), a 2-bit error there could never be
+"corrected" onto a third bit the way Hamming(15,11) allows, so `flip{8,92}` and `flip{8,127}` should
+each land back near the unmodified baseline while `flip{92,127}` alone shows the large deviation.
+Instead, run from independent fresh processes (not sequential same-connection decodes, which by this
+point in the investigation was known to be unreliable -- exactly the failure mode this test was
+designed to rule out), `flip{92,127}`, `flip{8,92}`, `flip{8,127}`, and `flip{8,92,127}` all produced
+byte-identical PCM (checksum `e5b52df714b6e2ad`). The triple is genuinely real (not a same-connection
+artifact), and this specific convention is dead.
+
+**What survives**: the hard constraint itself -- whatever the real interleave turns out to be, bits
+{8, 92, 127} share one Hamming block and {68, 103, 127} share one (the same one, since 127 is
+common), so all five of {8, 68, 92, 103, 127} are in a single 15-bit block. An anchor sweep using the
+same fresh-process checksum oracle (bit 127 against all 143 other wire positions, one fresh process
+per candidate) was launched to find the block's full 15-bit membership and complete weight-3-codeword
+structure directly from the chip, without needing a candidate interleave table at all -- see the
+addendum below for its result once complete.
+
+Bit 32, mentioned in an earlier pass over this section as a hint from the disqualified full-exhaustive
+sweep (§15) suggesting `(32, 127)`, is **dropped**: that sweep's entire dataset is disqualified, and
+32 has no independent fresh-process confirmation.
