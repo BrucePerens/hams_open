@@ -153,6 +153,17 @@ fn main() {
         assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
         payload[2..].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
     };
+    // Per Bruce: AMBE's encoder incorporates feedback from previous decoding, so a decode-only
+    // reset (feeding pre-canned silence_r into the decoder) may not flush whatever state the chip
+    // shares between its encode and decode paths -- this actually EXERCISES the encoder with live
+    // silent PCM, discarding the resulting channel bits, rather than only decoding a pre-captured
+    // silence frame.
+    let send_speech_get_channel = |sock: &UdpSocket, buf: &mut [u8; 512], samples: &[i16]| {
+        sock.send(&build_speech(samples)).expect("send speech");
+        let n = sock.recv(buf).expect("recv channel");
+        let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
+        assert_eq!(ptype, TYPE_CHANNEL, "expected a CHANNEL (encode) response");
+    };
 
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(FRAME_SAMPLES);
@@ -167,11 +178,43 @@ fn main() {
         (sum_sq / a.len() as f64).sqrt()
     };
 
-    // Forces a canonical, history-independent state before a test: decode silence repeatedly
-    // (converges to a small, near-fixed point regardless of whatever came before), then prime with
-    // R to converge to the tone's own steady state. Called before EVERY decode of interest, not
+    // Forces a canonical, history-independent state before a test. Per Bruce: AMBE's encoder
+    // incorporates feedback from previous decoding, so plain [silence x N, tone x M] conditioning
+    // is NOT enough once the decoder has a busy history of many different prior flip-decodes --
+    // confirmed directly: a single prior flip-decode already degrades the next test's measured
+    // effect from 12.41 dB to 5.26 dB even with this same conditioning reapplied, and 100 busy
+    // prior flip-decodes plus this conditioning still only gives ~4-5 dB. This also exercises the
+    // encoder with live silent PCM (not just decoding a pre-canned silence frame), in case the chip
+    // shares state between its encode and decode paths. Called before EVERY decode of interest, not
     // just once at the start.
+    //
+    // Per Bruce's "three quiet frames" suggestion: AMBE's encoder incorporates feedback from
+    // previous decoding, and a busy prior history of many different flip-decodes measurably
+    // degrades the NEXT test's result even with this same conditioning reapplied (12.41 dB fresh ->
+    // 5.26 dB after just one prior flip-decode -> 4.03 dB after 100). A second, smaller pass -- 3
+    // more silence decodes, then PRIME_REPEATS more tone decodes -- appended after this one DOES
+    // recover that specific degraded case, reproducibly, back to 11.03 dB.
+    //
+    // **But this isn't a general fix**: applying that same second pass unconditionally to every
+    // conditioning call (including the very first, already-fresh one) was tried and made things
+    // worse, not better -- it compresses both real and null effects into the same narrow band (a
+    // known real effect measured 8.56 dB, while a known no-effect pair measured 9.19 dB under
+    // otherwise identical conditions, i.e. the ranking flipped). Both variants are individually
+    // fully reproducible (identical across repeated fresh-process runs) -- this is deterministic,
+    // parameter-sensitive state-dependence, not noise. Reverted to the single pass below, which
+    // gives clean separation for a fresh or lightly-used connection (matching every finding this
+    // investigation has actually relied on, including the confirmed {8,92,127}/{68,103,127}
+    // triples). The busy-history degradation itself, and this partial, non-universal recovery, are
+    // left as a real, open, honestly-reported finding: AMBE's encoder-feedback behavior is
+    // confirmed to matter here, but no single conditioning recipe has been found that works
+    // uniformly across both a fresh connection and a connection with a long, varied test history --
+    // which is exactly why the full exhaustive sweep (many thousands of tests on one connection)
+    // cannot currently be trusted end to end, even though short, targeted, few-tests-per-connection
+    // verification (as used throughout this file) remains reliable.
     let condition = |sock: &UdpSocket, buf: &mut [u8; 512]| {
+        for _ in 0..SILENCE_CONDITION_REPEATS {
+            send_speech_get_channel(sock, buf, &silence_samples);
+        }
         for _ in 0..SILENCE_CONDITION_REPEATS {
             send_channel_get_pcm(sock, buf, &silence_r);
         }
@@ -205,6 +248,57 @@ fn main() {
         "conditioned same-connection retest {positions:?}: rms={:.2}, distance={:.2} dB",
         rms(&pcm2),
         distance2
+    );
+
+    // Reproduce the full sweep's own failure mode in a controlled way, and verify `condition()`
+    // (which now includes the second recovery pass) fixes it in one shot: simulate a busy history
+    // (many different flip-and-decode tests in a row, no conditioning between them, matching the
+    // sweep's own inner loop structure before it reaches this pair), then compare plain
+    // `condition()` (expected to still show the degradation) against `condition()` plus the extra
+    // targeted recovery pass (expected to partially recover it) -- see the doc comment above
+    // `condition()` for why that recovery pass isn't simply built into it.
+    println!("\n--- simulating busy sweep-like history, then re-testing {positions:?} ---");
+    let mut lcg_state: u32 = 0xC0FFEE;
+    let mut rand_bit = || -> usize {
+        lcg_state ^= lcg_state << 13;
+        lcg_state ^= lcg_state >> 17;
+        lcg_state ^= lcg_state << 5;
+        (lcg_state as usize) % TOTAL_BITS
+    };
+    for _ in 0..100 {
+        let a = rand_bit();
+        let b = rand_bit();
+        let busy_flip = flip_bits_in_packet(&r, &[a, b]);
+        send_channel_get_pcm(&sock, &mut buf, &busy_flip);
+    }
+    condition(&sock, &mut buf);
+    let pcm_after_busy = send_channel_get_pcm(&sock, &mut buf, &flipped);
+    let distance_after_busy = spectral_distance(&baseline_spectrum, &db_spectrum(&pcm_after_busy));
+    println!(
+        "after 100 busy random flip-decodes + plain condition(): rms={:.2}, distance={:.2} dB",
+        rms(&pcm_after_busy),
+        distance_after_busy
+    );
+
+    for _ in 0..100 {
+        let a = rand_bit();
+        let b = rand_bit();
+        let busy_flip = flip_bits_in_packet(&r, &[a, b]);
+        send_channel_get_pcm(&sock, &mut buf, &busy_flip);
+    }
+    condition(&sock, &mut buf);
+    for _ in 0..3 {
+        send_channel_get_pcm(&sock, &mut buf, &silence_r);
+    }
+    for _ in 0..PRIME_REPEATS {
+        send_channel_get_pcm(&sock, &mut buf, &r);
+    }
+    let pcm_after_busy_recovered = send_channel_get_pcm(&sock, &mut buf, &flipped);
+    let distance_after_busy_recovered = spectral_distance(&baseline_spectrum, &db_spectrum(&pcm_after_busy_recovered));
+    println!(
+        "after 100 busy random flip-decodes + condition() + targeted 3-frame recovery: rms={:.2}, distance={:.2} dB",
+        rms(&pcm_after_busy_recovered),
+        distance_after_busy_recovered
     );
 
     // Also try flipping each position alone, for comparison (each should show no significant

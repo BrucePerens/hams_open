@@ -1098,9 +1098,44 @@ and fixed before a trustworthy run launched:
 the full run: for anchor bit 0, confirmed hits land at `(0,17) (0,18) (0,19)`, `(0,43) (0,44) (0,45)`,
 `(0,69) (0,70) (0,71)`, `(0,95) (0,96) (0,97)`, `(0,121) (0,122) (0,123)` -- five groups of exactly 3
 *consecutive* wire positions, each group spaced exactly 26 positions apart, with the same +26 pattern
-repeating (from a different starting offset) for anchor bit 1. This periodicity is far too regular to
-be noise -- a real, systematic property of the wire format's structure, not yet interpreted. Full
-results from the complete run (all 10011 pairs) will be recorded in a follow-up update once it
-finishes; expected runtime is longer than originally estimated (likely 4+ hours) given the additive-
-threshold/confirmation approach admits many more first-pass candidates than a stricter multiplicative
-threshold would have.
+repeating (from a different starting offset) for anchor bit 1.
+
+**The completed run found 1147 confirmed hits across all 142 candidates (one single connected
+component, not isolated small groups) -- and then failed its own sanity check.** Checking whether
+the two already-confirmed real triples appeared in this dataset, `(8, 92)`/`(8, 127)`/`(92, 127)`
+and `(68, 103)`/`(68, 127)`/`(103, 127)`, found only one match at all: `(68, 103)` appears, but as a
+**rejected, unconfirmed** candidate (`first=19.19 dB, retest=5.25 dB`) -- the sweep's own
+confirmation step threw out a pair independently verified, multiple times, by direct targeted
+testing to be real. A result set that rejects a known-real effect while accepting 1147 others cannot
+be trusted as a whole; the 1147-pair dataset (including the period-26 pattern) is **not** treated as
+reliable evidence of real structure, despite its superficially compelling regularity.
+
+**Root cause, per Bruce: AMBE's encoder incorporates feedback from previous decoding.** This session
+had already independently found and documented (during the AMBE+2 real-speech validation, and again
+during the DVSI pipelined-protocol investigation) that this chip's own real client software runs a
+genuine multi-frame lookahead/delay pipeline -- Bruce's comment connects that same mechanism to this
+specific failure. Verified directly and reproducibly (`examples/p25_ratet27_pairflip_diagnose_hit.rs`,
+`condition()`'s own doc comment has the full detail): a single prior flip-decode test already
+degrades the *next* test's measured `(68, 103)` effect from 12.41 dB to 5.26 dB, even with the same
+conditioning re-applied before it; 100 busy prior flip-decodes plus that same conditioning still only
+give 4.03 dB. Appending a second, smaller pass -- 3 more silence decodes, then a few more tone
+decodes -- after the main conditioning recovers this specific degraded case back to 11.03 dB,
+reproducibly (identical across repeated fresh-process runs). **But this is not a general fix**:
+applying that same second pass unconditionally to *every* conditioning call, including an already-
+fresh one, was tried and made things worse -- a known real effect measured 8.56 dB while a known
+no-effect pair measured 9.19 dB under otherwise-identical conditions (the ranking flipped). Both
+variants are individually fully deterministic; this is real, parameter-sensitive state-dependence,
+not measurement noise.
+
+**Where this leaves the RATET(27) investigation**: short, targeted, few-tests-per-connection
+verification (used throughout §§13-15's actual confirmed findings -- the two redundancy triples, the
+two unprotected `c7` bits) remains reliable, since a connection's history stays short and controlled.
+A long, exhaustive, thousands-of-tests-on-one-connection sweep does not currently have a trustworthy
+conditioning recipe, since no single procedure has been found that produces a canonical state
+regardless of a connection's prior history -- confirmed, not just suspected, by the direct
+reproduction of degradation-then-partial-recovery above. This is an honest, open limitation of the
+exhaustive-sweep methodology specifically, not a retraction of anything already confirmed by targeted
+testing. Recovering a fully general, history-independent reset procedure -- or abandoning long-
+running sweeps in favor of many short, independently-conditioned connections (fresh RATEP
+configuration per test, accepting the added per-test connection-setup cost) -- is the next step for
+whoever continues this investigation.
