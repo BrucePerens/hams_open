@@ -2041,3 +2041,41 @@ parameters), not a mix of a gain field and a discrete harmonic-count field. Dise
 specific coefficient each block carries -- if any single clean 1:1 correspondence exists at all --
 remains open, and this specific `L_hat`-encoding hypothesis is now closed off rather than left
 ambiguous. Full controlled-test data and script committed.
+
+## 25. Primary-source-motivated ECMODE tests: `TD_ENABLE` has no effect on RATET(27)'s wire format; `TS_ENABLE` reveals a genuinely different, but currently uninformative, "tone frame" mode
+
+A close re-read of DVSI's AMBE-3000R manual surfaced a previously untested, well-motivated
+hypothesis for `g3`'s stubborn rank-8 plateau: `ECMODE_IN` bit 12 (`TD_ENABLE`, Tone Detect Enable)
+is **enabled by default at reset**, and the manual states the encoder sets a `TONE_FRAME` status
+flag "if the output frame contains either a single frequency tone, a DTMF tone, a KNOX tone, or a
+call progress tone" -- raising the concern that every pure-tone/sawtooth stimulus this entire
+investigation has used (the primary tool for mapping `g0`-`g3` bit-by-bit) could have been silently
+triggering tone-detection-driven encoding differences the whole time, never tested or ruled out.
+
+**Tested directly via `PKT_ECMODE` (field `0x05`, a 2-byte `ECMODE_IN` word, confirmed from the
+manual's own Table 35).** `examples/p25_ratet27_capture_tone_detect_disabled.rs` sends
+`ECMODE_IN=0x0000` (every feature including `TD_ENABLE` off) before the same dense 57-444Hz
+sawtooth sweep used elsewhere. **Result: no detectable difference at all.** `g0` reads the exact
+same value (1597) at 200Hz with `TD_ENABLE` on or off; merging this new data into the full 2840-
+frame dataset left `g3`'s distinct-value count exactly unchanged (149, identical to before) --
+every frame produced under `TD_ENABLE=0` matched a value already seen under the default
+`TD_ENABLE=1`. This decisively rules out tone detection as an explanation for `g3`'s plateau, and
+for any of this investigation's block-mapping results more generally: pure-tone stimuli behave
+identically whether or not the chip's own tone-detection logic is active for this rate.
+
+**A related but distinct flag, `TS_ENABLE` (bit 14, off by default), was also tested and behaves
+very differently -- a genuine, newly-confirmed chip-mode discovery, though not directly useful for
+`g3`.** DVSI's manual: "If TS_ENABLE=1, then the encoder produces a tone frame in place of the
+frame that it would normally produce." `examples/p25_ratet27_capture_tone_send_forced.rs` sends
+`ECMODE_IN=0x4000` and repeats the same 20-frequency sweep. **Every single frequency produced the
+exact same fixed hex pattern** (`f08f00c08f00d00900500d00100408400400`), completely independent of
+the actual input signal -- confirming the wire format genuinely does change under `TS_ENABLE=1` (a
+real, distinct encoder mode exists and is reachable), but this specific forced-substitution mode
+produces a constant placeholder rather than content reflecting the real input, at least for a plain
+sawtooth stimulus. This is consistent with the chip's real tone-frame encoding needing input that
+actually passes its own tone-classification logic (a genuine DTMF pair, KNOX tone, or call-progress
+tone with correct timing/structure) rather than being reachable by simply forcing the flag alone --
+a concrete, bounded lead for a future session (test real DTMF tone pairs, e.g. 697+1209Hz for "1",
+with `TS_ENABLE` left at its own default so the chip's own detection decides when to substitute,
+rather than forcing it unconditionally). Both datasets committed
+(`tone_detect_disabled_sweep.tsv`, `tone_send_forced_sweep.tsv`).
