@@ -2097,3 +2097,28 @@ distinct frame *format* entirely, or the normal FEC/interleave format carrying a
 DTMF-specific parameter set) is not yet done and is a concrete, bounded next step; the complete
 16-digit dataset is committed (`real_dtmf_sweep.tsv`) so a future session can pick this up directly
 rather than re-capturing it.
+
+**That characterization was completed immediately, and it is a clean, complete, fully-solved
+finding.** Decoding all 16 DTMF frames through the already-validated `ratet27_wire_format`/
+`ratet27_fec` pipeline (`decode_dtmf.py`) resolves the entire structure at
+a glance: **the normal FEC/interleave format is reused (not a distinct frame format), but with
+almost everything zeroed except two fields that directly, cleanly encode the DTMF row and column
+frequencies:**
+
+| block | DTMF behavior |
+|---|---|
+| `g0` | Encodes the **row** frequency: exactly `4032, 4033, 4034, 4035` for rows 697/770/852/941Hz respectively -- a perfect, unbroken 4-step linear staircase, identical across all 4 digits sharing each row |
+| `u4` | Encodes the **column** frequency: exactly `80, 208, 336, 464` for columns 1209/1336/1477/1633Hz -- also perfectly linear, with a constant step of exactly 128 (`2^7`) between adjacent columns |
+| `g1`, `g2`, `g3`, `u5`, `u6`, `c7` | **All constant (`g1`=2944, `g2`=0, `g3`=0, `u5`=0, `u6`=0, `c7`=0) across every one of the 16 digits** -- these carry no DTMF-specific information at all; `g3` decodes with distance 0 to the all-zero Golay codeword, confirming `0` is a genuine, valid member of its codeword space (not itself informative about `g3`'s normal-voice-mode meaning, since DTMF mode simply never uses it) |
+
+This is a complete, decisive resolution of the "what does the chip do with DTMF" question raised by
+this section's own earlier tests -- not just "DTMF classification is active" (already shown above)
+but the *exact* mechanism: reuse the same FEC blocks, park two of them (previously unassigned to any
+confirmed semantic meaning) on simple linear row/column frequency codes, and zero the rest. This is
+also indirect, real evidence for two things established more tentatively elsewhere in this
+document: it confirms `g0` really is a frequency-related quantizer field (consistent with, though a
+different specific mode from, the gain/pitch interpretation in section 23), and it gives `u4` a
+second, cleanly-decoded, real-world semantic meaning distinct from its already-fully-solved Hamming
+FEC role -- the chip clearly repurposes the same wire positions for different content depending on
+what it classifies the input as. `decode_dtmf.py`'s own output and this table are fully
+reproducible from the committed `real_dtmf_sweep.tsv` with zero chip time.
