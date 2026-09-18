@@ -374,6 +374,14 @@ class BackupConfig(models.Model):
         # Verified by [@ANCHOR: backup_management:COMM_test_apply_policies]
         # Use Service ID for security & audit trails (moved to _publish_to_worker)
         for rec in self:
+            # Bug-hunt fix, 2026-09-18: policies are a Kopia-only concept -- the daemon's
+            # kopia_policy branch always builds a `kopia policy set` command regardless of
+            # config_engine, so applying this to a pgbackrest config queued an always-failing
+            # no-op against the wrong tool (harmless, just confusing -- see
+            # docs/bug_hunt_claims/hams_open/backup_management/models/backup_config/claims/
+            # action_apply_policies.md).
+            if rec.engine != "kopia":
+                continue
             action = rec._publish_to_worker("kopia_policy")
             if isinstance(action, dict) and len(self) == 1:
                 res = action

@@ -179,6 +179,20 @@ class TestBackupManagement(RealTransactionCase):
         self.assertTrue(job.exists())
         self.assertEqual(job.state, "pending")
 
+    def test_08b_apply_policies_skips_non_kopia_configs(self):
+        # Tests [@ANCHOR: backup_management:COMM_backup_apply_policies]
+        # Bug-hunt fix, 2026-09-18: policies are a Kopia-only concept -- applying them to a
+        # pgbackrest config used to queue an always-failing kopia_policy job against the wrong
+        # tool. No job should be queued for a non-kopia config at all.
+        job_count_before = self.env["backup.job"].search_count(
+            [("config_id", "=", self.config_pg.id)]
+        )
+        self.config_pg.action_apply_policies()
+        job_count_after = self.env["backup.job"].search_count(
+            [("config_id", "=", self.config_pg.id)]
+        )
+        self.assertEqual(job_count_after, job_count_before)
+
     def test_08c_restore_drill_triggered(self):
         # Tests [@ANCHOR: backup_management:COMM_execute_restore_drill]
         self.config_kopia.restore_drill_script = "/opt/hams/backup/test_restore.sh"
