@@ -45,12 +45,15 @@ const TYPE_SPEECH: u8 = 0x02;
 const TYPE_CHANNEL: u8 = 0x01;
 const SAMPLE_RATE: f64 = 8000.0;
 const FRAME_SAMPLES: usize = 160;
-const SETTLING_FRAMES: usize = 30;
-const CAPTURED_FRAMES: usize = 10;
+const SETTLING_FRAMES: usize = 80;
+const CAPTURED_FRAMES: usize = 15;
 
-// Voice-range frequencies whose period evenly divides 160 samples (avoids inter-frame phase drift
-// between "settled" frames -- the same confound found and fixed during the D-STAR investigation).
-const TEST_FREQS_HZ: [f64; 4] = [200.0, 400.0, 500.0, 1000.0];
+// Every frequency whose period (8000/f) is an exact divisor of 160 samples, i.e. genuinely zero
+// inter-frame phase drift once settled -- the full real set, not just a handful (period must divide
+// 160 exactly: divisors are 1,2,4,5,8,10,16,20,32,40,80,160, giving these 8 frequencies). A wider
+// set than the original 4-point probe, for real statistical power when checking which field (if
+// any) tracks pitch monotonically.
+const TEST_FREQS_HZ: [f64; 8] = [50.0, 100.0, 200.0, 250.0, 400.0, 500.0, 800.0, 1000.0];
 
 fn build_control_ratep(rcw: [u16; 6]) -> Vec<u8> {
     let mut payload = vec![FIELD_RATEP];
@@ -106,6 +109,70 @@ fn bit_diff_positions(a: &[u8], b: &[u8], num_bits: usize) -> Vec<usize> {
     positions
 }
 
+/// This crate's own `u0..u7` field-order convention (matching TIA-102.BAAA-A's stated order and
+/// this crate's own already-confirmed Golay/Hamming data-width split): 12,12,12,12,11,11,11,7 bits,
+/// MSB-first, contiguous. Extracted here purely to *check* whether it holds for the chip's raw
+/// NOFEC bits -- not assumed correct.
+const U_WIDTHS: [usize; 8] = [12, 12, 12, 12, 11, 11, 11, 7];
+
+fn extract_fields(frame: &[u8]) -> [u32; 8] {
+    let mut bits = Vec::with_capacity(88);
+    for &byte in frame {
+        for i in (0..8).rev() {
+            bits.push((byte >> i) & 1);
+        }
+    }
+    let mut out = [0u32; 8];
+    let mut offset = 0;
+    for (i, &w) in U_WIDTHS.iter().enumerate() {
+        let mut v = 0u32;
+        for b in &bits[offset..offset + w] {
+            v = (v << 1) | *b as u32;
+        }
+        out[i] = v;
+        offset += w;
+    }
+    out
+}
+
+/// Standard Gray-to-binary conversion, checking Bruce's own direct question: does interpreting a
+/// field as Gray-coded (rather than plain binary) reveal a cleaner, more monotonic relationship
+/// with the known true frequency than plain binary does?
+fn gray_to_binary(g: u32) -> u32 {
+    let mut b = g;
+    let mut shift = 1;
+    while (g >> shift) != 0 {
+        b ^= g >> shift;
+        shift += 1;
+    }
+    b
+}
+
+fn correlation(xs: &[f64], ys: &[f64]) -> f64 {
+    let n = xs.len() as f64;
+    let mx = xs.iter().sum::<f64>() / n;
+    let my = ys.iter().sum::<f64>() / n;
+    let cov: f64 = xs.iter().zip(ys).map(|(x, y)| (x - mx) * (y - my)).sum();
+    let vx: f64 = xs.iter().map(|x| (x - mx).powi(2)).sum();
+    let vy: f64 = ys.iter().map(|y| (y - my).powi(2)).sum();
+    cov / (vx.sqrt() * vy.sqrt())
+}
+
+/// Spearman rank correlation -- robust to a field that's monotonic but non-linear (e.g. a
+/// logarithmic pitch quantizer), which Pearson alone could understate.
+fn spearman(xs: &[f64], ys: &[f64]) -> f64 {
+    fn ranks(v: &[f64]) -> Vec<f64> {
+        let mut idx: Vec<usize> = (0..v.len()).collect();
+        idx.sort_by(|&a, &b| v[a].total_cmp(&v[b]));
+        let mut r = vec![0.0; v.len()];
+        for (rank, &i) in idx.iter().enumerate() {
+            r[i] = rank as f64;
+        }
+        r
+    }
+    correlation(&ranks(xs), &ranks(ys))
+}
+
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
@@ -153,5 +220,23 @@ fn main() {
             let diff = bit_diff_positions(ba, bb, *na);
             println!("{fa:>6}Hz vs {fb:>6}Hz: {} bits differ at positions {diff:?}", diff.len());
         }
+    }
+
+    // Per-field extraction and correlation, both plain-binary and Gray-decoded, under this crate's
+    // own u0..u7 field-order assumption -- checked directly, not assumed, per Bruce's own question
+    // about whether Gray coding could explain the earlier multi-bit-per-step pattern.
+    println!("\n--- Per-field (u0..u7) values and correlation with true frequency ---");
+    let true_freqs: Vec<f64> = settled.iter().map(|(f, _, _)| *f).collect();
+    let per_frame_fields: Vec<[u32; 8]> = settled.iter().map(|(_, frame, _)| extract_fields(frame)).collect();
+    for field in 0..8 {
+        let plain: Vec<f64> = per_frame_fields.iter().map(|f| f[field] as f64).collect();
+        let gray: Vec<f64> = per_frame_fields.iter().map(|f| gray_to_binary(f[field]) as f64).collect();
+        println!(
+            "u{field}: plain={plain:?} pearson={:.3} spearman={:.3}  |  gray-decoded={gray:?} pearson={:.3} spearman={:.3}",
+            correlation(&true_freqs, &plain),
+            spearman(&true_freqs, &plain),
+            correlation(&true_freqs, &gray),
+            spearman(&true_freqs, &gray),
+        );
     }
 }

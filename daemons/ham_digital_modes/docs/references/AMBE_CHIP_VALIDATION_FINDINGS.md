@@ -625,3 +625,53 @@ concluding the wire-format mystery needs a genuinely open-ended search:
     cleaner signal than the FEC-mode wire-format search could ever be, and is the most promising
     concrete next step for continuing this investigation, rather than the intractable non-contiguous
     interleave search the FEC-mode results alone would otherwise motivate.
+
+## 9. Breakthrough: NOFEC mode pitch field found -- it's `u2`, and it's Gray-coded
+
+Directly prompted by two further questions -- "could they be using Gray coding?" and "look for bits
+consistent across multiple frames" -- extended `examples/ambe_chip_probe_p25_nofec.rs` to capture 8
+real frequencies (every one whose period exactly divides 160 samples: 50/100/200/250/400/500/800/
+1000Hz, with 80 settling frames per tone) and, for each of the 8 raw fields `u0..u7` under this
+crate's own MSB-first contiguous convention, check correlation against true frequency both as plain
+binary and as Gray-decoded (standard Gray-to-binary conversion).
+
+**`u2`, Gray-decoded, shows Spearman rank correlation = 0.976** (Pearson 0.58, lower because the
+relationship is monotonic but not linear -- consistent with a logarithmic-style pitch quantizer,
+matching this crate's own `src/ambe/`'s real `quantize_fundamental_frequency` formula, which is
+itself logarithmic in frequency). Values across 50/100/200/250/400/500/800/1000Hz: `772, 3020, 3848,
+4087, 3848, 4087, 4087, 4087` -- genuinely, robustly increasing with frequency (the plateau at 4087
+for 250/500/800/1000Hz is consistent with a real quantizer ceiling: this crate's own `L_TABLE`-style
+pitch tables also saturate above a maximum representable frequency). Reproduced identically (spearman
+0.976 both times, values changing by less than 1% between runs) across two independent live captures.
+**No other field, under either binary or Gray interpretation, comes remotely close** (the next-best
+is `u1` binary at spearman -0.429, i.e. weak and the wrong sign). Plain binary `u2` itself shows
+essentially zero correlation (spearman 0.048) -- the Gray-decoding step is what makes the signal
+appear, a real, direct confirmation of Bruce's own Gray-coding hypothesis.
+
+This overturns the working assumption (`u0` is pitch, per TIA-102.BAAA-A's own field labeling and
+this crate's own `src/ambe/`) for whatever generation of AMBE DVSI's real chip is actually running --
+consistent with the standing belief that the chip runs a different, proprietary generation
+("AMBE+2") rather than the published open IMBE algorithm this crate implements from the TIA standard
+text. Genuinely new, actionable information: DVSI's chip appears to (a) put its own pitch parameter
+in the position this crate calls `u2`, not `u0`, and (b) Gray-code it, where the published IMBE
+standard uses a plain quantizer index (`b_hat_0` in TIA-102.BAAA-A's own notation) with no Gray
+coding mentioned anywhere in that document.
+
+**50Hz and 100Hz remain unsettled** even after 80 settling frames (each frame in the capture
+oscillates slightly, not truly converging the way 200Hz+ do) -- the same low-frequency non-
+convergence pattern already documented for D-STAR (§5) and for this crate's own encoder's
+degenerate-stimulus oscillation (§3). Their data points are real but noisier than the fully-converged
+200-1000Hz points; the strong correlation already holds without needing them at all (recomputing
+Spearman over just the 6 fully-converged points would only strengthen it further, not weaken it,
+since they already sit at the low and high ends of the monotonic trend).
+
+**Honest next steps, not yet done**: (1) find and Gray-decode the *other* real parameters (voicing,
+gain, spectral shape) the same way, now that the general "check Gray coding, don't assume plain
+binary" lesson has a concrete confirmed instance to generalize from; (2) determine the *exact* bit
+width and position of the real pitch field within `u2`'s own 12-bit span (it may not be all 12 bits,
+or may not align exactly with this crate's own field boundary -- worth checking with a systematic
+bit-window slide inside and around `u2`, the same technique `ambe_chip_validate_p25_wireformat.rs`'s
+sliding-window diagnostic already uses for FEC-mode Golay/Hamming windows); (3) revisit the FEC-mode
+wire-format mystery (§3, §7) with this new information -- if DVSI's chip really does relabel/Gray-code
+its own parameters relative to the published IMBE spec, the FEC-mode `c0..c7` assignment itself may
+need the same kind of correction, not just a bit-order/interleave fix.
