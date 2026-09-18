@@ -2252,3 +2252,39 @@ for `g3`'s behavior now has to explain why it is *perfectly* stable during confi
 *occasionally* bistable during confirmed silence, not a general "noisy/unresolved" block. Full
 100-frame dataset with per-frame `VOICE_ACTIVE` ground truth committed
 (`dtx_voice_active_ground_truth.txt`).
+
+**A real caveat, disclosed rather than glossed over**: all three `VOICE_ACTIVE=1` peaks (75, 100,
+150) were generated from the *same* LCG noise realization (seed 42), just rescaled to different
+amplitudes -- not three independently-varied signals. Since rescaling a signal preserves its
+relative harmonic/spectral shape, `g3`'s perfect constancy across those three points could reflect
+that shared shape rather than a genuine "always constant during voice" property that would hold for
+differently-shaped voiced content (real speech, tones at different frequencies, etc. -- all of
+which showed real `g3` variation earlier in this investigation, section 23's 149-distinct-value
+count). The confirmed-silence-vs-confirmed-voice split itself is solid (it doesn't depend on this
+caveat), but "`g3` is *perfectly* stable whenever `VOICE_ACTIVE=1`" as a general claim needs
+re-testing with genuinely varied voiced content (different noise seeds, real speech, several
+distinct tones) under this same `DTX_ENABLE`+`ECMODE_OUT`-visible configuration before being
+trusted -- a concrete, cheap next step now that the tooling exists.
+
+**That cheap follow-up was run immediately, and it confirms the caveat was justified -- correcting
+the record rather than leaving an over-broad claim standing.** `examples/p25_ratet27_probe_g3_
+during_varied_voice.rs` tests `g3` (with the same `DTX_ENABLE`+`TD_ENABLE`+`ECMODE_OUT`-visible
+configuration) against genuinely varied content: 5 independent noise seeds, 4 tones at different
+frequencies, and 5 different chunks of real recorded speech -- 14 stimuli, 140 captured frames.
+**Result: `g3` takes 14 distinct values across these 14 stimuli** (`0, 1024, 1086, 1087, 2048, 2087,
+2109, 2110, 2111, 3072, 3134, 3135, 62, 63`), decisively contradicting a general "`g3` is perfectly
+stable whenever `VOICE_ACTIVE=1`" claim -- confirming the earlier finding's constancy really was an
+artifact of testing only rescaled copies of one noise pattern, not a genuine property of confirmed
+voice frames. **The corrected, more precise picture, visible in this richer data**: values cluster
+into groups differing by only 1-2 (`1086/1087`, `2109/2110/2111`, `3134/3135`), and the cluster
+"bases" (`0, 1024, 2048, 3072`) are exact multiples of `1024 = 2^10` -- consistent with `g3` being a
+genuine multi-bit parameter with a coarse ~2-bit component (bits 10-11) and a finer, more slowly-
+varying component in the lower bits, roughly matching the block's own established rank-8 ceiling
+(`2^8 = 256` reachable values) rather than either "constant" or "fully rank-12 random." This is a
+more accurate, if still incomplete, characterization than either the original "stubborn plateau"
+framing or the immediately-preceding "perfectly stable during voice" overclaim -- `g3` is real,
+multi-valued, content-dependent data, just confined to a smaller-than-full-rank subspace for reasons
+still not identified. Both datasets (the confound-affected one and this corrective one) are kept
+committed side by side (`dtx_voice_active_ground_truth.txt`, `g3_varied_voice_content.txt`) as a
+worked example of exactly the kind of stimulus-diversity trap this whole investigation has run into
+more than once.
