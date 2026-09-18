@@ -31,7 +31,21 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        with cls.registry.cursor() as cr:
+        # A real, physically-committed cursor, NOT cls.registry.cursor(): under
+        # --test-enable, Odoo's own test harness mocks registry.cursor at the
+        # CLASS level (before setUp()'s own _real_cursor_factory monkeypatch
+        # ever runs) to hand out TestCursor savepoint proxies over one shared,
+        # never-really-committed suite transaction. cls.registry.cursor()
+        # here used to be exactly that -- its own "commit" was a savepoint
+        # RELEASE, not a real COMMIT, so the insert below was invisible to
+        # every later real connection (self.cr, opened via db_connect() in
+        # setUp()'s _real_cursor_factory) for the rest of the class's tests.
+        # Root-caused 2026-09-17 by comparing txid_current() before/after:
+        # the "post-commit" reread reported the SAME txid as before the
+        # insert -- proof no real transaction boundary had been crossed.
+        # db_connect(...).cursor() bypasses the mock entirely, matching how
+        # _real_cursor_factory itself gets a real cursor.
+        with odoo.sql_db.db_connect(cls.registry.db_name).cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
                 "INSERT INTO ir_config_parameter (key, value) VALUES "
                 "('web.base.url', 'https://hams.com'), "
@@ -39,7 +53,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                 "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value"
             )
             # The context manager automatically commits if no exception is
-            # raised.
+            # raised -- and this time it is a real cursor, so it is a real
+            # commit.
         # web.base.url.freeze prevents a real, documented Odoo mechanism
         # (res_users.py's admin-login handler: on a successful
         # base.group_system login carrying a base_location, it silently
@@ -58,21 +73,6 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # unset. Passing 'stable' explicitly clears it (plus 'default'/
         # 'templates.cached_values', which 'stable' depends on per that same
         # table).
-        #
-        # NOTE: this does NOT fix test_facility.py's own
-        # test_07_common_setup_class_sql flake (confirmed directly this
-        # session, via a temporary set_param() call-tracing monkeypatch,
-        # since removed) -- neither of the two real set_param('web.base.url',
-        # ...) calls that happen anywhere in a `-u zero_sudo` run explain
-        # that failure; both happen chronologically AFTER test_07 already
-        # failed. self.env.cr there was seen holding
-        # 'http://localhost:<port>' -- exactly ir_config_parameter.py's own
-        # _default_parameters['web.base.url'] install-time default -- which
-        # points at a transaction-snapshot/cursor-timing issue specific to
-        # this class's own "real transaction hijacking" design (self.env.cr
-        # vs self.cr being genuinely different connections/snapshots), not
-        # at anything this freeze/cache fix governs. Left as a known,
-        # pre-existing, narrowly-scoped test bug -- not chased further here.
         cls.registry.clear_cache('stable')
 
     def setUp(self):
