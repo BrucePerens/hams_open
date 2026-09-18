@@ -12,3 +12,10 @@ tests/fixtures/*
 # through plain upstream Codec2's own reference encoder/decoder, never
 # real recorded speech. See tests/fixtures/codec2_1600/README.md.
 !tests/fixtures/codec2_1600/
+# osr_speech IS committed -- real speech, but from the Open Speech
+# Repository, whose own stated license explicitly authorizes exactly this
+# ("incorporated into web sites or test equipment"), unlike the WSPR
+# recording above or the Codec2 team's own donated WAVs (also real but
+# kept out of git despite being cleared -- OSR's own license makes that
+# extra caution unnecessary here). See tests/fixtures/osr_speech/README.md.
+!tests/fixtures/osr_speech/
