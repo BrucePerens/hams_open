@@ -2172,3 +2172,49 @@ confirm DVSI's "background noise level" claim as cleanly as hoped**: either the 
 parameter lives somewhere this test didn't isolate (a different block, or a combination). A
 finer-grained sweep concentrated just below the threshold (e.g. peaks 0, 5, 10, ..., 50 in small
 steps) is the natural next attempt. Full dataset committed (`dtx_noise_levels_sweep.tsv`).
+
+## 27. `PKT_CHANFMT` reveals the chip's own ground-truth classification flags appended to channel packets -- structure determined, full correlation left as a clean-state follow-up
+
+DVSI's manual documents `PKT_CHANFMT` (field `0x15`, a 2-byte data word) as able to make output
+CHANNEL packets always include the `ECMODE_OUT` status word (`VOICE_ACTIVE` at bit 1, `TONE_FRAME`
+at bit 15) -- real, direct ground truth for what the chip itself classified each frame as, rather
+than inferring classification from stimulus type alone as every earlier section had to.
+`examples/p25_ratet27_probe_chanfmt_ecmode.rs` sends `PKT_CHANFMT` with `ecmode=0b01` ("always
+include") and dumps raw response bytes.
+
+**The manual doesn't show a worked packet example for this option; empirically determined here.**
+Confirmed accepted (`[15, 00]` response, matching Table 63's own success code). Every subsequent
+CHANNEL packet grew from the normal 24 bytes (4-byte header + 20-byte `CHAND` payload) to 27 bytes
+-- **3 extra payload bytes appended immediately after the 18-byte `CHAND` bit data**: a 1-byte field
+ID (`0x02`) followed by the 2-byte big-endian `ECMODE_OUT` word itself. Observed values across 10
+frames (5 loud-tone, 5 silence) were exactly two distinct 16-bit words, `0x0002` and `0x0402` --
+both with bit 1 (`VOICE_ACTIVE`) set, differing only in bit 10, which Table 14 documents as
+"Reserved." **This specific test is not yet a clean read**, and is disclosed as such rather than
+over-interpreted: `ECMODE_IN`'s own state was left over from the immediately preceding `DTX_ENABLE`
+noise-level sweep (section 26) rather than reset to a known baseline, so the bit-10 anomaly and the
+lack of any `TONE_FRAME` (bit 15) observation on the loud tone are both plausibly artifacts of that
+leftover state rather than genuine findings. **What is solid and reusable**: the exact appended-
+field byte offset and format now determined, which is the real prerequisite for a clean follow-up
+that resets `ECMODE_IN` to a known state (e.g. `TD_ENABLE` on, everything else off) before checking
+whether `VOICE_ACTIVE`/`TONE_FRAME` correlate with `g3`'s own behavior -- a more direct test than
+any of this investigation's stimulus-based inference so far, and the natural next step for a future
+session.
+
+**The clean follow-up was run immediately, and it is a decisive, ground-truth confirmation.**
+Resetting `ECMODE_IN` to a known baseline (`TD_ENABLE` on, everything else off) before re-running
+the same `PKT_CHANFMT` probe against four settled stimuli -- a loud tone, silence, real noise, and a
+real DTMF digit (`697+1209Hz`, digit "1") -- gives a completely clean, unambiguous result:
+**`TONE_FRAME` (`ECMODE_OUT` bit 15) reads exactly `1` for every one of the 5 captured DTMF frames,
+and exactly `0` for every one of the other 15 frames (5 each of loud tone, silence, noise)** -- a
+perfect, zero-exception match to which stimulus this investigation already knew (section 25)
+produces the special row/column DTMF encoding. This is independent, ground-truth confirmation from
+the chip's own self-reported classification flag, not just an inference from the resulting wire
+pattern -- the strongest possible validation that section 25's DTMF decode is genuinely correct.
+`VOICE_ACTIVE` (bit 1) reads `1` for all 20 frames including pure silence, consistent with DVSI's
+own manual: that flag's real "0 for frames that don't need transmitting" behavior only applies when
+`DTX_ENABLE` is also on, which this clean-baseline test deliberately left off.
+
+**This also gives one more clean negative data point for `g3`**: across the 15 non-DTMF frames
+(all reading `TONE_FRAME=0`), `g3` still shows its usual varied, rank-limited behavior -- tone-frame
+classification is not a hidden factor behind the ordinary-voice-mode `g3` mystery either, now
+confirmed via the chip's own self-reported status rather than inferred from stimulus type.
