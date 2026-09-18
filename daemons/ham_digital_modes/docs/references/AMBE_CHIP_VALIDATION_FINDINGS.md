@@ -74,17 +74,52 @@ tracker bug). Run it with `cargo run --example ambe_chip_validate_p25 -- 192.168
   (`pack_frame_msb_first` in the harness: c0..c7 concatenated MSB-first, widths
   `23,23,23,23,15,15,15,7`) is simply wrong and needs to be found empirically rather than assumed.
 
+**Update, same session, after step 2 below**: tried this immediately (`examples/ambe_frame_diagnose.rs`,
+also committed) -- unpacked the chip's real captured frame under five plausible bit/byte/field-order
+conventions (MSB-first, LSB-first-per-byte, whole-stream-reversed, reversed field order, reversed byte
+order) and ran each through this crate's own `decode_parameters`. **All five fail identically** (every
+one triggers section 7.7's frame-repeat condition, meaning none produces a clean Golay decode of
+`c_hat_0`). This rules out a simple bit-transposition bug as the explanation and points at something
+more fundamental -- most likely that DVSI's chip, even at an aggregate bitrate matching RATET index
+27 exactly, does not necessarily use the *same* Golay/Hamming split, bit-prioritization order, or
+modulation PRN that TIA-102.BABA's own text describes; DVSI's own USB-3000 Manual never confirms the
+chip's internal bitstream layout is identical to the published spec's example implementation, only
+that the aggregate bit budget matches.
+
+**A real, related discovery while chasing this**: G4KLX's AMBETools ships a full IMBE FEC codec
+(`Common/IMBEFEC.cpp`) for converting to/from the P25 *over-the-air* dibit/`.dvtool` format --
+real, working code showing an actual **144-bit interleave permutation** (`IMBE_INTERLEAVE[144]`) is
+applied on top of the raw `c0..c7` concatenation before transmission, plus the same
+content-dependent whitening/PRN construction this codec's own `modulation.rs` implements (seeded from
+`c0`'s own 12 data bits via a linear congruential generator: `p = 16*c0; p = (173*p+13849) mod 65536`
+-- worth directly comparing against `modulation::pseudo_random_sequence`'s own formula for an exact
+match, not yet done). **This interleave is very likely an RF-modem/channel-symbol-level step applied
+*downstream* of the vocoder chip, not something the AMBE3003 chip itself does to its own USB/serial
+`CHANNEL` packets** -- AMBETools uses `CIMBEFEC` specifically for its `.dvtool`/over-the-air file
+format conversion, separately from `DV3000SerialController`'s own direct chip I/O, which never
+interleaves. So this probably isn't the missing piece for comparing against the chip's raw serial
+output directly, but it's the right place to look once channel-frame-level work (a real, separate,
+already-disclosed scope boundary per `mod.rs`'s own doc comment) is in scope.
+
 **Real next steps, in order:**
-1. Diagnose and fix the 12-frame oscillation on a stationary input -- this is a bug (or at least a
-   real, unexplained behavior) in this crate's own closed loop, independent of the chip.
-2. Feed the chip's real captured frames into this crate's own decoder and check FEC pass/fail, to
-   settle the bit-packing/field-order question before trusting any further bit-level comparison.
-3. Once framing is confirmed correct, re-run the harness and look at *where* in the 144 bits any
-   remaining disagreement concentrates (pitch `b0`? gain? higher-order coefficients?) -- that's where
-   an actual TIA-table transcription error, if one exists, would show up.
+1. **A more powerful empirical technique than guessing bit-order permutations further**: capture the
+   chip's real output for *two slightly different* stationary tones (e.g. 200Hz and 220Hz) and XOR the
+   two 144-bit frames. Since pitch is the parameter most directly controlled by tone frequency, the
+   bit positions that actually change reveal, empirically and with no assumptions about DVSI's
+   internal layout, exactly where pitch information lives in the chip's own real output -- then that
+   observed pattern can be compared against where this crate's own `bit_prioritization`/`quantize_fundamental_frequency`
+   believe pitch lives, which is a much stronger diagnostic than continuing to guess whole-frame
+   bit/byte orderings blindly.
+2. Diagnose and fix the 12-frame oscillation on a stationary input, independent of the chip
+   comparison -- a closed-loop predictive encoder should converge to a fixed point for a genuinely
+   stationary input, not cycle.
+3. Directly compare `modulation::pseudo_random_sequence`'s own LCG formula against the
+   `173*p + 13849 mod 65536` construction found in AMBETools' `IMBEFEC.cpp` above -- if this codec's
+   own transcription of the spec's PRN differs from that real, working reference, that's a concrete,
+   fixable bug, independent of the interleave/framing question.
 4. Extend the harness with a real decode-direction test (feed known bits to the chip's decoder, i.e.
    send a `CHANNEL` packet and read back the `SPEECH` response, compare PCM against this crate's own
-   `decode_frame` output) once the encode direction is understood.
+   `decode_frame` output) once the encode-direction framing question above is resolved.
 
 ## 4. D-STAR: real, primary-source data now in hand, implementation not yet started
 
