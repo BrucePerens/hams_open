@@ -448,6 +448,121 @@ mod tests {
         assert_eq!(c[7], u[7]);
     }
 
+    /// A real, investigated (not hypothetical) property of this encoder's own closed-loop
+    /// prediction, documented here because it looks alarming until traced to its real mechanism: a
+    /// perfectly stationary, exactly-periodic input (a pure sine tone whose period evenly divides
+    /// the 160-sample frame, so every frame's raw PCM -- and this frame's own unquantized spectral
+    /// estimate, confirmed directly, not assumed -- is bit-identical) does **not** converge to a
+    /// single fixed 144-bit frame. See `docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` section 3
+    /// for the full investigation; summarized here because it's exactly what this test guards:
+    ///
+    /// - With `l_hat=18` for a 200Hz tone, `FrameState`'s `xi_max` and `voiced` settle immediately
+    ///   and stay fixed, but `spectral_amplitudes` (Eq. 54's reconstructed history) does not settle
+    ///   to a single value. **Most harmonics lock into an exact, stable period-2 cycle** (confirmed
+    ///   by direct inspection out to 400 frames: e.g. harmonic 1 alternates between exactly
+    ///   `2456.121424...` and `2678.395858...`, bit-for-bit repeating, from frame ~30 onward) --
+    ///   traced to its real mechanism: the gain vector's second-stage DCT coefficient `G_hat_2`
+    ///   (Annex F, 6 bits at `L=18`) straddles a quantizer bin boundary, and `prediction_coefficient`'s
+    ///   own `rho ~= 0.49` feedback (Eq. 54/77) amplifies each frame's quantization error by
+    ///   `1/(1-rho) ~= 1.96` before feeding it back -- the textbook condition for a DPCM-style
+    ///   closed-loop quantized predictor to settle into a period-2 limit cycle instead of a fixed
+    ///   point. Confirmed structural, not a coincidental one-off: the same phenomenon (a stable
+    ///   short cycle, not divergence) appears across a wide tone-amplitude sweep (3000-12000; a
+    ///   uniform amplitude scaling only shifts the coarse Annex E gain index `b2`, never the
+    ///   shape-encoding coefficients that actually drive the cycle -- Eq. 54's own bias-correction
+    ///   term is proven elsewhere in this module to cancel a constant level exactly) and for a
+    ///   harmonic-rich (sawtooth-like) stimulus too.
+    /// - **One block does not settle into a short exact cycle**: block 4 (harmonics 13-15 for
+    ///   `L=18`, the block with the smallest higher-order bit budget among the unvoiced blocks --
+    ///   only 3+2 AC bits, Annex G) keeps producing a new value most frames, out to at least 400
+    ///   frames, rather than locking into any repeat visible in a reasonable window. Its magnitude
+    ///   stays bounded (observed in the 0.06-0.10 range, consistent with the ~0.07-0.09 true
+    ///   unvoiced-noise-floor input for this stimulus) rather than diverging, so this reads as
+    ///   compounded coarse-quantizer sensitivity on a maximally out-of-distribution stimulus (this
+    ///   pure tone puts essentially 100% of the signal's real energy on exactly one harmonic out of
+    ///   18, which also saturates block 0's own `C_1,2` coefficient at its quantizer's maximum index
+    ///   -- both are real, extreme conditions no genuine multi-formant voiced/unvoiced speech frame
+    ///   would ever produce), not evidence of unbounded instability.
+    /// - This is why the real chip's own bit-exact convergence on the same stimulus (`examples/
+    ///   ambe_chip_validate_p25.rs`) is not good counter-evidence of a bug here: the findings doc's
+    ///   own section 3 already shows the chip's real output has no recognizable TIA-102.BABA FEC
+    ///   structure under eight independently-tried bit-layout hypotheses (every one scores the
+    ///   Golay(23,12) perfect code's own maximum possible error count, indistinguishable from noise)
+    ///   -- strong evidence the chip is running a materially different vocoder generation (most
+    ///   likely DVSI's own AMBE+2) at this rate, not the published IMBE algorithm this module
+    ///   implements from TIA-102.BABA's own text. A different algorithm's behavior on a degenerate
+    ///   stimulus says nothing about whether Eq. 54/62/63 as published are supposed to converge here.
+    ///
+    /// What this test actually checks, given all of the above: not "converges to one frame" or even
+    /// "the whole 144-bit frame repeats with a short period" (both real but wrong expectations this
+    /// replaces), but that every harmonic's reconstructed amplitude stays finite and within a
+    /// generous, sane bound of the true input across a long run -- a real regression guard against
+    /// the loop actually diverging or producing NaN/garbage, distinct from (and looser than) exact
+    /// convergence -- plus the one specific exact-cycle property (harmonic 1, the dominant one)
+    /// that direct investigation showed really is stable and worth pinning down precisely.
+    #[test]
+    fn encode_frame_stays_bounded_for_a_stationary_tone_even_though_it_does_not_converge() {
+        let sample_rate = 8000.0;
+        let tone_hz = 200.0;
+        let frame_samples = 160;
+        let num_frames = 100;
+        let total_samples = num_frames * frame_samples + 400;
+        let raw: Vec<f64> = (0..total_samples)
+            .map(|n| 8000.0 * (2.0 * std::f64::consts::PI * tone_hz * n as f64 / sample_rate).sin())
+            .collect();
+        let omega0_hat = 2.0 * std::f64::consts::PI * tone_hz / sample_rate;
+
+        let mut state = FrameState::initial();
+        let mut harmonic1_amplitudes: Vec<f64> = Vec::with_capacity(num_frames);
+        for frame_idx in 0..num_frames {
+            let center = frame_idx * frame_samples + frame_samples / 2 + 110;
+            let frame = pitch_refinement::RefinementFrame::new(&raw, center);
+            let (_c, next_state) = encode_frame(&frame, omega0_hat, 0.001, &state, false)
+                .expect("a clean stationary tone should always encode, every frame, indefinitely");
+
+            // Every harmonic's reconstructed amplitude must stay finite and within a generous, sane
+            // neighborhood of the true ~4000 input level -- loose enough to tolerate the real
+            // quantizer-saturation undershoot documented above (down to the unvoiced noise floor for
+            // the non-dominant harmonics), but tight enough to catch real unbounded divergence.
+            for (l, &amplitude) in next_state.spectral_amplitudes.iter().enumerate() {
+                assert!(
+                    amplitude.is_finite() && (0.0..8000.0).contains(&amplitude),
+                    "frame {frame_idx}, harmonic {}: expected a bounded, finite reconstructed \
+                     amplitude, got {amplitude}",
+                    l + 1
+                );
+            }
+
+            harmonic1_amplitudes.push(next_state.spectral_amplitudes[0]);
+            state = next_state;
+        }
+
+        // The one specific exact-cycle property direct investigation confirmed: by the tail of a
+        // long run, harmonic 1 (the dominant one) alternates between exactly two values, repeating
+        // bit-for-bit every other frame -- a real, stable period-2 limit cycle, not lingering
+        // transient drift.
+        let tail = &harmonic1_amplitudes[num_frames - 20..];
+        for i in 0..tail.len() - 2 {
+            assert!(
+                (tail[i] - tail[i + 2]).abs() < 1e-6,
+                "expected harmonic 1's reconstructed amplitude to have settled into an exact \
+                 period-2 cycle by the tail of a long run, but tail[{i}]={} and tail[{}]={} differ \
+                 by more than floating-point noise",
+                tail[i],
+                i + 2,
+                tail[i + 2]
+            );
+        }
+        assert!(
+            (tail[0] - tail[1]).abs() > 1.0,
+            "expected the two alternating values of harmonic 1's period-2 cycle to be genuinely \
+             distinct (not a false positive from a cycle that's actually already converged to one \
+             value), got {} and {}",
+            tail[0],
+            tail[1]
+        );
+    }
+
     /// The real composition test the per-stage unit tests can't catch: a genuine synthetic
     /// harmonic signal (same construction `pitch_refinement`/`vuv`/`spectral_amplitude`'s own tests
     /// already use) run through the entire pipeline end to end, twice in a row -- the second call
