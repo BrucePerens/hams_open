@@ -1956,3 +1956,23 @@ also depends on `L_hat` per this crate's own `tables::block_lengths_for_l`). A n
 requiring more chip time this session didn't spend: a systematic sweep specifically targeting the
 `L_hat`/`K_hat` step-boundary frequencies (rather than the 20Hz-even grid used here, which mostly
 missed them) to see whether `g1`/`g2` jump in lock-step with `L_hat`'s own exact transition points.
+
+**That follow-up was run, and the result is genuinely nuanced -- disclosed as such rather than
+forced into either a clean confirmation or a clean denial.** `examples/p25_ratet27_capture_lhat_
+boundary_sweep.rs` tested 7 of `L_hat`'s own computed transition frequencies (100.7, 155.4, 202.6,
+238.9, 271.2, 313.8, 340.5 Hz), each probed 3Hz below and 3Hz above the exact boundary (RMS-
+normalized sawtooth, same technique as the earlier confound-controlled pitch sweep). **`g1` changed
+value at every single one of the 7 boundaries tested** -- but this is weaker evidence for an
+`L_hat`-specific link than it first appears, since a 6Hz-wide window with no same-`L_hat` control
+pair cannot distinguish "`g1` jumps exactly at `L_hat` transitions" from "`g1` varies continuously
+and finely with pitch" (the same character `g0`'s own gain quantizer already showed, per section 23)
+-- both explanations predict a change across any 6Hz gap in this frequency range. **`g2`, by
+contrast, stayed exactly stable across 6 of the 7 boundaries**, changing only at 340.5Hz -- this is
+more consistent with `g2` tracking something genuinely coarser and step-like (plausibly `L_hat`/
+`K_hat` or a quantity derived from them) than with continuous fine-grained pitch sensitivity,
+though still short of proof without a proper same-`L_hat`, different-frequency control pair (e.g.
+two frequencies several tens of Hz apart but on the same side of a boundary, which this specific
+test didn't include). **Net honest read**: `g2` remains the more promising `L_hat`-linked candidate
+of the two; `g1` is more likely a second continuously-varying, pitch-sensitive parameter (like
+`g0`) than a discrete harmonic-count encoding. Full boundary-sweep data and analysis script
+committed for a properly controlled follow-up.
