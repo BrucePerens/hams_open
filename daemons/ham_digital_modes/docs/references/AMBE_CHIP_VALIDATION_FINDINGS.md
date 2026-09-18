@@ -1839,6 +1839,42 @@ binary, monotonically decreasing with frequency. The exact quantizer formula (bi
 matches `quantize_fundamental_frequency`'s literal constants or a chip-specific variant) remains
 unfit -- a natural next step given this clean staircase data is now committed and reproducible.
 
+**Correction, found by the very next follow-up test: `g0` is not simply "the pitch parameter" --
+it responds to amplitude too, most likely making it a gain/energy-related quantizer rather than a
+pure pitch quantizer.** A clean amplitude sweep (`examples/p25_ratet27_capture_amplitude_sweep.rs`:
+a single fixed, well-converged frequency (200Hz sawtooth) at 16 different, precisely-known peak
+amplitudes -- unlike pseudo-random noise, whose actual RMS is decorrelated from its stated peak,
+making the earlier gain-correlation attempt against noise data too noisy to be useful) found `g0`
+correlates with amplitude just as cleanly as it correlated with frequency above: **Spearman 1.000**,
+a perfect monotonic staircase from 1045 (quietest) to 1597 (loudest, saturating). This raised a real
+concern that the frequency-correlation finding above might have been an amplitude/RMS confound
+rather than a genuine pitch effect: a discretely-sampled sawtooth's *actual* RMS is not perfectly
+frequency-independent when the period is a large fraction of the 160-sample frame (incomplete-cycle
+boundary effects at low frequencies), even though its *nominal peak* was held fixed.
+
+**Directly tested and ruled out as a confound, but the underlying dual-dependency is real.**
+`examples/p25_ratet27_capture_rms_normalized_pitch_sweep.rs` reruns the exact same 57-444Hz dense
+sweep, but explicitly computes each frequency's actual buffer RMS and rescales to a fixed target
+(confirmed: 3463.4-3463.6 across all 20 frequencies, genuinely constant, not just nominally so).
+**Every single decoded `g0` value came back bit-for-bit identical to the original, non-normalized
+sweep** -- the exact same near-perfect monotonic staircase, Spearman -0.952. This rules out RMS
+confound as the explanation for the frequency correlation: `g0` really does depend on frequency
+independently of amplitude, *and* (per the amplitude sweep above) really does depend on amplitude
+independently of frequency, at the same time. This is not a contradiction -- it's exactly the
+behavior a genuine **gain/energy quantizer** should have in any real vocoder: gain is computed from
+a spectral-amplitude decomposition that itself depends on where the harmonics fall relative to the
+estimated pitch, so a real gain parameter is expected to shift with pitch even at constant overall
+signal RMS, not just with amplitude. The likelier reading, revising the framing above rather than
+retracting the underlying data (both correlations are real and reproduced identically across
+independent captures): **`g0` is this chip's real gain/energy-related quantizer** (plausibly
+`b_hat_2`/`g_hat[0]` in this crate's own textbook terms, the first-stage DC/gain DCT coefficient,
+rather than the fundamental-frequency quantizer `b_hat_0`) -- still a genuine, useful semantic
+result (a real parameter's real location, confirmed bit-exact and reproducible), just not the
+specific parameter first guessed. Disentangling gain from pitch fully would need a 2-D sweep
+(varying both independently and checking whether `g0` is better explained by a formula combining
+both, e.g. log-energy at the fundamental) -- a concrete, bounded next step, with all three
+datasets (dense pitch sweep, amplitude sweep, RMS-normalized sweep) committed for it.
+
 **D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
 both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
 dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
