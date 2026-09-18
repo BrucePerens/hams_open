@@ -17,6 +17,11 @@
 //! match what this crate's own software says a valid codeword should look like" bar the D-STAR and
 //! AMBE+2 harnesses already apply.
 //!
+//! Also validates against real recorded speech (the already-cleared Open Speech Repository
+//! fixtures at `tests/fixtures/osr_speech/`, this codec's own native 8kHz sample rate) -- a more
+//! representative test than synthetic tones alone, matching what a real deployment would actually
+//! see: two full multi-second recordings, checked frame by frame.
+//!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27 -- <host:port>`
 use ham_digital_modes::ambe::ratet27_fec::decode_block;
 use ham_digital_modes::ambe::ratet27_wire_format::Block;
@@ -74,6 +79,12 @@ fn sawtooth(freq: f64) -> Vec<i16> {
             (6000.0 * (2.0 * phase - 1.0)) as i16
         })
         .collect()
+}
+fn read_wav_mono_i16(path: &str) -> Vec<i16> {
+    let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
+    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
+    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
 }
 
 fn main() {
@@ -163,11 +174,52 @@ fn main() {
         );
     }
 
+    println!("\n-- Real recorded speech --");
+    let speech_files = [
+        "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav",
+        "tests/fixtures/osr_speech/OSR_us_000_0011_8k.wav",
+    ];
+    for path in speech_files {
+        let pcm = read_wav_mono_i16(path);
+        let n_frames = (pcm.len() / FRAME_SAMPLES).min(400);
+        let mut zero_error_this_file = 0;
+        for i in 0..n_frames {
+            let frame = &pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES];
+            let n = send_recv_retrying(&sock, &mut buf, &build_speech(frame));
+            let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_CHANNEL, "expected a CHANNEL response");
+            assert_eq!(payload[1] as usize, TOTAL_BITS, "unexpected bit count");
+
+            let pkt = &buf[..n];
+            let bits_bytes = &pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES];
+            let mut wire_frame_bits = [false; TOTAL_BITS];
+            for (byte_idx, &byte) in bits_bytes.iter().enumerate() {
+                for bit_idx in 0..8 {
+                    wire_frame_bits[byte_idx * 8 + bit_idx] = (byte >> (7 - bit_idx)) & 1 == 1;
+                }
+            }
+            let mut all_zero_error = true;
+            for &block in &blocks_to_check {
+                let (_data, distance) = decode_block(&wire_frame_bits, block);
+                if distance != 0 {
+                    all_zero_error = false;
+                }
+            }
+            total_frames += 1;
+            if all_zero_error {
+                total_zero_error_frames += 1;
+                zero_error_this_file += 1;
+            }
+        }
+        println!("  {path}: {zero_error_this_file}/{n_frames} frames zero-error on all 7 confirmed blocks");
+    }
+
     println!();
     if total_zero_error_frames == total_frames {
         println!(
-            "PASS: all {total_frames} captured frames across {} frequencies decoded with zero errors on every confirmed block (g0,g1,g2,u4,u5,u6,c7).",
-            frequencies.len()
+            "PASS: all {total_frames} captured frames across {} frequencies and {} real speech recordings decoded with zero errors on every confirmed block (g0,g1,g2,u4,u5,u6,c7).",
+            frequencies.len(),
+            speech_files.len()
         );
     } else {
         println!(
