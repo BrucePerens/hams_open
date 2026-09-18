@@ -1759,6 +1759,30 @@ simple hypothesis; the semantic-mapping question remains genuinely open and like
 understanding the chip's own pitch estimator (a substantial, separate reverse-engineering task) more
 than further trial-and-error block-correspondence guessing.
 
+**A second, broader semantic probe using real speech (not a single assumed-exact pitch), also
+inconclusive but with one lead worth following up.** Since this chip's encoder is known to never
+converge to a fixed steady state on a pure tone (`examples/ambe_chip_validate_dstar.rs`'s own doc
+comment), the single-frequency `u0=g0` test above may simply have compared mismatched effective
+pitches. `examples/ratet27_speech_u_vector_correlation.rs` runs real recorded speech through both
+paths in lock-step, frame by frame -- this crate's own full encode pipeline (the same per-frame
+pitch grid-search as `tests/ambe_real_speech_round_trip.rs`, with `FrameState` history properly
+chained across frames) and the real chip on the identical PCM -- dumping each successfully-encoded
+frame's `u_hat_0..u_hat_7` alongside the chip's own decoded `g0`/`g1`/`g2`/`u4`/`u5`/`u6`/`c7` for
+600 real frames. Pearson correlation across all `(this crate's field, chip's field)` pairs found
+**no strong correspondence anywhere** -- the largest is a moderate 0.359 between this crate's own
+`u_hat_4` and the chip's decoded `u4`, with everything else under 0.2 in magnitude (several near
+zero). This is genuinely inconclusive rather than a clean negative: raw-integer Pearson correlation
+is a weak tool for finding a *bit-level* correspondence that might be Gray-coded (as already
+established for D-STAR/AMBE+2's own pitch field, §9) or reordered -- a real relationship would show
+near-zero linear correlation under either scrambling even if the mapping is deterministic. The
+`u_hat_4`/chip-`u4` pair is the one lead worth another session's time (e.g. checking a per-bit XOR/
+Gray-decode correlation rather than raw integer correlation); nothing else in this table showed
+enough signal to prioritize. The full 600-frame capture (every field from both sides, per frame) is
+committed at `docs/references/ratet27_captures/u_vector_speech_correlation_600frames.tsv` so a
+future session can pick up exactly where this one left off (re-analyze with a different
+correlation technique) instead of re-running the same real-speech capture against the chip from
+scratch.
+
 **D-STAR and AMBE+2 half-rate status, checked against this session's broader `/goal` directive**:
 both already have real, committed, passing chip-validation harnesses (`examples/ambe_chip_validate_
 dstar.rs` -- validates every captured frame Golay-decodes with zero corrected errors across 8
