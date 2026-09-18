@@ -1912,3 +1912,15 @@ previously-established result (best candidate `bits[27..34)`, Gray-decoded, `|sp
 Both harnesses are real, existing, chip-validated code from earlier sessions, and this session
 freshly confirmed both still pass against the live chip today -- closing that part of the broader
 goal with current, not merely historical, evidence.
+
+**RATET(27) now has the same kind of real PASS/FAIL chip-validation harness D-STAR and AMBE+2 half-
+rate already had.** `examples/ambe_chip_validate_ratet27.rs` -- new this session -- captures live
+chip frames across the same 8 frequencies as the D-STAR harness and decodes each through
+`ratet27_wire_format`/`ratet27_fec` directly (no search, no hypothesis-scoring -- this session
+already determined the real format), checking for zero corrected errors on all 7 resolved blocks
+(`g0`, `g1`, `g2`, `u4`, `u5`, `u6`, `c7`; `g3` deliberately excluded). **Live result: PASS, 120/120
+captured frames across all 8 frequencies, zero errors on every block.** This supersedes the older,
+now-stale `ambe_chip_validate_p25_wireformat.rs` (a search harness built on the wrong assumption
+that RATET(27) uses PRN whitening, since disproven by this session's GF(2) rank analysis) and is
+the concrete "duplicated in software, validated against the chip" deliverable for RATET(27)'s FEC
+layer this whole session's work has been building toward.
