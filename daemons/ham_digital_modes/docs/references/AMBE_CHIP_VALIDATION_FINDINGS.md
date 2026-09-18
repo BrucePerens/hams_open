@@ -1399,3 +1399,53 @@ byte/bit-order hypotheses, still does not place the confirmed 15-member block in
 together with both known `c7` bits in block 7 -- reinforcing that this chip's host-interface
 "channel" packing is a genuinely different, proprietary format, not Table 5-1 plus a simple
 transpose layer.
+
+## 20. Second Hamming block mapped, and the complete 7-bit `c7` raw block found -- the transform validated on 3 of 8 sub-blocks with zero mismatches
+
+The full anchor-9 sweep, re-run with the sawtooth signal, resolved cleanly into exactly the
+predicted structure. 143 candidates grouped into: the dominant null class (122 members, checksum
+`b65c2ca8...`), **7 matched pairs** (14 positions), and **7 unrepeated singles** (7 positions) --
+21 non-anchor positions total, splitting neatly into two different phenomena:
+
+**The 7 matched pairs give `u5`'s complete membership, exactly matching the transform's prediction
+with zero mismatches:**
+
+| checksum | members |
+|---|---|
+| `1f101d45...` | 10, 21 |
+| `defe0d99...` | 22, 93 |
+| `bdf17b41...` | 33, 117 |
+| `7d4a72ec...` | 45, 57 |
+| `0810d1b9...` | 69, 129 |
+| `cd9c8c56...` | 81, 105 |
+| `78ed0fe7...` | 140, 141 |
+
+Combined with anchor 9: **u5 = {9, 10, 21, 22, 33, 45, 57, 69, 81, 93, 105, 117, 129, 140, 141}** --
+identical, position for position, to the wire set §19 derived analytically from the transform
+(`natural(m) = 12*(m mod 12) + (m div 12)` applied to natural range 107-121). Zero mismatches.
+
+**The 7 unrepeated singles are the complete 7-bit unprotected `c7` block, not just the 2 pitch bits
+found in §14.** `{71, 83, 95, 107, 119, 131, 143}` each showed their own distinct, non-repeating
+effect (consistent with raw/unmodulated bits: each shows its own independent signature regardless of
+what else is flipped, rather than pairing up like FEC-protected bits do). These 7 positions are all
+congruent to 11 (mod 12), stride-12, and map under the transform to **natural positions 137 through
+143 -- exactly 7 consecutive values**, matching §19's `c7`-placement prediction exactly. The other 5
+of these 7 (everything except the already-known 131, 143) were invisible to the original single-bit
+oracle (§14) for the same reason column 9's Hamming partners were invisible to the anchor-9 sine
+sweep: a pure 200 Hz tone doesn't render whatever these bits control (very likely low-order spectral-
+amplitude LSBs, per §14's original textbook-count reasoning -- they were never really "inert," just
+inaudible on that specific signal).
+
+**The transform is now validated on 3 of 8 sub-blocks (`u4`, `u5`, `c7`) with zero mismatches
+between prediction and direct chip measurement.** The remaining 5 sub-blocks (`u6`, and 4 Golay
+blocks `g0..g3`) have fully determined predicted wire-position sets from the same transform (natural
+ranges 122-136 for `u6`, and 0-22/23-45/46-68/69-91 for `g0..g3`):
+
+- predicted `u6` = `{11, 23, 34, 35, 46, 47, 58, 59, 70, 82, 94, 106, 118, 130, 142}`
+- predicted `g0` = `{0, 1, 12, 13, 24, 25, 36, 37, 48, 49, 60, 61, 72, 73, 84, 85, 96, 97, 108, 109, 120, 121, 132}`
+  (and `g1`/`g2`/`g3` follow the same pattern shifted by natural offsets 23/46/69)
+
+A quick spot-check of 4 predicted `u6` pairs (`{11,23}`, `{34,35}`, `{11,35}`, `{23,34}`, sawtooth
+signal, fresh process each) found all 4 non-null with distinct checksums -- consistent with `u6`
+being real (not yet full-membership-mapped; a complete anchor-11 sweep was launched the same way as
+`u4`/`u5` to confirm it fully -- see the next section for its result).
