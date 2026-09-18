@@ -123,7 +123,7 @@ class TestDocumentation(RealTransactionCase):
             "The redirect to the login page should resolve successfully.",
         )
         self.assertIn(
-            b"/web/login",  # burn-ignore-route
+            b"/web/login",
             response.url.encode(),
             "Unauthenticated guest users should be redirected to the login screen.",
         )

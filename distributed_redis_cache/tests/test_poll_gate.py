@@ -115,7 +115,7 @@ class TestHttpPollGateCallSite(HamsHttpCase):
         """
         calls = self._spy_on_the_poll()
 
-        response = self.url_open("/web/login")  # burn-ignore-route
+        response = self.url_open("/web/login")
         self.assertEqual(response.status_code, 200)
 
         self.assertTrue(
@@ -138,7 +138,7 @@ class TestHttpPollGateCallSite(HamsHttpCase):
             side_effect=refuse,
         )
 
-        response = self.url_open("/web/login")  # burn-ignore-route
+        response = self.url_open("/web/login")
         self.assertEqual(response.status_code, 200)
 
         self.assertTrue(seen, "the gate must actually be consulted on the request path")

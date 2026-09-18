@@ -32,7 +32,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         # We test both /odoo and /web prefixes
         response_odoo = self.url_open(
             "/web/login", allow_redirects=False
-        )  # burn-ignore-route  # fmt: skip
+        )  # fmt: skip
         self.assertEqual(
             response_odoo.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",
@@ -42,7 +42,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         company_id = self.env.company.id
         response_web = self.url_open(
             f"/odoo/image/res.company/{company_id}/logo"
-        )  # burn-ignore-route  # fmt: skip
+        )  # fmt: skip
         self.assertEqual(
             response_web.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",
@@ -64,7 +64,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_response = Response()
         mock_request = type("MockRequest", (object,), {})()
         mock_request.httprequest = type("MockHttpRequest", (object,), {})()
-        mock_request.httprequest.path = "/web/assets/1/dummy.js"  # burn-ignore-route
+        mock_request.httprequest.path = "/web/assets/1/dummy.js"
 
         self.safe_patch(
             "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
@@ -269,7 +269,7 @@ class TestCloudflareHeaders(HamsHttpCase):
 
         # Static-asset branch (1): a 404 for a missing asset must not get
         # max-age=31536000 either.
-        mock_request.httprequest.path = "/web/assets/1/missing.js"  # burn-ignore-route
+        mock_request.httprequest.path = "/web/assets/1/missing.js"
         missing_asset_response = Response(status=404)
         res = DummyIrHttp._post_dispatch(missing_asset_response)
         self.assertEqual(

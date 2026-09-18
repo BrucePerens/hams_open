@@ -145,7 +145,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         unsub_url = unsub_url_raw.strip("<>")
 
         self.assertTrue(
-            "/website/unsubscribe/res.partner/" in unsub_url,  # burn-ignore-route
+            "/website/unsubscribe/res.partner/" in unsub_url,
             "The URL must map to the correct controller route.",
         )
 
@@ -298,7 +298,6 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         # Attempt an unsubscribe with a forged token
         fake_token = "1234abcd5678"
         current_ts = int(time.time())
-        # burn-ignore-route
         url = f"/website/unsubscribe/res.partner/{self.creator.partner_id.id}/{self.follower.partner_id.id}/{current_ts}/{fake_token}"
 
         self.authenticate(None, None)

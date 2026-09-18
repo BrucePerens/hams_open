@@ -65,7 +65,7 @@ class TestZeroSudoControllers(RealTransactionCase):
 
         # 2. Attempt login via POST to /web/login
         # We fetch the login page first to get a session and CSRF token
-        response = self.url_open("/web/login")  # burn-ignore-route
+        response = self.url_open("/web/login")
         csrf_token = ""
 
         match = re.search(r'name="csrf_token"\s+value="([^"]+)"', response.text)
@@ -74,7 +74,7 @@ class TestZeroSudoControllers(RealTransactionCase):
 
         response = self.url_open(
             "/web/login",
-            data={  # burn-ignore-route # fmt: skip
+            data={# fmt: skip
                 "login": login,
                 "password": password,
                 "csrf_token": csrf_token,
@@ -195,7 +195,7 @@ class TestZeroSudoControllers(RealTransactionCase):
         # few lines up in `super().authenticate()`) for "don't complete
         # this login" without raising.
         result = self.make_jsonrpc_request(
-            "/web/session/authenticate",  # burn-ignore-route
+            "/web/session/authenticate",
             {"db": self.env.cr.dbname, "login": login, "password": password},
         )
         self.assertEqual(

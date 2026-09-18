@@ -73,7 +73,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
         long_desc = "A" * 6000
 
         response = self.url_open(
-            "/website/report_violation",  # burn-ignore-route
+            "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": f"/{self.user_test.website_slug}/home",

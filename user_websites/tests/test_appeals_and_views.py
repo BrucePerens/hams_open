@@ -112,7 +112,7 @@ class TestAppealsAndViews(RealTransactionCase):
 
         # User submits an appeal
         self.url_open(
-            "/website/submit_appeal",  # burn-ignore-route
+            "/website/submit_appeal",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "reason": "It was a misunderstanding!",

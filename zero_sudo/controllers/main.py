@@ -64,7 +64,7 @@ class ZeroSudoHome(Home):
                 # Use query parameter to show error on login page after redirect
                 return request.redirect(
                     "/web/login?error=access_denied_service"
-                )  # burn-ignore-route: Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
+                )  # Tested by [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor]  # fmt: skip
         return response
 
 

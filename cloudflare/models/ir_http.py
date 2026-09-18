@@ -41,7 +41,7 @@ class IrHttp(models.AbstractModel):
         # # Verified by [@ANCHOR: test_cf_static_asset_caching]
         if any(
             path.startswith(prefix) for prefix in ("/web/static", "/web/assets")
-        ):  # burn-ignore-route  # fmt: skip
+        ):  # fmt: skip
             # A transient error (500/404/etc.) must never be pinned at the edge for a
             # year -- only a genuinely successful (or not-modified) asset response is
             # long-TTL cacheable.
@@ -61,14 +61,14 @@ class IrHttp(models.AbstractModel):
             for prefix in (
                 "/my/",
                 "/odoo",
-                "/web/",  # burn-ignore-route  # fmt: skip
+                "/web/",  # burn-ignore-route: cache-control prefix classifier, must match every /web/* sub-route incl. /web/image and /web/content, not a navigation target  # fmt: skip
                 "/api/",
                 "/shop/cart",
                 "/shop/checkout",
                 "/shop/confirm_order",
                 "/helpdesk/",
             )
-        ):  # burn-ignore-route  # fmt: skip
+        ):  # fmt: skip
             response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
             return res
 

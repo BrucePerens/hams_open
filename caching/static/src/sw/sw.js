@@ -184,7 +184,7 @@ self.addEventListener('fetch', (event) => {
 
     // Explicitly bypass WebSockets, secure APIs, and dynamic routes.
     if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
-    if (url.pathname.startsWith('/my/') || url.pathname.startsWith('/api/') || url.pathname.startsWith('/web/image/') || url.pathname.startsWith('/web/content/')) return; // burn-ignore-route
+    if (url.pathname.startsWith('/my/') || url.pathname.startsWith('/api/') || url.pathname.startsWith('/web/image/') || url.pathname.startsWith('/web/content/')) return;
 
     // Explicitly bypass documentation images
     if (url.pathname.includes('/static/description/images/')) return;

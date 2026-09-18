@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class ServiceWorkerController(http.Controller):
 
-    @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True) # burn-ignore-route
+    @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True)
     def service_worker(self):
         # [@ANCHOR: COMM_caching_sw_serve_route]
 

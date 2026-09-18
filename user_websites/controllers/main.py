@@ -641,7 +641,7 @@ class UserWebsitesController(http.Controller):
         auth="public",
         website=True,
         csrf=True,
-    )  # burn-ignore-route  # fmt: skip
+    )  # fmt: skip
     # [@ANCHOR: user_websites:COMM_unsubscribe]
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]

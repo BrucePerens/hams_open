@@ -113,7 +113,7 @@ class TestAdvancedEdgeCases(HamsHttpCase):
 
         # We manually construct a request with NO headers to simulate a stripped Referrer
         response = self.url_open(
-            "/website/report_violation",  # burn-ignore-route
+            "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
                 "url": "/some/test/url",
