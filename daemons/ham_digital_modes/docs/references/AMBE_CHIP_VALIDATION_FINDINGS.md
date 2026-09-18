@@ -1011,3 +1011,65 @@ chance). This means the chip's real interleave (if Table 5-1 applies to its raw 
 differs from every tried convention, or genuinely isn't Table 5-1-based -- but `{131, 143}` stands as
 a real, hard, reusable constraint for testing any future candidate table, a first for this whole
 RATET(27) investigation.
+
+## 15. The full exhaustive pair sweep: a decoder-state-history bug found and fixed, and a real breakthrough -- confirmed 3-way redundancy groups
+
+Given the anchor sweep's inconclusive result (§14), Bruce asked directly to run the full exhaustive
+C(142,2) = 10011-pair sweep despite its known inert-parameter blind spot, since even a clean negative
+across the whole space would be informative, and any positive hit would be immediately decisive.
+
+**First attempt: a real methodological bug found the hard way.** The first run (no per-hit
+confirmation, 4x tone-only re-priming per test) came back with hundreds of "hits" clustering into
+long runs of near-identical distance values across huge, unrelated-looking bit ranges -- not the
+sparse, structured signal a real codeword-membership proof should produce. Adding a same-run
+confirmation retest (re-converge, re-test the same pair immediately) collapsed this to 6 hits:
+`(8, 92)`, `(8, 127)`, `(32, 127)`, `(68, 103)`, `(103, 127)`, `(128, 139)`.
+
+**Second, deeper problem, found by manually verifying those 6 hits**
+(`examples/p25_ratet27_pairflip_diagnose_hit.rs`): pair `(8, 93)` reproduced *identically* (byte-for-
+byte PCM) across two fully independent fresh-boot runs of the diagnostic tool -- strong-looking
+evidence of a real, deterministic effect. But `(8, 93)` never even registered as a hit in the full
+sweep's own first pass. The two contexts differ in exactly one way: the diagnostic tool always primes
+from a fresh connection with the same short, fixed sequence, while the sweep tests thousands of
+different bit-pairs in sequence before reaching any given pair. This means the chip's decoder carries
+state beyond what a short re-priming burst resets -- a long, varied test history leaves it in a
+different residual state than a deliberate, short reset does, even though *that* residual state is
+itself perfectly reproducible run-to-run (which is exactly why `(8, 93)` looked like real signal under
+naive fresh-boot verification, and is a real trap: reproducibility across independent runs does not,
+by itself, prove genuine content-level significance if the *test setup itself* has an unresolved
+history-dependence).
+
+**The fix (Bruce's suggestion): condition with digital silence before every single test, not just
+re-prime with the tone.** Silence has no pitch/phase to track (§14's own finding, from ruling it out
+as a *test signal*: it makes too many parameters irrelevant to serve as the flip target), but that
+same property makes it an excellent *conditioning* input -- decoding many silence frames in a row
+forces the decoder to a small, near-fixed state regardless of whatever came before, and priming with
+the tone from that canonical starting point converges to the tone's steady state independent of prior
+history. Re-testing `(8, 93)` with 20 silence-decodes-then-4-tone-primes before the comparison dropped
+its distance to 0.52-1.12 dB, comfortably below threshold and consistent with the sweep's own
+original "no effect" finding -- confirming the earlier "reproducible" result was a measurement
+artifact of insufficient state reset, not real signal, and that the fix resolves it.
+
+**Re-verifying the 6 original hits under proper conditioning found something real.** `(8, 92)` and
+`(8, 127)` produce byte-for-byte *identical* decoded PCM (not just similar distance -- the exact same
+samples). So does `(92, 127)`, which the unconditioned sweep had missed entirely as a hit (direct,
+concrete proof the unconditioned sweep's results could not be trusted and needed re-running).
+Flipping all three, `{8, 92, 127}`, together *also* produces that exact same PCM. Independently,
+`(68, 103)`, `(103, 127)`, and `(68, 127)` all produce another shared identical PCM, and flipping
+`{68, 103, 127}` together matches it too. **This is the decisive signature of a genuine 3-way
+redundancy/majority-vote structure protecting two distinct logical bits**: any single member alone
+shows no effect (consistent with the single-bit oracle, §14), any 2-of-3 combination flips the
+majority vote the same way regardless of which two, and all 3 together does too -- a real, previously
+undocumented property of this rate's wire format, found empirically with no assumption about
+interleave, byte order, or PN-modulation convention. Bit 127 is shared between both confirmed
+triples; cross-pairs between the two groups (`(8, 68)`, `(92, 103)`) show no effect, confirming the
+two groups are otherwise distinct, not one larger connected structure.
+
+**Consequence: the full exhaustive sweep is being re-run with proper silence conditioning before
+every test** (`examples/p25_ratet27_pairflip_full_sweep.rs`, updated in place), since the
+unconditioned version demonstrably missed at least one real structural relationship. Conditioning
+adds real cost (20 silence decodes + 4 tone primes before every one of the 10011 pairs, versus 4
+before), pushing expected runtime from ~40 minutes to roughly 2.5-3.5 hours; the per-hit confirmation
+retest from the first attempt was removed since conditioning-based determinism was independently hand-
+verified across 8 different flip combinations before launching this run. Results from this run will
+be recorded in a follow-up update once it completes.
