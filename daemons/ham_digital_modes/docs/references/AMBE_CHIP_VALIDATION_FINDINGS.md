@@ -1259,9 +1259,62 @@ artifact), and this specific convention is dead.
 common), so all five of {8, 68, 92, 103, 127} are in a single 15-bit block. An anchor sweep using the
 same fresh-process checksum oracle (bit 127 against all 143 other wire positions, one fresh process
 per candidate) was launched to find the block's full 15-bit membership and complete weight-3-codeword
-structure directly from the chip, without needing a candidate interleave table at all -- see the
-addendum below for its result once complete.
+structure directly from the chip, without needing a candidate interleave table at all -- see §18 for
+its result.
 
-Bit 32, mentioned in an earlier pass over this section as a hint from the disqualified full-exhaustive
-sweep (§15) suggesting `(32, 127)`, is **dropped**: that sweep's entire dataset is disqualified, and
-32 has no independent fresh-process confirmation.
+## 18. Complete membership of one full Hamming(15,11) FEC block, found by pure chip-oracle experiment
+
+The 4-of-5 near miss in §17 motivated a direct, assumption-free sweep: hold bit 127 flipped, and
+additionally flip every one of the other 143 wire positions in turn (`flip{127, b}` for
+`b in 0..144, b != 127`), one fresh process per `b`, comparing the resulting PCM checksum against the
+unmodified-baseline checksum. **Exactly 14 of the 143 candidates produced a non-baseline checksum** --
+and 14 is exactly the number of "other members" a 15-bit Hamming(15,11) block should have relative to
+one anchor. This gives a complete, empirically-derived membership map for one entire FEC block, with
+zero assumptions about interleave, byte order, or any candidate table:
+
+**{8, 20, 32, 44, 56, 68, 80, 92, 103, 104, 115, 116, 127, 128, 139}** (15 positions).
+
+The 14 non-anchor members grouped into 4 distinct checksum classes:
+
+| checksum (dB effect) | members |
+|---|---|
+| `e5b52df7...` (10.62 dB) | 8, 92 |
+| `55ce58d8...` (13.95 dB) | 20, 32 |
+| `b63f63e9...` (12.41 dB) | 44, 56, 68, 80, 103, 104, 115, 116 |
+| `3985aaa9...` (6.75 dB) | 128, 139 |
+
+**Two new triples, `{20, 32, 127}` and `{128, 139, 127}`, were independently confirmed with the same
+full rigor as §15's original two** (`p25_ratet27_hamming_block_falsification_test.rs`, fresh process
+per test): all four combinations -- both pairs, both singles-with-127, and the full triple -- produce
+byte-identical PCM within each group. Bit 32, previously seen only as an unverified hint from the
+disqualified full-exhaustive sweep (§15) and dropped in §17, is now independently confirmed real --
+it pairs with 20, not with 127 alone or with the original {8,92,103} group.
+
+**The 8-member class is not one pair -- it is 4 distinct genuine codewords that happen to be
+audibly indistinguishable on this test signal.** For a fixed anchor, the Hamming(15,11) parity-check
+column structure guarantees the other 14 members pair up into exactly 7 disjoint 2-element partners
+(each pair `{b, c}` satisfying `h_b XOR h_c = h_127`, forming a weight-3 codeword `{127, b, c}` with
+the anchor) -- proven directly: testing `flip{44, X}` for `X` in the other 5 members of the 8-member
+class found `flip{44, 104}` alone reproduces the exact `b63f...` checksum, while `flip{44, 80}`,
+`flip{44, 115}`, and `flip{44, 56}` do not (the last giving yet another distinct non-baseline
+checksum, `f207f672...`, 0.70 dB). Since `{68, 103}` is already independently confirmed as a genuine
+pair (§15), and Hamming(15,11)'s column algebra guarantees a clean bijective pairing among any
+anchor's 14 partners with no overlaps, the 8-member class must actually consist of (at least) 4
+separate real weight-3 codewords -- `{127, 68, 103}`, `{127, 44, 104}`, and two more among
+`{56, 80, 115, 116}` -- that all happen to produce indistinguishable decoded PCM on a steady 200 Hz
+test tone. This directly parallels §14's `c7` finding (5 of 7 raw bits showed no audible effect on
+this same test signal): most of this Hamming block's 11 information bits are apparently inaudible or
+redundant-effect for a steady tone, and only one or two of them (the ones responsible for the
+10.62/13.95/12.41/6.75 dB effects) are perceptible with this specific test material. **Determining
+the exact 2 remaining pairs inside `{56, 80, 115, 116}` is not resolvable with this test signal's
+audible-effect oracle** -- it would need either a richer test signal (real speech, where more IMBE
+parameters are perceptually active) or the chip's actual parity-check matrix, neither available here.
+
+**This is, along with the confirmed unprotected `c7` pitch bits (§14), the most complete real
+structural result this investigation has produced for RATET(27)**: one full 15-bit FEC block's exact
+wire-bit membership, obtained by pure black-box chip experimentation with no assumptions about
+interleave, byte order, or any candidate specification table. It remains an open question which of
+the chip's 3 total Hamming(15,11) blocks this is, and where the other 2 Hamming blocks and 4
+Golay(23,12) blocks land among the remaining 129 wire positions -- the same anchor-sweep technique
+(fixing one confirmed member of another block and sweeping the rest) is the natural next step for
+whoever continues this investigation.
