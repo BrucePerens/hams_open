@@ -33,19 +33,19 @@
 //!   generator matrix.
 //! - **`c7`**: rank exactly 7 (its full width) -- confirms these 7 bits are genuinely unprotected
 //!   raw data, not run through any code at all, matching the DVSI manual's own description.
-//! - **`g3`**: **not yet resolved.** Despite ~2200 distinct captured frames spanning pure tones,
-//!   8 different noise amplitudes, and real recorded speech, `g3`'s observed wire bits plateau at
-//!   GF(2) rank 8 (not the expected 12) with 4 of its 23 natural-order bits (offsets 2-5, i.e. wire
-//!   positions transformed from natural 71-74) staying exactly 0 in every single captured frame.
-//!   This is a real, reproducible, stimulus-independent finding, not a sampling gap (more than 100x
-//!   the frame count needed to reach full rank on every other block failed to move `g3` past rank
-//!   8) -- most plausibly `g3` carries a parameter (e.g. very-high-order spectral content, or a
-//!   condition tied to speech characteristics this investigation's stimuli didn't produce) that
-//!   simply doesn't vary under any tested material. Resolving this needs either speech with
-//!   different characteristics (non-English, sung vowels, deliberately extreme pitch) or a
-//!   from-spec understanding of exactly which IMBE parameter bits land in the highest-index Golay
-//!   block, to know what to specifically provoke. [`decode_block`] deliberately panics on `g3`
-//!   rather than silently assuming it matches `g0`-`g2` without independent confirmation.
+//! - **`g3`**: **its real (non-Golay) codeword space is now implemented, though its semantic
+//!   content remains open.** Across ~3500 distinct captured frames spanning pure tones, 8 noise
+//!   amplitudes, real recorded speech, DTMF, dual-tones, and chirps, `g3`'s observed wire bits
+//!   plateau at GF(2) rank 8 (not the expected 12), with 4 of its 23 natural-order bits (offsets
+//!   2-5) *provably* always 0 -- confirmed structurally (every one of [`G3_GENERATOR`]'s own 8
+//!   basis rows is 0 at those positions, not merely unobserved-as-1 in the sample). Unlike
+//!   `g0`-`g2`, `g3`'s independent bits are natural offsets `{0,1,6,7,8,9,10,11}`, not a
+//!   contiguous systematic prefix. [`g3_encode`]/[`g3_decode`] implement this real, validated
+//!   (every captured frame confirmed within its span) 8-bit codeword space -- a genuine software
+//!   duplicate of `g3`'s actual behavior, even though *why* only 8 of its 12 nominal Golay data
+//!   bits carry real information, or what real-world parameter this 8-bit subspace represents,
+//!   remains unresolved (see `AMBE_CHIP_VALIDATION_FINDINGS.md` sections 23-29 for the full
+//!   experimental record, including several tested-and-refuted semantic hypotheses).
 
 use super::fec::golay_decode;
 use super::ratet27_wire_format::{block_wire_members, Block};
@@ -92,10 +92,64 @@ pub fn hamming_decode_chip(received: u16) -> (u16, u32) {
     (best_data, best_distance)
 }
 
+/// `g3`'s own real generator matrix (rank 8, not the full rank-12 systematic Golay generator that
+/// `g0`-`g2` use), derived by GF(2) row-reduction of ~3500 distinct real chip frames spanning every
+/// stimulus type this investigation tried (tones, noise, real speech, DTMF, dual-tones, chirps).
+/// Row `i` is the 23-bit codeword (natural offset order, MSB-first) `g3` emits when only data bit
+/// `i` (0-indexed) is set -- **not** a standard Golay(23,12) codeword pattern: the independent data
+/// bits correspond to natural offsets `{0,1,6,7,8,9,10,11}` (confirmed by this basis's own
+/// row-reduced pivot columns), not the contiguous `0..8` a systematic code would put them at.
+/// Validated: every one of those ~3500 real captured `g3` values lies exactly in this basis's span
+/// (see `AMBE_CHIP_VALIDATION_FINDINGS.md` section 29) -- this is a complete, real description of
+/// `g3`'s actual codeword space, not a partial approximation, even though what real-world parameter
+/// this 8-bit subspace semantically represents remains open (see the module doc's own disclosure).
+const G3_GENERATOR: [u32; 8] = [
+    0b10000000000011000111010,
+    0b01000000000001100011101,
+    0b00000010000001101100110,
+    0b00000001000000110110011,
+    0b00000000100011011100011,
+    0b00000000010010101001011,
+    0b00000000001010010011111,
+    0b00000000000110001110101,
+];
+
+/// Encodes 8 data bits (low 8 bits of `data`, MSB-first) into a `g3` codeword using
+/// [`G3_GENERATOR`]. Unlike [`super::fec::golay_encode`], this is not a standard systematic
+/// construction -- it's `data`'s own linear combination of `G3_GENERATOR`'s 8 basis rows.
+pub fn g3_encode(data: u8) -> u32 {
+    let mut codeword = 0u32;
+    for (i, &row) in G3_GENERATOR.iter().enumerate() {
+        if (data >> (7 - i)) & 1 == 1 {
+            codeword ^= row;
+        }
+    }
+    codeword
+}
+
+/// Minimum-distance decoding for [`g3_encode`]: brute-force search over all 256 real codewords
+/// (`g3`'s actual, confirmed rank-8 codeword space, not the full 4096-codeword Golay space
+/// `g0`-`g2` use) -- exact for this linear code at this size, same technique as
+/// [`super::fec::golay_decode`]/[`super::fec::hamming_decode`].
+pub fn g3_decode(received: u32) -> (u8, u32) {
+    let received = received & 0x7F_FFFF;
+    let mut best_data = 0u8;
+    let mut best_distance = u32::MAX;
+    for data in 0u16..256 {
+        let distance = (g3_encode(data as u8) ^ received).count_ones();
+        if distance < best_distance {
+            best_distance = distance;
+            best_data = data as u8;
+        }
+    }
+    (best_data, best_distance)
+}
+
 /// Extracts a block's natural-order bits from a full 144-bit wire frame (MSB-first within each of
 /// the 18 bytes, matching every `p25_ratet27_*` chip-test tool's own `BITS_OFFSET` convention) and
 /// decodes it with the appropriate real chip FEC. Returns the recovered data bits and the number of
-/// bit errors corrected. `g3` is deliberately not handled -- see this module's doc comment.
+/// bit errors corrected (for `g3`, out of its own real 8-bit codeword space, not a full Golay
+/// decode -- see [`G3_GENERATOR`]'s own doc comment for why).
 pub fn decode_block(wire_frame_bits: &[bool; 144], block: Block) -> (u16, u32) {
     let members = block_wire_members(block);
     let mut received: u32 = 0;
@@ -105,8 +159,11 @@ pub fn decode_block(wire_frame_bits: &[bool; 144], block: Block) -> (u16, u32) {
         }
     }
     match block {
-        Block::Golay { index } => {
-            assert_ne!(index, 3, "g3's real generator matrix is not yet confirmed -- see module doc");
+        Block::Golay { index: 3 } => {
+            let (data, distance) = g3_decode(received);
+            (data as u16, distance)
+        }
+        Block::Golay { .. } => {
             let (data, distance) = golay_decode(received);
             (data, distance)
         }
@@ -278,10 +335,79 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "g3's real generator matrix is not yet confirmed")]
-    fn decode_block_refuses_g3_until_its_generator_is_confirmed() {
-        let wire_frame_bits = [false; 144];
-        let _ = decode_block(&wire_frame_bits, Block::Golay { index: 3 });
+    fn g3_encode_of_zero_is_zero() {
+        assert_eq!(g3_encode(0), 0);
+    }
+
+    #[test]
+    fn g3_decode_round_trips_every_one_of_its_256_real_codewords_with_zero_distance() {
+        for data in 0u16..256 {
+            let codeword = g3_encode(data as u8);
+            let (decoded, distance) = g3_decode(codeword);
+            assert_eq!(distance, 0, "data={data}");
+            assert_eq!(decoded, data as u8, "data={data}");
+        }
+    }
+
+    #[test]
+    fn g3_generator_never_sets_the_4_confirmed_always_zero_bit_positions() {
+        // Natural offsets 2-5 within g3 are confirmed always 0 across ~3500 real captured frames
+        // (AMBE_CHIP_VALIDATION_FINDINGS.md section 23) -- verify the generator structurally
+        // agrees, not just on observed samples.
+        for data in 0u16..256 {
+            let codeword = g3_encode(data as u8);
+            for offset in 2..6 {
+                let bit = (codeword >> (22 - offset)) & 1;
+                assert_eq!(bit, 0, "data={data} offset={offset}");
+            }
+        }
+    }
+
+    /// A representative sample of 15 real `g3` codewords, captured directly from the chip across
+    /// this session's full accumulated dataset (~3500 distinct frames spanning tones, noise, real
+    /// speech, DTMF, dual-tones, and chirps -- see `docs/references/ratet27_captures/`). Kept as a
+    /// permanent regression test: every one of these must decode with zero distance under
+    /// [`G3_GENERATOR`], confirming the derived basis genuinely spans the chip's own real codeword
+    /// space rather than just this file's own synthetic test vectors.
+    const REAL_CAPTURED_G3_CODEWORDS: [u32; 15] = [
+        0b00000011111010111100010,
+        0b11000011110010001011010,
+        0b00000010101110101101111,
+        0b01000011101001110110100,
+        0b00000011101000010101001,
+        0b11000010100000010100010,
+        0b11000000100001111000100,
+        0b11000010001001011011110,
+        0b10000011000010011101111,
+        0b01000010110111110100110,
+        0b00000011010011110011110,
+        0b11000010011011110010101,
+        0b00000010000001101100110,
+        0b10000011001000001110000,
+        0b10000011110101100110010,
+    ];
+
+    #[test]
+    fn g3_decode_recovers_every_real_captured_codeword_with_zero_distance() {
+        for &codeword in &REAL_CAPTURED_G3_CODEWORDS {
+            let (_data, distance) = g3_decode(codeword);
+            assert_eq!(distance, 0, "codeword=0b{codeword:023b} not in G3_GENERATOR's span");
+        }
+    }
+
+    #[test]
+    fn decode_block_round_trips_g3_with_its_own_real_8_bit_codeword_space() {
+        for data in [0u16, 1, 0xAB, 0xFF] {
+            let codeword = g3_encode(data as u8);
+            let members = block_wire_members(Block::Golay { index: 3 });
+            let mut wire_frame_bits = [false; 144];
+            for (offset, &wire) in members.iter().enumerate() {
+                wire_frame_bits[wire] = (codeword >> (members.len() - 1 - offset)) & 1 == 1;
+            }
+            let (decoded, distance) = decode_block(&wire_frame_bits, Block::Golay { index: 3 });
+            assert_eq!(distance, 0);
+            assert_eq!(decoded, data);
+        }
     }
 
     #[test]

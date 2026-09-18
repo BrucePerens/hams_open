@@ -4,9 +4,9 @@
 //! real frames from the live chip across several frequencies and checks that this crate's own
 //! `ambe::ratet27_wire_format`/`ambe::ratet27_fec` modules -- the real wire format and FEC codes
 //! this investigation determined by direct chip-frame sampling, not assumed or guessed -- decode
-//! every one of them with **zero corrected errors** on the 7 sub-blocks confirmed this session
-//! (`g0`, `g1`, `g2`, `u4`, `u5`, `u6`, `c7`; `g3` is deliberately excluded -- its real generator
-//! matrix is not yet confirmed, see `AMBE_CHIP_VALIDATION_FINDINGS.md` section 23).
+//! every one of them with **zero corrected errors** on all 8 sub-blocks confirmed this session
+//! (`g0`, `g1`, `g2`, `g3`, `u4`, `u5`, `u6`, `c7`; `g3` uses its own real 8-bit codeword space,
+//! not a full Golay decode -- see `ratet27_fec`'s own module doc).
 //!
 //! Unlike the older, now-superseded `ambe_chip_validate_p25_wireformat.rs` (a *search* harness that
 //! assumed a content-dependent PRN whitening stage this session's GF(2) rank analysis has since
@@ -122,12 +122,13 @@ fn main() {
         Block::Golay { index: 0 },
         Block::Golay { index: 1 },
         Block::Golay { index: 2 },
+        Block::Golay { index: 3 },
         Block::Hamming { index: 0 },
         Block::Hamming { index: 1 },
         Block::Hamming { index: 2 },
         Block::Raw,
     ];
-    let block_names = ["g0", "g1", "g2", "u4", "u5", "u6", "c7"];
+    let block_names = ["g0", "g1", "g2", "g3", "u4", "u5", "u6", "c7"];
 
     let frequencies = [50.0, 100.0, 200.0, 250.0, 400.0, 500.0, 800.0, 1000.0];
     let mut total_frames = 0usize;
@@ -169,7 +170,7 @@ fn main() {
             }
         }
         println!(
-            "  {freq:6.0}Hz: {zero_error_this_freq}/{CAPTURE_FRAMES} frames zero-error on all 7 confirmed blocks ({})",
+            "  {freq:6.0}Hz: {zero_error_this_freq}/{CAPTURE_FRAMES} frames zero-error on all 8 confirmed blocks ({})",
             block_names.join(",")
         );
     }
@@ -211,13 +212,13 @@ fn main() {
                 zero_error_this_file += 1;
             }
         }
-        println!("  {path}: {zero_error_this_file}/{n_frames} frames zero-error on all 7 confirmed blocks");
+        println!("  {path}: {zero_error_this_file}/{n_frames} frames zero-error on all 8 confirmed blocks");
     }
 
     println!();
     if total_zero_error_frames == total_frames {
         println!(
-            "PASS: all {total_frames} captured frames across {} frequencies and {} real speech recordings decoded with zero errors on every confirmed block (g0,g1,g2,u4,u5,u6,c7).",
+            "PASS: all {total_frames} captured frames across {} frequencies and {} real speech recordings decoded with zero errors on every confirmed block (g0,g1,g2,g3,u4,u5,u6,c7).",
             frequencies.len(),
             speech_files.len()
         );
