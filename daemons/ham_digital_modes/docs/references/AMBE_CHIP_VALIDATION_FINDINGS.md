@@ -2218,3 +2218,37 @@ own manual: that flag's real "0 for frames that don't need transmitting" behavio
 (all reading `TONE_FRAME=0`), `g3` still shows its usual varied, rank-limited behavior -- tone-frame
 classification is not a hidden factor behind the ordinary-voice-mode `g3` mystery either, now
 confirmed via the chip's own self-reported status rather than inferred from stimulus type.
+
+## 28. Ground-truth `VOICE_ACTIVE` precisely confirms the silence/voice boundary, and ties `g3`'s bistable oscillation directly to confirmed silence for the first time
+
+Combining the two previous sections' tools -- `PKT_CHANFMT`'s ground-truth `ECMODE_OUT` readout
+(section 27) and `DTX_ENABLE`'s noise-level sweep (section 26) -- into one probe
+(`examples/p25_ratet27_probe_dtx_voice_active.rs`) resolves both of that section's own open
+questions at once, using the chip's own self-reported classification rather than inferring it from
+wire values.
+
+**The silence/voice boundary is precisely between peak 50 and peak 75** (10 noise peaks tested, 0
+through 150): `VOICE_ACTIVE` reads a clean, exceptionless `0` for every frame at peaks 0-50 and a
+clean, exceptionless `1` for every frame at peaks 75-150 -- tightening section 26's own "somewhere
+between 50 and 100" boundary. `g0` tracks this exactly: a rock-solid constant `3841` for every
+`VOICE_ACTIVE=0` frame, then `1041/1045/1049` (increasing with peak) for every `VOICE_ACTIVE=1`
+frame -- direct, ground-truth confirmation that `g0`'s earlier-documented threshold behavior
+(section 26) really is the chip's own voice/silence decision, not a coincidental artifact of this
+investigation's own signal generation.
+
+**A genuinely new, decisive result for `g3`**: across all 100 captured frames, `g3` reads exactly
+`2048` in **100% of the 30 confirmed-`VOICE_ACTIVE=1` frames, with zero exceptions** -- completely
+stable during real voice activity. During the 70 confirmed-`VOICE_ACTIVE=0` (silence) frames, `g3`
+is *mostly* `2048` but flips to `3072` in exactly 10 of them, scattered roughly one-per-peak-level
+with no obvious pattern tying it to peak level itself. **This is the first time this investigation
+has tied `g3`'s long-documented bistable oscillation (sections 18, 23, 26 all noted variants of a
+low-signal "flips between two values" pattern without being able to say what drove it) directly to
+a ground-truth chip classification flag rather than inferring it from stimulus type**: it is
+specifically and only associated with confirmed silence, never with confirmed voice activity. This
+does not yet explain the two-value flip itself (whether it's genuine comfort-noise-level jitter,
+matching DVSI's manual claim, or some other adaptive/decaying state that happens to resolve to one
+of two values near a decision boundary), but meaningfully narrows the search: any future hypothesis
+for `g3`'s behavior now has to explain why it is *perfectly* stable during confirmed voice and only
+*occasionally* bistable during confirmed silence, not a general "noisy/unresolved" block. Full
+100-frame dataset with per-frame `VOICE_ACTIVE` ground truth committed
+(`dtx_voice_active_ground_truth.txt`).
