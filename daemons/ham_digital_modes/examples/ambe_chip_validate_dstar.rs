@@ -22,6 +22,10 @@
 //! framing bugs above were fixed, every frequency tested (including 500/800/1000Hz) decoded with
 //! zero errors too; an early, wrong theory during this investigation blamed a since-fixed framing
 //! bug's symptom on the chip being "at the edge of its range" instead.
+//!
+//! Also validates against real recorded speech (the OSR speech fixtures at
+//! `tests/fixtures/osr_speech/`, already cleared for use elsewhere in this crate) -- a more
+//! representative test than synthetic tones alone.
 
 use ham_digital_modes::ambe_dstar::decode::parse_frame;
 use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
@@ -107,6 +111,13 @@ fn test_tone(freq: u32) -> Vec<i16> {
         .collect()
 }
 
+fn read_wav_mono_i16(path: &str) -> Vec<i16> {
+    let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
+    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
+    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+}
+
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
@@ -147,9 +158,37 @@ fn main() {
         }
     }
 
-    if any_failures_in_range {
-        eprintln!("\nFAIL: at least one voice-range frequency had a non-zero-error frame -- real framing bug.");
+    println!("\n-- Real recorded speech --");
+    let speech_files = [
+        "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav",
+        "tests/fixtures/osr_speech/OSR_us_000_0011_8k.wav",
+    ];
+    let mut any_speech_failures = false;
+    for path in speech_files {
+        let pcm = read_wav_mono_i16(path);
+        let n_frames = (pcm.len() / FRAME_SAMPLES).min(400);
+        let mut exact = 0usize;
+        for i in 0..n_frames {
+            let frame_samples = &pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES];
+            let Some(bytes) = encode_frame(&sock, frame_samples) else {
+                eprintln!("  {path} frame {i}: no response from chip");
+                continue;
+            };
+            let frame = wire_bytes_to_frame(&bytes);
+            let parsed = parse_frame(frame);
+            if parsed.epsilon_c0 == 0 && parsed.epsilon_c1 == 0 {
+                exact += 1;
+            }
+        }
+        println!("  {path}: {exact}/{n_frames} frames Golay-decoded with zero errors on C0 and C1");
+        if exact != n_frames {
+            any_speech_failures = true;
+        }
+    }
+
+    if any_failures_in_range || any_speech_failures {
+        eprintln!("\nFAIL: at least one voice-range frequency or real-speech frame had a non-zero-error frame -- real framing bug.");
         std::process::exit(1);
     }
-    println!("\nPASS: every voice-range frame (50/100/200/250/400Hz) Golay-decoded with zero errors on both C0 and C1.");
+    println!("\nPASS: every voice-range frequency frame (50/100/200/250/400Hz) and every real-speech frame Golay-decoded with zero errors on both C0 and C1.");
 }
