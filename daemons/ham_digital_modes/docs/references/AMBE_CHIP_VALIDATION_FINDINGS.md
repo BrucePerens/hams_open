@@ -512,17 +512,116 @@ the more likely outcome once the AMBETools `IMBE_INTERLEAVE[144]` table was rule
 (see §3's correction) and no other independently-sourced reference for DVSI's *own* proprietary wire
 format could be found. Unlike D-STAR, where the chip turned out to reuse the real over-the-air format
 directly on its serial bytes, P25's chip apparently does not do the equivalent -- at least not via the
-one real, independent interleave table checked here. Cracking DVSI's actual proprietary P25 bit
-layout from here, if still wanted, would need either a genuine from-scratch structural search (a much
-larger, non-contiguous permutation space than the one searched here, likely intractable to brute
-force) or a different empirical approach entirely (e.g. correlating specific known-content chip
-CONTROL/DATA channel bits against expected vocoder parameter values one at a time, rather than
-guessing a global bit-order transformation) -- a genuine, open reverse-engineering problem with no
-shortcut currently in hand, exactly as this document's own honest assessment in §3 anticipated.
+`dsd` reconstruction checked here, since confirmed against a stronger source below.
+
+**Update, same session: the real, official standard's own interleave table was found, transcribed,
+and tested -- still a clean negative.** Bruce pointed at two documents already in `hams_com`'s
+`reference/ambe/`: `TIA-102.BABC_Vocoder_Reference_Test.pdf` (turned out to be an audio-quality
+conformance *test procedure* manual, not bit-exact reference vectors -- not useful here) and
+`TIA-102-BAAA-A_Project_25_FDMA_CAI.pdf`, the real Common Air Interface standard, which turned out to
+contain exactly what was needed: **Table 5-1, "Interleaving Schedule for Voice Word"** -- the
+standard's own authoritative voice-frame interleave (distinct from `dsd`'s third-party
+reconstruction, and distinct from a separate, unrelated `7.2`-section data-channel interleaver in the
+same document that a first pass mistakenly grabbed). Confirms this crate's own `c0..c7`
+data-then-parity, MSB-first bit-numbering convention exactly (`c_0(22)` = Golay MSB, `c_X(14)` =
+Hamming MSB, matching this crate's existing, independently-confirmed convention) and gives, for each
+of the 72 transmitted dibit symbols, exactly which codeword bit is that symbol's Bit 1 and Bit 0.
+
+Transcribed programmatically, not by eye, using **two independent extraction methods that agreed
+exactly on all 72 symbols**: `pdftotext -layout` (regex-parsed after fixing a first attempt that
+matched the table's own table-of-contents entry instead of its real location) and PyMuPDF's own
+word-position extraction (grouping words by line, splitting columns by x-coordinate -- the same class
+of technique this crate's own Annex G table used for a *different*, watermark-corrupted PDF, though
+this document itself has no watermark or custom font encoding, confirmed via `pdfimages -list` and
+`page.get_fonts()`). Both extractions were checked against the real structural invariant that each of
+the 8 codewords' own bit-index set, collected across every appearance in the table, must be exactly
+`0..width` with no gaps or duplicates -- true for all 8 blocks under both methods. The resulting
+`apply_tia_interleave` function (in `examples/ambe_chip_validate_p25_wireformat.rs`) was itself
+verified as a genuine bijection and a correct round trip (scatter a known `[c0..c7]` via the table's
+own inverse, recover it exactly) before being trusted against real chip data.
+
+**Result: this real, official, doubly-verified interleave table also scores at noise level against
+the real chip**, on both RATEP(P25 FEC) and RATET(27) captures, across all 4 byte-order/bit-direction
+combinations -- 0 matching frames out of 125 and 31 unique frames respectively, for every metric
+(raw, dewhitened-4-block, and dewhitened-7-block). This is now a **much stronger** negative than the
+`dsd`-based one: the standard's own text is unambiguous and directly authoritative, not a third
+party's own reconstruction that could in principle have targeted a different protocol revision or
+made its own transcription error. It also surfaces a real, relevant fact the document itself states
+directly: "There are often other symbols interleaved within the voice frame" (frame sync, NAC, status
+symbols/busy bits, encryption sync) -- real, non-audio information genuinely does get interleaved
+into the *over-the-air* transmission, confirming a hypothesis Bruce raised directly. But the
+`10 Annex for Transmit Bit Order`'s own per-symbol tables (covering the full Logical Link Data Unit,
+not just the voice frame) describe those extra symbols as part of the larger over-the-air *frame*
+structure, well beyond the 144 bits AMBEServer3003's `CHANNEL` packet always returns for this rate
+(confirmed repeatedly, live, across every test in this document) -- strong evidence the DVSI chip's
+own `CHANNEL` response is genuinely just the 144-bit voice codeword, stripped of that surrounding
+RF-frame structure by the chip itself, not a case of non-audio bits silently making it into what this
+harness assumed was pure vocoder data.
+
+With four independently-sourced interleave/ordering hypotheses now tested and rejected (this crate's
+own Annex H table, AMBETools' unrelated `IMBE_INTERLEAVE[144]`, `dsd`'s OTA reconstruction, and now
+the real standard's own Table 5-1) plus the full `8!` contiguous-block-reordering search, the
+conclusion stands even more firmly: DVSI's chip does not expose its P25 `CHANNEL` bytes in the
+standard's own published bit order, unlike D-STAR. Cracking DVSI's actual proprietary P25 bit layout
+from here, if still wanted, would need either a genuine from-scratch structural search (a much larger,
+non-contiguous permutation space than the one searched here, likely intractable to brute force) or a
+different empirical approach entirely (e.g. correlating specific known-content chip CONTROL/DATA
+channel bits against expected vocoder parameter values one at a time, rather than guessing a global
+bit-order transformation) -- a genuine, open reverse-engineering problem with no shortcut currently in
+hand, exactly as this document's own honest assessment anticipated.
 
 **Reproducing this work**: `cargo run --release --example ambe_chip_validate_p25_wireformat --
-192.168.10.189 2460 --save <path>` captures fresh frames from the chip and runs all three hypothesis
-families (takes well under a minute total, dominated by the ~600 UDP round trips during capture, not
-by the search itself). `--replay <path>` re-runs the analysis against a previously saved capture
+192.168.10.189 2460 --save <path>` captures fresh frames from the chip and runs all four hypothesis
+families (sliding window, `8!` permutation search, `dsd`'s OTA interleave, and the real TIA-102.BAAA-A
+Table 5-1) -- takes well under a minute total, dominated by the ~600 UDP round trips during capture,
+not by the search itself. `--replay <path>` re-runs the analysis against a previously saved capture
 without hitting the chip again. `--selftest` runs the ground-truth validation described above with no
-network access at all.
+network access at all (note: the TIA-interleave hypothesis scores 0 under `--selftest` too, since the
+self-test's own synthetic ground truth is packed in this crate's plain contiguous `c0..c7` format, not
+actually OTA-interleaved -- that's expected, not a self-test failure; `apply_tia_interleave`'s own
+correctness was instead verified separately, via the bijection/round-trip check described above).
+
+## 8. Also checked, per direct suggestions: offset/inversion, constant bits, and a real NOFEC mode
+
+Three further, cheap-to-test hypotheses, checked directly against the real chip data before
+concluding the wire-format mystery needs a genuinely open-ended search:
+
+- **Simple offset or bit-inversion**: an exhaustive check of all 144 cyclic rotations x bit-complement
+  (on/off) x the 4 byte-order/bit-direction combinations, against both the plain contiguous `c0..c7`
+  layout and the real TIA-102.BAAA-A Table 5-1 interleave (§7), found **zero combinations with any
+  match at all** -- not "a small improvement," literally every rotation scored the same as no
+  rotation. Rules out a simple shift or global inversion combined with either candidate layout.
+- **A large embedded non-audio header**: across 156 real captured frames (9 different tones/
+  amplitudes), only **2 of 144** raw bit positions are constant across every frame, and which 2
+  positions they are changes depending on byte/bit-order convention (i.e. they're not the same
+  physical bits) -- nowhere near the many-bits-in-a-row pattern a genuine fixed sync/header field
+  would produce. Real, though thin, evidence against a large fixed non-vocoder header living inside
+  the 144-bit `CHANNEL` payload (the chip's response size is also always exactly 144 bits, matching
+  the standard's own total frame size precisely -- not padded or truncated relative to it).
+- **A real NOFEC mode, found and probed directly** (`examples/ambe_chip_probe_p25_nofec.rs`): DVSI's
+  chip has a documented alternate rate configuration with no FEC at all -- confirmed via a real
+  working reference (`DV3000_REQ_P25_NOFEC` in G4KLX AMBETools' `DV3000SerialController.cpp`) rather
+  than guessed. Configuring the real chip this way and encoding returns **exactly 88 bits every
+  time**, matching this crate's own `VOICE_BITS` exactly -- a real, independent confirmation of the
+  voice/FEC bit split, live. This mode removes every Golay/Hamming/whitening/interleave ambiguity at
+  a stroke: there is no FEC to protect, so (per the FDMA CAI document's own reasoning for *why*
+  interleaving exists -- spreading burst errors across a *coded* word) there should be no reason to
+  interleave a NOFEC frame either. The chip's NOFEC output also **converges to a perfectly stable,
+  exactly-repeating value** for a settled stationary tone (confirmed across 200/400/500/1000Hz, no
+  deviation across 10 frames after a 30-frame settle) -- cleaner than D-STAR's own low-frequency
+  non-convergence.
+  - **Bit-diffing the raw 88-bit NOFEC frames between different test frequencies** (the exact
+    technique that found the original P25 FEC-mode "stride-12" clue in §3) shows only 3-5 of the 88
+    bits change between any pair of the four frequencies tested, and -- a real, structural surprise --
+    they are **not** clustered in the first 12 bits, where this crate's own `u0`-first, MSB-first,
+    contiguous convention (matching TIA-102.BAAA-A's own stated field order and this crate's already-
+    confirmed `c0..c7` numbering) would put the pitch parameter `u0`. Instead they land in what would
+    be `u1`, `u2`, `u4`, `u5`, `u6`, and `u7` under that convention -- never `u0` or `u3`. Several
+    fields shifting together, rather than one field varying smoothly across a 5x frequency range, is
+    consistent with a harmonic-count-dependent bit-allocation boundary effect (changing pitch shifts
+    `L_hat`, which shifts how many bits several *other* parameters get, per this codec's own real
+    Annex-based bit allocation) -- a real, plausible mechanism, but not yet a settled "this specific
+    bit range is pitch" conclusion. **Genuinely promising, not yet resolved**: NOFEC mode is a much
+    cleaner signal than the FEC-mode wire-format search could ever be, and is the most promising
+    concrete next step for continuing this investigation, rather than the intractable non-contiguous
+    interleave search the FEC-mode results alone would otherwise motivate.

@@ -597,6 +597,87 @@ fn dsd_interleave_test(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm:
 }
 
 // ---------------------------------------------------------------------------------------------
+// Test 4: the REAL, official TIA-102.BAAA-A Table 5-1 ("Interleaving Schedule for Voice Word") --
+// the actual published standard's own voice-frame interleave, as opposed to the third-party `dsd`
+// reconstruction tried in test 3. Transcribed programmatically (not by eye) from the real PDF text
+// (`reference/ambe/TIA-102-BAAA-A_Project_25_FDMA_CAI.pdf` in `hams_com`, fetched via two
+// independent extraction methods -- `pdftotext -layout` regex-parsed, and PyMuPDF's own
+// word-position extraction -- which agreed exactly on all 72 symbols, and both independently
+// confirmed each of the 8 blocks' own bit-index set is the exact expected contiguous range with no
+// gaps or duplicates). Unlike D-STAR's third-party `dsd` table, this is the actual standard's own
+// text, Table 5-1, giving each of the 72 transmitted dibit symbols' own two bits (`Bit 1`/`Bit 0`)
+// directly as `c_X(i)` -- codeword `X`, bit index `i` (`22`=MSB for a Golay block, `14`=MSB for a
+// Hamming block, `6`=MSB for `c_7`, matching this crate's own MSB-first convention exactly, already
+// confirmed independently). No bit1/bit0-order ambiguity here (unlike the `dsd` dibit-convention
+// question in test 3): the standard names Bit 1 and Bit 0 explicitly per symbol.
+// ---------------------------------------------------------------------------------------------
+
+const TIA_BLOCK: [usize; 144] = [
+    0, 1, 2, 3, 4, 5, 1, 0, 3, 2, 5, 4, 0, 1, 2, 3, 4, 6, 1, 0, 3, 2, 6, 4, 0, 1, 2, 3, 4, 6, 1, 0,
+    3, 2, 6, 4, 0, 1, 2, 3, 4, 6, 1, 0, 3, 2, 6, 4, 0, 1, 2, 3, 4, 6, 1, 0, 3, 2, 6, 4, 0, 1, 2, 3,
+    4, 6, 1, 0, 3, 2, 6, 5, 0, 1, 2, 3, 5, 6, 1, 0, 3, 2, 6, 5, 0, 1, 2, 3, 5, 6, 1, 0, 3, 2, 6, 5,
+    0, 1, 2, 3, 5, 6, 1, 0, 3, 2, 7, 5, 0, 1, 2, 3, 5, 7, 1, 0, 3, 2, 7, 5, 0, 1, 2, 4, 5, 7, 1, 0,
+    4, 3, 7, 5, 0, 2, 3, 4, 5, 7, 2, 1, 4, 3, 7, 5,
+];
+const TIA_INDEX: [usize; 144] = [
+    22, 21, 20, 19, 10, 1, 20, 21, 18, 19, 0, 9, 20, 19, 18, 17, 8, 14, 18, 19, 16, 17, 13, 7, 18,
+    17, 16, 15, 6, 12, 16, 17, 14, 15, 11, 5, 16, 15, 14, 13, 4, 10, 14, 15, 12, 13, 9, 3, 14, 13,
+    12, 11, 2, 8, 12, 13, 10, 11, 7, 1, 12, 11, 10, 9, 0, 6, 10, 11, 8, 9, 5, 14, 10, 9, 8, 7, 13,
+    4, 8, 9, 6, 7, 3, 12, 8, 7, 6, 5, 11, 2, 6, 7, 4, 5, 1, 10, 6, 5, 4, 3, 9, 0, 4, 5, 2, 3, 6, 8,
+    4, 3, 2, 1, 7, 5, 2, 3, 0, 1, 4, 6, 2, 1, 0, 14, 5, 3, 0, 1, 13, 22, 2, 4, 0, 22, 21, 12, 3, 1,
+    21, 22, 11, 20, 0, 2,
+];
+
+/// Deinterleaves wire bits (already extracted under a byte/bit-order hypothesis) into `[c0..c7]`
+/// via the real, official Table 5-1: wire bit `2*s` is symbol `s`'s Bit 1, wire bit `2*s+1` is its
+/// Bit 0, and `TIA_BLOCK[i]`/`TIA_INDEX[i]` give which codeword and bit index wire bit `i` belongs to.
+fn apply_tia_interleave(bits: &[u8; 144]) -> [u32; 8] {
+    let mut block_bits = [[0u8; 23]; 8];
+    for i in 0..144 {
+        block_bits[TIA_BLOCK[i]][TIA_INDEX[i]] = bits[i];
+    }
+    std::array::from_fn(|id| {
+        let size = BLOCK_SIZES[id] as usize;
+        (0..size).fold(0u32, |acc, i| acc | ((block_bits[id][i] as u32) << i))
+    })
+}
+
+fn tia_interleave_test(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: &[u64]) {
+    println!("\n-- Real TIA-102.BAAA-A Table 5-1 interleave test ({} unique frames) --", unique_frames.len());
+    for &(reverse_bytes, lsb_first) in &BYTE_BIT_HYPOTHESES {
+        let bitstreams: Vec<[u8; 144]> =
+            unique_frames.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+        let mut raw4 = 0usize;
+        let mut dew4 = 0usize;
+        let mut dew7 = 0usize;
+        for bits in &bitstreams {
+            let c = apply_tia_interleave(bits);
+            if let Some((r4, d4, d7)) = score_candidate(c, golay_bm, hamming_bm) {
+                if r4 {
+                    raw4 += 1;
+                }
+                if d4 {
+                    dew4 += 1;
+                }
+                if d7 {
+                    dew7 += 1;
+                }
+            }
+        }
+        println!(
+            "  {}: raw c1-3 match {}/{}, dewhitened c1-3 match {}/{}, dewhitened all-7 match {}/{}",
+            hypothesis_name(reverse_bytes, lsb_first),
+            raw4,
+            bitstreams.len(),
+            dew4,
+            bitstreams.len(),
+            dew7,
+            bitstreams.len(),
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------------------------
 
@@ -673,6 +754,7 @@ fn main() {
 
         sliding_window_diagnostic(&unique, &golay_bm, &hamming_bm);
         dsd_interleave_test(&unique, &golay_bm, &hamming_bm);
+        tia_interleave_test(&unique, &golay_bm, &hamming_bm);
         let hits = permutation_search(&unique, &golay_bm, &hamming_bm);
 
         if hits.is_empty() {
