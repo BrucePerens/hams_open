@@ -23,12 +23,24 @@
 //! one member of this confirmed structure ((92, 127)), directly demonstrating why this full run needed
 //! to be redone with conditioning rather than trusting the first pass.
 //!
-//! Expected runtime: ~10000 pairs x 25 round trips (20 silence-conditioning decodes + 4 re-priming
-//! decodes + 1 flipped-frame decode) at this protocol's per-frame UDP round-trip pace -- on the
-//! order of 2.5-3.5 hours. Progress is printed periodically so a background run's log shows live
-//! progress. No per-hit confirmation retest this time (removed): conditioning-based determinism was
-//! independently verified by hand across 8 different flip combinations before this run, so a second
-//! in-run retest would only add cost without adding real confidence.
+//! **Two more bugs found and fixed before this version's first real run.** (1) The baseline itself
+//! was captured via plain tone-only re-priming while every other decode used full silence
+//! conditioning -- comparing two different decoder states, which inflated the measured noise floor
+//! to ~21 dB and would have set the hit threshold (5x floor) far above even the confirmed real
+//! {8,92,127}/{68,103,127} effects (~10-14 dB). Fixed by conditioning the baseline capture too. (2)
+//! Even after that fix, a silence-then-tone "relock" transient turned out to have a heavier-tailed
+//! noise floor than pure tone-only re-priming (occasional spikes up to ~9 dB, versus ~0.4 dB for
+//! tone-only) -- high enough that the confirmed-real but weak (128, 139) pair (5.56 dB) could be
+//! indistinguishable from an unlucky noise draw under a naive max-of-N threshold. Fixed by using the
+//! MEDIAN of 20 calibration samples as the robust floor estimate (not swayed by rare outliers) and
+//! reinstating a per-hit confirmation retest (an independent second draw): a genuine effect
+//! reproduces reliably, a noise spike usually doesn't land above threshold twice in a row.
+//!
+//! Expected runtime: ~10000 pairs x up to 30 round trips (20 silence-conditioning decodes + 4
+//! re-priming decodes + 1 flipped-frame decode, plus another 25 for confirmation on any hit) at this
+//! protocol's per-frame UDP round-trip pace -- on the order of 2.5-4 hours, depending on how many
+//! candidates need confirmation. Progress is printed periodically so a background run's log shows
+//! live progress.
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;
 use std::time::{Duration, Instant};
@@ -44,7 +56,6 @@ const TEST_FREQ_HZ: f64 = 200.0;
 const SETTLING_FRAMES: usize = 80;
 const TOTAL_BITS: usize = 144;
 const PRIME_REPEATS: usize = 4;
-const BASELINE_REPEATS: usize = 5;
 const SILENCE_CONDITION_REPEATS: usize = 20;
 const KNOWN_UNPROTECTED: [usize; 2] = [131, 143];
 
@@ -169,6 +180,12 @@ fn main() {
         }
     };
 
+    // Tried a Hann window here to reduce phase-dependent spectral leakage (the suspected cause of
+    // the noise floor's wide spread) -- it changed the distribution's shape but didn't clearly
+    // improve separation from the confirmed real effects, so reverted to plain rectangular FFT
+    // (matching the already-verified diagnostic tool) rather than chase further DSP tuning. The
+    // wide, heavy-tailed noise floor is accepted as a real property of this comparison method (see
+    // the threshold rationale below) rather than something to eliminate before this run.
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(FRAME_SAMPLES);
     const DB_FLOOR: f64 = 1.0;
@@ -182,21 +199,46 @@ fn main() {
         (sum_sq / a.len() as f64).sqrt()
     };
 
-    for _ in 0..BASELINE_REPEATS - 1 {
-        send_channel_get_pcm(&sock, &mut buf, &r);
-    }
+    // Baseline must be captured via the SAME conditioning protocol used for every subsequent
+    // test -- an earlier version captured it via plain tone-only re-priming (matching the
+    // unconditioned sweep) while every other decode used full silence conditioning, comparing two
+    // different decoder states and inflating the noise floor to ~21 dB (versus ~0.5-1 dB expected),
+    // which would have set the hit threshold far above even the confirmed real {8,92,127}/
+    // {68,103,127} effects (~10-14 dB) -- caught before wasting the ~3 hour run on it.
+    condition(&sock, &mut buf);
     let baseline_pcm = send_channel_get_pcm(&sock, &mut buf, &r);
     let baseline_spectrum = db_spectrum(&baseline_pcm);
 
+    // 20 samples, not 8: a fresh silence-then-tone relock apparently has heavier-tailed noise than
+    // pure tone-only re-priming did (observed up to ~9-21 dB spikes vs ~0.4 dB for tone-only), so a
+    // plain max-of-N floor is dominated by rare outliers rather than the typical case. Using the
+    // median as the robust floor estimate, with confirmation retesting (below) to catch the rare
+    // case where a real, weak effect (the confirmed (128,139) pair measured at 5.56 dB, below some
+    // observed noise spikes) needs a second independent draw to separate it from noise.
     let mut floor_distances = Vec::new();
-    for _ in 0..8 {
+    for _ in 0..20 {
         condition(&sock, &mut buf);
         let pcm = send_channel_get_pcm(&sock, &mut buf, &r);
         floor_distances.push(spectral_distance(&baseline_spectrum, &db_spectrum(&pcm)));
     }
-    let noise_floor = floor_distances.iter().cloned().fold(0.0_f64, f64::max);
-    let threshold = (noise_floor * 5.0).max(5.0);
-    println!("noise floor (max of 8 conditioned repeats): {noise_floor:.2} dB; using changed-decode threshold = {threshold:.2} dB");
+    floor_distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let median_floor = floor_distances[floor_distances.len() / 2];
+    let max_floor = floor_distances[floor_distances.len() - 1];
+    // A multiplicative threshold (Nx median) doesn't work here: the noise floor's own median
+    // (observed ~5 dB) times any reasonable multiplier already exceeds the confirmed real
+    // {8,92,127}/{68,103,127} effects (~10-14 dB), which would never even reach confirmation. Use
+    // an additive margin instead, low enough to admit real 10+ dB effects into the confirmation
+    // step, accepting that this also admits a fair share of the noise tail -- confirmation (an
+    // independent second draw) is what actually separates them, not the first-pass threshold alone.
+    // This also means a weak real effect at or below the noise floor's own median (the previously,
+    // separately confirmed (128, 139) pair at 5.56 dB) is not reliably detectable by this automated
+    // pass; that's an accepted, documented limitation, not something this run needs to fix, since
+    // that pair is already confirmed by direct, targeted testing regardless of this sweep's outcome.
+    let threshold = (median_floor + 3.0).max(6.0);
+    println!(
+        "noise floor: median={median_floor:.2} dB, max={max_floor:.2} dB (of 20 conditioned repeats); using changed-decode threshold = {threshold:.2} dB"
+    );
+    println!("all 20 floor samples: {floor_distances:.2?}");
 
     let candidates: Vec<usize> = (0..TOTAL_BITS).filter(|k| !KNOWN_UNPROTECTED.contains(k)).collect();
     let total_pairs = candidates.len() * (candidates.len() - 1) / 2;
@@ -213,8 +255,20 @@ fn main() {
             let distance = spectral_distance(&baseline_spectrum, &db_spectrum(&pcm));
             tested += 1;
             if distance > threshold {
-                hits.push((a, b, distance));
-                println!("  HIT: ({a}, {b}) distance={distance:.2} dB");
+                // Confirm with a second, independently-conditioned draw: the noise floor's own
+                // occasional spikes (up to ~9-21 dB observed) can exceed a real but weak effect
+                // (the confirmed (128,139) pair measures only 5.56 dB), so a single measurement
+                // above threshold isn't decisive on its own -- a genuine effect reproduces on an
+                // independent redraw, a noise spike usually doesn't land above threshold twice.
+                condition(&sock, &mut buf);
+                let confirm_pcm = send_channel_get_pcm(&sock, &mut buf, &flipped);
+                let confirm_distance = spectral_distance(&baseline_spectrum, &db_spectrum(&confirm_pcm));
+                if confirm_distance > threshold {
+                    hits.push((a, b, distance));
+                    println!("  HIT: ({a}, {b}) distance={distance:.2} dB (confirmed: {confirm_distance:.2} dB)");
+                } else {
+                    println!("  (not confirmed: ({a}, {b}) first={distance:.2} dB, retest={confirm_distance:.2} dB)");
+                }
             }
             if tested.is_multiple_of(200) {
                 let elapsed = start.elapsed().as_secs_f64();

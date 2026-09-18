@@ -1065,11 +1065,42 @@ interleave, byte order, or PN-modulation convention. Bit 127 is shared between b
 triples; cross-pairs between the two groups (`(8, 68)`, `(92, 103)`) show no effect, confirming the
 two groups are otherwise distinct, not one larger connected structure.
 
-**Consequence: the full exhaustive sweep is being re-run with proper silence conditioning before
-every test** (`examples/p25_ratet27_pairflip_full_sweep.rs`, updated in place), since the
-unconditioned version demonstrably missed at least one real structural relationship. Conditioning
-adds real cost (20 silence decodes + 4 tone primes before every one of the 10011 pairs, versus 4
-before), pushing expected runtime from ~40 minutes to roughly 2.5-3.5 hours; the per-hit confirmation
-retest from the first attempt was removed since conditioning-based determinism was independently hand-
-verified across 8 different flip combinations before launching this run. Results from this run will
-be recorded in a follow-up update once it completes.
+**Consequence: the full exhaustive sweep needed re-running with proper silence conditioning**
+(`examples/p25_ratet27_pairflip_full_sweep.rs`, updated in place), since the unconditioned version
+demonstrably missed at least one real structural relationship. Two more tuning problems were found
+and fixed before a trustworthy run launched:
+
+1. **Baseline/conditioning mismatch.** An early version of the conditioned sweep captured its own
+   baseline via the *old* plain tone-only re-priming method while every subsequent test used full
+   silence conditioning -- comparing two different decoder states. This inflated the measured noise
+   floor to ~21 dB, which would have set a 5x-floor threshold (~106 dB) far above even the confirmed
+   real effects (~10-14 dB), silently missing everything. Fixed by conditioning the baseline capture
+   identically to every other test.
+
+2. **A genuinely wide, heavy-tailed noise floor, not a bug.** Even after that fix, 20 independent
+   conditioned samples of "decode unmodified R" spread smoothly from 0.5 dB to over 20 dB (not a
+   rare-outlier pattern -- a real, continuous spread). Neither increasing the tone-priming count
+   (4->20) nor the silence-conditioning count (20->80) meaningfully tightened this, ruling out
+   "insufficient relock time" as the cause; a Hann window (to reduce phase-dependent spectral
+   leakage, the other likely explanation) changed the distribution's shape but didn't clearly help
+   either, and was reverted rather than chased further. This means a single dB-spectral-distance
+   measurement cannot, by itself, reliably separate a weak real effect from noise here -- the
+   previously-confirmed but weak `(128, 139)` pair (5.56 dB) sits within the same range as ordinary
+   noise spikes. **Fix**: use the *median* of 20 calibration samples as a robust floor estimate (not
+   swayed by the tail), a modest additive threshold margin above it (low enough to admit real
+   10+ dB effects into confirmation, accepting that this also admits much of the noise tail), and a
+   mandatory independent-redraw confirmation retest for every candidate -- a genuine effect
+   reproduces reliably, noise usually doesn't land above threshold twice. This is an accepted,
+   documented limitation for weak effects specifically, not a blocker for the strong ones this sweep
+   is actually aimed at finding.
+
+**A striking, highly regular preliminary pattern**, seen in a bounded sanity check before launching
+the full run: for anchor bit 0, confirmed hits land at `(0,17) (0,18) (0,19)`, `(0,43) (0,44) (0,45)`,
+`(0,69) (0,70) (0,71)`, `(0,95) (0,96) (0,97)`, `(0,121) (0,122) (0,123)` -- five groups of exactly 3
+*consecutive* wire positions, each group spaced exactly 26 positions apart, with the same +26 pattern
+repeating (from a different starting offset) for anchor bit 1. This periodicity is far too regular to
+be noise -- a real, systematic property of the wire format's structure, not yet interpreted. Full
+results from the complete run (all 10011 pairs) will be recorded in a follow-up update once it
+finishes; expected runtime is longer than originally estimated (likely 4+ hours) given the additive-
+threshold/confirmation approach admits many more first-pass candidates than a stricter multiplicative
+threshold would have.
