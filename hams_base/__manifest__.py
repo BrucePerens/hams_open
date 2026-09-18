@@ -16,6 +16,7 @@
         "views/unsubscribe_templates.xml",
         "views/mail_templates.xml",
         "data/compliance_document_data.xml",
+        "data/mail_alias_data.xml",
     ],
     "installable": True,
     "auto_install": False,

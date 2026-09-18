@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<odoo>
+    <data noupdate="1">
+        <!-- Route dmarc-reports@hams.com to hams_base.dmarc.report. Bug-hunt fix, 2026-09-18,
+             per Bruce's own answer in night_shift_questions/answered/
+             hams-base-dmarc-pipeline-unwired-and-poisoned-alias-310b7a4f.md: the DMARC-report
+             ingestion pipeline (message_new/process_dmarc_attachment/_parse_dmarc_xml, heavily
+             hardened and unit-tested) had no real mail.alias routing anything to it, and
+             res_config_settings.py's own suggested DNS rua= record pointed at not-read@, which
+             mail_thread.py's own message_route override (this module) drops anything sent to
+             (unless it's a recognized bounce/unsubscribe/vacation-reply) BEFORE Odoo's alias
+             dispatch ever runs, so a real DMARC aggregate report would never have reached the
+             handler even with the alias wired to it. A dedicated alias avoids that collision
+             entirely: "dmarc-reports" is not special-cased anywhere in message_route, so mail
+             sent there falls straight through to super().message_route()'s normal alias
+             resolution. See res_config_settings.py's own _compute_dns_records, updated in the
+             same change to suggest this alias's address instead of not-read@. -->
+        <record id="mail_alias_dmarc_reports" model="mail.alias">
+            <field name="alias_name">dmarc-reports</field>
+            <field name="alias_model_id" ref="hams_base.model_hams_base_dmarc_report"/>
+            <field name="alias_contact">everyone</field>
+        </record>
+    </data>
+</odoo>

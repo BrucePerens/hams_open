@@ -30,5 +30,5 @@ class TestResConfigSettings(common.TransactionCase):
         self.assertIn("spf1", settings.dns_spf_record)
         self.assertEqual(
             settings.dns_dmarc_record,
-            "v=DMARC1; p=quarantine; rua=mailto:not-read@example-club.org;",
+            "v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@example-club.org;",
         )

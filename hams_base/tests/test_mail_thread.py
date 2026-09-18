@@ -105,3 +105,69 @@ class TestMailThread(HamsTransactionCase):
                 "A genuine (non-noise) postmaster@ message must not hit any "
                 "of this override's drop branches.",
             )
+
+    def test_dmarc_reports_alias_is_wired_and_routes_to_the_real_model(self):
+        """Bug-hunt fix, 2026-09-18, per Bruce's own answer in
+        night_shift_questions/answered/
+        hams-base-dmarc-pipeline-unwired-and-poisoned-alias-310b7a4f.md: no mail.alias used to
+        route anything to hams_base.dmarc.report, so a real DMARC aggregate report had no path
+        to ever reach the handler. Unlike the postmaster test above (which relies on a
+        DIFFERENT module's alias and isn't installed in this module's own isolated test
+        environment), hams_base now ships its own dmarc-reports@ alias directly
+        (data/mail_alias_data.xml) -- this test proves it for real, not just that routing
+        "falls through"."""
+        # Tests [@ANCHOR: hams_base:COMM_message_route]
+        alias = self.env['mail.alias'].search([('alias_name', '=', 'dmarc-reports')])
+        self.assertTrue(alias, "the dmarc-reports@ mail.alias must exist")
+        self.assertEqual(
+            alias.alias_model_id.model,
+            'hams_base.dmarc.report',
+            "dmarc-reports@ must route to hams_base.dmarc.report",
+        )
+
+        # message_route()'s own alias lookup matches on alias_full_name
+        # (alias_name@alias_domain_id.name) unless alias_incoming_local is
+        # set, so the alias record needs a real alias_domain_id to match a
+        # real "@hams.com" recipient -- this module's own data file leaves
+        # alias_domain_id to its ORM default (the company's own
+        # alias_domain_id at install time), which is unset in this
+        # isolated test database. Real production relies on a real
+        # mail.alias.domain already configured via normal Odoo
+        # administration (Settings > Technical > Email > Alias Domains),
+        # the same way pager_duty/tests/test_mail_ingest_incident.py's own
+        # setUpClass configures it for its own postmaster@ alias test.
+        # Set it explicitly here rather than relying on install-time
+        # ordering.
+        alias_domain = self.env['mail.alias.domain'].search([('name', '=', 'hams.com')], limit=1)
+        if not alias_domain:
+            alias_domain = self.env['mail.alias.domain'].create({'name': 'hams.com'})
+        alias.alias_domain_id = alias_domain.id
+
+        msg_dict = {
+            'to': 'dmarc-reports@hams.com',
+            'subject': 'Report Domain: example.com Submitter: mail.example.net',
+            'body': '',
+            'email_from': 'noreply-dmarc-support@google.com',
+            'message_id': '<test-dmarc-reports@google.com>',
+            'references': '',
+            'in_reply_to': '',
+            'recipients': 'dmarc-reports@hams.com',
+        }
+        real_message = EmailMessage()
+        real_message['To'] = msg_dict['to']
+        real_message['From'] = msg_dict['email_from']
+        real_message['Subject'] = msg_dict['subject']
+        real_message['Message-Id'] = msg_dict['message_id']
+        real_message.set_content(msg_dict['body'])
+
+        mock_logger = self.safe_patch('odoo.addons.hams_base.models.mail_thread._logger')
+        # Real alias resolution -- unlike the postmaster test, this alias IS
+        # installed here, so this must resolve to a real route, not raise.
+        routes = self.env['mail.thread'].message_route(real_message, msg_dict)
+        self.assertTrue(routes, "a message to the real dmarc-reports@ alias must resolve to a route")
+        self.assertEqual(routes[0][0], 'hams_base.dmarc.report')
+        for call in mock_logger.info.call_args_list:
+            self.assertNotIn(
+                'Dropping', call.args[0],
+                "dmarc-reports@ is not special-cased in message_route and must never be dropped.",
+            )
