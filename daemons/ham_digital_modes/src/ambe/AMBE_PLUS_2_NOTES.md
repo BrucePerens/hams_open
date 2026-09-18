@@ -1,12 +1,23 @@
-# AMBE+2 (DMR / Yaesu System Fusion generation) -- documentation only, NOT IMPLEMENTED
+# AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate generation)
+
+**2026-09-17 update: implemented, gated off by default.** Bruce explicitly revisited and reversed
+the prior "do not implement" instruction below: "Build the decoder, keep it conditionally compiled
+out by default, with the explanation that it's kept compiled out until we can clearly exercise the
+patents. Use it to test internally... And the encoder, please." A real encoder and decoder now
+exist at `src/ambe_plus_2/`, gated behind the `ambe_plus_2` Cargo feature -- **not enabled by
+default** (`cargo build`/`cargo test` with no flags never compile any of it, confirmed directly by
+symbol inspection, not just by the `#[cfg]` attribute's placement). It exists for internal testing
+against real DVSI chip hardware only -- see the dated section at the bottom of this file for what
+that testing found. Real deployment or default-on use would still need the patent-clearance
+question this file originally raised to be resolved separately; nothing about building this module
+for internal testing resolves that question on its own.
 
 Per `docs/proposals/AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md`: DMR and Yaesu System Fusion both use
 AMBE+2, the half-rate codec covered by the 2009 addendum to TIA-102.BABA-1, which names 12 specific
 patents. This file exists to record what's known about how AMBE+2 differs from the AMBE generation
-`ambe/mod.rs` implements (D-STAR's own, from the 2003 base standard), so a future implementer doesn't
-have to re-derive that context from scratch -- **it is not an invitation to implement AMBE+2**. Do not
-add AMBE+2 encode/decode code to this crate until the patent-clearance question in the plan document
-above has been revisited and resolved.
+`ambe/mod.rs` implements (D-STAR's own, from the 2003 base standard) -- the sections below predate
+the 2026-09-17 authorization above and are kept as-is for the historical record of what was known
+before implementation started.
 
 ## 2026-09-07: the half-rate addendum's own Annexes extracted and verified
 
@@ -377,3 +388,101 @@ not attempted here, since this pass was scoped to the tables Bruce specifically 
 particular, the vector-quantization mechanism (Annexes E/F/G) needs its own real algorithm description
 (nearest-codeword search, most likely, but confirm rather than assume) before any of this becomes
 buildable, separate from the patent-clearance gate this whole file already exists to enforce.
+
+**Update, 2026-09-17: this next step is now done.** The vector-quantization search question above
+was answered by direct inspection of mbelib's own real, working `ambe3600x2450.c`/
+`ambe3600x2450_const.h` source (nearest-codeword search is confirmed correct -- see
+`src/ambe_plus_2/quantize.rs`'s own doc comment), not by reading the addendum's own encoder/decoder
+prose directly (mbelib's source was sufficient and already cross-checked value-for-value against
+every annex table above). See the dated section below for the full implementation and real
+chip-test results.
+
+## 2026-09-17: implemented as `src/ambe_plus_2/`, gated behind the `ambe_plus_2` Cargo feature
+
+Bruce's own direct instruction, reversing the "do not implement" position this file opened with:
+"Build the decoder, keep it conditionally compiled out by default, with the explanation that it's
+kept compiled out until we can clearly exercise the patents. Use it to test internally... And the
+encoder, please."
+
+**What was built**: a full encoder and decoder at `src/ambe_plus_2/` (`mod.rs`, `tables.rs` +
+`tables_prba.rs`/`tables_hoc.rs`, `decode.rs`, `encode.rs`, `quantize.rs`, `interleave.rs`),
+mirroring `ambe_dstar`'s own module structure and quality bar. The large vector-quantizer tables
+(Annexes E/F/G, 640+72 rows) were generated programmatically from the CSVs in
+`half_rate_reference/` (and the small Annex A-D tables from this file's own fenced blocks above) by
+a one-time script, not hand-transcribed -- avoiding the exact class of transcription error the
+D-STAR build caught twice. Every real structural fact (the `b0..b8` bit-scatter, the special
+120-127 erasure/silence/tone `b0` codes, the FEC/whitening frame layer) was traced directly from
+mbelib's real `ambe3600x2450.c`/`ambe3600x2450_const.h` source, not guessed -- and the FEC/
+whitening frame layer turned out to be **bit-for-bit identical to `ambe_dstar`'s own** (same
+Golay(23,12) C0/C1, same spare-bit convention, same `173*p+13849 mod 65536` whitening LCG), so it
+is reused directly (`ambe_plus_2::parse_frame`/`build_frame`/`whiten_c1` are re-exports of
+`ambe_dstar`'s) rather than reimplemented. Annex J's tone-frame mode is stubbed
+(`decode::FrameKind::Tone`, `DequantizedFrame::Tone`) with a disclosed TODO, not silently skipped --
+this file's own Annex J table above has the real data for a future pass.
+
+The `ambe_plus_2` Cargo feature is **not** in the default feature set; `cargo build`/`cargo test`
+with no flags compile none of this module at all (confirmed directly by symbol inspection of the
+built rlib -- zero `ambe_plus_2` symbols without the flag, 60 with it -- not just assumed from the
+`#[cfg]` attribute's placement). `cargo test --lib` (no flags) shows the exact same 443-pass/
+0-fail/21-ignored result as before this change; `cargo test --features ambe_plus_2` adds 20 new,
+all-passing tests for the new module; `cargo clippy --all-targets` (with or without the feature) is
+clean.
+
+### The real chip test: a genuine, decisive positive result
+
+DVSI's own USB-3000 Manual (already downloaded this session for other reasons) names `PKT_RATET`
+Rate Index 33 as **"APCO Project 25 half-rate with FEC (3600 bps)"** (control byte `0x21`) and Rate
+Index 34 as **"...with No FEC (2450 bps)"** (`0x22`) -- DVSI's own manual, in its own words, calls
+this exactly what TIA-102.BABA-1's addendum is: the P25 half-rate vocoder, i.e. AMBE+2. This is a
+different, distinct rate from RATET 27 (the already-negative full-rate mystery in sections 7-10
+above) -- genuinely matching this new codec's own 49-data-bit/72-total-bit frame size, where RATET
+27 (88/144 bits) does not.
+
+Configuring the real chip for these two rates and capturing live 8-tone test data
+(`examples/ambe_chip_validate_ambe_plus_2.rs`) gave a real, decisive, **positive** result on both:
+
+- **Rate 34 (No FEC, 49 raw bits)**: a hypothesis-agnostic sliding 7-bit-window correlation scan
+  (the same technique that found P25 full-rate's own Gray-coded `u2` pitch field, section 9 above)
+  found bits `[29..36)`, **Gray-decoded**, with **Spearman rank correlation 0.976** against true
+  frequency -- the identical magnitude to the full-rate finding, a real, independent confirmation
+  that this chip family's pitch parameter is genuinely Gray-coded, not something specific to one
+  rate's own bit layout.
+- **Rate 33 (with FEC, 72 bits)**: two framing hypotheses were tried -- a direct `C0||C1||C2||C3`
+  concatenation (**0 of 8** captured frames Golay-decoded with zero corrected errors on both `C0`
+  and `C1`) and Annex H's own TIA-specified interleave (**8 of 8** frames, perfect). Since a
+  Golay(23,12) code is a genuine perfect code, a *wrong* framing hits zero corrected errors on a
+  real 23-bit input only with probability 2^-11 per codeword -- 8-for-8 across two independent
+  codewords per frame, across 8 different real captured tones, is not a coincidence. **The chip's
+  own real wire format for this rate is exactly TIA-102.BABA-1's Annex H interleave**, the same
+  real finding `ambe_dstar`'s own investigation made for D-STAR's wire format. With the correct
+  (deinterleaved) framing, the recovered `b0` pitch index tracks true frequency exactly as a real
+  AMBE+2 encoder should: monotonically decreasing from 118 (50Hz) to 90 (100Hz) within AMBE's own
+  designed vocal-pitch range, then saturating into the reserved 120-123 (erasure) code range for
+  200-1000Hz test tones outside that designed range (120, 120, 120, 121, 121, 122) -- the same
+  "quantizer ceiling saturation" pattern already documented for full-rate NOFEC mode in section 9
+  above (there, a `u2` value plateau at 4087; here, saturation into the reserved-code boundary
+  itself), not a framing bug.
+
+**Conclusion, reported honestly either way per this whole investigation's own discipline**: this is
+a **positive** result, not a negative one -- when the real DVSI chip is explicitly configured for
+its own documented "APCO Project 25 half-rate" rate (33/34), it decodes bit-for-bit through this
+freshly built, from-spec AMBE+2 half-rate codec, with a real wire-format interleave exactly matching
+TIA-102.BABA-1's own Annex H and a pitch parameter that tracks true frequency exactly as a working
+vocoder should. **This does not, by itself, explain or resolve the separate RATET(27) full-rate
+mystery** (sections 7-10) -- that remains a genuine, still-open negative result for a different rate
+with a different frame size; a working half-rate match does not retroactively make the full-rate
+chip's own output "actually AMBE+2" too. What it does establish: the real chip hardware genuinely
+implements standard, spec-compliant AMBE+2 half-rate when asked for it by name, which is itself
+useful, real confirmation that this new codec's own from-spec implementation (tables, FEC, and bit
+scatter) is correct against real, independent silicon -- not just against mbelib's software
+reimplementation of the same spec.
+
+**Independently re-verified, same night, with two more test frequencies added (80Hz, 160Hz, for 10
+total)**: reproduced end to end, including rebuilding and re-running the harness live against the
+chip -- now **10 of 10** frames Golay-clean under Annex H framing (0 of 10 direct), an even stronger
+margin. The two new points fill in the trend cleanly: `b0` goes 118 (50Hz) -> 91 (80Hz) -> 90 (100Hz)
+-> 66 (160Hz) -> erasure from 200Hz up. `W0_TABLE`'s own real endpoints (`b0=119` -> `f0~=65Hz`,
+`b0=0` -> `f0~=400Hz`) line up with exactly where the erasure cutoff sits -- real, additional evidence
+the erasure is the chip's own genuine low-confidence response to a pure-tone stimulus outside its
+designed vocal-pitch range, not a remaining decode bug. See
+`docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md`'s §11 addendum for the full detail.

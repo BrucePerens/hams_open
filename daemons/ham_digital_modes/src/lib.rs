@@ -8,6 +8,12 @@
 
 pub mod ambe;
 pub mod ambe_dstar;
+// AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate) -- gated off by default, pending
+// patent clearance for any real deployment use. See src/ambe_plus_2/mod.rs's own doc comment and
+// src/ambe/AMBE_PLUS_2_NOTES.md for the authorization history and scope. Build/test with
+// `cargo build/test --features ambe_plus_2`.
+#[cfg(feature = "ambe_plus_2")]
+pub mod ambe_plus_2;
 pub mod codec2_1600;
 pub mod codec2_3200;
 pub mod dstar;

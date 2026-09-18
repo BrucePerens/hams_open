@@ -1,10 +1,12 @@
 //! AMBE (Advanced Multi-Band Excitation) vocoder -- D-STAR's own generation of the algorithm,
 //! implemented from TIA-102.BABA (the 2003 base standard) directly, per
-//! `docs/proposals/AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md`. That document also names the real
-//! reasoning for scope: DMR and Yaesu System Fusion both use the later AMBE+2 generation (the 2009
-//! addendum, which names 12 specific patents) and are deliberately NOT implemented here -- see
-//! `AMBE_PLUS_2_NOTES.md` in this same directory for what's known about that generation, kept as
-//! documentation only.
+//! `docs/proposals/AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md`. DMR and Yaesu System Fusion both
+//! use the later AMBE+2 generation (the 2009 half-rate addendum, which names 12 specific patents);
+//! that generation is now implemented at `super::ambe_plus_2`, gated behind the `ambe_plus_2`
+//! Cargo feature (off by default) for internal chip-compatibility testing only -- see
+//! `AMBE_PLUS_2_NOTES.md` in this same directory for the authorization history and
+//! `super::ambe_plus_2`'s own doc comment for the real implementation. Real deployment/default-on
+//! use of that generation still needs the patent-clearance question resolved separately.
 //!
 //! # Real, current state, corrected 2026-09-07: both encode AND decode are now implemented, tested, and wired end to end
 //!
@@ -118,8 +120,9 @@
 //! the Project 25 CAI this module's own `interleave` doc comment discusses) -- the same "core codec
 //! vs. channel-frame placement" scope boundary already drawn above for P25, not yet drawn for D-STAR
 //! specifically. Also open: real AMBE-chip bit-exact validation once Bruce's own hardware arrives
-//! (the proposal's own item 3), and the 2009 AMBE+2 addendum, deliberately out of scope pending patent
-//! clearance (this doc comment's own opening paragraph).
+//! (the proposal's own item 3). The 2009 AMBE+2 addendum is no longer out of scope -- see
+//! `super::ambe_plus_2` (gated behind the `ambe_plus_2` Cargo feature, off by default) and this
+//! file's own opening paragraph.
 
 pub mod bit_prioritization;
 pub mod decode;

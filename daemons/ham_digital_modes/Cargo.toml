@@ -47,3 +47,15 @@ microfft = { version = "0.6", features = ["size-512", "size-1024"] }
 
 [build-dependencies]
 cc = "1.0"
+
+[features]
+# AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate, TIA-102.BABA-1's 2009 addendum) is
+# covered by 12 specific named patents -- off by default, on only for internal chip-compatibility
+# testing. See src/ambe_plus_2/mod.rs's own doc comment and src/ambe/AMBE_PLUS_2_NOTES.md for the
+# authorization history. `cargo build`/`cargo test` (no flags) must never compile any of this --
+# verified directly, not just assumed from the #[cfg] attribute's placement.
+ambe_plus_2 = []
+
+[[example]]
+name = "ambe_chip_validate_ambe_plus_2"
+required-features = ["ambe_plus_2"]

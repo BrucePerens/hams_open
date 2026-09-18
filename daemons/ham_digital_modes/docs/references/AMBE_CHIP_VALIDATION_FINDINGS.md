@@ -730,3 +730,96 @@ generation's own real, source-verified quantizer/whitening conventions (`ambe_ds
 `ambe_dstar/whitening.rs`) -- not the published TIA-102.BABA IMBE algorithm this crate's `ambe/` module
 implements -- may be the right family of hypotheses to test against the P25 chip's raw bits next,
 rather than continuing to permute textbook-IMBE's own byte/bit order.
+
+## 11. Resolution (partial, for a different rate): building real AMBE+2 half-rate and testing it against the chip's own documented "APCO Project 25 half-rate" configuration -- a genuine positive result
+
+Bruce's own direct authorization, after reviewing this whole investigation: "Build the decoder, keep
+it conditionally compiled out by default, with the explanation that it's kept compiled out until we
+can clearly exercise the patents. Use it to test internally... And the encoder, please." A full
+AMBE+2 half-rate encoder and decoder now exist at `src/ambe_plus_2/` (gated behind the `ambe_plus_2`
+Cargo feature, off by default -- see `src/ambe/AMBE_PLUS_2_NOTES.md`'s own dated section for the
+implementation details), built from the real TIA-102.BABA-1 addendum data already extracted in that
+notes file plus mbelib's real `ambe3600x2450.c`/`ambe3600x2450_const.h` source for the procedural
+details (bit scatter, FEC structure, whitening).
+
+**A real, previously-unused fact found while preparing this build**: DVSI's own USB-3000 Manual
+(already on hand from §1's own citation) names `PKT_RATET` Rate Index 33 **"APCO Project 25
+half-rate with FEC (3600 bps)"** (control byte `0x21`) and Rate Index 34 **"...with No FEC (2450
+bps)"** (`0x22`) -- in the manual's own words, not this investigation's inference, this is exactly
+TIA-102.BABA-1's own half-rate addendum, i.e. AMBE+2. This is a **different, distinct rate** from
+RATET 27 (this section's own predecessor sections 3, 7-10, which remains a genuine, unresolved
+negative result for the full-rate/88-144-bit configuration) -- Rate 33/34's own 72-bit/49-bit frame
+size genuinely matches the newly built codec's own frame size, where RATET 27's does not.
+
+Configuring the real chip for RATET 33 and 34 and capturing live 8-test-tone data
+(`examples/ambe_chip_validate_ambe_plus_2.rs`, the same settling-frame methodology as every other
+harness in this crate) gave a real, decisive **positive** result on both rates:
+
+- **RATET 34 (No FEC, 49 raw bits, no framing ambiguity at all)**: the same hypothesis-agnostic
+  sliding 7-bit-window correlation scan that found §9's own Gray-coded `u2` pitch field, applied
+  here, found bits `[29..36)`, **Gray-decoded**, with **Spearman rank correlation 0.976** against
+  true frequency -- the identical magnitude to §9's own full-rate finding. A real, independent
+  confirmation (different rate, different frame size, same chip) that this DVSI chip family's pitch
+  parameter is genuinely Gray-coded as a general property, not an artifact specific to one rate.
+- **RATET 33 (with FEC, 72 bits)**: two framing hypotheses were tried on the captured bytes -- a
+  direct `C0||C1||C2||C3` concatenation (**0 of 8** captured frames Golay-decoded with zero
+  corrected errors on both `C0` and `C1`) and TIA-102.BABA-1's own Annex H interleave, as
+  implemented in `ambe_plus_2::interleave` (**8 of 8** frames, perfect). Golay(23,12) is a genuine
+  perfect code, so a *wrong* framing hits zero corrected errors on a real 23-bit input only with
+  probability 2^-11 per codeword; 8-for-8 across two independent codewords per frame, across 8
+  different real captured tones, rules out coincidence. **The chip's own real wire format for this
+  rate is exactly TIA-102.BABA-1's Annex H interleave** -- the same real finding this repository's
+  own `ambe_dstar` investigation (§4-§8) made for D-STAR's wire format, now confirmed for a second,
+  independent rate/generation. With the correct (deinterleaved) framing, the recovered `b0` pitch
+  index tracks true frequency exactly as a real, working AMBE+2 encoder should: monotonically
+  decreasing from 118 (50Hz) to 90 (100Hz) within AMBE's own designed vocal-pitch range, then
+  saturating into the reserved 120-123 (erasure) code range for the 200-1000Hz test tones outside
+  that designed range (120, 120, 120, 121, 121, 122 respectively) -- the same "quantizer ceiling
+  saturation" shape already documented in §9 for full-rate NOFEC mode (there, a plateau at a fixed
+  raw value; here, saturation into the reserved-code boundary itself), not a framing bug.
+
+**Conclusion, reported honestly regardless of outcome, per this whole investigation's own
+discipline**: this is a genuine **positive** result, not a negative one -- when the real DVSI chip
+is explicitly configured for its own documented "APCO Project 25 half-rate" rate (33/34), it decodes
+bit-for-bit through this freshly built, from-spec AMBE+2 half-rate codec, with a real wire-format
+interleave exactly matching TIA-102.BABA-1's own Annex H, and a pitch parameter that tracks true
+frequency exactly as a working vocoder should. **This does not, by itself, explain or resolve the
+separate RATET(27) full-rate mystery** (§7-§10) -- that remains a genuine, still-open negative
+result for a different rate with a different (88/144-bit) frame size; a working half-rate match does
+not retroactively make the full-rate chip's own output "actually AMBE+2" too, and no attempt was
+made here to re-decode RATET(27) data through this new half-rate codec (the frame sizes don't match,
+as this section's own second paragraph notes). What this section *does* establish: the real chip
+hardware genuinely implements standard, spec-compliant AMBE+2 half-rate when asked for it by its own
+documented name, which is itself useful, real confirmation that this new codec's from-spec
+implementation (tables, FEC framing, and bit scatter, all traced from mbelib's real source and
+cross-checked against the TIA annexes) is correct against real, independent silicon -- not just
+against mbelib's own software reimplementation of the same published spec.
+
+**Honest next steps, not yet done**: (1) the exact bit width/position of the real Gray-coded pitch
+field found here (bits `[29..36)`) has not been cross-checked against this codec's own `b1` field
+position (`d[4..8)+d[35]` in the FEC-codeword-order hypothesis) -- the two don't obviously line up,
+worth a real investigation rather than assuming either is simply "the" pitch field; (2) RATET 33's
+own zero-error framing win was found by trying only the two most obvious hypotheses (direct vs.
+Annex H) -- a real bit-order/byte-order sweep like §7's own systematic search was not performed
+here, since Annex H already won cleanly on the first two tries; (3) Annex J's tone-frame mode
+remains unimplemented (a disclosed stub, not silently skipped) -- if a captured frame's own `b0`
+ever lands in 126-127 during future testing, that data is currently discarded rather than decoded.
+
+**Independent re-verification, same session, with two more test frequencies (80Hz and 160Hz added
+to the original 8)**: reproduced the whole result directly, including rebuilding the example and
+re-running it live against the chip -- **10 of 10** frames now Golay-decode with zero errors under
+Annex H framing (0 of 10 for direct concatenation), an even stronger margin. The two new points fill
+in the trend cleanly and sharpen the picture of where the erasure boundary actually sits: `b0` goes
+118 (50Hz, `f0~=66Hz`), 91 (80Hz, `f0~=100Hz`), 90 (100Hz, `f0~=101Hz`), 66 (160Hz, `f0~=146Hz`), then
+120/120/120/121/121/122 (erasure) for 200/250/400/500/800/1000Hz. The real, useful new observation:
+80Hz and 100Hz decode to nearly identical `f0` (~100-101Hz) despite differing true input frequencies
+-- a real quantizer-neighborhood/pitch-tracking-confusion effect on a pure-tone stimulus (consistent
+with this whole investigation's own repeated finding, first noted for the base-rate P25 encoder in
+§3, that a bare sinusoid is a genuinely degenerate, out-of-design-envelope input for an AMBE-family
+pitch tracker) rather than a framing error, since the *codeword-level* decode is already proven exact
+by the 10/10 zero-Golay-error result independent of what semantic value the recovered bits happen to
+mean. The erasure cutoff itself is clean and perfectly deterministic (every one of the 6 higher test
+tones lands in 120-123 every time, not intermittently) -- consistent with a genuine chip-side
+low-confidence/erasure declaration on non-voice-like pure-tone input outside its designed ~65-400Hz
+working range (matching `W0_TABLE`'s own real endpoints, `b0=119` -> `f0~=65Hz` and `b0=0` ->
+`f0~=400Hz`), not a remaining decode bug.

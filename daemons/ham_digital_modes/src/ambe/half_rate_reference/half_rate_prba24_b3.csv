@@ -2,8 +2,9 @@
 # b3 -> a 3-dimensional codeword vector (G2, G3, G4). 512 entries (b3 0-511, 9-bit index),
 # completeness-verified (every index present exactly once) before being trusted -- see
 # ambe/AMBE_PLUS_2_NOTES.md for the real methodology and structural context.
-# Reference data only: AMBE+2 (DMR / Yaesu System Fusion) is NOT implemented in this codebase,
-# pending patent clearance -- see AMBE_PLUS_2_NOTES.md and
+# Reference data for AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate): implemented at
+# ../ambe_plus_2/, gated behind the `ambe_plus_2` Cargo feature (off by default, internal chip-
+# compatibility testing only pending real patent clearance) -- see AMBE_PLUS_2_NOTES.md and
 # docs/proposals/AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md.
 b3,G2,G3,G4
 0,0.526055,-0.328567,-0.304727

@@ -4,8 +4,9 @@
 # ambe/AMBE_PLUS_2_NOTES.md for the real methodology and structural context. Sibling files
 # half_rate_higher_order_b6/b7/b8.csv cover the other three coefficient groups this same annex
 # defines.
-# Reference data only: AMBE+2 (DMR / Yaesu System Fusion) is NOT implemented in this codebase,
-# pending patent clearance -- see AMBE_PLUS_2_NOTES.md and
+# Reference data for AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate): implemented at
+# ../ambe_plus_2/, gated behind the `ambe_plus_2` Cargo feature (off by default, internal chip-
+# compatibility testing only pending real patent clearance) -- see AMBE_PLUS_2_NOTES.md and
 # docs/proposals/AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md.
 b5,H1_1,H1_2,H1_3,H1_4
 0,0.264108,0.045976,-0.200999,-0.122344
