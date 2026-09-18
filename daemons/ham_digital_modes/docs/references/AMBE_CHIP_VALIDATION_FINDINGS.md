@@ -2364,3 +2364,21 @@ frame corroboration, and a direct comparison against the textbook `dequantize_fu
 formula's own shape) would either confirm or refute this candidacy with the same rigor `g0`'s gain
 identification received. Scripts committed (`analyze_u456_pitch_correlation.py`,
 `analyze_u6_amplitude.py`), reproducible from already-committed data with zero new chip time.
+
+**A real, significant weakening found immediately on closer inspection, disclosed rather than left
+standing**: the correlation analysis above used only the *last* of 8 captured frames per frequency.
+Checking all 8 frames per frequency (still zero chip time, same already-committed dataset) shows
+`u6` is **highly unstable below roughly 280Hz** -- 5 to 8 distinct values across just 8 frames at
+every frequency from 60 through 260Hz -- and only becomes genuinely frame-stable at 340Hz and above
+(2-3 distinct values, converging to a rock-solid `0` at 400Hz+). This is the same "chip's own
+encoder never fully converges to steady state on a pure tone at low frequencies" behavior already
+documented elsewhere in this investigation (the D-STAR harness's own doc comment; section 19's
+low-frequency oscillation), not a new problem -- but it means the strong Spearman correlation
+reported above is driven largely by "noisy/varied at low frequency, stable-near-zero at high
+frequency" rather than a clean, reliable per-frequency quantizer reading throughout the range.
+**The zero-amplitude-correlation finding stands independently** (that test used a single fixed,
+well-converged 200Hz tone, unaffected by this low-frequency instability), but "cleanest pitch
+candidate found this session" overstated how usable `u6`'s individual readings are below ~280Hz --
+downgraded here to "a real, amplitude-independent frequency-correlated signal, but noisy/unreliable
+per-frame below ~280Hz," a more accurate characterization pending a proper multi-frame-averaged or
+majority-vote re-analysis.
