@@ -135,6 +135,12 @@ impl Pitch {
         (l_est as i128 * self.n).div_euclid(self.d) as i32
     }
 
+    /// `b_hat_0 = floor(4 pi / omega0 - 39)` (Eq. 45), clamped below at 0 like the float `as u32` cast
+    /// (`4 pi / omega0 = 512 / u = 512 d / n`; exact integer arithmetic).
+    pub fn quantizer_b0(&self) -> u32 {
+        (512 * self.d - 39 * self.n).div_euclid(self.n).clamp(0, u32::MAX as i128) as u32
+    }
+
     /// `L_hat = floor(0.9254 * floor(pi / omega0 + 1/4))` (Eq. 31).
     pub fn harmonics_count(&self) -> u32 {
         let inner = (512 * self.d + self.n).div_euclid(4 * self.n);

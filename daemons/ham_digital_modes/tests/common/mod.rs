@@ -108,12 +108,12 @@ fn pearson(a: &[f64], b: &[f64]) -> f64 {
 
 /// Compares the fixed encoder's frames with the float encoder's for one file, decoding both with the float decoder
 /// (`make_decoder` builds a fresh one per stream). Accumulates into `p`.
-pub fn compare_streams(
+pub fn compare_streams<T: Copy + PartialEq>(
     p: &mut Parity,
-    fixed: &[u128],
-    float: &[u128],
-    view: impl Fn(u128) -> FrameView,
-    make_decoder: impl Fn() -> Box<dyn FnMut(u128) -> Option<[f64; 160]>>,
+    fixed: &[T],
+    float: &[T],
+    view: impl Fn(T) -> FrameView,
+    make_decoder: impl Fn() -> Box<dyn FnMut(T) -> Option<[f64; 160]>>,
 ) {
     if fixed.len() != float.len() {
         p.count_mismatch += 1;

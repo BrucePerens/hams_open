@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Fixed-point port of `ambe::float::tia_102_baba::prediction`'s decoder-side function
-//! (`reconstruct_log2_amplitude`) -- the encoder-side `prediction_residual` is not ported (encoding
-//! is out of scope for this decoder-focused port, same reasoning as TIA-102.BABA's pitch-estimation
-//! chain). `prediction_coefficient` is an exact table lookup (`L` only has 48 possible values,
-//! `9..=56`) rather than the float sibling's own piecewise formula, avoiding hand-transcribing Q16.16
-//! literals for a formula that's cheap to precompute exactly instead.
+//! Fixed-point port of `ambe::float::tia_102_baba::prediction`: the decoder-side `reconstruct_log2_amplitude` and the
+//! encoder-side `prediction_residual` (both built on the shared predicted/bias-correction terms).
+//! `prediction_coefficient` is an exact table lookup (`L` only has 48 possible values, `9..=56`) rather than the
+//! float sibling's own piecewise formula, avoiding hand-transcribing Q16.16 literals for a formula that's cheap to
+//! precompute exactly instead.
 
 use super::reconstruct_tables::PREDICTION_COEFFICIENT_Q16_16;
-use crate::ambe::fixed::general::explog::log2_q16;
+use crate::ambe::fixed::general::explog::{log2_q16, log2_q16_i64};
 use crate::ambe::fixed::general::fixed_ops::{div_q16, mul_q16};
 
 /// Same value as the float sibling's own `INITIAL_L_HAT_PREV` -- the spec's own stated
@@ -90,4 +89,19 @@ pub fn reconstruct_log2_amplitude_q16(
     let (predicted_q16, bias_correction_q16) =
         predicted_and_bias_correction_q16(l, l_hat_curr, l_hat_prev, previous_m_q16);
     t_hat_l_q16 + predicted_q16 - bias_correction_q16
+}
+
+/// The fixed-point equivalent of `prediction_residual` (Eq. 54): `T_hat_l = log2(M_hat_l) - predicted +
+/// bias_correction`, from the frame's own unquantized amplitude `unquantized_m_l_q16` (Q16.16, floored at one LSB
+/// so a silent harmonic gives a very negative but finite residual instead of `i32::MIN`).
+pub fn prediction_residual_q16(
+    l: u32,
+    unquantized_m_l_q16: i64,
+    l_hat_curr: u32,
+    l_hat_prev: u32,
+    previous_m_q16: &[i32],
+) -> i32 {
+    let (predicted_q16, bias_correction_q16) =
+        predicted_and_bias_correction_q16(l, l_hat_curr, l_hat_prev, previous_m_q16);
+    log2_q16_i64(unquantized_m_l_q16.max(1)) - predicted_q16 + bias_correction_q16
 }

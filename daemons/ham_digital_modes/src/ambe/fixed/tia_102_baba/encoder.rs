@@ -25,6 +25,7 @@ use super::pitch::{
     choose_initial_pitch_estimate, look_ahead_pitch_tracking, look_back_pitch_tracking, ErrorTable,
     PitchAnalysisFrame, DEFAULT_PITCH_INDEX,
 };
+use super::encode::{encode_frame, FrameState};
 use super::pitch_refinement::{refine_pitch, Pitch, RefinementFrame};
 use std::collections::VecDeque;
 
@@ -164,6 +165,64 @@ impl FrameAnalyzer {
 }
 
 impl Default for FrameAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Streaming fixed-point TIA-102.BABA encoder: fixed-point sibling of the float `tia_102_baba::encoder::Encoder`
+/// (same surface, 16-bit PCM in, `[u32; 8]` code vectors out), composing [`FrameAnalyzer`] with
+/// [`super::encode::encode_frame`]. Two frames of look-ahead delay; [`Encoder::finish`] flushes with silence.
+pub struct Encoder {
+    analyzer: FrameAnalyzer,
+    state: FrameState,
+    last_frame: Option<[u32; 8]>,
+    /// Frames for which analysis failed (degenerate pitch/`L_hat`) and the previous frame was repeated.
+    pub failed_frames: usize,
+}
+
+impl Encoder {
+    pub fn new() -> Self {
+        Self { analyzer: FrameAnalyzer::new(), state: FrameState::initial(), last_frame: None, failed_frames: 0 }
+    }
+
+    /// Shifts every frame's analysis centre by `samples` (may be negative) relative to `k*160`.
+    pub fn set_center_offset(&mut self, samples: i32) {
+        self.analyzer.set_center_offset(samples);
+    }
+
+    pub fn push_samples(&mut self, samples: &[i16]) {
+        self.analyzer.push_samples(samples);
+    }
+
+    /// Encodes the next frame if enough look-ahead has been pushed, else `None`.
+    pub fn next_frame(&mut self) -> Option<[u32; 8]> {
+        let a = self.analyzer.next_analysis()?;
+        match encode_frame(&a.refinement, &a.pitch, a.initial_pitch_error_q16, &self.state, false) {
+            Some((c, next_state)) => {
+                self.state = next_state;
+                self.last_frame = Some(c);
+                Some(c)
+            }
+            None => {
+                self.failed_frames += 1;
+                self.last_frame.or(Some([0; 8]))
+            }
+        }
+    }
+
+    /// Pads with silence so every pushed sample's frame can be emitted, and returns those remaining frames.
+    pub fn finish(&mut self) -> Vec<[u32; 8]> {
+        self.analyzer.finish_input();
+        let mut out = Vec::new();
+        while let Some(f) = self.next_frame() {
+            out.push(f);
+        }
+        out
+    }
+}
+
+impl Default for Encoder {
     fn default() -> Self {
         Self::new()
     }
