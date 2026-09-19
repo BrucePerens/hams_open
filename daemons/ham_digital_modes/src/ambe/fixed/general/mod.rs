@@ -6,6 +6,8 @@
 
 pub mod explog;
 mod explog_table;
+pub mod fixed_ops;
 pub mod isqrt;
+pub mod mbe_speech;
 pub mod trig;
 mod trig_table;

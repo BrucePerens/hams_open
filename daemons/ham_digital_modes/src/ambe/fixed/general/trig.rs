@@ -51,6 +51,16 @@ pub fn cos_q16(phase: u32) -> i32 {
     sin_q16(phase.wrapping_add(QUARTER_TURN))
 }
 
+/// Converts `x * pi` (for a Q16.16 `x`, which may be negative or span many turns) into this module's
+/// own `u32` phase convention, for callers whose own formula is naturally expressed as `cos(pi * x)`
+/// or `sin(pi * x)` (e.g. the MBE dequantize chain's own DCT sums) rather than as a phase directly.
+/// `pi` radians is exactly a half turn (`1u32 << 31`), so this is `x` scaled by that half-turn and
+/// wrapped -- the wrapping is exact and free (`u32` overflow *is* the modulo-2*pi reduction), even
+/// though `x` itself may be far outside `-2..2`.
+pub fn phase_from_pi_multiple_q16(x_q16: i32) -> u32 {
+    ((x_q16 as i64).wrapping_mul(1i64 << 31) >> 16) as u32
+}
+
 // No `#[cfg(test)]` module here: any test comparing this module's output against `f64::sin`/`cos`
 // needs floating point to compute the expected value, which would put `f64` tokens inside
 // `src/ambe/fixed` and defeat the whole-tree "zero floating point" check this crate enforces (see

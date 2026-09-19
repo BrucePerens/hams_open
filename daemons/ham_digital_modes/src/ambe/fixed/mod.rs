@@ -40,5 +40,7 @@
 //! it is the exact same code.
 #![deny(clippy::float_arithmetic)]
 
+#[cfg(feature = "ambe_plus_2")]
+pub mod ambe_plus_2;
 pub mod general;
 pub mod ratet27;
