@@ -19,7 +19,9 @@ use super::trig::cos_pi_frac;
 
 /// `round(0.65 * 65536)` -- the `Sum43`/`log2_Ml` recursion's own fixed blend-weight constant
 /// (mbelib's real `.65` literal, `AMBE_CHIP_VALIDATION_FINDINGS.md`'s own transcription history).
-const POINT_65_Q16_16: i64 = 42598;
+pub const POINT_65_Q16_16: i64 = 42598;
+/// `round(0.8 * 65536)`, the D-STAR predictor weight (`float::dstar::decode::PREDICTOR_RHO`).
+pub const POINT_80_Q16_16: i64 = 52429;
 /// `round(0.2046 * 65536)` -- the unvoiced scaling constant (mbelib's real `unvc` formula).
 const POINT_2046_Q16_16: i32 = 13409;
 
@@ -52,6 +54,8 @@ pub struct SpeechTables<'a> {
     pub hoc_b6_q16: &'a [[i32; 4]],
     pub hoc_b7_q16: &'a [[i32; 4]],
     pub hoc_b8_q16: &'a [[i32; 4]],
+    /// The amplitude predictor's weight in Q16.16: `POINT_65_Q16_16` for AMBE+2, `POINT_80_Q16_16` for D-STAR (the chip's value).
+    pub rho_q16: i64,
 }
 
 /// Persistent decoder state across frames, generic over every MBE-family mode -- the fixed-point
@@ -219,7 +223,7 @@ pub fn dequantize_speech(
     // sum43 currently carries two extra Q16.16 factors (delta_l and the log2_ml value); shift back
     // to one Q16.16 factor, then apply the *0.65/l scaling.
     let sum43_q16 = sum43 >> 16;
-    let sum43_scaled_q16 = ((sum43_q16 * POINT_65_Q16_16) >> 16) / (l as i64);
+    let sum43_scaled_q16 = ((sum43_q16 * tables.rho_q16) >> 16) / (l as i64);
 
     let sum_tl: i64 = tl[1..=l_usize].iter().map(|&v| v as i64).sum();
     let sum42_q16 = (sum_tl / (l as i64)) as i32;
@@ -234,8 +238,8 @@ pub fn dequantize_speech(
         let delta = delta_l_q16[h] as i64;
         let one_minus_delta = 65536 - delta;
         let ik = int_kl[h];
-        let c1 = (POINT_65_Q16_16 * one_minus_delta * (prev_at(&state.log2_ml_q16, ik) as i64)) >> 32;
-        let c2 = (POINT_65_Q16_16 * delta * (prev_at(&state.log2_ml_q16, ik + 1) as i64)) >> 32;
+        let c1 = (tables.rho_q16 * one_minus_delta * (prev_at(&state.log2_ml_q16, ik) as i64)) >> 32;
+        let c2 = (tables.rho_q16 * delta * (prev_at(&state.log2_ml_q16, ik + 1) as i64)) >> 32;
         log2_ml_q16[h] =
             (tl[h] as i64 + c1 + c2 - sum43_scaled_q16 + big_gamma_q16 as i64) as i32;
         let exp2_val = exp2_q16(log2_ml_q16[h]);

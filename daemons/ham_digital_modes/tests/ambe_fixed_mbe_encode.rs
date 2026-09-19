@@ -57,6 +57,7 @@ struct OwnedTables {
     lmprbl: Vec<[u32; 4]>,
     hoc: [Vec<[f64; 4]>; 4],
     even: bool,
+    rho: f64,
 }
 impl OwnedTables {
     fn view(&self) -> fl::ModeTables<'_> {
@@ -68,6 +69,7 @@ impl OwnedTables {
             lmprbl: &self.lmprbl,
             hoc: [&self.hoc[0], &self.hoc[1], &self.hoc[2], &self.hoc[3]],
             hoc_b8_even_only: self.even,
+            rho: self.rho,
         }
     }
 }
@@ -351,6 +353,7 @@ mod dstar_mode {
                 lmprbl: tables::LMPRBL.to_vec(),
                 hoc: [tables::HOC_B5.to_vec(), tables::HOC_B6.to_vec(), tables::HOC_B7.to_vec(), tables::HOC_B8.to_vec()],
                 even: true,
+                rho: float_decode::PREDICTOR_RHO,
             },
             l_table: &tables::L_TABLE,
             f0: float_decode::f0_from_b0,
@@ -411,6 +414,7 @@ mod ambe_plus_2_mode {
                 lmprbl: tables::LMPRBL.to_vec(),
                 hoc: [tables::HOC_B5.to_vec(), tables::HOC_B6.to_vec(), tables::HOC_B7.to_vec(), tables::HOC_B8.to_vec()],
                 even: false,
+                rho: 0.65,
             },
             l_table: &tables::L_TABLE,
             f0: table_f0,

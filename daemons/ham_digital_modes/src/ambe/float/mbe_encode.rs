@@ -13,7 +13,7 @@
 //! - `b5..b8`: nearest higher-order-coefficient rows per block (only the coefficients the decoder reads).
 //!
 //! The decoder recursion is `log2Ml[l] = Tl[l] + pred[l] - Sum43 + Gamma`, `Gamma = gamma - 0.5*log2(L) -
-//! mean(Tl)` (the mean of `Tl` cancels, so it is free), with `pred[l] = 0.65 * interp(previous log2Ml)`.
+//! mean(Tl)` (the mean of `Tl` cancels, so it is free), with `pred[l] = rho * interp(previous log2Ml)`.
 
 use std::f64::consts::{PI, SQRT_2};
 
@@ -27,6 +27,8 @@ pub struct ModeTables<'a> {
     pub hoc: [&'a [[f64; 4]]; 4],
     /// D-STAR/AMBE+2 `b8` only ever carries even indices (its low bit is always 0).
     pub hoc_b8_even_only: bool,
+    /// The mode's amplitude-predictor weight (`0.65` for AMBE+2, `dstar::decode::PREDICTOR_RHO` for D-STAR).
+    pub rho: f64,
 }
 
 /// What the frame's analysis wants the decoder to reproduce. `voiced` and `ml` are 1-indexed by harmonic (index 0
@@ -111,9 +113,9 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
         let delta = f - ik as f64;
         let interp = (1.0 - delta) * prev_at(prev, ik) + delta * prev_at(prev, ik + 1);
         sum43 += interp;
-        pred[h] = 0.65 * interp;
+        pred[h] = tables.rho * interp;
     }
-    sum43 *= 0.65 / l as f64;
+    sum43 *= tables.rho / l as f64;
 
     // Target log2Ml (undoing the unvoiced scaling the decoder applies), then x = log2Ml - pred.
     let unvc = 0.2046 / target.w0.sqrt();

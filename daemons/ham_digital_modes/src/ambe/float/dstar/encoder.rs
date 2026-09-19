@@ -58,6 +58,7 @@ impl Encoder {
             lmprbl: &tables::LMPRBL,
             hoc: [&tables::HOC_B5, &tables::HOC_B6, &tables::HOC_B7, &tables::HOC_B8],
             hoc_b8_even_only: true,
+            rho: crate::ambe::float::dstar::decode::PREDICTOR_RHO,
         };
         let q = quantize_speech(
             &SpeechTarget { l, w0, vuv_f0: f0 / super::decode::F0_CHIP_SCALE, voiced: &voiced, ml: &ml },

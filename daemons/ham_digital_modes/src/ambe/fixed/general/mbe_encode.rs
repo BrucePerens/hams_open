@@ -24,8 +24,6 @@ use super::fixed_ops::{mul_q16, TWO_PI_Q16_16};
 use super::mbe_speech::MbeDecoderState;
 use super::trig::cos_pi_frac;
 
-/// `round(0.65 * 65536)`, the decoder's blend weight (same constant as `mbe_speech`).
-const POINT_65_Q16_16: i64 = 42598;
 /// `round(sqrt(2) * 65536)`.
 const SQRT2_Q16_16: i32 = 92682;
 /// `round(0.2046 * 65536)`, the decoder's unvoiced scale.
@@ -45,6 +43,8 @@ pub struct ModeTables<'a> {
     pub hoc_q16: [&'a [[i32; 4]]; 4],
     /// D-STAR `b8` only ever carries even indices (its low bit is always 0).
     pub hoc_b8_even_only: bool,
+    /// The decoder's predictor weight in Q16.16 (see `mbe_speech::SpeechTables::rho_q16`).
+    pub rho_q16: i64,
 }
 
 /// What the frame's analysis wants the decoder to reproduce. `voiced`, `ml_q16` and `log2_ml_q16` are 1-indexed by
@@ -167,9 +167,9 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
         let one_minus_delta = 65536 - delta;
         let (p0, p1) = (prev_at(prev.log2_ml_q16, ik), prev_at(prev.log2_ml_q16, ik + 1));
         sum43 += one_minus_delta * p0 + delta * p1;
-        *slot = ((POINT_65_Q16_16 * one_minus_delta * p0) >> 32) + ((POINT_65_Q16_16 * delta * p1) >> 32);
+        *slot = ((tables.rho_q16 * one_minus_delta * p0) >> 32) + ((tables.rho_q16 * delta * p1) >> 32);
     }
-    let sum43_scaled = (((sum43 >> 16) * POINT_65_Q16_16) >> 16) / l64;
+    let sum43_scaled = (((sum43 >> 16) * tables.rho_q16) >> 16) / l64;
 
     // x = target log2Ml - pred; its mean sets the gain, the zero-mean remainder is Tl.
     let x: Vec<i64> = (0..=l).map(|h| if h == 0 { 0 } else { target.log2_ml_q16[h] as i64 - pred[h] }).collect();

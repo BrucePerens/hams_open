@@ -11,14 +11,28 @@ use super::unvoiced_synthesis::N;
 use crate::ambe::fixed::tia_102_baba::error_estimation::estimate_errors_q16;
 use crate::ambe::fixed::tia_102_baba::synthesis::SynthesisState;
 
+/// `round(0.12 * 65536)`: the output's high-frequency lift weight, `float::mbe_synthesis::HIGH_LIFT_WEIGHT`.
+const HIGH_LIFT_WEIGHT_Q16_16: i64 = 7864;
+
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,
     error_rate_prev_q16: i32,
+    lift_history: [i64; 2],
 }
 
 impl MbeSynthesizer {
     pub fn new() -> Self {
-        Self { synthesis: SynthesisState::new(), error_rate_prev_q16: 0 }
+        Self { synthesis: SynthesisState::new(), error_rate_prev_q16: 0, lift_history: [0; 2] }
+    }
+
+    fn lift(&mut self, frame: [i64; N]) -> [i64; N] {
+        let mut out = frame;
+        for (o, &x) in out.iter_mut().zip(frame.iter()) {
+            let second_difference = x - 2 * self.lift_history[0] + self.lift_history[1];
+            *o = x.saturating_add((second_difference.saturating_mul(HIGH_LIFT_WEIGHT_Q16_16)) >> 16);
+            self.lift_history = [x, self.lift_history[0]];
+        }
+        out
     }
 
     /// Synthesizes one speech frame. `voiced` and `ml_q16` are both 1-indexed by harmonic (index 0
@@ -37,12 +51,14 @@ impl MbeSynthesizer {
         }
         let errors = estimate_errors_q16(&[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0], self.error_rate_prev_q16);
         self.error_rate_prev_q16 = errors.rate_q16;
-        self.synthesis.synthesize_frame(&ml_q16[1..], w0_q16, &voiced[1..], &errors)
+        let frame = self.synthesis.synthesize_frame(&ml_q16[1..], w0_q16, &voiced[1..], &errors)?;
+        Some(self.lift(frame))
     }
 
     /// Repeats the previous frame's parameters (an erasure); `None` before any real frame has run.
     pub fn synthesize_repeat(&mut self) -> Option<[i64; N]> {
-        self.synthesis.synthesize_repeated_frame()
+        let frame = self.synthesis.synthesize_repeated_frame()?;
+        Some(self.lift(frame))
     }
 
     /// A silence frame: all zeros.

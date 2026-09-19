@@ -23,6 +23,7 @@ pub fn mode_tables() -> ModeTables<'static> {
         lmprbl: &LMPRBL,
         hoc_q16: [&HOC_B5_Q16_16, &HOC_B6_Q16_16, &HOC_B7_Q16_16, &HOC_B8_Q16_16],
         hoc_b8_even_only: false,
+        rho_q16: crate::ambe::fixed::general::mbe_speech::POINT_65_Q16_16,
     }
 }
 

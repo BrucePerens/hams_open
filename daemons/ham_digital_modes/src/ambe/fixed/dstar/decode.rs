@@ -58,6 +58,7 @@ pub enum DequantizedFrame {
 
 fn speech_tables() -> SpeechTables<'static> {
     SpeechTables {
+        rho_q16: crate::ambe::fixed::general::mbe_speech::POINT_80_Q16_16,
         vuv: &VUV,
         dg_q16: &DG_Q16_16,
         prba24_q16: &PRBA24_Q16_16,

@@ -19,9 +19,27 @@ use super::tia_102_baba::error_estimation::{estimate_errors, FrameErrors};
 use super::tia_102_baba::synthesis::SynthesisState;
 use super::tia_102_baba::unvoiced_synthesis::N;
 
+/// Weight of the second difference in the output's high-frequency lift `y[n] = x[n] + g*(x[n] - 2x[n-1] + x[n-2])`.
+/// The chip's D-STAR and AMBE+2 output is flat against this synthesis below about 2.4 kHz and then rises to +3.2 dB at
+/// 3.6 kHz (measured per harmonic, at three different pitches, with `examples/dstar_field_scan.rs`; a real-speech
+/// long-term spectrum agrees), which this two-tap-zero filter reproduces within about 1 dB.
+pub const HIGH_LIFT_WEIGHT: f64 = 0.12;
+
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,
     error_rate_prev: f64,
+    lift_history: [f64; 2],
+}
+
+impl MbeSynthesizer {
+    fn lift(&mut self, frame: [f64; N]) -> [f64; N] {
+        let mut out = frame;
+        for (o, &x) in out.iter_mut().zip(frame.iter()) {
+            *o = x + HIGH_LIFT_WEIGHT * (x - 2.0 * self.lift_history[0] + self.lift_history[1]);
+            self.lift_history = [x, self.lift_history[0]];
+        }
+        out
+    }
 }
 
 impl MbeSynthesizer {
@@ -29,6 +47,7 @@ impl MbeSynthesizer {
         Self {
             synthesis: SynthesisState::new(),
             error_rate_prev: 0.0,
+            lift_history: [0.0; 2],
         }
     }
 
@@ -53,12 +72,14 @@ impl MbeSynthesizer {
             return None;
         }
         let errors = self.errors_for(epsilon_c0, epsilon_c1);
-        self.synthesis.synthesize_frame(&ml[1..], w0, &voiced[1..], &errors)
+        let frame = self.synthesis.synthesize_frame(&ml[1..], w0, &voiced[1..], &errors)?;
+        Some(self.lift(frame))
     }
 
     /// Repeats the previous frame's parameters (an erasure); `None` before any real frame has run.
     pub fn synthesize_repeat(&mut self) -> Option<[f64; N]> {
-        self.synthesis.synthesize_repeated_frame()
+        let frame = self.synthesis.synthesize_repeated_frame()?;
+        Some(self.lift(frame))
     }
 
     /// A silence frame: all zeros, like mbelib's `mbe_synthesizeSilencef`.

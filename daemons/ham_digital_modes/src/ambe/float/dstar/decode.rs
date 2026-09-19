@@ -286,6 +286,12 @@ pub enum DequantizedFrame {
     Tone(TonePayload),
 }
 
+/// The weight of the previous frame's log amplitudes in the amplitude predictor. mbelib (and AMBE+2 half-rate) use `0.65`; the
+/// chip's D-STAR decoder settles with a per-frame step-response ratio of about `0.8`
+/// (`examples/dstar_field_scan.rs ... rho`: first-frame response identical, later increments shrink by 0.78-0.81 per
+/// frame on the chip versus 0.65-0.69 on mbelib's constant).
+pub const PREDICTOR_RHO: f64 = 0.8;
+
 /// Dequantizes one frame's decoded 49-bit `d` into real synthesis-ready parameters (or a tone
 /// frame's own payload), advancing `state` in place for the `Speech` case -- the direct,
 /// freshly-written equivalent of mbelib's own `mbe_decodeAmbe2400Parms`, verified stage by stage
@@ -431,7 +437,7 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
         };
         sum43 += (1.0 - deltal[h]) * prev_at(ik) + deltal[h] * prev_at(ik + 1);
     }
-    sum43 *= 0.65 / l as f64;
+    sum43 *= PREDICTOR_RHO / l as f64;
 
     let sum42: f64 = tl[1..=l as usize].iter().sum::<f64>() / l as f64;
     let big_gamma = gamma - 0.5 * (l as f64).log2() - sum42;
@@ -449,8 +455,8 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
                 .copied()
                 .unwrap_or(*state.log2_ml.last().unwrap_or(&0.0))
         };
-        let c1 = 0.65 * (1.0 - deltal[h]) * prev_at(intkl[h]);
-        let c2 = 0.65 * deltal[h] * prev_at(intkl[h] + 1);
+        let c1 = PREDICTOR_RHO * (1.0 - deltal[h]) * prev_at(intkl[h]);
+        let c2 = PREDICTOR_RHO * deltal[h] * prev_at(intkl[h] + 1);
         log2_ml[h] = tl[h] + c1 + c2 - sum43 + big_gamma;
         ml[h] = if voiced[h] {
             (0.693 * log2_ml[h]).exp()
