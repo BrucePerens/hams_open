@@ -6,9 +6,9 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
-## Executive summary (updated as of section 37) -- read this first
+## Executive summary (updated as of section 38) -- read this first
 
-This document has grown to 37 sections across a long, multi-session investigation. This summary
+This document has grown to 38 sections across a long, multi-session investigation. This summary
 exists so a reader (or a future session) doesn't have to read the whole thing to know where things
 stand. Every claim below is sourced to its own section; treat this summary as an index and status
 board, not a replacement for the underlying evidence.
@@ -64,12 +64,22 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    §34's own re-derivation found the naive "`L_hat`-dependent step size" hypothesis does not hold
    cleanly (identical `L_hat` values produced very different dither behavior at two frequencies), so
    this remains a genuinely open question, not just an unfinished derivation.
-5. **A newly found, real, unidentified `ECMODE_IN` feature at bit 8** (§36) -- a systematic sweep of
-   all 16 `ECMODE_IN` bits against a fixed stimulus found bit 8 measurably shifts `g1`/`g2`/`u4`/`u5`/
-   `u6`/`c7` to new value ranges (most likely noise suppression, echo cancellation, or companding,
-   named as existing-but-untested features in §21, though this project cannot confirm which without
-   DVSI's own bit-name table). Does not resolve `g3`'s own plateau (§21) -- `g3` stayed within its
-   already-known subspace under bit 8 -- but is a real, concrete, bounded lead of its own.
+5. **A newly found, real `ECMODE_IN` feature at bit 8, narrowed but not conclusively identified**
+   (§36, §38) -- a systematic sweep of all 16 `ECMODE_IN` bits found bit 8 measurably shifts
+   `g1`/`g2`/`u4`/`u5`/`u6`/`c7` on identical content, and reliably produces `g0=1597` across three
+   independent tests. A temporal abrupt-switch test found **zero transient** across a 90x amplitude
+   jump (evidence against a converging AGC specifically), leaving a static transform or some other
+   fixed-output behavior as the remaining candidates -- genuinely open, not resolved. A first
+   characterization attempt's "smooth monotonic boost toward a saturated ceiling" framing was caught
+   as overclaiming (a tautology plus a contaminated baseline measurement) and corrected in the same
+   section; chasing the contamination down further than "assumed settling shortfall" found it wasn't
+   that at all -- a direct decay test showed `g0` reaching the correct baseline in ~3 frames, then
+   spontaneously jumping to a second stable value at a highly reproducible frame count across two
+   independent runs. That's a genuine, separate finding in its own right (§38): even `g0`, one of
+   this document's most reliable blocks, can be multi-modal for an unvarying pure tone over a long
+   enough window, not just the already-documented blocks/frequencies. Full certainty on bit 8's
+   identity would need DVSI's own bit-name table. Does not resolve `g3`'s own plateau (§21) -- `g3`
+   stayed within its already-known subspace under bit 8.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -2897,3 +2907,93 @@ its own repeated `decode_block` loop, and re-ran it live against the real chip: 
 920/920 frames zero-error**, confirming the consolidation preserves exact behavior rather than
 silently changing it. The other ~14 examples are deliberately left as-is -- migrating every one of
 them would be churn without new validation value, not a step toward "duplicated in software."
+
+## 38. Bit 8 reliably produces `g0=1597` under multiple tests -- and chasing why the first amplitude probe's baseline column looked wrong turned up a genuinely new, reproducible chip behavior
+
+Section 36 found `ECMODE_IN` bit 8 real but couldn't distinguish noise suppression, echo
+cancellation, or companding. The first follow-up attempt (`examples/p25_ratet27_ecmode_
+bit8_amplitude_probe.rs`) ran a 16-point amplitude sweep, alternating `ECMODE_IN=0` ("baseline") and
+`ECMODE_IN=1<<8` back to back at each amplitude, and reported a "smooth, monotonically shrinking
+boost" from the baseline toward a "saturated ceiling" of `1597` -- **this framing overclaimed on two
+counts, both caught before being relied on further:**
+
+1. Since bit 8's own reading was a flat constant (`1597`) at every amplitude, the "delta" column was
+   arithmetically just `1597 - baseline`, i.e. exactly baseline's own already-known monotonic curve,
+   inverted. It carried zero information about bit 8 beyond the one real fact (the constant itself).
+   Calling `1597` a "saturated ceiling" under bit 8 also imported an inference: `g0` is a 12-bit
+   Golay data field with no intrinsic "loudest" meaning outside baseline's own documented curve --
+   the fact is "`g0` reads `1597` under bit 8," not "bit 8 pins `g0` to its ceiling."
+2. **The "baseline" column itself didn't match the already-committed `g0_long_settling_
+   amplitude_sweep.tsv`** (section 23/33's own confirmed curve) beyond the very first point -- e.g.
+   `1049` vs. the committed `1561` at amplitude 138.2. The originally-proposed explanation
+   (insufficient settling between the sweep's alternating baseline/bit-8 captures, failing to clear
+   an adaptive carryover from the immediately-preceding bit-8 excursion) was a plausible hypothesis,
+   not yet a confirmed one -- and directly testing it, below, showed the real explanation is more
+   interesting than that.
+
+**A single clean re-measurement first isolated the one solid fact.**
+`examples/p25_ratet27_ecmode_default_state_probe.rs`: one fixed amplitude (138.2, matching the
+discrepant point exactly), 300 frames of settling, three conditions in sequence from a fresh
+connection -- `ECMODE_IN` never touched at all (true power-on/reset default), `ECMODE_IN` explicitly
+`0x0000`, and `ECMODE_IN` explicitly `1<<8`. Untouched-default and explicit-zero both read `g0=1561`,
+identical to each other and matching the committed section 23 data exactly (ruling out "bit 8 is on
+by default" as an explanation for the discrepancy); `ECMODE_IN=1<<8` read `g0=1597`.
+
+**A temporal abrupt-switch test then ruled out a converging AGC specifically.**
+`examples/p25_ratet27_ecmode_bit8_abrupt_switch.rs` holds bit 8 on throughout, settles 250 frames at a
+quiet amplitude (`g0=1597`), then abruptly switches to a 90x louder tone with **no resettling**. If
+bit 8 were an AGC converging to a target level, the sudden jump should produce at least a brief
+transient before re-settling. It reads `g0=1597` in the very first frame after the switch, with zero
+visible transient across 20 frames -- evidence against a converging AGC, though it does not by
+itself distinguish a static transform from some other fixed-output behavior.
+
+**Directly testing the settling-shortfall hypothesis found it wrong, and something more interesting
+in its place.** `examples/p25_ratet27_ecmode_bit8_off_transient.rs` settles 300 frames at amplitude
+138.2 with bit 8 ON (`g0=1597`, confirmed), then switches `ECMODE_IN` to `0x0000` with **no change to
+the input signal** and logs `g0` for 120 frames (raw output committed as
+`ecmode_bit8_off_transient.txt`; the run below was independently reproduced a second time with an
+almost identical sequence, ruling out one-off noise):
+
+```
+frame 0:  1597   (config not yet applied)
+frame 1:  1652   (transient)
+frame 2:  1627   (transient)
+frames 3-11: 1561   (matches the clean baseline exactly -- reached in ~3 frames, not 60)
+frame 12: 2201   (one-frame spike)
+frames 13-119: 1049   (a second, different, stable value -- holds for the rest of the 120-frame log)
+```
+
+This directly refutes the settling-shortfall hypothesis: `g0` reaches the correct clean baseline
+(`1561`) within about 3 frames of switching bit 8 off, far faster than the original sweep's 60-frame
+settling window -- if under-settling were the whole story, the sweep's baseline readings should have
+been correct, not off by 512. Instead, **`g0` spontaneously jumps away from its own correct baseline
+value to a second, different stable value (`1049`) partway through the log, at a highly consistent
+frame count across two independent runs**, with a one-frame spike marking the transition. (`1049`
+itself was checked against this document's other data before drawing any conclusion from it: it is
+not a special or previously-flagged constant -- it also shows up as an ordinary value in unrelated
+content, e.g. real speech frames in `u_vector_speech_correlation_600frames.tsv` and a ramp stimulus
+in `all_stimuli_2687frames.tsv`. A coincidentally identical value in the unrelated
+`dtx_noise_levels_sweep.tsv` dataset was checked and does not indicate a real connection -- that
+dataset uses broadband noise content with `DTX_ENABLE=1`, a different stimulus and chip state
+entirely.) Two different "valid-looking" readings for the literal same, unchanging input, separated
+by a reproducible spike at a consistent frame count, is a new instance of this document's own
+repeatedly-documented finding that this chip's encoder does not always converge to one steady value
+on an unvarying pure tone (`ambe_dstar`'s own doc comment, invoked for `u6`/`u4`/several frequencies
+elsewhere in this document) -- extended here to show even `g0`, one of this document's most
+consistently "clean" and reliable blocks, is not immune to it at this specific amplitude, just on a
+longer timescale (dozens of frames) than the 8-frame capture window most tests in this document use
+to sample it. **The original sweep's `1049` "baseline" was, on this evidence, most likely a genuine,
+real state this exact stimulus can settle into over an extended window -- not a contamination
+artifact -- and the reproducible ~12-frame transition point is a real, concrete, unexplained
+observation left for whoever next investigates this chip's longer-timescale gain behavior.**
+
+**Honest current state**: bit 8 reliably produces `g0=1597` (confirmed independently three separate
+ways: the original sweep, the clean single-point re-measurement, and the abrupt-switch test's settled
+segment) and shows no transient on an abrupt 90x amplitude jump. Whether it is a static compander, a
+fixed reference-value override, or something else is not resolved by this document's own testing and
+would need DVSI's own bit-name table to settle. Separately, and just as concretely: this
+investigation of bit 8 surfaced real evidence that `g0` itself can take on more than one stable value
+for literally the same unchanging input over a long enough observation window, at least at this one
+amplitude -- a genuine, reproducible finding in its own right, independent of what bit 8 turns out to
+be. `u4`'s own values under bit 8 are noisy in the same way `u4` is noisy everywhere else in this
+document (section 34) and are not treated as informative about bit 8's identity specifically.
