@@ -6,13 +6,18 @@
 
 import collections
 import logging
+import os
 import odoo
 from odoo.tests.common import HttpCase, get_db_name
 from odoo.modules.registry import Registry
 import psycopg2
 from psycopg2 import sql
 from odoo.tools import mute_logger, _
-from odoo.addons.zero_sudo.tests.common import SafePatchMixin, wait_for_werkzeug_threads
+from odoo.addons.zero_sudo.tests.common import (
+    SafePatchMixin,
+    wait_for_werkzeug_threads,
+    wait_for_background_futures,
+)
 import unittest.mock
 
 _logger = logging.getLogger(__name__)
@@ -225,6 +230,44 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # even if an ORM AccessError occurs during the leak verification phase.
         # Wait for any lingering backend HTTP threads to finish, preventing teardown serialization failures.
         wait_for_werkzeug_threads(timeout=5.0)
+
+        # night_shift_todo/medium/test-harness-lingering-http-transaction-teardown-
+        # serialization-fd450979.md fix: the real conflicting writer is not an HTTP
+        # thread at all (active=[] at every teardown, confirmed live -- see
+        # wait_for_background_futures()'s own docstring in common.py). It is production
+        # code's own Cursor.postcommit -> ThreadPoolExecutor.submit() pattern
+        # (action_suspend_user_websites() -> _async_unpublish_content, triggered by this
+        # test's own self.env.cr.commit() above in the test body) opening a separate
+        # real connection and committing to the same row this teardown is about to
+        # DELETE. Wait for it to actually finish BEFORE the rollback below resets our
+        # own snapshot, so the next snapshot this cursor takes already sees that
+        # background commit instead of racing it.
+        wait_for_background_futures(timeout=10.0)
+
+        # night_shift_todo/medium/test-harness-lingering-http-transaction-teardown-
+        # serialization-fd450979.md diagnostic pass: right before the unlink/cleanup loop
+        # (which is where the "could not serialize access due to concurrent update" has
+        # been observed), log a one-shot snapshot of every OTHER backend on this database
+        # that is idle-in-transaction, and how long it has been open. Gated behind
+        # HAMS_TRACE_PG_THREADS=1, never raises, and changes nothing about the real
+        # teardown -- a pure read-only diagnostic query.
+        if os.environ.get("HAMS_TRACE_PG_THREADS") == "1":
+            try:
+                own_pid = self.cr._cnx.get_backend_pid()
+                self.cr.execute(
+                    "SELECT pid, state, now() - xact_start AS xact_age, "
+                    "left(query, 200) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND pid != %s "
+                    "AND state = 'idle in transaction'",
+                    (own_pid,),
+                )
+                rows = self.cr.fetchall()
+                _logger.warning(
+                    "[PGTRACE] _real_teardown pre-cleanup own_pid=%s idle_in_txn=%s",
+                    own_pid, rows,
+                )
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("[PGTRACE] idle-in-transaction snapshot failed: %s", e)
 
         try:
             # Rollback any lingering, uncommitted test state to drop REPEATABLE READ

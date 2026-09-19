@@ -7,6 +7,7 @@
 import psutil
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, invalidate_model_cache
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
+import concurrent.futures
 import contextlib
 import ctypes
 import glob
@@ -244,18 +245,29 @@ _active_werkzeug_threads = set()
 _original_process_request_thread = (
     werkzeug.serving.ThreadedWSGIServer.process_request_thread
 )
+_HAMS_TRACE_PG_THREADS = os.environ.get("HAMS_TRACE_PG_THREADS") == "1"
 
 
 # [@ANCHOR: zero_sudo:patched_process_request_thread]
 def _patched_process_request_thread(self, request, client_address, *args, **kwargs):
     t = threading.current_thread()
     _active_werkzeug_threads.add(t)
+    if _HAMS_TRACE_PG_THREADS:
+        _logger.warning(
+            "[PGTRACE] thread-add name=%s ident=%s client=%s active_count=%d",
+            t.name, t.ident, client_address, len(_active_werkzeug_threads),
+        )
     try:
         return _original_process_request_thread(
             self, request, client_address, *args, **kwargs
         )
     finally:
         _active_werkzeug_threads.discard(t)
+        if _HAMS_TRACE_PG_THREADS:
+            _logger.warning(
+                "[PGTRACE] thread-discard name=%s ident=%s active_count=%d",
+                t.name, t.ident, len(_active_werkzeug_threads),
+            )
 
 
 werkzeug.serving.ThreadedWSGIServer.process_request_thread = (
@@ -266,6 +278,11 @@ werkzeug.serving.ThreadedWSGIServer.process_request_thread = (
 # [@ANCHOR: zero_sudo:wait_for_werkzeug_threads]
 def wait_for_werkzeug_threads(timeout=5.0):
     """Wait for all tracked background Werkzeug request threads to finish. Kill if they time out."""
+    if _HAMS_TRACE_PG_THREADS:
+        _logger.warning(
+            "[PGTRACE] wait_for_werkzeug_threads entry: active=%s",
+            [(t.name, t.ident) for t in _active_werkzeug_threads],
+        )
     start_time = time.time()
     for t in list(_active_werkzeug_threads):
         if t is threading.current_thread():
@@ -306,6 +323,86 @@ def wait_for_werkzeug_threads(timeout=5.0):
                 _logger.error(
                     "Exception while trying to kill Werkzeug thread %s: %s", t.name, e
                 )
+    if _HAMS_TRACE_PG_THREADS:
+        _logger.warning(
+            "[PGTRACE] wait_for_werkzeug_threads exit: still_active=%s",
+            [(t.name, t.ident) for t in _active_werkzeug_threads],
+        )
+
+
+_pending_background_futures = set()
+# Future carries no reference back to the callable it wraps (that lives on the
+# executor's internal _WorkItem, not the Future), so name it ourselves at submit time
+# for a useful message if wait_for_background_futures() ever has to report a stall.
+_pending_background_future_names = {}
+_pending_background_futures_lock = threading.Lock()
+_original_threadpool_submit = concurrent.futures.ThreadPoolExecutor.submit
+
+
+# [@ANCHOR: zero_sudo:tracked_threadpool_submit]
+def _tracked_threadpool_submit(self, fn, *args, **kwargs):
+    # night_shift_todo/medium/test-harness-lingering-http-transaction-teardown-
+    # serialization-fd450979.md root cause: the real conflicting writer behind
+    # "could not serialize access due to concurrent update" was never an HTTP/werkzeug
+    # thread at all -- a live repro (HAMS_TRACE_PG_THREADS=1) showed
+    # `_active_werkzeug_threads` was EMPTY at every one of test_04's teardowns
+    # (`wait_for_werkzeug_threads`'s own entry/exit trace, `still_active=[]` throughout).
+    # The actual writer is production code:
+    # `user_websites.models.res_users_moderation.action_suspend_user_websites()`
+    # unconditionally defers `_async_unpublish_content` to `self.env.cr.postcommit`,
+    # which -- once the test's own `self.env.cr.commit()` runs it -- submits it to
+    # `user_websites.models.res_users.BACKGROUND_EXECUTOR`, a process-wide
+    # `concurrent.futures.ThreadPoolExecutor`. That function opens its OWN real
+    # `registry.cursor()` (a genuinely separate connection/backend, since
+    # RealTransactionCase.setUp() replaces `self.registry.cursor` for the whole shared
+    # Registry singleton) and commits `website_published = False` to the exact
+    # `website_page` row the test's own teardown then tries to DELETE. No mechanism
+    # anywhere waited for that background job before the leak-check's cleanup ran --
+    # this is that mechanism, generic to ANY ThreadPoolExecutor-submitted background
+    # work anywhere in the codebase, not just this one call site.
+    future = _original_threadpool_submit(self, fn, *args, **kwargs)
+    with _pending_background_futures_lock:
+        _pending_background_futures.add(future)
+        _pending_background_future_names[future] = getattr(fn, "__qualname__", repr(fn))
+
+    def _on_done(f):
+        with _pending_background_futures_lock:
+            _pending_background_futures.discard(f)
+            _pending_background_future_names.pop(f, None)
+
+    future.add_done_callback(_on_done)
+    return future
+
+
+concurrent.futures.ThreadPoolExecutor.submit = _tracked_threadpool_submit
+
+
+# [@ANCHOR: zero_sudo:wait_for_background_futures]
+def wait_for_background_futures(timeout=10.0):
+    """Wait for any concurrent.futures.ThreadPoolExecutor work submitted anywhere in this
+    process (e.g. a Cursor.postcommit-deferred async job that opens its own real,
+    separate database connection -- see `_tracked_threadpool_submit`'s own comment for
+    the concrete example this was built for) to finish, before a RealTransactionCase's
+    own teardown starts a fresh snapshot and runs its leak-check/cleanup DELETEs against
+    rows that background job may still be writing. Best-effort: a job that is still
+    running after `timeout` is logged loudly (so a real stall is attributable, not
+    silently swallowed) and this function returns anyway -- it must never hang a test
+    run indefinitely over a background job that never finishes.
+    """
+    with _pending_background_futures_lock:
+        pending = list(_pending_background_futures)
+    if not pending:
+        return
+    done, not_done = concurrent.futures.wait(pending, timeout=timeout)
+    if not_done:
+        with _pending_background_futures_lock:
+            names = [_pending_background_future_names.get(f, "?") for f in not_done]
+        _logger.warning(
+            "wait_for_background_futures: %d background ThreadPoolExecutor job(s) "
+            "(%s) still running after %.1fs -- proceeding anyway; a teardown "
+            "leak-check racing them is still possible.",
+            len(not_done), names, timeout,
+        )
 
 
 # 🚨 NATIVE SCREENSHOT RESCUE 🚨
