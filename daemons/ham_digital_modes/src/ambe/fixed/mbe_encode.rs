@@ -3,6 +3,11 @@
 //! AMBE+2 encoders: fixed-point sibling of `ambe::float::mbe_encode::analyze_at_pitch`. The
 //! quantization half of that float module is out of scope here.
 
+use crate::ambe::fixed::general::fixed_ops::{div_q16, mul_q16, TWO_PI_Q16_16};
+use crate::ambe::fixed::general::mbe_encode::{
+    quantize_speech, target_log2_ml_q16, ModeTables, PrevState, QuantizedSpeech, SpeechTarget,
+};
+use crate::ambe::fixed::general::mbe_speech::MbeDecoderState;
 use crate::ambe::fixed::tia_102_baba::encoder::FrameAnalysis;
 use crate::ambe::fixed::tia_102_baba::pitch_refinement::{Pitch, RefinementFrame};
 use crate::ambe::fixed::tia_102_baba::spectral_amplitude::estimate_spectral_amplitudes_q16;
@@ -70,4 +75,32 @@ pub fn analyze_frame_at_pitch(
     state: &mut AnalysisState,
 ) -> (Vec<bool>, Vec<i64>) {
     analyze_at_pitch(&frame.refinement, frame.initial_pitch_error_q16, pitch, l, state)
+}
+
+/// Analysis and quantization of one frame at an already-chosen pitch, shared by the D-STAR and AMBE+2 streaming
+/// encoders: analyses voicing/amplitudes at the decoder's own `w0` (`w0_q32`, radians/sample Q32, the table entry for
+/// the chosen `b0`), converts them to the decoder's log2 domain and quantizes them against `prev`, the mirror of the
+/// decoder state. `f0_q16` is the table fundamental in cycles/sample (Q16.16). `w0` and the V/UV pitch are derived
+/// exactly as the fixed decoder derives them (`mul_q16(f0, 2*pi)` and `div_q16(w0, 2*pi)`), so the search inverts the
+/// fixed decoder.
+pub fn analyze_and_quantize(
+    frame: &FrameAnalysis,
+    l: u32,
+    f0_q16: i32,
+    w0_q32: i64,
+    tables: &ModeTables,
+    prev: &MbeDecoderState,
+    state: &mut AnalysisState,
+) -> QuantizedSpeech {
+    let w0_q16 = mul_q16(f0_q16, TWO_PI_Q16_16);
+    let vuv_f0_q16 = div_q16(w0_q16, TWO_PI_Q16_16);
+    let pitch = Pitch::from_omega0_q30(w0_q32 >> 2);
+    let (voiced, ml) = analyze_frame_at_pitch(frame, &pitch, l, state);
+    let ml_q16: Vec<i32> = ml.iter().map(|&m| m.clamp(0, i32::MAX as i64) as i32).collect();
+    let log2_ml_q16 = target_log2_ml_q16(w0_q16, &voiced, &ml_q16);
+    quantize_speech(
+        &SpeechTarget { l, vuv_f0_q16, voiced: &voiced, ml_q16: &ml_q16, log2_ml_q16: &log2_ml_q16 },
+        &PrevState::from_decoder_state(prev),
+        tables,
+    )
 }

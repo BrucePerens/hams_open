@@ -22,7 +22,7 @@
 //! tone's amplitude exponentially ([`dstar_tone_amplitude_q16`]); AMBE+2 tone frames always come out
 //! at 24000 rms in total ([`AMBE_PLUS_2_TONE_RMS`]).
 
-use super::explog::exp2_q16;
+use super::explog::{exp2_q16, log2_q16_i64};
 use super::isqrt::isqrt_u64;
 use super::trig::sin_q16;
 use super::unvoiced_synthesis::N;
@@ -49,6 +49,15 @@ pub fn dstar_tone_amplitude_q16(volume: u32) -> i64 {
     } else {
         (base + (1i64 << (-n - 1))) >> -n
     }
+}
+
+/// The inverse of [`dstar_tone_amplitude_q16`]: the `volume` field for a desired per-tone peak amplitude (Q16.16 PCM
+/// units), `round(180 + log2(A / 3268) / DSTAR_LOG2_SLOPE)` clamped to `0..=255`. Port of the float
+/// `dstar_tone_volume_for_amplitude` (the amplitude is floored at 1, like the float).
+pub fn dstar_tone_volume_for_amplitude_q16(amplitude_q16: i64) -> u32 {
+    let lg = log2_q16_i64(amplitude_q16.max(1 << 16)) as i64 - log2_q16_i64(3268i64 << 16) as i64;
+    let steps_q16 = (lg << 32) / DSTAR_LOG2_SLOPE_Q32; // log2 ratio (Q16) / slope (Q32) -> volume steps, Q16
+    ((180 * 65536 + steps_q16 + 32768) >> 16).clamp(0, 255) as u32
 }
 
 /// AMBE+2 half-rate: the chip's total output level for any tone frame, rms in PCM units.
@@ -143,6 +152,15 @@ mod tests {
             assert!((a - peak).abs() * 25 < peak, "volume {v}: model {a} vs chip {peak}");
         }
         assert_eq!(dstar_tone_amplitude_q16(180) >> 16, 3268);
+    }
+
+    #[test]
+    fn dstar_tone_volume_inverts_the_amplitude_curve() {
+        for v in 60u32..=230 {
+            assert_eq!(dstar_tone_volume_for_amplitude_q16(dstar_tone_amplitude_q16(v)), v, "volume {v}");
+        }
+        assert_eq!(dstar_tone_volume_for_amplitude_q16(0), dstar_tone_volume_for_amplitude_q16(1 << 16));
+        assert_eq!(dstar_tone_volume_for_amplitude_q16(i64::MAX >> 8), 255);
     }
 
     #[test]
