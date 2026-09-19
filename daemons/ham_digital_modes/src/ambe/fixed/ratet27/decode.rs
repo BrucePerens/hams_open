@@ -22,7 +22,8 @@ use crate::ambe::fixed::general::unvoiced_synthesis::N;
 use crate::ambe::float::ratet27::bit_prioritization::{
     deprioritize_bits, extract_fundamental_frequency_quantizer, DeprioritizedBits,
 };
-use crate::ambe::float::ratet27::fec::{golay_decode, hamming_decode};
+use crate::ambe::float::ratet27::fec::golay_decode;
+use crate::ambe::float::ratet27::ratet27_fec::hamming_decode_chip;
 use crate::ambe::float::ratet27::tables::{gain_bit_allocation, higher_order_bit_allocation};
 
 /// `round(1.0 * 65536)` -- Annex A's own `M~_l(-1) = 1` (unity, not silent) initial history value, in
@@ -85,9 +86,9 @@ impl DecoderState {
         let (u1, epsilon_1) = golay_decode(c[1]);
         let (u2, epsilon_2) = golay_decode(c[2]);
         let (u3, epsilon_3) = golay_decode(c[3]);
-        let (u4, epsilon_4) = hamming_decode(c[4] as u16);
-        let (u5, epsilon_5) = hamming_decode(c[5] as u16);
-        let (u6, epsilon_6) = hamming_decode(c[6] as u16);
+        let (u4, epsilon_4) = hamming_decode_chip(c[4] as u16);
+        let (u5, epsilon_5) = hamming_decode_chip(c[5] as u16);
+        let (u6, epsilon_6) = hamming_decode_chip(c[6] as u16);
         let u7 = c[7];
 
         let u_vectors: [u32; 8] = [

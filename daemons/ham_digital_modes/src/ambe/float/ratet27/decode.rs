@@ -22,7 +22,11 @@
 //!    "successfully" -- a modulated-then-corrected codeword still looks like a valid parameter set,
 //!    just the wrong one, which is why this went undetected until PCM was compared against the
 //!    chip's own decoded output for the first time. `nu_hat_7 = c_hat_7` (no FEC ever, unaffected
-//!    either way).
+//!    either way). **`c_hat_4..c_hat_6` are decoded with the chip's own Hamming labeling
+//!    ([`super::ratet27_fec::hamming_decode_chip`]), not the textbook one** -- section 23 of that same
+//!    findings document had recorded the difference, but this decoder kept the textbook code until a live
+//!    run showed it reporting false corrected errors in 576 of 600 clean chip Hamming words and recovering
+//!    different data for 377 of them (`tests/ambe_ratet27_chip_hamming_labeling.rs`).
 //! 3. Together with `epsilon_0`, the corrected-error counts from this step feed
 //!    [`super::error_estimation::estimate_errors`].
 //! 4. **Bootstrap `b_hat_0`** directly from `u_hat_0`/`u_hat_7` alone
@@ -55,7 +59,8 @@ use super::bit_prioritization::{
 use super::error_estimation::{
     estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
 };
-use super::fec::{golay_decode, hamming_decode};
+use super::fec::golay_decode;
+use super::ratet27_fec::hamming_decode_chip;
 use super::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
 };
@@ -155,9 +160,9 @@ impl DecoderState {
         let (u1, epsilon_1) = golay_decode(c[1]);
         let (u2, epsilon_2) = golay_decode(c[2]);
         let (u3, epsilon_3) = golay_decode(c[3]);
-        let (u4, epsilon_4) = hamming_decode(c[4] as u16);
-        let (u5, epsilon_5) = hamming_decode(c[5] as u16);
-        let (u6, epsilon_6) = hamming_decode(c[6] as u16);
+        let (u4, epsilon_4) = hamming_decode_chip(c[4] as u16);
+        let (u5, epsilon_5) = hamming_decode_chip(c[5] as u16);
+        let (u6, epsilon_6) = hamming_decode_chip(c[6] as u16);
         let u7 = c[7]; // No FEC (fec.rs's own doc comment): no decode, no error count.
 
         let u_vectors: [u32; 8] = [

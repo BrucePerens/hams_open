@@ -221,9 +221,9 @@ pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
         fec::golay_encode(u[1] as u16),
         fec::golay_encode(u[2] as u16),
         fec::golay_encode(u[3] as u16),
-        fec::hamming_encode(u[4] as u16) as u32,
-        fec::hamming_encode(u[5] as u16) as u32,
-        fec::hamming_encode(u[6] as u16) as u32,
+        ratet27_fec::hamming_encode_chip(u[4] as u16) as u32,
+        ratet27_fec::hamming_encode_chip(u[5] as u16) as u32,
+        ratet27_fec::hamming_encode_chip(u[6] as u16) as u32,
         u[7],
     ]
 }
