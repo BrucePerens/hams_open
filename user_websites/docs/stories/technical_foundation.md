@@ -29,6 +29,8 @@ The module provides several dropzones for UI extension:
 
 - **Navbar Actions:** [@ANCHOR: dropzone_navbar_actions]
 
+- **Navbar Owner Lookup:** a member-owned record's navbar resolves its owner through the service account, so logged-out visitors and other members can load the page ([@ANCHOR: mixin_navbar_profile_user]). Verified by `[@ANCHOR: test_navbar_member_owned_record_public_visitor]`.
+
 - **Portal Templates:** [@ANCHOR: dropzone_templates]
 
 - **Snippets Sidebar:** [@ANCHOR: dropzone_snippets]

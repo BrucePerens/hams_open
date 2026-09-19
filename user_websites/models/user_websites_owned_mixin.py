@@ -34,6 +34,32 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         index=True,
     )
 
+    def _user_websites_navbar_profile_user(self):
+        # [@ANCHOR: mixin_navbar_profile_user]
+
+        # Verified by [@ANCHOR: test_navbar_member_owned_record_public_visitor]
+        """The owner of this record, browsed as the user_websites service account.
+
+        Called by layout_inherit_user_navbar on every website page whose
+        main_object carries this mixin. The navbar reads the owner's
+        website_slug, name, avatar and write_date, and neither the public user
+        nor a portal member may read another member's res.users row, so doing
+        that through self.owner_user_id was a 403 for every visitor except the
+        owner. website.page never showed it only because Odoo serves pages with
+        a sudo'd main_object; website_blog's post page and ham_events' event
+        page pass the visitor's own record. This resolves the owner the same
+        way this module's controllers resolve profile_user.
+
+        Only the owner's id is read in the visitor's own environment, from the
+        owned record itself, which the visitor was already allowed to load.
+        """
+        self.ensure_one()
+        owner_id = self.owner_user_id.id
+        env_svc = self.env["zero_sudo.security.utils"]._get_service_env(
+            "user_websites.user_websites_service_account"
+        )
+        return env_svc["res.users"].browse(owner_id) if owner_id else False
+
     @api.model
     def _check_proxy_ownership_create(self, vals_list):
         # [@ANCHOR: mixin_proxy_ownership_create]

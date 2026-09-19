@@ -208,6 +208,82 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
             "The dynamic user navigation bar must render on the page.",
         )
 
+    def test_07b_navbar_member_owned_record_public_visitor(self):
+        # [@ANCHOR: test_navbar_member_owned_record_public_visitor]
+
+        # Tests [@ANCHOR: xpath_rendering_navbar_head]
+
+        # Tests [@ANCHOR: mixin_navbar_profile_user]
+        """A published record owned by a member must render for visitors who
+        cannot read res.users: logged out, and logged in as another member.
+
+        The navbar head resolves the owner from main_object.owner_user_id.
+        website.page is served with a sudo'd main_object, so it never hit
+        this; any controller passing the visitor's own record (website_blog's
+        post page here, ham_events' event page in hams_com) got a 403 because
+        the template read the owner's website_slug as the visitor.
+        """
+        owner, other = [
+            self.env["res.users"].create(
+                {
+                    "name": f"Navbar {tag} Member",
+                    "login": f"navbar-{tag}-member",
+                    "password": f"navbar-{tag}-member",
+                    "email": f"navbar-{tag}@example.com",
+                    "website_slug": f"navbar-{tag}-member",
+                    "group_ids": [
+                        (
+                            6,
+                            0,
+                            [
+                                self.env.ref("base.group_portal").id,
+                                self.env.ref(
+                                    "user_websites.group_user_websites_user"
+                                ).id,
+                            ],
+                        )
+                    ],
+                }
+            )
+            for tag in ("owner", "other")
+        ]
+        website = self.env["website"].get_current_website()
+        blog = self.env["blog.blog"].create(
+            {
+                "name": "Navbar Owner Blog",
+                "website_id": website.id,
+                "owner_user_id": owner.id,
+            }
+        )
+        post = self.env["blog.post"].create(
+            {
+                "name": "Navbar Owner Post",
+                "blog_id": blog.id,
+                "is_published": True,
+                "website_id": website.id,
+                "owner_user_id": owner.id,
+            }
+        )
+        # The helper itself, called as a visitor who cannot read res.users.
+        resolved = post.with_user(other)._user_websites_navbar_profile_user()
+        self.assertEqual(resolved.id, owner.id)
+        self.assertEqual(resolved.website_slug, "navbar-owner-member")
+        unowned = self.env["blog.post"].new({"name": "Navbar Unowned Post"})
+        self.assertFalse(unowned._user_websites_navbar_profile_user())
+
+        url = post.website_url
+        slug_meta = b'name="user_websites_slug" content="navbar-owner-member"'
+
+        for login in (None, other.login):
+            with self.subTest(visitor=login or "public"):
+                self.authenticate(login, login)
+                response = self.url_open(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(b"Navbar Owner Post", response.content)
+                self.assertIn(slug_meta, response.content)
+                self.assertIn(b'id="userNavbarNav"', response.content)
+                self.assertIn(b"Navbar owner Member", response.content)
+
     def test_08_backend_views_rendering(self):
         # [@ANCHOR: test_user_websites_backend_views_rendering]
         """Verify that standard backend views compile without error."""

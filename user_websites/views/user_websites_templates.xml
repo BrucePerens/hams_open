@@ -43,7 +43,10 @@
             <!-- [@ANCHOR: xpath_rendering_navbar_head] -->
 
             <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_navbar_head] -->
-            <t t-set="profile_user" t-value="profile_user or (main_object.owner_user_id if main_object and 'owner_user_id' in main_object else False)"/>
+            <!-- Not main_object.owner_user_id directly: that reads the owner's res.users row as
+                 the visitor, a 403 for the public user and for other members. See
+                 _user_websites_navbar_profile_user() on the owned mixin. -->
+            <t t-set="profile_user" t-value="profile_user or (main_object._user_websites_navbar_profile_user() if main_object and 'owner_user_id' in main_object and 'user_websites_group_id' in main_object else False)"/>
             <t t-set="profile_group" t-value="profile_group or (main_object.user_websites_group_id if main_object and 'user_websites_group_id' in main_object else False)"/>
             <t t-set="resolved_slug" t-value="resolved_slug or (profile_user.website_slug if profile_user else (profile_group.website_slug if profile_group else False))"/>
             <t t-set="page_type" t-value="page_type or ('blog' if 'blog' in request.httprequest.path else 'home')"/>
