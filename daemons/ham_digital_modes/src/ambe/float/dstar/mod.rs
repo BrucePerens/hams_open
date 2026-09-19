@@ -88,6 +88,7 @@ pub mod decode;
 pub mod encode;
 pub mod interleave;
 pub mod quantize;
+pub mod synthesis;
 pub mod tables;
 pub mod whitening;
 

@@ -80,6 +80,7 @@ pub mod decode;
 pub mod encode;
 pub mod interleave;
 pub mod quantize;
+pub mod synthesis;
 pub mod tables;
 
 /// Total frame size: `24 + 23 + 11 + 14`, identical to `ambe_dstar::FRAME_BITS`.
