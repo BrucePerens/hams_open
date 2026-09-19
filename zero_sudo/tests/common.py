@@ -733,6 +733,41 @@ class SafePatchMixin:
         self.addCleanup(patcher.stop)
         return mock_obj
 
+    # [@ANCHOR: zero_sudo:safe_patch_object_cm]
+    def safe_patch_object_cm(self, target, attribute, *args, **kwargs):
+        """Same safety checks and defaults as safe_patch_object(), but returns the
+        unstarted patcher instead of starting it and registering `self.addCleanup`.
+
+        For the one real case safe_patch_object() cannot serve: a patch that must be
+        undone at a narrower point than full test-method teardown -- e.g. only for the
+        duration of one call that drives a browser through several navigations in a
+        single profile (a real, existing need in this codebase; see
+        test_shack_sw_behavior_tour.py's own `_run_steps_in_one_browser_profile()` and
+        test_shack_offline_isolation_tour.py's `_drive()`, both of which undo a
+        BusBus._sendone/WebsocketConnectionHandler.websocket_allowed patch within one
+        `with contextlib.ExitStack() as atexit:` block's own LIFO unwind, interleaved
+        with a bus-kill callback and browser cleanup -- addCleanup's own full-teardown
+        timing would leave the patch active well past that point, and would double-patch
+        on a second call to the same helper within one test method).
+
+        The caller owns starting and stopping it -- pass the return value straight to
+        `ExitStack.enter_context()` (a patcher object already implements the context
+        manager protocol: `__enter__` is `.start()`, `__exit__` is `.stop()`), or use it
+        as a plain `with` context manager directly. Never call raw `patch`/`patch.object`
+        in a test file for this -- that is exactly what the burn list's own "Native patch
+        decorators and context managers are forbidden" rule exists to catch, and this
+        method is the sanctioned way to get the same real behavior without it.
+        """
+        if "Cursor" in type(target).__name__:
+            raise RuntimeError(
+                "Mocking database cursors is strictly forbidden as it corrupts "
+                "the test teardown sequence. See safe_patch_object()'s own error "
+                "message for the real alternative."
+            )
+        if not args and "new" not in kwargs and "new_callable" not in kwargs:
+            kwargs["new_callable"] = DiagnosticMock
+        return patch.object(target, attribute, *args, **kwargs)
+
     @classmethod
     # [@ANCHOR: zero_sudo:get_callsign]
     def get_callsign(cls, key="W1AW"):
