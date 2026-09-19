@@ -220,7 +220,8 @@ impl DecoderState {
         };
         let l_hat = self.forced_l_hat.unwrap_or_else(|| match self.l_alpha {
             Some(a) => ((a * std::f64::consts::PI / omega0_tilde).round() as u32).clamp(9, 56),
-            None => harmonics_count(omega0_tilde),
+            // The chip's pitch map spans b0 0..=255, whose Eq. 47 count leaves the 9..=56 range Annex F/G define.
+            None => harmonics_count(omega0_tilde).clamp(9, 56),
         });
         let k_hat = frequency_bands_count(l_hat);
 

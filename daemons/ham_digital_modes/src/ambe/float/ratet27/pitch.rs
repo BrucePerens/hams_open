@@ -201,7 +201,11 @@ impl PitchAnalysisFrame {
         let w4: f64 = (-150i32..=150)
             .map(|j| initial_pitch_window(j).powi(4))
             .sum();
-        (s - p * r_sum) / (s * (1.0 - p * w4))
+        let denominator = s * (1.0 - p * w4);
+        if denominator.abs() < 1e-12 {
+            return 1.0; // all-zero (silent) input: no pitch evidence, worst error instead of 0/0 = NaN
+        }
+        (s - p * r_sum) / denominator
     }
 }
 
@@ -300,13 +304,15 @@ pub fn look_ahead_pitch_tracking(
         n += 1;
     }
     // "the smallest of these sub-multiples is checked... the next largest sub-multiple is checked
-    // next" -- smallest first, matching the loop order above (p_hat_0/2 < p_hat_0/3 is false; higher
-    // n gives a SMALLER raw value, so the vector above is already smallest-first as built).
-    for &candidate in &submultiples {
+    // next" (section 5.1.4). Higher `n` gives a SMALLER value, so the vector above is largest-first
+    // (`p_hat_0/2` first) and must be walked in reverse to test the smallest sub-multiple first.
+    for &candidate in submultiples.iter().rev() {
         let ce_f_candidate = ce_f_at(candidate);
-        let ratio = ce_f_candidate / ce_f_p_hat_0;
-        let satisfies_18 = ce_f_candidate <= 0.85 && ratio <= 1.7;
-        let satisfies_19 = ce_f_candidate <= 0.4 && ratio <= 3.5;
+        // The ratio tests only make sense against a positive reference error; a non-positive one can
+        // flip the inequality's sign and accept a strictly worse candidate, so they fail then.
+        let ratio_ok = |limit: f64| ce_f_p_hat_0 > 0.0 && ce_f_candidate / ce_f_p_hat_0 <= limit;
+        let satisfies_18 = ce_f_candidate <= 0.85 && ratio_ok(1.7);
+        let satisfies_19 = ce_f_candidate <= 0.4 && ratio_ok(3.5);
         let satisfies_20 = ce_f_candidate <= 0.05;
         if satisfies_18 || satisfies_19 || satisfies_20 {
             return (candidate, ce_f_candidate);
