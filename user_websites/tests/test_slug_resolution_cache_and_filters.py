@@ -246,7 +246,16 @@ class TestSlugResolutionCacheAndFilters(RealTransactionCase):
                 f"Writing {field} changes what the content routing view "
                 f"returns, so it must invalidate the res.users cache.",
             )
-            self.assertEqual(notify.call_args.args[1], "res.users")
+            notified = [call.args[1] for call in notify.call_args_list]
+            self.assertIn("res.users", notified)
+            # The suspension flag is also read by WebsitePage's own
+            # @distributed_cache() page-id lookup, so it evicts that too --
+            # and no other field may.
+            self.assertEqual(
+                "website.page" in notified,
+                field == "is_suspended_from_websites",
+                f"Writing {field} notified {notified}.",
+            )
 
         notify.reset_mock()
         user.write({"name": "Renamed But Not Rerouted"})

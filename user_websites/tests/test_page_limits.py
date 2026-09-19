@@ -215,3 +215,74 @@ class TestPageLimits(RealTransactionCase):
             ),
             "A suspended owner's page must not resolve via direct URL lookup.",
         )
+
+    def test_05_direct_suspension_write_evicts_the_cached_page_id(self):
+        # Tests [@ANCHOR: user_websites:COMM_get_page_id_by_url]
+        # Tests [@ANCHOR: user_websites:COMM_res_users_write]
+        """_get_page_id_by_url() checks the owner's suspension flag only when
+        it POPULATES its cache entry. A direct `is_suspended_from_websites`
+        write (not the suspend/pardon actions, which evict on their own) used
+        to leave the already-resolved page id served by that worker."""
+        page = self.env["website.page"].create(
+            {
+                "url": "/direct-suspend-write-user-test",
+                "name": "Direct Suspend Write Test",
+                "type": "qweb",
+                "owner_user_id": self.user_limited.id,
+                "website_published": True,
+            }
+        )
+        self.env.flush_all()
+        self.env.cr.commit()
+        self.assertEqual(
+            self.env["website.page"]._get_page_id_by_url(
+                "/direct-suspend-write-user-test", False
+            ),
+            page.id,
+            "Precondition: the page resolves (and is now cached).",
+        )
+
+        self.user_limited.write({"is_suspended_from_websites": True})
+        # The eviction runs as a postcommit callback, so a real commit is needed.
+        self.env.cr.commit()
+        self.assertFalse(
+            self.env["website.page"]._get_page_id_by_url(
+                "/direct-suspend-write-user-test", False
+            ),
+            "A directly-suspended owner's page must stop resolving, not stay "
+            "served from the cache entry populated before the suspension.",
+        )
+
+    def test_06_direct_group_suspension_write_evicts_the_cached_page_id(self):
+        # Tests [@ANCHOR: user_websites:COMM_get_page_id_by_url]
+        """Same as test_05, for a group-owned page and the group's own flag."""
+        group = self.env["user.websites.group"].create(
+            {"name": "Direct Suspend Group", "website_slug": "directsuspendgrp"}
+        )
+        page = self.env["website.page"].create(
+            {
+                "url": "/direct-suspend-write-group-test",
+                "name": "Direct Suspend Write Group Test",
+                "type": "qweb",
+                "user_websites_group_id": group.id,
+                "website_published": True,
+            }
+        )
+        self.env.flush_all()
+        self.env.cr.commit()
+        self.assertEqual(
+            self.env["website.page"]._get_page_id_by_url(
+                "/direct-suspend-write-group-test", False
+            ),
+            page.id,
+            "Precondition: the page resolves (and is now cached).",
+        )
+
+        group.write({"is_suspended_from_websites": True})
+        self.env.cr.commit()
+        self.assertFalse(
+            self.env["website.page"]._get_page_id_by_url(
+                "/direct-suspend-write-group-test", False
+            ),
+            "A directly-suspended group's page must stop resolving.",
+        )

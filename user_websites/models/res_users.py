@@ -339,6 +339,18 @@ class ResUsers(models.Model):
         ):
             notify_model_invalidation(self.env, "res.users")
 
+        # WebsitePage._get_page_id_by_url() is a second @distributed_cache()
+        # consumer of the suspension flag: it checks
+        # owner_user_id.is_suspended_from_websites at cache-POPULATION time,
+        # so a page id resolved before a suspension keeps being served by
+        # that worker until something evicts it. action_suspend_user_websites()
+        # / action_pardon_user_websites() evict it themselves, but a direct
+        # field write (an admin view, an import, a future moderation flow)
+        # did not. Doing it here, on the field write itself, closes that for
+        # every caller.
+        if "is_suspended_from_websites" in vals:
+            notify_model_invalidation(self.env, "website.page")
+
         # --- Content Lifecycle Policy ---
         # Adversarial security review, 2026-09-09: this block used to run
         # BEFORE super().write(vals) above, i.e. before the access-controlled

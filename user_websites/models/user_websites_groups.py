@@ -363,6 +363,13 @@ class UserWebsitesGroup(models.Model):
                 raise ValidationError(_("The Group Website Slug must be unique and valid."))
             raise
 
+        # WebsitePage._get_page_id_by_url() checks
+        # user_websites_group_id.is_suspended_from_websites at cache-population
+        # time; evict it on ANY write of the flag, not only via the
+        # suspend/pardon actions. (Mirrors res.users.write().)
+        if "is_suspended_from_websites" in vals:
+            notify_model_invalidation(self.env, "website.page")
+
         # --- 301 Redirect Automation ---
         if "website_slug" in vals:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
