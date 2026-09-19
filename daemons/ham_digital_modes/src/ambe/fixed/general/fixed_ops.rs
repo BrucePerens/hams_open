@@ -34,6 +34,45 @@ pub fn div_q16(a: i32, b: i32) -> i32 {
     quotient.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
+/// `a * b` for an `i64` value `a` with 16 fractional bits (`a_real = a / 65536`, the same "wide
+/// container, same convention" idea [`super::explog::log2_q16_i64`] documents) and an ordinary Q16.16
+/// `i32` scalar `b`, returning the product with the same 16-fractional-bit `i64` convention. Uses an
+/// `i128` intermediate rather than `i64` -- `a` can be large enough (RATET(27) enhancement's own
+/// `R_M0`/`S_E`) that `a * b` alone can exceed `i64::MAX` before the final shift, and an `i128`
+/// product costs nothing extra here (it is not a floating-point type; this crate's own "no floating
+/// point whatsoever" rule is about `f32`/`f64`, not integer width).
+pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64 {
+    let product = (a as i128) * (b_q16 as i128);
+    let rounded = if product >= 0 { product + (1i128 << 15) } else { product - (1i128 << 15) };
+    (rounded >> 16) as i64
+}
+
+/// `a / b` for two `i64` values sharing the same 16-fractional-bit convention [`mul_q16_i64`]/
+/// [`super::explog::log2_q16_i64`] use, returning a Q16.16 `i32` ratio -- for computing a
+/// dimensionless ratio (RATET(27) enhancement's own `k = R_M1/R_M0`, bounded to `[-1,1]` by
+/// Cauchy-Schwarz, or its final `gamma = sqrt(R_M0/E_enh)` rescale) from two values whose own
+/// individual magnitudes may not fit an `i32`, even though their *ratio* always will. Normalizes
+/// both operands by the same right-shift first so `numerator << 16` cannot overflow `i64` regardless
+/// of `a`/`b`'s own magnitude, then divides exactly as [`div_q16`] does. Saturates to `i32::MAX`/
+/// `i32::MIN` on division by zero (before or after normalizing), matching [`div_q16`]'s own
+/// never-panic convention.
+pub fn div_q16_i64(a: i64, b: i64) -> i32 {
+    if b == 0 {
+        return if a >= 0 { i32::MAX } else { i32::MIN };
+    }
+    let max_abs = a.unsigned_abs().max(b.unsigned_abs());
+    let bits = if max_abs == 0 { 0 } else { 64 - max_abs.leading_zeros() as i32 };
+    let shift = (bits - 47).max(0);
+    let a_s = a >> shift;
+    let b_s = b >> shift;
+    if b_s == 0 {
+        return if a_s >= 0 { i32::MAX } else { i32::MIN };
+    }
+    let numerator = a_s << 16;
+    let quotient = numerator / b_s;
+    quotient.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+}
+
 /// `sqrt(x)` for a non-negative Q16.16 `x`, returning a Q16.16 result -- exact to the nearest
 /// representable Q16.16 value (built directly on [`isqrt_u64`]'s own exact integer result, not an
 /// iterative approximation). Returns `0` for a negative `x` (matching this crate's own "never panic"

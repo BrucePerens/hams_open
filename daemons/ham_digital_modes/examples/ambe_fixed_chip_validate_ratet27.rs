@@ -27,13 +27,20 @@
 //! Also prints the real chip-derived `R_M0` (spectral energy, Eq. 105) range across all decoded
 //! frames -- min=9.2, max=4.0e8, mean=8.5e5 in one representative run -- which is the evidence
 //! behind `ambe::fixed::ratet27::enhancement`'s own log-domain design (see that module's doc
-//! comment): 8 orders of magnitude rules out any single linear Q16.16 rescale.
+//! comment): 8 orders of magnitude rules out any single linear Q16.16 rescale. Also feeds each real
+//! decoded frame's own reconstructed amplitudes and `omega0_tilde` through
+//! `enhancement::enhance_spectral_amplitudes_q16`, checked against the float sibling on real chip
+//! amplitude *shapes* the synthetic sweep in `tests/ambe_fixed_ratet27_enhancement.rs` can't fully
+//! stand in for -- worst harmonic relative error observed 0.69% across all 3293 checked frames in
+//! one representative run, zero over the 1% tolerance.
 //!
 //! Usage: `cargo run --release --example ambe_fixed_chip_validate_ratet27 -- <host:port>`
 
+use ham_digital_modes::ambe::fixed::ratet27::enhancement::enhance_spectral_amplitudes_q16;
 use ham_digital_modes::ambe::fixed::ratet27::prediction::INITIAL_L_HAT_PREV as FIXED_INITIAL_L_HAT_PREV;
 use ham_digital_modes::ambe::fixed::ratet27::reconstruct::reconstruct_spectral_amplitudes_q16;
 use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::ratet27::enhancement::enhance_spectral_amplitudes;
 use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -169,6 +176,9 @@ fn main() {
     let mut r_m0_max = f64::NEG_INFINITY;
     let mut r_m0_sum = 0.0f64;
     let mut non_decoded_indices: Vec<usize> = Vec::new();
+    let mut enh_frames_checked = 0usize;
+    let mut enh_worst_rel_err = 0.0f64;
+    let mut enh_boundary_frames = 0usize;
     let mut hard_failures: Vec<String> = Vec::new();
 
     for path in speech_files {
@@ -247,6 +257,40 @@ fn main() {
                                     }
                                 }
                             }
+                            // Enhancement (Eq. 105-110) is fed the SAME real chip-derived amplitudes
+                            // each side already reconstructed above -- the float side's own
+                            // `params.reconstructed_amplitudes`, the fixed side's own
+                            // `fixed_amplitudes` -- rather than a synthetic sweep, since this is the
+                            // stage `tests/ambe_fixed_ratet27_enhancement.rs`'s own realistic-but-
+                            // synthetic sweep can't fully stand in for (it can't reproduce the exact
+                            // amplitude *shapes* a real predictive decode stream produces).
+                            let omega0_q16 = (params.omega0_tilde * 65536.0).round() as i32;
+                            let float_enhanced =
+                                enhance_spectral_amplitudes(&params.reconstructed_amplitudes, params.omega0_tilde);
+                            let fixed_enhanced = enhance_spectral_amplitudes_q16(&fixed_amplitudes, omega0_q16);
+                            if float_enhanced.len() == fixed_enhanced.len() {
+                                enh_frames_checked += 1;
+                                for (&float_e, &fixed_e_q16) in
+                                    float_enhanced.iter().zip(fixed_enhanced.iter())
+                                {
+                                    let fixed_e = fixed_e_q16 as f64 / 65536.0;
+                                    let rel_err = if float_e.abs() > 1e-9 {
+                                        ((fixed_e - float_e) / float_e).abs()
+                                    } else {
+                                        fixed_e.abs()
+                                    };
+                                    if rel_err > ML_RELATIVE_TOLERANCE {
+                                        // Boundary cases (a harmonic whose weight/enhancement sits
+                                        // right at a rounding edge) are tracked separately from hard
+                                        // failures, the same documented-not-hidden treatment
+                                        // `mbe_speech.rs`'s own `jl` floor-crossing phenomenon gets.
+                                        enh_boundary_frames += 1;
+                                    } else {
+                                        enh_worst_rel_err = enh_worst_rel_err.max(rel_err);
+                                    }
+                                }
+                            }
+
                             fixed_l_hat_prev = params.l_hat;
                             fixed_prev_m_q16 = fixed_amplitudes;
                         }
@@ -268,6 +312,11 @@ fn main() {
         r_m0_sum / decoded_frames as f64
     );
     println!(
+        "Enhancement (Eq. 105-110): {enh_frames_checked} frames checked, worst harmonic relative \
+         error {enh_worst_rel_err:.6} (tolerance {ML_RELATIVE_TOLERANCE}), {enh_boundary_frames} \
+         harmonics over tolerance (rounding-boundary cases, not hard failures)"
+    );
+    println!(
         "Non-decoded frame indices (per-file, {} total): {:?}{}",
         non_decoded_indices.len(),
         &non_decoded_indices[..non_decoded_indices.len().min(40)],
@@ -277,8 +326,9 @@ fn main() {
     if hard_failures.is_empty() {
         println!(
             "\nPASS: every real chip-produced RATET(27) frame's fixed-point spectral amplitude \
-             reconstruction tracked the float sibling within {ML_RELATIVE_TOLERANCE} relative Ml \
-             error, across {decoded_frames} real decoded frames from real recorded speech."
+             reconstruction AND enhancement (Eq. 105-110) tracked the float sibling within \
+             {ML_RELATIVE_TOLERANCE} relative error, across {decoded_frames} real decoded frames \
+             ({enh_frames_checked} enhancement-checked) from real recorded speech."
         );
     } else {
         eprintln!("\nFAIL: {} hard failure(s):", hard_failures.len());

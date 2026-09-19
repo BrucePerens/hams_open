@@ -14,6 +14,40 @@
 
 use super::explog_table::{EXP2_FRAC_LEN, EXP2_FRAC_Q16_16, LOG2_FRAC_LEN, LOG2_FRAC_Q16_16};
 
+/// `log2(x)` in Q16.16, for a positive `x` given as an **`i64` with the same 16 fractional bits**
+/// as everywhere else in this crate (`x_real = x / 65536`) rather than a plain `i32` -- for a caller
+/// whose own value's *integer* range genuinely exceeds `i32` (RATET(27) enhancement's own `R_M0`/
+/// `S_E`, which real chip data shows spans roughly 9 to 4x10^8, see
+/// `ambe::fixed::ratet27::enhancement`'s own doc comment), while its needed *fractional* precision
+/// is still just 16 bits. Mirrors [`log2_q16`]'s own table lookup and interpolation exactly (same
+/// table, same 8-bit index/22-bit interpolation window), just locating the leading-1 bit within a
+/// 64-bit input instead of a 32-bit one -- never panics: a non-positive `x` returns `i32::MIN`, the
+/// same sentinel [`log2_q16`] uses.
+pub fn log2_q16_i64(x: i64) -> i32 {
+    if x <= 0 {
+        return i32::MIN;
+    }
+    let xu = x as u64;
+    let msb = 63 - xu.leading_zeros(); // position of the leading 1 bit, 0..=62 (x fits in a positive i64)
+
+    // Normalize so the leading 1 sits at bit 30, exactly as `log2_q16` does for its own `u32` input
+    // -- the same table and interpolation window apply regardless of how many bits `x` started with.
+    let shift = 30i32 - msb as i32;
+    let normalized: u64 = if shift >= 0 { xu << shift } else { xu >> (-shift) };
+    let frac_bits = (normalized & ((1u64 << 30) - 1)) as u32;
+    let index = (frac_bits >> 22) as usize;
+    let sub_frac = (frac_bits & ((1 << 22) - 1)) as i64;
+
+    let a = LOG2_FRAC_Q16_16[index.min(LOG2_FRAC_LEN - 2)] as i64;
+    let b = LOG2_FRAC_Q16_16[(index + 1).min(LOG2_FRAC_LEN - 1)] as i64;
+    let interp = a + (((b - a) * sub_frac) >> 22);
+
+    // log2(xu) [xu treated as a plain integer] = msb + interp/65536. `x` is itself Q16.16-in-an-i64
+    // (x_real = xu / 2^16), so log2(x_real) = log2(xu) - 16, same adjustment `log2_q16` applies.
+    let log2_raw_q16 = (msb as i64) * 65536 + interp;
+    (log2_raw_q16 - (16i64 << 16)) as i32
+}
+
 /// `log2(x)` in Q16.16, for a positive Q16.16 `x`. Never panics: a non-positive `x` (log2 is
 /// undefined for zero, complex for negative) returns `i32::MIN` as a saturating "negative infinity"
 /// sentinel, matching this crate's own established "never panic across the full input range"
@@ -89,8 +123,10 @@ pub fn exp2_q16(y: i32) -> i32 {
 }
 
 /// `round(log2(e) * 65536)` -- `e`'s own base-2 logarithm, the constant that converts a natural
-/// exponent into a base-2 one: `exp(x) = 2^(x * log2(e))`.
-const LOG2_E_Q16_16: i32 = 94548;
+/// exponent into a base-2 one: `exp(x) = 2^(x * log2(e))`. `pub` (not just used internally by
+/// [`exp_q16`]) since a caller building its own log-domain computation around a natural-log-based
+/// spec formula (RATET(27) enhancement's own `V_M`, Eq. 112) needs the same conversion.
+pub const LOG2_E_Q16_16: i32 = 94548;
 
 /// `exp(x)` in Q16.16, for a Q16.16 `x` -- via `exp2_q16(x * log2(e))`, since this crate's own
 /// primitive table is base-2. Inherits [`exp2_q16`]'s own documented precision floor and saturation

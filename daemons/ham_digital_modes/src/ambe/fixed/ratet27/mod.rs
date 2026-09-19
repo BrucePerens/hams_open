@@ -11,6 +11,7 @@
 //! rather than duplicated here -- only the parameter dequantization and synthesis math genuinely
 //! needs a fixed-point port.
 
+pub mod enhancement;
 pub mod error_estimation;
 pub mod parameter_encoding;
 pub mod prediction;
