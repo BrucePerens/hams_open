@@ -25,13 +25,16 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
   `examples/ambe_chip_validate_ambe_plus_2.rs`. Ordinary speech, DTX-silence, and tone/DTMF frames
   (`ECMODE_IN`'s `TD_ENABLE` bit) are all now fully validated (§40) -- the chip genuinely detects a
   tone/DTMF digit but serializes it into the `Erasure` range instead of its own spec-defined `Tone`
-  range, and the digit's own identity (and, for a plain single tone, its frequency) is fully
-  recoverable via DVSI's own documented `TONE_IDX` field (`AMBE-3000R` manual Table 103/104) --
+  range (confirmed live, via forced generation, to be genuinely unreachable on this chip/rate, not
+  merely undecoded), and the digit's own identity (and, for a plain single tone, its frequency) is
+  fully recoverable via DVSI's own documented `TONE_IDX` field (`AMBE-3000R` manual Table 103/104,
+  the same underlying identifiers as Annex J's own `f0`/`l1`/`l2` synthesis table) --
   `ambe_plus_2::decode::classify_b0`/`decode_tone_idx`/`dtmf_digit_from_tone_idx`, with its own
   dedicated pass/fail validator, `examples/ambe_chip_validate_ambe_plus_2_dtmf.rs` (all 16 DTMF
   digits plus 4 single tones, all 8 captured frames each, cross-checked against the independent
-  `TONE_FRAME` ground-truth bit as well as `b0`). A genuinely separate, still-open item: `TONE_IDX`'s
-  own `Call Progress` range (`0xA0`-`0xA2`) was never tested (item 6 below).
+  `TONE_FRAME` ground-truth bit as well as `b0`). DVSI's own `Call Progress` tones were also tested
+  (via forced generation): they read back as a second, distinct `Erasure` sub-code, `b0=122` (not
+  `120`) -- see item 6 below for the real, still-open reconciliation question this raised.
 - **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
   `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29). Consolidated
   into one reusable entry point, `ambe::ratet27_frame::decode_frame`, tying the FEC layer together
@@ -105,27 +108,30 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    control that the readback mechanism works correctly on this rate. **AMBE+2 half-rate's chip
    genuinely detects the tone -- this is not a detection failure -- it just doesn't serialize that
    detection into `b0`'s documented `Tone` range the way D-STAR or the spec text describe.**
-   **RESOLVED in full, later in §40, for both DTMF and single tones**: the detected tone's own
-   identity *is* fully recoverable from the `Erasure` frame's other bits -- and turns out to be
-   DVSI's own separately documented `TONE_IDX` field (`AMBE-3000R Vocoder Chip Users Manual` Table
-   103/104, a different document from the one that named `TONE_FRAME`), found first by direct bit
+   **RESOLVED in full, later in §40, for detected DTMF, detected single tones, and (via forced
+   generation) call-progress tones and the `b0=126/127` question itself**: the detected tone's own
+   identity *is* fully recoverable from the `Erasure` frame's other bits -- DVSI's own documented
+   `TONE_IDX` field (`AMBE-3000R Vocoder Chip Users Manual` Table 103/104), found first by direct bit
    analysis of real captures and only afterward matched to the manual's own table. DTMF maps
    `0x80 | nibble`; a single tone maps `round(f0/31.25Hz)` -- both confirmed exactly against real
    captures (16 DTMF digits, 26 single-tone captures across 8 frequencies and 4 amplitudes) and
-   chip-validated live, 160/160 (`examples/ambe_chip_validate_ambe_plus_2_dtmf.rs`). **What remains
-   open is narrow and different from what was originally suspected**: `TONE_IDX`'s own `Call
-   Progress` range (`0xA0`-`0xA2`, `0xFF`) was never tested, and the frame's internal redundancy
-   structure (the field's high nibble is fully copied only twice, not four times, since a would-be
-   third copy's bits are shared with `b0`'s own marker requirement) has only been exercised by values
-   whose high nibble happens not to conflict. This is **not** the same question as Annex J's own
-   entirely separate, still-undecoded `Tone`-frame parameters (`b0=126/127`, a different document,
-   for a frame kind this rate's `TD_ENABLE` path was never observed to reach at all) --
-   `ambe_plus_2::decode::DequantizedFrame::Tone`'s own already-disclosed gap there stands unchanged.
-   **Checked against mbelib's own reference decoder, not just this codebase**: it doesn't decode
-   Annex J's own tone-frame content either -- `mbe_decodeAmbe2450Parms` returns immediately on
-   `b0 ∈ {126,127}` without reading any payload bits, and the caller synthesizes silence for it
-   exactly like Erasure, so there is no existing reference implementation to consult
-   for that field's bit-scatter; deriving it would be original work.
+   chip-validated live, 160/160 (`examples/ambe_chip_validate_ambe_plus_2_dtmf.rs`). **Annex J's own
+   `f0`/`l1`/`l2` table is the same underlying tone-identifier space, not a second, separate,
+   still-mysterious one** -- `l1*f0`/`l2*f0` reconstruct the real DTMF/call-progress frequencies at
+   the matching index, so Annex J is best understood as the decoder-side synthesis recipe for
+   whichever identifier ends up in a frame. **`b0=126/127` was directly tested via forced generation
+   (DVSI's own `TONE` field, bypassing the detector entirely, `examples/p25_ambe_plus_2_forced_tone_
+   probe.rs`) and never observed** -- forced DTMF and forced single tones both read back `b0=120`,
+   exactly like every detection-triggered capture; `FrameKind::Tone` is now understood to be
+   unreachable on this chip/rate, not merely undecoded. The same forced-tone mechanism also found a
+   second, genuinely distinct `Erasure` sub-code: forcing DVSI's own `Call Progress` tones
+   (dial/ring/busy) reads back `b0=122`, decoding as Annex J's own `ID=160/161/162`. **One real,
+   disclosed discrepancy remains, not yet reconciled**: forcing a specific `TONE_IDX` for DTMF or
+   call-progress reads back a *different* number (Annex J's own larger native `ID`, not the
+   `TONE_IDX` that was sent) -- single tones are unaffected since the two numberings coincide there.
+   This does not affect the *detected*-DTMF finding's own live-validated correctness (128/128, in
+   `TONE_IDX`'s own numbering, confirmed directly) -- it is a secondary discovery about the *forced*-
+   generation path specifically, recorded honestly rather than smoothed over.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -3426,15 +3432,47 @@ RATET(27) and D-STAR already had, plus single-tone frequency identification neit
 modes needed -- closing what had been the one remaining "no known field decodes it" gap in this
 document.
 
-**What this still leaves open, narrower than before**: `TONE_IDX`'s own `Call Progress` range
-(`0xA0` dial tone, `0xA1` ring tone, `0xA2` busy tone, `0xFF` inactive/invalid) was never tested --
-those higher-valued high nibbles (`0xA`) would be the first real test of whether the 3rd,
-`b0`-entangled high-nibble copy can even represent them (its low 3 bits are forced to `0` by `b0`'s
-own marker, and `0xA`'s low 3 bits are `010`, non-zero -- a real, as-yet-unobserved potential
-conflict). This is **not** the same open item as Annex J's own separate, still-undecoded `Tone`-frame
-parameters (`FrameKind::Tone`, `b0=126/127` -- a different table, in a different document, for a
-different, genuinely spec-defined frame kind this rate's `TD_ENABLE` path was never observed to
-reach).
+**Correction to the paragraph above, found immediately afterward**: Annex J's own tone-frame
+parameter table (`f0`/`l1`/`l2`, `AMBE_PLUS_2_NOTES.md`) is **not** a second, separate, still-mysterious
+encoding from `TONE_IDX` -- they are the same underlying tone identifiers. Checked directly:
+`l1 * f0` and `l2 * f0` reconstruct the real DTMF frequencies at the *same* index (e.g. Annex J row
+128, `f0=78.5, l1=12, l2=17`, gives `12*78.5=942 Hz` / `17*78.5=1334.5 Hz`, matching DTMF `'0'`'s own
+`941/1336 Hz`), and the same holds for every DTMF row 128-143. Annex J is the *decoder-side synthesis
+recipe* (two sinusoids at harmonics `l1` and `l2` of a fundamental `f0`) for whichever tone
+identifier ends up in a frame -- not an independent mystery. This means `FrameKind::Tone`'s
+"not decoded" gap is, in principle, now closeable with a table lookup plus two sinusoids, not a
+bit-scatter derivation -- not built here, since the frame kind it would apply to was never observed
+(next paragraph).
+
+**A decisive follow-up, using a mechanism found directly in DVSI's manual, independent of tone
+detection entirely**: the manual documents a *forced*-tone-generation path -- a `TONE` field
+(`0x08`, `TONE_IDX` byte, amplitude byte) appended to a `SPEECH` packet, with `ECMODE_IN`'s
+`TS_ENABLE` bit (14) set, "force[s] the encoder to transmit a tone frame" for a specified `TONE_IDX`
+(Table 98/103, page 72-74) -- bypassing the tone *detector* entirely.
+`examples/p25_ambe_plus_2_forced_tone_probe.rs` used this to answer, decisively, whether `b0=126/127`
+is reachable on this chip/rate at all: **forcing `TONE_IDX=0x81` (DTMF) and `TONE_IDX=0x08` (single
+tone) both read back `b0=120`, matching every detection-triggered capture in this document exactly.
+`b0=126/127` was never observed, forced or detected.** `FrameKind::Tone` is now understood to be
+believed unreachable on this chip/rate, not merely undecoded.
+
+**The same forced-tone mechanism also found a real, new, distinct `Erasure` sub-code**: forcing
+DVSI's own documented `Call Progress` tones (`TONE_IDX=0xA0/0xA1/0xA2` -- dial/ring/busy) reads back
+`b0=122`, not `120` -- a second, genuinely distinct chip-defined `Erasure` sub-kind, decoding as
+Annex J's own `ID=160/161/162` (`l1*f0`/`l2*f0` again matching the documented dial/ring/busy
+frequencies closely). `b0`'s 120-123 range is therefore not one undifferentiated "erasure"; it is at
+least two real, distinct sub-kinds, now both identified.
+
+**A real, disclosed discrepancy, found by the same forced-tone probe, not yet reconciled further**:
+forcing a *specific* `TONE_IDX` and reading the result back does **not** return that same `TONE_IDX`
+for DTMF or call-progress values -- it returns Annex J's own larger, native `ID` instead (forcing
+`0x87` reads back `128`; forcing `0xA0/0xA1/0xA2` reads back `160/161/162`). Single tones are
+unaffected, because `TONE_IDX` and Annex J's `ID` numerically coincide for that range (both
+`round(f0/31.25Hz)`) -- they only diverge where `TONE_IDX`'s own compact, packet-interface numbering
+differs from Annex J's own unified space. **This does not affect the DTMF finding's own correctness
+or its live validation**: a genuinely *detected* DTMF digit (the real, practically useful case this
+document validated 128/128) reads back in `TONE_IDX`'s own numbering, confirmed directly, not
+inferred -- the discrepancy is specific to the *forced*-generation path, a secondary discovery
+recorded honestly rather than smoothed over, not a retraction of the detection result.
 
 ### Cross-mode summary
 
