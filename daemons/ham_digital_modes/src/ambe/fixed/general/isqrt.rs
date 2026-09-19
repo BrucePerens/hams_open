@@ -42,6 +42,28 @@ pub fn isqrt_u32(n: u32) -> u32 {
     isqrt_u64(n as u64) as u32
 }
 
+/// `floor(sqrt(n))` for a `u128`, by the classic bit-pair digit recurrence (exact, 64 iterations).
+/// Needed where a wide energy ratio (`i128` sums of squared spectrum bins) must be rooted with no
+/// precision lost to narrowing to `u64` first.
+pub fn isqrt_u128(n: u128) -> u128 {
+    let mut remainder = n;
+    let mut result = 0u128;
+    let mut bit = 1u128 << 126;
+    while bit > remainder {
+        bit >>= 2;
+    }
+    while bit != 0 {
+        if remainder >= result + bit {
+            remainder -= result + bit;
+            result = (result >> 1) + bit;
+        } else {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,6 +91,18 @@ mod tests {
                 r == u32::MAX as u64 || (r + 1).checked_mul(r + 1).is_none_or(|sq| sq > n),
                 "n={n}: r={r}, (r+1)^2 <= n"
             );
+        }
+    }
+
+    #[test]
+    fn isqrt_u128_matches_the_defining_inequality_and_isqrt_u64() {
+        for n in [0u128, 1, 2, 3, 4, 15, 16, 17, u64::MAX as u128, (u64::MAX as u128) + 1, u128::MAX, 1u128 << 100, (1u128 << 100) - 1] {
+            let r = isqrt_u128(n);
+            assert!(r * r <= n, "n={n}");
+            assert!((r + 1).checked_mul(r + 1).is_none_or(|sq| sq > n), "n={n}");
+        }
+        for n in [0u64, 1, 99, 1_000_000_007, u64::MAX] {
+            assert_eq!(isqrt_u128(n as u128), isqrt_u64(n) as u128);
         }
     }
 
