@@ -52,32 +52,57 @@ class RabbitMQPool(models.AbstractModel):
             return self._channel
 
     @api.model
-    def publish(self, exchange, routing_key, body, properties=None):
+    def publish(self, exchange, routing_key, body, properties=None, on_result=None):
         # [@ANCHOR: rabbitmq_publish]
 
         # # Verified by [@ANCHOR: COMM_test_02_publish_delivers_a_real_message_after_commit] [@ANCHOR: COMM_test_03_publish_serializes_dict_bodies_to_json]
         """
         Publishes a message using the global connection pool.
+
+        The actual send is deferred to cr.postcommit, so the return value
+        (always True) only means "queued for after commit", never "delivered".
+        To learn the real outcome, pass ``on_result``: a callable invoked as
+        ``on_result(success: bool)`` from the postcommit hook once the real
+        AMQP publish has been attempted (True only if basic_publish returned
+        without error). It runs after the transaction has committed, so it
+        must open its own cursor/transaction if it needs to write to the
+        database. An exception raised by ``on_result`` is logged and never
+        propagates into the commit path.
         """
         if isinstance(body, dict):
             body = json.dumps(body)
 
+        def _report(success):
+            if on_result is None:
+                return
+            try:
+                on_result(success)
+            except Exception:  # audit-ignore-catch-all: caller callback must never break the commit path
+                _logger.exception(
+                    "on_result callback failed for RabbitMQ publish "
+                    "(exchange=%r, routing_key=%r)", exchange, routing_key,
+                )
+
         def _do_publish():
-            # Bug-hunt finding (class 5, silent-failure gate): publish()
-            # already returned True to its caller before this postcommit
-            # callback ever runs, so a failure here can never be signaled
-            # back -- the caller has no way to know the message was
-            # dropped. That contract isn't changed here (it would require
-            # a bigger redesign of the postcommit-deferred publish model),
-            # but the two failure branches below are the ONLY remaining
-            # trail for reconciling a lost message, so they now log
-            # exchange/routing_key instead of a bare generic message.
-            channel = self._get_channel()
+            # publish() already returned True to its caller before this
+            # postcommit callback runs, so the return value cannot carry the
+            # outcome. Callers that need it pass on_result (see publish()'s
+            # docstring); the failure branches also log exchange/routing_key
+            # as the trail for reconciling a lost message.
+            try:
+                channel = self._get_channel()
+            except Exception:  # audit-ignore-catch-all
+                _logger.exception(
+                    "Unexpected error obtaining RabbitMQ channel "
+                    "(exchange=%r, routing_key=%r)", exchange, routing_key,
+                )
+                channel = None
             if not channel:
                 _logger.error(
                     "Cannot publish message, no RabbitMQ channel available "
                     "(exchange=%r, routing_key=%r).", exchange, routing_key
                 )
+                _report(False)
                 return False
             try:
                 with self._lock:
@@ -87,7 +112,6 @@ class RabbitMQPool(models.AbstractModel):
                         body=body,
                         properties=properties or pika.BasicProperties(delivery_mode=2)
                     )
-                return True
             except pika.exceptions.AMQPError:
                 _logger.exception(
                     "Failed to publish message to RabbitMQ (exchange=%r, routing_key=%r)",
@@ -95,7 +119,10 @@ class RabbitMQPool(models.AbstractModel):
                 )
                 # Force reconnect on next attempt
                 self.__class__._connection = None
+                _report(False)
                 return False
+            _report(True)
+            return True
 
         self.env.cr.postcommit.add(_do_publish)
         return True

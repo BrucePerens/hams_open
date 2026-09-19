@@ -4,6 +4,8 @@ import json
 import time
 import uuid
 
+import pika
+
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -131,3 +133,54 @@ class TestRabbitMQPool(RealTransactionCase):
             second_channel, first_channel,
             "must not hand back the same closed channel object",
         )
+
+    def test_05_on_result_reports_real_success_and_failure_after_commit(self):
+        # Regression (0fd43f88): publish() always returned True before the
+        # deferred send ran, so no caller could ever see a real failure.
+        # Uses a stub channel so it needs no live broker.
+        # Tests [@ANCHOR: rabbitmq_publish]
+        pool = self.env["hams_rabbitmq.pool"]
+
+        class _Channel:
+            def __init__(self, exc=None):
+                self.exc = exc
+                self.sent = []
+
+            def basic_publish(self, **kwargs):
+                if self.exc:
+                    raise self.exc
+                self.sent.append(kwargs)
+
+        good = _Channel()
+        get_channel = self.safe_patch_object(type(pool), "_get_channel", return_value=good)
+        results = []
+        self.assertTrue(pool.publish("", "q", "ok", on_result=results.append))
+        self.assertEqual(results, [], "on_result must not fire before the commit")
+        self.env.cr.commit()
+        self.assertEqual(results, [True])
+        self.assertEqual(len(good.sent), 1)
+
+        # Broker rejects the publish: on_result(False), publish() itself still True.
+        get_channel.return_value = _Channel(exc=pika.exceptions.AMQPError("broker down"))
+        failures = []
+        self.assertTrue(pool.publish("", "q", "lost", on_result=failures.append))
+        self.env.cr.commit()
+        self.assertEqual(failures, [False])
+
+        # No channel at all (broker unreachable): on_result(False).
+        get_channel.return_value = None
+        no_channel = []
+        self.assertTrue(pool.publish("", "q", "lost", on_result=no_channel.append))
+        self.env.cr.commit()
+        self.assertEqual(no_channel, [False])
+
+    def test_06_a_failing_on_result_callback_does_not_break_the_commit(self):
+        # Tests [@ANCHOR: rabbitmq_publish]
+        pool = self.env["hams_rabbitmq.pool"]
+
+        def boom(_success):
+            raise RuntimeError("callback bug")
+
+        self.safe_patch_object(type(pool), "_get_channel", return_value=None)
+        pool.publish("", "hams_rabbitmq_unused", "x", on_result=boom)
+        self.env.cr.commit()  # must not raise
