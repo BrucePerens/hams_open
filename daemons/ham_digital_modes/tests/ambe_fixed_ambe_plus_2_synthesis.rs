@@ -56,16 +56,13 @@ fn concat_snr(pairs: &[(Vec<f64>, Vec<f64>)]) -> f64 {
 }
 
 /// Measured (release build, 40 frames of `OSR_us_000_0010_8k.wav`, the same fixture and encoder path
-/// as `ambe_fixed_dstar_synthesis.rs`): first frame 38.6 dB, per-frame 17 to 67 dB (the low-level
-/// unvoiced-dominated frames sit at 59-67 dB), 18.3 dB over all 40 frames. The first frame is just
-/// under the 40 dB single-frame bar (D-STAR's is 55 dB) because the pitch quantization error already
-/// shows in the first frame here; with the pitch matched the whole 40 frames agree at 56.2 dB.
-/// See `ambe_fixed_dstar_synthesis.rs` for the analysis of why the multi-frame figure is below the 40 dB single-frame bar: the
-/// fixed decoder's Q16.16 pitch quantization compounds in the harmonic phase accumulators, not
-/// synthesis arithmetic, as
+/// as `ambe_fixed_dstar_synthesis.rs`): first frame 59.0 dB, 56.8 dB over all 40 frames. Before the
+/// fixed decoder carried its pitch at Q32 radians/sample (`W0_TABLE_Q32`) these were 35.3 dB and
+/// 18.4 dB: the Q16.16 pitch quantization compounded in the harmonic phase accumulators (see
+/// `ambe_fixed_dstar_synthesis.rs` for the analysis), not synthesis arithmetic, as
 /// `speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic` verifies.
-const SPEECH_FIRST_FRAME_MIN_SNR_DB: f64 = 35.0;
-const SPEECH_40_FRAME_MIN_SNR_DB: f64 = 15.0;
+const SPEECH_FIRST_FRAME_MIN_SNR_DB: f64 = 50.0;
+const SPEECH_40_FRAME_MIN_SNR_DB: f64 = 45.0;
 
 #[test]
 fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
@@ -86,7 +83,7 @@ fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
     assert!(level_db.abs() < 1.0, "level differs by {level_db} dB");
 }
 
-/// Re-runs the float side with the *fixed* decoder's own (Q16.16-quantized) pitch substituted for its
+/// Re-runs the float side with the *fixed* decoder's own (Q32-quantized) pitch substituted for its
 /// exact one, everything else float.
 #[test]
 fn speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic() {
@@ -114,7 +111,7 @@ fn speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic() {
         else {
             panic!("speech test frames expected");
         };
-        let w0 = fp.w0_q16 as f64 / 65536.0;
+        let w0 = fp.w0_q32 as f64 / 4294967296.0;
         let pcm = synth.synthesize_speech(w0, &p.voiced, &p.ml, parsed.epsilon_c0, parsed.epsilon_c1).unwrap();
         reference.extend(pcm);
         test.extend(from_q16_i64(&fixed_pcm));

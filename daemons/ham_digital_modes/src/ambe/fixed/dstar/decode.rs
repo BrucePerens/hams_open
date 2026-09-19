@@ -10,7 +10,7 @@
 
 use super::tables_q16::{
     DG_Q16_16, HOC_B5_Q16_16, HOC_B6_Q16_16, HOC_B7_Q16_16, HOC_B8_Q16_16, PRBA24_Q16_16,
-    PRBA58_Q16_16, W0_TABLE_Q16_16,
+    PRBA58_Q16_16, W0_TABLE_Q16_16, W0_TABLE_Q32,
 };
 use crate::ambe::fixed::general::fixed_ops::{mul_q16, TWO_PI_Q16_16};
 use crate::ambe::fixed::general::mbe_speech::{
@@ -85,6 +85,7 @@ pub fn dequantize(d: u64, state: &mut MbeDecoderState) -> DequantizedFrame {
         W0_TABLE_Q16_16[(raw.b0 as usize).min(W0_TABLE_Q16_16.len() - 1)],
         TWO_PI_Q16_16,
     );
+    let w0_q32 = W0_TABLE_Q32[(raw.b0 as usize).min(W0_TABLE_Q32.len() - 1)];
     let raw_speech = RawSpeechParameters {
         b1: raw.b1,
         b2: raw.b2,
@@ -99,6 +100,6 @@ pub fn dequantize(d: u64, state: &mut MbeDecoderState) -> DequantizedFrame {
     // The V/UV slot uses the pitch before the chip-fit scale (`ambe::float::dstar::decode::F0_CHIP_SCALE`,
     // 1.024 = 67109/65536 in Q16.16), matching the float sibling.
     let vuv_w0_q16 = (((w0_q16 as i64) << 16) / F0_CHIP_SCALE_Q16_16 as i64) as i32;
-    let params = dequantize_speech(l, w0_q16, vuv_w0_q16, &raw_speech, &tables, state);
+    let params = dequantize_speech(l, w0_q16, w0_q32, vuv_w0_q16, &raw_speech, &tables, state);
     DequantizedFrame::Speech(params)
 }

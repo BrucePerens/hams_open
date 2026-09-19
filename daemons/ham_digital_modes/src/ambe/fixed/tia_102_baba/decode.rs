@@ -12,7 +12,8 @@
 
 use super::error_estimation::{estimate_errors_q16, should_mute_frame_q16, should_repeat_frame_q16, FrameErrorsQ16};
 use super::parameter_encoding::{
-    decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency_q16, frequency_bands_count,
+    decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency_q16, dequantize_fundamental_frequency_q32,
+    frequency_bands_count,
     harmonics_count_from_b0,
 };
 use super::prediction::INITIAL_L_HAT_PREV;
@@ -33,6 +34,8 @@ const ONE_Q16_16: i32 = 65536;
 /// The fixed-point equivalent of `DecodedParameters`.
 pub struct DecodedParameters {
     pub omega0_tilde_q16: i32,
+    /// `omega0_tilde` at Q32 radians/sample -- the precision synthesis uses.
+    pub omega0_tilde_q32: i64,
     pub l_hat: u32,
     pub k_hat: u32,
     pub bits: DeprioritizedBits,
@@ -111,6 +114,7 @@ impl DecoderState {
         }
 
         let omega0_tilde_q16 = dequantize_fundamental_frequency_q16(b0);
+        let omega0_tilde_q32 = dequantize_fundamental_frequency_q32(b0);
         let l_hat = harmonics_count_from_b0(b0);
         let k_hat = frequency_bands_count(l_hat);
 
@@ -139,6 +143,7 @@ impl DecoderState {
 
         Some(FrameOutcome::Decoded(DecodedParameters {
             omega0_tilde_q16,
+            omega0_tilde_q32,
             l_hat,
             k_hat,
             bits,
@@ -156,7 +161,7 @@ impl DecoderState {
             FrameOutcome::Decoded(params) => {
                 let pcm = self.synthesis.synthesize_frame(
                     &params.reconstructed_amplitudes_q16,
-                    params.omega0_tilde_q16,
+                    params.omega0_tilde_q32,
                     &params.voiced,
                     &params.errors,
                 )?;

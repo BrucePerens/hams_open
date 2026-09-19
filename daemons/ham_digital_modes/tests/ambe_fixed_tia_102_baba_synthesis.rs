@@ -21,8 +21,11 @@ const MIN_SNR_DB: f64 = 40.0;
 fn to_q16(v: f64) -> i32 {
     (v * 65536.0).round() as i32
 }
-fn from_q16(v: i32) -> f64 {
-    v as f64 / 65536.0
+fn to_q32(v: f64) -> i64 {
+    (v * 4294967296.0).round() as i64
+}
+fn from_q32(v: i64) -> f64 {
+    v as f64 / 4294967296.0
 }
 fn from_q16_i64(v: i64) -> f64 {
     v as f64 / 65536.0
@@ -60,15 +63,15 @@ fn run_scenario(frames: &[(f64, Vec<bool>, Vec<f64>)]) -> (Vec<f64>, Vec<f64>) {
     let mut float_pcm = Vec::new();
     let mut fixed_pcm = Vec::new();
     for (omega0, voiced, amplitudes) in frames {
-        let omega0_q16 = to_q16(*omega0);
-        let omega0_fair = from_q16(omega0_q16);
+        let omega0_q32 = to_q32(*omega0);
+        let omega0_fair = from_q32(omega0_q32);
         let amplitudes_q16: Vec<i32> = amplitudes.iter().map(|&a| to_q16(a)).collect();
 
         let float_frame = float_state
             .synthesize_frame(amplitudes, omega0_fair, voiced, &errors)
             .unwrap();
         let fixed_frame = fixed_state
-            .synthesize_frame(&amplitudes_q16, omega0_q16, voiced, &errors_q16)
+            .synthesize_frame(&amplitudes_q16, omega0_q32, voiced, &errors_q16)
             .unwrap();
 
         float_pcm.extend(float_frame.iter().copied());
@@ -116,7 +119,7 @@ fn synthesize_frame_rejects_a_length_mismatch() {
     let voiced = vec![true; 5];
     let amplitudes = vec![to_q16(100.0); 6];
     assert!(state
-        .synthesize_frame(&amplitudes, to_q16(0.1), &voiced, &zero_errors_q16())
+        .synthesize_frame(&amplitudes, to_q32(0.1), &voiced, &zero_errors_q16())
         .is_none());
 }
 
@@ -139,7 +142,7 @@ fn synthesize_repeated_frame_reuses_the_last_real_frames_own_final_parameters() 
     let errors = zero_errors_q16();
 
     state
-        .synthesize_frame(&amplitudes, to_q16(omega0), &voiced, &errors)
+        .synthesize_frame(&amplitudes, to_q32(omega0), &voiced, &errors)
         .unwrap();
 
     for _ in 0..3 {
@@ -188,7 +191,7 @@ fn synthesize_frame_applies_a_no_op_gamma_m_when_amplitudes_are_well_under_thres
     let voiced = vec![false; 9];
     let amplitudes = vec![to_q16(1.0); 9];
     let frame = state
-        .synthesize_frame(&amplitudes, to_q16(omega0), &voiced, &zero_errors_q16())
+        .synthesize_frame(&amplitudes, to_q32(omega0), &voiced, &zero_errors_q16())
         .unwrap();
     assert!(
         frame.iter().any(|&s| s.abs() > 10),
@@ -241,7 +244,7 @@ fn synthesize_frame_matches_float_when_gamma_m_actually_engages() {
 /// Pitch varies slightly frame to frame (a small nearby-`b0` sweep, quantized identically for both
 /// sides, exactly as `ambe_fixed_voiced_synthesis.rs`'s own `run_scenario` does) rather than holding
 /// one `omega0` exactly across every frame -- an earlier version of this test held `omega0` exactly
-/// and fed float the *unquantized* value while fixed got `to_q16(omega0)`, both mistakes
+/// and fed float the *unquantized* value while fixed got `to_q32(omega0)`, both mistakes
 /// `ambe_fixed_voiced_synthesis.rs`'s own doc comment already found and fixed for `voiced_synthesis`
 /// in isolation: per-frame SNR measured 56.8 dB on frame 0 degrading to 25.0 dB by frame 5, the same
 /// signature already characterized there, not a new bug in this module's own enhancement/error-
@@ -260,15 +263,15 @@ fn synthesize_frame_matches_float_with_a_moderate_error_record() {
     let mut float_pcm = Vec::new();
     let mut fixed_pcm = Vec::new();
     for &b0 in &b0_values {
-        let omega0_q16 = to_q16(dequantize_fundamental_frequency(b0));
-        let omega0_fair = from_q16(omega0_q16);
+        let omega0_q32 = to_q32(dequantize_fundamental_frequency(b0));
+        let omega0_fair = from_q32(omega0_q32);
         let amplitudes_q16: Vec<i32> = amplitudes.iter().map(|&a| to_q16(a)).collect();
 
         let float_frame = float_state
             .synthesize_frame(&amplitudes, omega0_fair, &voiced, &errors)
             .unwrap();
         let fixed_frame = fixed_state
-            .synthesize_frame(&amplitudes_q16, omega0_q16, &voiced, &errors_q16)
+            .synthesize_frame(&amplitudes_q16, omega0_q32, &voiced, &errors_q16)
             .unwrap();
         float_pcm.extend(float_frame.iter().copied());
         fixed_pcm.extend(fixed_frame.iter().map(|&s| from_q16_i64(s)));

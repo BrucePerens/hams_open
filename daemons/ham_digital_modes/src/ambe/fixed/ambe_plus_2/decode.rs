@@ -9,7 +9,7 @@
 
 use super::tables_q16::{
     DG_Q16_16, HOC_B5_Q16_16, HOC_B6_Q16_16, HOC_B7_Q16_16, HOC_B8_Q16_16, PRBA24_Q16_16,
-    PRBA58_Q16_16, W0_TABLE_Q16_16,
+    PRBA58_Q16_16, W0_TABLE_Q16_16, W0_TABLE_Q32,
 };
 use crate::ambe::fixed::general::fixed_ops::{mul_q16, TWO_PI_Q16_16};
 use crate::ambe::fixed::general::mbe_speech::{
@@ -76,6 +76,7 @@ pub fn dequantize(raw: &RawParameters, state: &mut MbeDecoderState) -> Dequantiz
     // W0_TABLE actually stores f0 (matching the float sibling's own table name despite the mismatch
     // -- see `ambe::float::ambe_plus_2::decode::dequantize`'s own `f0`/`w0` split); w0 = f0 * 2*pi.
     let w0_q16 = mul_q16(W0_TABLE_Q16_16[raw.b0 as usize], TWO_PI_Q16_16);
+    let w0_q32 = W0_TABLE_Q32[raw.b0 as usize];
     let raw_speech = RawSpeechParameters {
         b1: raw.b1,
         b2: raw.b2,
@@ -87,6 +88,6 @@ pub fn dequantize(raw: &RawParameters, state: &mut MbeDecoderState) -> Dequantiz
         b8: raw.b8,
     };
     let tables = speech_tables();
-    let params = dequantize_speech(l, w0_q16, w0_q16, &raw_speech, &tables, state);
+    let params = dequantize_speech(l, w0_q16, w0_q32, w0_q16, &raw_speech, &tables, state);
     DequantizedFrame::Speech(params)
 }

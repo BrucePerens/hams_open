@@ -200,31 +200,25 @@ fn bin_index(m: i32) -> usize {
     (m + 128) as usize
 }
 
-/// `256 / (2*pi)` in Q16.16 -- the shared scale factor of both harmonic-band-edge equations.
-const BAND_EDGE_SCALE_Q16: i64 = 2_670_177; // round(256.0 / (2.0*PI) * 65536.0)
+/// `256 / (2*pi)` in Q32 -- the shared scale factor of both harmonic-band-edge equations.
+const BAND_EDGE_SCALE_Q32: i128 = 174_992_710_548; // round(256.0 / (2.0*PI) * 2^32)
 
-/// `a~_l`/`b~_l` (Eq. 122/123) share this shape: `(256/(2pi)) * (l +- 0.5) * omega0_tilde`, computed
-/// as `(256/(2pi)) * (2l +- 1) * omega0_tilde / 2` to keep `2l +- 1` an exact integer (avoiding a
-/// separate "0.5" fixed-point literal) until the final, single division by 2.
-fn band_edge_q16(two_l_plus_minus_1: i64, omega0_tilde_q16: i32) -> i32 {
-    let scaled = BAND_EDGE_SCALE_Q16 * two_l_plus_minus_1; // still Q16.16, scaled by an integer.
-    let with_omega0 = mul_q16_i64(scaled, omega0_tilde_q16);
-    (with_omega0 >> 1) as i32 // divide by the shared "/2" from (2l+-1)/2 = l +- 0.5.
+/// `ceil(a~_l)` / `ceil(b~_l)` (Eq. 122/123) share this shape: `(256/(2pi)) * (l +- 0.5) * omega0_tilde`,
+/// computed as `(256/(2pi)) * (2l +- 1) * omega0_tilde / 2` to keep `2l +- 1` an exact integer. The
+/// pitch is Q32 (`radians/sample * 2^32`), so the whole product carries `2^64` (scale times pitch),
+/// plus one more bit for the shared "/2"; the ceiling is taken on that wide product directly rather
+/// than on a Q16.16 intermediate. Both edges are always non-negative (`l >= 1`, `omega0_tilde > 0`).
+fn band_edge_ceil(two_l_plus_minus_1: i64, omega0_tilde_q32: i64) -> i32 {
+    let product = BAND_EDGE_SCALE_Q32 * (two_l_plus_minus_1 as i128) * (omega0_tilde_q32 as i128);
+    ((product + ((1i128 << 65) - 1)) >> 65) as i32
 }
 
-fn band_edge_a_q16(l: u32, omega0_tilde_q16: i32) -> i32 {
-    band_edge_q16(2 * l as i64 - 1, omega0_tilde_q16)
+fn band_edge_a_ceil(l: u32, omega0_tilde_q32: i64) -> i32 {
+    band_edge_ceil(2 * l as i64 - 1, omega0_tilde_q32)
 }
 
-fn band_edge_b_q16(l: u32, omega0_tilde_q16: i32) -> i32 {
-    band_edge_q16(2 * l as i64 + 1, omega0_tilde_q16)
-}
-
-/// `ceil` of a non-negative Q16.16 value to a plain integer -- both band edges are always
-/// non-negative (`l >= 1`, `omega0_tilde > 0`), so the standard `(x + 2^16 - 1) >> 16` trick applies
-/// without a separate negative-input case.
-fn ceil_q16_to_i32(x_q16: i32) -> i32 {
-    (x_q16 + 65535) >> 16
+fn band_edge_b_ceil(l: u32, omega0_tilde_q32: i64) -> i32 {
+    band_edge_ceil(2 * l as i64 + 1, omega0_tilde_q32)
 }
 
 /// `gamma_w` (Eq. 121) in Q16.16: `round(146.6432708443356 * 65536)`, the exact same constant the
@@ -238,7 +232,7 @@ pub const UNVOICED_SCALING_COEFFICIENT_Q16: i32 = 9_610_413;
 /// [`sqrt_wide_q16`] directly, not a "square everything first" reorganization.
 fn unvoiced_spectrum_q16(
     noise: &NoiseState,
-    omega0_tilde_q16: i32,
+    omega0_tilde_q32: i64,
     voiced: &[bool],
     spectral_amplitudes_q16: &[i32],
     gamma_w_q16: i32,
@@ -254,8 +248,8 @@ fn unvoiced_spectrum_q16(
         if voiced[(l - 1) as usize] {
             continue; // Eq. 119: stays zero.
         }
-        let a = ceil_q16_to_i32(band_edge_a_q16(l, omega0_tilde_q16));
-        let b = ceil_q16_to_i32(band_edge_b_q16(l, omega0_tilde_q16));
+        let a = band_edge_a_ceil(l, omega0_tilde_q32);
+        let b = band_edge_b_ceil(l, omega0_tilde_q32);
         if b <= a {
             continue; // Degenerate (unreachable for any real pitch period) zero-width band.
         }
@@ -335,13 +329,13 @@ impl UnvoicedState {
     pub fn synthesize(
         &mut self,
         noise: &NoiseState,
-        omega0_tilde_q16: i32,
+        omega0_tilde_q32: i64,
         voiced: &[bool],
         spectral_amplitudes_q16: &[i32],
     ) -> Option<[i32; N]> {
         let spectrum = unvoiced_spectrum_q16(
             noise,
-            omega0_tilde_q16,
+            omega0_tilde_q32,
             voiced,
             spectral_amplitudes_q16,
             UNVOICED_SCALING_COEFFICIENT_Q16,

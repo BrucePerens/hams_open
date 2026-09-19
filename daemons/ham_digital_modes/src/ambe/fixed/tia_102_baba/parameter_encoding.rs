@@ -12,7 +12,7 @@
 
 mod b0_table;
 
-use b0_table::{B0_COUNT, L_HAT_FROM_B0, OMEGA0_TILDE_Q16_16};
+use b0_table::{B0_COUNT, L_HAT_FROM_B0, OMEGA0_TILDE_Q16_16, OMEGA0_TILDE_Q32};
 
 pub use crate::ambe::float::tia_102_baba::parameter_encoding::{
     decode_voicing_decisions, decode_voicing_decisions_per_harmonic, encode_voicing_decisions,
@@ -26,6 +26,13 @@ pub use crate::ambe::float::tia_102_baba::vuv::frequency_bands_count;
 /// this crate's own established "never panic on any input" convention.
 pub fn dequantize_fundamental_frequency_q16(b0_tilde: u32) -> i32 {
     OMEGA0_TILDE_Q16_16[(b0_tilde as usize).min(B0_COUNT - 1)]
+}
+
+/// `omega0_tilde` (Eq. 46) in Q32 radians/sample (`2^32` per radian): the same table lookup at the
+/// wider precision synthesis needs (a harmonic's phase is `l * omega0 * n`, so Q16.16's 1.5e-5 rad
+/// resolution is amplified by the harmonic number and sample index).
+pub fn dequantize_fundamental_frequency_q32(b0_tilde: u32) -> i64 {
+    OMEGA0_TILDE_Q32[(b0_tilde as usize).min(B0_COUNT - 1)]
 }
 
 /// `L~` (Eq. 47) for a received `b_hat_0` -- likewise an exact table lookup. Takes `b_hat_0`

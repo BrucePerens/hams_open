@@ -109,6 +109,25 @@ pub fn phase_from_radians_q16_i64(angle_q16: i64) -> u32 {
     round_div_to_u32((angle_q16 as i128) << 63, PI_Q48)
 }
 
+/// Converts a Q32 angle in radians (`i64`, `angle * 2^32`) into this module's `u32` phase convention:
+/// the same conversion as [`phase_from_radians_q16_i64`] with 16 more fractional bits on the input.
+/// Pitch (`omega0`) is carried at this precision through synthesis because a harmonic's phase is
+/// `l * omega0 * n`, so a Q16.16 `omega0`'s ~1.5e-5 rad resolution is multiplied by up to `56 * 160`
+/// before it ever reaches a `cos`.
+pub fn phase_from_radians_q32(angle_q32: i64) -> u32 {
+    round_div_to_u32((angle_q32 as i128) << 47, PI_Q48)
+}
+
+/// The inverse of [`phase_from_radians_q32`]: recovers a bounded `(-pi, pi]` Q32 radian value from a
+/// wrapping phase, rounded to nearest (ties away from zero).
+pub fn radians_q32_from_phase(phase: u32) -> i64 {
+    let numerator = (phase as i32 as i128) * PI_Q48;
+    let denominator = 1i128 << 47;
+    let half = denominator / 2;
+    let rounded = if numerator >= 0 { numerator + half } else { numerator - half };
+    (rounded / denominator) as i64
+}
+
 /// Rounds `numerator / denominator` to the nearest integer (ties away from zero, the same convention
 /// [`super::fixed_ops::mul_q16`]/`explog::exp2_q16` already use) before truncating to `u32`.
 fn round_div_to_u32(numerator: i128, denominator: i128) -> u32 {

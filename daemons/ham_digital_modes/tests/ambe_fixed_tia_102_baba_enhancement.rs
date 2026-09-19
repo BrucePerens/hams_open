@@ -77,7 +77,7 @@ fn energy_and_scaled_energy_match() {
         let amps = realistic_amplitudes(l, peak);
         let amps_q16: Vec<i32> = amps.iter().map(|&v| to_q16(v)).collect();
         let omega0 = 0.05;
-        let omega0_q16 = to_q16(omega0);
+        let omega0_q32 = (omega0 * 4294967296.0_f64).round() as i64;
 
         assert_close_i64(
             &format!("energy l={l} peak={peak}"),
@@ -87,7 +87,7 @@ fn energy_and_scaled_energy_match() {
         assert_close_i64(
             &format!("scaled_energy l={l} peak={peak}"),
             float_enh::scaled_energy(&amps, omega0),
-            fixed_enh::scaled_energy_q16(&amps_q16, omega0_q16),
+            fixed_enh::scaled_energy_q16(&amps_q16, omega0_q32),
         );
     }
 }
@@ -98,10 +98,10 @@ fn enhance_spectral_amplitudes_matches() {
         let amps = realistic_amplitudes(l, peak);
         let amps_q16: Vec<i32> = amps.iter().map(|&v| to_q16(v)).collect();
         let omega0 = 0.05;
-        let omega0_q16 = to_q16(omega0);
+        let omega0_q32 = (omega0 * 4294967296.0_f64).round() as i64;
 
         let float_result = float_enh::enhance_spectral_amplitudes(&amps, omega0);
-        let fixed_result = fixed_enh::enhance_spectral_amplitudes_q16(&amps_q16, omega0_q16);
+        let fixed_result = fixed_enh::enhance_spectral_amplitudes_q16(&amps_q16, omega0_q32);
         assert_eq!(float_result.len(), fixed_result.len());
         for (h, (&fv, &fxv)) in float_result.iter().zip(fixed_result.iter()).enumerate() {
             assert_close(&format!("enhance l={l} peak={peak} h={h}"), fv, fxv);

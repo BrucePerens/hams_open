@@ -29,6 +29,11 @@ fn to_q16(v: f64) -> i32 {
     (v * 65536.0).round() as i32
 }
 
+/// Pitch is carried at Q32 radians/sample (`2^32` per radian) through voiced synthesis.
+fn to_q32(v: f64) -> i64 {
+    (v * 4294967296.0).round() as i64
+}
+
 fn snr_db(float_pcm: &[f64], fixed_pcm: &[f64]) -> f64 {
     let signal_power: f64 = float_pcm.iter().map(|&s| s * s).sum();
     let noise_power: f64 = float_pcm
@@ -42,19 +47,19 @@ fn snr_db(float_pcm: &[f64], fixed_pcm: &[f64]) -> f64 {
     10.0 * (signal_power / noise_power).log10()
 }
 
-fn from_q16(v: i32) -> f64 {
-    v as f64 / 65536.0
+fn from_q32(v: i64) -> f64 {
+    v as f64 / 4294967296.0
 }
 
 /// Runs both implementations across a sequence of (omega0, voiced, amplitudes) frames, returning the
 /// whole run's concatenated PCM for an SNR check.
 ///
-/// `omega0` is round-tripped through `to_q16`/`from_q16` before being given to *either* side. This
+/// `omega0` is round-tripped through `to_q32`/`from_q32` before being given to *either* side. This
 /// matters specifically for `voiced_synthesis` (unlike every other fixed-vs-float comparison in this
 /// crate): `psi`/`phi` (Eq. 139-140) are phase *accumulators* that add a per-frame increment forever,
 /// so any persistent difference in the two sides' own `omega0` -- even one far too small to matter for
 /// a single frame -- compounds linearly with frame count into a real, growing phase error. Feeding
-/// float the *exact* `f64` omega0 while fixed necessarily works from a `to_q16`-rounded one (as an
+/// float the *exact* `f64` omega0 while fixed necessarily works from a `to_q32`-rounded one (as an
 /// earlier version of this file did) is not a meaningful test of the port: it asks fixed to track an
 /// idealized, infinite-precision oscillator it was never given the precision to represent, a gap that
 /// grows without bound and has nothing to do with whether the port's own arithmetic is correct
@@ -84,12 +89,12 @@ fn run_scenario(frames: &[(f64, Vec<bool>, Vec<f64>)]) -> (Vec<f64>, Vec<f64>) {
             float_noise.advance_frame();
             fixed_noise.advance_frame();
         }
-        let omega0_q16 = to_q16(*omega0);
-        let omega0_fair = from_q16(omega0_q16);
+        let omega0_q32 = to_q32(*omega0);
+        let omega0_fair = from_q32(omega0_q32);
         let float_frame = float_state.synthesize(&float_noise, omega0_fair, voiced, amplitudes).unwrap();
         let amplitudes_q16: Vec<i32> = amplitudes.iter().map(|&a| to_q16(a)).collect();
         let fixed_frame = fixed_state
-            .synthesize(&fixed_noise, omega0_q16, voiced, &amplitudes_q16)
+            .synthesize(&fixed_noise, omega0_q32, voiced, &amplitudes_q16)
             .unwrap();
         float_pcm.extend(float_frame.iter().copied());
         fixed_pcm.extend(fixed_frame.iter().map(|&s| s as f64 / 65536.0));
@@ -238,7 +243,7 @@ fn synthesize_rejects_a_length_mismatch() {
     let noise = FixedNoiseState::new();
     let voiced = vec![true; 5];
     let amplitudes = vec![to_q16(100.0); 6];
-    assert!(state.synthesize(&noise, to_q16(0.1), &voiced, &amplitudes).is_none());
+    assert!(state.synthesize(&noise, to_q32(0.1), &voiced, &amplitudes).is_none());
 }
 
 #[test]
@@ -247,7 +252,7 @@ fn synthesize_rejects_more_harmonics_than_max_harmonics() {
     let noise = FixedNoiseState::new();
     let voiced = vec![true; fixed_v::MAX_HARMONICS + 1];
     let amplitudes = vec![to_q16(100.0); fixed_v::MAX_HARMONICS + 1];
-    assert!(state.synthesize(&noise, to_q16(0.1), &voiced, &amplitudes).is_none());
+    assert!(state.synthesize(&noise, to_q32(0.1), &voiced, &amplitudes).is_none());
 }
 
 /// A realistic long call: 200 frames (4 real seconds) of a sustained vowel with a gentle vibrato-like
@@ -281,8 +286,10 @@ fn synthesize_matches_float_across_a_long_run_with_naturally_varying_pitch() {
 /// remains after `trig::PI_Q48` fixed the unbounded per-frame drift the other long-run tests above used
 /// to show: `VoicedState::new()`'s own Annex A initial state sets `omega0(-1) = 0.02985 * pi`, a real
 /// number float's own `VoicedState` stores exactly (a private `f64` literal) but this crate's own
-/// `OMEGA0_INITIAL_Q16` can only ever approximate to Q16.16's `16` fractional bits (already the
-/// nearest representable value -- there is no more precise way to hold this constant in Q16.16). Since
+/// `OMEGA0_INITIAL_Q32` can only ever approximate to its `32` fractional bits (the nearest
+/// representable value). The figures below (`~0.00032 rad` at `l=1` up to `~0.018 rad` at `l=56`) are
+/// from when this constant was Q16.16 (`OMEGA0_INITIAL_Q16`, cold-start SNR then ~35-40 dB); at Q32
+/// the offset is 65536 times smaller and the same scenario measures 97.7 dB. Since
 /// `psi_l`/`phi_l` update *every* harmonic `1..=56` on *every* call regardless of voicing (Eq. 139-140),
 /// this one-time, per-harmonic quantization error is folded into the phase accumulator on the very
 /// first `synthesize()` call and never resolves afterwards (confirmed directly: it persists unchanged
@@ -298,7 +305,7 @@ fn synthesize_matches_float_across_a_long_run_with_naturally_varying_pitch() {
 /// as `mbe_speech.rs`'s own floor-crossing rate.
 #[test]
 fn synthesize_characterizes_the_annex_a_initial_omega0_quantization_offset() {
-    const COLD_START_MIN_SNR_DB: f64 = 35.0;
+    const COLD_START_MIN_SNR_DB: f64 = 80.0;
     let l_hat = fixed_v::MAX_HARMONICS;
     let omega0 = dequantize_fundamental_frequency(30);
     let voiced = vec![true; l_hat];
@@ -309,6 +316,7 @@ fn synthesize_characterizes_the_annex_a_initial_omega0_quantization_offset() {
     let frames = vec![(omega0, voiced, amplitudes)];
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
+    eprintln!("cold-start voiced SNR {snr:.1} dB");
     assert!(
         snr >= COLD_START_MIN_SNR_DB,
         "cold-start, max-harmonic-count SNR got worse than the characterized Annex A offset: {snr} dB"
