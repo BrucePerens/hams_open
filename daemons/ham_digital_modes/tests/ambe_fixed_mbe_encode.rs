@@ -339,7 +339,7 @@ mod dstar_mode {
     }
 
     fn vuv_w0(w0_q16: i32) -> i32 {
-        (((w0_q16 as i64) << 16) / 67_109) as i32 // the fixed decoder's unscaled pitch (F0_CHIP_SCALE = 67109/65536)
+        w0_q16 // the fixed decoder's V/UV slots use the same pitch
     }
 
     pub fn mode() -> Mode {
@@ -357,7 +357,7 @@ mod dstar_mode {
             },
             l_table: &tables::L_TABLE,
             f0: float_decode::f0_from_b0,
-            vuv_scale: float_decode::F0_CHIP_SCALE,
+            vuv_scale: 1.0,
             fixed_tables: fixed_encode::mode_tables(),
             fixed_vuv_w0: vuv_w0,
             float_recon,

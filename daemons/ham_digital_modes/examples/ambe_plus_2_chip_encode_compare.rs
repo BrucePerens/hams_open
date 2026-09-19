@@ -202,6 +202,10 @@ fn main() {
         ours.extend(enc.finish());
         ours.truncate(n_frames);
         let our_params = params(&ours);
+        if let Ok(path) = std::env::var("DUMP_B0") {
+            let lines: Vec<String> = our_params.iter().zip(chip_params.iter()).map(|(a, b)| format!("{} {}", a.as_ref().map_or(-1, |x| x.b0 as i32), b.as_ref().map_or(-1, |x| x.b0 as i32))).collect();
+            std::fs::write(format!("{path}.{offset}"), lines.join("\n")).unwrap();
+        }
         let (mut both, mut b0_close, mut b1_eq, mut b2_close) = (0usize, 0usize, 0usize, 0usize);
         for (a, b) in our_params.iter().zip(chip_params.iter()) {
             if let (Some(a), Some(b)) = (a, b) {
@@ -213,7 +217,19 @@ fn main() {
         }
         let ours_chip = chip_decode(&sock, &mut buf, &ours);
         let mut d = AmbePlus2SynthesisDecoder::new();
+        if std::env::var("DEBUG_NONE").is_ok() {
+            let mut dd = AmbePlus2SynthesisDecoder::new();
+            let nones = ours.iter().filter(|&&f| dd.decode_frame(f).is_none()).count();
+            let mut dd = AmbePlus2SynthesisDecoder::new();
+            let rms: f64 = (ours.iter().flat_map(|&f| dd.decode_frame(f).unwrap_or([0.0; 160])).map(|x| x * x).sum::<f64>() / (ours.len() * 160) as f64).sqrt();
+            let tone_frames = ours.iter().filter(|&&f| matches!(dequantize(&extract_raw_parameters(parse_frame(f).d), &mut DecoderState::initial()), DequantizedFrame::Tone { .. })).count();
+            eprintln!("offset {offset}: tone frames {tone_frames}; our decoder returned None for {nones} of {} frames, rms {rms:.0}", ours.len());
+        }
         let ours_ours: Vec<f64> = ours.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect();
+        if std::env::var("DEBUG_NONE").is_ok() {
+            let rms = |v: &[f64]| (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt();
+            eprintln!("offset {offset}: rms chip-dec {:.0} our-dec {:.0}; env corr chip-dec vs our-dec {:.4}", rms(&ours_chip), rms(&ours_ours), corr(&env(&ours_chip), &env(&ours_ours)));
+        }
         println!(
             "offset {offset:5}: frames {} both-speech {both}; b0 within 2: {:.2}, b1 equal: {:.2}, b2 within 2: {:.2}; envelope corr vs input: our-enc->chip-dec {:.4}, our-enc->our-dec {:.4}",
             ours.len(),

@@ -56,6 +56,14 @@ fn explained_fraction(x: &[f64], hzs: &[f64]) -> (f64, Vec<f64>) {
     (if total > 0.0 { (explained / total).min(1.5) } else { 0.0 }, amps)
 }
 
+/// Fraction of a frame's energy one sinusoid must explain to count as a single tone. `0.9` mistook voiced speech whose
+/// fundamental dominates a frame for a tone (5 of 150 frames of the OSR test speech, each then synthesized at tone
+/// level); real tones sit at essentially 1.0.
+pub const SINGLE_TONE_MIN_EXPLAINED_FRACTION: f64 = 0.99;
+
+/// Purity required of the 200 Hz single tone, the one tone below 400 Hz the chip reports.
+pub const LOW_TONE_MIN_EXPLAINED_FRACTION: f64 = 0.999;
+
 pub fn volume_for_amplitude(amplitude: f64) -> u32 {
     (186.0 + 17.0 * (amplitude.max(1.0) / 4000.0).log2()).round().clamp(0.0, 255.0) as u32
 }
@@ -104,11 +112,13 @@ pub fn detect_tone(frame: &[f64]) -> Option<Detection> {
     }
     let (amp, hz) = refined;
     let (frac, _) = explained_fraction(frame, &[hz]);
-    if amp > 100.0 && frac > 0.9 {
+    if amp > 100.0 && frac > SINGLE_TONE_MIN_EXPLAINED_FRACTION {
         let index = (hz / 31.25).round() as u32;
-        let in_range = (12..=122).contains(&index) || index == 6;
-        let pitch_like_gap = (270.0..340.0).contains(&hz); // the chip does not report tones near 300 Hz
-        if in_range && !pitch_like_gap {
+        // The chip reports single tones from 400 Hz up, plus 200 Hz. Below 400 Hz voiced speech is itself nearly a pure
+        // sinusoid (a vowel's fundamental at 150-390 Hz explains 90-100% of a frame), so only a very pure, exactly-200 Hz
+        // component counts there.
+        let in_range = (13..=122).contains(&index) || (index == 6 && (hz - 200.0).abs() < 3.0 && frac > LOW_TONE_MIN_EXPLAINED_FRACTION);
+        if in_range {
             return Some(Detection { tone: DetectedTone::Single { index, hz }, amplitude: amp });
         }
     }

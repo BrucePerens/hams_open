@@ -31,8 +31,7 @@ fn nearest_row<const N: usize>(table: &[[f64; N]], target: &[f64; N]) -> u32 {
 /// what a real decoder actually consults.
 pub fn quantize_pitch(w0: f64) -> u32 {
     let f0 = w0 / (2.0 * std::f64::consts::PI);
-    // Inverse of decode::dequantize's f0 formula: f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5)).
-    let b0_estimate = ((-(f0 / super::decode::F0_CHIP_SCALE).log2() - 4.311767578125) / 2.1336e-2) - 0.5;
+    let b0_estimate = super::decode::b0_from_f0(f0);
     b0_estimate.round().clamp(0.0, 125.0) as u32
 }
 

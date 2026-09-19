@@ -300,20 +300,19 @@ pub const PREDICTOR_RHO: f64 = 0.8;
 /// from a different bit scatter than the ordinary speech `b1`/`b2` [`extract_raw_parameters`]
 /// returns -- see [`decode_tone`].
 ///
-/// `f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5))` -- mbelib's own "w0 guess" formula (its own
-/// comment notes two other candidate formulas from the spec text and patent filings; this is the one
-/// mbelib's real, working decoder actually uses). Extracted as its own function (previously inlined
-/// directly in [`dequantize`]) so `examples/ambe_fixed_generate_dstar_tables.rs` can generate a
-/// fixed-point table by calling this real function directly, the same reasoning
-/// `tia_102_baba::parameter_encoding::dequantize_fundamental_frequency` already established for TIA-102.BABA.
+/// `f0 = 2^(-4.258618 - 0.021766*b0)` cycles per sample: the real chip's D-STAR pitch map, fitted to the harmonic
+/// peak frequencies of the chip's own output at 100 pitch indices (`examples/dstar_field_scan.rs ... f0scan`; maximum
+/// residual 0.2%). It is logarithmic at 45.94 steps per octave, half of the P25-mode chip's 92.02, so the two are
+/// sibling maps. mbelib's own guess formula `2^(-4.311767578125 - 2.1336e-2*(b0+0.5))` has 46.87 steps per octave and
+/// is up to 1.7% off at either end of the range.
 pub fn f0_from_b0(b0: u32) -> f64 {
-    F0_CHIP_SCALE * 2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
+    2f64.powf(-4.258618 - 0.021766 * b0 as f64)
 }
 
-/// The real chip's D-STAR fundamental frequency is measured at `1.024x` mbelib's guessed formula
-/// (`examples/dstar_fit_pitch_table.rs`: pooled over four speakers (median 1.030 for the first, 1.024 pooled), b0 31-55, with a
-/// control on this crate's own PCM reading 1.000).
-pub const F0_CHIP_SCALE: f64 = 1.024;
+/// Inverse of [`f0_from_b0`], fractional.
+pub fn b0_from_f0(f0: f64) -> f64 {
+    (-f0.log2() - 4.258618) / 0.021766
+}
 
 // [@ANCHOR: dequantize]
 pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
@@ -328,8 +327,7 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
 
     let mut voiced = vec![false; l as usize + 1];
     for (harmonic, slot) in voiced.iter_mut().enumerate().skip(1) {
-        // mbelib's V/UV slot uses its own unscaled f0, not the chip-fitted scale applied to the pitch itself.
-        let jl = (harmonic as f64 * 16.0 * (f0 / F0_CHIP_SCALE)) as usize;
+        let jl = (harmonic as f64 * 16.0 * f0) as usize;
         *slot = tables::VUV[raw.b1 as usize][jl.min(7)];
     }
 

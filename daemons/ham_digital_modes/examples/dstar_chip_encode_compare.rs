@@ -193,6 +193,10 @@ fn main() {
         ours.extend(enc.finish());
         ours.truncate(n_frames);
         let our_params = params(&ours);
+        if let Ok(path) = std::env::var("DUMP_B0") {
+            let lines: Vec<String> = our_params.iter().zip(chip_params.iter()).map(|(a, b)| format!("{} {}", a.as_ref().map_or(-1, |x| x.b0 as i32), b.as_ref().map_or(-1, |x| x.b0 as i32))).collect();
+            std::fs::write(format!("{path}.{offset}"), lines.join("\n")).unwrap();
+        }
         let (mut both, mut b0_close, mut b1_eq, mut b2_close) = (0usize, 0usize, 0usize, 0usize);
         for (a, b) in our_params.iter().zip(chip_params.iter()) {
             if let (Some(a), Some(b)) = (a, b) {

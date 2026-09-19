@@ -136,11 +136,11 @@ pub fn detect_tone(frame: &[i16]) -> Option<Detection> {
         f += HZ_Q16;
     }
     let (amp, hz, p) = refined;
-    if amp > hundred && explained_exceeds(total, p, 9, 10) {
+    if amp > hundred && explained_exceeds(total, p, 99, 100) {
         let index = ((hz as i64 + (HZ_PER_INDEX_Q16 as i64 >> 1)) / HZ_PER_INDEX_Q16 as i64) as u32;
-        let in_range = (12..=122).contains(&index) || index == 6;
-        let pitch_like_gap = (270 * HZ_Q16..340 * HZ_Q16).contains(&hz); // the chip does not report tones near 300 Hz
-        if in_range && !pitch_like_gap {
+        let in_range = (13..=122).contains(&index)
+            || (index == 6 && (hz - 200 * HZ_Q16).abs() < 3 * HZ_Q16 && explained_exceeds(total, p, 999, 1000));
+        if in_range {
             return Some(Detection { tone: DetectedTone::Single { index, hz_q16: hz }, amplitude_q16: amp });
         }
     }

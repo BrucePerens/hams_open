@@ -22,8 +22,15 @@ pub struct Encoder {
 }
 
 impl Encoder {
+    /// Analysis-centre offset (samples) at which this encoder's pitch track lines up with the chip encoder's: voiced
+    /// frames agree within 2 pitch steps 66% of the time at -80 (`examples/dstar_chip_encode_compare.rs`, `DUMP_B0`), and
+    /// the median difference is 0; at the default 0 the best alignment needs a one-frame shift.
+    pub const CHIP_ALIGNED_CENTER_OFFSET: i32 = -80;
+
     pub fn new() -> Self {
-        Self { analyzer: FrameAnalyzer::new(), mirror: DStarDecoderState::initial(), analysis: AnalysisState::new() }
+        let mut analyzer = FrameAnalyzer::new();
+        analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
+        Self { analyzer, mirror: DStarDecoderState::initial(), analysis: AnalysisState::new() }
     }
 
     pub fn set_center_offset(&mut self, samples: i32) {
@@ -61,7 +68,7 @@ impl Encoder {
             rho: crate::ambe::float::dstar::decode::PREDICTOR_RHO,
         };
         let q = quantize_speech(
-            &SpeechTarget { l, w0, vuv_f0: f0 / super::decode::F0_CHIP_SCALE, voiced: &voiced, ml: &ml },
+            &SpeechTarget { l, w0, vuv_f0: f0, voiced: &voiced, ml: &ml },
             &PrevState { l: self.mirror.l, log2_ml: &self.mirror.log2_ml, gamma: self.mirror.gamma },
             &mode,
         );
