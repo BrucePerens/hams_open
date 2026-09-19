@@ -116,11 +116,6 @@ fn main() {
     let slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
     let intercept = (sy - slope * sx) / n;
     println!("log2(chip/guess) = {intercept:.5} + {slope:.6}*b0  (guess is 2^(-4.311767578125 - 0.021336*(b0+0.5)))");
-    println!(
-        "=> chip f0 = 2^({:.6} - {:.6}*(b0+0.5)) roughly",
-        -4.311767578125 + intercept + slope * -0.5 * -1.0 * 0.0,
-        0.021336 - slope
-    );
     for (b0, r) in points.iter().take(40) {
         println!("  b0={b0:3} ratio={r:.4}");
     }
