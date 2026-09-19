@@ -17,9 +17,15 @@ board, not a replacement for the underlying evidence.
 including real recorded speech, as of the latest re-run -- §23, §25, §29, §31, §35):
 - **D-STAR** -- `ambe_dstar`, validated via `examples/ambe_chip_validate_dstar.rs`. Its own tone/DTMF
   frames (`ECMODE_IN`'s `TD_ENABLE` bit) are now also decoded and chip-validated (§40) --
-  `ambe_dstar::decode::classify_b0`/`decode_tone`/`dtmf_digit_from_tone_index`.
+  `ambe_dstar::decode::classify_b0`/`decode_tone`/`dtmf_digit_from_tone_index`, with its own
+  dedicated pass/fail validator, `examples/ambe_chip_validate_dstar_tone.rs` (all 16 DTMF digits, all
+  8 captured frames each, cross-checked against the independent `TONE_FRAME` ground-truth bit as well
+  as `b0`).
 - **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
-  `examples/ambe_chip_validate_ambe_plus_2.rs`.
+  `examples/ambe_chip_validate_ambe_plus_2.rs`. Ordinary speech and DTX-silence are fully validated;
+  **tone/DTMF frames are a real, documented gap** -- the chip genuinely detects them (confirmed via
+  `TONE_FRAME`, §40) but serializes them into the `Erasure` range instead of its own `Tone` range, and
+  no known field decodes the digit/frequency identity from those frames (item 6 below).
 - **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
   `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29). Consolidated
   into one reusable entry point, `ambe::ratet27_frame::decode_frame`, tying the FEC layer together
@@ -99,7 +105,11 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    bit-scatter locating that table's `ID` field within a real tone frame's 49-bit `d` was never
    derived) would need to be resolved first, since Annex J's own `ID` space (0-254, with 128-163
    individually tabulated as *not* following a simple row/column formula the way D-STAR's own
-   dual-tone table does) is a real, separate reverse-engineering task, not a quick follow-up.
+   dual-tone table does) is a real, separate reverse-engineering task, not a quick follow-up. **Checked
+   against mbelib's own reference decoder, not just this codebase**: it doesn't decode this either --
+   `mbe_decodeAmbe2450Parms` returns immediately on `b0 ∈ {126,127}` without reading any payload bits,
+   and the caller synthesizes silence for it exactly like Erasure, so there is no existing reference
+   implementation to consult for the `ID` field's bit-scatter; deriving it would be original work.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -2916,7 +2926,12 @@ distance) with the two confirmed interpretations already established elsewhere i
 `Ratet27Frame::is_dtx_silence()` (delegating to `ratet27_dtx::is_dtx_silence_frame`, section 31/35).
 Deliberately scoped narrow, per direct advice: no `PKT_CHANFMT`/`ECMODE_OUT` parsing (that's packet-
 layer, not frame-layer), and no `VOICE_ACTIVE`-from-wire-bits classifier (section 35 already
-established that isn't reliably possible from `g0` alone).
+established that isn't reliably possible from `g0` alone). (Update, section 40: `ECMODE_OUT`'s own
+bits are since confirmed as a genuine, global, three-rate-validated ground-truth mechanism in their
+own right, independent of any per-rate frame decoder -- bit 14/`VOICE_ACTIVE` in section 27/28, and
+bit 15/`TONE_FRAME` in section 40's `examples/p25_ambe_plus_2_and_dstar_tone_frame_ground_truth.rs`
+and `examples/ambe_chip_validate_dstar_tone.rs` -- so a future session extending packet-layer
+handling should start from those two probes rather than rediscovering that `ECMODE_OUT` exists.)
 
 Tested against real captured frames, not synthetic ones: a real DTMF digit from `real_dtmf_sweep.tsv`
 (confirms `g0=4032`, `u4=80`, `g1=2944`, `g2`/`g3`/`u5`/`u6`/`c7=0`, `dtmf_digit() == Some((0,0))`) and
@@ -3328,6 +3343,23 @@ an open gap, not silently skipped), and Annex J's own 128-163 range does *not* f
 row/column formula the way D-STAR's own dual-tone table does (mbelib's own source comments this
 directly: "dual tone index is different on ambe(dstar) and ambe2+"), so this is a real,
 separate reverse-engineering task for a future session, not a quick follow-up to this one.
+
+**Checked against the reference decoder itself, not just this codebase: mbelib doesn't derive it
+either.** `mbe_decodeAmbe2450Parms()` in mbelib's own `ambe3600x2450.c` decodes `b0` from `ambe_d[0..4)`
+and `ambe_d[37..40)` first, and the instant it finds `b0 == 126 || b0 == 127` it does
+`return (3)` immediately -- before reading a single one of the payload bits (`b1` through `b8`: V/UV,
+gain, spectral amplitudes) that a Tone frame's later bits would otherwise carry. The caller,
+`mbe_processAmbe2450Dataf()`, treats `bad == 3` the same way it treats `bad == 2` (Erasure): both fall
+through to the `else` branch that calls `mbe_synthesizeSilencef()` and re-initializes the codec state,
+with no tone-specific synthesis path at all. In other words, the reference implementation recognizes
+that a frame is a tone (the `b0` check) but never reads or decodes the tone's own identity -- it
+discards the rest of the frame and plays silence, exactly like a real Erasure. This means Annex J's
+`ID`-field bit-scatter isn't a gap specific to this codebase's own reverse-engineering effort; it was
+never implemented by the reference decoder either, so there is no existing source to consult for it --
+deriving it (if it is even present in the bits at all) would be original reverse-engineering work
+against the raw chip output, using stimuli that vary the Annex J `ID` itself (single tones spanning its
+full 0-254 range, not just the 16 DTMF pairs already captured, which may all cluster in one narrow
+sub-range).
 
 ### Cross-mode summary
 
