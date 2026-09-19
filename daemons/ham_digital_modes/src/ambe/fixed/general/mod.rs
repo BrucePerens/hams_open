@@ -9,6 +9,8 @@ mod explog_table;
 pub mod fixed_ops;
 pub mod isqrt;
 pub mod mbe_speech;
+pub mod mbe_synthesis;
+pub mod tone_synthesis;
 pub mod trig;
 mod trig_table;
 pub mod unvoiced_synthesis;

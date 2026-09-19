@@ -9,4 +9,5 @@
 //! `AMBE_PLUS_2_NOTES.md`).
 
 pub mod decode;
+pub mod synthesis;
 mod tables_q16;
