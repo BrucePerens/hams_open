@@ -80,15 +80,26 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    built to test). Does not resolve `g3`'s own plateau (§21) -- `g3` stayed within its already-known
    subspace under bit 8, and the manual itself contains no internal codec parameter documentation that
    could otherwise help.
-6. **A new, real, unexplained cross-mode asymmetry (§40)**: `ECMODE_IN`'s `TD_ENABLE` bit,
-   demonstrably acts on all three rates this document covers (RATET(27), D-STAR, AMBE+2 half-rate --
-   confirmed global), but produces *different* special-frame codes for the same detected tone/DTMF
-   stimulus depending on rate: D-STAR
-   reaches its own real `Tone` code (`b0=126`, matching mbelib's reference decoder exactly, with a
-   fully decodable per-digit index), while AMBE+2 half-rate reaches `Erasure` (`b0=120`) instead of
-   its own spec-defined `Tone` code (`b0=126/127`), for the identical stimulus and the identical
-   `TD_ENABLE` bit. Reproducible, isolated from any `DTX_ENABLE` interaction, but mechanism
-   unexplained -- a real open item, not a bug in this document's own testing.
+6. **A real cross-mode `b0` labeling asymmetry (§40), with the detection question itself now
+   resolved**: `ECMODE_IN`'s `TD_ENABLE` bit demonstrably acts on all three rates this document
+   covers (RATET(27), D-STAR, AMBE+2 half-rate -- confirmed global), but the *serialized* `b0` value
+   differs by rate for the same detected tone/DTMF stimulus: D-STAR reaches its own real `Tone` code
+   (`b0=126`, matching mbelib's reference decoder exactly, with a fully decodable per-digit index),
+   while AMBE+2 half-rate reaches `Erasure` (`b0=120`) instead of its own spec-defined `Tone` code
+   (`b0=126/127`). **Checked directly against the chip's own independent ground-truth status flag**
+   (`ECMODE_OUT`'s `TONE_FRAME` bit, DVSI's manual, read via `PKT_CHANFMT` the same way `VOICE_ACTIVE`
+   was in §27/§28): `TONE_FRAME=1` for every one of AMBE+2 half-rate's 17 tone/DTMF stimuli, 8/8
+   frames each, with D-STAR's own already-confirmed `Tone`/`b0=126` result serving as a positive
+   control that the readback mechanism works correctly on this rate. **AMBE+2 half-rate's chip
+   genuinely detects the tone -- this is not a detection failure -- it just doesn't serialize that
+   detection into `b0`'s documented `Tone` range the way D-STAR or the spec text describe.** Why, and
+   whether the detected tone's real content (frequency/digit identity) is recoverable from the
+   `Erasure` frame's own other bits at all, remain open -- `ambe_plus_2::decode::DequantizedFrame::
+   Tone`'s own already-disclosed gap (Annex J's tone-frame parameter table is transcribed, but the
+   bit-scatter locating that table's `ID` field within a real tone frame's 49-bit `d` was never
+   derived) would need to be resolved first, since Annex J's own `ID` space (0-254, with 128-163
+   individually tabulated as *not* following a simple row/column formula the way D-STAR's own
+   dual-tone table does) is a real, separate reverse-engineering task, not a quick follow-up.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -3284,6 +3295,39 @@ exists** -- an honest null result from a real attempt, not evidence that no such
 7-bit linear window is a narrow hypothesis; the real field, if any, could be non-contiguous,
 differently sized, or not linearly related to row/column the way D-STAR's own `128 + row + 4*col`
 happened to be).
+
+### The Erasure-vs-Tone asymmetry is not a detection failure -- checked against the chip's own ground truth
+
+DVSI's manual describes `TD_ENABLE` only as "tone detection is enabled" -- it says nothing about what
+`b0` value the encoder is supposed to emit once a tone is actually detected, so the Erasure-vs-Tone
+difference above is **undocumented by DVSI, not contradicted by it**. But the manual documents a
+separate, independent, chip-reported ground-truth flag for exactly this question:
+`ECMODE_OUT`'s `TONE_FRAME` bit (bit 15, requested via `PKT_CHANFMT` the same way `VOICE_ACTIVE` was
+in §27/§28): "The encoder sets this bit if the output frame contains either a single frequency tone,
+a DTMF tone, a KNOX tone, or a call progress tone."
+
+`examples/p25_ambe_plus_2_and_dstar_tone_frame_ground_truth.rs` checked it directly against the same
+17 stimuli (loud 200Hz tone + 16 DTMF digits) under `TD_ENABLE`, on both rates. **`TONE_FRAME=1` for
+every single AMBE+2 half-rate frame, 8/8 captures each, all 17 stimuli** -- even though `b0=120`
+(`Erasure`) throughout. D-STAR's own already-confirmed result (`b0=126`, `Tone`) also reads
+`TONE_FRAME=1`, 8/8, serving as a positive control that the readback mechanism itself works correctly
+outside RATET(27), and that a real, working "not detected" case would show `TONE_FRAME=0` if it
+occurred (it never did across either rate's own tone stimuli).
+
+**This settles the detection question decisively: AMBE+2 half-rate's chip genuinely, correctly
+detects every one of these stimuli as a tone. It is not failing to detect anything.** What remains
+open is narrower and more specific than before: *why* does this rate serialize a genuinely-detected
+tone into `b0=120` (`Erasure`) instead of its own spec-defined `126/127` (`Tone`) range, and is the
+tone's real content (frequency, or DTMF digit identity) recoverable from that `Erasure` frame's other
+bits at all? The natural hypothesis -- that this is actually a real Annex J tone frame (DVSI's own
+dedicated tone-frame parameter table, already transcribed in full in `src/ambe/AMBE_PLUS_2_NOTES.md`,
+covering `ID` values 0-254 with 128-163 individually tabulated) -- is not chased further here: Annex J's
+own `ID` field's bit position within a real tone frame's 49-bit `d` was never derived in this
+codebase (`ambe_plus_2::decode::DequantizedFrame::Tone`'s own doc comment already discloses this as
+an open gap, not silently skipped), and Annex J's own 128-163 range does *not* follow a simple
+row/column formula the way D-STAR's own dual-tone table does (mbelib's own source comments this
+directly: "dual tone index is different on ambe(dstar) and ambe2+"), so this is a real,
+separate reverse-engineering task for a future session, not a quick follow-up to this one.
 
 ### Cross-mode summary
 
