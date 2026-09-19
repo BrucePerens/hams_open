@@ -2562,3 +2562,12 @@ is very likely `u4`'s own quantizer step size (or a simple multiple of it) at wh
 point this test's fixed 200Hz/varying-amplitude stimulus lands on -- a concrete, quantitative clue
 for whoever next attempts `u4`'s full semantic identification, not available from any single-frame
 reading alone.
+
+**A quick cross-check of the same dataset against the other blocks**: `g1`/`g2`/`u5`/`u6` show no
+comparably clean pattern (their distinct-value gaps are irregular, no single repeated difference).
+`g3`, however, **independently reproduces its own already-established "steps of exactly `1024`"
+structure** (section 29's basis analysis) on this completely different dataset (fixed 200Hz tone,
+varying amplitude, rather than the varied-content test that originally found it) -- e.g. amplitude
+100 gives exactly `{1024, 2048, 3072}`, amplitude 364.7 gives values including an exact `1024` gap
+(`2103` to `3127`). A clean independent replication of an already-documented structural fact, not a
+new finding, but useful confirmation from a second, unrelated dataset.
