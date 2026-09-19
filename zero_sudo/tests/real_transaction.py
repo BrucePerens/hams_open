@@ -50,7 +50,6 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
 
     @classmethod
     def setUpClass(cls):
-        super().setUpClass()
         # A real, physically-committed cursor, NOT cls.registry.cursor(): under
         # --test-enable, Odoo's own test harness mocks registry.cursor at the
         # CLASS level (before setUp()'s own _real_cursor_factory monkeypatch
@@ -65,7 +64,50 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # insert -- proof no real transaction boundary had been crossed.
         # db_connect(...).cursor() bypasses the mock entirely, matching how
         # _real_cursor_factory itself gets a real cursor.
-        with odoo.sql_db.db_connect(cls.registry.db_name).cursor() as cr:
+        #
+        # night_shift_todo/high/test-runner-hangs-before-any-tour-starts-9a60a362.md's own
+        # root cause, source-traced against Odoo core: this block USED to run AFTER
+        # super().setUpClass(), which resolves to HttpCase.setUpClass()
+        # (odoo/tests/common.py:2220-2228). That method sets cls.cr = cls.registry.cursor()
+        # (a real, unpatched cursor -- the TestCursor mock is only installed a few lines
+        # later by registry_enter_test_mode_cls(), so cls.cr itself is never a savepoint
+        # proxy) and then calls ICP.set_param('web.base.url', cls.base_url()), which does a
+        # real UPDATE of this exact row through cls.cr and never commits it (a
+        # TransactionCase's cls.cr is deliberately rolled back, not committed, at class
+        # teardown -- that is the whole point of the isolation it provides). That UPDATE's
+        # row lock therefore sat held for the rest of the class's setUpClass() window. The
+        # second, separate db_connect() connection below then tried to UPSERT the SAME row
+        # and blocked on that lock forever -- a class deadlocking against its own parent's
+        # write, one statement after another, in the same call stack (confirmed live via
+        # py-spy + pg_stat_activity: the blocked backend's own in-flight query was this
+        # exact INSERT, and the row-locking backend was cls.cr's connection, "idle in
+        # transaction" on its own uncommitted UPDATE of the same id).
+        #
+        # The fix is this reordering. This db_connect() cursor is a genuinely SEPARATE,
+        # short-lived connection: it opens, writes, commits for real, and closes -- all
+        # inside this "with" block, before cls.cr / cls.registry / cls.env exist at all
+        # (get_db_name() needs none of them; setUp() below already calls it the same way).
+        # By the time super().setUpClass() runs and HttpCase.setUpClass() performs its own
+        # real UPDATE of this row through cls.cr, this connection has already committed and
+        # gone -- there is no longer a second, concurrent connection for it to collide with.
+        # The two writes still happen, in this order, but sequentially in wall-clock time on
+        # non-overlapping connections, not concurrently on the same locked row. (Reordering
+        # alone was considered and dismissed once already in this same to-do, on the
+        # assumption that HttpCase.setUpClass()'s own write would still race a still-open
+        # competing connection regardless of order -- that assumption didn't account for
+        # this connection being transient and already closed by the time HttpCase's write
+        # runs, which is what actually eliminates the collision.)
+        #
+        # This does NOT make HttpCase's own HTTP/tour machinery see the wrong host: url_open(),
+        # browser_js() and xmlrpc_url all build requests from cls.base_url() directly in
+        # Python (HOST + cls.http_port()), never by reading the 'web.base.url' ICP value back
+        # out of the database -- confirmed by reading HttpCase's own source. So it is safe for
+        # the real, cross-connection-committed value of 'web.base.url' to differ from
+        # cls.base_url() for the rest of the class's life; nothing in Odoo core's own request
+        # mechanics depends on them matching. Only zero_sudo:test_07_common_setup_class_sql
+        # (this project's own coverage anchor for this exact statement) reads 'web.base.url'
+        # back via a real, separate connection, and it tolerates either value already.
+        with odoo.sql_db.db_connect(get_db_name()).cursor() as cr:
             cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql] # fmt: skip
                 "INSERT INTO ir_config_parameter (key, value) VALUES "
                 "('web.base.url', 'https://hams.com'), "
@@ -75,6 +117,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             # The context manager automatically commits if no exception is
             # raised -- and this time it is a real cursor, so it is a real
             # commit.
+        super().setUpClass()
         # web.base.url.freeze prevents a real, documented Odoo mechanism
         # (res_users.py's admin-login handler: on a successful
         # base.group_system login carrying a base_location, it silently
