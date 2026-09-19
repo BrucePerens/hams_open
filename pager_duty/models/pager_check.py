@@ -540,8 +540,9 @@ class PagerCheck(models.Model):
 
         json_content = json.dumps(json_dict, indent=2)
         path = self._get_config_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        write_error = None
         try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             # Bug-hunt fix (class 11: credential handled with a permission
             # gap): this file embeds plaintext dbpass/SMTP credentials for
             # every configured check (see the dbpass field above and its
@@ -563,6 +564,27 @@ class PagerCheck(models.Model):
                 f.write(json_content)
         except OSError as e:
             _logger.warning("Failed to write daemon configuration to %s: %s", path, e)
+            write_error = e
+
+        if write_error is not None:
+            # The daemon config on disk is now stale and the daemon keeps monitoring with
+            # the old checks, so the admin must not be told the export worked
+            # (todo 4bc4eb36).
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Export Failed"),
+                    "message": _(
+                        "The daemon configuration could not be written to %(path)s: %(error)s. "
+                        "The monitoring daemon is still using its previous configuration.",
+                        path=path,
+                        error=write_error.strerror or str(write_error),
+                    ),
+                    "type": "danger",
+                    "sticky": True,
+                },
+            }
 
         return {
             "type": "ir.actions.client",

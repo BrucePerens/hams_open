@@ -2,6 +2,9 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import os
+import tempfile
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from unittest.mock import mock_open, MagicMock
@@ -136,3 +139,32 @@ class TestGeneralizedConfig(HamsTransactionCase):
         check_model.action_pull_from_json()
         m_open.assert_called_once()
 
+    def test_06_export_reports_failure_when_the_config_cannot_be_written(self):
+        """A failed config write must not be reported as "Export Successful" (todo 4bc4eb36)."""
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        with tempfile.TemporaryDirectory() as tmp:
+            blocker = os.path.join(tmp, "blocker")
+            with open(blocker, "w", encoding="utf-8") as f:
+                f.write("a regular file where a directory is needed")
+            bad_path = os.path.join(blocker, "etc", "pager_config.json")
+            self.safe_patch_object(
+                type(check_model), "_get_config_path", return_value=bad_path
+            )
+            result = check_model.action_push_to_json()
+        params = result["params"]
+        self.assertEqual(params["type"], "danger")
+        self.assertNotIn("Successful", params["title"])
+        self.assertIn(bad_path, params["message"])
+
+    def test_07_export_still_reports_success_when_the_write_works(self):
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        with tempfile.TemporaryDirectory() as tmp:
+            good_path = os.path.join(tmp, "etc", "pager_config.json")
+            self.safe_patch_object(
+                type(check_model), "_get_config_path", return_value=good_path
+            )
+            result = check_model.action_push_to_json()
+            self.assertTrue(os.path.exists(good_path))
+        self.assertEqual(result["params"]["type"], "success")
