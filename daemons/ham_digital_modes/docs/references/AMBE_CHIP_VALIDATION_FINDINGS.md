@@ -6,9 +6,9 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
-## Executive summary (updated as of section 35) -- read this first
+## Executive summary (updated as of section 36) -- read this first
 
-This document has grown to 35 sections across a long, multi-session investigation. This summary
+This document has grown to 36 sections across a long, multi-session investigation. This summary
 exists so a reader (or a future session) doesn't have to read the whole thing to know where things
 stand. Every claim below is sourced to its own section; treat this summary as an index and status
 board, not a replacement for the underlying evidence.
@@ -61,6 +61,12 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    §34's own re-derivation found the naive "`L_hat`-dependent step size" hypothesis does not hold
    cleanly (identical `L_hat` values produced very different dither behavior at two frequencies), so
    this remains a genuinely open question, not just an unfinished derivation.
+5. **A newly found, real, unidentified `ECMODE_IN` feature at bit 8** (§36) -- a systematic sweep of
+   all 16 `ECMODE_IN` bits against a fixed stimulus found bit 8 measurably shifts `g1`/`g2`/`u4`/`u5`/
+   `u6`/`c7` to new value ranges (most likely noise suppression, echo cancellation, or companding,
+   named as existing-but-untested features in §21, though this project cannot confirm which without
+   DVSI's own bit-name table). Does not resolve `g3`'s own plateau (§21) -- `g3` stayed within its
+   already-known subspace under bit 8 -- but is a real, concrete, bounded lead of its own.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -2781,3 +2787,52 @@ field. `is_dtx_silence_frame`'s narrow exact-match-only scope, calling only genu
 silence, was correct as originally shipped -- broadening it, as briefly considered, would have been a
 regression, not an improvement, and this section exists so a future session doesn't re-propose the
 same broadening without first re-running this same check.
+
+## 36. A systematic `ECMODE_IN` bit sweep finds a genuine, previously untested feature at bit 8 -- and a clean independent reconfirmation of `TS_ENABLE` (bit 14)
+
+Section 21's own record names an explicit, untried lever for `g3`'s stubborn rank-8 plateau: "an
+encoder feature/mode this investigation's SPEECH-packet-only testing never engages (frame-repeat,
+DTX, or another documented `ECMODE`/`DCMODE` flag)." Only bits 11 (`DTX_ENABLE`) and 12 (`TD_ENABLE`)
+had ever been tested directly (section 24); the other 13 of `ECMODE_IN`'s 16 bits were completely
+untried. This project has no locally stored copy of DVSI's own bit-name table, but that isn't needed
+to test the real question empirically: does setting each individual bit change the chip's actual
+output on identical content at all?
+
+**Method**: `examples/p25_ratet27_ecmode_bit_sweep.rs` sets `ECMODE_IN` to exactly one bit at a time
+(0 through 15, skipping the two already-tested), resettles a fixed 200Hz/6000-amplitude sawtooth for
+60 frames, captures 8 frames, and decodes all 8 blocks -- including `g3` via this crate's own real
+`g3_decode` now that section 29 derived it, not an assumed-Golay stand-in. `u4` serves as the
+cleanest canary: in the `ECMODE_IN=0x0000` baseline it holds to exactly its known 2-value dither
+(`{1734, 1787}`, section 34) with zero other jitter, so any bit that leaves `u4` outside that exact
+2-value set has demonstrably changed something real, not just landed in one of the chip's already-
+known noisy corners.
+
+**Result, run once against the live chip, all 16 bits in a single pass**: 13 of the 14 newly-tested
+bits (`0`-`7`, `9`, `10`, `13`, `15`) leave `u4` at exactly `{1734, 1787}` -- zero effect detectable by
+this test. Two bits stand out clearly:
+
+- **Bit 14 reproduces `TS_ENABLE`** (already documented in section 25) exactly: `g0=4048`,
+  `g1=3712`, `g2=0`, `g3=0`, `u4=80`, `u5=0`, `u6=0`, `c7=0`, identical across all 8 frames,
+  independent of the actual sawtooth content -- a clean, independent reconfirmation via a completely
+  different test harness of an already-known finding, not a new one.
+- **Bit 8 is new.** `g0` stays exactly `1597` (matching baseline -- the gain/amplitude reading is
+  unaffected, consistent with the stimulus's amplitude being unchanged) and `g3` stays within its
+  already-established subspace (`{191, 255}`, both already-seen members -- **this does not resolve
+  the `g3` plateau mystery**), but `g1`, `g2`, `u4`, `u5`, `u6`, and `c7` all shift to genuinely new,
+  previously-unseen value clusters: `u4` moves from `{1734, 1787}` to `{1960, 1961, 1966}` (a ~200-
+  unit shift, far larger than any dither step documented elsewhere for this block), `u6` reaches values
+  as low as `295` (well below its baseline floor of `682`), and `g2`/`u5`/`c7` all land in ranges with
+  no overlap with baseline. This is a real, reproducible, previously undocumented `ECMODE_IN` feature
+  -- most plausibly one of the audio-processing toggles section 21 already named as existing but
+  untested (noise suppression, echo cancellation, or companding), though this project cannot name
+  which one precisely without DVSI's own bit-table reference. Recorded here, with the raw sweep
+  output and a committed analysis script
+  (`ecmode_bit_sweep_output.txt`, `analyze_ecmode_bit_sweep.py`), as a concrete, bounded, real lead
+  for whoever next has manual access or wants to characterize bit 8's effect on real speech content.
+
+**Scope discipline, stated explicitly**: this was one targeted sweep using a different technique
+(control-word bit variation, not another audio-stimulus variation) specifically because section 21
+named it as a real untried lever, not the start of a broader semantic hunt. `g1`/`g2`/`u5` remain
+noise-limited under every content-variation test already tried in this document; bit 8's discovery
+doesn't change that -- it opens one new, narrow, well-defined follow-up (what bit 8 does, precisely)
+rather than reopening the general semantic-identity question.
