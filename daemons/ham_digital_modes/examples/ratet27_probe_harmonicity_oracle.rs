@@ -21,8 +21,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_harmonicity_oracle -- <host:port>`
 
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -252,7 +252,7 @@ fn main() {
             count[idx] += 1;
         }
         // Per-band (3 harmonics each, matching frequency_bands_count's l<=36 grouping) classification.
-        use ham_digital_modes::ambe::float::ratet27::vuv::frequency_bands_count;
+        use ham_digital_modes::ambe::float::tia_102_baba::vuv::frequency_bands_count;
         let k_hat = frequency_bands_count(b.1) as usize;
         let mut decoded_band = vec![false; k_hat];
         for l in 1..=b.1 {

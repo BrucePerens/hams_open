@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Fixed-point port of [`super::super::float::ratet27::voiced_synthesis`] (TIA-102.BABA_2003.pdf
+//! Fixed-point port of [`super::super::float::tia_102_baba::voiced_synthesis`] (TIA-102.BABA_2003.pdf
 //! section 11.3, Eq. 127-141) -- see that module's own doc comment for the spec derivation, the two
 //! documented notational resolutions (the bare `L~` in Eq. 140, and `phi_l(0)` for harmonics beyond
 //! `max[L~(-1), L~(0)]`), both reused unchanged here.

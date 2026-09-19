@@ -20,7 +20,7 @@
 //! AGC-vs-compander question it was designed to answer turned out to be the wrong question.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_bit8_abrupt_switch -- <host:port>`
-use ham_digital_modes::ambe::float::ratet27::ratet27_frame::decode_frame;
+use ham_digital_modes::ambe::dvsi_p25fec::frame::decode_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

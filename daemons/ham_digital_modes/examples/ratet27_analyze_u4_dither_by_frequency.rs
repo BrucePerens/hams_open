@@ -15,9 +15,9 @@
 //! for any frequency-dependent finding from this dataset, flagged here rather than left implicit.
 //!
 //! Usage: `cargo run --release --example ratet27_analyze_u4_dither_by_frequency`
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
-use ham_digital_modes::ambe::float::ratet27::vuv::harmonics_count;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::harmonics_count;
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
 

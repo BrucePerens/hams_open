@@ -9,8 +9,8 @@
 //!
 //! Usage: `cargo run --release --example p25_ratet27_probe_dtx_voice_active -- <host:port>`
 use ham_digital_modes::ambe::general::fec::golay_decode;
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 

@@ -4,7 +4,7 @@
 //! `classify_b0` reports `Tone`, `ECMODE_OUT`'s `TONE_FRAME` ground-truth bit reads 1, and
 //! `dtmf_digit_from_tone_index` recovers the exact row/column pair for every one -- straight from
 //! the chip's own live response, not the frozen fixtures `decode.rs`'s own unit tests check
-//! against. Every other module with a live-fixture pair (`ratet27_dtmf`, `ambe_plus_2`) already has
+//! against. Every other module with a live-fixture pair (`dvsi_p25fec::dtmf`, `ambe_plus_2`) already has
 //! a pass/fail validator beside its frozen fixtures; this closes that same gap for D-STAR's tone
 //! decode, shipped in the same round as section 40's D-STAR tone/DTMF findings.
 //!

@@ -7,8 +7,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_level_bits -- <host:port> <level|tilt|period> [period=60]`
 
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::hamming_decode_chip;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::dvsi_p25fec::fec::hamming_decode_chip;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::golay_decode;
 use std::net::UdpSocket;
 use std::time::Duration;

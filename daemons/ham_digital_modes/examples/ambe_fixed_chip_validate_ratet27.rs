@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Live chip validation for `ambe::fixed::ratet27::reconstruct`/`prediction`: feeds real recorded
+//! Live chip validation for `ambe::fixed::tia_102_baba::reconstruct`/`prediction`: feeds real recorded
 //! speech through the real DVSI chip (RATET(27), P25 full-rate FEC), decodes each real frame's real
 //! quantizer values via the already-chip-validated float `DecoderState::decode_parameters`, and
 //! confirms the fixed-point `reconstruct_spectral_amplitudes_q16` tracks the float sibling's own
@@ -16,8 +16,8 @@
 //! That wrong domain corrupted `u_hat_1..u_hat_6`/`b_hat_0` on nearly every frame, driving
 //! `errors.rate` past the `0.0875` mute threshold almost immediately (`Decoded: 3/3320`).
 //! `wire_bytes_to_c` now extracts each block's raw pre-FEC codeword directly via
-//! `ratet27_wire_format::block_wire_members` -- the same convention
-//! `ratet27_fec::decode_block`/`ratet27_frame::decode_frame` use and that
+//! `dvsi_p25fec::wire_format::block_wire_members` -- the same convention
+//! `dvsi_p25fec::fec::decode_block`/`dvsi_p25fec::frame::decode_frame` use and that
 //! `examples/ambe_chip_validate_ratet27.rs`'s own zero-corrected-error PASS harness already confirms
 //! against the live chip -- which recovers `Decoded: 3291/3320` (worst Ml relative error observed
 //! well under the 1% tolerance). The remaining ~29 non-decoded frames are `should_mute_frame`/
@@ -26,22 +26,22 @@
 //!
 //! Also prints the real chip-derived `R_M0` (spectral energy, Eq. 105) range across all decoded
 //! frames -- min=9.2, max=4.0e8, mean=8.5e5 in one representative run -- which is the evidence
-//! behind `ambe::fixed::ratet27::enhancement`'s own log-domain design (see that module's doc
+//! behind `ambe::fixed::tia_102_baba::enhancement`'s own log-domain design (see that module's doc
 //! comment): 8 orders of magnitude rules out any single linear Q16.16 rescale. Also feeds each real
 //! decoded frame's own reconstructed amplitudes and `omega0_tilde` through
 //! `enhancement::enhance_spectral_amplitudes_q16`, checked against the float sibling on real chip
-//! amplitude *shapes* the synthetic sweep in `tests/ambe_fixed_ratet27_enhancement.rs` can't fully
+//! amplitude *shapes* the synthetic sweep in `tests/ambe_fixed_tia_102_baba_enhancement.rs` can't fully
 //! stand in for -- worst harmonic relative error observed 0.69% across all 3293 checked frames in
 //! one representative run, zero over the 1% tolerance.
 //!
 //! Usage: `cargo run --release --example ambe_fixed_chip_validate_ratet27 -- <host:port>`
 
-use ham_digital_modes::ambe::fixed::ratet27::enhancement::enhance_spectral_amplitudes_q16;
-use ham_digital_modes::ambe::fixed::ratet27::prediction::INITIAL_L_HAT_PREV as FIXED_INITIAL_L_HAT_PREV;
-use ham_digital_modes::ambe::fixed::ratet27::reconstruct::reconstruct_spectral_amplitudes_q16;
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::enhancement::enhance_spectral_amplitudes;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::fixed::tia_102_baba::enhancement::enhance_spectral_amplitudes_q16;
+use ham_digital_modes::ambe::fixed::tia_102_baba::prediction::INITIAL_L_HAT_PREV as FIXED_INITIAL_L_HAT_PREV;
+use ham_digital_modes::ambe::fixed::tia_102_baba::reconstruct::reconstruct_spectral_amplitudes_q16;
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -107,7 +107,7 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
 }
 /// Extracts `decode_parameters`'s own `c_hat_0..c_hat_7` domain -- the 8 raw, pre-FEC-decode code
 /// vectors -- directly from the DVSI chip's raw UDP wire bytes (MSB-first bits per byte, the same
-/// convention `ratet27_fec::decode_block`/`ratet27_frame::decode_frame` use and that
+/// convention `dvsi_p25fec::fec::decode_block`/`dvsi_p25fec::frame::decode_frame` use and that
 /// `ambe_chip_validate_ratet27.rs`'s own zero-corrected-error PASS harness already confirms against
 /// the live chip). **This replaces an earlier, wrong extraction** that instead paired wire bits into
 /// 72 "dibit symbols" and ran them through `interleave::deinterleave_from_dibit_symbols` -- that
@@ -165,7 +165,7 @@ fn main() {
     // The fixed side tracks its own parallel (l_hat_prev, previous_m_q16) history -- there is no
     // fixed-point DecoderState type yet (only reconstruct/prediction are ported so far, not the
     // full bit_prioritization-to-reconstruct pipeline as one struct), so this validator drives it
-    // directly, the same pattern tests/ambe_fixed_ratet27_reconstruct.rs already established.
+    // directly, the same pattern tests/ambe_fixed_tia_102_baba_reconstruct.rs already established.
     let mut fixed_l_hat_prev = FIXED_INITIAL_L_HAT_PREV;
     let mut fixed_prev_m_q16: Vec<i32> = vec![65536; FIXED_INITIAL_L_HAT_PREV as usize];
 
@@ -204,7 +204,7 @@ fn main() {
             match float_decoder.decode_parameters(c) {
                 Some(FrameOutcome::Decoded(params)) => {
                     decoded_frames += 1;
-                    let r_m0 = ham_digital_modes::ambe::float::ratet27::enhancement::energy(
+                    let r_m0 = ham_digital_modes::ambe::float::tia_102_baba::enhancement::energy(
                         &params.reconstructed_amplitudes,
                     );
                     r_m0_min = r_m0_min.min(r_m0);
@@ -261,7 +261,7 @@ fn main() {
                             // each side already reconstructed above -- the float side's own
                             // `params.reconstructed_amplitudes`, the fixed side's own
                             // `fixed_amplitudes` -- rather than a synthetic sweep, since this is the
-                            // stage `tests/ambe_fixed_ratet27_enhancement.rs`'s own realistic-but-
+                            // stage `tests/ambe_fixed_tia_102_baba_enhancement.rs`'s own realistic-but-
                             // synthetic sweep can't fully stand in for (it can't reproduce the exact
                             // amplitude *shapes* a real predictive decode stream produces).
                             let omega0_q16 = (params.omega0_tilde * 65536.0).round() as i32;

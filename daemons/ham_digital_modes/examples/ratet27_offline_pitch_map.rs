@@ -6,7 +6,7 @@
 //!
 //! Usage: `cargo run --release --example ratet27_offline_pitch_map -- [dir=/tmp]`
 
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 
 fn env(x: &[f64]) -> Vec<f64> {
     x.chunks_exact(160).map(|c| (c.iter().map(|s| s * s).sum::<f64>() / 160.0).sqrt()).collect()

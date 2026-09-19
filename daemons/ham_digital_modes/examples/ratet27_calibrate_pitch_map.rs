@@ -11,8 +11,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_calibrate_pitch_map -- <host:port> [step=4] [p_min=24] [p_max=120] [csv_path]`
 
-use ham_digital_modes::ambe::float::ratet27::bit_prioritization::extract_fundamental_frequency_quantizer;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::extract_fundamental_frequency_quantizer;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::golay_decode;
 use std::net::UdpSocket;
 use std::time::Duration;

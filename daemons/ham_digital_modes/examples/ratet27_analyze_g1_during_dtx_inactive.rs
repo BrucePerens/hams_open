@@ -8,8 +8,8 @@
 //! vs. inactive somewhat better than `g0` alone, even without `ECMODE_OUT`.
 //!
 //! Usage: `cargo run --release --example ratet27_analyze_g1_during_dtx_inactive`
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
 use std::collections::BTreeMap;
 
 const G1_HIGH_CLUSTER_FLOOR: u16 = 3300;

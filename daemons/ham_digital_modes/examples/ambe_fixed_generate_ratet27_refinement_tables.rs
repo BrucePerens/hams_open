@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Generates `src/ambe/fixed/ratet27/pitch_refinement_tables.rs`: the fixed-point tables for the
+//! Generates `src/ambe/fixed/tia_102_baba/pitch_refinement_tables.rs`: the fixed-point tables for the
 //! 256-point windowed DFT `S_w(m)` and the window's own 16384-point DFT `W_R(m)` (TIA-102.BABA_2003.pdf
 //! section 5.1.5), computed from the floating-point sibling's real window
-//! (`float::ratet27::pitch::pitch_refinement_window`) with the same formulas as
-//! `float::ratet27::pitch_refinement::window_dft_16384` (that function is crate-private, so its
+//! (`float::tia_102_baba::pitch::pitch_refinement_window`) with the same formulas as
+//! `float::tia_102_baba::pitch_refinement::window_dft_16384` (that function is crate-private, so its
 //! three-line sum is repeated here rather than widening its visibility).
 //!
 //! Regenerate with: `cargo run --release --example ambe_fixed_generate_ratet27_refinement_tables >
-//! src/ambe/fixed/ratet27/pitch_refinement_tables.rs`
+//! src/ambe/fixed/tia_102_baba/pitch_refinement_tables.rs`
 
-use ham_digital_modes::ambe::float::ratet27::pitch::pitch_refinement_window;
+use ham_digital_modes::ambe::float::tia_102_baba::pitch::pitch_refinement_window;
 use std::f64::consts::PI;
 
 const WR_HALF_RANGE: i32 = 512;

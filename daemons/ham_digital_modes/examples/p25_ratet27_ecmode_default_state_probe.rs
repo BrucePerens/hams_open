@@ -17,7 +17,7 @@
 //! bit 8 (or something with the same effect) is on by default.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_default_state_probe -- <host:port>`
-use ham_digital_modes::ambe::float::ratet27::ratet27_frame::decode_frame;
+use ham_digital_modes::ambe::dvsi_p25fec::frame::decode_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

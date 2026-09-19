@@ -9,7 +9,7 @@ use super::encode::{build_frame, build_tone_frame};
 use super::quantize::quantize_pitch;
 use super::tables;
 use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
-use crate::ambe::float::ratet27::encoder::FrameAnalyzer;
+use crate::ambe::float::tia_102_baba::encoder::FrameAnalyzer;
 use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
 
 /// The 12-bit level field a chip encoder writes for a tone of per-tone amplitude `amplitude` (measured 1 kHz sine

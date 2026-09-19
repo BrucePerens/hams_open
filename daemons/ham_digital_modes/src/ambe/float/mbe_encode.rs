@@ -216,13 +216,13 @@ impl Default for AnalysisState {
 /// the one this crate's shared synthesis expects. Both returned vectors are 1-indexed (index 0 unused), length
 /// `l + 1`.
 pub fn analyze_at_pitch(
-    frame: &crate::ambe::float::ratet27::encoder::FrameAnalysis,
+    frame: &crate::ambe::float::tia_102_baba::encoder::FrameAnalysis,
     w0: f64,
     l: u32,
     state: &mut AnalysisState,
 ) -> (Vec<bool>, Vec<f64>) {
-    use crate::ambe::float::ratet27::spectral_amplitude::estimate_spectral_amplitudes;
-    use crate::ambe::float::ratet27::vuv::{determine_voicing, frequency_bands_count};
+    use crate::ambe::float::tia_102_baba::spectral_amplitude::estimate_spectral_amplitudes;
+    use crate::ambe::float::tia_102_baba::vuv::{determine_voicing, frequency_bands_count};
 
     let (bands, xi_max) = determine_voicing(&frame.refinement, w0, frame.initial_pitch_error, state.xi_max, &state.prev_bands);
     state.xi_max = xi_max;

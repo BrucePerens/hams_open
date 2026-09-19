@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Closes a real coverage gap this document's own executive summary implied but never checked:
 //! `ECMODE_IN`'s `DTX_ENABLE`/`TS_ENABLE` bits (and the resulting DTX-silence / DTMF-tone special
-//! frames `ambe::ratet27_dtx`/`ambe::ratet27_dtmf` classify) were only ever tested under
+//! frames `ambe::dvsi_p25fec::dtx`/`ambe::dvsi_p25fec::dtmf` classify) were only ever tested under
 //! `RATET(27)` (P25 full-rate FEC). `ECMODE_IN` is documented as a global encoder-side control
 //! (DVSI's own manual, section 39), so the same DTX/DTMF behavior should appear under D-STAR and
 //! AMBE+2 half-rate too -- but this project's own D-STAR and AMBE+2 decoders had never actually been

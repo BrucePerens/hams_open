@@ -10,7 +10,7 @@
 //! frames at all) its output is always ~24000 rms in total ([`AMBE_PLUS_2_TONE_RMS`]), i.e. a single tone of peak
 //! `24000*sqrt(2)` (clipped by the chip at full scale) or two tones of peak 24000 each.
 
-use super::ratet27::unvoiced_synthesis::N;
+use super::tia_102_baba::unvoiced_synthesis::N;
 use std::f64::consts::PI;
 
 /// Peak amplitude (16-bit PCM units) used when a tone frame carries no usable level.

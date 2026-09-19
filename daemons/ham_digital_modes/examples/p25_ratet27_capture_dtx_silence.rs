@@ -2,7 +2,7 @@
 //! Tests whether `DTX_ENABLE` (`ECMODE_IN` bit 11, Discontinuous Transmission / Voice Activity
 //! Detection) changes RATET(27)'s wire format for silence, following the same primary-source-
 //! motivated pattern that found the real DTMF encoding mode
-//! (`p25_ratet27_capture_real_dtmf.rs`/`ambe::ratet27_dtmf`). DVSI's manual: with VAD enabled, "the
+//! (`p25_ratet27_capture_real_dtmf.rs`/`ambe::dvsi_p25fec::dtmf`). DVSI's manual: with VAD enabled, "the
 //! encoder will output a silence frame (in-band)... [which] contains information regarding the
 //! level of background noise" -- a specific, testable claim that silence frames under `DTX_ENABLE`
 //! carry a real noise-level parameter, distinct from ordinary silence handling.

@@ -12,6 +12,6 @@ pub mod ambe_plus_2;
 pub mod dstar;
 pub mod mbe_encode;
 pub mod mbe_synthesis;
-pub mod ratet27;
+pub mod tia_102_baba;
 pub mod tone_detect;
 pub mod tone_synthesis;

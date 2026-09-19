@@ -11,16 +11,16 @@
 //! this crate's own existing chip-check convention), feed the *exact* pitch (not an estimate --
 //! `omega0 = 2*pi*freq/8000`) through `encode_prioritized_bits` to get this crate's own textbook
 //! `u_hat_0`, and separately decode a real captured chip frame at the same frequency through
-//! `ratet27_wire_format`/`ratet27_fec` to get the chip's real `g0` data. If `u_hat_0`'s top 6 bits
+//! `dvsi_p25fec::wire_format`/`dvsi_p25fec::fec` to get the chip's real `g0` data. If `u_hat_0`'s top 6 bits
 //! (`bit_prioritization::extract_fundamental_frequency_quantizer`'s own documented invariant: those
 //! 6 bits are always `b_hat_0`'s own MSBs, regardless of `k_hat`) match the corresponding bits of
 //! the chip's decoded `g0`, that's direct, concrete evidence for the `u0=g0` hypothesis.
 //!
 //! Usage: `cargo run --release --example ratet27_compare_textbook_u_vectors_to_chip -- <host:port> <freq_hz>`
-use ham_digital_modes::ambe::float::ratet27::pitch_refinement::RefinementFrame;
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
-use ham_digital_modes::ambe::float::ratet27::{encode_prioritized_bits, FrameState};
+use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::RefinementFrame;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
+use ham_digital_modes::ambe::float::tia_102_baba::{encode_prioritized_bits, FrameState};
 use std::net::UdpSocket;
 use std::time::Duration;
 

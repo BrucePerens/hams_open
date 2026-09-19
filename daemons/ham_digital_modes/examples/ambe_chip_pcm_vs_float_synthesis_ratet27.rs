@@ -14,7 +14,7 @@
 //! decoder state and this crate's own `DecoderState` advance in lockstep against the identical
 //! stream: for each real speech frame, (1) send it to the chip and capture the encoded channel bits,
 //! (2) immediately send those same bits back to get the chip's own reference PCM, (3) feed the same
-//! bits through `ambe::float::ratet27::decode::DecoderState::decode_frame` for this crate's own PCM.
+//! bits through `ambe::float::tia_102_baba::decode::DecoderState::decode_frame` for this crate's own PCM.
 //!
 //! **Why the metric isn't sample-exact SNR**: MBE synthesis has real, deliberate randomness --
 //! `voiced_synthesis`'s own phase dither and `unvoiced_synthesis`'s own noise generator. Two
@@ -46,8 +46,8 @@
 //!
 //! Usage: `cargo run --release --example ambe_chip_pcm_vs_float_synthesis_ratet27 -- <host:port>`
 
-use ham_digital_modes::ambe::float::ratet27::decode::DecoderState;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 

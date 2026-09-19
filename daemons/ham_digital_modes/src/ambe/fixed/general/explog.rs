@@ -18,7 +18,7 @@ use super::explog_table::{EXP2_FRAC_LEN, EXP2_FRAC_Q16_16, LOG2_FRAC_LEN, LOG2_F
 /// as everywhere else in this crate (`x_real = x / 65536`) rather than a plain `i32` -- for a caller
 /// whose own value's *integer* range genuinely exceeds `i32` (RATET(27) enhancement's own `R_M0`/
 /// `S_E`, which real chip data shows spans roughly 9 to 4x10^8, see
-/// `ambe::fixed::ratet27::enhancement`'s own doc comment), while its needed *fractional* precision
+/// `ambe::fixed::tia_102_baba::enhancement`'s own doc comment), while its needed *fractional* precision
 /// is still just 16 bits. Mirrors [`log2_q16`]'s own table lookup and interpolation exactly (same
 /// table, same 8-bit index/22-bit interpolation window), just locating the leading-1 bit within a
 /// 64-bit input instead of a 32-bit one -- never panics: a non-positive `x` returns `i32::MIN`, the

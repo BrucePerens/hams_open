@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Generates `src/ambe/fixed/ratet27/parameter_encoding/b0_table.rs`: two parallel 208-entry tables
+//! Generates `src/ambe/fixed/tia_102_baba/parameter_encoding/b0_table.rs`: two parallel 208-entry tables
 //! (`b_hat_0` is an
 //! 8-bit quantizer value the spec limits to `0..=207`, TIA-102.BABA_2003.pdf section 6.1) mapping
 //! every possible received `b_hat_0` directly to `omega0_tilde` (Q16.16) and `L~`, computed here by
 //! calling this crate's own real, chip-cross-checked floating-point functions
-//! (`ratet27::parameter_encoding::dequantize_fundamental_frequency`, `ratet27::vuv::harmonics_count`)
+//! (`tia_102_baba::parameter_encoding::dequantize_fundamental_frequency`, `tia_102_baba::vuv::harmonics_count`)
 //! rather than re-deriving the formulas -- so the fixed-point table is guaranteed to agree with the
 //! float sibling for every input, not just a formula that was independently retyped and might drift.
 //!
 //! Since `b_hat_0` only has 208 valid values, this sidesteps needing a general fixed-point division
 //! or `harmonics_count` port for the decoder path entirely: every decoder call site
-//! (`ratet27::decode`) only ever calls these two functions with an already-dequantized `omega0_tilde`
+//! (`tia_102_baba::decode`) only ever calls these two functions with an already-dequantized `omega0_tilde`
 //! that is itself always one of these 208 discrete values, so a direct lookup is exact, not an
 //! approximation, and needs no interpolation.
 //!
 //! Regenerate with: `cargo run --release --example ambe_fixed_generate_ratet27_b0_table >
-//! src/ambe/fixed/ratet27/parameter_encoding/b0_table.rs`
+//! src/ambe/fixed/tia_102_baba/parameter_encoding/b0_table.rs`
 
-use ham_digital_modes::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency;
-use ham_digital_modes::ambe::float::ratet27::vuv::harmonics_count;
+use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency;
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::harmonics_count;
 
 const B0_COUNT: usize = 208; // 0..=207, per the spec's own stated valid range.
 const Q16_ONE: f64 = 65536.0;

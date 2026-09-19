@@ -11,7 +11,7 @@ use super::decode::{
 };
 use super::parse_frame;
 use crate::ambe::float::mbe_synthesis::MbeSynthesizer;
-use crate::ambe::float::ratet27::unvoiced_synthesis::N;
+use crate::ambe::float::tia_102_baba::unvoiced_synthesis::N;
 use crate::ambe::float::tone_synthesis::{
     ToneSynthesizer, AMBE_PLUS_2_TONE_RMS, CALL_BUSY_HZ, CALL_DIAL_HZ, CALL_RING_HZ,
 };

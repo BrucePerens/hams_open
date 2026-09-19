@@ -37,13 +37,13 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
   `120`, `FrameKind::CallProgress`, kept separate from `FrameKind::Erasure`'s genuine `b0=121/123`) --
   see item 6 below for the full resolution, including the one real quirk this raised (a forced-DTMF
   rate-column mismatch, fully explained, not a lingering unknown).
-- **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
-  `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29). Consolidated
-  into one reusable entry point, `ambe::ratet27_frame::decode_frame`, tying the FEC layer together
+- **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::dvsi_p25fec::wire_format` /
+  `ambe::dvsi_p25fec::fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29). Consolidated
+  into one reusable entry point, `ambe::dvsi_p25fec::frame::decode_frame`, tying the FEC layer together
   with the confirmed DTMF/DTX interpretations rather than leaving every caller re-derive the same
   8-block wire-bit extraction from scratch (§37).
-- **RATET(27) DTMF encoding** -- `ambe::ratet27_dtmf`, fully decoded and validated (§25).
-- **RATET(27) DTX-silence classification** -- `ambe::ratet27_dtx`, validated against real chip-
+- **RATET(27) DTMF encoding** -- `ambe::dvsi_p25fec::dtmf`, fully decoded and validated (§25).
+- **RATET(27) DTX-silence classification** -- `ambe::dvsi_p25fec::dtx`, validated against real chip-
   reported `VOICE_ACTIVE` ground truth (not just stimulus inference), corrected once by its own test
   harness and once more when upgraded to ground truth (§31, §35).
 
@@ -1831,11 +1831,11 @@ constraints, but the *one this session actually derived by sampling real codewor
 consistent with all of them, which is the strongest evidence available that it's the chip's real
 table (not merely "a" table that happens to work).
 
-**New committed code**: `src/ambe/ratet27_wire_format.rs` (the validated 12x12 transform, the 8
+**New committed code**: `src/ambe/dvsi_p25fec/wire_format.rs` (the validated 12x12 transform, the 8
 sub-block boundaries, and `block_wire_members` computing each block's exact wire membership
 programmatically from the transform rather than as separately hand-maintained lists -- regression-
 tested against every directly chip-confirmed set from §§18-21 with zero mismatches) and
-`src/ambe/ratet27_fec.rs` (the chip-real Golay reuse of `fec.rs`, the new `HAMMING_PARITY_CHIP`
+`src/ambe/dvsi_p25fec/fec.rs` (the chip-real Golay reuse of `fec.rs`, the new `HAMMING_PARITY_CHIP`
 table and its encode/decode functions, a unified `decode_block` entry point, and the full validation
 test suite described above -- 19 tests total across both files, all passing). This is a genuine,
 tested, chip-validated software duplicate of RATET(27)'s FEC layer for 7 of its 8 sub-blocks, not
@@ -1881,7 +1881,7 @@ audio-stimulus search expecting a different result.
 - §9's finding that pitch lives in `u2`, Gray-coded, was derived through the *textbook* TIA-102
   Annex H deinterleave -- which this entire investigation (§§15-22 and this section) has since shown
   does not match this chip's real wire format. That specific claim needs re-deriving through the
-  correct `ratet27_wire_format` deinterleave plus an empirical decode before anything semantic gets
+  correct `dvsi_p25fec::wire_format` deinterleave plus an empirical decode before anything semantic gets
   built on top of it; it should not be assumed to still hold.
 - Byte-exact PCM reproduction of the chip's own *synthesis* output is almost certainly unreachable
   regardless of how completely the FEC/interleave layer above gets nailed down -- DVSI's manual
@@ -1904,7 +1904,7 @@ decoded data, `u_hat_1` to `g1`'s, and so on, with no further block-level relabe
 `examples/ratet27_compare_textbook_u_vectors_to_chip.rs` tests this directly: for a known-frequency
 pure sine, feed the *exact* pitch (not an estimate) through `encode_prioritized_bits` to get this
 crate's own `u_hat_0`, and decode a real captured chip frame at the same frequency's `g0` block via
-`ratet27_fec::decode_block`. **The top 6 bits did not match at any of 4 tested frequencies
+`dvsi_p25fec::fec::decode_block`. **The top 6 bits did not match at any of 4 tested frequencies
 (100/200/250/400 Hz)** -- and, notably, the chip's own decoded `g0` value saturated to the same
 all-1s top-6-bits pattern (`0b111111`) at 200, 250, and 400 Hz while showing a distinct value at 100
 Hz, which does not resemble the textbook fundamental-frequency quantizer's own smoothly-varying
@@ -2075,7 +2075,7 @@ goal with current, not merely historical, evidence.
 **RATET(27) now has the same kind of real PASS/FAIL chip-validation harness D-STAR and AMBE+2 half-
 rate already had.** `examples/ambe_chip_validate_ratet27.rs` -- new this session -- captures live
 chip frames across the same 8 frequencies as the D-STAR harness and decodes each through
-`ratet27_wire_format`/`ratet27_fec` directly (no search, no hypothesis-scoring -- this session
+`dvsi_p25fec::wire_format`/`dvsi_p25fec::fec` directly (no search, no hypothesis-scoring -- this session
 already determined the real format), checking for zero corrected errors on all 7 resolved blocks
 (`g0`, `g1`, `g2`, `u4`, `u5`, `u6`, `c7`; `g3` deliberately excluded). **Live result: PASS, 120/120
 captured frames across all 8 frequencies, zero errors on every block.** This supersedes the older,
@@ -2258,8 +2258,8 @@ DTMF-specific parameter set) is not yet done and is a concrete, bounded next ste
 rather than re-capturing it.
 
 **That characterization was completed immediately, and it is a clean, complete, fully-solved
-finding.** Decoding all 16 DTMF frames through the already-validated `ratet27_wire_format`/
-`ratet27_fec` pipeline (`decode_dtmf.py`) resolves the entire structure at
+finding.** Decoding all 16 DTMF frames through the already-validated `dvsi_p25fec::wire_format`/
+`dvsi_p25fec::fec` pipeline (`decode_dtmf.py`) resolves the entire structure at
 a glance: **the normal FEC/interleave format is reused (not a distinct frame format), but with
 almost everything zeroed except two fields that directly, cleanly encode the DTMF row and column
 frequencies:**
@@ -2468,7 +2468,7 @@ confirmation of an earlier finding: natural offsets 2-5 are `0` in *every one* o
 meaning the entire codeword space this basis spans can never produce a `1` there -- the "always
 zero" pattern noted since section 23 is now proven, not merely unobserved-as-1 in the sample.
 
-**Implemented as real software**: `g3_encode`/`g3_decode` in `src/ambe/ratet27_fec.rs`, brute-force
+**Implemented as real software**: `g3_encode`/`g3_decode` in `src/ambe/dvsi_p25fec/fec.rs`, brute-force
 minimum-distance decoding over the real 256-codeword space (the same technique `fec.rs`'s own
 `golay_decode`/`hamming_decode` use, just over `g3`'s own smaller, real code rather than a
 sub-select of the full Golay space). `decode_block` now handles `g3` directly instead of panicking.
@@ -2566,14 +2566,14 @@ left as an open "probably right" lead. Full 300-frame dataset committed
 (`u6_converged_range_sweep.tsv`) so a future session sees this exact result rather than re-deriving
 it.
 
-## 31. `ratet27_dtx`: DTX-silence classification implemented in software, one real overclaim caught and fixed by its own validation harness
+## 31. `dvsi_p25fec::dtx`: DTX-silence classification implemented in software, one real overclaim caught and fixed by its own validation harness
 
 Following the same "implement the confirmed behavior in software" approach that produced
-`ratet27_dtmf` (section 25), implemented DTX-silence classification as `ambe::ratet27_dtx`, based on
+`dvsi_p25fec::dtmf` (section 25), implemented DTX-silence classification as `ambe::dvsi_p25fec::dtx`, based on
 section 26/28's finding that `g0`, `g2`, and `c7` all read clean constants for confirmed DTX-silence.
 The first version required all three fields to match.
 
-**Its own new live validation harness (`examples/ambe_chip_validate_ratet27_dtx.rs`) immediately
+**Its own new live validation harness (`examples/ambe_chip_validate_dvsi_p25fec/dtx.rs`) immediately
 caught a real overclaim in that first version.** A careful 10-fresh-frame check found `g2` took 7
 different values and `c7` took 3 different values across just 10 confirmed-silence frames -- neither
 is actually a reliable constant, despite section 26's own single-frame check suggesting otherwise.
@@ -2794,7 +2794,7 @@ varying amplitude, rather than the varied-content test that originally found it)
 (`2103` to `3127`). A clean independent replication of an already-documented structural fact, not a
 new finding, but useful confirmation from a second, unrelated dataset.
 
-## 35. `ratet27_dtx` upgraded to real chip ground truth, and both of its own open questions resolved together
+## 35. `dvsi_p25fec::dtx` upgraded to real chip ground truth, and both of its own open questions resolved together
 
 Section 31's `is_dtx_silence_frame` classifier was validated only by stimulus inference ("we sent
 digital silence, so this should read as silence") -- the same weakness DTMF had before `PKT_CHANFMT`'s
@@ -2949,7 +2949,7 @@ noise-limited under every content-variation test already tried in this document;
 doesn't change that -- it opens one new, narrow, well-defined follow-up (what bit 8 does, precisely)
 rather than reopening the general semantic-identity question.
 
-## 37. Consolidating scattered validation code into one reusable decoder: `ambe::ratet27_frame`
+## 37. Consolidating scattered validation code into one reusable decoder: `ambe::dvsi_p25fec::frame`
 
 Every RATET(27) validation/probe tool in this project -- roughly 15 of them by this point -- repeated
 the same boilerplate: unpack an 18-byte channel-frame payload into 144 wire bits, then call
@@ -2957,11 +2957,11 @@ the same boilerplate: unpack an 18-byte channel-frame payload into 144 wire bits
 software" was true block-by-block, scattered across examples, rather than as one coherent, reusable,
 tested decoder a real consumer could actually call.
 
-Added `ambe::ratet27_frame` with a single public entry point, `decode_frame(&[u8; 18]) ->
-Ratet27Frame`, ties together `ratet27_wire_format`/`ratet27_fec` (all 8 blocks plus each one's FEC
+Added `ambe::dvsi_p25fec::frame` with a single public entry point, `decode_frame(&[u8; 18]) ->
+Ratet27Frame`, ties together `dvsi_p25fec::wire_format`/`dvsi_p25fec::fec` (all 8 blocks plus each one's FEC
 distance) with the two confirmed interpretations already established elsewhere in this document:
-`Ratet27Frame::dtmf_digit()` (delegating to `ratet27_dtmf::decode_dtmf_digit`, section 25) and
-`Ratet27Frame::is_dtx_silence()` (delegating to `ratet27_dtx::is_dtx_silence_frame`, section 31/35).
+`Ratet27Frame::dtmf_digit()` (delegating to `dvsi_p25fec::dtmf::decode_dtmf_digit`, section 25) and
+`Ratet27Frame::is_dtx_silence()` (delegating to `dvsi_p25fec::dtx::is_dtx_silence_frame`, section 31/35).
 Deliberately scoped narrow, per direct advice: no `PKT_CHANFMT`/`ECMODE_OUT` parsing (that's packet-
 layer, not frame-layer), and no `VOICE_ACTIVE`-from-wire-bits classifier (section 35 already
 established that isn't reliably possible from `g0` alone). (Update, section 40: `ECMODE_OUT`'s own
@@ -3271,7 +3271,7 @@ isn't recoverable from `RawParameters` alone -- different bits entirely) and now
 `DequantizedFrame::{Speech, Tone}` instead of unconditionally decoding every `b0` value as ordinary
 speech. Before this fix, a real live DTX-silence or DTMF/tone frame under D-STAR would have been
 silently misdecoded as ordinary (if pitch-unusual) speech by this crate -- exactly the class of
-silent-misclassification bug this document's own `ratet27_dtx`/`ratet27_dtmf` work was built to
+silent-misclassification bug this document's own `dvsi_p25fec::dtx`/`dvsi_p25fec::dtmf` work was built to
 avoid for RATET(27). Regression-tested against 17 real captured chip frames (16 DTMF digits + the
 plain tone, exact hex fixtures), plus a `classify_b0` boundary test; full crate suite (497 tests) and
 clippy both clean after the change. The one existing external caller (`ambe_dstar_chip_check.rs`)

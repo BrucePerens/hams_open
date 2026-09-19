@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Generates `src/ambe/fixed/ratet27/reconstruct_tables.rs`: Q16.16 versions of the float tables
-//! `ambe::fixed::ratet27::reconstruct`/`prediction` need. `block_lengths_for_l`,
+//! Generates `src/ambe/fixed/tia_102_baba/reconstruct_tables.rs`: Q16.16 versions of the float tables
+//! `ambe::fixed::tia_102_baba::reconstruct`/`prediction` need. `block_lengths_for_l`,
 //! `higher_order_bit_allocation`, and `higher_order_coefficient_positions` are already pure integer
 //! and reused directly from the float sibling -- not regenerated here.
 //!
@@ -10,10 +10,10 @@
 //!
 //! Regenerate with:
 //! `cargo run --release --example ambe_fixed_generate_ratet27_reconstruct_tables >
-//! src/ambe/fixed/ratet27/reconstruct_tables.rs`
+//! src/ambe/fixed/tia_102_baba/reconstruct_tables.rs`
 
-use ham_digital_modes::ambe::float::ratet27::prediction::prediction_coefficient;
-use ham_digital_modes::ambe::float::ratet27::tables::{
+use ham_digital_modes::ambe::float::tia_102_baba::prediction::prediction_coefficient;
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
     gain_bit_allocation, higher_order_coefficient_sigma, higher_order_step_multiplier,
     GAIN_QUANTIZER_LEVELS,
 };

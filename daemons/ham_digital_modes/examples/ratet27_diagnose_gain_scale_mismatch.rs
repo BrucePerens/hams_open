@@ -30,9 +30,9 @@
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_gain_scale_mismatch -- <host:port>`
 
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::enhancement::energy;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::tia_102_baba::enhancement::energy;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::golay_decode;
 use std::net::UdpSocket;
 use std::time::Duration;

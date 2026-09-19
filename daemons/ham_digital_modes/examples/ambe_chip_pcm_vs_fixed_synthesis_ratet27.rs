@@ -3,7 +3,7 @@
 //! the standing "finish the fixed-point AMBE implementation, test it against the chip" `/goal` named.
 //! Everything up to this harness (the arithmetic primitives, all three modes' parameter dequantize,
 //! `unvoiced_synthesis`/`voiced_synthesis`/`SynthesisState` orchestration, and finally
-//! `fixed::ratet27::decode::DecoderState`) was prerequisite work; this is the first real comparison of
+//! `fixed::tia_102_baba::decode::DecoderState`) was prerequisite work; this is the first real comparison of
 //! this crate's own *fixed-point* synthesized PCM against the real DVSI chip's own decoded PCM.
 //!
 //! Runs the float and fixed decoders in the same pass against the same captured chip channel
@@ -19,7 +19,7 @@
 //! beyond what the float reference already carries. Direct `fixed-vs-float` envelope correlation is
 //! `1.0000`. Sample-level `fixed-vs-float` SNR (phase-sensitive, unlike the envelope numbers above) is
 //! `31.4 dB` over the first 8 frames, settling to `~24-25 dB` over the full 200 -- a real but modest
-//! decline consistent with the omega0-quantization-mismatch mechanism `tests/ambe_fixed_ratet27_
+//! decline consistent with the omega0-quantization-mismatch mechanism `tests/ambe_fixed_tia_102_baba_
 //! decode.rs`'s own discriminating test already characterized on synthetic frames, here confirmed on
 //! genuinely varying real pitch rather than collapsing further (it settles, not compounds
 //! exponentially the way the pre-`PI_Q48` bug did). Peak amplitudes are close and well under
@@ -29,9 +29,9 @@
 //!
 //! Usage: `cargo run --release --example ambe_chip_pcm_vs_fixed_synthesis_ratet27 -- <host:port>`
 
-use ham_digital_modes::ambe::fixed::ratet27::decode::DecoderState as FixedDecoderState;
-use ham_digital_modes::ambe::float::ratet27::decode::DecoderState as FloatDecoderState;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::fixed::tia_102_baba::decode::DecoderState as FixedDecoderState;
+use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState as FloatDecoderState;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 

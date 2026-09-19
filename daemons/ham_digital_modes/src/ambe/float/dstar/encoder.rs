@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Streaming PCM-to-frame encoder for D-STAR's AMBE: shared pitch analysis
-//! ([`crate::ambe::float::ratet27::encoder::FrameAnalyzer`]), voicing/amplitude analysis at the quantized pitch
+//! ([`crate::ambe::float::tia_102_baba::encoder::FrameAnalyzer`]), voicing/amplitude analysis at the quantized pitch
 //! ([`crate::ambe::float::mbe_encode::analyze_at_pitch`]), then the inverse of this mode's dequantization chain
 //! ([`crate::ambe::float::mbe_encode::quantize_speech`]). A mirror of the decoder's own state is advanced by
 //! actually dequantizing each emitted frame, so the encoder's predictions always match what a decoder will hold.
@@ -12,7 +12,7 @@ use super::encode::{build_frame, build_tone_frame, pack_raw_parameters};
 use super::quantize::quantize_pitch;
 use super::tables;
 use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
-use crate::ambe::float::ratet27::encoder::FrameAnalyzer;
+use crate::ambe::float::tia_102_baba::encoder::FrameAnalyzer;
 use crate::ambe::float::tone_detect::{detect_tone, volume_for_amplitude, DetectedTone};
 
 pub struct Encoder {

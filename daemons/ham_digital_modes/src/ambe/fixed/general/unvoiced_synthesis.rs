@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Fixed-point port of [`super::super::float::ratet27::unvoiced_synthesis`] (TIA-102.BABA_2003.pdf
+//! Fixed-point port of [`super::super::float::tia_102_baba::unvoiced_synthesis`] (TIA-102.BABA_2003.pdf
 //! section 11.2, Eq. 117-126) -- see that module's own doc comment for the spec derivation and the
 //! `kchmck/imbe.rs` cross-check; this module only documents the *fixed-point-specific* choices.
 //!
@@ -100,7 +100,7 @@ fn mul_div_wide(a_q16: i64, b_q16: i64, c_q16: i64) -> i64 {
 }
 
 /// Advances the noise recurrence (Eq. 117) by one step -- byte-for-byte the same integer recurrence
-/// as `float::ratet27::unvoiced_synthesis::advance_noise` (already pure integer, nothing to port).
+/// as `float::tia_102_baba::unvoiced_synthesis::advance_noise` (already pure integer, nothing to port).
 pub(crate) fn advance_noise(u: i64) -> i64 {
     (171 * u + 11213).rem_euclid(53125)
 }

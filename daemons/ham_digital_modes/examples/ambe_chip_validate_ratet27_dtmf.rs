@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Live chip validation for `ambe::ratet27_dtmf`: feeds all 16 real ITU-T Q.23 DTMF digit tones to
+//! Live chip validation for `ambe::dvsi_p25fec::dtmf`: feeds all 16 real ITU-T Q.23 DTMF digit tones to
 //! the chip and confirms `decode_dtmf_digit` correctly recovers the exact row/column pair for
 //! every one, straight from the chip's own live response (not the frozen capture the module's own
 //! unit tests check against).
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27_dtmf -- <host:port>`
-use ham_digital_modes::ambe::float::ratet27::ratet27_dtmf::decode_dtmf_digit;
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::dvsi_p25fec::dtmf::decode_dtmf_digit;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -131,7 +131,7 @@ fn main() {
     }
 
     if all_ok {
-        println!("\nPASS: all 16 DTMF digits decoded correctly via ambe::ratet27_dtmf::decode_dtmf_digit.");
+        println!("\nPASS: all 16 DTMF digits decoded correctly via ambe::dvsi_p25fec::dtmf::decode_dtmf_digit.");
     } else {
         eprintln!("\nFAIL: at least one DTMF digit did not decode correctly.");
         std::process::exit(1);

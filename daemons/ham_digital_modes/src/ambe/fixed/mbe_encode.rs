@@ -3,10 +3,10 @@
 //! AMBE+2 encoders: fixed-point sibling of `ambe::float::mbe_encode::analyze_at_pitch`. The
 //! quantization half of that float module is out of scope here.
 
-use crate::ambe::fixed::ratet27::encoder::FrameAnalysis;
-use crate::ambe::fixed::ratet27::pitch_refinement::{Pitch, RefinementFrame};
-use crate::ambe::fixed::ratet27::spectral_amplitude::estimate_spectral_amplitudes_q16;
-use crate::ambe::fixed::ratet27::vuv::{
+use crate::ambe::fixed::tia_102_baba::encoder::FrameAnalysis;
+use crate::ambe::fixed::tia_102_baba::pitch_refinement::{Pitch, RefinementFrame};
+use crate::ambe::fixed::tia_102_baba::spectral_amplitude::estimate_spectral_amplitudes_q16;
+use crate::ambe::fixed::tia_102_baba::vuv::{
     determine_voicing, frequency_bands_count, XI_MAX_INITIAL_Q16,
 };
 

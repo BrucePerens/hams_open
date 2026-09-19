@@ -2,14 +2,14 @@
 //! Offline check (no chip needed; reads `ratet27_dump_frames_for_mbelib`'s `ratet27_frames.txt`): for
 //! real, clean chip-produced frames, how many bit errors do the textbook Hamming code
 //! (`general::fec::hamming_decode`, what `DecoderState::decode_parameters` uses) and the chip-real
-//! Hamming labeling (`ratet27_fec::hamming_decode_chip`, `AMBE_CHIP_VALIDATION_FINDINGS.md` section 23)
+//! Hamming labeling (`dvsi_p25fec::fec::hamming_decode_chip`, `AMBE_CHIP_VALIDATION_FINDINGS.md` section 23)
 //! each report for `c4..c6`, and how often do the two recover different data bits? A clean loopback
 //! frame has zero true errors, so a nonzero, constant "corrected" count means that decoder is using the
 //! wrong code.
 //!
 //! Usage: `cargo run --release --example ratet27_probe_hamming_labeling -- [/tmp/ratet27_frames.txt]`
 
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::hamming_decode_chip;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::hamming_decode_chip;
 use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 
 fn main() {

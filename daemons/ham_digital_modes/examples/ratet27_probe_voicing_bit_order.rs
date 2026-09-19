@@ -24,9 +24,9 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_voicing_bit_order -- <host:port>`
 
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::float::ratet27::synthesis::SynthesisState;
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::synthesis::SynthesisState;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -161,7 +161,7 @@ fn frame_rms(pcm: &[f64]) -> Vec<f64> {
 /// Reverses the per-band voicing bit order: band `k` (1-indexed) takes the decision this crate's own
 /// spec-literal decode assigned to band `k_hat + 1 - k` instead.
 fn reverse_band_order(voiced_per_harmonic: &[bool], l_hat: u32, k_hat: u32) -> Vec<bool> {
-    use ham_digital_modes::ambe::float::ratet27::vuv::frequency_bands_count;
+    use ham_digital_modes::ambe::float::tia_102_baba::vuv::frequency_bands_count;
     // Reconstruct the per-band array this frame's voiced_per_harmonic was expanded from, by taking
     // one representative harmonic per band (the highest harmonic in each band, arbitrary but
     // consistent), then re-expand with band index reversed.

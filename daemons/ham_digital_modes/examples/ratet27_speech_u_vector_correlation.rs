@@ -8,19 +8,19 @@
 //! full encode pipeline (`estimate_omega0` -- the same per-frame grid-search technique as
 //! `tests/ambe_real_speech_round_trip.rs` -- feeding `encode_prioritized_bits` with properly
 //! chained `FrameState` history) and the real chip (same PCM, same frame order), decoding the
-//! chip's response through `ratet27_fec::decode_block`. Dumps one TSV row per successfully-encoded
+//! chip's response through `dvsi_p25fec::fec::decode_block`. Dumps one TSV row per successfully-encoded
 //! frame with every block's value from both sides, for offline correlation analysis (e.g. does the
 //! chip's decoded `g0` value correlate with this crate's own `u_hat_0`, or with the dequantized
 //! pitch `extract_fundamental_frequency_quantizer` reports, across hundreds of real frames --
 //! stronger evidence than any single frequency's exact bit match).
 //!
 //! Usage: `cargo run --release --example ratet27_speech_u_vector_correlation -- <host:port> <wav_path> [frame_limit] > out.tsv`
-use ham_digital_modes::ambe::float::ratet27::bit_prioritization::extract_fundamental_frequency_quantizer;
-use ham_digital_modes::ambe::float::ratet27::pitch::PitchAnalysisFrame;
-use ham_digital_modes::ambe::float::ratet27::pitch_refinement::{refine_pitch, RefinementFrame};
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
-use ham_digital_modes::ambe::float::ratet27::{encode_prioritized_bits, FrameState};
+use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::extract_fundamental_frequency_quantizer;
+use ham_digital_modes::ambe::float::tia_102_baba::pitch::PitchAnalysisFrame;
+use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::{refine_pitch, RefinementFrame};
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
+use ham_digital_modes::ambe::float::tia_102_baba::{encode_prioritized_bits, FrameState};
 use std::net::UdpSocket;
 use std::time::Duration;
 

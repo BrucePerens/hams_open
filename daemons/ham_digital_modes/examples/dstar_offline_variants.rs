@@ -11,7 +11,7 @@
 use ham_digital_modes::ambe::float::dstar::decode::{dequantize, parse_frame, DStarDecoderState, DequantizedFrame};
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
-use ham_digital_modes::ambe::float::ratet27::synthesis::SynthesisState;
+use ham_digital_modes::ambe::float::tia_102_baba::synthesis::SynthesisState;
 use rustfft::{num_complex::Complex64, FftPlanner};
 
 fn read_wav(path: &str) -> Vec<f64> {

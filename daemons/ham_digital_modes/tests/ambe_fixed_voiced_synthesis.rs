@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Cross-checks `ambe::fixed::general::voiced_synthesis` against its floating-point sibling
-//! `ambe::float::ratet27::voiced_synthesis`, at this port's documented 40 dB SNR bar (see
+//! `ambe::float::tia_102_baba::voiced_synthesis`, at this port's documented 40 dB SNR bar (see
 //! `ambe_fixed_unvoiced_synthesis.rs`'s own doc comment for why a per-value relative-error check
 //! isn't used for full PCM frames). Since both `NoiseState`s are already confirmed byte-identical
 //! (`ambe_fixed_unvoiced_synthesis.rs`'s own test), the phase-dither draws are identical inputs on
@@ -19,9 +19,9 @@
 
 use ham_digital_modes::ambe::fixed::general::unvoiced_synthesis::NoiseState as FixedNoiseState;
 use ham_digital_modes::ambe::fixed::general::voiced_synthesis as fixed_v;
-use ham_digital_modes::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency;
-use ham_digital_modes::ambe::float::ratet27::unvoiced_synthesis::NoiseState as FloatNoiseState;
-use ham_digital_modes::ambe::float::ratet27::voiced_synthesis as float_v;
+use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency;
+use ham_digital_modes::ambe::float::tia_102_baba::unvoiced_synthesis::NoiseState as FloatNoiseState;
+use ham_digital_modes::ambe::float::tia_102_baba::voiced_synthesis as float_v;
 
 const MIN_SNR_DB: f64 = 40.0;
 

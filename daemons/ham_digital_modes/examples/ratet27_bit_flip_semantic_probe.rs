@@ -60,7 +60,7 @@
 //!
 //! Usage: `cargo run --release --example ratet27_bit_flip_semantic_probe -- <host:port>`
 
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::{golay_decode, golay_encode, hamming_decode, hamming_encode};
 use std::net::UdpSocket;
 use std::time::Duration;

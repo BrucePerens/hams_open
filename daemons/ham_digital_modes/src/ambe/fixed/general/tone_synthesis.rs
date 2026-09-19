@@ -9,7 +9,7 @@
 //! call-progress tables are plain integer hertz. Peak levels are `i64` Q16.16 in 16-bit PCM units
 //! (a full D-STAR volume of 255 gives a peak near 70000, and an AMBE+2 single tone peaks at
 //! `24000*sqrt(2)`, neither of which fits an `i32` Q16.16), and the output is `[i64; N]` Q16.16 like
-//! [`crate::ambe::fixed::ratet27::synthesis::SynthesisState`].
+//! [`crate::ambe::fixed::tia_102_baba::synthesis::SynthesisState`].
 //!
 //! **Accuracy against the float sibling** (`tests/ambe_fixed_dstar_synthesis.rs`,
 //! `tests/ambe_fixed_ambe_plus_2_synthesis.rs`): the sine comes from the 256-entry interpolated

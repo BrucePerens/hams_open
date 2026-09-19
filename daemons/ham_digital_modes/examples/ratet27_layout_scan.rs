@@ -15,10 +15,10 @@
 //! Usage: `RATET=<n> cargo run --release --example ratet27_layout_scan -- <host:port>` (without `RATET`, the P25-FEC
 //! RATEP words are used).
 
-use ham_digital_modes::ambe::float::ratet27::interleave::deinterleave_from_dibit_symbols;
-use ham_digital_modes::ambe::float::ratet27::modulation::modulate_code_vectors;
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::hamming_decode_chip;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::interleave::deinterleave_from_dibit_symbols;
+use ham_digital_modes::ambe::float::tia_102_baba::modulation::modulate_code_vectors;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::hamming_decode_chip;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 use std::net::UdpSocket;
 use std::time::Duration;

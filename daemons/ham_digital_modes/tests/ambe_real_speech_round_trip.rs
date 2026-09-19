@@ -25,10 +25,10 @@
 //! require getting exactly spec-correct. This test therefore checks robustness (no panics, no
 //! NaN/infinite output, output level bounded), not perceptual quality or spec-exact pitch tracking.
 
-use ham_digital_modes::ambe::float::ratet27::decode::DecoderState;
-use ham_digital_modes::ambe::float::ratet27::pitch::PitchAnalysisFrame;
-use ham_digital_modes::ambe::float::ratet27::pitch_refinement::{refine_pitch, RefinementFrame};
-use ham_digital_modes::ambe::float::ratet27::{encode_frame, FrameState};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
+use ham_digital_modes::ambe::float::tia_102_baba::pitch::PitchAnalysisFrame;
+use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::{refine_pitch, RefinementFrame};
+use ham_digital_modes::ambe::float::tia_102_baba::{encode_frame, FrameState};
 
 const FRAME_SAMPLES: usize = 160;
 const MARGIN: usize = 200; // pitch analysis needs 150 samples of margin, refinement needs its own

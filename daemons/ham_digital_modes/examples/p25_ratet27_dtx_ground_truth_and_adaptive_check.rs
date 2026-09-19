@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Closes two gaps the advisor flagged in `ratet27_dtx`'s own module doc: (1) the module's
+//! Closes two gaps the advisor flagged in `dvsi_p25fec::dtx`'s own module doc: (1) the module's
 //! validation so far only infers correctness from "we sent silence" / "we sent a loud tone", the
 //! same stimulus-inference weakness DTMF had before `PKT_CHANFMT`'s `ECMODE_OUT` gave it real
 //! chip-reported ground truth; (2) whether `DTX_SILENCE_G0`'s classification is itself
@@ -16,8 +16,8 @@
 //!     `VOICE_ACTIVE`'s adaptive/contrast-based behavior frame-for-frame, or lags/differs from it.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_dtx_ground_truth_and_adaptive_check -- <host:port>`
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
 use std::net::UdpSocket;
 use std::time::Duration;
 

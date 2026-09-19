@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Cross-checks `ambe::fixed::general::unvoiced_synthesis` against its floating-point sibling
-//! `ambe::float::ratet27::unvoiced_synthesis`. Scalar helpers (the synthesis window, the `gamma_w`
+//! `ambe::float::tia_102_baba::unvoiced_synthesis`. Scalar helpers (the synthesis window, the `gamma_w`
 //! constant) are held to this crate's usual 1% relative tolerance; full synthesized PCM frames are
 //! held to the fixed-point synthesis port's own documented bar instead (`fixed::mod`'s own doc
 //! comment: "at least 40 dB SNR against the floating-point sibling's own PCM for the same input"),
@@ -8,7 +8,7 @@
 //! per-value relative-error check would over-penalize.
 
 use ham_digital_modes::ambe::fixed::general::unvoiced_synthesis as fixed_uv;
-use ham_digital_modes::ambe::float::ratet27::unvoiced_synthesis as float_uv;
+use ham_digital_modes::ambe::float::tia_102_baba::unvoiced_synthesis as float_uv;
 
 const WINDOW_TOLERANCE: f64 = 0.01;
 const MIN_SNR_DB: f64 = 40.0;
@@ -134,7 +134,7 @@ fn synthesize_matches_float_for_a_partially_voiced_mix_across_a_pitch_change() {
     // fixed-point floor/ceil-boundary risk `fixed::general::mbe_speech`'s own doc comment already
     // documents and accepts (rare, real, and not chased to zero) -- using a real dequantized pitch
     // here, like actual decoded speech would, avoids exercising that risk gratuitously.
-    let omega0 = ham_digital_modes::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency(100);
+    let omega0 = ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency(100);
     let (float_pcm, fixed_pcm) = run_scenario(omega0, &voiced_frames, &amplitude_frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
     assert!(snr >= MIN_SNR_DB, "partially voiced mix SNR too low: {snr} dB");
@@ -155,7 +155,7 @@ fn synthesize_matches_float_for_a_low_pitch_many_harmonic_frame() {
 
 #[test]
 fn synthesize_matches_float_for_a_quiet_frame() {
-    let omega0 = ham_digital_modes::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency(150);
+    let omega0 = ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency(150);
     let voiced = vec![false; 12];
     let amplitudes: Vec<f64> = (1..=12).map(|i| 5.0 + 0.5 * i as f64).collect();
     let voiced_frames = vec![voiced.clone(); 3];
@@ -176,7 +176,7 @@ fn synthesize_matches_float_for_a_quiet_frame() {
 /// caught, not just the one value that happened to fail during development.
 #[test]
 fn synthesize_matches_float_across_a_very_quiet_amplitude_sweep() {
-    let omega0 = ham_digital_modes::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency(120);
+    let omega0 = ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency(120);
     for &peak in &[0.5, 1.0, 2.0, 3.0, 5.0, 8.0] {
         let voiced = vec![false; 10];
         let amplitudes: Vec<f64> = (1..=10).map(|i| peak * (0.5 + 0.05 * i as f64)).collect();

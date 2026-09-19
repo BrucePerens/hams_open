@@ -8,7 +8,7 @@
 //! `ambe::fixed::ambe_plus_2::decode`'s own doc comment for why this naming is kept anyway), computed
 //! from `f0_from_b0` (a formula, not a table, in the float sibling) at every one of `L_TABLE`'s own
 //! 126 possible `b0` indices -- exact for the decoder path, the same reasoning
-//! `ratet27::parameter_encoding::dequantize_fundamental_frequency_q16`'s own table established.
+//! `tia_102_baba::parameter_encoding::dequantize_fundamental_frequency_q16`'s own table established.
 //!
 //! Regenerate with:
 //! `cargo run --release --example ambe_fixed_generate_dstar_tables >

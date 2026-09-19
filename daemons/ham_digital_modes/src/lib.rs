@@ -6,7 +6,7 @@
 //! license conflict -- an LGPL-3.0 project can incorporate GPL-3.0
 //! dependencies; a proprietary/trade-secret one cannot.
 
-// AMBE codec family: ambe::float::<mode> (ratet27, dstar, ambe_plus_2, general) and
+// AMBE codec family: ambe::float::<mode> (tia_102_baba, dstar, ambe_plus_2, general) and
 // ambe::fixed::<mode>. AMBE+2 half-rate (ambe::float::ambe_plus_2 / ambe::fixed::ambe_plus_2) is
 // gated off by default, pending patent clearance for any real deployment use -- see
 // src/ambe/float/ambe_plus_2/mod.rs's own doc comment and

@@ -9,9 +9,9 @@
 //!
 //! Usage: `cargo run --release --example ratet27_chip_encode_compare -- <host:port> [wav] [n_frames]`
 
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::encoder::Encoder;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::tia_102_baba::encoder::Encoder;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 

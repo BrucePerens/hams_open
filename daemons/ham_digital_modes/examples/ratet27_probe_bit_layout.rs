@@ -21,14 +21,14 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_bit_layout -- <host:port> [base_frame_indexes...]`
 
-use ham_digital_modes::ambe::float::ratet27::decode::DecoderState;
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::{g3_decode, g3_encode, hamming_decode_chip, hamming_encode_chip};
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::float::ratet27::bit_prioritization::{deprioritize_bits, extract_fundamental_frequency_quantizer};
-use ham_digital_modes::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency;
-use ham_digital_modes::ambe::float::ratet27::quantize::higher_order_coefficient_positions;
-use ham_digital_modes::ambe::float::ratet27::tables::{gain_bit_allocation, higher_order_bit_allocation};
-use ham_digital_modes::ambe::float::ratet27::vuv::{frequency_bands_count, harmonics_count};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::{g3_decode, g3_encode, hamming_decode_chip, hamming_encode_chip};
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{deprioritize_bits, extract_fundamental_frequency_quantizer};
+use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency;
+use ham_digital_modes::ambe::float::tia_102_baba::quantize::higher_order_coefficient_positions;
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
 use ham_digital_modes::ambe::general::fec::{golay_decode, golay_encode};
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;

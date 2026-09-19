@@ -2,14 +2,14 @@
 //! Fixed-point port of [`crate::ambe::float::mbe_synthesis`]: the mode-independent MBE frame
 //! synthesis D-STAR and AMBE+2 half-rate share, turning one frame's already-dequantized
 //! `(w0, per-harmonic voicing, Ml)` into 20 ms of Q16.16 PCM by reusing
-//! [`crate::ambe::fixed::ratet27::synthesis::SynthesisState`] (enhancement, smoothing, voiced and
+//! [`crate::ambe::fixed::tia_102_baba::synthesis::SynthesisState`] (enhancement, smoothing, voiced and
 //! unvoiced synthesis). See the float sibling for the mbelib background and the two deliberate
 //! differences from mbelib; FEC statistics feed the same smoothing thresholds with the two Golay
 //! blocks these modes carry (`epsilon_c0`, `epsilon_c1`) and zero for the vectors they lack.
 
 use super::unvoiced_synthesis::N;
-use crate::ambe::fixed::ratet27::error_estimation::estimate_errors_q16;
-use crate::ambe::fixed::ratet27::synthesis::SynthesisState;
+use crate::ambe::fixed::tia_102_baba::error_estimation::estimate_errors_q16;
+use crate::ambe::fixed::tia_102_baba::synthesis::SynthesisState;
 
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,

@@ -2,11 +2,11 @@
 //! The first real PASS/FAIL chip-validation harness for RATET(27) (P25 full-rate with FEC), in the
 //! same style as `ambe_chip_validate_dstar.rs` and `ambe_chip_validate_ambe_plus_2.rs`: captures
 //! real frames from the live chip across several frequencies and checks that this crate's own
-//! `ambe::ratet27_wire_format`/`ambe::ratet27_fec` modules -- the real wire format and FEC codes
+//! `ambe::dvsi_p25fec::wire_format`/`ambe::dvsi_p25fec::fec` modules -- the real wire format and FEC codes
 //! this investigation determined by direct chip-frame sampling, not assumed or guessed -- decode
 //! every one of them with **zero corrected errors** on all 8 sub-blocks confirmed this session
 //! (`g0`, `g1`, `g2`, `g3`, `u4`, `u5`, `u6`, `c7`; `g3` uses its own real 8-bit codeword space,
-//! not a full Golay decode -- see `ratet27_fec`'s own module doc).
+//! not a full Golay decode -- see `dvsi_p25fec::fec`'s own module doc).
 //!
 //! Unlike the older, now-superseded `ambe_chip_validate_p25_wireformat.rs` (a *search* harness that
 //! assumed a content-dependent PRN whitening stage this session's GF(2) rank analysis has since
@@ -23,7 +23,7 @@
 //! see: two full multi-second recordings, checked frame by frame.
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27 -- <host:port>`
-use ham_digital_modes::ambe::float::ratet27::ratet27_frame::decode_frame;
+use ham_digital_modes::ambe::dvsi_p25fec::frame::decode_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

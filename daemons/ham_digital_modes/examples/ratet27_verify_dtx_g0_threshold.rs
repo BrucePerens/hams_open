@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Verifies a candidate broader DTX classifier (`g0 >= DTX_SILENCE_G0`, i.e. `g0 >= 3841`) against
 //! every committed RATET(27) capture dataset in `docs/references/ratet27_captures/`, before adding
-//! it to `ambe::ratet27_dtx` as `is_dtx_inactive_frame`. Section 35 found `g0` reads exactly `3841`
+//! it to `ambe::dvsi_p25fec::dtx` as `is_dtx_inactive_frame`. Section 35 found `g0` reads exactly `3841`
 //! for confirmed digital silence and `3844`-`3857` for confirmed-inactive background noise -- both
 //! well above every voiced/active `g0` value recorded anywhere in this project's own datasets (which
 //! cluster below 2400). This tool checks that claim directly and exhaustively rather than by
@@ -12,8 +12,8 @@
 //! needs to account for before shipping.
 //!
 //! Usage: `cargo run --release --example ratet27_verify_dtx_g0_threshold`
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
 
 const DTX_SILENCE_G0: u16 = 3841;
 

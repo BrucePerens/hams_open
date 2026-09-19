@@ -8,7 +8,7 @@ use super::decode::{
     DStarDecoderState, DequantizedFrame, FrameKind, ToneKind,
 };
 use crate::ambe::float::mbe_synthesis::MbeSynthesizer;
-use crate::ambe::float::ratet27::unvoiced_synthesis::N;
+use crate::ambe::float::tia_102_baba::unvoiced_synthesis::N;
 use crate::ambe::float::tone_synthesis::{dstar_tone_amplitude, ToneSynthesizer};
 
 pub struct DStarSynthesisDecoder {

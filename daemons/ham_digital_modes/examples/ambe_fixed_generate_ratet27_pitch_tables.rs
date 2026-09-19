@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Generates `src/ambe/fixed/ratet27/pitch_tables.rs`: the fixed-point forms of the RATET(27) pitch
+//! Generates `src/ambe/fixed/tia_102_baba/pitch_tables.rs`: the fixed-point forms of the RATET(27) pitch
 //! analysis tables (Annex B initial-pitch window, its square, the sum of its fourth powers, and the
 //! Annex D lowpass filter), computed from the floating-point sibling's own tables
-//! (`float::ratet27::pitch::{initial_pitch_window, lowpass_filter_tap}`) rather than retyped.
+//! (`float::tia_102_baba::pitch::{initial_pitch_window, lowpass_filter_tap}`) rather than retyped.
 //!
 //! Regenerate with: `cargo run --release --example ambe_fixed_generate_ratet27_pitch_tables >
-//! src/ambe/fixed/ratet27/pitch_tables.rs`
+//! src/ambe/fixed/tia_102_baba/pitch_tables.rs`
 
-use ham_digital_modes::ambe::float::ratet27::pitch::{initial_pitch_window, lowpass_filter_tap};
+use ham_digital_modes::ambe::float::tia_102_baba::pitch::{initial_pitch_window, lowpass_filter_tap};
 
 fn main() {
     println!("// SPDX-License-Identifier: LGPL-3.0-or-later");

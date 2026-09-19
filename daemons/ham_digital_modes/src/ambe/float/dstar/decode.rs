@@ -217,7 +217,7 @@ pub fn decode_tone(d: u64) -> TonePayload {
 }
 
 /// Maps a dual-tone `index` (128-163 per mbelib -- see [`ToneKind::Dual`]) to a DTMF `(row, col)`
-/// pair using the same 4x4 row/column numbering `ambe::ratet27_dtmf::decode_dtmf_digit` and this
+/// pair using the same 4x4 row/column numbering `ambe::dvsi_p25fec::dtmf::decode_dtmf_digit` and this
 /// crate's other DTMF tooling use (row 0-3 = 697/770/852/941 Hz, col 0-3 = 1209/1336/1477/1633 Hz)
 /// -- confirmed directly against a real chip capture of all 16 DTMF digits under D-STAR's RATEP with
 /// `TD_ENABLE` on: `index == 128 + row + 4*col` held exactly for every one of the 16 digits,
@@ -251,7 +251,7 @@ impl DStarDecoderState {
     /// A reasoned initial state for the very first frame -- no real prior history exists, so `L`
     /// starts at the table's own smallest real value (9, [`tables::L_TABLE`]'s first entry), and
     /// `log2_ml`/`gamma` both start at zero (unity amplitude in the log domain, the same
-    /// "flat, constant, therefore low-stakes" choice `super::super::ratet27::FrameState::initial` makes for
+    /// "flat, constant, therefore low-stakes" choice `super::super::tia_102_baba::FrameState::initial` makes for
     /// its own P25 codec, for the same reason: this recursion's own gain term is a *difference*
     /// from the previous frame, so a constant initial value doesn't bias frame 0 in any particular
     /// direction).
@@ -299,7 +299,7 @@ pub enum DequantizedFrame {
 /// mbelib's real, working decoder actually uses). Extracted as its own function (previously inlined
 /// directly in [`dequantize`]) so `examples/ambe_fixed_generate_dstar_tables.rs` can generate a
 /// fixed-point table by calling this real function directly, the same reasoning
-/// `ratet27::parameter_encoding::dequantize_fundamental_frequency` already established for RATET(27).
+/// `tia_102_baba::parameter_encoding::dequantize_fundamental_frequency` already established for RATET(27).
 pub fn f0_from_b0(b0: u32) -> f64 {
     F0_CHIP_SCALE * 2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
 }

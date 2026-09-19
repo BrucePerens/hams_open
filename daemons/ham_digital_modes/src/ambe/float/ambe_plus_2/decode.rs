@@ -204,7 +204,7 @@ pub fn decode_tone_idx(d: u64) -> Option<u8> {
 }
 
 /// Maps a [`decode_tone_idx`] DTMF-range result (`0x80..=0x8F`, AMBE+2 half-rate's own `RATET(33)`)
-/// to the `(row, column)` pair of DVSI's own DTMF keypad layout, matching `ambe::ratet27_dtmf`'s and
+/// to the `(row, column)` pair of DVSI's own DTMF keypad layout, matching `ambe::dvsi_p25fec::dtmf`'s and
 /// `ambe_dstar::decode`'s own established convention: row 0-3 is 697/770/852/941 Hz, column 0-3 is
 /// 1209/1336/1477/1633 Hz. Returns `None` for any value outside `0x80..=0x8F`.
 pub fn dtmf_digit_from_tone_idx(tone_idx: u8) -> Option<(u8, u8)> {

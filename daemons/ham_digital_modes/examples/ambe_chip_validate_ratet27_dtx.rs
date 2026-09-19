@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Live chip validation for `ambe::ratet27_dtx`: with `DTX_ENABLE` on, confirms
+//! Live chip validation for `ambe::dvsi_p25fec::dtx`: with `DTX_ENABLE` on, confirms
 //! `is_dtx_silence_frame` correctly classifies fresh live silence as silence and fresh live loud
 //! tones/noise as not-silence, straight from the chip's own current response (not the frozen
 //! capture the module's own unit tests check against).
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27_dtx -- <host:port>`
-use ham_digital_modes::ambe::float::ratet27::ratet27_dtx::is_dtx_silence_frame;
-use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::dvsi_p25fec::dtx::is_dtx_silence_frame;
+use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
 use std::net::UdpSocket;
 use std::time::Duration;
 

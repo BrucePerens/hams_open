@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The root-cause diagnostic behind the fix in `ambe::float::ratet27::decode::DecoderState::
+//! The root-cause diagnostic behind the fix in `ambe::float::tia_102_baba::decode::DecoderState::
 //! decode_parameters`/`encode_code_vectors` (removing a spurious demodulation/modulation step --
 //! see those functions' own doc comments for the full story). Kept as a permanent regression/
 //! evidence tool, not a throwaway.
@@ -28,18 +28,18 @@
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_synthesis_mismatch -- <host:port>`
 
-use ham_digital_modes::ambe::float::ratet27::bit_prioritization::{
+use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{
     deprioritize_bits, extract_fundamental_frequency_quantizer,
 };
-use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::parameter_encoding::{
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
 };
-use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::float::ratet27::tables::{gain_bit_allocation, higher_order_bit_allocation};
-use ham_digital_modes::ambe::float::ratet27::vuv::{frequency_bands_count, harmonics_count};
-use ham_digital_modes::ambe::float::ratet27::voiced_synthesis::VoicedState;
-use ham_digital_modes::ambe::float::ratet27::unvoiced_synthesis::NoiseState;
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
+use ham_digital_modes::ambe::float::tia_102_baba::voiced_synthesis::VoicedState;
+use ham_digital_modes::ambe::float::tia_102_baba::unvoiced_synthesis::NoiseState;
 use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 use std::f64::consts::PI;
 use std::net::UdpSocket;
@@ -229,7 +229,7 @@ fn main() {
         }
 
         // Hypothesis test: decode_parameters demodulates c[1..6] via modulate_code_vectors(c, u0)
-        // before FEC-decoding them -- but ratet27_fec::decode_block (the path
+        // before FEC-decoding them -- but dvsi_p25fec::fec::decode_block (the path
         // ambe_chip_validate_ratet27.rs's own zero-corrected-error PASS harness confirms against
         // the live chip) FEC-decodes the SAME raw wire-extracted codewords with NO demodulation at
         // all. modulate_code_vectors's own modulation vector is a pseudo-random sequence seeded by

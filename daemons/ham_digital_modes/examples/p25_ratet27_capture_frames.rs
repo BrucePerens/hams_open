@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Captures real DVSI-chip RATET(27) channel frames (raw 144-bit CHAND payloads) across a variety
 //! of stimulus signals, for offline analysis: deinterleave via the validated 12x12 transform
-//! (`ambe::ratet27_wire_format::natural_position`), split into the 8 FEC sub-blocks, and compute
+//! (`ambe::dvsi_p25fec::wire_format::natural_position`), split into the 8 FEC sub-blocks, and compute
 //! the GF(2) rank of each block's observed values across many frames. A block whose wire bits are
 //! genuinely the FEC codeword (no extra data-dependent modulation/whitening XORed in) should show
 //! rank exactly 12 (Golay) / 11 (Hamming) / <=7 (raw `c7`) -- higher rank means something else
