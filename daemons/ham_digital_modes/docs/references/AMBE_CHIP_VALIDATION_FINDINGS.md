@@ -2428,3 +2428,71 @@ validation harness immediately alongside the software rather than treating docum
 sufficient -- the harness itself is what surfaced the problem, on its very first run. `ambe::ratet27_
 dtx::is_dtx_silence_frame` is now a real, tested, chip-validated software duplicate of this specific
 confirmed chip behavior.
+
+## 32. A likely unifying discovery: `VOICE_ACTIVE` (and probably much of this session's puzzling instability) reflects an *adaptive*, history-dependent baseline, not a fixed threshold
+
+While trying to precisely locate the `VOICE_ACTIVE` threshold (previously only bounded to
+"somewhere between peak 50 and 75," section 28) with a binary search, `examples/p25_ratet27_locate_
+voice_active_threshold.rs` got a genuinely surprising, contradicting result: **peak 75, which
+section 28 found reliably `VOICE_ACTIVE=1` with 80 settling frames, read `VOICE_ACTIVE=0` with only
+40 settling frames** -- and, more strikingly, **peak 100 (also previously found `=1`) read
+`VOICE_ACTIVE=0` after 250 settling frames of the same constant-level noise.**
+
+**Directly confirmed as an adaptive-baseline effect, not measurement noise.** After 250 settling
+frames at peak 100 (confirmed inactive), the stimulus was abruptly switched to a genuinely loud
+tone (peak 9000) *without* any resettling. **Frame 0 still read `VOICE_ACTIVE=0`** (the algorithm
+hadn't processed the new frame's content yet), but **every one of the next 7 frames immediately
+read `VOICE_ACTIVE=1`** -- an instant flip triggered by the *contrast* between the new signal and
+the just-adapted baseline, not by the new signal's own absolute level (peak 9000 is, after all,
+*also* well above peak 100, which itself just read inactive after enough sustained exposure).
+
+**This means `VOICE_ACTIVE` (and by extension, very plausibly, several other DTX/VAD-adjacent
+behaviors this investigation observed) is a genuinely adaptive, multi-frame, history-dependent
+computation, not a simple function of the current frame's own content** -- DVSI's own manual
+description ("the silence threshold value is -25 dBm0... based upon various adaptive thresholds",
+quoted in section 26) already said this plainly, but this investigation's own testing protocol
+(a fixed settling-frame count, then capture) implicitly treated it as if a large-enough fixed
+settling count would always converge to one true, stimulus-determined answer. **It does not**:
+the "true" classification for a given absolute signal level depends on what was sent *immediately
+before*, for how long, not just on the level itself.
+
+**This is very likely the root cause, or a major contributor, to several of this session's own
+previously-unexplained instabilities**: `g3`'s odd, only-partially-explained bistable oscillation
+(sections 18, 23, 26, 29); `u6`'s bizarre "stable only in one narrow frequency island, unstable
+everywhere else" shape (section 30, now looking much more like an artifact of wherever a fixed
+20-frame settling protocol happened to land relative to `u6`'s own adaptive convergence, rather
+than a property of frequency itself); and quite possibly other single-frequency/single-amplitude
+correlation results throughout this document that used a fixed settling-frame count without
+checking whether that count was actually sufficient for that *specific* transition. **This is a
+real, disclosed limitation of this whole investigation's dominant methodology, not a new problem
+introduced by this test** -- recorded here because it changes how every earlier single-point
+measurement in this document should be read: as "the value after N settling frames from whatever
+came before," not "the value this stimulus alone determines."
+
+**A concrete, valuable next step this points to**: repeat the key semantic-layer experiments in
+this document (the `g0`/`u6`/`g1`/`g2` correlation sweeps in particular) using a settling protocol
+that explicitly holds each stimulus for a long, fixed, generous duration (e.g. 300+ frames,
+matching what this section used) and captures many trailing frames once demonstrably converged,
+rather than the shorter 40-80-frame settling this document's earlier sections mostly used -- some
+"unstable" or "unexplained" earlier findings may resolve cleanly under longer settling, the same
+way `VOICE_ACTIVE` did here once tested properly. This reframes several open items in this document
+(especially `g3` and `u6`) as *possibly* resolvable with a more patient protocol, not necessarily
+requiring new hypotheses about what parameter they represent.
+
+**The "more patience resolves it" hypothesis was tested directly on `u6` and did not hold --
+disclosed as a real refinement, not swept under the rug.** `examples/p25_ratet27_capture_u6_long_
+settling.rs` re-tested `u6` at 600Hz (one of section 30's worst instability points, 15 distinct
+values across 20 frames with 60 settling frames) with **500 settling frames** -- more than 6x
+longer than any settling period used elsewhere in this investigation. **Result: still 16 distinct
+values across 20 captured frames** (`694, 729, 1685, 733, 696, 732, 664, 726, 697, 725, 669, 728,
+700, 728, 662, 1753, 693, 733, 664, 732`) -- no more stable than before. **This means the adaptive-
+baseline discovery above does not generalize to explain every instability in this document**:
+`VOICE_ACTIVE` genuinely needed more settling time and stabilized once given it; `u6` at 600Hz does
+not stabilize even with 500 frames, meaning its own frame-to-frame variation is either driven by
+something that never reaches a fixed point for this stimulus (a continuously-adapting quantity with
+no steady state, unlike VAD's binary decision) or by genuine per-frame analysis noise unrelated to
+settling time at all. The corrected, most honest summary: **settling time matters and was
+previously underestimated for at least one real parameter (`VOICE_ACTIVE`), but it is not a
+universal explanation for every instability this document has found** -- `u6`'s own instability
+specifically remains unexplained by this hypothesis. Dataset committed
+(`u6_600hz_long_settling.tsv`).
