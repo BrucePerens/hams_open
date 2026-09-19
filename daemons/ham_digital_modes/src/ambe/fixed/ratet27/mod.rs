@@ -12,6 +12,7 @@
 //! needs a fixed-point port.
 
 pub mod decode;
+pub mod encoder;
 pub mod enhancement;
 pub mod error_estimation;
 pub mod parameter_encoding;

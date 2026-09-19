@@ -3,6 +3,7 @@
 //! AMBE+2 encoders: fixed-point sibling of `ambe::float::mbe_encode::analyze_at_pitch`. The
 //! quantization half of that float module is out of scope here.
 
+use crate::ambe::fixed::ratet27::encoder::FrameAnalysis;
 use crate::ambe::fixed::ratet27::pitch_refinement::{Pitch, RefinementFrame};
 use crate::ambe::fixed::ratet27::spectral_amplitude::estimate_spectral_amplitudes_q16;
 use crate::ambe::fixed::ratet27::vuv::{
@@ -58,4 +59,15 @@ pub fn analyze_at_pitch(
         ml[h] = amplitudes[h - 1];
     }
     (voiced, ml)
+}
+
+/// [`analyze_at_pitch`] for a [`FrameAnalysis`] from the streaming analyzer, at `pitch` (the frame's
+/// own refined pitch, or a decoder-quantized one) and harmonic count `l`.
+pub fn analyze_frame_at_pitch(
+    frame: &FrameAnalysis,
+    pitch: &Pitch,
+    l: u32,
+    state: &mut AnalysisState,
+) -> (Vec<bool>, Vec<i64>) {
+    analyze_at_pitch(&frame.refinement, frame.initial_pitch_error_q16, pitch, l, state)
 }
