@@ -2496,3 +2496,21 @@ previously underestimated for at least one real parameter (`VOICE_ACTIVE`), but 
 universal explanation for every instability this document has found** -- `u6`'s own instability
 specifically remains unexplained by this hypothesis. Dataset committed
 (`u6_600hz_long_settling.tsv`).
+
+## 33. `g0`'s amplitude relationship (section 23) fully confirmed settling-independent -- not every earlier finding needed the section 32 correction
+
+Section 32's adaptive-baseline discovery raises a fair question about every earlier single-point
+measurement in this document: was the settling period actually sufficient? Directly tested against
+`g0`'s own amplitude-quantizer finding (section 23), captured originally with 50 settling frames per
+point. `examples/p25_ratet27_capture_g0_long_settling_amplitude.rs` repeats the identical 16-point
+amplitude sweep with 300 settling frames (6x longer) and 8 captured frames per point.
+
+**Result: bit-for-bit identical to the original**, and perfectly frame-stable (8/8 identical
+captures) at every one of the 16 amplitudes -- `1045, 1561, 1565, 1569, 1569, 1573, 1577, 1581,
+1585, 1585, 1589, 1593, 1593, 1597, 1597, 1597`, matching section 23's own values exactly. This is a
+clean, positive confirmation that `g0`'s amplitude relationship was already a genuine, fully-
+converged steady-state reading, not a settling artifact -- unlike `VOICE_ACTIVE` (genuinely settling-
+dependent, section 32) or `u6` (unstable regardless of settling length, also section 32). **Not every
+earlier finding in this document needs re-litigating under section 32's discovery**: some, like this
+one, hold up cleanly on direct re-test with a much more patient protocol. Dataset committed
+(`g0_long_settling_amplitude_sweep.tsv`).
