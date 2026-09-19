@@ -211,7 +211,7 @@ mod tests {
     // Tests [@ANCHOR: inverse_gain_vector_dct]
     fn gain_vector_dct_and_its_inverse_round_trip_a_real_asymmetric_input() {
         let r_hat = [1.0, -0.5, 0.25, 0.0, 2.0, -1.5];
-        let g_hat = crate::ambe::gain_vector_dct(&r_hat);
+        let g_hat = crate::ambe::float::ratet27::gain_vector_dct(&r_hat);
         let reconstructed = inverse_gain_vector_dct(&g_hat);
         for (i, (&expected, &got)) in r_hat.iter().zip(reconstructed.iter()).enumerate() {
             assert!(
@@ -284,7 +284,7 @@ mod tests {
         let blocks = quantize::partition_into_blocks(&residuals, l_hat_curr).unwrap();
         let dct_blocks: [Vec<f64>; 6] = std::array::from_fn(|i| quantize::block_dct(&blocks[i]));
         let r_hat: [f64; 6] = std::array::from_fn(|i| dct_blocks[i][0]);
-        let g_hat = crate::ambe::gain_vector_dct(&r_hat);
+        let g_hat = crate::ambe::float::ratet27::gain_vector_dct(&r_hat);
 
         let b2 = tables::quantize_gain_index(g_hat[0]);
         let gain_pairs = quantize::quantize_gain_vector(&g_hat, l_hat_curr).unwrap();

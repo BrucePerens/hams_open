@@ -29,7 +29,7 @@
 //! Usage: `cargo run --release --features ambe_plus_2 --example ambe_plus_2_dvsi_reference_replay --
 //! 192.168.10.189:2460 <path-to-in.dat>`
 
-use ham_digital_modes::ambe_plus_2::{decode as ap2_decode, interleave as ap2_interleave, parse_frame};
+use ham_digital_modes::ambe::float::ambe_plus_2::{decode as ap2_decode, interleave as ap2_interleave, parse_frame};
 use std::fs;
 use std::net::UdpSocket;
 use std::time::Duration;

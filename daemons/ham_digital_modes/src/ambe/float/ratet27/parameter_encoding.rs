@@ -100,7 +100,7 @@ pub fn encode_voicing_decisions(voiced: &[bool]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::pitch::candidate_pitches;
+    use crate::ambe::float::ratet27::pitch::candidate_pitches;
 
     #[test]
     fn quantize_fundamental_frequency_matches_eq45_at_a_hand_computed_value() {
@@ -193,7 +193,7 @@ mod tests {
     /// can produce, not assumed from the quarter-sample bound above.
     #[test]
     fn harmonics_count_agrees_with_itself_across_the_full_quantize_dequantize_round_trip() {
-        use crate::ambe::vuv::harmonics_count;
+        use crate::ambe::float::ratet27::vuv::harmonics_count;
 
         for p in real_refined_pitch_range() {
             let omega0_hat = 2.0 * PI / p;

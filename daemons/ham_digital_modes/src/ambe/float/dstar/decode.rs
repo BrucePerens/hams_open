@@ -10,7 +10,7 @@
 //! disclosed next step, not silently skipped.
 
 use super::tables;
-use crate::ambe::fec::golay_decode;
+use crate::ambe::float::general::fec::golay_decode;
 
 /// The real FEC/whitening outcome of parsing one raw 72-bit frame: the 49 decoded data bits plus
 /// both Golay blocks' own corrected-error counts. **The same caveat the P25 chip-validation
@@ -114,7 +114,7 @@ pub fn extract_raw_parameters(d: u64) -> RawParameters {
 /// captured chip frame under `ECMODE_IN`'s `TD_ENABLE` bit (see
 /// `AMBE_CHIP_VALIDATION_FINDINGS.md`'s cross-mode DTX/DTMF section), not merely read off the
 /// source. This is narrower than AMBE+2 half-rate's own 120-127 eight-value block
-/// ([`crate::ambe_plus_2::decode::classify_b0`]): D-STAR only ever special-cases `b0` being
+/// ([`crate::ambe::float::ambe_plus_2::decode::classify_b0`]): D-STAR only ever special-cases `b0` being
 /// *exactly* 126 or 127, treating every other value -- including 120-125 -- as an ordinary (if
 /// perhaps unusual) voiced/unvoiced speech pitch code. This matters concretely: the same live chip,
 /// configured for D-STAR's RATEP and with `DTX_ENABLE` on, was observed driving silence frames to
@@ -251,7 +251,7 @@ impl DStarDecoderState {
     /// A reasoned initial state for the very first frame -- no real prior history exists, so `L`
     /// starts at the table's own smallest real value (9, [`tables::L_TABLE`]'s first entry), and
     /// `log2_ml`/`gamma` both start at zero (unity amplitude in the log domain, the same
-    /// "flat, constant, therefore low-stakes" choice `super::ambe::FrameState::initial` makes for
+    /// "flat, constant, therefore low-stakes" choice `super::super::ratet27::FrameState::initial` makes for
     /// its own P25 codec, for the same reason: this recursion's own gain term is a *difference*
     /// from the previous frame, so a constant initial value doesn't bias frame 0 in any particular
     /// direction).
@@ -451,13 +451,13 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::fec::golay_encode;
-    use crate::ambe_dstar::whiten_c1;
+    use crate::ambe::float::general::fec::golay_encode;
+    use crate::ambe::float::dstar::whiten_c1;
 
     /// A real, self-consistent round trip: build a frame from known C0/C1/C2/C3 values (Golay-encode
     /// C0's own data, whiten and Golay-encode C1's), pack it, and confirm `parse_frame` recovers the
     /// exact original 49 data bits with zero corrected errors -- the same load-bearing check
-    /// `super::super::ambe::fec`'s own tests use for its Golay/Hamming implementations, applied here
+    /// `super::super::general::fec`'s own tests use for its Golay/Hamming implementations, applied here
     /// to this module's own frame assembly and whitening order.
     #[test]
     fn parse_frame_recovers_a_cleanly_encoded_frame_with_zero_errors() {
@@ -597,7 +597,7 @@ mod tests {
                 .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
                 .collect();
             let wire_bytes: [u8; 9] = bytes.try_into().unwrap();
-            let frame = crate::ambe_dstar::interleave::wire_bytes_to_frame(&wire_bytes);
+            let frame = crate::ambe::float::dstar::interleave::wire_bytes_to_frame(&wire_bytes);
             let parsed = parse_frame(frame);
             assert_eq!(parsed.epsilon_c0, 0, "{label}: C0 must decode with zero errors");
             assert_eq!(parsed.epsilon_c1, 0, "{label}: C1 must decode with zero errors");

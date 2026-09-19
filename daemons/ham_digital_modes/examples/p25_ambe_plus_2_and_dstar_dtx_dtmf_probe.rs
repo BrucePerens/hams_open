@@ -28,14 +28,14 @@
 //! implementation directly rather than a private copy of the same logic.
 //!
 //! Usage: `cargo run --release --features ambe_plus_2 --example p25_ambe_plus_2_and_dstar_dtx_dtmf_probe -- <host:port>`
-use ham_digital_modes::ambe_dstar::decode::{
+use ham_digital_modes::ambe::float::dstar::decode::{
     decode_tone as dstar_decode_tone, extract_raw_parameters as dstar_extract_raw,
     parse_frame as dstar_parse_frame,
 };
-use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
-use ham_digital_modes::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind};
-use ham_digital_modes::ambe_plus_2::interleave::interleaved_to_frame;
-use ham_digital_modes::ambe_plus_2::parse_frame;
+use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind};
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

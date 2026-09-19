@@ -235,7 +235,7 @@ impl Default for DecoderState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::{
+    use crate::ambe::float::ratet27::{
         bit_prioritization::prioritize_bits, encode_code_vectors, parameter_encoding, tables,
     };
 
@@ -262,8 +262,8 @@ mod tests {
         let omega0_hat = 2.0 * std::f64::consts::PI / 100.0;
         let b0 = parameter_encoding::quantize_fundamental_frequency(omega0_hat);
         let omega0_tilde = parameter_encoding::dequantize_fundamental_frequency(b0);
-        let l_hat = crate::ambe::vuv::harmonics_count(omega0_tilde);
-        let k_hat = crate::ambe::vuv::frequency_bands_count(l_hat);
+        let l_hat = crate::ambe::float::ratet27::vuv::harmonics_count(omega0_tilde);
+        let k_hat = crate::ambe::float::ratet27::vuv::frequency_bands_count(l_hat);
 
         let voiced_bands = vec![true; k_hat as usize];
         let b1 = parameter_encoding::encode_voicing_decisions(&voiced_bands);
@@ -357,8 +357,8 @@ mod tests {
     ) {
         let frame = build_synthetic_voiced_frame();
 
-        let symbols = crate::ambe::interleave::interleave_to_dibit_symbols(frame.c);
-        let recovered_c = crate::ambe::interleave::deinterleave_from_dibit_symbols(symbols);
+        let symbols = crate::ambe::float::ratet27::interleave::interleave_to_dibit_symbols(frame.c);
+        let recovered_c = crate::ambe::float::ratet27::interleave::deinterleave_from_dibit_symbols(symbols);
         assert_eq!(
             recovered_c, frame.c,
             "a clean interleave/deinterleave round trip must recover the exact code vectors"

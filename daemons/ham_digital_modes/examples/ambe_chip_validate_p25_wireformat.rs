@@ -54,10 +54,10 @@
 //! `ambe_chip_validate_*` harnesses -- never touches the serial/USB layer directly, so the chip's
 //! known UART-BREAK lockup hazard (see the findings doc section 6) cannot be triggered by this tool.
 
-use ham_digital_modes::ambe::fec::{golay_encode, hamming_encode};
-use ham_digital_modes::ambe::modulation::modulation_vectors;
-use ham_digital_modes::ambe::pitch_refinement::RefinementFrame;
-use ham_digital_modes::ambe::{encode_frame as ambe_encode_frame, FrameState};
+use ham_digital_modes::ambe::float::general::fec::{golay_encode, hamming_encode};
+use ham_digital_modes::ambe::float::ratet27::modulation::modulation_vectors;
+use ham_digital_modes::ambe::float::ratet27::pitch_refinement::RefinementFrame;
+use ham_digital_modes::ambe::float::ratet27::{encode_frame as ambe_encode_frame, FrameState};
 use std::collections::HashSet;
 use std::f64::consts::PI;
 use std::fs;

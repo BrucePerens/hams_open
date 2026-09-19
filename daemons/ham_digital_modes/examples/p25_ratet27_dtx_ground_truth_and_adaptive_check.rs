@@ -16,8 +16,8 @@
 //!     `VOICE_ACTIVE`'s adaptive/contrast-based behavior frame-for-frame, or lags/differs from it.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_dtx_ground_truth_and_adaptive_check -- <host:port>`
-use ham_digital_modes::ambe::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
 use std::net::UdpSocket;
 use std::time::Duration;
 

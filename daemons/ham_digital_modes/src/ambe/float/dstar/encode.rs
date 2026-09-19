@@ -4,7 +4,7 @@
 //! encode `C0`'s data, whiten and Golay-encode `C1`'s data, concatenate with `C2`/`C3` raw).
 
 use super::decode::RawParameters;
-use crate::ambe::fec::golay_encode;
+use crate::ambe::float::general::fec::golay_encode;
 
 /// Scatters `b0..b8` back into the 49-bit `d[]` layout `decode::extract_raw_parameters` reads from
 /// -- each assignment here is the direct algebraic inverse of that function's own extraction, over
@@ -66,7 +66,7 @@ pub fn build_frame(d: u64) -> u128 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe_dstar::decode::{extract_raw_parameters, parse_frame};
+    use crate::ambe::float::dstar::decode::{extract_raw_parameters, parse_frame};
 
     /// The real, end-to-end round trip this whole module exists for: pack a set of raw parameters
     /// into a transmittable frame, parse that frame back, and confirm both the FEC layer reports
@@ -119,7 +119,7 @@ mod tests {
     /// trip (which never leaves `u128` frame space) wouldn't exercise.
     #[test]
     fn build_frame_round_trips_through_real_wire_bytes() {
-        use crate::ambe_dstar::interleave::{frame_to_wire_bytes, wire_bytes_to_frame};
+        use crate::ambe::float::dstar::interleave::{frame_to_wire_bytes, wire_bytes_to_frame};
 
         let original = RawParameters {
             b0: 0b101_0110,

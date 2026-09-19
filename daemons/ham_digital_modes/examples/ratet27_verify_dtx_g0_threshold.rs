@@ -12,8 +12,8 @@
 //! needs to account for before shipping.
 //!
 //! Usage: `cargo run --release --example ratet27_verify_dtx_g0_threshold`
-use ham_digital_modes::ambe::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
 
 const DTX_SILENCE_G0: u16 = 3841;
 

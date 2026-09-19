@@ -268,7 +268,7 @@ mod tests {
 
     /// The composition none of the per-function tests above can catch: wires the whole encoder
     /// parameter pipeline together end to end (`partition_into_blocks` -> `block_dct` per block ->
-    /// extract each block's own DC term into `R_i` -> [`crate::ambe::gain_vector_dct`] -> both
+    /// extract each block's own DC term into `R_i` -> [`crate::ambe::float::ratet27::gain_vector_dct`] -> both
     /// quantizers), using a constant residual input specifically because it produces a fully
     /// checkable expectation at every stage: a constant block's own DCT is zero except its DC term
     /// (already proven per-block above), so every higher-order coefficient and every non-DC
@@ -292,7 +292,7 @@ mod tests {
             );
         }
 
-        let g_hat = crate::ambe::gain_vector_dct(&r_hat);
+        let g_hat = crate::ambe::float::ratet27::gain_vector_dct(&r_hat);
         assert!((g_hat[0] - constant).abs() < 1e-9);
         for &g in &g_hat[1..] {
             assert!(

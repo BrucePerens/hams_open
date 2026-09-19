@@ -9,10 +9,10 @@
 //! decode, shipped in the same round as section 40's D-STAR tone/DTMF findings.
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_dstar_tone -- <host:port>`
-use ham_digital_modes::ambe_dstar::decode::{
+use ham_digital_modes::ambe::float::dstar::decode::{
     classify_b0, dtmf_digit_from_tone_index, extract_raw_parameters, parse_frame, FrameKind,
 };
-use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
+use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -170,7 +170,7 @@ fn main() {
                 let is_tone = matches!(kind, FrameKind::Tone);
                 let tone_frame = tone_frame_bit(pkt) == 1;
                 let decoded = if is_tone {
-                    let tone = ham_digital_modes::ambe_dstar::decode::decode_tone(parsed.d);
+                    let tone = ham_digital_modes::ambe::float::dstar::decode::decode_tone(parsed.d);
                     dtmf_digit_from_tone_index(tone.index)
                 } else {
                     None

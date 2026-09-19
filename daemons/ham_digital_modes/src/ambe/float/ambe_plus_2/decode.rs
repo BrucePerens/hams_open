@@ -1,7 +1,7 @@
 //! Parameter extraction and dequantization for AMBE+2 half-rate frames -- see `mod.rs`'s own doc
 //! comment for the real, source-verified `b0..b8` bit-scatter this module implements directly
 //! (traced from mbelib's real `mbe_decodeAmbe2450Parms`), and for why the FEC/whitening layer
-//! itself (`parse_frame`) is reused from `super::super::ambe_dstar` rather than reimplemented here.
+//! itself (`parse_frame`) is reused from `super::super::dstar` rather than reimplemented here.
 
 use super::tables;
 
@@ -409,8 +409,8 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::fec::golay_encode;
-    use crate::ambe_dstar::whiten_c1;
+    use crate::ambe::float::general::fec::golay_encode;
+    use crate::ambe::float::dstar::whiten_c1;
 
     /// The `b0..b8` scatter must be a genuine bijection over all 49 bits of `d[]` -- every index
     /// used by exactly one parameter, exactly once (`mod.rs`'s own doc comment claims this
@@ -475,7 +475,7 @@ mod tests {
         };
         assert!(original.b0 < 120);
 
-        let d = crate::ambe_plus_2::encode::pack_raw_parameters(&original);
+        let d = crate::ambe::float::ambe_plus_2::encode::pack_raw_parameters(&original);
 
         let c0_data = ((d >> 37) & 0xFFF) as u16;
         let c1_data = ((d >> 25) & 0xFFF) as u16;
@@ -489,7 +489,7 @@ mod tests {
             | ((c2 as u128) << 14)
             | (c3 as u128);
 
-        let parsed = crate::ambe_plus_2::parse_frame(frame);
+        let parsed = crate::ambe::float::ambe_plus_2::parse_frame(frame);
         assert_eq!(parsed.epsilon_c0, 0);
         assert_eq!(parsed.epsilon_c1, 0);
 

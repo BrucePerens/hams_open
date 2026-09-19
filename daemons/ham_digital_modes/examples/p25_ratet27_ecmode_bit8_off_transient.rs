@@ -11,7 +11,7 @@
 //! sub-hypothesis) versus a monotonic, non-overshooting decay.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_bit8_off_transient -- <host:port>`
-use ham_digital_modes::ambe::ratet27_frame::decode_frame;
+use ham_digital_modes::ambe::float::ratet27::ratet27_frame::decode_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

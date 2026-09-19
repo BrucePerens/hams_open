@@ -7,7 +7,7 @@
 //! byte-order/bit-direction hypotheses) across many real captured frames for a Golay-validity rate
 //! dramatically above chance -- the same falsification-test logic used throughout this
 //! investigation, but without assuming fixed field boundaries this time.
-use ham_digital_modes::ambe::fec::golay_encode;
+use ham_digital_modes::ambe::float::general::fec::golay_encode;
 use std::net::UdpSocket;
 use std::time::Duration;
 

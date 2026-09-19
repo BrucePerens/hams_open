@@ -5,9 +5,9 @@
 //! capture the module's own unit tests check against).
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27_dtx -- <host:port>`
-use ham_digital_modes::ambe::ratet27_dtx::is_dtx_silence_frame;
-use ham_digital_modes::ambe::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_dtx::is_dtx_silence_frame;
+use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
 use std::net::UdpSocket;
 use std::time::Duration;
 

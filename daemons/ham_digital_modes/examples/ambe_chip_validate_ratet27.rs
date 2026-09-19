@@ -23,7 +23,7 @@
 //! see: two full multi-second recordings, checked frame by frame.
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27 -- <host:port>`
-use ham_digital_modes::ambe::ratet27_frame::decode_frame;
+use ham_digital_modes::ambe::float::ratet27::ratet27_frame::decode_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

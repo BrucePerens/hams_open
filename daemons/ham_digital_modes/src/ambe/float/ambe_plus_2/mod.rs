@@ -1,5 +1,5 @@
 //! AMBE+2 half-rate (the DMR / Yaesu System Fusion / P25 Phase 2 generation, TIA-102.BABA-1's own
-//! 2009 addendum to the base P25 IMBE standard `super::ambe` implements): a 72-bit frame every
+//! 2009 addendum to the base P25 IMBE standard `super::ratet27` implements): a 72-bit frame every
 //! 20ms (3600 total / 2450 speech / 1150 FEC bps -- DVSI's own USB-3000 Manual lists this as
 //! `PKT_RATET` Rate Index 33 "APCO Project 25 half-rate with FEC" and Rate Index 34 "APCO Project
 //! 25 half-rate with No FEC", `0x21`/`0x22`; see
@@ -11,13 +11,13 @@
 //! AMBE+2 is covered by 12 specific patents named in the TIA-102.BABA-1 addendum itself. This
 //! module exists **only** for internal testing against real DVSI chip hardware -- confirming or
 //! refuting the hypothesis that the chip's own "P25" configurations are actually running an
-//! AMBE+2-family algorithm, not the published, patent-clear IMBE algorithm `super::ambe`
+//! AMBE+2-family algorithm, not the published, patent-clear IMBE algorithm `super::ratet27`
 //! implements. It is not enabled by default, not exported for any deployment use, and real
 //! deployment would need the patent-clearance question resolved separately (see
 //! `AMBE_PLUS_2_NOTES.md`'s own dated sections for the authorization history). Build/test it with
 //! `cargo build --features ambe_plus_2` / `cargo test --features ambe_plus_2`.
 //!
-//! # Frame structure: identical to `super::ambe_dstar`'s own frame layer, different tables
+//! # Frame structure: identical to `super::dstar`'s own frame layer, different tables
 //!
 //! Traced directly from mbelib's real `ambe3600x2450.c`/`ambe3600x2450_const.h`
 //! (<https://github.com/szechyjs/mbelib>, ISC-licensed): **the 72-bit FEC/whitening frame layer
@@ -26,9 +26,9 @@
 //! `mbe_demodulateAmbe3600x2450Data`'s pseudo-random generator, seeded from `ambe_fr[0][23..12]`
 //! with the same `173*p+13849 mod 65536` recurrence, is the same construction
 //! `ambe_dstar::whitening` already implements and tests). Rather than reimplement it, this module
-//! reuses `super::ambe_dstar`'s frame layer directly -- see the re-exports below -- exactly the
+//! reuses `super::dstar`'s frame layer directly -- see the re-exports below -- exactly the
 //! same "reuse, don't reimplement" precedent `ambe_dstar` itself set by reusing
-//! `super::ambe::fec::golay_encode`/`golay_decode`.
+//! `super::general::fec::golay_encode`/`golay_decode`.
 //!
 //! Four sub-blocks, `C0 || C1 || C2 || C3` for `24 + 23 + 11 + 14 = 72` bits: `C0` (a `[23,12]`
 //! Golay codeword plus 1 spare LSB), `C1` (a second Golay codeword, whitened), `C2` (11
@@ -90,6 +90,6 @@ pub const DECODED_BITS: usize = 49;
 // The FEC/whitening frame layer is bit-for-bit identical to ambe_dstar's own (see this module's
 // doc comment) -- reused directly rather than reimplemented, the same precedent ambe_dstar itself
 // set reusing ambe::fec.
-pub use crate::ambe_dstar::decode::{parse_frame, ParsedFrame};
-pub use crate::ambe_dstar::encode::build_frame;
-pub use crate::ambe_dstar::whiten_c1;
+pub use crate::ambe::float::dstar::decode::{parse_frame, ParsedFrame};
+pub use crate::ambe::float::dstar::encode::build_frame;
+pub use crate::ambe::float::dstar::whiten_c1;

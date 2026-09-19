@@ -27,8 +27,8 @@
 //! `tests/fixtures/osr_speech/`, already cleared for use elsewhere in this crate) -- a more
 //! representative test than synthetic tones alone.
 
-use ham_digital_modes::ambe_dstar::decode::parse_frame;
-use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
+use ham_digital_modes::ambe::float::dstar::decode::parse_frame;
+use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

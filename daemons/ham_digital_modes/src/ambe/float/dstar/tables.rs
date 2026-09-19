@@ -1,4 +1,4 @@
-//! D-STAR's own AMBE quantizer tables -- unlike the P25 half/full-rate codec in `super::ambe`
+//! D-STAR's own AMBE quantizer tables -- unlike the P25 half/full-rate codec in `super::ratet27`
 //! (built directly from the published TIA-102.BABA text), DVSI has never published a spec for
 //! D-STAR's own, older/smaller AMBE variant. These table *values* are transcribed from mbelib
 //! (<https://github.com/szechyjs/mbelib>, `ambe3600x2400_const.h`), a real, independently

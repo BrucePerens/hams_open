@@ -30,9 +30,9 @@
 //!
 //! Run against the chip: `cargo run --release --features ambe_plus_2 --example ambe_chip_validate_ambe_plus_2 -- 192.168.10.189:2460`
 
-use ham_digital_modes::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind, RawParameters};
-use ham_digital_modes::ambe_plus_2::interleave::interleaved_to_frame;
-use ham_digital_modes::ambe_plus_2::{parse_frame, tables};
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind, RawParameters};
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::{parse_frame, tables};
 use std::net::UdpSocket;
 use std::time::Duration;
 

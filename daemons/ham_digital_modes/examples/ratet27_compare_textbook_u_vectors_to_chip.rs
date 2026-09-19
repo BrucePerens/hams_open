@@ -17,10 +17,10 @@
 //! the chip's decoded `g0`, that's direct, concrete evidence for the `u0=g0` hypothesis.
 //!
 //! Usage: `cargo run --release --example ratet27_compare_textbook_u_vectors_to_chip -- <host:port> <freq_hz>`
-use ham_digital_modes::ambe::pitch_refinement::RefinementFrame;
-use ham_digital_modes::ambe::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::ratet27_wire_format::Block;
-use ham_digital_modes::ambe::{encode_prioritized_bits, FrameState};
+use ham_digital_modes::ambe::float::ratet27::pitch_refinement::RefinementFrame;
+use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
+use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::float::ratet27::{encode_prioritized_bits, FrameState};
 use std::net::UdpSocket;
 use std::time::Duration;
 

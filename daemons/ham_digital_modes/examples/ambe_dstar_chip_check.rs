@@ -3,10 +3,10 @@
 //! RATEP configured to the confirmed D-STAR rate-control-word) through this crate's own
 //! `ambe_dstar::decode`, and print the recovered parameters for a sanity look.
 
-use ham_digital_modes::ambe_dstar::decode::{
+use ham_digital_modes::ambe::float::dstar::decode::{
     dequantize, extract_raw_parameters, parse_frame, DStarDecoderState, DequantizedFrame,
 };
-use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
+use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

@@ -7,9 +7,9 @@
 //! with the chip's *meaning* of those bits) -- a high error count / REPEAT-classification means that
 //! convention is wrong, before ever getting to whether the tables match.
 
-use ham_digital_modes::ambe::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::fec::golay_decode;
-use ham_digital_modes::ambe::interleave::deinterleave_from_dibit_symbols;
+use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
+use ham_digital_modes::ambe::float::general::fec::golay_decode;
+use ham_digital_modes::ambe::float::ratet27::interleave::deinterleave_from_dibit_symbols;
 
 fn bits_msb_first(bytes: &[u8; 18]) -> Vec<bool> {
     let mut bits = Vec::with_capacity(144);

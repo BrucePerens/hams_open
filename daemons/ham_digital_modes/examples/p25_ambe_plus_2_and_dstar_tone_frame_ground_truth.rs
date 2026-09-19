@@ -16,14 +16,14 @@
 //! positive control that this readback mechanism works correctly outside RATET(27).
 //!
 //! Usage: `cargo run --release --features ambe_plus_2 --example p25_ambe_plus_2_and_dstar_tone_frame_ground_truth -- <host:port>`
-use ham_digital_modes::ambe_dstar::decode::{
+use ham_digital_modes::ambe::float::dstar::decode::{
     classify_b0 as dstar_classify_b0, extract_raw_parameters as dstar_extract_raw,
     parse_frame as dstar_parse_frame,
 };
-use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
-use ham_digital_modes::ambe_plus_2::decode::{classify_b0, extract_raw_parameters};
-use ham_digital_modes::ambe_plus_2::interleave::interleaved_to_frame;
-use ham_digital_modes::ambe_plus_2::parse_frame;
+use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, extract_raw_parameters};
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -203,7 +203,7 @@ fn main() {
         for (ci, &col) in cols.iter().enumerate() {
             let samples = dtmf_tone(row, col, 9000.0);
             let pkts = capture(&sock, &samples);
-            let decoded: Vec<(u32, ham_digital_modes::ambe_plus_2::decode::FrameKind, u16)> = pkts
+            let decoded: Vec<(u32, ham_digital_modes::ambe::float::ambe_plus_2::decode::FrameKind, u16)> = pkts
                 .iter()
                 .map(|pkt| {
                     let bits = channel_bits(pkt);

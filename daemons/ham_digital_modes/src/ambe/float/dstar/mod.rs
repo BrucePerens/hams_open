@@ -1,6 +1,6 @@
 //! D-STAR's own AMBE variant: a 72-bit, 9-byte frame every 20ms (3600 total / 2400 speech / 1200
 //! FEC bps), an older and structurally different generation from the P25 half/full-rate codec in
-//! `super::ambe` (built from the published TIA-102.BABA text). DVSI has never published a spec for
+//! `super::ratet27` (built from the published TIA-102.BABA text). DVSI has never published a spec for
 //! this D-STAR variant; its real frame structure and quantizer tables here are reverse-derived from
 //! mbelib (<https://github.com/szechyjs/mbelib>, ISC-licensed, a real working open-source decoder),
 //! confirmed against two independent primary sources for the on-chip configuration: DVSI's own
@@ -46,7 +46,7 @@
 //! Golay-decoding `C0` and `C1` (in that order -- `C1`'s whitening seed depends on `C0`'s own
 //! corrected data) yields `12 + 12 = 24` protected data bits; concatenated with `C2`'s 11 and `C3`'s
 //! 14 raw bits, that's **49 total decoded parameter bits** (72 - 49 = 23 bits of real FEC overhead).
-//! This crate's own [`super::ambe::fec::golay_encode`]/[`golay_decode`](super::ambe::fec::golay_decode)
+//! This crate's own [`super::general::fec::golay_encode`]/[`golay_decode`](super::general::fec::golay_decode)
 //! are reused directly here (not reimplemented): both use the identical "12 data bits then 11 parity
 //! bits, MSB-first" systematic convention mbelib's own Golay implementation does, confirmed by
 //! direct comparison before relying on it.

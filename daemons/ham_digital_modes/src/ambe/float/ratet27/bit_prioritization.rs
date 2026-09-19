@@ -290,7 +290,7 @@ pub fn deprioritize_bits(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::tables;
+    use crate::ambe::float::ratet27::tables;
 
     /// The real Annex F/G bit widths for the spec's own worked example, `L_hat = 16`, `K_hat = 6`
     /// (Table 6 and the higher-order bit allocation table, both already transcribed and tested in
@@ -474,7 +474,7 @@ mod tests {
     fn extract_fundamental_frequency_quantizer_is_independent_of_l_hat_and_k_hat() {
         let b0 = 0b1011_0110u32;
         for l_hat in [9u32, 16, 30, 56] {
-            let k_hat = crate::ambe::vuv::frequency_bands_count(l_hat);
+            let k_hat = crate::ambe::float::ratet27::vuv::frequency_bands_count(l_hat);
             let gain: [u8; 5] = std::array::from_fn(|i| {
                 tables::gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0
             });
@@ -536,7 +536,7 @@ mod tests {
     #[test]
     fn deprioritize_bits_is_the_exact_inverse_of_prioritize_bits_for_a_small_l_hat() {
         let l_hat = 9u32;
-        let k_hat = crate::ambe::vuv::frequency_bands_count(l_hat);
+        let k_hat = crate::ambe::float::ratet27::vuv::frequency_bands_count(l_hat);
         let gain: [u8; 5] =
             std::array::from_fn(|i| tables::gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
         let higher = tables::higher_order_bit_allocation(l_hat).unwrap().to_vec();

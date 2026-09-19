@@ -13,11 +13,11 @@
 //! structure for the sibling generation.
 //!
 //! Usage: `cargo run --release --features ambe_plus_2 --example ambe_chip_validate_ambe_plus_2_dtmf -- <host:port>`
-use ham_digital_modes::ambe_plus_2::decode::{
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
     classify_b0, decode_tone_idx, dtmf_digit_from_tone_idx, extract_raw_parameters, FrameKind,
 };
-use ham_digital_modes::ambe_plus_2::interleave::interleaved_to_frame;
-use ham_digital_modes::ambe_plus_2::parse_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 

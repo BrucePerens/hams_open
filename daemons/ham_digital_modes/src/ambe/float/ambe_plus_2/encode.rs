@@ -52,8 +52,8 @@ pub fn build_frame(raw: &RawParameters) -> u128 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe_plus_2::decode::extract_raw_parameters;
-    use crate::ambe_plus_2::parse_frame;
+    use crate::ambe::float::ambe_plus_2::decode::extract_raw_parameters;
+    use crate::ambe::float::ambe_plus_2::parse_frame;
 
     /// The full real, end-to-end round trip this whole module exists for: pack a set of raw
     /// parameters into a transmittable frame, parse it back through the shared frame layer, and

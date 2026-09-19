@@ -41,8 +41,8 @@
 //! exact-match search next (as used successfully elsewhere in this document), not a conclusion that
 //! no field existed. Left in place as a real, useful record of the exploratory step that came first,
 //! not superseded/deleted.
-use ham_digital_modes::ambe_plus_2::interleave::interleaved_to_frame;
-use ham_digital_modes::ambe_plus_2::parse_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 
 // (digit label, row 0-3, col 0-3, real hex captured live under RATET(33), TD_ENABLE on, DTX_ENABLE
 // on -- from AMBE_CHIP_VALIDATION_FINDINGS.md section 40's own probe run).
