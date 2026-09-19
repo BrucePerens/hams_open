@@ -304,10 +304,10 @@ pub fn f0_from_b0(b0: u32) -> f64 {
     F0_CHIP_SCALE * 2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
 }
 
-/// The real chip's D-STAR fundamental frequency is measured at `1.030x` mbelib's guessed formula
-/// (`examples/dstar_fit_pitch_table.rs`: median 1.030 over 33 loud stable-pitch frames, b0 31-55, with a
+/// The real chip's D-STAR fundamental frequency is measured at `1.024x` mbelib's guessed formula
+/// (`examples/dstar_fit_pitch_table.rs`: pooled over four speakers (median 1.030 for the first, 1.024 pooled), b0 31-55, with a
 /// control on this crate's own PCM reading 1.000).
-pub const F0_CHIP_SCALE: f64 = 1.030;
+pub const F0_CHIP_SCALE: f64 = 1.024;
 
 // [@ANCHOR: dequantize]
 pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {

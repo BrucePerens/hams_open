@@ -11,6 +11,8 @@
 //! correlation `0.8355`, but float is 10-14 dB too quiet below 700 Hz (chip tracks the input within
 //! ~3 dB) -- open. Run under `flock /tmp/dvsi_chip.lock` (the chip is shared between sessions).
 //!
+//! Set `AMBE_WAV_IN` to use a different speech file and `AMBE_WAV_OUT_DIR` for the output directory.
+//!
 //! Usage: `cargo run --release --example ambe_chip_pcm_vs_float_synthesis_half_rate -- <dstar|ambe_plus_2> [host:port]`
 //! (`ambe_plus_2` needs `--features ambe_plus_2`).
 
@@ -148,7 +150,7 @@ fn main() {
     while sock.recv(&mut buf).is_ok() {}
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
-    let pcm = read_wav_mono_i16("tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav");
+    let pcm = read_wav_mono_i16(&std::env::var("AMBE_WAV_IN").unwrap_or_else(|_| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string()));
     let n_frames = (pcm.len() / FRAME_SAMPLES).min(N_FRAMES);
     let mut payloads: Vec<Vec<u8>> = Vec::new();
     for i in 0..n_frames {

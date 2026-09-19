@@ -188,6 +188,22 @@ impl SynthesisState {
         self.synthesize_core(omega0_tilde, &voiced, &final_amplitudes)
     }
 
+    /// Synthesizes a frame from already-final parameters, skipping spectral enhancement, V/UV smoothing and
+    /// amplitude smoothing entirely (`reconstructed_amplitudes` and `voiced` go straight to Eq. 127-142). For
+    /// experiments comparing a mode's output against the real chip with those stages disabled.
+    pub fn synthesize_frame_unenhanced(
+        &mut self,
+        amplitudes: &[f64],
+        omega0_tilde: f64,
+        voiced: &[bool],
+    ) -> Option<[f64; N]> {
+        if amplitudes.len() != voiced.len() {
+            return None;
+        }
+        self.last_final_amplitudes = Some((omega0_tilde, voiced.to_vec(), amplitudes.to_vec()));
+        self.synthesize_core(omega0_tilde, voiced, amplitudes)
+    }
+
     /// Synthesizes a *repeated* frame (section 7.7, Eq. 99-104): when the decoder's own frame-repeat
     /// check fires (an invalid `b_hat_0` or `error_estimation::should_repeat_frame`), every IMBE
     /// model parameter for the current frame is set equal to the previous frame's own -- crucially,

@@ -68,6 +68,8 @@ fn main() {
             extract_raw_parameters(parse_frame(wire_bytes_to_frame(&wire)).d).b0
         })
         .collect();
+    let b0_dump: String = b0s.iter().map(|b| format!("{b}\n")).collect();
+    std::fs::write(format!("{dir}/dstar_b0.txt"), b0_dump).unwrap();
     let mut points: Vec<(u32, f64)> = Vec::new(); // (b0, chip/guess ratio)
     for i in 1..b0s.len() - 1 {
         let (a, b, c) = (b0s[i - 1] as i32, b0s[i] as i32, b0s[i + 1] as i32);
