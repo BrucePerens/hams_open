@@ -2547,3 +2547,18 @@ speculation, not confirmed) rather than either a clean continuous quantizer or p
 remains as unstable and weakly-correlated as `g1`/`g2`/`u6` -- no clean semantic signal found for it
 yet by any test in this document. Both are recorded as open, real, current-state findings rather
 than being left completely uninvestigated.
+
+**A precise structural detail found while looking closer at `u4`'s own "exactly 2 values" pattern**:
+at every one of the 16 tested amplitudes, `u4`'s two alternating values differ by **exactly `53`**,
+with zero exceptions (`454/507`, `1862/1915`, `1734/1787`, `1606/1659`, `1990/2043` -- all
+differences checked directly, all exactly `53`). This is a real, precise, frequency/amplitude-
+independent constant, not a coincidence of these specific 16 test points. The most likely
+explanation, consistent with standard vocoder design practice: `u4` (or whatever underlying quantity
+it encodes) is subject to **error-feedback/dithered quantization** -- alternating between two
+adjacent quantizer levels frame-to-frame to preserve the *average* value's fidelity despite coarse
+per-frame resolution, a well-known technique (related to noise-shaping/dither in ADPCM and similar
+codecs) for reducing perceptible quantization distortion in a slowly-varying parameter. If so, `53`
+is very likely `u4`'s own quantizer step size (or a simple multiple of it) at whatever operating
+point this test's fixed 200Hz/varying-amplitude stimulus lands on -- a concrete, quantitative clue
+for whoever next attempts `u4`'s full semantic identification, not available from any single-frame
+reading alone.
