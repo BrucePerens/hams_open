@@ -150,7 +150,7 @@ class TestEnsureKopiaS3Repository(unittest.TestCase):
             "endpoint_url": "https://s3.us-west-002.backblazeb2.com",
         }
         self.env_vars = {"AWS_ACCESS_KEY_ID": "ak", "AWS_SECRET_ACCESS_KEY": "sk"}
-        self.config_file = "/var/lib/odoo/backups/.kopia-configs/config_42.config"  # the daemon's real config dir; makedirs and the kopia call are mocked
+        self.config_file = "/tmp/does-not-need-to-exist/config_42.config"
 
     @patch("main.os.makedirs")
     @patch("main.subprocess.run")

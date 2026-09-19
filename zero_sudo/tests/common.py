@@ -363,7 +363,7 @@ def _tracked_threadpool_submit(self, fn, *args, **kwargs):
     future = _original_threadpool_submit(self, fn, *args, **kwargs)
     with _pending_background_futures_lock:
         _pending_background_futures.add(future)
-        _pending_background_future_names[future] = repr(fn)
+        _pending_background_future_names[future] = getattr(fn, "__qualname__", repr(fn))
 
     def _on_done(f):
         with _pending_background_futures_lock:

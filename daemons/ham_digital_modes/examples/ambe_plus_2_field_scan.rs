@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #![allow(dead_code)]
-//! Field-by-field oracle scan of the chip's D-STAR decoder against this crate's decoder (the mbelib-derived model).
+//! Field-by-field oracle scan of the chip's AMBE+2 half-rate decoder against this crate's decoder (the mbelib-derived model).
 //! Starting from a base frame with every harmonic voiced, it sweeps ONE quantizer field at a time through all its
 //! values (`b2` gain delta, `b3` PRBA24, `b4` PRBA58, `b5..b8` higher-order coefficients), sends each resulting frame
 //! to the chip's decoder repeatedly (so the predictor settles), and measures the amplitude of every harmonic line in
@@ -10,20 +10,39 @@
 //!
 //! Usage: `cargo run --release --example dstar_field_scan -- <host:port> <out.tsv> [b0=44]`
 
-use ham_digital_modes::ambe::float::dstar::decode::{f0_from_b0, RawParameters};
-use ham_digital_modes::ambe::float::dstar::encode::{build_frame, pack_raw_parameters};
-use ham_digital_modes::ambe::float::dstar::interleave::frame_to_wire_bytes;
-use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
-use ham_digital_modes::ambe::float::dstar::tables::{DG, HOC_B5, HOC_B6, HOC_B7, HOC_B8, L_TABLE, PRBA24, PRBA58};
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::RawParameters;
+use ham_digital_modes::ambe::float::ambe_plus_2::encode::build_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::{frame_to_interleaved, interleaved_to_frame};
+use ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder as DStarSynthesisDecoder;
+use ham_digital_modes::ambe::float::ambe_plus_2::tables::{DG, HOC_B5, HOC_B6, HOC_B7, HOC_B8, L_TABLE, PRBA24, PRBA58, VUV, W0_TABLE};
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;
 use std::time::Duration;
 
-const FIELD_RATEP: u8 = 0x0A;
+fn frame_to_wire_bytes(frame: u128) -> [u8; 9] {
+    let wire = frame_to_interleaved(frame);
+    std::array::from_fn(|i| ((wire >> (8 * (8 - i))) & 0xFF) as u8)
+}
+#[allow(dead_code)]
+fn wire_bytes_to_frame(b: &[u8; 9]) -> u128 {
+    let mut wire: u128 = 0;
+    for &x in b {
+        wire = (wire << 8) | x as u128;
+    }
+    interleaved_to_frame(wire)
+}
+fn f0_from_b0(b0: u32) -> f64 {
+    W0_TABLE[b0 as usize]
+}
+fn pack_raw_parameters(raw: &RawParameters) -> RawParameters {
+    RawParameters { b0: raw.b0, b1: raw.b1, b2: raw.b2, b3: raw.b3, b4: raw.b4, b5: raw.b5, b6: raw.b6, b7: raw.b7, b8: raw.b8 }
+}
+
+const FIELD_RATET: u8 = 0x09;
 const TYPE_CONTROL: u8 = 0x00;
 const TYPE_CHANNEL: u8 = 0x01;
 const TYPE_SPEECH: u8 = 0x02;
-const RATEP_DSTAR: [u16; 6] = [0x0130, 0x0763, 0x4000, 0x0000, 0x0000, 0x0048];
+const RATET_HALF_RATE_FEC: u8 = 33;
 const FRAME_SAMPLES: usize = 160;
 const REPS: usize = 12;
 const FFT_LEN: usize = 4096;
@@ -146,11 +165,7 @@ fn main() {
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
-    let mut body = Vec::new();
-    for v in RATEP_DSTAR {
-        body.extend_from_slice(&v.to_be_bytes());
-    }
-    sock.send(&control(FIELD_RATEP, &body)).unwrap();
+    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC])).unwrap();
     let n = sock.recv(&mut buf).unwrap();
     parse_packet(&buf[..n]).unwrap();
     sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
@@ -164,17 +179,17 @@ fn main() {
     fn min_norm<const N: usize>(t: &[[f64; N]], even: bool) -> u32 {
         (0..t.len()).filter(|i| !even || i % 2 == 0).min_by(|&a, &b| t[a].iter().map(|x| x * x).sum::<f64>().total_cmp(&t[b].iter().map(|x| x * x).sum::<f64>())).unwrap() as u32
     }
-    let flat = (min_norm(&PRBA24, false), min_norm(&PRBA58, false), min_norm(&HOC_B5, false), min_norm(&HOC_B6, false), min_norm(&HOC_B7, false), min_norm(&HOC_B8, true));
+    let flat = (min_norm(&PRBA24, false), min_norm(&PRBA58, false), min_norm(&HOC_B5, false), min_norm(&HOC_B6, false), min_norm(&HOC_B7, false), min_norm(&HOC_B8, false));
     let b2_mid = (0..DG.len()).min_by(|&a, &b| (DG[a] - 0.0).abs().total_cmp(&(DG[b] - 0.0).abs())).unwrap() as u32;
     eprintln!("flat base: b2={b2_mid} b3..b8={flat:?}");
-    let base = || RawParameters { b0, b1: 15, b2: b2_mid, b3: flat.0, b4: flat.1, b5: flat.2, b6: flat.3, b7: flat.4, b8: flat.5 };
+    let base = || RawParameters { b0, b1: VUV.iter().position(|r| r.iter().all(|&v| v)).unwrap() as u32, b2: b2_mid, b3: flat.0, b4: flat.1, b5: flat.2, b6: flat.3, b7: flat.4, b8: flat.5 };
     if std::env::args().nth(4).as_deref() == Some("f0scan") {
         // The chip's true fundamental for every b0: least-squares slope of the measured harmonic peak frequencies
         // against harmonic number, over a long steady all-voiced flat frame.
-        for b0 in 10u32..110 {
+        for b0 in 10u32..118 {
             let mut raw = base();
             raw.b0 = b0;
-            let frame = build_frame(pack_raw_parameters(&raw));
+            let frame = build_frame(&pack_raw_parameters(&raw));
             let mut pcm = Vec::new();
             for _ in 0..30 {
                 pcm.extend(chip_steady(&sock, &mut buf, frame).into_iter().skip(160 * 8).take(160 * 4));
@@ -219,7 +234,7 @@ fn main() {
         // All-unvoiced flat frame: band energy (dB, 200 Hz bands) of chip versus ours, to see where the chip's noise ends.
         let mut raw = base();
         raw.b1 = 0;
-        let frame = build_frame(pack_raw_parameters(&raw));
+        let frame = build_frame(&pack_raw_parameters(&raw));
         let (chip, ours) = (chip_steady(&sock, &mut buf, frame), ours_steady(frame));
         for (label, pcm) in [("chip", chip), ("ours", ours)] {
             let seg = &pcm[pcm.len() - 1600..];
@@ -248,7 +263,7 @@ fn main() {
         } else {
             alt.b5 = row;
         }
-        let (fb, fa) = (build_frame(pack_raw_parameters(&base())), build_frame(pack_raw_parameters(&alt)));
+        let (fb, fa) = (build_frame(&pack_raw_parameters(&base())), build_frame(&pack_raw_parameters(&alt)));
         let mut seq = vec![fb; 12];
         seq.extend(vec![fa; 8]);
         seq.extend(vec![fb; 6]);
@@ -295,24 +310,24 @@ fn main() {
     }
     if std::env::args().nth(4).as_deref() == Some("lscan") {
         // For every b0, find the chip's last harmonic that responds to b8 (its top block) and the chip's actual f0.
-        for b0 in 20u32..100 {
+        for b0 in 20u32..118 {
             let l_ours = L_TABLE[b0 as usize] as usize;
             let f0 = f0_from_b0(b0) * 8000.0;
             let mut lo = base();
             lo.b0 = b0;
             let mut hi = base();
             hi.b0 = b0;
-            hi.b8 = 2;
-            lo.b8 = 12;
-            let a = line_amplitudes_db(&chip_steady(&sock, &mut buf, build_frame(pack_raw_parameters(&lo))), f0, (l_ours + 2).min((3950.0 / f0) as usize));
-            let b = line_amplitudes_db(&chip_steady(&sock, &mut buf, build_frame(pack_raw_parameters(&hi))), f0, (l_ours + 2).min((3950.0 / f0) as usize));
+            hi.b8 = 1;
+            lo.b8 = 6;
+            let a = line_amplitudes_db(&chip_steady(&sock, &mut buf, build_frame(&pack_raw_parameters(&lo))), f0, (l_ours + 2).min((3950.0 / f0) as usize));
+            let b = line_amplitudes_db(&chip_steady(&sock, &mut buf, build_frame(&pack_raw_parameters(&hi))), f0, (l_ours + 2).min((3950.0 / f0) as usize));
             let diffs: Vec<String> = a.iter().zip(&b).map(|(x, y)| format!("{:.0}", (x - y).abs())).collect();
             println!("b0={b0} L_ours={l_ours} f0={f0:.1} b8_delta_dB_by_harmonic: {}", diffs.join(" "));
         }
         return;
     }
     if std::env::args().nth(4).as_deref() == Some("peaks") {
-        let frame = build_frame(pack_raw_parameters(&base()));
+        let frame = build_frame(&pack_raw_parameters(&base()));
         for (label, pcm) in [("chip", chip_steady(&sock, &mut buf, frame)), ("ours", ours_steady(frame))] {
             let seg = &pcm[pcm.len() - 480..];
             let mut planner = FftPlanner::<f64>::new();
@@ -331,7 +346,7 @@ fn main() {
         }
         return;
     }
-    let fields: [(&str, usize); 7] = [("b2", 64), ("b3", 512), ("b4", 128), ("b5", 16), ("b6", 16), ("b7", 16), ("b8", 16)];
+    let fields: [(&str, usize); 7] = [("b2", 32), ("b3", 512), ("b4", 128), ("b5", 32), ("b6", 16), ("b7", 16), ("b8", 8)];
     let mut out = String::new();
     let only = std::env::args().nth(4);
     for (name, count) in fields {
@@ -339,9 +354,7 @@ fn main() {
             continue;
         }
         for v in 0..count {
-            if name == "b8" && v % 2 == 1 {
-                continue;
-            }
+            
             let mut raw = base();
             match name {
                 "b2" => raw.b2 = v as u32,
@@ -352,7 +365,7 @@ fn main() {
                 "b7" => raw.b7 = v as u32,
                 _ => raw.b8 = v as u32,
             }
-            let frame = build_frame(pack_raw_parameters(&raw));
+            let frame = build_frame(&pack_raw_parameters(&raw));
             let chip = line_amplitudes_db(&chip_steady(&sock, &mut buf, frame), f0_hz, harmonics);
             let ours = line_amplitudes_db(&ours_steady(frame), f0_hz, harmonics);
             for k in 0..harmonics {

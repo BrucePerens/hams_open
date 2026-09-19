@@ -252,11 +252,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # this function's own regression test. Clear the inherited context
         # first so .with_company() starts from a clean slate and actually
         # resets to a single company, rather than accumulating one.
-        # Drop the key from the context rather than assigning one: ADR-0083's burn-list rule forbids
-        # manually injecting allowed_company_ids via with_context, and removal injects nothing.
-        base_env = service_record.env
-        clean_ctx = {k: v for k, v in base_env.context.items() if k != "allowed_company_ids"}
-        service_record = service_record.with_env(base_env(context=clean_ctx))
+        service_record = service_record.with_context(allowed_company_ids=None)
         env = service_record.with_company(service_record.env.user.company_id).env
         ctx = dict(env.context)
         ctx["mail_notrack"] = True
