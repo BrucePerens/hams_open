@@ -73,14 +73,75 @@ pub fn phase_from_pi_multiple_q16(x_q16: i32) -> u32 {
     ((x_q16 as i64).wrapping_mul(1i64 << 31) >> 16) as u32
 }
 
+/// `round(pi * 2^48)` -- a much higher-precision representation of pi than [`super::fixed_ops::
+/// PI_Q16_16`]'s own Q16.16 (`round(pi * 2^16)`), used *only* by [`phase_from_radians_q16`]/
+/// [`phase_from_radians_q16_i64`]/[`radians_from_phase_q16`] below. `PI_Q16_16`'s own rounding is a
+/// small *relative* error (`~2.02e-6`, i.e. about 2 parts per million) on the constant itself, and
+/// dividing by it turns that into an equally small *multiplicative scale error on every phase this
+/// module ever produces* -- harmless for an ordinary single-shot angle, but `voiced_synthesis`'s own
+/// `psi_l`/`phi_l` (Eq. 139-140) accumulate a phase increment every frame forever, so a `2 ppm`
+/// scale error on the *frequency itself* is a genuine, unbounded, linearly growing phase drift over a
+/// long call -- confirmed directly: an early version of this module used `PI_Q16_16` here, and
+/// `ambe_fixed_voiced_synthesis.rs`'s own long-run scenarios measured SNR degrading by `~6 dB` per
+/// doubling of frame count (`56 dB` at 1 frame down to `~0 dB` at 128), *independent* of whether the
+/// pitch was held constant or genuinely varied frame to frame -- exactly the signature of a fixed
+/// fractional frequency error, not of any rounding noise correlated with a repeated input. Kept as its
+/// own `i128` constant (not a wider version of `PI_Q16_16` itself) since every *other* caller of
+/// `PI_Q16_16` wants an ordinary Q16.16 value, not this format.
+const PI_Q48: i128 = 884_279_719_003_555;
+
 /// Converts a Q16.16 angle in radians directly into this module's own `u32` phase convention, for
 /// callers whose own formula is a genuine radian angle (e.g. `omega0 * l`, RATET(27)'s own
 /// enhancement-stage phase term) rather than a clean multiple of `pi`. `phase = angle / (2*pi) *
-/// 2^32 = angle * 2^31 / pi`; computed as one exact integer division by [`super::fixed_ops::
-/// PI_Q16_16`] in a wide enough integer type before ever reducing mod `2^32`, so the final
-/// truncating cast to `u32` is the correct wraparound, not a source of extra error.
+/// 2^32 = angle * 2^15 / pi`; computed against [`PI_Q48`] (not `fixed_ops::PI_Q16_16` -- see that
+/// constant's own doc comment for why) in a wide enough integer type before ever reducing mod `2^32`,
+/// so the final truncating cast to `u32` is the correct wraparound, not a source of extra error.
 pub fn phase_from_radians_q16(angle_q16: i32) -> u32 {
-    (((angle_q16 as i64) << 31) / (super::fixed_ops::PI_Q16_16 as i64)) as u32
+    round_div_to_u32((angle_q16 as i128) << 63, PI_Q48)
+}
+
+/// The same conversion as [`phase_from_radians_q16`], for a caller whose own Q16.16 angle is
+/// computed in `i64` (a sum of several per-sample terms, e.g. `voiced_synthesis`'s own `theta_l(n)`,
+/// each individually bounded but not worth narrowing to `i32` before every intermediate addition) --
+/// widened to `i128` for the left shift so a genuinely large `i64` input still reduces mod `2*pi`
+/// exactly rather than risking a shift overflow.
+pub fn phase_from_radians_q16_i64(angle_q16: i64) -> u32 {
+    round_div_to_u32((angle_q16 as i128) << 63, PI_Q48)
+}
+
+/// Rounds `numerator / denominator` to the nearest integer (ties away from zero, the same convention
+/// [`super::fixed_ops::mul_q16`]/`explog::exp2_q16` already use) before truncating to `u32`.
+fn round_div_to_u32(numerator: i128, denominator: i128) -> u32 {
+    let half = denominator.abs() / 2;
+    let rounded = if numerator >= 0 { numerator + half } else { numerator - half };
+    (rounded / denominator) as u32
+}
+
+/// The exact inverse of [`phase_from_radians_q16`], for a caller that needs a persistent phase
+/// *accumulator* to survive indefinitely many frames without overflow (`voiced_synthesis`'s own
+/// `psi_l`/`phi_l`, Eq. 139-140, which keep adding a per-frame increment forever): store the
+/// accumulator as this module's own wrapping `u32` phase (which can never overflow, by construction
+/// -- see this module's own doc comment), and use this function only to recover a bounded Q16.16
+/// radian value, in `(-pi, pi]`, for the *within-frame* arithmetic that genuinely needs an ordinary
+/// radian quantity (added to other bounded per-sample terms before a final `cos`/`sin`) rather than
+/// a phase. Interpreting `phase` as `i32` (the same bits, two's-complement) before scaling is what
+/// makes the result symmetric around zero instead of `[0, 2*pi)`: a `u32` phase past the half turn
+/// (`1u32 << 31`) is, bit-for-bit, a negative `i32`, exactly the "wrapped the other way past pi"
+/// case this format is supposed to represent for free.
+///
+/// Rounds to the nearest Q16.16 value (ties away from zero) rather than truncating the final shift:
+/// a plain arithmetic `>> 31` floors, which is a *signed* half-LSB-average bias applied fresh to
+/// every rendered sample in `voiced_synthesis` (it does not itself compound in the stored phase
+/// accumulator, since only the wrapping `u32` phase is carried forward -- but the same one-sided bias
+/// on every sample of every frame is still a real, systematic error against the float sibling, not
+/// mere per-sample rounding noise). Uses [`PI_Q48`], not `fixed_ops::PI_Q16_16`, for the same reason
+/// [`phase_from_radians_q16`] does -- see that constant's own doc comment.
+pub fn radians_from_phase_q16(phase: u32) -> i32 {
+    let numerator = (phase as i32 as i128) * PI_Q48;
+    let denominator = 1i128 << 63;
+    let half = denominator / 2;
+    let rounded = if numerator >= 0 { numerator + half } else { numerator - half };
+    (rounded / denominator) as i32
 }
 
 // No `#[cfg(test)]` module here: any test comparing this module's output against `f64::sin`/`cos`

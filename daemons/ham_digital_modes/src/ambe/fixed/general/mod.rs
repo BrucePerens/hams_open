@@ -12,3 +12,4 @@ pub mod mbe_speech;
 pub mod trig;
 mod trig_table;
 pub mod unvoiced_synthesis;
+pub mod voiced_synthesis;
