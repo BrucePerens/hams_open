@@ -2526,3 +2526,24 @@ resolve it. Consistent with, though not proof of, `g1`/`g2` depending on somethi
 a single scalar amplitude parameter (plausibly genuine higher-order spectral-shape content, which a
 single fixed-frequency sawtooth's amplitude alone wouldn't cleanly parameterize) rather than being an
 under-settled version of the same simple gain relationship `g0` shows.
+
+## 34. First semantic look at `u4`/`u5` against amplitude: `u4` is notably more stable than `g1`/`g2`/`u5`, zero extra chip time
+
+Also decoded from the same long-settling amplitude dataset (section 33), at zero extra chip time:
+`u4` and `u5`, neither previously looked at semantically (only `u4`'s separate DTMF column-encoding
+role, section 25, was known). Result:
+
+| block | Spearman vs amplitude | distinct values per amplitude (8 frames each) |
+|---|---|---|
+| `u4` | 0.538 | **exactly 2**, every amplitude |
+| `u5` | 0.132 | 6-8 (noisy) |
+
+`u4` stands out: while its correlation with amplitude is only moderate (not as clean as `g0`'s own
+0.9+-class relationship), it is **remarkably more frame-stable** than `g1`, `g2`, or `u5` -- settling
+into exactly one of two values at every tested amplitude, rather than jumping among 6-8 values like
+`u5`. This is consistent with a genuine two-state or coarsely-quantized real parameter (plausibly a
+voicing decision, matching `bit_prioritization`'s own textbook role for such a field, though this is
+speculation, not confirmed) rather than either a clean continuous quantizer or pure noise. `u5`
+remains as unstable and weakly-correlated as `g1`/`g2`/`u6` -- no clean semantic signal found for it
+yet by any test in this document. Both are recorded as open, real, current-state findings rather
+than being left completely uninvestigated.
