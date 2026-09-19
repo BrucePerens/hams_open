@@ -17,6 +17,15 @@
 //! does not claim `g0`'s specific silence value carries a meaningful "background noise level"
 //! (DVSI's own manual claim for this feature, tested and found inconclusive in section 26's own
 //! noise-level sweep).
+//!
+//! **A real open question, not yet checked**: section 32 found the closely-related `VOICE_ACTIVE`
+//! status flag is adaptive/history-dependent (its classification of a given signal level depends on
+//! what was sent in the recent past, not just the current frame), discovered *after* this module's
+//! own validation used a fixed 60-frame settling period for both stimuli. Whether `g0`'s own
+//! `DTX_SILENCE_G0` classification is similarly history-dependent (e.g. whether a moderate signal
+//! sustained long enough might eventually also read as this same constant) has not been tested --
+//! this module's own confirmed behavior holds for the specific settling protocol it was tested
+//! under, not necessarily for every possible signal history.
 
 /// `g0`'s confirmed, robust constant value for a genuine DTX-silence frame -- verified stable
 /// across 10 fresh live frames with zero exceptions, and zero overlap with voiced-frame values.
