@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #![allow(dead_code)]
-//! Calibrates the real chip's RATET(27) pitch index: feeds harmonic-rich periodic signals of known period to the
-//! chip's encoder and reports the `b0` it emits (median over steady-state frames) next to what the TIA-102
-//! mapping `b0 = 2P - 39.5` would predict for that period `P` (in samples at 8 kHz).
+//! Layout scan for a chip rate setting: captures encoder frames for harmonic signals and, for each of several
+//! interpretations of the 18 payload bytes (the chip's own proprietary layout used by this crate; the standard P25
+//! over-the-air dibit interleave read MSB-first, and LSB-first; each with and without the modulation/whitening
+//! step), counts the FEC errors on `c0..c6` (Golay/Hamming distances) and how often `b0` is in the valid TIA range.
+//! A layout that really is standard P25 IMBE shows ~0 errors and valid `b0` on every frame.
 //!
-//! **Result (live chip)**: the chip's `b0` is NOT the TIA linear map. It rises monotonically with period but
-//! logarithmically (~93.7 index steps per octave of period: P=24 -> 29, 48 -> 123, 96 -> 215, 120 -> 244) and
-//! exceeds the TIA maximum of 207 for periods above ~100 samples. This is the same log-pitch structure as
-//! D-STAR's quantizer at twice the resolution.
+//! **Result (live chip)**: with the P25-FEC RATEP words the crate's chip layout gives 0 FEC errors (the standard OTA
+//! interleave, with or without modulation, gives random-level ~14/frame). With `RATET=27` and `RATET=59` (the index a
+//! web-sourced note claims is "P25 Phase 1 IMBE"; unverified) every layout tried gives random-level errors, so those
+//! settings emit a layout none of these interpretations decode; no chip setting has been found that yields standard
+//! P25 IMBE frames.
 //!
-//! Usage: `cargo run --release --example ratet27_calibrate_pitch_map -- <host:port> [step=4] [p_min=24] [p_max=120] [csv_path]`
+//! Usage: `RATET=<n> cargo run --release --example ratet27_layout_scan -- <host:port>` (without `RATET`, the P25-FEC
+//! RATEP words are used).
 
-use ham_digital_modes::ambe::float::ratet27::bit_prioritization::extract_fundamental_frequency_quantizer;
+use ham_digital_modes::ambe::float::ratet27::interleave::deinterleave_from_dibit_symbols;
+use ham_digital_modes::ambe::float::ratet27::modulation::modulate_code_vectors;
+use ham_digital_modes::ambe::float::ratet27::ratet27_fec::hamming_decode_chip;
 use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::general::fec::golay_decode;
+use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -120,58 +126,75 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
 }
 
 
+fn errors(c: &[u32; 8], chip_hamming: bool) -> u32 {
+    let mut e = 0;
+    for &x in &c[..4] {
+        e += golay_decode(x).1;
+    }
+    for &x in &c[4..7] {
+        e += if chip_hamming { hamming_decode_chip(x as u16).1 } else { hamming_decode(x as u16).1 };
+    }
+    e
+}
+
+fn dibits(bytes: &[u8], msb_first: bool) -> [(bool, bool); 72] {
+    let mut bits = Vec::new();
+    for &b in bytes {
+        for i in 0..8 {
+            bits.push(if msb_first { (b >> (7 - i)) & 1 == 1 } else { (b >> i) & 1 == 1 });
+        }
+    }
+    std::array::from_fn(|i| (bits[2 * i], bits[2 * i + 1]))
+}
+
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect {host}: {e}"));
+    sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
     if let Ok(idx) = std::env::var("RATET") {
-        // Select a numbered rate (PKT_RATET, field 0x09) instead of the P25-FEC rate control words.
-        let idx: u8 = idx.parse().unwrap();
-        let mut pkt = vec![0x61_u8, 0x00, 0x02, TYPE_CONTROL, 0x09, idx];
+        let pkt = vec![0x61_u8, 0x00, 0x02, TYPE_CONTROL, 0x09, idx.parse().unwrap()];
         sock.send(&pkt).unwrap();
-        pkt.clear();
     } else {
         sock.send(&build_control_ratep(RATEP_P25_FEC)).unwrap();
     }
     let n = sock.recv(&mut buf).unwrap();
-    parse_packet(&buf[..n]).unwrap();
-    println!("period P | chip b0 (median of frames 6..14) | TIA b0 prediction 2P-39.5 | chip-implied period (b0+39.5)/2");
-    let step: f64 = std::env::args().nth(2).and_then(|a| a.parse().ok()).unwrap_or(4.0);
-    let p_min: f64 = std::env::args().nth(3).and_then(|a| a.parse().ok()).unwrap_or(24.0);
-    let p_max: f64 = std::env::args().nth(4).and_then(|a| a.parse().ok()).unwrap_or(120.0);
-    let csv_path = std::env::args().nth(5);
-    let mut csv = String::new();
-    let mut p = p_min;
-    while p <= p_max {
-        let mut b0s = Vec::new();
+    println!("rate config reply: {:02x?}", &buf[..n]);
+    let mut totals = [0u32; 8];
+    let mut frames = 0;
+    let names = ["chip layout (this crate)", "OTA msb-first, no demod", "OTA msb-first, demod", "OTA lsb-first, no demod", "OTA lsb-first, demod", "chip layout, TIA hamming", "-", "-"];
+    for period in [45.0f64, 60.0, 80.0] {
         for f in 0..14usize {
             let frame: Vec<i16> = (0..FRAME_SAMPLES)
-                .map(|i| {
-                    let t = (f * FRAME_SAMPLES + i) as f64;
-                    (1..=8).map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * t / p).sin()).sum::<f64>() as i16
-                })
+                .map(|i| (1..=8).map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * (f * FRAME_SAMPLES + i) as f64 / period).sin()).sum::<f64>() as i16)
                 .collect();
             let n = send_recv_retrying(&sock, &mut buf, &build_speech(&frame));
             let (_, payload) = parse_packet(&buf[..n]).unwrap();
+            if f < 6 {
+                continue;
+            }
+            if f == 8 && period == 60.0 {
+                println!("payload ({} bytes): {:02x?}", payload.len(), payload);
+            }
+            let bytes = &payload[payload.len() - FRAME_BYTES..];
+            frames += 1;
             let mut wb = [0u8; FRAME_BYTES];
-            wb.copy_from_slice(&payload[payload.len() - FRAME_BYTES..]);
-            let c = wire_bytes_to_c(&wb);
-            let mut u = [0u32; 8];
-            u[0] = golay_decode(c[0]).0 as u32;
-            u[7] = c[7];
-            if f >= 6 {
-                b0s.push(extract_fundamental_frequency_quantizer(&u));
+            wb.copy_from_slice(bytes);
+            let c_chip = wire_bytes_to_c(&wb);
+            totals[0] += errors(&c_chip, true);
+            totals[5] += errors(&c_chip, false);
+            for (k, msb) in [(1usize, true), (3, false)] {
+                let c = deinterleave_from_dibit_symbols(dibits(bytes, msb));
+                totals[k] += errors(&c, false);
+                let u0 = golay_decode(c[0]).0 as u32;
+                let d = modulate_code_vectors(c, u0);
+                totals[k + 1] += errors(&d, false);
             }
         }
-        b0s.sort();
-        let med = b0s[b0s.len() / 2];
-        csv.push_str(&format!("{p},{med}\n"));
-        println!("{p:6.1} | {med:4} (range {}-{}) | {:6.1} | {:6.1}", b0s[0], b0s[b0s.len() - 1], 2.0 * p - 39.5, (med as f64 + 39.5) / 2.0);
-        p += step;
     }
-    if let Some(path) = csv_path {
-        std::fs::write(path, csv).unwrap();
+    println!("total FEC errors over {frames} frames (a true layout gives ~0; random data gives ~{} per frame):", 3 * 4 + 3);
+    for k in 0..6 {
+        println!("  {:28} {:5}  ({:.2} per frame)", names[k], totals[k], totals[k] as f64 / frames as f64);
     }
 }
