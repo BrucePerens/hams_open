@@ -28,7 +28,7 @@
 //! - At peak 75 and peak 100 -- still `VOICE_ACTIVE=0` (below the roughly-50-to-75 activation
 //!   threshold located in section 28/33) but noticeably noisier than near-silence -- `g0` read
 //!   `3844`-`3845` and `3856`-`3857` respectively, rising smoothly with the actual noise level while
-//!   still well below the values seen once `VOICE_ACTIVE` flips to `1`. **This is a real, positive
+//!   still well above the (much lower) values seen once `VOICE_ACTIVE` flips to `1`. **This is a real, positive
 //!   confirmation of DVSI's own "background noise level" manual claim**, previously tested and found
 //!   inconclusive in section 26 -- `g0` genuinely does encode a continuous noise-floor reading when
 //!   the chip judges the frame inactive, it just doesn't hold exactly `3841` outside of true silence.
@@ -46,6 +46,15 @@
 //!   reading in this test was not -- it tracked genuine noise level consistently, and
 //!   [`DTX_SILENCE_G0`]'s exact-match behavior is safe to rely on for real near-silence without
 //!   worrying that a merely-quiet-but-sustained signal will eventually also read as `3841`.
+//!
+//! **Do not broaden [`is_dtx_silence_frame`] to a range check (e.g. `g0 >= DTX_SILENCE_G0`) without
+//! re-reading `AMBE_CHIP_VALIDATION_FINDINGS.md` section 35's own verification first** -- that
+//! broadening was considered, checked exhaustively against every other committed capture dataset via
+//! `examples/ratet27_verify_dtx_g0_threshold.rs`, and falsified for three separate reasons: DTMF and
+//! forced-tone frames use an unrelated `g0` encoding that overlaps this exact range by construction
+//! (section 25), a full-amplitude 60Hz tone reads `g0=3945` despite being genuinely active content,
+//! and several un-converged pure sine tones intermittently spike into this range mid-stream. The
+//! exact-match-only scope here is deliberate, not an oversight to fix later.
 
 /// `g0`'s confirmed, robust constant value for a genuine DTX-silence frame -- verified stable
 /// across 10 fresh live frames with zero exceptions, and zero overlap with voiced-frame values.

@@ -2667,11 +2667,14 @@ the multi-value spreads:
 | 440 |  8 | 4 values, max gap 53 | 4 values, max gap 53 |
 
 **This settles two things at once, one confirming and one disconfirming the earlier speculation.**
-First, confirmed: the near-identical values under 60 vs. 300 frames of settling (every frequency
-matches or comes within 1-2 values of its own short-settling reading) means the multi-value spreads
-at low frequencies and the varying dominant gap are **real chip behavior, not a settling artifact**
--- the same conclusion section 32 already reached for `u6` by the same method, now independently
-replicated for `u4`. Second, disconfirmed: a clean, monotonic `L_hat`-dependent quantizer step size
+First, confirmed: the near-identical values under 60 vs. 300 frames of settling at nearly every
+frequency (most match exactly or come within 1-2 values of the short-settling reading; `160`Hz is
+the one clear exception, going from a single stable value to 4 distinct values under 5x longer
+settling -- the opposite of what an under-settling artifact would predict, and left as its own small
+open oddity rather than glossed over) means the multi-value spreads at low frequencies and the
+varying dominant gap are **real chip behavior, not a settling artifact** -- the same conclusion
+section 32 already reached for `u6` by the same method, now independently replicated for `u4`.
+Second, disconfirmed: a clean, monotonic `L_hat`-dependent quantizer step size
 does **not** hold. `L_hat=8` gives a gap of `2` at 420Hz but `53` at 440Hz -- the same nominal
 harmonics count producing wildly different dither behavior rules out `L_hat` alone as the
 explanation, at least not via a simple one-to-one step-size mapping. (`L_hat=12` at 280Hz/300Hz *did*
@@ -2687,8 +2690,10 @@ boundary, adding spectral content the nominal frequency alone doesn't have. Of t
 frequencies, only `100`, `200`, `300`, and `400`Hz divide 160 exactly (the analysis tool's own
 `divides_160` column confirms this directly rather than leaving it computed by hand); every other
 frequency's stimulus carries this click. This does not track the `~53`-vs-`~42-45` split cleanly
-either (`200` and `300`Hz, both click-free, land in different gap clusters), so it does not appear
-to be the primary explanation -- but it is a real methodological caveat on the whole sweep, not just
+either: `100`Hz is click-free yet lands in the `~42-45` cluster, while `200`Hz and `300`Hz are also
+click-free yet land in the `~53` cluster -- click-free frequencies span both clusters, so click
+presence/absence does not appear to be the primary explanation for the split -- but it is a real
+methodological caveat on the whole sweep, not just
 this block's own analysis, and is left as an open item for whoever next revisits pitch-swept stimuli
 against this chip: a phase-continuous stimulus generator (carrying phase across the frame boundary
 rather than resetting it) would remove this confound entirely.
@@ -2720,7 +2725,7 @@ consistency with what was sent.
 **A genuine new finding, not just validation**: at noise peak 75 and peak 100 -- both still
 `VOICE_ACTIVE=0` (below the roughly-50-to-75 activation threshold section 28/33 already located) but
 audibly noisier than near-silence -- `g0` read `3844`-`3845` and `3856`-`3857` respectively, rising
-smoothly with the actual noise level while staying well below the values seen once `VOICE_ACTIVE`
+smoothly with the actual noise level while staying well above the (much lower) values seen once `VOICE_ACTIVE`
 flips to `1`. This is a real, positive confirmation of DVSI's own manual claim that this field
 reflects a "background noise level," a claim section 26's own noise-level sweep tested and found
 inconclusive. The corrected understanding: `g0` genuinely does encode a continuous noise-floor
@@ -2742,3 +2747,37 @@ stable under sustained exposure, not a slow drift back toward the true-silence c
 not, at least under this test -- it tracked genuine noise level consistently rather than habituating
 to it, and `DTX_SILENCE_G0`'s exact-match behavior is safe to rely on without worrying that a
 merely-quiet-but-sustained signal will eventually also read as `3841`.
+
+**A tempting broader classifier (`g0 >= DTX_SILENCE_G0`, since every confirmed-inactive `g0` value
+seen above is `>= 3841` and every confirmed-active value recorded anywhere in this session's own
+data is well below `2400`) was checked exhaustively against every committed capture dataset before
+being added to the module -- and was falsified, for three distinct, genuine reasons, not one.** A
+purpose-built tool (`examples/ratet27_verify_dtx_g0_threshold.rs`) decoded `g0` from all 16 other
+committed datasets (roughly 5,600 frames) and found real counterexamples:
+1. **DTMF and forced-tone frames use a completely different `g0` encoding that overlaps this exact
+   range by construction** -- section 25 already established `g0 = 4032 + row_index` for DTMF, and
+   `real_dtmf_sweep.tsv` confirms every single one of its 160 frames reads `g0 >= 3841`, as does every
+   frame of `tone_send_forced_sweep.tsv`. A naive `>= 3841` classifier would misclassify every DTMF
+   digit and every forced-tone frame as silence -- exactly the kind of false positive that would
+   silently drop real, intentional signaling content in an actual transmitter.
+2. **A full-amplitude 60Hz tone -- likely below this codec's voice-band filtering -- reads as
+   "quiet" by this measure.** `dense_pitch_sweep_57to444hz.tsv`, `rms_normalized_pitch_sweep`, and
+   `u4_long_settling_pitch_sweep.tsv` all show their 60Hz rows reading `g0=3945` on every one of 8
+   frames, consistent across three independent captures -- a real, repeatable phenomenon, not
+   dataset noise, and a useful independent clue that this codec's internal energy measure reflects
+   perceptually/passband-filtered signal content, not raw PCM amplitude.
+3. **Several un-converged pure sine tones intermittently spike into this range without representing
+   genuine silence.** `all_stimuli_2687frames.tsv` shows `sine_200`, `sine_400`, `sine_250`,
+   `sine_320`, several `extreme_sine_*` tones, and even one single frame of `real_speech`
+   intermittently reading `g0 >= 3841` mid-stream, alongside many other frames of the same stimulus
+   reading normally -- consistent with this project's own well-documented finding that this chip's
+   encoder never fully converges to steady state on a pure tone (`ambe_dstar`'s own doc comment).
+
+**The conclusion is a real negative result worth keeping, not a failed attempt to hide**: there is no
+safe range-based broadening of `is_dtx_silence_frame` using `g0` alone. The chip's own `VOICE_ACTIVE`
+status flag (via `PKT_CHANFMT`'s `ECMODE_OUT` field) remains the only reliable ground truth for "is
+this frame inactive," and is not recoverable from the ordinary 144 wire bits without that extra
+field. `is_dtx_silence_frame`'s narrow exact-match-only scope, calling only genuine near-zero-noise
+silence, was correct as originally shipped -- broadening it, as briefly considered, would have been a
+regression, not an improvement, and this section exists so a future session doesn't re-propose the
+same broadening without first re-running this same check.
