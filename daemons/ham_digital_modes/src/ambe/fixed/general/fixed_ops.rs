@@ -88,3 +88,34 @@ pub fn sqrt_q16(x: i32) -> i32 {
     }
     isqrt_u64((x as u64) * 65536) as i32
 }
+
+/// `sqrt(x)` for a non-negative, wide (`i64`) Q16.16 `x` whose own real magnitude may be far outside
+/// a plain `i32` Q16.16's `~32767` ceiling (e.g. `unvoiced_synthesis`'s own windowed-noise-DFT power,
+/// which can reach the hundreds of thousands in real terms) -- and whose *square root*, unlike
+/// [`sqrt_q16`]'s own typical caller, may **also** be too wide for a plain `i32` Q16.16 result. Returns
+/// an `i64` Q16.16 result on the same wide convention `mul_q16_i64`/`div_q16_i64` use, `0` for a
+/// negative `x`.
+///
+/// **Why this exists alongside [`sqrt_q16`], not as a drop-in replacement**: the natural derivation
+/// (`sqrt_q16`'s own: `result_q16 = isqrt(x_q16 * 65536)`) needs `x_q16 * 65536` computed exactly
+/// first -- for a wide `x_q16` (say `~4.7e16`, a real `unvoiced_synthesis` value), that product
+/// (`~3.1e21`) overflows even `u64` (`~1.8e19`), so [`isqrt_u64`] alone can't take it directly.
+///
+/// **Derivation**: widen to `u128` first (`target = x_q16 << 16`, exact, `u128` has ample headroom).
+/// If `target` still doesn't fit `u64`, drop the *lowest* `2k` bits for the smallest `k` that brings
+/// it back into `u64` range, take the exact integer square root of what remains, then shift the root
+/// left by `k` -- exploiting `sqrt(a * 4^k) = sqrt(a) * 2^k` so the dropped low bits (a relative error
+/// on the order of `2^(2k) / target`, negligible at these magnitudes -- at most a few bits out of a
+/// 70+ bit number for every real caller) don't need to be reasoned about bit-by-bit, only bounded.
+pub fn sqrt_wide_q16(x_q16: i64) -> i64 {
+    if x_q16 <= 0 {
+        return 0;
+    }
+    let target = (x_q16 as u128) << 16;
+    let bits = 128 - target.leading_zeros();
+    let excess_bits = bits.saturating_sub(63);
+    let k = excess_bits.div_ceil(2);
+    let shifted = (target >> (2 * k)) as u64;
+    let root = isqrt_u64(shifted);
+    (root << k) as i64
+}

@@ -11,3 +11,4 @@ pub mod isqrt;
 pub mod mbe_speech;
 pub mod trig;
 mod trig_table;
+pub mod unvoiced_synthesis;
