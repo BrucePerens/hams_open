@@ -6,32 +6,35 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
-## Executive summary (updated as of section 34) -- read this first
+## Executive summary (updated as of section 35) -- read this first
 
-This document has grown to 34 sections across a long, multi-session investigation. This summary
+This document has grown to 35 sections across a long, multi-session investigation. This summary
 exists so a reader (or a future session) doesn't have to read the whole thing to know where things
 stand. Every claim below is sourced to its own section; treat this summary as an index and status
 board, not a replacement for the underlying evidence.
 
 **Chip modes with real, tested, chip-validated software** (all pass live against the real chip,
-including real recorded speech, as of the latest re-run -- §23, §25, §29, §31):
+including real recorded speech, as of the latest re-run -- §23, §25, §29, §31, §35):
 - **D-STAR** -- `ambe_dstar`, validated via `examples/ambe_chip_validate_dstar.rs`.
 - **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
   `examples/ambe_chip_validate_ambe_plus_2.rs`.
 - **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
   `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29).
 - **RATET(27) DTMF encoding** -- `ambe::ratet27_dtmf`, fully decoded and validated (§25).
-- **RATET(27) DTX-silence classification** -- `ambe::ratet27_dtx`, validated, corrected once by its
-  own test harness (§31).
+- **RATET(27) DTX-silence classification** -- `ambe::ratet27_dtx`, validated against real chip-
+  reported `VOICE_ACTIVE` ground truth (not just stimulus inference), corrected once by its own test
+  harness and once more when upgraded to ground truth (§31, §35).
 
 **What "known and duplicated in software" does *not* yet cover -- the real, current gaps**:
 1. **The semantic identity of most RATET(27) FEC sub-blocks.** `g0` alone is solidly confirmed as a
    gain/energy-related quantizer (§23, independently re-confirmed settling-independent in §33).
    `g1`/`g2` show real but weak, messy amplitude dependence that does *not* clean up with much
    longer settling (§33) -- likely gain-vector-related but not identified to a specific coefficient.
-   `u4` shows a precise, real structural signature (a clean 2-state dither with an exact step of 53,
-   §34) and a separate, fully-confirmed DTMF-column role (§25), but its *ordinary-voice-mode*
-   semantic identity is still unknown. `u5` shows no clean signal under any test tried. `u6`'s
+   `u4` shows a real, settling-independent dither signature -- a clean 2-state, exact-step-of-53
+   pattern at fixed frequency/varying amplitude, but a messier, frequency-dependent multi-value
+   pattern (not cleanly explained by `L_hat` alone) at fixed amplitude/varying frequency (§34) -- and
+   a separate, fully-confirmed DTMF-column role (§25), but its *ordinary-voice-mode* semantic
+   identity is still unknown. `u5` shows no clean signal under any test tried. `u6`'s
    pitch-candidate hypothesis was tested rigorously and explicitly **retracted** (§30) -- it is
    genuinely unstable across almost the entire tested frequency range. `c7`'s 2 of 7 bits are
    pitch-related (from an earlier session); the other 5 show real but complex, possibly
@@ -43,13 +46,21 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    readings) is adaptive/history-dependent, not a fixed per-frame function -- it responds to
    contrast with a slowly-adapting baseline. This was directly confirmed. Re-testing showed it does
    **not** universally explain earlier instabilities: `g0`'s own finding held up unchanged under 6x
-   longer settling (§33), but `u6`'s instability persisted even under 500-frame settling (§30) --
-   so this is a real, partial explanation for *some* open items, not a master key to all of them.
-3. **DTX's own "background noise level" claim** (DVSI's own manual wording) -- a real classification
-   threshold was found and precisely located (§28), but no continuous level-tracking was confirmed
-   (§26).
-4. **The exact quantizer formula** for `g0`'s gain values, and for `u4`'s newly-found step-of-53
-   dither, are not yet reduced to closed-form expressions matching a specific textbook equation.
+   longer settling (§33), and `u4`'s frequency-dependent dither pattern likewise held up unchanged
+   under 5x longer settling (§34), but `u6`'s instability persisted even under 500-frame settling
+   (§30) -- so this is a real, partial explanation for *some* open items, not a master key to all of
+   them. Separately, `g0`'s own DTX-silence classification (`DTX_SILENCE_G0`) was directly tested and
+   found **not** history-dependent under 600 frames of sustained moderate noise (§35), unlike
+   `VOICE_ACTIVE` itself.
+3. **DTX's own "background noise level" claim** (DVSI's own manual wording) -- **now confirmed**
+   (§35, upgrading §26's earlier inconclusive result): `g0` rises smoothly with actual noise level
+   while the chip still judges the frame inactive (`VOICE_ACTIVE=0`), directly ground-truthed against
+   the chip's own status flag rather than inferred from the stimulus alone.
+4. **The exact quantizer formula** for `g0`'s gain values, and for `u4`'s frequency-dependent dither
+   step, are not yet reduced to closed-form expressions matching a specific textbook equation -- and
+   §34's own re-derivation found the naive "`L_hat`-dependent step size" hypothesis does not hold
+   cleanly (identical `L_hat` values produced very different dither behavior at two frequencies), so
+   this remains a genuinely open question, not just an unfinished derivation.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -2619,27 +2630,68 @@ frame-to-frame to preserve the *average* value's fidelity despite coarse per-fra
 well-known technique (related to noise-shaping/dither in ADPCM and similar codecs).
 
 **Corrected immediately on checking a second, independent dataset (zero extra chip time): the
-dither step is not a single universal constant -- it varies with frequency, clustering into (at
-least) two distinct values.** Re-running the same check against the RMS-normalized dense pitch
-sweep (fixed amplitude, varying frequency, section 23) finds `u4`'s dominant dither gap is
-`~53` at several frequencies (`180, 200, 220, 240, 260, 300, 340, 360, 380, 440`Hz -- observed as
-`53, 53, 53(within a 4-value spread), 53, 53, 53, 50, 54, 52, 53`) but **`~42-45` at others**
-(`80, 100, 120, 280, 320, 440`Hz -- `40, 45, 45, 45, 41, 42`), with occasional perfect stability
-(`160`Hz: a single value, no dither at all) and noisier multi-value spreads at the lowest
-frequencies (`60`Hz) consistent with this document's own well-established low-frequency
-non-convergence pattern. **This is a real, better characterization, not a contradiction of the
-amplitude-sweep result** (both datasets are internally consistent; frequency simply wasn't held
-fixed in the second one) -- and it is a *more* interesting finding than a single universal
-constant: two (or more) distinct step sizes appearing at different frequencies is exactly the
-qualitative signature of an **`L_hat`-dependent quantizer step size**, which this crate's own
-textbook `tables::gain_bit_allocation` (Annex F) documents explicitly for higher-order gain-vector
-coefficients ("`step_size` is non-decreasing as `L` grows for fixed `m`" -- see that function's own
-doc comment). This is a genuine, concrete, quantitative clue supporting `u4` as a real gain-vector
-element (distinct from `g0`'s own role) with an `L_hat`-dependent step size, not proof, but a much
-more specific and checkable lead than "probably gain-related" -- a natural next step is computing
-`L_hat` for each tested frequency (via this crate's own `vuv::harmonics_count`, already used in
-section 24) and checking whether the `~53` vs `~42-45` clustering lines up with `L_hat` crossing a
-specific Annex F bit-allocation boundary.
+dither step is not a single universal constant -- it varies with frequency.** Re-running the same
+check against the RMS-normalized dense pitch sweep (fixed amplitude, varying frequency, section 23)
+found `u4` showing more than 2 distinct values at many frequencies, with a dominant gap clustering
+around `~53` at some frequencies and `~42-45` at others. This first pass used a hand-rolled Hamming
+decode and only 18 of the dataset's 20 frequencies, and was itself re-derived properly below.
+
+**Redone rigorously with a committed tool using the crate's own real `decode_block`, not a
+reimplementation** (`examples/ratet27_analyze_u4_dither_by_frequency.rs`, output for all 20
+frequencies committed as this section's own supporting evidence) -- and cross-checked against a
+freshly captured, independent dataset at 300 frames of settling per frequency (5x the original 60,
+matching section 33's proven-sufficient protocol) to rule out under-settling as the explanation for
+the multi-value spreads:
+
+| freq (Hz) | `L_hat` | distinct `u4` values (60-frame settling) | distinct `u4` values (300-frame settling) |
+|---|---|---|---|
+| 60  | 61 | 5 values, max gap 7  | 5 values, max gap 5 |
+| 80  | 46 | 4 values, max gap 40 | 4 values, max gap 40 |
+| 100 | 37 | 3 values, max gap 45 | 3 values, max gap 45 |
+| 120 | 30 | 3 values, max gap 45 | 3 values, max gap 45 |
+| 140 | 25 | 3 values, max gap 3  | 3 values, max gap 3 |
+| 160 | 23 | 1 value (no dither)  | 4 values, max gap 29 |
+| 180 | 20 | 2 values, gap 53     | 2 values, gap 53 |
+| 200 | 18 | 2 values, gap 53     | 2 values, gap 53 |
+| 220 | 16 | 4 values, max gap 53 | 4 values, max gap 53 |
+| 240 | 14 | 3 values, max gap 53 | 3 values, max gap 53 |
+| 260 | 13 | 3 values, max gap 53 | 3 values, max gap 53 |
+| 280 | 12 | 5 values, max gap 45 | 4 values, max gap 53 |
+| 300 | 12 | 5 values, max gap 53 | 4 values, max gap 53 |
+| 320 | 11 | 5 values, max gap 48 | 5 values, max gap 48 |
+| 340 | 11 | 5 values, max gap 50 | 4 values, max gap 51 |
+| 360 | 10 | 3 values, max gap 54 | 4 values, max gap 51 |
+| 380 |  9 | 3 values, max gap 52 | 3 values, max gap 52 |
+| 400 |  9 | 2 values, gap 2      | 2 values, gap 2 |
+| 420 |  8 | 2 values, gap 2      | 2 values, gap 2 |
+| 440 |  8 | 4 values, max gap 53 | 4 values, max gap 53 |
+
+**This settles two things at once, one confirming and one disconfirming the earlier speculation.**
+First, confirmed: the near-identical values under 60 vs. 300 frames of settling (every frequency
+matches or comes within 1-2 values of its own short-settling reading) means the multi-value spreads
+at low frequencies and the varying dominant gap are **real chip behavior, not a settling artifact**
+-- the same conclusion section 32 already reached for `u6` by the same method, now independently
+replicated for `u4`. Second, disconfirmed: a clean, monotonic `L_hat`-dependent quantizer step size
+does **not** hold. `L_hat=8` gives a gap of `2` at 420Hz but `53` at 440Hz -- the same nominal
+harmonics count producing wildly different dither behavior rules out `L_hat` alone as the
+explanation, at least not via a simple one-to-one step-size mapping. (`L_hat=12` at 280Hz/300Hz *did*
+give the same value set both times, so `L_hat` may still matter in some frequencies' cases -- the
+data doesn't support a clean universal rule either way.) The originally reported "exactly 53 at every
+amplitude" result (fixed-200Hz, varying amplitude) remains correct on its own terms; what's corrected
+here is only the claim that this generalizes to a single frequency-independent constant.
+
+**A confound worth naming rather than ignoring**: the pitch-sweep stimulus generator computes one
+160-sample buffer per frequency and resends it unchanged every frame, so any frequency whose period
+does not evenly divide the 160-sample frame has a phase discontinuity ("click") at every frame
+boundary, adding spectral content the nominal frequency alone doesn't have. Of the 20 tested
+frequencies, only `100`, `200`, `300`, and `400`Hz divide 160 exactly (the analysis tool's own
+`divides_160` column confirms this directly rather than leaving it computed by hand); every other
+frequency's stimulus carries this click. This does not track the `~53`-vs-`~42-45` split cleanly
+either (`200` and `300`Hz, both click-free, land in different gap clusters), so it does not appear
+to be the primary explanation -- but it is a real methodological caveat on the whole sweep, not just
+this block's own analysis, and is left as an open item for whoever next revisits pitch-swept stimuli
+against this chip: a phase-continuous stimulus generator (carrying phase across the frame boundary
+rather than resetting it) would remove this confound entirely.
 
 **A quick cross-check of the same dataset against the other blocks**: `g1`/`g2`/`u5`/`u6` show no
 comparably clean pattern (their distinct-value gaps are irregular, no single repeated difference).
@@ -2649,3 +2701,44 @@ varying amplitude, rather than the varied-content test that originally found it)
 100 gives exactly `{1024, 2048, 3072}`, amplitude 364.7 gives values including an exact `1024` gap
 (`2103` to `3127`). A clean independent replication of an already-documented structural fact, not a
 new finding, but useful confirmation from a second, unrelated dataset.
+
+## 35. `ratet27_dtx` upgraded to real chip ground truth, and both of its own open questions resolved together
+
+Section 31's `is_dtx_silence_frame` classifier was validated only by stimulus inference ("we sent
+digital silence, so this should read as silence") -- the same weakness DTMF had before `PKT_CHANFMT`'s
+`ECMODE_OUT` field gave it real chip-reported ground truth (section 25). The module's own doc comment
+also carried an explicit, untested open question: whether `DTX_SILENCE_G0`'s classification is itself
+adaptive/history-dependent the way section 32 found `VOICE_ACTIVE` to be. A single new tool
+(`examples/p25_ratet27_dtx_ground_truth_and_adaptive_check.rs`) reads `g0` and the chip's own
+`VOICE_ACTIVE` flag together and resolves both at once.
+
+**Ground truth, ecmode-out-confirmed**: across a noise-peak sweep from 0 through 50 (all confirmed
+`VOICE_ACTIVE=0` via `ECMODE_OUT`), `g0` read exactly `3841` on every single one of 60 captured
+frames -- full agreement between the wire-bit classifier and the chip's own status flag, not just
+consistency with what was sent.
+
+**A genuine new finding, not just validation**: at noise peak 75 and peak 100 -- both still
+`VOICE_ACTIVE=0` (below the roughly-50-to-75 activation threshold section 28/33 already located) but
+audibly noisier than near-silence -- `g0` read `3844`-`3845` and `3856`-`3857` respectively, rising
+smoothly with the actual noise level while staying well below the values seen once `VOICE_ACTIVE`
+flips to `1`. This is a real, positive confirmation of DVSI's own manual claim that this field
+reflects a "background noise level," a claim section 26's own noise-level sweep tested and found
+inconclusive. The corrected understanding: `g0` genuinely does encode a continuous noise-floor
+reading while the chip judges a frame inactive; it just doesn't hold exactly `3841` outside of true,
+near-zero-noise silence. `is_dtx_silence_frame` was never a general "is this frame inactive"
+classifier and isn't changed by this finding -- it correctly identifies genuine silence specifically
+-- but the module's doc comment was corrected to state this precisely rather than leave the
+"background noise level" question marked inconclusive when it is now confirmed.
+
+**The abrupt-switch protocol (section 32) moved `g0` and `VOICE_ACTIVE` in lock-step**: after
+settling at peak 100 (`g0=3857`, `VOICE_ACTIVE=0`), the frame immediately following an abrupt switch
+to a loud, unrelated tone flipped both `VOICE_ACTIVE` to `1` and `g0` to a much lower value within a
+single frame -- no separate lag between the two fields.
+
+**The history-dependence open question is now answered, not merely retested**: 600 consecutive
+frames of sustained peak-100 noise never once produced `g0=3841`. The elevated noise-floor reading is
+stable under sustained exposure, not a slow drift back toward the true-silence constant. So while
+`VOICE_ACTIVE` is confirmed adaptive/contrast-based (section 32), `g0`'s own noise-floor reading was
+not, at least under this test -- it tracked genuine noise level consistently rather than habituating
+to it, and `DTX_SILENCE_G0`'s exact-match behavior is safe to rely on without worrying that a
+merely-quiet-but-sustained signal will eventually also read as `3841`.

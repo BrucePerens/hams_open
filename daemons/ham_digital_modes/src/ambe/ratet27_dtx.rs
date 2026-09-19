@@ -13,19 +13,39 @@
 //! frames and exactly `1597` in 10/10 fresh loud-tone frames, zero overlap. **`g0` alone is the
 //! real, robust discriminator; `g2`/`c7` were not.**
 //!
-//! This module implements only [`is_dtx_silence_frame`], a direct classifier on `g0` alone -- it
-//! does not claim `g0`'s specific silence value carries a meaningful "background noise level"
-//! (DVSI's own manual claim for this feature, tested and found inconclusive in section 26's own
-//! noise-level sweep).
+//! This module implements only [`is_dtx_silence_frame`], a direct classifier for *genuine,
+//! near-zero-noise silence* specifically -- it is deliberately narrower than "the chip currently
+//! considers this frame inactive/non-speech" (that broader classification is the chip's own
+//! `VOICE_ACTIVE` status flag, exposed only via `PKT_CHANFMT`'s `ECMODE_OUT` field, not decodable
+//! from the ordinary 144 wire bits alone).
 //!
-//! **A real open question, not yet checked**: section 32 found the closely-related `VOICE_ACTIVE`
-//! status flag is adaptive/history-dependent (its classification of a given signal level depends on
-//! what was sent in the recent past, not just the current frame), discovered *after* this module's
-//! own validation used a fixed 60-frame settling period for both stimuli. Whether `g0`'s own
-//! `DTX_SILENCE_G0` classification is similarly history-dependent (e.g. whether a moderate signal
-//! sustained long enough might eventually also read as this same constant) has not been tested --
-//! this module's own confirmed behavior holds for the specific settling protocol it was tested
-//! under, not necessarily for every possible signal history.
+//! **Ground-truth validation and the two open questions above were both resolved together** by
+//! `examples/p25_ratet27_dtx_ground_truth_and_adaptive_check.rs`, which reads `g0` and the chip's own
+//! `VOICE_ACTIVE` flag on the same frame:
+//! - Across a noise-peak sweep from 0 through 50 (all confirmed `VOICE_ACTIVE=0`), `g0` read exactly
+//!   `3841` on every single frame -- full agreement, real ground truth rather than stimulus
+//!   inference.
+//! - At peak 75 and peak 100 -- still `VOICE_ACTIVE=0` (below the roughly-50-to-75 activation
+//!   threshold located in section 28/33) but noticeably noisier than near-silence -- `g0` read
+//!   `3844`-`3845` and `3856`-`3857` respectively, rising smoothly with the actual noise level while
+//!   still well below the values seen once `VOICE_ACTIVE` flips to `1`. **This is a real, positive
+//!   confirmation of DVSI's own "background noise level" manual claim**, previously tested and found
+//!   inconclusive in section 26 -- `g0` genuinely does encode a continuous noise-floor reading when
+//!   the chip judges the frame inactive, it just doesn't hold exactly `3841` outside of true silence.
+//!   [`is_dtx_silence_frame`] therefore only catches the near-zero-noise case correctly; it is not a
+//!   general "is this frame inactive" classifier, and was never claimed to decode `VOICE_ACTIVE`
+//!   itself from wire bits alone (which isn't possible without `ECMODE_OUT`).
+//! - The same abrupt-switch protocol section 32 used to find `VOICE_ACTIVE` adaptive also moved `g0`
+//!   in lock-step: after settling at peak 100 (`g0=3857`, `VOICE_ACTIVE=0`), the frame immediately
+//!   after an abrupt switch to a loud, unrelated tone flipped both `VOICE_ACTIVE` to `1` and `g0` to
+//!   a much lower value within a single frame -- no separate lag between the two.
+//! - **The history-dependence question is now answered, not just untested**: 600 consecutive frames
+//!   of sustained peak-100 noise never once produced `g0=3841` -- the elevated noise-floor reading is
+//!   stable under sustained exposure, not a slow drift back toward the true-silence constant. So
+//!   while `VOICE_ACTIVE` is confirmed adaptive/contrast-based (section 32), `g0`'s own noise-floor
+//!   reading in this test was not -- it tracked genuine noise level consistently, and
+//!   [`DTX_SILENCE_G0`]'s exact-match behavior is safe to rely on for real near-silence without
+//!   worrying that a merely-quiet-but-sustained signal will eventually also read as `3841`.
 
 /// `g0`'s confirmed, robust constant value for a genuine DTX-silence frame -- verified stable
 /// across 10 fresh live frames with zero exceptions, and zero overlap with voiced-frame values.
