@@ -4,7 +4,7 @@
 //! `ambe_dstar::decode`, and print the recovered parameters for a sanity look.
 
 use ham_digital_modes::ambe_dstar::decode::{
-    dequantize, extract_raw_parameters, parse_frame, DStarDecoderState,
+    dequantize, extract_raw_parameters, parse_frame, DStarDecoderState, DequantizedFrame,
 };
 use ham_digital_modes::ambe_dstar::interleave::wire_bytes_to_frame;
 
@@ -36,14 +36,20 @@ fn main() {
     );
 
     let mut state = DStarDecoderState::initial();
-    let params = dequantize(&raw, &mut state);
-    println!(
-        "l={} w0={:.5} (pitch period {:.1} samples, f0={:.1}Hz)",
-        params.l,
-        params.w0,
-        2.0 * std::f64::consts::PI / params.w0,
-        params.w0 / (2.0 * std::f64::consts::PI) * 8000.0
-    );
-    println!("voiced={:?}", &params.voiced[1..]);
-    println!("ml={:?}", &params.ml[1..]);
+    match dequantize(parsed.d, &mut state) {
+        DequantizedFrame::Speech(params) => {
+            println!(
+                "l={} w0={:.5} (pitch period {:.1} samples, f0={:.1}Hz)",
+                params.l,
+                params.w0,
+                2.0 * std::f64::consts::PI / params.w0,
+                params.w0 / (2.0 * std::f64::consts::PI) * 8000.0
+            );
+            println!("voiced={:?}", &params.voiced[1..]);
+            println!("ml={:?}", &params.ml[1..]);
+        }
+        DequantizedFrame::Tone(tone) => {
+            println!("tone frame: index={} volume={}", tone.index, tone.volume);
+        }
+    }
 }

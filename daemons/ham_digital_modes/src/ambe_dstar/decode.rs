@@ -109,6 +109,135 @@ pub fn extract_raw_parameters(d: u64) -> RawParameters {
     }
 }
 
+/// D-STAR's own real special-value trigger for `b0`, traced directly from mbelib's real
+/// `ambe3600x2400.c` (`if ((b0&0x7E) == 0x7E) // frame is tone`) -- confirmed against a real,
+/// captured chip frame under `ECMODE_IN`'s `TD_ENABLE` bit (see
+/// `AMBE_CHIP_VALIDATION_FINDINGS.md`'s cross-mode DTX/DTMF section), not merely read off the
+/// source. This is narrower than AMBE+2 half-rate's own 120-127 eight-value block
+/// ([`crate::ambe_plus_2::decode::classify_b0`]): D-STAR only ever special-cases `b0` being
+/// *exactly* 126 or 127, treating every other value -- including 120-125 -- as an ordinary (if
+/// perhaps unusual) voiced/unvoiced speech pitch code. This matters concretely: the same live chip,
+/// configured for D-STAR's RATEP and with `DTX_ENABLE` on, was observed driving silence frames to
+/// `b0=120` -- a value this real reference decoder does **not** recognize as special, so a DTX-
+/// silence frame under D-STAR is decoded as ordinary (if pitch-unusual) speech by mbelib itself, not
+/// just by this crate. That is a real property of D-STAR's own encoding, not a gap this function
+/// needs to paper over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameKind {
+    /// `b0` anything except 126/127: a real, voiced/unvoiced speech frame -- the common case,
+    /// and (per the doc comment above) also what a DTX-silence frame at `b0=120` decodes as.
+    Speech,
+    /// `b0` 126 or 127 exactly (`b0 & 0x7E == 0x7E`): a tone frame. Its `b1`/`b2` are **not** the
+    /// ordinary speech fields this module's own [`extract_raw_parameters`] returns -- see
+    /// [`decode_tone`] for the real, separately bit-scattered tone index/volume.
+    Tone,
+}
+
+pub fn classify_b0(b0: u32) -> FrameKind {
+    if b0 & 0x7E == 0x7E {
+        FrameKind::Tone
+    } else {
+        FrameKind::Speech
+    }
+}
+
+/// A tone frame's own real `index` value, classified per mbelib's real range table:
+///
+/// | `index` range | Meaning |
+/// |---|---|
+/// | `0..5` | Invalid/reserved -- a real encoder never emits this |
+/// | `5..=122` | A single tone at `index * 31.25` Hz |
+/// | `123..128` | Invalid/reserved |
+/// | `128..=163` | A dual tone (DTMF is one, not the only, dual-tone signal) -- see [`dtmf_digit_from_tone_index`] |
+/// | `164..=255` (`index`'s remaining 8-bit values) | Invalid/reserved |
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ToneKind {
+    Invalid,
+    Single { hz: f64 },
+    Dual,
+}
+
+/// Classifies a tone frame's `index` per mbelib's real range table (see [`ToneKind`]'s own doc
+/// comment for the full table) -- confirmed directly against a live chip capture: a plain 200Hz
+/// test tone produced `index=6`, which this function reads as `Single { hz: 187.5 }`, one
+/// quantization step (31.25Hz) below the true stimulus frequency.
+pub fn classify_tone_index(index: u32) -> ToneKind {
+    match index {
+        5..=122 => ToneKind::Single { hz: index as f64 * 31.25 },
+        128..=163 => ToneKind::Dual,
+        _ => ToneKind::Invalid,
+    }
+}
+
+/// A tone frame's own real payload: `index` (see [`classify_tone_index`]/[`ToneKind`] for what it
+/// means) and `volume`, an 8-bit level with no further documented structure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TonePayload {
+    pub index: u32,
+    pub volume: u32,
+}
+
+/// Decodes a tone frame's real `index`/`volume`, per mbelib's own `ambe3600x2400.c` tone branch --
+/// **a completely different bit scatter from [`extract_raw_parameters`]'s ordinary speech `b1`/`b2`**
+/// (three of `index`'s bits are looked up through per-value tables keyed on `d[6..9)`, not read as a
+/// plain contiguous field), so calling this on a frame [`classify_b0`] didn't call `Tone` produces a
+/// meaningless value, not an error -- callers must check `classify_b0(b0)` first. Only valid to call
+/// when the caller already has the frame's decoded 49-bit `d`.
+///
+/// The three lookup tables below (`T5TAB`/`T6TAB`/`T7TAB`) are transcribed directly from mbelib
+/// (<https://github.com/szechyjs/mbelib>, ISC-licensed, `mbelib Author`), the same source and the
+/// same functional-numeric-data status `tables.rs`'s own doc comment and this project's established
+/// position (`hams_com/docs/AMBE_TABLE_COPYRIGHTABILITY_ANALYSIS.md`) already cover -- only the eight
+/// values in each table are taken from mbelib; this function's own logic is freshly written.
+pub fn decode_tone(d: u64) -> TonePayload {
+    let bit = |msb_index: usize| -> u32 { ((d >> (48 - msb_index)) & 1) as u32 };
+    // Verified/guessed status per mbelib's own inline comments; kept in code since it's load-bearing,
+    // not just documentation -- these three tables cover the 3-bit `d[6..9)` selector's 8 outcomes.
+    const T7TAB: [u32; 8] = [1, 0, 0, 0, 0, 1, 1, 1];
+    const T6TAB: [u32; 8] = [0, 0, 0, 1, 1, 1, 1, 0];
+    const T5TAB: [u32; 8] = [0, 0, 1, 0, 1, 1, 0, 1];
+    let sel = ((bit(6) << 2) | (bit(7) << 1) | bit(8)) as usize;
+    let index = (T7TAB[sel] << 7)
+        | (T6TAB[sel] << 6)
+        | (T5TAB[sel] << 5)
+        | (bit(9) << 4)
+        | (bit(42) << 3)
+        | (bit(43) << 2)
+        | (bit(10) << 1)
+        | bit(11);
+    let volume = (bit(12) << 7)
+        | (bit(13) << 6)
+        | (bit(14) << 5)
+        | (bit(15) << 4)
+        | (bit(16) << 3)
+        | (bit(44) << 2)
+        | (bit(45) << 1)
+        | bit(17);
+    TonePayload { index, volume }
+}
+
+/// Maps a dual-tone `index` (128-163 per mbelib -- see [`ToneKind::Dual`]) to a DTMF `(row, col)`
+/// pair using the same 4x4 row/column numbering `ambe::ratet27_dtmf::decode_dtmf_digit` and this
+/// crate's other DTMF tooling use (row 0-3 = 697/770/852/941 Hz, col 0-3 = 1209/1336/1477/1633 Hz)
+/// -- confirmed directly against a real chip capture of all 16 DTMF digits under D-STAR's RATEP with
+/// `TD_ENABLE` on: `index == 128 + row + 4*col` held exactly for every one of the 16 digits,
+/// independent of `DTX_ENABLE`'s own state. `index` 144-163 are real, mbelib-documented dual-tone
+/// codes this function correctly reports as "not a DTMF digit" (`None`) rather than rejecting as
+/// invalid input -- this crate has no evidence about what those 20 codes represent (a larger
+/// dual-tone signaling space the chip supports beyond the 16-digit DTMF keypad, most plausibly, but
+/// unconfirmed), so `classify_tone_index` still calls them `Dual`, only this function's own
+/// DTMF-specific mapping returns `None` for them.
+pub fn dtmf_digit_from_tone_index(index: u32) -> Option<(u8, u8)> {
+    if !(128..=163).contains(&index) {
+        return None;
+    }
+    let offset = index - 128;
+    if offset > 15 {
+        return None;
+    }
+    Some(((offset % 4) as u8, (offset / 4) as u8))
+}
+
 /// Persistent decoder state across frames -- the previous frame's own `L~`, its (post-inverse-DCT)
 /// `log2` spectral-amplitude history, and `γ`, all of which the gain/spectral-magnitude recursion
 /// below genuinely needs (mirroring mbelib's own `prev_mp` argument).
@@ -146,16 +275,31 @@ pub struct DStarParameters {
     pub ml: Vec<f64>,
 }
 
-/// Dequantizes `RawParameters` into real synthesis-ready parameters, advancing `state` in place --
-/// the direct, freshly-written equivalent of mbelib's own `mbe_decodeAmbe2400Parms`, verified stage
-/// by stage against that real source (see this function's own inline citations) rather than
-/// guessed.
+/// The real outcome of dequantizing one frame: ordinary speech parameters, or a tone frame's own
+/// separately-scattered payload (see [`decode_tone`]) -- never speech parameters computed from a
+/// tone frame's ordinary-speech-shaped `b0..b8` misinterpretation, which is exactly what this crate
+/// did before `classify_b0`/[`FrameKind::Tone`] existed (see this module's own doc comment history:
+/// a live chip capture with `TD_ENABLE` on and a DTMF/tone stimulus reliably produces `b0 in
+/// {126,127}`, which the pre-fix `dequantize` ran straight through the voiced-speech path).
+pub enum DequantizedFrame {
+    Speech(DStarParameters),
+    Tone(TonePayload),
+}
+
+/// Dequantizes one frame's decoded 49-bit `d` into real synthesis-ready parameters (or a tone
+/// frame's own payload), advancing `state` in place for the `Speech` case -- the direct,
+/// freshly-written equivalent of mbelib's own `mbe_decodeAmbe2400Parms`, verified stage by stage
+/// against that real source (see this function's own inline citations) rather than guessed. Takes
+/// `d` directly (not just `RawParameters`) because a real tone frame's `index`/`volume` are read
+/// from a different bit scatter than the ordinary speech `b1`/`b2` [`extract_raw_parameters`]
+/// returns -- see [`decode_tone`].
 // [@ANCHOR: dequantize]
-pub fn dequantize(raw: &RawParameters, state: &mut DStarDecoderState) -> DStarParameters {
-    // b0 is a 7-bit field (0..=127) but only 126 pitch codes are defined -- 126/127 are reserved
-    // combinations a real encoder never emits. A corrupted-but-Golay-accepted frame from a lossy
-    // radio channel could still produce one, so this is a real system-boundary input, not
-    // internal logic -- clamp rather than panic.
+pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
+    let raw = extract_raw_parameters(d);
+    if classify_b0(raw.b0) == FrameKind::Tone {
+        return DequantizedFrame::Tone(decode_tone(d));
+    }
+
     let l = tables::L_TABLE[(raw.b0 as usize).min(tables::L_TABLE.len() - 1)];
     // f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5)); w0 = 2*pi*f0 -- mbelib's own "w0 guess" formula
     // (its own comment notes two other candidate formulas from the spec text and patent filings; this
@@ -301,7 +445,7 @@ pub fn dequantize(raw: &RawParameters, state: &mut DStarDecoderState) -> DStarPa
     state.log2_ml = log2_ml;
     state.gamma = gamma;
 
-    DStarParameters { l, w0, voiced, ml }
+    DequantizedFrame::Speech(DStarParameters { l, w0, voiced, ml })
 }
 
 #[cfg(test)]
@@ -369,10 +513,10 @@ mod tests {
         );
     }
 
-    /// A basic sanity range check on dequantization: for every real `b0` value, the resulting `l`
-    /// must fall within `L_TABLE`'s own real range (9..=56), and every per-harmonic spectral
-    /// amplitude must be finite and non-negative -- catches an indexing panic or a NaN/negative
-    /// amplitude across the full parameter space, not just one hand-picked example.
+    /// A basic sanity range check on dequantization: for every real, non-tone `b0` value, the
+    /// resulting `l` must fall within `L_TABLE`'s own real range (9..=56), and every per-harmonic
+    /// spectral amplitude must be finite and non-negative -- catches an indexing panic or a
+    /// NaN/negative amplitude across the full parameter space, not just one hand-picked example.
     #[test]
     fn dequantize_produces_finite_nonnegative_amplitudes_across_the_full_b0_range() {
         for b0 in 0u32..126 {
@@ -387,16 +531,85 @@ mod tests {
                 b7: 3,
                 b8: 3 << 1,
             };
+            let d = super::super::encode::pack_raw_parameters(&raw);
             let mut state = DStarDecoderState::initial();
-            let params = dequantize(&raw, &mut state);
-            assert!(
-                (9..=56).contains(&params.l),
-                "b0={b0}: l={} out of range",
-                params.l
-            );
-            for (h, &m) in params.ml.iter().enumerate().skip(1) {
-                assert!(m.is_finite() && m >= 0.0, "b0={b0}, harmonic {h}: Ml={m}");
+            match dequantize(d, &mut state) {
+                DequantizedFrame::Speech(params) => {
+                    assert!(
+                        (9..=56).contains(&params.l),
+                        "b0={b0}: l={} out of range",
+                        params.l
+                    );
+                    for (h, &m) in params.ml.iter().enumerate().skip(1) {
+                        assert!(m.is_finite() && m >= 0.0, "b0={b0}, harmonic {h}: Ml={m}");
+                    }
+                }
+                DequantizedFrame::Tone(_) => panic!("b0={b0} is not a tone value (126/127)"),
             }
+        }
+    }
+
+    /// `classify_b0` must match mbelib's own real `ambe3600x2400.c` trigger exactly:
+    /// `(b0 & 0x7E) == 0x7E`, i.e. *only* 126 and 127, not the wider 120-127 block AMBE+2 half-rate
+    /// reserves -- confirmed against a real chip capture where D-STAR's own `DTX_ENABLE` drove a
+    /// silence frame to `b0=120`, a value mbelib itself does not special-case (see this module's own
+    /// doc comment above `FrameKind`).
+    #[test]
+    fn classify_b0_matches_mbelib_exactly_not_the_wider_ambe_plus_2_range() {
+        for b0 in 0u32..126 {
+            assert_eq!(classify_b0(b0), FrameKind::Speech, "b0={b0} must not classify as Tone");
+        }
+        assert_eq!(classify_b0(126), FrameKind::Tone);
+        assert_eq!(classify_b0(127), FrameKind::Tone);
+    }
+
+    /// Real chip captures (D-STAR RATEP, `TD_ENABLE` on, `AMBE_CHIP_VALIDATION_FINDINGS.md`'s
+    /// cross-mode DTX/DTMF section) of all 16 DTMF digits and a plain 200Hz tone, decoded through
+    /// this module's real wire-format/FEC layer end to end -- confirms `classify_b0` reads `Tone`
+    /// for all 17 stimuli, and that `dtmf_digit_from_tone_index(decode_tone(d).index)` recovers the
+    /// exact row/column pair for every one of the 16 digits (and correctly returns `None` for the
+    /// plain tone), straight from the chip's own live response, not a synthetic round trip.
+    #[test]
+    fn real_chip_capture_dtmf_digits_and_tone_decode_correctly() {
+        type Case = (&'static str, &'static str, Option<(u8, u8)>);
+        let cases: [Case; 17] = [
+            ("digit 1 (row 0, col 0)", "d30824f38319304110", Some((0, 0))),
+            ("digit 2 (row 0, col 1)", "d30824f38359304110", Some((0, 1))),
+            ("digit 3 (row 0, col 2)", "d30824f39319304110", Some((0, 2))),
+            ("digit A (row 0, col 3)", "d30824f39359304110", Some((0, 3))),
+            ("digit 4 (row 1, col 0)", "83092082c51540c62c", Some((1, 0))),
+            ("digit 5 (row 1, col 1)", "83092082c55540c62c", Some((1, 1))),
+            ("digit 6 (row 1, col 2)", "83092082d51540c62c", Some((1, 2))),
+            ("digit B (row 1, col 3)", "83092082d55540c62c", Some((1, 3))),
+            ("digit 7 (row 2, col 0)", "83883ce38409418e10", Some((2, 0))),
+            ("digit 8 (row 2, col 1)", "83883ce38449418e10", Some((2, 1))),
+            ("digit 9 (row 2, col 2)", "83883ce39409418e10", Some((2, 2))),
+            ("digit C (row 2, col 3)", "83883ce39449418e10", Some((2, 3))),
+            ("digit * (row 3, col 0)", "d30838928201310b2c", Some((3, 0))),
+            ("digit 0 (row 3, col 1)", "d30838928241310b2c", Some((3, 1))),
+            ("digit # (row 3, col 2)", "d30838929201310b2c", Some((3, 2))),
+            ("digit D (row 3, col 3)", "d30838929241310b2c", Some((3, 3))),
+            ("plain 200Hz tone (not DTMF)", "c2c92cb20741e00918", None),
+        ];
+        for (label, hex, expected_row_col) in cases {
+            let bytes: Vec<u8> = (0..hex.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+                .collect();
+            let wire_bytes: [u8; 9] = bytes.try_into().unwrap();
+            let frame = crate::ambe_dstar::interleave::wire_bytes_to_frame(&wire_bytes);
+            let parsed = parse_frame(frame);
+            assert_eq!(parsed.epsilon_c0, 0, "{label}: C0 must decode with zero errors");
+            assert_eq!(parsed.epsilon_c1, 0, "{label}: C1 must decode with zero errors");
+            let raw = extract_raw_parameters(parsed.d);
+            assert_eq!(classify_b0(raw.b0), FrameKind::Tone, "{label}: b0={} must classify as Tone", raw.b0);
+            let tone = decode_tone(parsed.d);
+            assert_eq!(
+                dtmf_digit_from_tone_index(tone.index),
+                expected_row_col,
+                "{label}: tone index={}",
+                tone.index
+            );
         }
     }
 }

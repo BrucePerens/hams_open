@@ -71,6 +71,18 @@
 //!
 //! `d[24]` (`C2`'s own first bit) is a real, transmitted bit that no known decoder (including
 //! mbelib's own) ever reads -- genuinely unused, not a transcription gap.
+//!
+//! # Tone frames: a different `b1`/`b2` scatter entirely
+//!
+//! The table above is only for ordinary speech frames. When `b0 & 0x7E == 0x7E` (`b0` is exactly
+//! 126 or 127 -- [`decode::classify_b0`]), the frame is a tone frame, and mbelib's real decoder
+//! reads a completely different `index`/`volume` pair from different `d[]` bits (three of `index`'s
+//! bits even go through per-value lookup tables keyed on `d[6..9)`, not a plain field) -- see
+//! [`decode::decode_tone`]. Confirmed directly against a real chip capture (D-STAR RATEP,
+//! `ECMODE_IN`'s `TD_ENABLE` bit on): all 16 DTMF digits and a plain test tone reliably produced
+//! `b0 in {126,127}`, and the dual-tone `index` recovered `128 + row + 4*col` exactly for every
+//! digit -- see [`decode::dtmf_digit_from_tone_index`] and `AMBE_CHIP_VALIDATION_FINDINGS.md`'s
+//! cross-mode DTX/DTMF section for the full chip trace.
 
 pub mod decode;
 pub mod encode;

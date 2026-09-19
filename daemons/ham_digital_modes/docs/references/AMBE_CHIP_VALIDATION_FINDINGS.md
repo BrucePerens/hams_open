@@ -6,16 +6,18 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
-## Executive summary (updated as of section 39) -- read this first
+## Executive summary (updated as of section 40) -- read this first
 
-This document has grown to 39 sections across a long, multi-session investigation. This summary
+This document has grown to 40 sections across a long, multi-session investigation. This summary
 exists so a reader (or a future session) doesn't have to read the whole thing to know where things
 stand. Every claim below is sourced to its own section; treat this summary as an index and status
 board, not a replacement for the underlying evidence.
 
 **Chip modes with real, tested, chip-validated software** (all pass live against the real chip,
 including real recorded speech, as of the latest re-run -- §23, §25, §29, §31, §35):
-- **D-STAR** -- `ambe_dstar`, validated via `examples/ambe_chip_validate_dstar.rs`.
+- **D-STAR** -- `ambe_dstar`, validated via `examples/ambe_chip_validate_dstar.rs`. Its own tone/DTMF
+  frames (`ECMODE_IN`'s `TD_ENABLE` bit) are now also decoded and chip-validated (§40) --
+  `ambe_dstar::decode::classify_b0`/`decode_tone`/`dtmf_digit_from_tone_index`.
 - **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
   `examples/ambe_chip_validate_ambe_plus_2.rs`.
 - **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
@@ -78,6 +80,15 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    built to test). Does not resolve `g3`'s own plateau (§21) -- `g3` stayed within its already-known
    subspace under bit 8, and the manual itself contains no internal codec parameter documentation that
    could otherwise help.
+6. **A new, real, unexplained cross-mode asymmetry (§40)**: `ECMODE_IN`'s `TD_ENABLE` bit,
+   demonstrably acts on all three rates this document covers (RATET(27), D-STAR, AMBE+2 half-rate --
+   confirmed global), but produces *different* special-frame codes for the same detected tone/DTMF
+   stimulus depending on rate: D-STAR
+   reaches its own real `Tone` code (`b0=126`, matching mbelib's reference decoder exactly, with a
+   fully decodable per-digit index), while AMBE+2 half-rate reaches `Erasure` (`b0=120`) instead of
+   its own spec-defined `Tone` code (`b0=126/127`), for the identical stimulus and the identical
+   `TD_ENABLE` bit. Reproducible, isolated from any `DTX_ENABLE` interaction, but mechanism
+   unexplained -- a real open item, not a bug in this document's own testing.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -3050,11 +3061,18 @@ instead of linear PCM -- confirmed to actually take effect, not just documented 
 manual, with zero contradictions**: `DTX_ENABLE` (11), `TD_ENABLE` (12, confirmed on-by-default), and
 `TS_ENABLE` (14) all match their manual descriptions and this document's own independently-derived
 empirical behavior exactly (§25/§26/§28/§31), and bits 6/7/9/10/13/15's real, confirmed no-effect
-result under a clean synthetic tone (§36) is now understood as the expected result for
-noise/echo-only or no-op reserved bits, not a mysterious null. This is a strong, independent
-cross-validation of this document's own empirical methodology: every bit this document tested and
-drew a conclusion about, using nothing but direct chip observation, turns out to match DVSI's own
-primary-source documentation exactly.
+result under a clean synthetic tone (§36) is now understood as the expected result for noise/echo-
+only or no-op reserved bits -- though for bit 9 (`ES_ENABLE`, echo suppression) and bit 13
+(`EC_ENABLE`, echo cancellation) specifically, the null is doubly expected and not a clean isolation
+of "no echo path": §36's own caveat notes each bit only got 60 frames of settling after the
+*previous* bit's stimulus (1.2 seconds on the 20ms frame clock), which is short for an adaptive echo
+filter to converge. So the null holds either way -- no echo to act on, or not enough time to act on
+it -- but this test can't distinguish the two, not a mysterious null. Bit 7 (`CP_SELECT`) is the
+cleanest cross-check of the set: the manual states it has no effect while `CP_ENABLE=0`, and §36
+tested bit 7 alone (`CP_ENABLE=0` throughout), so its null result is exactly what the manual predicts,
+not merely consistent with it. This is a strong, independent cross-validation of this document's own
+empirical methodology: every bit this document tested and drew a conclusion about, using nothing but
+direct chip observation, turns out to match DVSI's own primary-source documentation exactly.
 
 **`DCMODE_IN`/`DCMODE_OUT` are also now fully documented** (the manual's own `Table 15`/`Table 16`,
 and `PKT_DCMODE`'s field ID, `0x06`, from `Table 37`) -- previously named in this document only as an
@@ -3087,3 +3105,142 @@ descriptive sentence for `CP_ENABLE` specifically, deliberately lighter than rep
 own full table -- but the judgment of whether even that is the right amount to quote in this
 document (which is itself in the public `hams_open` repository) is Bruce's to make, not something to
 decide unilaterally. Flagged here, and in this round's `night_shift_history.md` entry, for his review.
+
+## 40. `ECMODE_IN`'s DTX/DTMF behavior checked under D-STAR and AMBE+2 half-rate, not just RATET(27) -- a real gap in `ambe_dstar` found and fixed
+
+Every DTX-silence and DTMF finding in this document up through §39 was tested exclusively under
+RATET(27) (P25 full-rate FEC). `ECMODE_IN` is documented as a global, per-channel encoder control
+(§39, DVSI's own manual), so `DTX_ENABLE`/`TD_ENABLE` should behave the same way under D-STAR and
+AMBE+2 half-rate -- but this had never actually been checked, and this document's own executive
+summary implied full coverage ("chip modes... duplicated in software") without it. This section
+closes that gap directly against the live chip, using each mode's own already-validated decoder
+(`ambe_dstar::decode`, `ambe_plus_2::decode`) rather than RATET(27)'s own `g0`/`u4`-based classifiers,
+which are specific to RATET(27)'s own proprietary wire permutation and don't apply elsewhere.
+
+**Methodology note, learned the hard way**: `PKT_ECMODE` writes the full 16-bit register, not just
+the bit a caller cares about. `TD_ENABLE` (bit 12) is on-by-default (§25), so writing
+`ECMODE_IN = DTX_ENABLE` alone silently clears it -- the first pass of this section's own probe did
+exactly that, producing a false "no tone/DTMF detection under either D-STAR or AMBE+2" null result
+that changed the moment `TD_ENABLE` was re-set explicitly alongside `DTX_ENABLE`: D-STAR went from
+ordinary speech to its own real `Tone` code, while AMBE+2 half-rate changed too, but to `Erasure`
+rather than `Tone` (see its own subsection below) -- re-setting `TD_ENABLE` fixed the test, not the
+underlying cross-mode difference. Every capture below re-sets `ECMODE_IN` explicitly rather than
+relying on any assumed default. Tooling:
+`examples/p25_ambe_plus_2_and_dstar_dtx_dtmf_probe.rs` (not a `cargo test`, a live-chip tool, per this
+project's established convention).
+
+### AMBE+2 half-rate (RATET(33)): DTX-silence matches the published spec exactly
+
+`ambe_plus_2::decode::classify_b0` already implements DVSI/TIA's own published special-value
+convention for the half-rate family (`0..=119` Speech, `120..=123` Erasure, `124..=125` Silence,
+`126..=127` Tone), taken directly from the spec (via mbelib's real `ambe3600x2450.c`), not
+reverse-engineered. Confirmed live, with a clean on/off control:
+
+- Silence, `DTX_ENABLE` off: `b0=119` (ordinary `Speech`, the boundary value), 8/8 frames.
+- Silence, `DTX_ENABLE` on: `b0=124` (`Silence`, exactly per spec), 8/8 frames.
+
+This is a second, independent chip validation of DTX-silence signaling (RATET(27)'s own g0=3841
+marker being the first, §31/§35) under a completely different rate and a completely different,
+already-published bit layout -- real, positive cross-mode confirmation that `ECMODE_IN`'s
+`DTX_ENABLE` is a genuine, global encoder feature, not something specific to RATET(27)'s own wire
+format.
+
+### AMBE+2 half-rate: `TD_ENABLE` reaches `Erasure`, not `Tone` -- real, reproducible, unexplained
+
+With `TD_ENABLE` set (isolated from `DTX_ENABLE`: tested both with `DTX_ENABLE` on and off, changed
+what value it produced not whether it produced one -- see the methodology note above -- 8/8 frames
+each), a loud 200Hz tone and all 16 DTMF digit pairs uniformly produced `b0=120` (`Erasure`), never
+`b0=126/127` (`Tone`). This is a real, deterministic, reproducible chip behavior, not noise -- every
+one of 17 different stimuli, under two different `DTX_ENABLE` states, landed on the identical `b0`
+value. The ordinary-speech `b1`/`b2` fields were checked first and found flat/near-flat across the 17
+stimuli (`b2` constant at 7; `b1` alternating narrowly between 30/31 with no correlation to which
+digit was sent) -- but **the full 9-byte captured frame is not flat**: each of the 16 digits produced
+a genuinely different hex frame (e.g. digit 1 = `e8cedbae008cd122c0`, digit 2 =
+`eacdeb8e20ad8702c0`, byte-for-byte distinct), confirmed by re-running with the raw frame hex printed
+alongside the decode. `b1`/`b2`'s own flatness only rules out those two specific fields as a per-digit
+code -- it says nothing about the other ~32 undecoded bits of `d`, since mbelib's own real decoder
+returns immediately on `Erasure` without ever reading further fields, so there is no known decode for
+whatever is actually varying there. **Whether AMBE+2 half-rate's `Erasure` frames carry real per-digit
+information is genuinely unknown, not ruled out** -- correcting this section's own first draft, which
+claimed the flat `b1`/`b2` result as evidence of "no payload," an inference the full-frame hex
+directly contradicts. **Why `TD_ENABLE` maps a detected tone to `Erasure` rather than its own `Tone`
+code on this particular rate is also not established** -- both left as real, open items (executive
+summary item 6), not guessed at further.
+
+### D-STAR: real special-value trigger is `b0 in {126,127}` exactly, not the wider range first assumed
+
+D-STAR's `L_TABLE` has 126 real entries (`b0` 0..=125 all valid pitch codes), which a first pass of
+this section's own tooling misread as implying a `{120..127}`-style reserved block similar to AMBE+2
+half-rate. **Checked directly against mbelib's own real source** (`ambe3600x2400.c`, this project's
+own cited primary reference for `ambe_dstar`), not assumed: the actual trigger is
+`(b0 & 0x7E) == 0x7E`, i.e. `b0` is *exactly* 126 or 127 -- narrower than the guess, and a real,
+concrete gap this project's own `ambe_dstar::decode::dequantize` had never checked for at all (every
+`b0` value, including 126/127, ran straight through the ordinary voiced-speech dequantization path).
+
+### D-STAR: `TD_ENABLE` reaches its own real `Tone` code, with a fully decodable per-digit index
+
+With `TD_ENABLE` set (again isolated from `DTX_ENABLE`, identical result both on and off), a loud
+200Hz tone and all 16 DTMF digit pairs reliably produced `b0=126`, matching mbelib's real trigger
+exactly -- unlike AMBE+2 half-rate's own `Erasure` result above. Tone frames use a **completely
+different bit scatter** for their own `index`/`volume` fields than ordinary speech's `b1`/`b2` (three
+of `index`'s bits are looked up through per-value tables keyed on `d[6..9)`, not a plain contiguous
+field) -- read directly from mbelib's own tone-decode branch, not guessed, and confirmed against the
+live chip's real output:
+
+- The 200Hz test tone decoded to `index=6`: mbelib's own range table reads `5..=122` as "single tone
+  at `index*31.25` Hz" -- `6*31.25 = 187.5`Hz, one quantization step below the true 200Hz stimulus.
+  Reasonable, given the field's own 31.25Hz resolution.
+- All 16 DTMF digits decoded to `index` values 128-143, mbelib's own "dual tone" range (128-163) --
+  and **`index == 128 + row + 4*col` held exactly for every one of the 16 digits**, using this
+  project's own established row/column DTMF numbering (row 0-3 = 697/770/852/941Hz, col 0-3 =
+  1209/1336/1477/1633Hz). A genuine, complete, chip-validated DTMF digit-identification scheme for
+  D-STAR, structurally different from RATET(27)'s own `g0`/`u4` scheme but equally real.
+
+**Fixed in `ambe_dstar::decode`, not just documented** (per the project's own standing practice --
+see this document's own `git log`, e.g. §31/§35 -- of turning a found gap directly into tested code
+rather than filing it as a someday item): added `FrameKind`/`classify_b0` (mbelib's exact `b0`
+trigger), `TonePayload`/`decode_tone` (the real tone-frame bit scatter), `ToneKind`/
+`classify_tone_index` (mbelib's own index range table), and `dtmf_digit_from_tone_index` (the
+`128 + row + 4*col` mapping found above). `dequantize`'s own signature changed from taking
+`&RawParameters` to the frame's full decoded `d: u64` (needed because a tone frame's real payload
+isn't recoverable from `RawParameters` alone -- different bits entirely) and now returns
+`DequantizedFrame::{Speech, Tone}` instead of unconditionally decoding every `b0` value as ordinary
+speech. Before this fix, a real live DTX-silence or DTMF/tone frame under D-STAR would have been
+silently misdecoded as ordinary (if pitch-unusual) speech by this crate -- exactly the class of
+silent-misclassification bug this document's own `ratet27_dtx`/`ratet27_dtmf` work was built to
+avoid for RATET(27). Regression-tested against 17 real captured chip frames (16 DTMF digits + the
+plain tone, exact hex fixtures), plus a `classify_b0` boundary test; full crate suite (497 tests) and
+clippy both clean after the change. The one existing external caller (`ambe_dstar_chip_check.rs`)
+updated to match.
+
+### D-STAR: `DTX_ENABLE`'s own silence output is not distinguishable from speech by any known decoder
+
+With `DTX_ENABLE` off, a silent (all-zero) input settles to `b0=34` -- an ordinary pitch code.
+With `DTX_ENABLE` on, the identical silent input settles to `b0=120` instead (8/8 frames both
+conditions, clean, reproducible discrete jump) -- a real, deterministic effect of the bit. But
+`b0=120` is **not** within mbelib's real special-value trigger (`{126,127}` only, confirmed above),
+so this D-STAR "silence marker," if that is genuinely what it is, would be decoded as ordinary (if
+pitch-unusual) speech by mbelib's own real reference decoder, not just by this crate before the fix
+above. This document does not claim to know whether `b0=120` is DVSI's deliberate D-STAR silence
+encoding, an accident of how the encoder's gain/pitch math degenerates on zero input, or evidence
+that `DTX_ENABLE` isn't really a supported feature for this particular custom RATEP configuration at
+all -- `b0` alone can't distinguish those, and no further DVSI documentation exists to check against
+(§39). One further discriminator, from the raw captured hex rather than just `b0`: the 8 DTX-on
+silence frames were *not* byte-identical (`de4ca831...`, `de4c2e29...`, `da0c2a39...`,
+`cecea411...` -- only `b0=120` stayed pinned), unlike the tone/DTMF captures above, where all 8
+frames per stimulus were exactly identical. A genuine sentinel/marker frame (like RATET(27)'s own
+`g0=3841` DTX marker) would be expected to be a fixed constant; ordinary encoding with one field
+pinned to a fixed value while the rest keeps varying looks more like "the encoder still processes the
+(silent) input normally, and DTX only forces the pitch index" than a dedicated marker. Recorded as a
+real, checked, but genuinely unresolved property of D-STAR's own encoding, not a gap in this crate.
+
+### Cross-mode summary
+
+`ECMODE_IN` is now confirmed global across three structurally different rates (RATET(27), D-STAR,
+AMBE+2 half-rate) -- not just asserted from the manual's own wording, but independently verified with
+real on/off contrasts on two of the three. Two of the three rates now have chip-validated, fully
+decodable per-digit DTMF identification in software: RATET(27) via its already-documented `g0`/`u4`
+pair, and D-STAR via the tone frame's own separate `index` field (`128 + row + 4*col`, this section).
+AMBE+2 half-rate's equivalent, if one exists, remains undiscovered -- its `Erasure` frames visibly
+carry *some* per-digit information in the raw hex, but no known field decodes it (item 6 above).
+Software coverage claim updated accordingly in the executive summary.
