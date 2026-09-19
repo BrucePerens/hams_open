@@ -63,6 +63,7 @@ use super::fec::golay_decode;
 use super::ratet27_fec::hamming_decode_chip;
 use super::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
+    dequantize_fundamental_frequency_chip,
 };
 use super::prediction::INITIAL_L_HAT_PREV;
 use super::reconstruct::reconstruct_spectral_amplitudes;
@@ -117,9 +118,29 @@ pub struct DecoderState {
     l_hat_prev: u32,
     spectral_amplitudes_prev: Vec<f64>,
     error_rate_prev: f64,
+    chip_pitch_map: bool,
+    forced_l_hat: Option<u32>,
+    l_alpha: Option<f64>,
 }
 
 impl DecoderState {
+    /// A decoder using the real chip's log-scale pitch index (see
+    /// [`super::parameter_encoding::CHIP_B0_STEPS_PER_OCTAVE`]) instead of the TIA linear one, and accepting
+    /// `b0` up to 255.
+    pub fn new_chip() -> Self {
+        Self { chip_pitch_map: true, ..Self::new() }
+    }
+
+    /// Experiments only: decode every frame as if it carried `l_hat` harmonics regardless of `b0`.
+    pub fn set_forced_l_hat(&mut self, l_hat: Option<u32>) {
+        self.forced_l_hat = l_hat;
+    }
+
+    /// Experiments only: harmonic count `round(alpha*pi/omega0)` clamped to 9..=56 instead of Eq. 47.
+    pub fn set_l_alpha(&mut self, alpha: Option<f64>) {
+        self.l_alpha = alpha;
+    }
+
     // [@ANCHOR: ambe:decoder_state_new]
     pub fn new() -> Self {
         let l_hat_prev = INITIAL_L_HAT_PREV;
@@ -128,6 +149,9 @@ impl DecoderState {
             l_hat_prev,
             spectral_amplitudes_prev: vec![1.0; l_hat_prev as usize],
             error_rate_prev: 0.0,
+            chip_pitch_map: false,
+            forced_l_hat: None,
+            l_alpha: None,
         }
     }
 
@@ -185,12 +209,19 @@ impl DecoderState {
             return Some(FrameOutcome::Mute);
         }
 
-        if b0 > MAX_VALID_B0 || should_repeat_frame(&errors) {
+        if (!self.chip_pitch_map && b0 > MAX_VALID_B0) || should_repeat_frame(&errors) {
             return Some(FrameOutcome::Repeat);
         }
 
-        let omega0_tilde = dequantize_fundamental_frequency(b0);
-        let l_hat = harmonics_count(omega0_tilde);
+        let omega0_tilde = if self.chip_pitch_map {
+            dequantize_fundamental_frequency_chip(b0)
+        } else {
+            dequantize_fundamental_frequency(b0)
+        };
+        let l_hat = self.forced_l_hat.unwrap_or_else(|| match self.l_alpha {
+            Some(a) => ((a * std::f64::consts::PI / omega0_tilde).round() as u32).clamp(9, 56),
+            None => harmonics_count(omega0_tilde),
+        });
         let k_hat = frequency_bands_count(l_hat);
 
         let gain_widths: [u8; 5] =
@@ -462,6 +493,9 @@ mod tests {
             synthesis: SynthesisState::new(),
             l_hat_prev: INITIAL_L_HAT_PREV,
             spectral_amplitudes_prev: vec![1.0; INITIAL_L_HAT_PREV as usize],
+            chip_pitch_map: false,
+            forced_l_hat: None,
+            l_alpha: None,
             error_rate_prev: 0.2, // 0.95*0.2 = 0.19, comfortably over the 0.0875 threshold
                                   // regardless of this frame's own corrected error count.
         };

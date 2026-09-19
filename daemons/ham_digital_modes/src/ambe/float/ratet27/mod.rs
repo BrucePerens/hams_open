@@ -126,6 +126,7 @@
 
 pub mod bit_prioritization;
 pub mod decode;
+pub mod encoder;
 pub mod enhancement;
 pub mod error_estimation;
 // Golay/Hamming FEC now lives in `super::general` (shared with `super::dstar`/`super::ambe_plus_2`);
