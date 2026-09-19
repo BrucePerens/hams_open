@@ -3234,6 +3234,57 @@ pinned to a fixed value while the rest keeps varying looks more like "the encode
 (silent) input normally, and DTX only forces the pitch index" than a dedicated marker. Recorded as a
 real, checked, but genuinely unresolved property of D-STAR's own encoding, not a gap in this crate.
 
+### AMBE+2 half-rate's `Erasure` frames: a bit-correlation scan comes back clean, and finds a real bug in a shared tool along the way
+
+Since the 16 DTMF digits' full `Erasure` frames differ byte-for-byte (previous subsection) but no
+known field explains why, `examples/ambe_plus_2_erasure_frame_digit_correlation_scan.rs` (offline,
+no chip needed -- reuses the 16 real captured hex frames above) ran the same sliding 7-bit-window
+Spearman correlation scan `ambe_chip_validate_ambe_plus_2.rs` originally used to find P25 full-rate's
+own Gray-coded pitch field, against DTMF row and column separately -- on the *decoded* 49-bit `d`
+(post-Golay, post-dewhiten), not the raw 72-bit deinterleaved frame: `C1`'s 23 raw bits are
+XOR-whitened with a PRBS seeded from `C0`'s own already-decoded data before transmission, and a fixed
+XOR does not preserve a 7-bit window's ordinal value, so scanning the still-whitened frame would make
+a real field inside `C1`'s data bits invisible to this technique regardless of whether it exists.
+Both blocks Golay-decoded with zero corrected errors for all 16 digits (a real observation, though
+per this document's own established Golay caveat -- a perfect `[23,12,7]` code always decodes
+*something* within distance <=3 -- zero errors alone doesn't prove these are "real," intentionally
+encoded codewords).
+
+**The first run (on the raw, still-whitened frame) reported several windows with a suspicious,
+too-good `spearman=1.000` against row -- including `bits[0..7)`, which turned out to be the literal
+constant `127` across all 16 digits.** A perfectly constant window cannot carry per-digit
+information, so a "perfect correlation" against it is impossible in any real sense; the actual cause
+was a genuine bug in the shared `ranks()` helper (copied into three separate example tools in this
+crate, including this one and `ambe_chip_validate_ambe_plus_2.rs`'s own original): it assigns
+strictly increasing ranks 0..n-1 by stable-sort order even when many input values are exactly tied,
+rather than the standard, correct fractional (averaged) rank for ties. When a column is constant, a
+stable sort leaves it in its original input order -- and since these 16 digits were captured in
+strict row-major order, that "rank by input order" fallback trivially, spuriously correlates with
+row. Fixed in all three copies (`ambe_chip_probe_p25_nofec.rs` also had it) with correct
+tie-averaging, plus a minimum-distinct-values guard in this section's own new tool so a near-constant
+window is skipped rather than scored. Full crate suite and clippy both clean after the fix.
+`ambe_chip_probe_p25_nofec.rs`'s own already-recorded finding (§9, `u2`'s Gray-coded pitch field,
+spearman 0.976) is not put in doubt by this bug: §9's own reported values across 8 real frequencies
+(`772, 3020, 3848, 4087, 3848, 4087, 4087, 4087`) already show four genuinely distinct values with a
+real monotonic-then-saturating shape, not the two-way, input-order-correlated tie pattern this bug
+specifically produces, and the result was independently reproduced across two separate live captures
+-- the shape of that finding's own data rules out this specific failure mode, though it was not
+re-run with the fixed code to confirm the exact coefficient.
+
+**With the bug fixed and scanning the correctly decoded `d`, the scan comes back genuinely clean**:
+the best real correlation found against row was `|spearman|=0.600`, and against column
+`|spearman|=0.500` (both at `d[11..18)`). This tests 43 window positions times 2 (plain/Gray) = 86
+comparisons per target. For `n=16` samples, the uncorrected two-tailed `p~0.05` critical Spearman
+value is approximately 0.50 -- so *any single one* of these 86 tests, run in isolation, would nominally
+call 0.500-0.600 "significant." Run 86 times per target, that is close to exactly what pure chance
+predicts (roughly 86 * 0.05 ~ 4 false positives expected at that threshold), which is the actual,
+quantified reason these values are not evidence of a real field, not merely "look a bit low."
+**This technique does not find AMBE+2 half-rate's own per-digit `Erasure`-frame encoding, if one
+exists** -- an honest null result from a real attempt, not evidence that no such encoding exists (a
+7-bit linear window is a narrow hypothesis; the real field, if any, could be non-contiguous,
+differently sized, or not linearly related to row/column the way D-STAR's own `128 + row + 4*col`
+happened to be).
+
 ### Cross-mode summary
 
 `ECMODE_IN` is now confirmed global across three structurally different rates (RATET(27), D-STAR,

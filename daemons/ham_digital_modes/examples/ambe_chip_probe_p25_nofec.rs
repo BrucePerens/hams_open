@@ -161,12 +161,25 @@ fn correlation(xs: &[f64], ys: &[f64]) -> f64 {
 /// Spearman rank correlation -- robust to a field that's monotonic but non-linear (e.g. a
 /// logarithmic pitch quantizer), which Pearson alone could understate.
 fn spearman(xs: &[f64], ys: &[f64]) -> f64 {
+    // Fractional (average) rank, correctly handling ties -- see
+    // `ambe_chip_validate_ambe_plus_2.rs`'s own copy of this fix (AMBE_CHIP_VALIDATION_FINDINGS.md
+    // section 40) for why assigning distinct ranks 0..n-1 by stable-sort order is wrong whenever
+    // values tie.
     fn ranks(v: &[f64]) -> Vec<f64> {
         let mut idx: Vec<usize> = (0..v.len()).collect();
         idx.sort_by(|&a, &b| v[a].total_cmp(&v[b]));
         let mut r = vec![0.0; v.len()];
-        for (rank, &i) in idx.iter().enumerate() {
-            r[i] = rank as f64;
+        let mut i = 0;
+        while i < idx.len() {
+            let mut j = i;
+            while j + 1 < idx.len() && v[idx[j + 1]] == v[idx[i]] {
+                j += 1;
+            }
+            let avg_rank = (i + j) as f64 / 2.0;
+            for &k in &idx[i..=j] {
+                r[k] = avg_rank;
+            }
+            i = j + 1;
         }
         r
     }
