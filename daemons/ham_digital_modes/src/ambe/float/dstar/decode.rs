@@ -293,6 +293,17 @@ pub enum DequantizedFrame {
 /// `d` directly (not just `RawParameters`) because a real tone frame's `index`/`volume` are read
 /// from a different bit scatter than the ordinary speech `b1`/`b2` [`extract_raw_parameters`]
 /// returns -- see [`decode_tone`].
+///
+/// `f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5))` -- mbelib's own "w0 guess" formula (its own
+/// comment notes two other candidate formulas from the spec text and patent filings; this is the one
+/// mbelib's real, working decoder actually uses). Extracted as its own function (previously inlined
+/// directly in [`dequantize`]) so `examples/ambe_fixed_generate_dstar_tables.rs` can generate a
+/// fixed-point table by calling this real function directly, the same reasoning
+/// `ratet27::parameter_encoding::dequantize_fundamental_frequency` already established for RATET(27).
+pub fn f0_from_b0(b0: u32) -> f64 {
+    2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
+}
+
 // [@ANCHOR: dequantize]
 pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
     let raw = extract_raw_parameters(d);
@@ -301,10 +312,7 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
     }
 
     let l = tables::L_TABLE[(raw.b0 as usize).min(tables::L_TABLE.len() - 1)];
-    // f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5)); w0 = 2*pi*f0 -- mbelib's own "w0 guess" formula
-    // (its own comment notes two other candidate formulas from the spec text and patent filings; this
-    // is the one mbelib's real, working decoder actually uses).
-    let f0 = 2f64.powf(-4.311767578125 - 2.1336e-2 * (raw.b0 as f64 + 0.5));
+    let f0 = f0_from_b0(raw.b0);
     let w0 = f0 * 2.0 * std::f64::consts::PI;
 
     let mut voiced = vec![false; l as usize + 1];
