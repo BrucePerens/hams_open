@@ -58,7 +58,7 @@ fn fixed_pitch_refinement_matches_float_on_real_speech() {
             }
             // E_R at the float side's chosen period, both implementations.
             let e_float = fl::refinement_error(&ff, omega_float);
-            let e_fixed = fx::refinement_error(&xf, p8_float as u32) as f64 / 2f64.powi(60);
+            let e_fixed = fx::refinement_error(&xf, &fx::Pitch::from_p8(p8_float as u32)) as f64 / 2f64.powi(60);
             if e_float > 1.0 {
                 worst_err_rel = worst_err_rel.max(((e_fixed - e_float) / e_float).abs());
                 err_pairs += 1;
@@ -90,15 +90,16 @@ fn integer_band_arithmetic_matches_the_real_definitions() {
         for l in 0..=57i32 {
             let a = 1024 * (2 * l as i64 - 1);
             let expected = (a as f64 / p8 as f64).ceil() as i32;
-            assert_eq!(fx::band_start(l, p8), expected, "p8={p8} l={l}");
+            assert_eq!(fx::Pitch::from_p8(p8).band_start(l), expected, "p8={p8} l={l}");
         }
     }
     // The 16384-point window DFT index stays inside the table for every reachable bin.
     for p8 in 159u32..=985 {
         for l in 1..=57i32 {
-            let (lo, hi) = (fx::band_start(l, p8), fx::band_start(l + 1, p8));
+            let pitch = fx::Pitch::from_p8(p8);
+            let (lo, hi) = (pitch.band_start(l), pitch.band_start(l + 1));
             for m in lo..hi {
-                assert!(fx::window_index(m, l, p8).abs() <= 512, "p8={p8} l={l} m={m}");
+                assert!(pitch.window_index(m, l).abs() <= 512, "p8={p8} l={l} m={m}");
             }
         }
     }

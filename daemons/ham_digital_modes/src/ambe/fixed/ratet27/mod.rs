@@ -22,4 +22,6 @@ mod pitch_tables;
 pub mod prediction;
 pub mod reconstruct;
 mod reconstruct_tables;
+pub mod spectral_amplitude;
 pub mod synthesis;
+pub mod vuv;

@@ -4,9 +4,11 @@
 //! refinement error `E_R` (Eq. 24) and [`refine_pitch`]. Fixed-point sibling of
 //! [`crate::ambe::float::ratet27::pitch_refinement`].
 //!
-//! # Pitch representation: `P8`, the pitch period in eighths of a sample
+//! # Pitch representation: [`Pitch`] (an exact fraction), and `P8` for the refinement search
 //!
-//! Every pitch the refinement examines is `p_hat_i +- k/8` with `p_hat_i` a half-sample candidate, so
+//! The refinement returns a period in eighths of a sample, `P8`; [`Pitch`] wraps either a `P8` or an
+//! arbitrary `omega0` (needed by the voicing/amplitude analysis at a decoder-quantized pitch) in the
+//! exact-fraction form the band arithmetic uses. Every pitch the refinement examines is `p_hat_i +- k/8` with `p_hat_i` a half-sample candidate, so
 //! the period is an exact integer `P8 = 8 * P`. With `omega0 = 2*pi/P` every place the float code
 //! multiplies by `omega0` and by `256/(2*pi)` or `16384/(2*pi)` cancels the `pi`:
 //!
@@ -60,6 +62,9 @@ impl Cplx {
     }
 }
 
+/// `round(256 / (2 * pi) * 2^40)`: bins per radian, Q40.
+const BINS_PER_RADIAN_Q40: i128 = 44_798_133_900_177;
+
 /// `omega0 = 2*pi / (P8 / 8)` in radians per sample, Q30.
 pub fn omega0_q30_from_p8(p8: u32) -> i32 {
     let num = TWO_PI_Q30 * 8;
@@ -69,6 +74,72 @@ pub fn omega0_q30_from_p8(p8: u32) -> i32 {
 /// `P8` of a half-sample pitch candidate index.
 pub fn p8_of_index(idx: usize) -> u32 {
     (4 * p2_of_index(idx)) as u32
+}
+
+/// A fundamental frequency in the form the band arithmetic needs: `u = 256 * omega0 / (2 * pi)`, the
+/// spacing of the harmonics in `S_w` bins, as an exact fraction `n / d`, plus `omega0` itself in Q30.
+///
+/// Every band edge is `a_l = (l - 1/2) u` and every window index `floor(64 (m - l u) + 1/2)`, so with
+/// `u = n / d` both are exact integer divisions. From a period in eighths of a sample
+/// ([`Pitch::from_p8`]) `u = 2048 / P8` is exact (no `pi` at all); from an arbitrary `omega0`
+/// ([`Pitch::from_omega0_q30`]) `u = omega0 * (256 / 2 pi)` is formed with a Q40 constant, an
+/// integer product with no rounding beyond that of `omega0` itself.
+#[derive(Clone, Copy, Debug)]
+pub struct Pitch {
+    n: i128,
+    d: i128,
+    omega0_q30: i64,
+}
+
+impl Pitch {
+    /// From a period of `p8 / 8` samples.
+    pub fn from_p8(p8: u32) -> Self {
+        Self { n: 2048, d: p8 as i128, omega0_q30: omega0_q30_from_p8(p8) as i64 }
+    }
+
+    /// From `omega0` in radians per sample, Q30 (must be positive).
+    pub fn from_omega0_q30(omega0_q30: i64) -> Self {
+        Self { n: omega0_q30 as i128 * BINS_PER_RADIAN_Q40, d: 1i128 << 70, omega0_q30 }
+    }
+
+    /// From `omega0` in radians per sample, Q16.16 (the decoders' own convention; only 16 fractional
+    /// bits, so band edges that fall within about `l * u * 2^-17 / omega0` of an integer bin may
+    /// round differently from a higher-precision `omega0`).
+    pub fn from_omega0_q16(omega0_q16: i32) -> Self {
+        Self::from_omega0_q30((omega0_q16 as i64) << 14)
+    }
+
+    /// `omega0` in radians per sample, Q30.
+    pub fn omega0_q30(&self) -> i64 {
+        self.omega0_q30
+    }
+
+    /// `ceil(a_l) = ceil((l - 1/2) u)`, which is also the (exclusive) upper bin of band `l - 1`.
+    pub fn band_start(&self, l: i32) -> i32 {
+        let num = (2 * l as i128 - 1) * self.n;
+        -((-num).div_euclid(2 * self.d)) as i32
+    }
+
+    /// Index into `W_R` for bin `m` of harmonic `l`: `floor(64 (m - l u) + 1/2)`.
+    pub fn window_index(&self, m: i32, l: i32) -> i32 {
+        (128 * (m as i128 * self.d - l as i128 * self.n) + self.d).div_euclid(2 * self.d) as i32
+    }
+
+    /// `floor(0.9254 * pi / omega0 - 1/2)`, Eq. 24's harmonic limit (`pi / omega0 = 128 / u`).
+    pub fn l_estimate(&self) -> i64 {
+        (9254 * 256 * self.d - 10000 * self.n).div_euclid(20000 * self.n) as i64
+    }
+
+    /// `floor(l_est * u)`: the last bin Eq. 24 sums over.
+    pub fn upper_bin(&self, l_est: i64) -> i32 {
+        (l_est as i128 * self.n).div_euclid(self.d) as i32
+    }
+
+    /// `L_hat = floor(0.9254 * floor(pi / omega0 + 1/4))` (Eq. 31).
+    pub fn harmonics_count(&self) -> u32 {
+        let inner = (512 * self.d + self.n).div_euclid(4 * self.n);
+        (9254 * inner).div_euclid(10000) as u32
+    }
 }
 
 /// The 256-point windowed DFT of one frame: `S_w(m)` for `m = -127..=128`, Q10.
@@ -123,29 +194,14 @@ pub fn window_dft_16384_q22(m: i32) -> i64 {
     }
 }
 
-fn div_ceil_i64(a: i64, b: i64) -> i64 {
-    -((-a).div_euclid(b))
-}
-
-/// `ceil(a_l) = ceil(1024 (2l - 1) / P8)`, which is also the (exclusive) upper bin of band `l - 1`.
-pub fn band_start(l: i32, p8: u32) -> i32 {
-    div_ceil_i64(1024 * (2 * l as i64 - 1), p8 as i64) as i32
-}
-
-/// Index into `W_R` for bin `m` of harmonic `l`: `floor(64 m - 16384 l / P + 1/2)`.
-pub fn window_index(m: i32, l: i32, p8: u32) -> i32 {
-    let p = p8 as i64;
-    (128 * m as i64 * p - 262144 * l as i64 + p).div_euclid(2 * p) as i32
-}
-
 /// `A_l` (Eq. 26-28) as a Q16 complex, from the bins `[ceil(a_l), ceil(b_l))`.
-pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, p8: u32) -> Cplx {
-    let (lo, hi) = (band_start(l as i32, p8), band_start(l as i32 + 1, p8));
+pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> Cplx {
+    let (lo, hi) = (pitch.band_start(l as i32), pitch.band_start(l as i32 + 1));
     let mut num_re = 0i128;
     let mut num_im = 0i128;
     let mut den = 0i128;
     for m in lo..hi {
-        let wr = window_dft_16384_q22(window_index(m, l as i32, p8)) as i128;
+        let wr = window_dft_16384_q22(pitch.window_index(m, l as i32)) as i128;
         let s = frame.sw_at(m);
         num_re += s.re as i128 * wr;
         num_im += s.im as i128 * wr;
@@ -163,7 +219,7 @@ pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, p8: u32) -> Cplx 
 /// Q60 `i128`.
 pub fn spectrum_error_and_energy(
     frame: &RefinementFrame,
-    p8: u32,
+    pitch: &Pitch,
     max_l: u32,
     m_start: i32,
     m_end: i32,
@@ -175,14 +231,14 @@ pub fn spectrum_error_and_energy(
     }
     let mut err = real;
     for l in 0..=max_l as i32 {
-        let (lo, hi) = (band_start(l, p8), band_start(l + 1, p8));
+        let (lo, hi) = (pitch.band_start(l), pitch.band_start(l + 1));
         let (s, e) = (lo.max(m_start), hi.min(m_end));
         if s >= e {
             continue;
         }
-        let amp = harmonic_amplitude_q16(frame, l as u32, p8);
+        let amp = harmonic_amplitude_q16(frame, l as u32, pitch);
         for m in s..e {
-            let wr = window_dft_16384_q22(window_index(m, l, p8));
+            let wr = window_dft_16384_q22(pitch.window_index(m, l));
             let syn = Cplx { re: (amp.re * wr) >> 8, im: (amp.im * wr) >> 8 }; // Q16 * Q22 = Q38 -> Q30
             let real_bin = to_q30(frame.sw_at(m));
             let diff = Cplx { re: real_bin.re - syn.re, im: real_bin.im - syn.im };
@@ -192,17 +248,12 @@ pub fn spectrum_error_and_energy(
     (err, real)
 }
 
-/// `L_est = floor(0.9254 * pi / omega0 - 1/2) = floor((4627 P8 - 40000) / 80000)` (Eq. 24's limit).
-fn l_estimate(p8: u32) -> i64 {
-    (4627 * p8 as i64 - 40000).div_euclid(80000)
-}
-
-/// The refinement error `E_R` (Eq. 24) at period `p8`, Q60.
-pub fn refinement_error(frame: &RefinementFrame, p8: u32) -> i128 {
-    let l_est = l_estimate(p8);
-    let upper_m = (l_est * 2048).div_euclid(p8 as i64) as i32;
+/// The refinement error `E_R` (Eq. 24) at `pitch`, Q60.
+pub fn refinement_error(frame: &RefinementFrame, pitch: &Pitch) -> i128 {
+    let l_est = pitch.l_estimate();
+    let upper_m = pitch.upper_bin(l_est);
     let max_l = l_est.max(0) as u32 + 1;
-    spectrum_error_and_energy(frame, p8, max_l, 50, upper_m + 1).0
+    spectrum_error_and_energy(frame, pitch, max_l, 50, upper_m + 1).0
 }
 
 /// Refines the half-sample candidate `p_hat_i_index` (see [`super::pitch`]) to quarter-sample
@@ -214,7 +265,7 @@ pub fn refine_pitch(frame: &RefinementFrame, p_hat_i_index: usize) -> u32 {
     let mut best_err = i128::MAX;
     for off in [-9, -7, -5, -3, -1, 1, 3, 5, 7, 9] {
         let p8 = (base + off) as u32;
-        let e = refinement_error(frame, p8);
+        let e = refinement_error(frame, &Pitch::from_p8(p8));
         if e < best_err {
             best_err = e;
             best_p8 = p8;
