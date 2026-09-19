@@ -2514,3 +2514,15 @@ dependent, section 32) or `u6` (unstable regardless of settling length, also sec
 earlier finding in this document needs re-litigating under section 32's discovery**: some, like this
 one, hold up cleanly on direct re-test with a much more patient protocol. Dataset committed
 (`g0_long_settling_amplitude_sweep.tsv`).
+
+**`g1`/`g2`, decoded from this same already-captured long-settling dataset at zero extra chip time,
+do *not* clean up the way `g0` did -- another real, disclosed negative result.** `g1` and `g2` both
+remain noisy across the same 16 amplitudes with 300-frame settling (`g1`: `3410, 1358, 1322, 1362,
+3406, 3410, 3410, 1362, 1358, 3410, 3410, 3410, 1362, 1370, 3370, 3370`; `g2`: similarly scattered),
+with weak Spearman correlations (`g1`: `0.279`, `g2`: `0.479`) essentially unchanged from the
+original short-settling reading. This rules out insufficient settling as the explanation for `g1`/
+`g2`'s own weaker, messier amplitude relationship (section 23) -- unlike `g0`, more patience does not
+resolve it. Consistent with, though not proof of, `g1`/`g2` depending on something more complex than
+a single scalar amplitude parameter (plausibly genuine higher-order spectral-shape content, which a
+single fixed-frequency sawtooth's amplitude alone wouldn't cleanly parameterize) rather than being an
+under-settled version of the same simple gain relationship `g0` shows.
