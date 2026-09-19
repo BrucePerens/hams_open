@@ -11,6 +11,16 @@
 //! real `g3_decode` (not an assumed-Golay stand-in, now that section 29 derived the real generator)
 //! and reports which bits, if any, move anything -- not just `g3`.
 //!
+//! **Caveat for reuse**: each bit's 60-frame settling period runs immediately after the *previous*
+//! bit's 8 capture frames of the same fixed stimulus, with no explicit reset of the chip's own
+//! adaptive state (section 32) in between. This was fine for the actual run this tool produced --
+//! the null result on 13 of 14 bits reflects ample settling at an unchanging stimulus, and bit 8's
+//! large, immediately-reversible effect (bit 9 promptly returned every block to baseline) isn't an
+//! artifact of carried-over state -- but a future stimulus chosen near one of section 32's own
+//! adaptive/contrast-sensitive boundaries could see cross-bit contamination. Re-settle explicitly
+//! (e.g. re-run the baseline stimulus for a full settling period) before reusing this tool with a
+//! stimulus that isn't simply "far from any known threshold," as this one was.
+//!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_bit_sweep -- <host:port>`
 use ham_digital_modes::ambe::ratet27_fec::decode_block;
 use ham_digital_modes::ambe::ratet27_wire_format::Block;

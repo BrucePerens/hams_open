@@ -2782,11 +2782,23 @@ committed datasets (roughly 5,600 frames) and found real counterexamples:
 **The conclusion is a real negative result worth keeping, not a failed attempt to hide**: there is no
 safe range-based broadening of `is_dtx_silence_frame` using `g0` alone. The chip's own `VOICE_ACTIVE`
 status flag (via `PKT_CHANFMT`'s `ECMODE_OUT` field) remains the only reliable ground truth for "is
-this frame inactive," and is not recoverable from the ordinary 144 wire bits without that extra
-field. `is_dtx_silence_frame`'s narrow exact-match-only scope, calling only genuine near-zero-noise
-silence, was correct as originally shipped -- broadening it, as briefly considered, would have been a
-regression, not an improvement, and this section exists so a future session doesn't re-propose the
-same broadening without first re-running this same check.
+this frame inactive," and is not recoverable from `g0` alone within the ordinary 144 wire bits
+without that extra field. `is_dtx_silence_frame`'s narrow exact-match-only scope, calling only
+genuine near-zero-noise silence, was correct as originally shipped -- broadening it, as briefly
+considered, would have been a regression, not an improvement, and this section exists so a future
+session doesn't re-propose the same broadening without first re-running this same check.
+
+**One more discriminator checked, zero extra chip time, before generalizing "not recoverable" beyond
+`g0` specifically**: `g1` is bimodal in essentially every other dataset in this document (a "low"
+cluster around 1200-1360, a "high" cluster around 3370-3420 -- e.g. section 36's own baseline).
+`examples/ratet27_analyze_g1_during_dtx_inactive.rs` checked the already-committed
+`dtx_silence_sweep.tsv` directly: across both confirmed-inactive content labels (`dtxon_silence`,
+`dtxon_lowlevelnoise`, 20 frames total), `g1` **never once** reached the high cluster, while both
+confirmed-active labels (`dtxon_tone`, `dtxoff_tone`, 20 frames total) reached it in every single
+frame. This is a real, suggestive pattern in a small sample (40 frames, 2 labels each side, not a
+systematic sweep) -- worth recording as a concrete lead for `(g0, g1)` jointly discriminating active
+from inactive better than `g0` alone, but not yet enough data to promote to a validated classifier the
+way `is_dtx_silence_frame` itself was.
 
 ## 36. A systematic `ECMODE_IN` bit sweep finds a genuine, previously untested feature at bit 8 -- and a clean independent reconfirmation of `TS_ENABLE` (bit 14)
 
@@ -2822,11 +2834,20 @@ this test. Two bits stand out clearly:
   previously-unseen value clusters: `u4` moves from `{1734, 1787}` to `{1960, 1961, 1966}` (a ~200-
   unit shift, far larger than any dither step documented elsewhere for this block), `u6` reaches values
   as low as `295` (well below its baseline floor of `682`), and `g2`/`u5`/`c7` all land in ranges with
-  no overlap with baseline. This is a real, reproducible, previously undocumented `ECMODE_IN` feature
-  -- most plausibly one of the audio-processing toggles section 21 already named as existing but
-  untested (noise suppression, echo cancellation, or companding), though this project cannot name
-  which one precisely without DVSI's own bit-table reference. Recorded here, with the raw sweep
-  output and a committed analysis script
+  no overlap with baseline. **One discriminating observation worth naming directly**: section 34's
+  amplitude sweep shows `u4` climbing toward its own higher values as input amplitude rises, and bit
+  8's shifted `u4` reading (`1960-1966`) sits at the high end of that same amplitude-correlated range
+  -- yet `g0`, this chip's own primary gain/amplitude indicator, reads bit-for-bit identical to
+  baseline (`1597`) the entire time, on literally the same, unchanged input signal. Either `u4` is
+  reacting to something bit 8 changed that isn't the same "amplitude" `g0` tracks, or bit 8 performs
+  gain-dependent processing (consistent with companding, or an AGC-like effect) that manifests in the
+  higher-order coefficients without moving `g0` itself. This doesn't identify bit 8 conclusively, but
+  it's a real, concrete clue narrowing the field of plausible explanations, not just a list of names:
+  this is a real, reproducible, previously undocumented `ECMODE_IN` feature -- most plausibly one of
+  the audio-processing toggles section 21 already named as existing but untested (noise suppression,
+  echo cancellation, or companding), though this project cannot name which one precisely without
+  DVSI's own bit-table reference. Recorded here, with the raw sweep output and a committed analysis
+  script
   (`ecmode_bit_sweep_output.txt`, `analyze_ecmode_bit_sweep.py`), as a concrete, bounded, real lead
   for whoever next has manual access or wants to characterize bit 8's effect on real speech content.
 
