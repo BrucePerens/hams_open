@@ -54,6 +54,164 @@ class OdooAPIError(Exception):
     """Custom exception for Odoo JSON-2 API failures."""
 
 
+# [@ANCHOR: backup_management:COMM_strip_endpoint_scheme]
+def _strip_endpoint_scheme(endpoint_url):
+    """
+    Normalize an admin-entered endpoint_url (e.g. from Backblaze B2's own
+    docs, which give "https://s3.us-west-002.backblazeb2.com") into the
+    bare host kopia's own --endpoint flag requires.
+
+    Verified against the real kopia 0.23.1 binary on this box: a scheme
+    prefix makes `kopia repository connect s3 --endpoint=https://...` fail
+    outright with "can't connect to storage: unable to create client:
+    Endpoint url cannot have fully qualified paths." pgbackrest's own
+    --repo1-s3-endpoint tolerates a scheme prefix (verified separately),
+    but we strip it there too for consistency between the two engines.
+
+    Returns (host, disable_tls) -- disable_tls is True only for an
+    explicit "http://" scheme, since kopia defaults to TLS and pgbackrest's
+    S3 repo driver has no plain-HTTP option at all.
+    """
+    if not endpoint_url:
+        return "", False
+    host = endpoint_url.strip()
+    disable_tls = False
+    if host.startswith("https://"):
+        host = host[len("https://") :]
+    elif host.startswith("http://"):
+        host = host[len("http://") :]
+        disable_tls = True
+    return host.rstrip("/"), disable_tls
+
+
+# Where per-backup.config kopia repository-connection state (repository.config
+# files) is kept. One file per config_id -- NOT kopia's single global default
+# config path -- because this worker serves many backup.config records, each
+# potentially pointing at a different S3/B2 bucket with different
+# credentials; sharing one global kopia config would make every job silently
+# operate against whichever bucket a *previous* job last connected to.
+_KOPIA_CONFIG_DIR = os.environ.get(
+    "BACKUP_WORKER_KOPIA_CONFIG_DIR", "/var/lib/odoo/backups/.kopia-configs"
+)
+
+
+def _kopia_config_file(config_id):
+    return os.path.join(_KOPIA_CONFIG_DIR, f"config_{config_id}.config")
+
+
+# [@ANCHOR: backup_management:COMM_ensure_kopia_s3_repository]
+def _ensure_kopia_s3_repository(config, env_vars, config_file):
+    """
+    Ensure a kopia repository is connected (in config_file) for this
+    backup.config's S3/B2 bucket, creating it on the very first job run
+    against that bucket.
+
+    kopia has no single "connect-or-create" command, and the two don't
+    overlap: `repository connect` fails against a bucket with no
+    repository yet ("repository not initialized in the provided
+    storage"), and `repository create` fails against a bucket that
+    already has one ("found existing data in storage location") --
+    verified empirically against a real local kopia 0.23.1 binary
+    (filesystem backend, same repository-init code path as s3/b2) on this
+    box; see daemon/test_main.py's TestKopiaEnsureS3Repository for the
+    mocked-subprocess assertions built on those exact semantics. So: try
+    connect first (the common case on every run after the first); only
+    fall back to create when connect fails.
+
+    kopia's own `repository connect b2` subcommand is explicitly marked
+    [DEPRECATED] in this box's installed kopia (0.23.1 --help output) --
+    B2 is connected here via its S3-compatible API instead (the
+    task/finding's own second option), identically to any other non-AWS
+    S3-compatible endpoint_url.
+    """
+    endpoint_host, disable_tls = _strip_endpoint_scheme(config.get("endpoint_url"))
+    bucket = config.get("bucket_name") or ""
+    base_args = ["--bucket", bucket]
+    if endpoint_host:
+        base_args += ["--endpoint", endpoint_host]
+    if disable_tls:
+        base_args += ["--disable-tls"]
+
+    os.makedirs(os.path.dirname(config_file), exist_ok=True)
+
+    connect_cmd = ["kopia", "repository", "connect", "s3"] + base_args
+    connect_result = subprocess.run(
+        connect_cmd, capture_output=True, text=True, env=env_vars, check=False
+    )
+    if connect_result.returncode == 0:
+        logger.info("Kopia S3/B2 repository already connected (bucket=%s)", bucket)
+        return
+
+    logger.info(
+        "Kopia repository connect failed (expected on first run against "
+        "bucket=%s): %s",
+        bucket,
+        connect_result.stderr.strip()[-300:],
+    )
+
+    create_cmd = ["kopia", "repository", "create", "s3"] + base_args
+    create_result = subprocess.run(
+        create_cmd, capture_output=True, text=True, env=env_vars, check=False
+    )
+    if create_result.returncode != 0:
+        # ValueError, not RuntimeError: execute_job's own except tuple
+        # (OdooAPIError, subprocess.SubprocessError, OSError, ValueError,
+        # PermissionError) is what reports this back to Odoo as a failed
+        # job and acks the RabbitMQ message -- it does not catch
+        # RuntimeError, which would otherwise escape uncaught.
+        raise ValueError(
+            f"Failed to connect to or create kopia S3/B2 repository "
+            f"(bucket={bucket}): connect error: "
+            f"{connect_result.stderr.strip()[-300:]!r}; create error: "
+            f"{create_result.stderr.strip()[-300:]!r}"
+        )
+    logger.info("Kopia S3/B2 repository created (bucket=%s)", bucket)
+
+
+# [@ANCHOR: backup_management:COMM_pgbackrest_s3_repo_args]
+def _pgbackrest_s3_repo_args(config, target_path):
+    """
+    Real, non-secret pgbackrest S3/B2-repo CLI flags for this
+    backup.config. access_key/secret_key are deliberately NOT built into
+    this argv: pgbackrest's own CLI refuses --repo1-s3-key and
+    --repo1-s3-key-secret outright ("ERROR: option 'repo1-s3-key' is not
+    allowed on the command-line -- HINT: this option could expose secrets
+    in the process list"), verified against the real pgbackrest 2.59.1
+    binary on this box. They're threaded through PGBACKREST_REPO1_S3_KEY /
+    PGBACKREST_REPO1_S3_KEY_SECRET env vars instead (also verified against
+    the real binary), matching this file's existing KOPIA_PASSWORD
+    env-var pattern for the same reason: keeping secrets out of the
+    `logger.info("Executing: %s", ...)` argv log line below.
+
+    storage_type == "b2" also lands here: pgbackrest has no native B2 repo
+    type, so B2 is addressed via its S3-compatible API and endpoint_url,
+    same as kopia.
+    """
+    endpoint_host, _disable_tls = _strip_endpoint_scheme(config.get("endpoint_url"))
+    args = [
+        "--repo1-type=s3",
+        f"--repo1-s3-bucket={config.get('bucket_name') or ''}",
+    ]
+    if endpoint_host:
+        args.append(f"--repo1-s3-endpoint={endpoint_host}")
+    # backup.config has no dedicated "region" field (only
+    # storage_type/bucket_name/endpoint_url/access_key/secret_key) even
+    # though pgbackrest's s3 repo type requires *some* region value.
+    # "us-east-1" is the common S3-compatible-provider placeholder and
+    # works for AWS S3 and for B2 (B2's S3-compatible API does not
+    # validate SigV4 region against the endpoint host). A provider that
+    # does enforce region/endpoint agreement would need a real `region`
+    # field added to the model -- not done here; see the daemon's own
+    # to-do note for this gap.
+    args.append(f"--repo1-s3-region={config.get('region') or 'us-east-1'}")
+    # No dedicated bucket-prefix/path field exists either; keying the
+    # in-bucket path off target_path (the pgbackrest stanza name, already
+    # validated elsewhere to ^[a-zA-Z0-9_]+$) keeps configs that share one
+    # bucket from colliding, without inventing a new payload field.
+    args.append(f"--repo1-path=/{target_path}")
+    return args
+
+
 # Keys inside a job payload dict that carry live, decrypted credentials
 # (kopia_password, secret_key, access_key) -- _publish_to_worker in
 # backup_config.py puts these on the wire in plaintext for the worker to
@@ -167,6 +325,8 @@ def execute_job(ch, method, properties, body):
             cmd = ["kopia", "snapshot", "create", "--json", "--", target_path]
         elif engine == "pgbackrest":
             cmd = ["pgbackrest", "backup", f"--stanza={target_path}", "--type=full"]
+            if config.get("storage_type") in ("s3", "b2"):
+                cmd.extend(_pgbackrest_s3_repo_args(config, target_path))
             keep_daily = config.get("keep_daily", 0)
             if keep_daily > 0:
                 cmd.append(f"--repo1-retention-full={keep_daily}")
@@ -195,6 +355,8 @@ def execute_job(ch, method, properties, body):
                 cmd = ["kopia", "snapshot", "list", "--json"]
             else:
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
+                if config.get("storage_type") in ("s3", "b2"):
+                    cmd.extend(_pgbackrest_s3_repo_args(config, target_path))
         elif engine == "restore_drill":
             script_path = payload.get("script")
             allowed_base = os.environ.get("BACKUP_WORKER_SCRIPTS_DIR", "/opt/hams/daemons/backup_worker/scripts")
@@ -282,8 +444,38 @@ def execute_job(ch, method, properties, body):
         # This also correctly covers kopia_policy and sync_snapshots kopia
         # invocations, which had the identical gap.
         env_vars = os.environ.copy()
-        if cmd[0] == "kopia" and config.get("kopia_password"):
-            env_vars["KOPIA_PASSWORD"] = config["kopia_password"]
+        storage_type = config.get("storage_type") or "local"
+        if cmd[0] == "kopia":
+            if config.get("kopia_password"):
+                env_vars["KOPIA_PASSWORD"] = config["kopia_password"]
+            if storage_type in ("s3", "b2"):
+                # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are kopia's own
+                # documented env-var overrides for --access-key /
+                # --secret-access-key (confirmed via `kopia repository
+                # connect s3 --help` on this box) -- used instead of the
+                # CLI flags so the credentials never land in the
+                # `logger.info("Executing: %s", ...)` argv log line below.
+                if config.get("access_key"):
+                    env_vars["AWS_ACCESS_KEY_ID"] = config["access_key"]
+                if config.get("secret_key"):
+                    env_vars["AWS_SECRET_ACCESS_KEY"] = config["secret_key"]
+                # KOPIA_CONFIG_PATH (kopia's own env-var form of
+                # --config-file, confirmed via --help and by direct testing
+                # against a real repository.config on this box) routes
+                # every kopia invocation below -- snapshot create, policy
+                # set, snapshot list, restore -- at this backup.config's own
+                # per-config repository state, not kopia's single global
+                # default config.
+                config_file = _kopia_config_file(config_id)
+                env_vars["KOPIA_CONFIG_PATH"] = config_file
+                _ensure_kopia_s3_repository(config, env_vars, config_file)
+        elif cmd[0] == "pgbackrest" and storage_type in ("s3", "b2"):
+            # See _pgbackrest_s3_repo_args' own docstring: pgbackrest's CLI
+            # refuses these two options as command-line flags outright.
+            if config.get("access_key"):
+                env_vars["PGBACKREST_REPO1_S3_KEY"] = config["access_key"]
+            if config.get("secret_key"):
+                env_vars["PGBACKREST_REPO1_S3_KEY_SECRET"] = config["secret_key"]
 
         if not shutil.which(cmd[0]):
             warn_msg = f"""Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here."""
