@@ -20,6 +20,9 @@ fn raw_d(b0: u32, b1: u32, b2: u32, b3: u32, b4: u32, b5: u32, b6: u32, b7: u32,
 
 /// A representative sweep, spanning low/mid/high `L` (via `b0`, kept away from D-STAR's own
 /// `b0 & 0x7E == 0x7E` tone-frame trigger) and several `VUV`/`DG`/`PRBA`/`HOC` indices each.
+/// Largest value Q16.16 in an `i32` represents.
+const I32_Q16_MAX: f64 = i32::MAX as f64 / 65536.0;
+
 fn representative_sequences() -> Vec<Vec<u64>> {
     vec![
         vec![
@@ -89,6 +92,13 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
                         float_params.ml.iter().zip(fixed_params.ml_q16.iter()).enumerate().skip(1)
                     {
                         let fixed_ml = fixed_ml_q16 as f64 / 65536.0;
+                        if float_ml >= I32_Q16_MAX {
+                            // The chip's doubled D-STAR gain lets the extreme frames exceed what Q16.16 in an i32 can hold
+                            // (a harmonic amplitude above 32768 would clip the 16-bit output anyway): the fixed value must
+                            // saturate at the maximum rather than wrap.
+                            assert_eq!(fixed_ml_q16, i32::MAX, "frame {frame_idx}, d={d:#x}, harmonic {h}: float {float_ml} must saturate");
+                            continue;
+                        }
                         let rel_err = if float_ml.abs() > 1e-9 {
                             ((fixed_ml - float_ml) / float_ml).abs()
                         } else {

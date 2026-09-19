@@ -76,6 +76,8 @@ impl Encoder {
             hoc: [&tables::HOC_B5, &tables::HOC_B6, &tables::HOC_B7, &tables::HOC_B8],
             hoc_b8_even_only: false,
             rho: 0.65,
+            gamma_scale: 1.0,
+            gamma_memory: 0.5,
         };
         let q = quantize_speech(
             &SpeechTarget { l, w0, vuv_f0: f0, voiced: &voiced, ml: &ml },

@@ -23,6 +23,8 @@ pub fn mode_tables() -> ModeTables<'static> {
         hoc_q16: [&HOC_B5_Q16_16, &HOC_B6_Q16_16, &HOC_B7_Q16_16, &HOC_B8_Q16_16],
         hoc_b8_even_only: true,
         rho_q16: crate::ambe::fixed::general::mbe_speech::POINT_80_Q16_16,
+        gamma_scale_q16: crate::ambe::fixed::general::mbe_speech::GAMMA_SCALE_2_Q16_16,
+        gamma_memory_q16: crate::ambe::fixed::general::mbe_speech::GAMMA_MEMORY_ZERO_Q16_16,
     }
 }
 

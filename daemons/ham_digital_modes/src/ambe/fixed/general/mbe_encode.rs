@@ -45,6 +45,9 @@ pub struct ModeTables<'a> {
     pub hoc_b8_even_only: bool,
     /// The decoder's predictor weight in Q16.16 (see `mbe_speech::SpeechTables::rho_q16`).
     pub rho_q16: i64,
+    /// The decoder's gain recursion in Q16.16 (see `mbe_speech::SpeechTables`).
+    pub gamma_scale_q16: i64,
+    pub gamma_memory_q16: i64,
 }
 
 /// What the frame's analysis wants the decoder to reproduce. `voiced`, `ml_q16` and `log2_ml_q16` are 1-indexed by
@@ -175,7 +178,8 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     let x: Vec<i64> = (0..=l).map(|h| if h == 0 { 0 } else { target.log2_ml_q16[h] as i64 - pred[h] }).collect();
     let mean_x = x[1..=l].iter().sum::<i64>() / l64;
     let gamma_target = mean_x + sum43_scaled + (log2_q16((l as i32) << 16) >> 1) as i64;
-    let delta_target = gamma_target - (prev.gamma_q16 >> 1) as i64;
+    let delta_target = (((gamma_target - ((prev.gamma_q16 as i64 * tables.gamma_memory_q16) >> 16)) as i128) << 16) / tables.gamma_scale_q16 as i128;
+    let delta_target = delta_target as i64;
     let (mut b2_dist, mut b2_idx) = (i64::MAX, 0usize);
     for (i, &dg) in tables.dg_q16.iter().enumerate() {
         let d = (dg as i64 - delta_target).abs();

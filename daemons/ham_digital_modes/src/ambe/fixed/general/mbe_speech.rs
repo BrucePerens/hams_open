@@ -20,6 +20,11 @@ use super::trig::cos_pi_frac;
 /// `round(0.65 * 65536)` -- the `Sum43`/`log2_Ml` recursion's own fixed blend-weight constant
 /// (mbelib's real `.65` literal, `AMBE_CHIP_VALIDATION_FINDINGS.md`'s own transcription history).
 pub const POINT_65_Q16_16: i64 = 42598;
+/// Gain-recursion constants in Q16.16: scale 1 and 2, memory 0.5 and 0.
+pub const GAMMA_SCALE_1_Q16_16: i64 = 65536;
+pub const GAMMA_SCALE_2_Q16_16: i64 = 131072;
+pub const GAMMA_MEMORY_HALF_Q16_16: i64 = 32768;
+pub const GAMMA_MEMORY_ZERO_Q16_16: i64 = 0;
 /// `round(0.8 * 65536)`, the D-STAR predictor weight (`float::dstar::decode::PREDICTOR_RHO`).
 pub const POINT_80_Q16_16: i64 = 52429;
 /// `round(0.2046 * 65536)` -- the unvoiced scaling constant (mbelib's real `unvc` formula).
@@ -56,6 +61,9 @@ pub struct SpeechTables<'a> {
     pub hoc_b8_q16: &'a [[i32; 4]],
     /// The amplitude predictor's weight in Q16.16: `POINT_65_Q16_16` for AMBE+2, `POINT_80_Q16_16` for D-STAR (the chip's value).
     pub rho_q16: i64,
+    /// The gain recursion `gamma = scale*DG + memory*gamma_prev` in Q16.16 (`float::dstar::decode::GAMMA_SCALE`).
+    pub gamma_scale_q16: i64,
+    pub gamma_memory_q16: i64,
 }
 
 /// Persistent decoder state across frames, generic over every MBE-family mode -- the fixed-point
@@ -141,7 +149,8 @@ pub fn dequantize_speech(
     }
 
     let delta_gamma_q16 = tables.dg_q16[raw.b2 as usize];
-    let gamma_q16 = delta_gamma_q16 + (state.gamma_q16 >> 1); // + 0.5 * state.gamma
+    let gamma_q16 = (((delta_gamma_q16 as i64 * tables.gamma_scale_q16) >> 16) + ((state.gamma_q16 as i64 * tables.gamma_memory_q16) >> 16))
+        .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
     // PRBA -> Gm -> Ri: an 8-point cosine sum (mbelib's own real `Gm`/`Ri` construction). `gm[0]`
     // (array index 0, never accessed by the float sibling's own `enumerate().skip(1)`) and `gm[1]`

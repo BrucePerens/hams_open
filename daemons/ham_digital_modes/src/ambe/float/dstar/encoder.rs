@@ -70,6 +70,8 @@ impl Encoder {
             hoc: [&tables::HOC_B5, &tables::HOC_B6, &tables::HOC_B7, &tables::HOC_B8],
             hoc_b8_even_only: true,
             rho: crate::ambe::float::dstar::decode::PREDICTOR_RHO,
+            gamma_scale: crate::ambe::float::dstar::decode::GAMMA_SCALE,
+            gamma_memory: crate::ambe::float::dstar::decode::GAMMA_MEMORY,
         };
         let q = quantize_speech(
             &SpeechTarget { l, w0, vuv_f0: f0, voiced: &voiced, ml: &ml },

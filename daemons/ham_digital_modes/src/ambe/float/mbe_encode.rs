@@ -29,6 +29,9 @@ pub struct ModeTables<'a> {
     pub hoc_b8_even_only: bool,
     /// The mode's amplitude-predictor weight (`0.65` for AMBE+2, `dstar::decode::PREDICTOR_RHO` for D-STAR).
     pub rho: f64,
+    /// The mode's gain recursion `gamma = gamma_scale*DG + gamma_memory*gamma_prev` (see `dstar::decode::GAMMA_SCALE`).
+    pub gamma_scale: f64,
+    pub gamma_memory: f64,
 }
 
 /// What the frame's analysis wants the decoder to reproduce. `voiced` and `ml` are 1-indexed by harmonic (index 0
@@ -131,7 +134,7 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
         .collect();
     let mean_x = x[1..=l].iter().sum::<f64>() / l as f64;
     let gamma_target = mean_x + sum43 + 0.5 * (l as f64).log2();
-    let delta_target = gamma_target - 0.5 * prev.gamma;
+    let delta_target = (gamma_target - tables.gamma_memory * prev.gamma) / tables.gamma_scale;
     let b2 = tables
         .dg
         .iter()

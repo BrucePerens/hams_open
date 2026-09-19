@@ -43,6 +43,8 @@ const SILENCE_W0_Q16_16: i32 = TWO_PI_Q16_16 >> 5;
 fn speech_tables() -> SpeechTables<'static> {
     SpeechTables {
         rho_q16: crate::ambe::fixed::general::mbe_speech::POINT_65_Q16_16,
+        gamma_scale_q16: crate::ambe::fixed::general::mbe_speech::GAMMA_SCALE_1_Q16_16,
+        gamma_memory_q16: crate::ambe::fixed::general::mbe_speech::GAMMA_MEMORY_HALF_Q16_16,
         vuv: &VUV,
         dg_q16: &DG_Q16_16,
         prba24_q16: &PRBA24_Q16_16,

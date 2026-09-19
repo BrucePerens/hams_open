@@ -286,6 +286,14 @@ pub enum DequantizedFrame {
     Tone(TonePayload),
 }
 
+/// The gain recursion `gamma = GAMMA_SCALE*DG[b2] + GAMMA_MEMORY*gamma_prev`. mbelib uses `1` and `0.5`; the chip's
+/// D-STAR decoder has no gain memory at all and its gain is twice the table value: after a gain step its output level
+/// settles in two frames and returns to the old level in one, while mbelib's recursion needs five or six
+/// (`examples/dstar_field_scan.rs ... ljump <row>` with `FIELD=b2`; settled levels agree, the trajectories then match
+/// to about 2 dB). AMBE+2 half-rate does follow mbelib's recursion.
+pub const GAMMA_SCALE: f64 = 2.0;
+pub const GAMMA_MEMORY: f64 = 0.0;
+
 /// The weight of the previous frame's log amplitudes in the amplitude predictor. mbelib (and AMBE+2 half-rate) use `0.65`; the
 /// chip's D-STAR decoder settles with a per-frame step-response ratio of about `0.8`
 /// (`examples/dstar_field_scan.rs ... rho`: first-frame response identical, later increments shrink by 0.78-0.81 per
@@ -332,7 +340,7 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
     }
 
     let delta_gamma = tables::DG[raw.b2 as usize];
-    let gamma = delta_gamma + 0.5 * state.gamma;
+    let gamma = GAMMA_SCALE * delta_gamma + GAMMA_MEMORY * state.gamma;
 
     // PRBA -> Gm -> Ri (8-point cosine sum) -> Cik's own first two elements per block.
     let prba24 = tables::PRBA24[raw.b3 as usize];

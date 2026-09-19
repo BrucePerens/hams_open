@@ -58,6 +58,8 @@ struct OwnedTables {
     hoc: [Vec<[f64; 4]>; 4],
     even: bool,
     rho: f64,
+    gamma_scale: f64,
+    gamma_memory: f64,
 }
 impl OwnedTables {
     fn view(&self) -> fl::ModeTables<'_> {
@@ -70,6 +72,8 @@ impl OwnedTables {
             hoc: [&self.hoc[0], &self.hoc[1], &self.hoc[2], &self.hoc[3]],
             hoc_b8_even_only: self.even,
             rho: self.rho,
+            gamma_scale: self.gamma_scale,
+            gamma_memory: self.gamma_memory,
         }
     }
 }
@@ -221,7 +225,11 @@ fn float_target_log2(t: &Trial) -> Vec<f64> {
 fn float_second(t: &Trial, tables: &OwnedTables, first: &fx::QuantizedSpeech, which: usize) -> u32 {
     let mut poisoned = tables.clone();
     match which {
-        2 => poisoned.dg[first.b2 as usize] = FAR,
+        2 => {
+            // The D-STAR gain table repeats its last value (rows 62 and 63), so poison every row equal to the winner.
+            let winner = poisoned.dg[first.b2 as usize];
+            poisoned.dg.iter_mut().filter(|v| **v == winner).for_each(|v| *v = FAR);
+        }
         3 => poisoned.prba24[first.b3 as usize] = [FAR; 3],
         4 => poisoned.prba58[first.b4 as usize] = [FAR; 4],
         5 => poisoned.hoc[0][first.b5 as usize] = [FAR; 4],
@@ -354,6 +362,8 @@ mod dstar_mode {
                 hoc: [tables::HOC_B5.to_vec(), tables::HOC_B6.to_vec(), tables::HOC_B7.to_vec(), tables::HOC_B8.to_vec()],
                 even: true,
                 rho: float_decode::PREDICTOR_RHO,
+                gamma_scale: float_decode::GAMMA_SCALE,
+                gamma_memory: float_decode::GAMMA_MEMORY,
             },
             l_table: &tables::L_TABLE,
             f0: float_decode::f0_from_b0,
@@ -415,6 +425,8 @@ mod ambe_plus_2_mode {
                 hoc: [tables::HOC_B5.to_vec(), tables::HOC_B6.to_vec(), tables::HOC_B7.to_vec(), tables::HOC_B8.to_vec()],
                 even: false,
                 rho: 0.65,
+                gamma_scale: 1.0,
+                gamma_memory: 0.5,
             },
             l_table: &tables::L_TABLE,
             f0: table_f0,

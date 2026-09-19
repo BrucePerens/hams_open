@@ -439,7 +439,11 @@ fn main() {
         // back. Frame RMS (dB) of chip and ours, to find how the chip's predictor handles a change of L.
         let alt_b0: u32 = std::env::args().nth(5).and_then(|s| s.parse().ok()).unwrap_or(90);
         let mut alt = base();
-        alt.b0 = alt_b0;
+        if std::env::var("FIELD").as_deref() == Ok("b2") {
+            alt.b2 = alt_b0;
+        } else {
+            alt.b0 = alt_b0;
+        }
         if std::env::var("UNVOICED").is_ok() {
             alt.b1 = 0;
         }

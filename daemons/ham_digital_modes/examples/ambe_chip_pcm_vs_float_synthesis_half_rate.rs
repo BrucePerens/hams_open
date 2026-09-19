@@ -166,6 +166,8 @@ fn main() {
     }
 
     let mut dstar_dec = DStarSynthesisDecoder::new();
+    let mut param_state = ham_digital_modes::ambe::float::dstar::decode::DStarDecoderState::initial();
+    let param_range: Option<(usize, usize)> = std::env::var("PARAMS_RANGE").ok().and_then(|v| { let (a, b) = v.split_once(':')?; Some((a.parse().ok()?, b.parse().ok()?)) });
     #[cfg(feature = "ambe_plus_2")]
     let mut ap2_dec = ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder::new();
     let (mut chip_pcm, mut float_pcm) = (Vec::new(), Vec::new());
@@ -207,6 +209,22 @@ fn main() {
                 vec![0.0; FRAME_SAMPLES]
             }
         };
+        if let (Some((a, b)), "dstar") = (param_range, mode.as_str()) {
+            let mut wb = [0u8; 9];
+            wb.copy_from_slice(frame_bytes);
+            let parsed = ham_digital_modes::ambe::float::dstar::decode::parse_frame(wire_bytes_to_frame(&wb));
+            let raw = ham_digital_modes::ambe::float::dstar::decode::extract_raw_parameters(parsed.d);
+            let rms = |v: &[f64]| (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt();
+            let dq = ham_digital_modes::ambe::float::dstar::decode::dequantize(parsed.d, &mut param_state);
+            if i >= a && i < b {
+                if let ham_digital_modes::ambe::float::dstar::decode::DequantizedFrame::Speech(p) = dq {
+                    let voiced = p.voiced[1..].iter().filter(|&&v| v).count();
+                    let l = p.ml.len() - 1;
+                    let mean_db = 20.0 * (p.ml[1..].iter().map(|m| m * m).sum::<f64>() / l as f64).sqrt().log10();
+                    println!("frame {i}: b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} L={l} voiced={voiced}/{l} meanMl={mean_db:.1}dB chip_rms={:.0} ours_rms={:.0} err={}+{}", raw.b0, raw.b1, raw.b2, raw.b3, raw.b4, raw.b5, raw.b6, raw.b7, raw.b8, rms(&chip), rms(&float), parsed.epsilon_c0, parsed.epsilon_c1);
+                }
+            }
+        }
         psd_add(&mut chip_psd, &chip);
         psd_add(&mut float_psd, &float);
         let input: Vec<f64> = pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES].iter().map(|&s| s as f64).collect();
