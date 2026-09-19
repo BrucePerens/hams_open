@@ -132,6 +132,30 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
     data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
 }
+/// Writes a minimal mono 16-bit 8kHz PCM WAV -- so both decoded streams can be listened to directly,
+/// a far richer diagnostic than any single correlation number for telling "garbage" apart from
+/// "recognizable speech that's merely out of sync" apart from "wrong scale but otherwise correct".
+fn write_wav_mono_i16(path: &str, samples: &[f64]) {
+    let pcm: Vec<i16> = samples.iter().map(|&s| s.round().clamp(-32768.0, 32767.0) as i16).collect();
+    let data_len = (pcm.len() * 2) as u32;
+    let mut out = Vec::with_capacity(44 + pcm.len() * 2);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data_len).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    out.extend_from_slice(&1u16.to_le_bytes()); // mono
+    out.extend_from_slice(&8000u32.to_le_bytes());
+    out.extend_from_slice(&16000u32.to_le_bytes()); // byte rate = sample_rate * block_align
+    out.extend_from_slice(&2u16.to_le_bytes()); // block align
+    out.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data_len.to_le_bytes());
+    for s in pcm {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    std::fs::write(path, out).unwrap_or_else(|e| panic!("write {path}: {e}"));
+}
 /// The same raw pre-FEC `c_hat_0..c_hat_7` extraction `ambe_fixed_chip_validate_ratet27.rs` uses,
 /// confirmed correct there (`Decoded: 3291/3320` real frames).
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
@@ -204,27 +228,38 @@ fn main() {
     let mut float_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);
     let mut float_decode_failures = 0usize;
 
+    // **Two separate passes, not interleaved per frame.** An earlier version of this harness sent
+    // an encode request immediately followed by a decode request, frame by frame -- but the chip's
+    // own decoder almost certainly carries frame-to-frame continuity state (phase, noise generator)
+    // the same way this crate's own `DecoderState`/`SynthesisState` do, and there is no reason to
+    // assume that state survives an *encode* request landing on the same UDP session in between.
+    // Interleaving could silently reset the chip's own decoder continuity every single frame,
+    // which would explain a moderate envelope correlation (per-frame gross amplitude reconstruction
+    // doesn't depend on continuity) alongside poor raw-sample/phase correlation (continuity-
+    // dependent phase tracking would never match). Capturing every channel payload first (an
+    // encode-only pass, identical in shape to every other already-validated encode-only example in
+    // this codebase), then decoding all of them in one uninterrupted decode-only pass, isolates
+    // whether interleaving itself was the problem.
+    let mut channel_payloads: Vec<Vec<u8>> = Vec::with_capacity(n_frames);
     for i in 0..n_frames {
         let frame = &pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES];
-
-        // 1. Encode: real speech in, real chip-produced channel bits out.
         let n = send_recv_retrying(&sock, &mut buf, &build_speech(frame));
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
         assert_eq!(ptype, TYPE_CHANNEL, "expected a CHANNEL response");
-        let channel_payload = payload.to_vec();
+        channel_payloads.push(payload.to_vec());
+    }
 
+    for channel_payload in &channel_payloads {
         let mut wire_bytes = [0u8; FRAME_BYTES];
         wire_bytes.copy_from_slice(&channel_payload[channel_payload.len() - FRAME_BYTES..]);
         let c = wire_bytes_to_c(&wire_bytes);
 
-        // 2. Decode via the chip itself: the same channel bits sent right back.
-        let n = send_recv_retrying(&sock, &mut buf, &build_channel(&channel_payload));
+        let n = send_recv_retrying(&sock, &mut buf, &build_channel(channel_payload));
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
         assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decoded PCM) response");
         let chip_frame_pcm = parse_speech_payload(payload);
         chip_pcm.extend(chip_frame_pcm.iter().map(|&s| s as f64));
 
-        // 3. Decode via this crate's own float synthesis, fed the identical channel bits.
         match float_decoder.decode_frame(c) {
             Some(frame_pcm) => float_pcm.extend(frame_pcm.iter().copied()),
             None => {
@@ -346,5 +381,13 @@ fn main() {
     println!(
         "Best envelope alignment: lag={best_frame_lag} frames ({:.1} ms), envelope correlation at that lag = {best_frame_corr:.4}",
         best_frame_lag as f64 * 20.0
+    );
+
+    let out_dir = std::env::var("AMBE_RATET27_WAV_OUT_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    write_wav_mono_i16(&format!("{out_dir}/ratet27_chip_decoded.wav"), &chip_pcm);
+    write_wav_mono_i16(&format!("{out_dir}/ratet27_float_decoded.wav"), &float_pcm);
+    println!(
+        "Wrote {out_dir}/ratet27_chip_decoded.wav and {out_dir}/ratet27_float_decoded.wav for direct \
+         listening comparison (set AMBE_RATET27_WAV_OUT_DIR to change the output directory)."
     );
 }
