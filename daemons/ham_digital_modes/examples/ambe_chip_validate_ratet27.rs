@@ -23,8 +23,7 @@
 //! see: two full multi-second recordings, checked frame by frame.
 //!
 //! Usage: `cargo run --release --example ambe_chip_validate_ratet27 -- <host:port>`
-use ham_digital_modes::ambe::ratet27_fec::decode_block;
-use ham_digital_modes::ambe::ratet27_wire_format::Block;
+use ham_digital_modes::ambe::ratet27_frame::decode_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -118,16 +117,6 @@ fn main() {
         unreachable!()
     };
 
-    let blocks_to_check = [
-        Block::Golay { index: 0 },
-        Block::Golay { index: 1 },
-        Block::Golay { index: 2 },
-        Block::Golay { index: 3 },
-        Block::Hamming { index: 0 },
-        Block::Hamming { index: 1 },
-        Block::Hamming { index: 2 },
-        Block::Raw,
-    ];
     let block_names = ["g0", "g1", "g2", "g3", "u4", "u5", "u6", "c7"];
 
     let frequencies = [50.0, 100.0, 200.0, 250.0, 400.0, 500.0, 800.0, 1000.0];
@@ -148,23 +137,12 @@ fn main() {
             assert_eq!(payload[1] as usize, TOTAL_BITS, "unexpected bit count");
 
             let pkt = &buf[..n];
-            let bits_bytes = &pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES];
-            let mut wire_frame_bits = [false; TOTAL_BITS];
-            for (byte_idx, &byte) in bits_bytes.iter().enumerate() {
-                for bit_idx in 0..8 {
-                    wire_frame_bits[byte_idx * 8 + bit_idx] = (byte >> (7 - bit_idx)) & 1 == 1;
-                }
-            }
+            let bits_bytes: &[u8; FRAME_BYTES] =
+                pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES].try_into().unwrap();
+            let frame = decode_frame(bits_bytes);
 
-            let mut all_zero_error = true;
-            for &block in &blocks_to_check {
-                let (_data, distance) = decode_block(&wire_frame_bits, block);
-                if distance != 0 {
-                    all_zero_error = false;
-                }
-            }
             total_frames += 1;
-            if all_zero_error {
+            if frame.is_zero_error() {
                 total_zero_error_frames += 1;
                 zero_error_this_freq += 1;
             }
@@ -192,22 +170,12 @@ fn main() {
             assert_eq!(payload[1] as usize, TOTAL_BITS, "unexpected bit count");
 
             let pkt = &buf[..n];
-            let bits_bytes = &pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES];
-            let mut wire_frame_bits = [false; TOTAL_BITS];
-            for (byte_idx, &byte) in bits_bytes.iter().enumerate() {
-                for bit_idx in 0..8 {
-                    wire_frame_bits[byte_idx * 8 + bit_idx] = (byte >> (7 - bit_idx)) & 1 == 1;
-                }
-            }
-            let mut all_zero_error = true;
-            for &block in &blocks_to_check {
-                let (_data, distance) = decode_block(&wire_frame_bits, block);
-                if distance != 0 {
-                    all_zero_error = false;
-                }
-            }
+            let bits_bytes: &[u8; FRAME_BYTES] =
+                pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES].try_into().unwrap();
+            let frame = decode_frame(bits_bytes);
+
             total_frames += 1;
-            if all_zero_error {
+            if frame.is_zero_error() {
                 total_zero_error_frames += 1;
                 zero_error_this_file += 1;
             }

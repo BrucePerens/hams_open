@@ -49,22 +49,30 @@ fn main() {
     // Labels are named by this project's own capture convention: "dtx{on,off}_{silence,tone,noise1,
     // noise2,lowlevelnoise}" -- "silence"/"lowlevelnoise" are the confirmed-inactive content here;
     // "tone" is confirmed-active; "noise1"/"noise2" vary in actual level (not separately confirmed
-    // active/inactive by content name alone, reported for context only).
-    println!("{:22}  {:>8}  g1_reaches_high_cluster(>= {G1_HIGH_CLUSTER_FLOOR})", "label", "n");
+    // active/inactive by content name alone -- see the g0~3957-yet-g1-high overlap noted below).
+    println!(
+        "{:22}  {:>8}  {:>28}",
+        "label", "n", format!("frames_reaching_g1_high(>= {G1_HIGH_CLUSTER_FLOOR})")
+    );
     for (label, vals) in &by_label {
-        let reaches_high = vals.iter().any(|&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR);
-        println!("{label:22}  {:8}  {reaches_high}", vals.len());
+        let reaching = vals.iter().filter(|&&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR).count();
+        println!("{label:22}  {:8}  {reaching}/{}", vals.len(), vals.len());
     }
 
-    let inactive_labels = ["dtxon_silence", "dtxon_lowlevelnoise"];
-    let active_labels = ["dtxon_tone", "dtxoff_tone"];
-    let inactive_ever_high = inactive_labels.iter().any(|l| {
-        by_label.get(*l).is_some_and(|vals| vals.iter().any(|&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR))
-    });
-    let active_ever_high = active_labels.iter().any(|l| {
-        by_label.get(*l).is_some_and(|vals| vals.iter().any(|&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR))
-    });
+    let fraction_reaching_high = |labels: &[&str]| -> (usize, usize) {
+        labels.iter().fold((0, 0), |(hit, total), l| {
+            let Some(vals) = by_label.get(*l) else { return (hit, total) };
+            let h = vals.iter().filter(|&&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR).count();
+            (hit + h, total + vals.len())
+        })
+    };
+    let (inactive_hit, inactive_total) = fraction_reaching_high(&["dtxon_silence", "dtxon_lowlevelnoise"]);
+    let (active_hit, active_total) = fraction_reaching_high(&["dtxon_tone", "dtxoff_tone"]);
     println!(
-        "\nConfirmed-inactive labels ever reach the g1 high cluster: {inactive_ever_high}\nConfirmed-active labels ever reach the g1 high cluster: {active_ever_high}"
+        "\nConfirmed-inactive labels reaching the g1 high cluster: {inactive_hit}/{inactive_total} (expect 0/{inactive_total} -- inactive should never reach it)\nConfirmed-active labels reaching the g1 high cluster: {active_hit}/{active_total} (a real but partial signal, not every frame)"
+    );
+
+    println!(
+        "\nAmbiguous case worth a real ECMODE_OUT-ground-truthed re-capture: noise1's own g0 sits in\ng0's own \"quiet-looking\" range (>= 3841) while also reaching the g1 high cluster -- these\ncaptures predate PKT_CHANFMT, so whether the chip's own VOICE_ACTIVE was really 0 or 1 for\nthese specific frames is unknown, and settling it directly is the single most informative next\ncapture for the (g0, g1) joint-classifier question."
     );
 }

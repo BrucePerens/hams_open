@@ -6,9 +6,9 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
-## Executive summary (updated as of section 36) -- read this first
+## Executive summary (updated as of section 37) -- read this first
 
-This document has grown to 36 sections across a long, multi-session investigation. This summary
+This document has grown to 37 sections across a long, multi-session investigation. This summary
 exists so a reader (or a future session) doesn't have to read the whole thing to know where things
 stand. Every claim below is sourced to its own section; treat this summary as an index and status
 board, not a replacement for the underlying evidence.
@@ -19,7 +19,10 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
 - **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
   `examples/ambe_chip_validate_ambe_plus_2.rs`.
 - **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
-  `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29).
+  `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29). Consolidated
+  into one reusable entry point, `ambe::ratet27_frame::decode_frame`, tying the FEC layer together
+  with the confirmed DTMF/DTX interpretations rather than leaving every caller re-derive the same
+  8-block wire-bit extraction from scratch (§37).
 - **RATET(27) DTMF encoding** -- `ambe::ratet27_dtmf`, fully decoded and validated (§25).
 - **RATET(27) DTX-silence classification** -- `ambe::ratet27_dtx`, validated against real chip-
   reported `VOICE_ACTIVE` ground truth (not just stimulus inference), corrected once by its own test
@@ -2793,12 +2796,22 @@ session doesn't re-propose the same broadening without first re-running this sam
 cluster around 1200-1360, a "high" cluster around 3370-3420 -- e.g. section 36's own baseline).
 `examples/ratet27_analyze_g1_during_dtx_inactive.rs` checked the already-committed
 `dtx_silence_sweep.tsv` directly: across both confirmed-inactive content labels (`dtxon_silence`,
-`dtxon_lowlevelnoise`, 20 frames total), `g1` **never once** reached the high cluster, while both
-confirmed-active labels (`dtxon_tone`, `dtxoff_tone`, 20 frames total) reached it in every single
-frame. This is a real, suggestive pattern in a small sample (40 frames, 2 labels each side, not a
-systematic sweep) -- worth recording as a concrete lead for `(g0, g1)` jointly discriminating active
-from inactive better than `g0` alone, but not yet enough data to promote to a validated classifier the
-way `is_dtx_silence_frame` itself was.
+`dtxon_lowlevelnoise`, 20 frames total), `g1` **never once** reached the high cluster. Both
+confirmed-active labels (`dtxon_tone`, `dtxoff_tone`, 20 frames total) reached the high cluster in
+**6 of 10 frames each** -- not every frame; the other 4 of 10 landed in the same low cluster inactive
+frames also use. So the asymmetry is real (inactive frames never reach high; active frames reach it
+often but not always) but weaker than a clean per-frame split -- a per-frame classifier built on `g1`
+alone would still misclassify roughly 40% of active frames as "looks inactive." This is a real,
+suggestive pattern in a small sample (40 frames, 2 labels each side, not a systematic sweep) -- worth
+recording as a concrete lead for `(g0, g1)` jointly discriminating active from inactive better than
+`g0` alone, but not yet enough data to promote to a validated classifier the way
+`is_dtx_silence_frame` itself was. **One specific frame set would settle the ambiguous case
+directly**: `dtxoff_noise1` and `dtxon_noise1` both show `g0 ≈ 3957` (`g0`'s own "quiet-looking"
+range) while also reaching `g1`'s high cluster -- but these captures predate `PKT_CHANFMT`, so
+whether the chip's own `VOICE_ACTIVE` was actually `1` or `0` for these specific frames is unknown.
+Re-capturing `noise1`-equivalent content with `ECMODE_OUT` enabled would show directly whether `g1`
+correctly overrides `g0` here (real evidence for the joint classifier) or gives a false active (a
+real limit on it) -- the single most informative next frame to capture for this specific question.
 
 ## 36. A systematic `ECMODE_IN` bit sweep finds a genuine, previously untested feature at bit 8 -- and a clean independent reconfirmation of `TS_ENABLE` (bit 14)
 
@@ -2857,3 +2870,30 @@ named it as a real untried lever, not the start of a broader semantic hunt. `g1`
 noise-limited under every content-variation test already tried in this document; bit 8's discovery
 doesn't change that -- it opens one new, narrow, well-defined follow-up (what bit 8 does, precisely)
 rather than reopening the general semantic-identity question.
+
+## 37. Consolidating scattered validation code into one reusable decoder: `ambe::ratet27_frame`
+
+Every RATET(27) validation/probe tool in this project -- roughly 15 of them by this point -- repeated
+the same boilerplate: unpack an 18-byte channel-frame payload into 144 wire bits, then call
+`decode_block` once per block. This is fine for one-off probes, but it means "known and duplicated in
+software" was true block-by-block, scattered across examples, rather than as one coherent, reusable,
+tested decoder a real consumer could actually call.
+
+Added `ambe::ratet27_frame` with a single public entry point, `decode_frame(&[u8; 18]) ->
+Ratet27Frame`, ties together `ratet27_wire_format`/`ratet27_fec` (all 8 blocks plus each one's FEC
+distance) with the two confirmed interpretations already established elsewhere in this document:
+`Ratet27Frame::dtmf_digit()` (delegating to `ratet27_dtmf::decode_dtmf_digit`, section 25) and
+`Ratet27Frame::is_dtx_silence()` (delegating to `ratet27_dtx::is_dtx_silence_frame`, section 31/35).
+Deliberately scoped narrow, per direct advice: no `PKT_CHANFMT`/`ECMODE_OUT` parsing (that's packet-
+layer, not frame-layer), and no `VOICE_ACTIVE`-from-wire-bits classifier (section 35 already
+established that isn't reliably possible from `g0` alone).
+
+Tested against real captured frames, not synthetic ones: a real DTMF digit from `real_dtmf_sweep.tsv`
+(confirms `g0=4032`, `u4=80`, `g1=2944`, `g2`/`g3`/`u5`/`u6`/`c7=0`, `dtmf_digit() == Some((0,0))`) and
+a real confirmed-silence frame from `dtx_silence_sweep.tsv` (`dtxon_silence`, confirms `g0=3841`,
+`is_dtx_silence() == true`). Migrated one consumer, `examples/ambe_chip_validate_ratet27.rs` (the
+project's own PASS/FAIL chip-validation harness), to use `decode_frame`/`is_zero_error()` in place of
+its own repeated `decode_block` loop, and re-ran it live against the real chip: **identical PASS,
+920/920 frames zero-error**, confirming the consolidation preserves exact behavior rather than
+silently changing it. The other ~14 examples are deliberately left as-is -- migrating every one of
+them would be churn without new validation value, not a step toward "duplicated in software."

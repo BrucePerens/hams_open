@@ -139,6 +139,7 @@ pub mod quantize;
 pub mod ratet27_dtmf;
 pub mod ratet27_dtx;
 pub mod ratet27_fec;
+pub mod ratet27_frame;
 pub mod ratet27_wire_format;
 pub mod reconstruct;
 pub mod spectral_amplitude;
