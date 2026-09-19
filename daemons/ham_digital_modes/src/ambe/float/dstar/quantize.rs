@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn quantize_pitch_round_trips_within_one_index_of_every_real_b0() {
         for b0 in 0u32..126 {
-            let f0 = crate::ambe::float::dstar::decode::f0_from_b0(b0 as u32);
+            let f0 = crate::ambe::float::dstar::decode::f0_from_b0(b0);
             let w0 = f0 * 2.0 * std::f64::consts::PI;
             let recovered = quantize_pitch(w0);
             assert!(
