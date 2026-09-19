@@ -112,6 +112,19 @@ fn corr(a: &[f64], b: &[f64]) -> f64 {
     }
     c / (va.sqrt() * vb.sqrt()).max(1e-12)
 }
+/// Best envelope correlation over lags of up to +-4 frames (hop 20 samples), so alignment choices are judged by quality
+/// rather than by how much decoder delay happens to line up with the input.
+fn best_lag_corr(input: &[f64], decoded: &[f64]) -> (f64, i32) {
+    let e = |x: &[f64]| -> Vec<f64> { x.windows(FRAME_SAMPLES).step_by(20).map(|w| (w.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt()).collect() };
+    let (a, b) = (e(input), e(decoded));
+    let mut best = (f64::NEG_INFINITY, 0);
+    for lag in -32i32..=32 {
+        let (x, y): (Vec<f64>, Vec<f64>) = a.iter().enumerate().filter_map(|(i, &v)| { let j = i as i32 + lag; (j >= 0 && (j as usize) < b.len()).then(|| (v, b[j as usize])) }).unzip();
+        if x.len() > 50 { let c = corr(&x, &y); if c > best.0 { best = (c, lag * 20); } }
+    }
+    best
+}
+
 fn env(x: &[f64]) -> Vec<f64> {
     x.chunks_exact(FRAME_SAMPLES).map(|c| (c.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt()).collect()
 }
@@ -231,7 +244,11 @@ fn main() {
             eprintln!("offset {offset}: rms chip-dec {:.0} our-dec {:.0}; env corr chip-dec vs our-dec {:.4}", rms(&ours_chip), rms(&ours_ours), corr(&env(&ours_chip), &env(&ours_ours)));
         }
         println!(
-            "offset {offset:5}: frames {} both-speech {both}; b0 within 2: {:.2}, b1 equal: {:.2}, b2 within 2: {:.2}; envelope corr vs input: our-enc->chip-dec {:.4}, our-enc->our-dec {:.4}",
+            "offset {offset:5}: lag-searched corr our-enc->chip-dec {:.4} (lag {} samples), our-enc->our-dec {:.4} (lag {}); frames {} both-speech {both}; b0 within 2: {:.2}, b1 equal: {:.2}, b2 within 2: {:.2}; envelope corr vs input: our-enc->chip-dec {:.4}, our-enc->our-dec {:.4}",
+            best_lag_corr(&input, &ours_chip).0,
+            best_lag_corr(&input, &ours_chip).1,
+            best_lag_corr(&input, &ours_ours).0,
+            best_lag_corr(&input, &ours_ours).1,
             ours.len(),
             b0_close as f64 / both.max(1) as f64,
             b1_eq as f64 / both.max(1) as f64,

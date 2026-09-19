@@ -253,6 +253,39 @@ fn main() {
         }
         return;
     }
+    if std::env::args().nth(4).as_deref() == Some("ljump") {
+        // Pitch (harmonic count) jump: settle on the flat base, switch b0 to a very different value for 8 frames, then
+        // back. Frame RMS (dB) of chip and ours, to find how the chip's predictor handles a change of L.
+        let alt_b0: u32 = std::env::args().nth(5).and_then(|s| s.parse().ok()).unwrap_or(90);
+        let mut alt = base();
+        alt.b0 = alt_b0;
+        if std::env::var("UNVOICED").is_ok() {
+            alt.b1 = 0;
+        }
+        let (fb, fa) = (build_frame(&pack_raw_parameters(&base())), build_frame(&pack_raw_parameters(&alt)));
+        let mut seq = vec![fb; 12];
+        seq.extend(vec![fa; 8]);
+        seq.extend(vec![fb; 8]);
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let rms_db = |v: &[f64]| 10.0 * (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64 + 1e-9).log10();
+        let chip: Vec<f64> = seq.iter().map(|&f| rms_db(&one(&sock, &mut buf, f))).collect();
+        let mut dec = DStarSynthesisDecoder::new();
+        let ours: Vec<f64> = seq.iter().map(|&f| rms_db(&dec.decode_frame(f).unwrap_or([0.0; 160]))).collect();
+        println!("frame RMS dB, chip-minus-ours by frame (12 base, 8 alt b0={alt_b0}, 8 base):");
+        println!("{}", chip.iter().zip(&ours).map(|(c, o)| format!("{:+.1}", c - o)).collect::<Vec<_>>().join(" "));
+        println!("chip: {}", chip.iter().map(|c| format!("{c:.0}")).collect::<Vec<_>>().join(" "));
+        println!("ours: {}", ours.iter().map(|c| format!("{c:.0}")).collect::<Vec<_>>().join(" "));
+        return;
+    }
     if std::env::args().nth(4).as_deref() == Some("rho") {
         // Step response: settle on the flat base, switch b5 to a strong row for 8 frames, then back for 6. The chip's and our
         // per-frame level (dB, relative to the settled base) at each harmonic give the predictor's coefficient.

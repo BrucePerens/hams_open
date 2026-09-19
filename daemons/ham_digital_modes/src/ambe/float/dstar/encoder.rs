@@ -27,6 +27,10 @@ impl Encoder {
     /// the median difference is 0; at the default 0 the best alignment needs a one-frame shift.
     pub const CHIP_ALIGNED_CENTER_OFFSET: i32 = -80;
 
+    // The chip encoder parks every all-unvoiced frame on b0 = 34, but copying that convention lowers the envelope
+    // correlation of our stream through the chip's decoder (0.870 -> 0.865 at the best alignment, 0.819 -> 0.707 at
+    // -80) even though it raises pitch-index agreement (40% -> 60% within 2 steps), so it is deliberately not copied.
+
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);

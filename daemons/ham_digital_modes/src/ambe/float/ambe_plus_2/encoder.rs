@@ -40,6 +40,9 @@ impl Encoder {
         Self { analyzer: FrameAnalyzer::new(), mirror: DecoderState::initial(), analysis: AnalysisState::new() }
     }
 
+    // The chip encoder parks entirely unvoiced frames on b0 92-93 (119 for the quietest noise), but copying that lowers the
+    // envelope correlation of our stream through the chip's decoder (0.973 -> 0.955), so it is deliberately not copied.
+
     pub fn set_center_offset(&mut self, samples: i32) {
         self.analyzer.set_center_offset(samples);
     }
