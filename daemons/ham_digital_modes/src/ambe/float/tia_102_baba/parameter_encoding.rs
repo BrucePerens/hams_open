@@ -29,7 +29,9 @@ pub const FUNDAMENTAL_FREQUENCY_BITS: u32 = 8;
 /// checked by the test below against the pitch range this codec actually estimates over
 /// ([`super::pitch::candidate_pitches`]), not merely asserted.
 pub fn quantize_fundamental_frequency(omega0_hat: f64) -> u32 {
-    ((4.0 * PI / omega0_hat) - 39.0).floor() as u32
+    // The estimated period is a multiple of an eighth sample, so `4*pi/omega0` is often exactly an integer; the tiny
+    // bias keeps floating-point rounding from turning such a boundary into the next lower index.
+    ((4.0 * PI / omega0_hat) - 39.0 + 1e-9).floor() as u32
 }
 
 /// The real DVSI chip's pitch index is not Eq. 45/46's linear map: measured by feeding harmonic signals of known
@@ -120,6 +122,17 @@ pub fn encode_voicing_decisions(voiced: &[bool]) -> u32 {
 mod tests {
     use super::*;
     use crate::ambe::float::tia_102_baba::pitch::candidate_pitches;
+
+    /// Every eighth-sample period (the estimator's resolution) quantizes to the exact rational answer
+    /// `floor(2*P - 39)`, including the periods where `4*pi/omega0` is an exact integer.
+    #[test]
+    fn quantize_fundamental_frequency_is_exact_at_every_eighth_sample_period() {
+        for eighths in 168u32..=976 {
+            let period = eighths as f64 / 8.0;
+            let expected = eighths / 4 - 39; // floor(2 * eighths / 8 - 39)
+            assert_eq!(quantize_fundamental_frequency(2.0 * PI / period), expected, "period {period}");
+        }
+    }
 
     #[test]
     fn quantize_fundamental_frequency_matches_eq45_at_a_hand_computed_value() {

@@ -7,7 +7,7 @@
 //! Usage: `cargo run --release --features ambe_plus_2 --example ambe_chip_silence_probe -- <host:port>`
 
 use ham_digital_modes::ambe::float::ambe_plus_2::decode as a2;
-use ham_digital_modes::ambe::float::ambe_plus_2::interleave::{frame_to_interleaved, interleaved_to_frame};
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
 use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame as a2_parse;
 use ham_digital_modes::ambe::float::dstar::decode as ds;
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame as ds_wire_to_frame;
