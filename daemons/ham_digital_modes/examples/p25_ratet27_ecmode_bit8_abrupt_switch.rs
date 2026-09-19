@@ -9,6 +9,16 @@
 //! `VOICE_ACTIVE`'s own adaptive behavior in section 32), logging `g0` every frame around the switch.
 //! A multi-frame transient before settling supports AGC; an instant jump supports a static transform.
 //!
+//! **Superseded framing, kept for the historical record**: bit 8 is now confirmed as `CP_ENABLE`
+//! (Compand Enable) direct from DVSI's own manual (section 39), and it doesn't apply a gain curve at
+//! all -- it tells the chip the incoming samples' *format* (linear vs. µ-law/A-law). This tool always
+//! sent linear PCM, so with bit 8 set the chip was misinterpreting those samples as µ-law bytes, not
+//! adjusting gain on a correctly-understood signal. There was never an AGC (or any gain control) for
+//! this test to discriminate against a compander -- both the "quiet" and "loud" tones in this test
+//! were genuinely different, equally-mismatched inputs, not a real loudness change the chip was
+//! normalizing. The result (no transient) still stands as a real, correctly-measured observation; the
+//! AGC-vs-compander question it was designed to answer turned out to be the wrong question.
+//!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_bit8_abrupt_switch -- <host:port>`
 use ham_digital_modes::ambe::ratet27_frame::decode_frame;
 use std::net::UdpSocket;

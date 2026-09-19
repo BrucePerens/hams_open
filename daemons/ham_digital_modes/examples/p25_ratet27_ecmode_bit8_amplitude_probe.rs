@@ -33,6 +33,15 @@
 //! aliasing from under-sampling, not a real signal. `g0`'s own bit-8 column (a flat, unchanging
 //! constant regardless of contamination) is unaffected by either flaw and remains a real finding.
 //!
+//! **Bit 8 is now confirmed as `CP_ENABLE` (Compand Enable) directly from DVSI's own manual (section
+//! 39)** -- not merely narrowed to "companding" by this probe's own reasoning below. The mechanism is
+//! also corrected in section 39: `CP_ENABLE` doesn't apply a gain curve, it tells the chip the
+//! incoming samples' *format* (linear vs. µ-law/A-law); this tool always sent linear PCM, so setting
+//! it made the chip misinterpret those samples as µ-law bytes and expand them, producing a garbled,
+//! consistently-loud-reading signal rather than a genuine amplitude-dependent boost. The "does the
+//! effect scale with amplitude" reasoning immediately below predates that correction and is kept for
+//! its own historical record, not as the operative explanation.
+//!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_bit8_amplitude_probe -- <host:port>`
 use ham_digital_modes::ambe::ratet27_frame::decode_frame;
 use std::net::UdpSocket;

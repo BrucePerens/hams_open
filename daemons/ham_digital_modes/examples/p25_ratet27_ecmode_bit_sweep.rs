@@ -21,6 +21,10 @@
 //! (e.g. re-run the baseline stimulus for a full settling period) before reusing this tool with a
 //! stimulus that isn't simply "far from any known threshold," as this one was.
 //!
+//! **Bit 8 is `CP_ENABLE` (Compand Enable)**, confirmed directly from DVSI's own primary-source
+//! manual after this tool's own empirical discovery -- see `AMBE_CHIP_VALIDATION_FINDINGS.md`
+//! section 39 for the full manual citation and cross-check against every other bit this tool tested.
+//!
 //! Usage: `cargo run --release --example p25_ratet27_ecmode_bit_sweep -- <host:port>`
 use ham_digital_modes::ambe::ratet27_fec::decode_block;
 use ham_digital_modes::ambe::ratet27_wire_format::Block;

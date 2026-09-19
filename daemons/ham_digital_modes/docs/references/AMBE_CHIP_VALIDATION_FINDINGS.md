@@ -6,9 +6,9 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
-## Executive summary (updated as of section 38) -- read this first
+## Executive summary (updated as of section 39) -- read this first
 
-This document has grown to 38 sections across a long, multi-session investigation. This summary
+This document has grown to 39 sections across a long, multi-session investigation. This summary
 exists so a reader (or a future session) doesn't have to read the whole thing to know where things
 stand. Every claim below is sourced to its own section; treat this summary as an index and status
 board, not a replacement for the underlying evidence.
@@ -64,22 +64,20 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    §34's own re-derivation found the naive "`L_hat`-dependent step size" hypothesis does not hold
    cleanly (identical `L_hat` values produced very different dither behavior at two frequencies), so
    this remains a genuinely open question, not just an unfinished derivation.
-5. **A newly found, real `ECMODE_IN` feature at bit 8, narrowed but not conclusively identified**
-   (§36, §38) -- a systematic sweep of all 16 `ECMODE_IN` bits found bit 8 measurably shifts
-   `g1`/`g2`/`u4`/`u5`/`u6`/`c7` on identical content, and reliably produces `g0=1597` across three
-   independent tests. A temporal abrupt-switch test found **zero transient** across a 90x amplitude
-   jump (evidence against a converging AGC specifically), leaving a static transform or some other
-   fixed-output behavior as the remaining candidates -- genuinely open, not resolved. A first
-   characterization attempt's "smooth monotonic boost toward a saturated ceiling" framing was caught
-   as overclaiming (a tautology plus a contaminated baseline measurement) and corrected in the same
-   section; chasing the contamination down further than "assumed settling shortfall" found it wasn't
-   that at all -- a direct decay test showed `g0` reaching the correct baseline in ~3 frames, then
-   spontaneously jumping to a second stable value at a highly reproducible frame count across two
-   independent runs. That's a genuine, separate finding in its own right (§38): even `g0`, one of
-   this document's most reliable blocks, can be multi-modal for an unvarying pure tone over a long
-   enough window, not just the already-documented blocks/frequencies. Full certainty on bit 8's
-   identity would need DVSI's own bit-name table. Does not resolve `g3`'s own plateau (§21) -- `g3`
-   stayed within its already-known subspace under bit 8.
+5. **RESOLVED (§39) -- a newly found, real `ECMODE_IN` feature at bit 8**: a systematic sweep of all
+   16 `ECMODE_IN` bits (§36) found bit 8 measurably shifts `g1`/`g2`/`u4`/`u5`/`u6`/`c7` on identical
+   content, and a follow-up characterization (§38) found it reliably produces `g0=1597` with no AGC-
+   like transient, while also catching two of its own overclaims along the way (a tautological "boost
+   curve," and an assumed-but-unconfirmed settling-shortfall explanation for a contaminated baseline
+   measurement -- both corrected in §38, which also surfaced a genuine, separate finding: `g0` itself
+   can be multi-modal for an unvarying pure tone over a long enough window, not just the
+   already-documented blocks/frequencies). **Bit 8 is `CP_ENABLE` (Compand Enable), confirmed directly
+   from DVSI's own primary-source manual (§39)**, fully explaining rather than merely correlating with
+   every observed effect. `DCMODE_IN`/`DCMODE_OUT` are also now fully documented (§39) and confirmed
+   out of scope (decode-direction controls this investigation's encode-direction methodology was never
+   built to test). Does not resolve `g3`'s own plateau (§21) -- `g3` stayed within its already-known
+   subspace under bit 8, and the manual itself contains no internal codec parameter documentation that
+   could otherwise help.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -2997,3 +2995,95 @@ for literally the same unchanging input over a long enough observation window, a
 amplitude -- a genuine, reproducible finding in its own right, independent of what bit 8 turns out to
 be. `u4`'s own values under bit 8 are noisy in the same way `u4` is noisy everywhere else in this
 document (section 34) and are not treated as informative about bit 8's identity specifically.
+
+## 39. Bit 8 identified with certainty: `CP_ENABLE` (Compand Enable), direct from DVSI's own primary-source manual -- and every prior empirical bit result cross-checks clean
+
+DVSI's own "AMBE-3000R Vocoder Chip Users Manual" (Version 1.4, March 2013) is publicly archived
+(the D-STAR digital-voice community has referenced it for years for exactly this kind of
+interoperability work) at a well-known ham radio site; a copy is stored in `hams_com` (private repo)
+at `docs/references/dvsi_ambe/` for internal reference, with a plain-text extraction for grepping.
+Its own `Table 13 ECMODE_IN Flags` resolves bit 8, and every other `ECMODE_IN` bit this document has
+ever tested, directly and with certainty. Bit names only below (the manual's own longer prose
+descriptions are not reproduced here -- every page of the source document is marked confidential, and
+a full table is a more substantial excerpt than this document's established practice of quoting a
+single descriptive sentence; see this section's own closing note):
+
+| Bit | Name |
+|---|---|
+| 0-5 | Reserved |
+| 6 | `NS_ENABLE` (Noise Suppressor Enable) |
+| 7 | `CP_SELECT` (Compand Select: µ-law/A-law) |
+| **8** | **`CP_ENABLE` (Compand Enable)** |
+| 9 | `ES_ENABLE` (Echo Suppressor Enable) |
+| 10 | Reserved |
+| 11 | `DTX_ENABLE` (already confirmed empirically, §26/§28/§31) |
+| 12 | `TD_ENABLE` (Tone Detect Enable, on by default at reset -- already confirmed empirically, §25) |
+| 13 | `EC_ENABLE` (Echo Canceller Enable) |
+| 14 | `TS_ENABLE` (Tone Send Enable -- already confirmed empirically, §25) |
+| 15 | Reserved |
+
+The one sentence this document relies on directly, quoted from the manual's own `CP_ENABLE`
+description: **"If `CP_ENABLE=1`, then companding is enabled... If `CP_ENABLE=0`, then companding is
+disabled and all speech samples are 16-bit linear."**
+
+**Bit 8 is `CP_ENABLE` -- companding, exactly the candidate section 38's own reasoning favored, now
+confirmed rather than inferred.** Read precisely, `CP_ENABLE` doesn't apply a gain curve to the
+signal -- it tells the chip **what format the incoming samples are in**. This investigation always
+sent genuine 16-bit linear PCM. With `CP_ENABLE=1` set, the chip instead interpreted those same
+linear samples *as if they were µ-law-encoded bytes* and expanded them accordingly -- a format
+mismatch, not a loudness boost. Expanding ordinary linear PCM values through a µ-law decompression
+curve produces a garbled, essentially-arbitrary waveform whose apparent amplitude has little
+relationship to the original signal's real loudness, which explains the flat `g0=1597` reading far
+better than any gain-curve story: the chip wasn't reading a boosted-but-still-meaningful signal, it
+was reading noise-like content that happened to consistently read as loud. **This also means section
+38's own "evidence against a converging AGC" framing was answering the wrong question** -- there was
+never an AGC (or any gain control) to converge; the abrupt-switch test's "amplitude jump" was really
+a jump between two different genuinely-mismatched (format-confused) inputs, not a loudness change the
+chip was trying to normalize. The numeric specifics of why the misinterpreted signal lands at exactly
+`1597` remain unexplained and are not pursued further. **A real, separate, practical implication worth
+recording**: this also confirms `CP_ENABLE` (and the encoder-side/decoder-side pair `PKT_ECMODE`/
+`PKT_DCMODE` both expose it) is how this chip would be told to accept genuine µ-law/A-law-encoded
+samples directly, if a future real telephony interface ever needed to feed it audio in that format
+instead of linear PCM -- confirmed to actually take effect, not just documented as existing.
+
+**Every other empirically-tested `ECMODE_IN` bit in this document checks out clean against the
+manual, with zero contradictions**: `DTX_ENABLE` (11), `TD_ENABLE` (12, confirmed on-by-default), and
+`TS_ENABLE` (14) all match their manual descriptions and this document's own independently-derived
+empirical behavior exactly (§25/§26/§28/§31), and bits 6/7/9/10/13/15's real, confirmed no-effect
+result under a clean synthetic tone (§36) is now understood as the expected result for
+noise/echo-only or no-op reserved bits, not a mysterious null. This is a strong, independent
+cross-validation of this document's own empirical methodology: every bit this document tested and
+drew a conclusion about, using nothing but direct chip observation, turns out to match DVSI's own
+primary-source documentation exactly.
+
+**`DCMODE_IN`/`DCMODE_OUT` are also now fully documented** (the manual's own `Table 15`/`Table 16`,
+and `PKT_DCMODE`'s field ID, `0x06`, from `Table 37`) -- previously named in this document only as an
+existing-but-untested facility. `DCMODE_IN` controls decoder-side (synthesis-direction) features:
+`LOST_FRAME` (bit 2, forces a frame repeat), `CNI_FRAME` (bit 3, forces comfort-noise insertion),
+`CP_SELECT`/`CP_ENABLE` (bits 7/8, same companding semantics as the encoder side, mirrored for
+decoded PCM output), and `TS_ENABLE` (bit 14, forces tone synthesis) -- all decode-direction
+controls with no bearing on this document's own encode-direction (`SPEECH` packet in, `CHANNEL`
+packet out) methodology, and genuinely out of scope for the same reason `PKT_CHAND4`'s soft-decision
+decode mode already was (§21): testing them would need a decode/synthesis feedback loop (comparing
+synthesized PCM output) this investigation was never built to do, not more of the same technique.
+Recorded here as resolved-and-out-of-scope, not left as an open unknown.
+
+**The manual does not document the internal codec's own bit-level parameter semantics** (checked
+directly -- no mention of gain vectors, pitch, voicing, spectral amplitude, or excitation parameters
+anywhere in its text): it is purely an I/O/packet interface manual, not internal algorithm
+documentation. This confirms, rather than merely leaves open, that `g1`/`g2`/`u5`'s semantic
+identity, `u4`'s full semantic role, and `g3`'s real-world meaning genuinely cannot be resolved from
+any DVSI-published source this document has now checked -- they remain open for the reasons already
+stated in this document's own executive summary, not because the search for documentation was
+incomplete.
+
+**A note for Bruce, not a decision made silently**: the source manual is marked "DVSI CONFIDENTIAL
+PROPRIETARY" on every page, though it has been publicly archived and referenced by the D-STAR
+digital-voice community for years for exactly this kind of interoperability work, and prior sections
+of this document already quote short descriptive sentences from it. Storing the full PDF in
+`hams_com` (private repo) follows this project's own established convention for copyrighted
+reference material. This section keeps its quoting to bit names (factual, not copyrightable) and one
+descriptive sentence for `CP_ENABLE` specifically, deliberately lighter than reproducing the manual's
+own full table -- but the judgment of whether even that is the right amount to quote in this
+document (which is itself in the public `hams_open` repository) is Bruce's to make, not something to
+decide unilaterally. Flagged here, and in this round's `night_shift_history.md` entry, for his review.
