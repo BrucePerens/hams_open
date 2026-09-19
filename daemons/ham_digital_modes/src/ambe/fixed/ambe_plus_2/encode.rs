@@ -45,3 +45,23 @@ pub fn amplitude_field_q16(amplitude_q16: i64) -> u16 {
     let field = lo.1 as i64 * 65536 + t_q16 * (hi.1 - lo.1) as i64;
     ((field + 32768) >> 16) as u16
 }
+
+/// `b0` for a pitch period of `p8 / 8` samples: the integer port of the float `quantize_pitch` (nearest entry of
+/// the 120-entry `W0_TABLE`, compared in `omega0` Q32 radians/sample, `omega0 = 2*pi*8/p8`).
+pub fn quantize_pitch_p8(p8: u32) -> u32 {
+    let p8 = p8.max(1) as i64;
+    let target = (crate::ambe::fixed::dstar::encode::TWO_PI_Q32 * 8 + p8 / 2) / p8;
+    let mut best = (i64::MAX, 0usize);
+    for (i, &w) in super::tables_q16::W0_TABLE_Q32.iter().take(120).enumerate() {
+        let d = (w - target).abs();
+        if d < best.0 {
+            best = (d, i);
+        }
+    }
+    best.1 as u32
+}
+
+/// The table pitch of `b0` as the fixed decoder uses it: `(f0 in cycles/sample Q16.16, omega0 in radians/sample Q32)`.
+pub fn table_pitch(b0: u32) -> (i32, i64) {
+    (super::tables_q16::W0_TABLE_Q16_16[b0 as usize], super::tables_q16::W0_TABLE_Q32[b0 as usize])
+}
