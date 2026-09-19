@@ -207,6 +207,35 @@ pub fn unvoiced_scaling_coefficient() -> f64 {
 /// match that harmonic's own enhanced spectral amplitude. `voiced`/`spectral_amplitudes` are both
 /// 1-indexed by harmonic (`voiced[0]` is harmonic 1, i.e. `v_bar_1`/`M_bar_1(0)`) and must be the same
 /// length; returns `None` on a length mismatch.
+///
+/// **A real panic risk was investigated here and found unreachable from any real decode path, valid
+/// or corrupted -- documented rather than defended against, per this crate's own "don't add defensive
+/// code for something that can't happen" convention.** `bin_index` panics if `band_edge_b(l_hat,
+/// omega0_tilde).ceil()` reaches `128` for the top harmonic `l_hat`, i.e. whenever
+/// `(l_hat + 0.5) * omega0_tilde > pi`. This *is* reachable from a hand-constructed, physically
+/// invalid `(l_hat, omega0_tilde)` pair (the mistake a synthetic test made while building the
+/// fixed-point port's own orchestration tests, `l_hat=40` with `omega0_tilde` from `b0=90` -- see
+/// `night_shift_todo/high/unvoiced-spectrum-panic-on-invalid-l-hat-omega0-pair-a1c9e3f7.md` in
+/// hams_com for that history), but every real caller in this codebase gets `l_hat` from `voiced.len()`
+/// alone (this function never receives `l_hat` as its own separate argument), and every real
+/// production caller builds `voiced` with exactly `vuv::harmonics_count(omega0_tilde)` elements for
+/// the *same* `omega0_tilde` passed in -- `decode.rs`'s own `decode_parameters` (`let l_hat =
+/// harmonics_count(omega0_tilde);`, right after dequantizing the same `omega0_tilde`), and
+/// `SynthesisState::synthesize_repeated_frame`, which reuses a `(omega0_tilde, voiced, amplitudes)`
+/// tuple saved together from one real prior frame, never mixing a `voiced` from one frame with an
+/// `omega0_tilde` from another. `l_hat` is *never* decoded from its own independent bitfield.
+///
+/// That leaves exactly one question: does `harmonics_count`'s own formula ever produce an `l_hat` that
+/// violates the constraint for some `omega0_tilde` this decoder could actually derive? `b0`'s raw
+/// bitfield (`extract_fundamental_frequency_quantizer`, 6+2 bits) spans `0..=255` even under arbitrary
+/// bit corruption, but `decode.rs`'s own `MAX_VALID_B0` check (`b0 > 207` forces a repeat) rejects
+/// every value above `207` *before* `dequantize_fundamental_frequency`/`harmonics_count` are ever
+/// called -- so `0..=207` is the complete real domain, corrupted bitstreams included. Checked directly
+/// for all 208 values (`unvoiced_spectrum_band_edge_stays_in_range_for_every_valid_b0` below): the
+/// worst-case margin is `pi - (l_hat + 0.5) * omega0_tilde ~= 0.0915` rad at `b0=12`, comfortably
+/// positive, not a knife-edge that floating-point rounding could flip. This is a real, checked
+/// property (not merely an unexamined assumption), encoded as a permanent regression test rather than
+/// left as prose alone.
 // [@ANCHOR: unvoiced_spectrum]
 fn unvoiced_spectrum(
     noise: &NoiseState,
@@ -453,6 +482,46 @@ mod tests {
         let voiced = vec![false; 5];
         let amplitudes = vec![100.0; 6];
         assert!(unvoiced_spectrum(&noise, 0.1, &voiced, &amplitudes, 146.0).is_none());
+    }
+
+    /// The permanent regression check backing `unvoiced_spectrum`'s own doc comment: proves, rather
+    /// than merely asserts in prose, that no real decode path (valid or bit-corrupted) can ever pass
+    /// an `(l_hat, omega0_tilde)` pair into `unvoiced_spectrum` that panics `bin_index`.
+    ///
+    /// `decode.rs`'s own `l_hat = harmonics_count(omega0_tilde)` means the only inputs this crate's
+    /// decoder can ever produce are `omega0_tilde = dequantize_fundamental_frequency(b0)` for `b0` in
+    /// `0..=207` (`decode.rs`'s own `MAX_VALID_B0`, checked before `harmonics_count` is ever called;
+    /// `b0`'s raw 8-bit field spans `0..=255` even under arbitrary bit corruption, so `208..=255`
+    /// covers every value a corrupted frame could add, and all of those are already rejected as a
+    /// repeat before reaching this formula). This test sweeps the complete real domain (all 208 valid
+    /// `b0` values) and checks the actual geometric constraint `unvoiced_spectrum`'s own loop depends
+    /// on: the top harmonic's own upper band edge, after the same `.ceil()` the real code applies,
+    /// must stay within `bin_index`'s valid `-128..127` domain.
+    #[test]
+    fn unvoiced_spectrum_band_edge_stays_in_range_for_every_valid_b0() {
+        use crate::ambe::float::ratet27::parameter_encoding::dequantize_fundamental_frequency;
+        use crate::ambe::float::ratet27::vuv::harmonics_count;
+
+        const MAX_VALID_B0: u32 = 207; // Mirrors decode.rs's own private `MAX_VALID_B0` exactly.
+        let mut worst_margin = f64::INFINITY;
+        for b0 in 0..=MAX_VALID_B0 {
+            let omega0_tilde = dequantize_fundamental_frequency(b0);
+            let l_hat = harmonics_count(omega0_tilde);
+            let top_edge = band_edge_b(l_hat, omega0_tilde).ceil() as i32;
+            assert!(
+                (-128..=127).contains(&top_edge),
+                "b0={b0}: l_hat={l_hat}, omega0_tilde={omega0_tilde}, top_edge={top_edge} would panic bin_index"
+            );
+            let margin = PI - (l_hat as f64 + 0.5) * omega0_tilde;
+            worst_margin = worst_margin.min(margin);
+        }
+        // A real, comfortable margin (not a knife-edge floating-point rounding could flip) --
+        // asserted directly so a future change to `harmonics_count`'s own formula that erodes this
+        // margin gets caught here rather than only in a live decode panic.
+        assert!(
+            worst_margin > 0.05,
+            "worst-case margin against the bin_index panic shrank to {worst_margin}, investigate before trusting this is still unreachable"
+        );
     }
 
     #[test]
