@@ -6,6 +6,67 @@ codebase's own from-spec P25 AMBE codec (`src/ambe/`) a real ground truth to val
 the concrete configuration data needed to build a D-STAR mode. This document records what's been
 confirmed so far, what's still open, and exactly how to reproduce or continue the validation.
 
+## Executive summary (updated as of section 34) -- read this first
+
+This document has grown to 34 sections across a long, multi-session investigation. This summary
+exists so a reader (or a future session) doesn't have to read the whole thing to know where things
+stand. Every claim below is sourced to its own section; treat this summary as an index and status
+board, not a replacement for the underlying evidence.
+
+**Chip modes with real, tested, chip-validated software** (all pass live against the real chip,
+including real recorded speech, as of the latest re-run -- §16-17, §23, §25, §31):
+- **D-STAR** -- `ambe_dstar`, validated via `examples/ambe_chip_validate_dstar.rs`.
+- **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
+  `examples/ambe_chip_validate_ambe_plus_2.rs`.
+- **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
+  `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29).
+- **RATET(27) DTMF encoding** -- `ambe::ratet27_dtmf`, fully decoded and validated (§25).
+- **RATET(27) DTX-silence classification** -- `ambe::ratet27_dtx`, validated, corrected once by its
+  own test harness (§31).
+
+**What "known and duplicated in software" does *not* yet cover -- the real, current gaps**:
+1. **The semantic identity of most RATET(27) FEC sub-blocks.** `g0` alone is solidly confirmed as a
+   gain/energy-related quantizer (§23, independently re-confirmed settling-independent in §33).
+   `g1`/`g2` show real but weak, messy amplitude dependence that does *not* clean up with much
+   longer settling (§33) -- likely gain-vector-related but not identified to a specific coefficient.
+   `u4` shows a precise, real structural signature (a clean 2-state dither with an exact step of 53,
+   §34) and a separate, fully-confirmed DTMF-column role (§25), but its *ordinary-voice-mode*
+   semantic identity is still unknown. `u5` shows no clean signal under any test tried. `u6`'s
+   pitch-candidate hypothesis was tested rigorously and explicitly **retracted** (§30) -- it is
+   genuinely unstable across almost the entire tested frequency range. `c7`'s 2 of 7 bits are
+   pitch-related (from an earlier session); the other 5 show real but complex, possibly
+   waveform-shape-dependent signal (§24a). `g3`'s real 8-bit codeword space is fully implemented in
+   software (§29) with a documented internal structure (steps of exactly 1024, independently
+   replicated in §34), but *why* it's confined to 8 of its nominal 12 bits, and what it represents,
+   remains open.
+2. **A methodological complication discovered late (§32)**: `VOICE_ACTIVE` (and plausibly other
+   readings) is adaptive/history-dependent, not a fixed per-frame function -- it responds to
+   contrast with a slowly-adapting baseline. This was directly confirmed. Re-testing showed it does
+   **not** universally explain earlier instabilities: `g0`'s own finding held up unchanged under 6x
+   longer settling (§33), but `u6`'s instability persisted even under 500-frame settling (§30) --
+   so this is a real, partial explanation for *some* open items, not a master key to all of them.
+3. **DTX's own "background noise level" claim** (DVSI's own manual wording) -- a real classification
+   threshold was found and precisely located (§28), but no continuous level-tracking was confirmed
+   (§26).
+4. **The exact quantizer formula** for `g0`'s gain values, and for `u4`'s newly-found step-of-53
+   dither, are not yet reduced to closed-form expressions matching a specific textbook equation.
+
+**What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
+this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
+half-rate FEC/No-FEC). The remaining ~58 rates are other DVSI-proprietary AMBE/AMBE+/AMBE+2
+configurations not needed for any current ham use case, and were never attempted.
+
+**The single most important methodological result, worth internalizing before continuing this
+work** (§23): the exact bit-index-within-codeword permutation question that motivated much of the
+early FEC-layer work is **provably unsolvable by black-box relational bit-flip testing alone**, no
+matter how much data is gathered -- proven directly via a computational automorphism-invariance
+argument, not just suspected. The fix that actually worked was **direct GF(2) rank/basis derivation
+from real captured chip frames**, not more clever flip experiments. Any future semantic-layer work
+should default to this same technique (capture many real frames, derive structure directly) rather
+than re-attempting single-variable correlation sweeps, which this document's later sections (§30,
+§33) show have a real, demonstrated failure mode: apparent correlations that don't survive proper
+controls (same-condition pairs, long settling, varied stimulus content).
+
 ## 1. The chip's own rate table, confirmed against DVSI's own manual
 
 DVSI's official "USB-3000 Manual" (downloaded from https://www.dvsinc.com/dlapps/appsoft.shtml)
