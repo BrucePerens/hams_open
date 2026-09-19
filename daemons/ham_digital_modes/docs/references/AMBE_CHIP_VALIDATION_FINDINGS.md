@@ -22,10 +22,16 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
   8 captured frames each, cross-checked against the independent `TONE_FRAME` ground-truth bit as well
   as `b0`).
 - **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
-  `examples/ambe_chip_validate_ambe_plus_2.rs`. Ordinary speech and DTX-silence are fully validated;
-  **tone/DTMF frames are a real, documented gap** -- the chip genuinely detects them (confirmed via
-  `TONE_FRAME`, §40) but serializes them into the `Erasure` range instead of its own `Tone` range, and
-  no known field decodes the digit/frequency identity from those frames (item 6 below).
+  `examples/ambe_chip_validate_ambe_plus_2.rs`. Ordinary speech, DTX-silence, and tone/DTMF frames
+  (`ECMODE_IN`'s `TD_ENABLE` bit) are all now fully validated (§40) -- the chip genuinely detects a
+  tone/DTMF digit but serializes it into the `Erasure` range instead of its own spec-defined `Tone`
+  range, and the digit's own identity (and, for a plain single tone, its frequency) is fully
+  recoverable via DVSI's own documented `TONE_IDX` field (`AMBE-3000R` manual Table 103/104) --
+  `ambe_plus_2::decode::classify_b0`/`decode_tone_idx`/`dtmf_digit_from_tone_idx`, with its own
+  dedicated pass/fail validator, `examples/ambe_chip_validate_ambe_plus_2_dtmf.rs` (all 16 DTMF
+  digits plus 4 single tones, all 8 captured frames each, cross-checked against the independent
+  `TONE_FRAME` ground-truth bit as well as `b0`). A genuinely separate, still-open item: `TONE_IDX`'s
+  own `Call Progress` range (`0xA0`-`0xA2`) was never tested (item 6 below).
 - **RATET(27) P25 full-rate FEC/interleave layer, all 8 sub-blocks** -- `ambe::ratet27_wire_format` /
   `ambe::ratet27_fec`, validated via `examples/ambe_chip_validate_ratet27.rs` (§23, §29). Consolidated
   into one reusable entry point, `ambe::ratet27_frame::decode_frame`, tying the FEC layer together
@@ -98,18 +104,28 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    frames each, with D-STAR's own already-confirmed `Tone`/`b0=126` result serving as a positive
    control that the readback mechanism works correctly on this rate. **AMBE+2 half-rate's chip
    genuinely detects the tone -- this is not a detection failure -- it just doesn't serialize that
-   detection into `b0`'s documented `Tone` range the way D-STAR or the spec text describe.** Why, and
-   whether the detected tone's real content (frequency/digit identity) is recoverable from the
-   `Erasure` frame's own other bits at all, remain open -- `ambe_plus_2::decode::DequantizedFrame::
-   Tone`'s own already-disclosed gap (Annex J's tone-frame parameter table is transcribed, but the
-   bit-scatter locating that table's `ID` field within a real tone frame's 49-bit `d` was never
-   derived) would need to be resolved first, since Annex J's own `ID` space (0-254, with 128-163
-   individually tabulated as *not* following a simple row/column formula the way D-STAR's own
-   dual-tone table does) is a real, separate reverse-engineering task, not a quick follow-up. **Checked
-   against mbelib's own reference decoder, not just this codebase**: it doesn't decode this either --
-   `mbe_decodeAmbe2450Parms` returns immediately on `b0 ∈ {126,127}` without reading any payload bits,
-   and the caller synthesizes silence for it exactly like Erasure, so there is no existing reference
-   implementation to consult for the `ID` field's bit-scatter; deriving it would be original work.
+   detection into `b0`'s documented `Tone` range the way D-STAR or the spec text describe.**
+   **RESOLVED in full, later in §40, for both DTMF and single tones**: the detected tone's own
+   identity *is* fully recoverable from the `Erasure` frame's other bits -- and turns out to be
+   DVSI's own separately documented `TONE_IDX` field (`AMBE-3000R Vocoder Chip Users Manual` Table
+   103/104, a different document from the one that named `TONE_FRAME`), found first by direct bit
+   analysis of real captures and only afterward matched to the manual's own table. DTMF maps
+   `0x80 | nibble`; a single tone maps `round(f0/31.25Hz)` -- both confirmed exactly against real
+   captures (16 DTMF digits, 26 single-tone captures across 8 frequencies and 4 amplitudes) and
+   chip-validated live, 160/160 (`examples/ambe_chip_validate_ambe_plus_2_dtmf.rs`). **What remains
+   open is narrow and different from what was originally suspected**: `TONE_IDX`'s own `Call
+   Progress` range (`0xA0`-`0xA2`, `0xFF`) was never tested, and the frame's internal redundancy
+   structure (the field's high nibble is fully copied only twice, not four times, since a would-be
+   third copy's bits are shared with `b0`'s own marker requirement) has only been exercised by values
+   whose high nibble happens not to conflict. This is **not** the same question as Annex J's own
+   entirely separate, still-undecoded `Tone`-frame parameters (`b0=126/127`, a different document,
+   for a frame kind this rate's `TD_ENABLE` path was never observed to reach at all) --
+   `ambe_plus_2::decode::DequantizedFrame::Tone`'s own already-disclosed gap there stands unchanged.
+   **Checked against mbelib's own reference decoder, not just this codebase**: it doesn't decode
+   Annex J's own tone-frame content either -- `mbe_decodeAmbe2450Parms` returns immediately on
+   `b0 ∈ {126,127}` without reading any payload bits, and the caller synthesizes silence for it
+   exactly like Erasure, so there is no existing reference implementation to consult
+   for that field's bit-scatter; deriving it would be original work.
 
 **What is deliberately out of scope**: DVSI's chip supports roughly 64 total `RATET` rate indices;
 this investigation covers only the ones ham radio actually uses (D-STAR, P25 full-rate FEC, AMBE+2
@@ -3361,13 +3377,74 @@ against the raw chip output, using stimuli that vary the Annex J `ID` itself (si
 full 0-254 range, not just the 16 DTMF pairs already captured, which may all cluster in one narrow
 sub-range).
 
+### AMBE+2 half-rate's `Erasure` frames carry DVSI's own documented `TONE_IDX` field -- fully resolved for both DTMF and single tones
+
+The previous subsection left one question open: is the tone/DTMF identity that AMBE+2 half-rate's
+chip genuinely detects (confirmed via `TONE_FRAME`) recoverable from the `Erasure` frame's own other
+bits at all? Direct bit-level analysis of the correlation-scan tool's own 16 already-captured real
+DTMF hex frames (decoded to the 49-bit `d`, not the raw whitened bits) found a real, exact structure
+-- and only after finding it did a search of the AMBE-3000R chip's own separate primary-source
+manual (a different document from the USB-3000 manual and from Annex J's own transcribed tables)
+turn up that DVSI already names and tabulates this exact field. **Yes, fully, for both DTMF and
+single tones.**
+
+**The bit-level finding, before the manual was consulted**: every field of `d` besides one is either
+a hard constant or a separately-identified amplitude field. Across all 16 real captured DTMF digits
+(same fixed capture amplitude): `d[0..4)=1111` and `d[37..40)=000` (the already-known `b0=120`
+marker), `d[4..16)=0x0f38` (confirmed elsewhere to be an amplitude/gain field, not digit-dependent --
+it takes 4 different values across a 4-point amplitude sweep at one fixed frequency), `d[36..40)
+=0x8`, and `d[44..49)=0b10000` -- every one of these, on every one of the 16 digits, with zero
+exceptions. What varies is an 8-bit value serialized low-nibble-first and repeated with uneven
+redundancy: the low nibble appears four times (`d[16..20)`, `d[24..28)`, `d[32..36)`, `d[40..44)`),
+the high nibble appears cleanly only twice (`d[20..24)`, `d[28..32)` -- a third copy at `d[36..40)`
+is entangled with `b0`'s own marker bits, which force that range's low 3 bits to `0`).
+
+**Checked against DVSI's own `AMBE-3000R Vocoder Chip Users Manual` (Version 1.4, March 2013,
+Table 103 "TONE Field Format" / Table 104 "TONE Index Values", page 74) -- and it is exactly the
+documented `TONE_IDX` field** (Field ID `0x00` of a `TONE` field), which the manual itself describes
+as bidirectional: "Can specify the index of a desired tone **or identify the index of a detected or
+received tone**." `TD_ENABLE` triggers the second case: the encoder detects a tone in real input
+audio and reports its own `TONE_IDX` back through the channel bits. Table 104 tabulates two of its
+own ranges relevant here, specific to AMBE+2 half-rate's "Rate Index Values 33 to 61" column (the
+table's other column, for rate indices 0-32, uses a *different*, non-monotonic DTMF mapping not
+applicable to this rate):
+- **DTMF** (`0x80..=0x8F`): `0x80 | nibble`, where `nibble` is the digit's own standard
+  DTMF-as-4-bit-nibble value -- confirmed value-for-value against all 16 real digits.
+- **Single tone** (`0x05..=0x7A`): `index = round(f0 / 31.25 Hz)`, spanning 156.25-3812.5 Hz --
+  confirmed exactly against 26 real single-tone captures spanning 8 distinct frequencies (203-401
+  Hz) and 4 amplitudes, with zero exceptions.
+
+This is now implemented as `ambe_plus_2::decode::decode_tone_idx`/`dtmf_digit_from_tone_idx`
+(the former majority-votes the 4 low-nibble copies and requires the 2 unconstrained high-nibble
+copies to agree, returning `None` rather than a guess on disagreement -- tested directly against a
+synthetically corrupted real capture in each direction) and chip-validated live via
+`examples/ambe_chip_validate_ambe_plus_2_dtmf.rs`: **all 16 DTMF digits plus 4 representative single
+tones, all 8 captured frames each, 160/160 clean** -- `classify_b0=Erasure`, `TONE_FRAME=1`, and
+`decode_tone_idx` matching DVSI's own documented value, on every single frame. AMBE+2 half-rate now
+has the same fully chip-validated, fully decodable per-digit DTMF identification in software that
+RATET(27) and D-STAR already had, plus single-tone frequency identification neither of those two
+modes needed -- closing what had been the one remaining "no known field decodes it" gap in this
+document.
+
+**What this still leaves open, narrower than before**: `TONE_IDX`'s own `Call Progress` range
+(`0xA0` dial tone, `0xA1` ring tone, `0xA2` busy tone, `0xFF` inactive/invalid) was never tested --
+those higher-valued high nibbles (`0xA`) would be the first real test of whether the 3rd,
+`b0`-entangled high-nibble copy can even represent them (its low 3 bits are forced to `0` by `b0`'s
+own marker, and `0xA`'s low 3 bits are `010`, non-zero -- a real, as-yet-unobserved potential
+conflict). This is **not** the same open item as Annex J's own separate, still-undecoded `Tone`-frame
+parameters (`FrameKind::Tone`, `b0=126/127` -- a different table, in a different document, for a
+different, genuinely spec-defined frame kind this rate's `TD_ENABLE` path was never observed to
+reach).
+
 ### Cross-mode summary
 
 `ECMODE_IN` is now confirmed global across three structurally different rates (RATET(27), D-STAR,
 AMBE+2 half-rate) -- not just asserted from the manual's own wording, but independently verified with
-real on/off contrasts on two of the three. Two of the three rates now have chip-validated, fully
-decodable per-digit DTMF identification in software: RATET(27) via its already-documented `g0`/`u4`
-pair, and D-STAR via the tone frame's own separate `index` field (`128 + row + 4*col`, this section).
-AMBE+2 half-rate's equivalent, if one exists, remains undiscovered -- its `Erasure` frames visibly
-carry *some* per-digit information in the raw hex, but no known field decodes it (item 6 above).
-Software coverage claim updated accordingly in the executive summary.
+real on/off contrasts on two of the three. **All three rates now have chip-validated, fully decodable
+per-digit DTMF identification in software**: RATET(27) via its already-documented `g0`/`u4` pair,
+D-STAR via the tone frame's own separate `index` field (`128 + row + 4*col`, this section), and
+AMBE+2 half-rate via DVSI's own documented `TONE_IDX` field, serialized into its `Erasure` frames
+(this section, directly above) -- found by the same technique (direct analysis of real, varied
+captured chip frames) each time, with AMBE+2 half-rate's own case additionally matched afterward to
+a primary-source table once the bit structure was already known. Software coverage claim updated
+accordingly in the executive summary.

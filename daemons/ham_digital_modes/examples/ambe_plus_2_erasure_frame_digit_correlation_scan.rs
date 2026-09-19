@@ -21,6 +21,26 @@
 //! single best correlation coefficient out of many tested positions (multiple-comparisons risk with
 //! only 16 data points and dozens of window positions -- see `scan`'s own doc comment for the actual
 //! numbers).
+//!
+//! **Update, same section: the real field was found afterward** -- DVSI's own documented `TONE_IDX`
+//! field (`AMBE-3000R Vocoder Chip Users Manual` Table 103/104; see
+//! `ambe_plus_2::decode::decode_tone_idx`'s own doc comment for the full citation and bit layout),
+//! whose low nibble (`d[16..20)`, repeated four times) holds the digit's own DTMF value directly for
+//! this rate (`0x80 | nibble`). **Why this scan's own null result against `row`/`col` separately is
+//! explained, not contradicted, by that finding, and it is a real, useful correction to this scan's
+//! own methodology**: the scan tested the right bit region (`d[16..20)` sits inside several of the
+//! sliding 7-bit windows tried) but the wrong hypothesis class. For the 3x3 sub-block of digits
+//! 1-9 (`row`,`col` both 0-2), the nibble genuinely *is* `3*row + col + 1`, a clean linear relation
+//! Spearman would have caught -- but the DTMF keypad's own historical layout puts `A/B/C` in column
+//! 3 and `*/0/#/D` in row 3 at nibble values (`0xA-0xC`, `0xE/0x0/0xF/0xD`) that break that linear
+//! rule, and those outliers alone are enough to pull `n=16` Spearman well below any reasonable
+//! significance threshold. The lesson generalizes: **a monotone/linear correlation scan can miss a
+//! real field that is a lookup table rather than a formula** -- it is not evidence against running
+//! such scans in general (they found this project's own real Gray-coded pitch field and D-STAR's
+//! own linear tone index), only evidence that a null result here specifically warranted an
+//! exact-match search next (as used successfully elsewhere in this document), not a conclusion that
+//! no field existed. Left in place as a real, useful record of the exploratory step that came first,
+//! not superseded/deleted.
 use ham_digital_modes::ambe_plus_2::interleave::interleaved_to_frame;
 use ham_digital_modes::ambe_plus_2::parse_frame;
 

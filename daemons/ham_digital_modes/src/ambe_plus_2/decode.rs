@@ -56,12 +56,15 @@ pub enum FrameKind {
     /// `b0` 0-119: a real, voiced/unvoiced speech frame -- the common case.
     Speech,
     /// `b0` 120-123: a lost/erased frame per spec; no real parameters to decode. **Caveat, not just
-    /// spec text**: the real chip also emits `b0=120` for a genuinely *detected* tone/DTMF digit
-    /// under `TD_ENABLE` (confirmed via the independent `ECMODE_OUT`/`TONE_FRAME` ground-truth bit,
-    /// `AMBE_CHIP_VALIDATION_FINDINGS.md` section 40) instead of its own spec-defined `Tone` range
-    /// (126-127) -- a caller that treats every `Erasure` frame as "nothing real happened" will
-    /// silently drop real detected tones on this rate. There is currently no known field that
-    /// recovers the tone's identity from these frames (section 40's own open item).
+    /// spec text**: the real chip also emits `b0=120` specifically for a genuinely *detected*
+    /// tone/DTMF digit under `TD_ENABLE` (confirmed via the independent `ECMODE_OUT`/`TONE_FRAME`
+    /// ground-truth bit, `AMBE_CHIP_VALIDATION_FINDINGS.md` section 40) instead of its own
+    /// spec-defined `Tone` range (126-127) -- a caller that treats every `Erasure` frame as "nothing
+    /// real happened" will silently drop a real detected tone on this rate. **A DTMF digit's own
+    /// identity is fully recoverable from this sub-code**, via [`decode_tone_idx`] -- see that
+    /// function's own doc comment (section 40's own follow-up finding, resolving what was
+    /// originally an open item). `b0` 121-123 remain otherwise unexplored (never produced by any
+    /// stimulus tried so far; plausibly reserved for other erasure sub-conditions).
     Erasure,
     /// `b0` 124-125: silence, with mbelib's own fixed `L=14`, `w0 = 2*pi/32`, fully unvoiced.
     Silence,
@@ -77,6 +80,102 @@ pub fn classify_b0(b0: u32) -> FrameKind {
         120..=123 => FrameKind::Erasure,
         124..=125 => FrameKind::Silence,
         _ => FrameKind::Tone,
+    }
+}
+
+/// **DVSI's own documented `TONE_IDX` field (`AMBE-3000R Vocoder Chip Users Manual`, Version 1.4,
+/// March 2013, Table 103 "TONE Field Format" / Table 104 "TONE Index Values", page 74), found
+/// serialized directly inside `Erasure` (`b0=120`) frames** -- not Annex J's own separate,
+/// still-undecoded `Tone`-frame parameters (`FrameKind::Tone`, `b0=126/127`). The manual documents
+/// `TONE_IDX` (Field ID `0x00` of a `TONE` field) as usable in both directions: "Can specify the
+/// index of a desired tone **or identify the index of a detected or received tone**" -- exactly this
+/// case, where `TD_ENABLE` makes the encoder autonomously detect a tone in real input audio and
+/// report its own `TONE_IDX` back through the channel bits, discovered here by direct analysis of
+/// real captured chip output (section 40), not by reading the manual first -- the manual was
+/// consulted afterward, once the bit-level structure was already found, and turned out to name and
+/// tabulate exactly the field already recovered.
+///
+/// Every field of the 49-bit `d` besides `TONE_IDX` itself is either a hard constant (`b0`'s own
+/// marker, `d[20..24)`/`d[28..32)` at DTMF's own fixed high nibble, `d[36..40)` always `0`) or a
+/// separately-identified amplitude/gain field (`d[4..16)`, confirmed to track input amplitude, not
+/// digit identity) -- confirmed against all 16 real ITU-T Q.23 DTMF digits and 26 real single-tone
+/// captures spanning several frequencies and amplitudes, not a small or cherry-picked sample.
+///
+/// **The byte is serialized low-nibble-first, redundantly, not simply repeated verbatim**: the low
+/// nibble appears four times (`d[16..20)`, `d[24..28)`, `d[32..36)`, `d[40..44)`), while the high
+/// nibble reliably appears only twice (`d[20..24)`, `d[28..32)`) -- a third copy would fall at
+/// `d[36..40)`, but that range's low 3 bits are pinned to `0` by `b0=120`'s own marker requirement
+/// (`extract_raw_parameters`'s `b0 = (bits(d,0,4)<<3) | bits(d,37,3)`), so it can only carry a high
+/// nibble whose own low 3 bits are already `0` (true of every value tested here -- DTMF's `0x8` and
+/// every single-tone value tried, all `< 0x10` -- but not yet confirmed for a high-nibble value like
+/// a call-progress tone's `0xA0`/`0xA1`/`0xA2`, which would conflict). [`decode_tone_idx`] therefore
+/// only trusts the two unconstrained high-nibble copies, majority-votes the four low-nibble copies,
+/// and returns `None` rather than a guess if either check fails -- never a false positive on a
+/// corrupted or unrelated frame.
+///
+/// **Confirmed decoding both of `TONE_IDX`'s own documented ranges** (both specific to AMBE+2
+/// half-rate's own `RATET(33)`, in DVSI's own "Rate Index Values 33 to 61" column of Table 104 --
+/// the table's other column, for rate indices 0-32, uses a *different*, non-monotonic DTMF mapping
+/// not applicable here):
+/// - **DTMF** (`0x80..=0x8F`): `0x80 | nibble`, where `nibble` is the digit's own standard
+///   DTMF-as-4-bit-nibble value (`'0'->0x0`, `'1'..='9'->0x1..=0x9`, `'A'..='D'->0xA..=0xD`,
+///   `'*'->0xE`, `'#'->0xF`) -- see [`dtmf_digit_from_tone_idx`] for the row/column decode.
+///   Chip-validated live end to end, 128/128 (`examples/ambe_chip_validate_ambe_plus_2_dtmf.rs`).
+/// - **Single tone** (`0x05..=0x7A`): the table's own documented formula, `index = round(f0 / 31.25
+///   Hz)` (156.25 Hz to 3812.5 Hz in 31.25 Hz steps) -- confirmed against 26 real captures across 8
+///   distinct frequencies (203-401 Hz) and 4 amplitudes, exact match every time. Many single
+///   frequencies tried were *not* classified as a tone by the chip at all (ordinary `Speech`
+///   instead, `TONE_FRAME=0`) -- the chip's tone detector does not treat every possible frequency as
+///   detectable.
+///
+/// Not yet tested: `TONE_IDX`'s own `Call Progress` range (`0xA0` dial, `0xA1` ring, `0xA2` busy) and
+/// `0xFF` (inactive/invalid) -- a real, bounded follow-up, not chased here.
+pub fn decode_tone_idx(d: u64) -> Option<u8> {
+    let low_copies = [bits(d, 16, 4), bits(d, 24, 4), bits(d, 32, 4), bits(d, 40, 4)];
+    let mut low = 0u8;
+    for bit_idx in 0..4 {
+        let mask = 1u32 << (3 - bit_idx);
+        let ones = low_copies.iter().filter(|&&n| n & mask != 0).count();
+        if ones == 2 {
+            return None; // a genuine tie across the 4 copies -- don't guess.
+        }
+        if ones > 2 {
+            low |= 1u8 << (3 - bit_idx);
+        }
+    }
+    let high_copies = [bits(d, 20, 4), bits(d, 28, 4)];
+    if high_copies[0] != high_copies[1] {
+        return None; // the only two unconstrained copies disagree -- don't guess.
+    }
+    Some(((high_copies[0] as u8) << 4) | low)
+}
+
+/// Maps a [`decode_tone_idx`] DTMF-range result (`0x80..=0x8F`, AMBE+2 half-rate's own `RATET(33)`)
+/// to the `(row, column)` pair of DVSI's own DTMF keypad layout, matching `ambe::ratet27_dtmf`'s and
+/// `ambe_dstar::decode`'s own established convention: row 0-3 is 697/770/852/941 Hz, column 0-3 is
+/// 1209/1336/1477/1633 Hz. Returns `None` for any value outside `0x80..=0x8F`.
+pub fn dtmf_digit_from_tone_idx(tone_idx: u8) -> Option<(u8, u8)> {
+    if tone_idx & 0xF0 != 0x80 {
+        return None;
+    }
+    match tone_idx & 0x0F {
+        0x1 => Some((0, 0)),
+        0x2 => Some((0, 1)),
+        0x3 => Some((0, 2)),
+        0xA => Some((0, 3)),
+        0x4 => Some((1, 0)),
+        0x5 => Some((1, 1)),
+        0x6 => Some((1, 2)),
+        0xB => Some((1, 3)),
+        0x7 => Some((2, 0)),
+        0x8 => Some((2, 1)),
+        0x9 => Some((2, 2)),
+        0xC => Some((2, 3)),
+        0xE => Some((3, 0)),
+        0x0 => Some((3, 1)),
+        0xF => Some((3, 2)),
+        0xD => Some((3, 3)),
+        _ => unreachable!("nibble is masked to 4 bits"),
     }
 }
 
@@ -403,6 +502,139 @@ mod tests {
                     assert_eq!(r.b0, b0);
                 }
             }
+        }
+    }
+
+    /// Real chip captures, one per DTMF digit (RATET(33), `TD_ENABLE` on, `DTX_ENABLE` on --
+    /// `AMBE_CHIP_VALIDATION_FINDINGS.md` section 40's own probe run, the same 16 hex frames already
+    /// hardcoded in `examples/ambe_plus_2_erasure_frame_digit_correlation_scan.rs`). Every field of
+    /// `d` other than `TONE_IDX`'s own repeated copies is confirmed constant across all 16 (at this
+    /// fixed capture amplitude -- `d[4..16)` is a separately-identified amplitude field, not asserted
+    /// here as a universal constant) -- checked directly, not assumed -- so this test both confirms
+    /// the digit decode and pins the discovery that every other bit really is fixed.
+    const REAL_DTMF_CAPTURES: [(&str, &str, u8, u8); 16] = [
+        ("1", "e8cedbae008cd122c0", 0, 0),
+        ("2", "eacdeb8e20ad8702c0", 0, 1),
+        ("3", "eaeff9ae228d9322c0", 0, 2),
+        ("A", "ebefc98c01cf8702c0", 0, 3),
+        ("4", "cafee98c22b8e502c0", 1, 0),
+        ("5", "cadcfbac2098f122c0", 1, 1),
+        ("6", "c8dfcb8c00b9a702c0", 1, 2),
+        ("B", "ebcddbac03ef9322c0", 1, 3),
+        ("7", "c8fdd9ac0299b322c0", 2, 0),
+        ("8", "e9ceeb8c23cec502c0", 2, 1),
+        ("9", "e9ecf9ac21eed122c0", 2, 2),
+        ("C", "cbdccb8e03dae502c0", 2, 3),
+        ("*", "c9fde98e21dba702c0", 3, 0),
+        ("0", "e8ecc98e02acc502c0", 3, 1),
+        ("#", "c9dffbae23fbb322c0", 3, 2),
+        ("D", "cbfed9ae01faf122c0", 3, 3),
+    ];
+
+    /// Real chip captures of single (non-DTMF) tones (RATET(33), `TD_ENABLE` on -- the same probe
+    /// run's `examples/p25_ambe_plus_2_annex_j_tone_id_probe.rs` output, one representative `d` value
+    /// per distinct detected frequency). `f0_hz` is the stimulus frequency actually sent; `expected`
+    /// is `round(f0_hz / 31.25)`, DVSI's own documented single-tone formula (Table 104).
+    const REAL_SINGLE_TONE_CAPTURES: [(f64, u64, u8); 4] = [
+        (250.00, 0x1ff6101010100, 0x08),
+        (203.12, 0x1ff60c0c0c0c0, 0x06),
+        (395.85, 0x1ff61a1a1a1a0, 0x0d),
+        (351.56, 0x1ff6161616160, 0x0b),
+    ];
+
+    fn hex_to_wire(hex: &str) -> u128 {
+        let mut wire: u128 = 0;
+        for i in 0..9 {
+            let byte = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).unwrap();
+            wire = (wire << 8) | byte as u128;
+        }
+        wire
+    }
+
+    #[test]
+    fn real_chip_capture_dtmf_digits_decode_correctly_via_tone_idx() {
+        for (label, hex, row, col) in REAL_DTMF_CAPTURES {
+            let logical = super::super::interleave::interleaved_to_frame(hex_to_wire(hex));
+            let parsed = super::super::parse_frame(logical);
+            let raw = extract_raw_parameters(parsed.d);
+            assert_eq!(classify_b0(raw.b0), FrameKind::Erasure, "digit {label}: b0={}", raw.b0);
+            let tone_idx = decode_tone_idx(parsed.d).unwrap_or_else(|| panic!("digit {label}: decode_tone_idx returned None"));
+            assert_eq!(tone_idx & 0xF0, 0x80, "digit {label}: tone_idx=0x{tone_idx:x} not in DTMF range");
+            assert_eq!(
+                dtmf_digit_from_tone_idx(tone_idx),
+                Some((row, col)),
+                "digit {label}: tone_idx=0x{tone_idx:x}"
+            );
+            // Every field besides TONE_IDX's own copies is a confirmed hard constant across all 16
+            // real captures at this fixed amplitude -- assert it rather than merely note it.
+            assert_eq!(bits(parsed.d, 4, 12), 0x0f38, "digit {label}: amplitude field changed");
+            assert_eq!(bits(parsed.d, 36, 4), 0x8, "digit {label}: constrained 3rd high-nibble copy changed");
+            assert_eq!(bits(parsed.d, 44, 5), 0b10000, "digit {label}: tail changed");
+        }
+    }
+
+    #[test]
+    fn real_chip_capture_single_tones_decode_correctly_via_tone_idx() {
+        for (f0_hz, d, expected) in REAL_SINGLE_TONE_CAPTURES {
+            let raw = extract_raw_parameters(d);
+            assert_eq!(classify_b0(raw.b0), FrameKind::Erasure, "f0={f0_hz}: b0={}", raw.b0);
+            let tone_idx = decode_tone_idx(d).unwrap_or_else(|| panic!("f0={f0_hz}: decode_tone_idx returned None"));
+            assert_eq!(tone_idx, expected, "f0={f0_hz}: tone_idx=0x{tone_idx:x}");
+            assert_eq!(dtmf_digit_from_tone_idx(tone_idx), None, "f0={f0_hz}: not a DTMF value");
+        }
+    }
+
+    #[test]
+    fn decode_tone_idx_majority_votes_against_a_single_corrupted_low_nibble_copy() {
+        // Digit '5' (low nibble 0x5) with the second of its 4 repeated low-nibble copies corrupted
+        // to 0x0 -- majority vote across the other 3 correct copies must still recover 0x85.
+        let (_, hex, row, col) = REAL_DTMF_CAPTURES[5];
+        let logical = super::super::interleave::interleaved_to_frame(hex_to_wire(hex));
+        let parsed = super::super::parse_frame(logical);
+        let mut d = parsed.d;
+        let shift = 49 - 24 - 4;
+        d &= !(0xFu64 << shift); // zero out the second low-nibble copy (d[24..28))
+        let tone_idx = decode_tone_idx(d).expect("majority vote should still recover a value");
+        assert_eq!(dtmf_digit_from_tone_idx(tone_idx), Some((row, col)));
+    }
+
+    #[test]
+    fn decode_tone_idx_returns_none_when_the_two_high_nibble_copies_disagree() {
+        let (_, hex, _, _) = REAL_DTMF_CAPTURES[0];
+        let logical = super::super::interleave::interleaved_to_frame(hex_to_wire(hex));
+        let parsed = super::super::parse_frame(logical);
+        let mut d = parsed.d;
+        let shift = 49 - 28 - 4;
+        d ^= 0xFu64 << shift; // corrupt the second high-nibble copy (d[28..32)) so it disagrees
+        assert_eq!(decode_tone_idx(d), None);
+    }
+
+    #[test]
+    fn dtmf_digit_from_tone_idx_covers_all_16_values_with_the_standard_keypad_layout() {
+        let expected: [(u8, (u8, u8)); 16] = [
+            (0x80, (3, 1)),
+            (0x81, (0, 0)),
+            (0x82, (0, 1)),
+            (0x83, (0, 2)),
+            (0x84, (1, 0)),
+            (0x85, (1, 1)),
+            (0x86, (1, 2)),
+            (0x87, (2, 0)),
+            (0x88, (2, 1)),
+            (0x89, (2, 2)),
+            (0x8A, (0, 3)),
+            (0x8B, (1, 3)),
+            (0x8C, (2, 3)),
+            (0x8D, (3, 3)),
+            (0x8E, (3, 0)),
+            (0x8F, (3, 2)),
+        ];
+        for (tone_idx, pair) in expected {
+            assert_eq!(dtmf_digit_from_tone_idx(tone_idx), Some(pair), "tone_idx=0x{tone_idx:x}");
+        }
+        // Anything outside the DTMF sub-range must not be misread as a digit.
+        for outside in [0x05u8, 0x7A, 0xA0, 0xA1, 0xA2, 0xFF, 0x00, 0x90] {
+            assert_eq!(dtmf_digit_from_tone_idx(outside), None, "tone_idx=0x{outside:x}");
         }
     }
 }
