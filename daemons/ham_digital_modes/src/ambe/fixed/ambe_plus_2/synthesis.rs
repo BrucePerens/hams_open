@@ -59,7 +59,7 @@ impl AmbePlus2SynthesisDecoder {
         match dequantize(&raw, &mut self.dequant) {
             DequantizedFrame::Speech(p) => {
                 self.tone.reset();
-                self.synth.synthesize_speech(p.w0_q16, &p.voiced, &p.ml_q16, parsed.epsilon_c0, parsed.epsilon_c1)
+                self.synth.synthesize_speech(p.w0_q32, &p.voiced, &p.ml_q16, parsed.epsilon_c0, parsed.epsilon_c1)
             }
             DequantizedFrame::Erasure => self.synth.synthesize_repeat(),
             DequantizedFrame::Silence { .. } => Some(self.synth.synthesize_silence()),

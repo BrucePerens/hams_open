@@ -53,7 +53,7 @@ pub struct SynthesisState {
     s_e: i64,
     tau_m: i64,
     first_frame: bool,
-    last_final_amplitudes: Option<(i32, Vec<bool>, Vec<i32>)>,
+    last_final_amplitudes: Option<(i64, Vec<bool>, Vec<i32>)>,
     comfort_noise_seed: i64,
 }
 
@@ -94,7 +94,7 @@ impl SynthesisState {
     fn finalize_parameters(
         &mut self,
         reconstructed_amplitudes_q16: &[i32],
-        omega0_tilde_q16: i32,
+        omega0_tilde_q32: i64,
         decoded_voiced: &[bool],
         errors: &FrameErrorsQ16,
     ) -> Option<(Vec<bool>, Vec<i32>)> {
@@ -104,7 +104,7 @@ impl SynthesisState {
 
         // Section 8: spectral amplitude enhancement (Eq. 105-110).
         let r_m0 = energy_q16(reconstructed_amplitudes_q16);
-        let enhanced = enhance_spectral_amplitudes_q16(reconstructed_amplitudes_q16, omega0_tilde_q16);
+        let enhanced = enhance_spectral_amplitudes_q16(reconstructed_amplitudes_q16, omega0_tilde_q32);
 
         // Section 9: V/UV smoothing (Eq. 111-113) -- forcing uses the *enhanced*, not-yet-gamma_M-
         // scaled amplitude, per enhancement::smooth_voicing_decision_q16's own established contract.
@@ -127,7 +127,7 @@ impl SynthesisState {
             .collect();
 
         self.last_final_amplitudes = Some((
-            omega0_tilde_q16,
+            omega0_tilde_q32,
             smoothed_voiced.clone(),
             final_amplitudes.clone(),
         ));
@@ -139,7 +139,7 @@ impl SynthesisState {
     /// in `i64` rather than re-narrowed to `i32`.
     fn synthesize_core(
         &mut self,
-        omega0_tilde_q16: i32,
+        omega0_tilde_q32: i64,
         voiced: &[bool],
         final_amplitudes_q16: &[i32],
     ) -> Option<[i64; N]> {
@@ -150,10 +150,10 @@ impl SynthesisState {
 
         let s_uv = self
             .unvoiced
-            .synthesize(&self.noise, omega0_tilde_q16, voiced, final_amplitudes_q16)?;
+            .synthesize(&self.noise, omega0_tilde_q32, voiced, final_amplitudes_q16)?;
         let s_v = self
             .voiced
-            .synthesize(&self.noise, omega0_tilde_q16, voiced, final_amplitudes_q16)?;
+            .synthesize(&self.noise, omega0_tilde_q32, voiced, final_amplitudes_q16)?;
 
         let mut s = [0i64; N];
         for i in 0..N {
@@ -168,25 +168,25 @@ impl SynthesisState {
     pub fn synthesize_frame(
         &mut self,
         reconstructed_amplitudes_q16: &[i32],
-        omega0_tilde_q16: i32,
+        omega0_tilde_q32: i64,
         decoded_voiced: &[bool],
         errors: &FrameErrorsQ16,
     ) -> Option<[i64; N]> {
         let (voiced, final_amplitudes) = self.finalize_parameters(
             reconstructed_amplitudes_q16,
-            omega0_tilde_q16,
+            omega0_tilde_q32,
             decoded_voiced,
             errors,
         )?;
-        self.synthesize_core(omega0_tilde_q16, &voiced, &final_amplitudes)
+        self.synthesize_core(omega0_tilde_q32, &voiced, &final_amplitudes)
     }
 
     /// Synthesizes a *repeated* frame (section 7.7, Eq. 99-104) -- see the float sibling's own doc
     /// comment for the full rationale (`M_bar_l(0) = M_bar_l(-1)`, skipping enhancement and its own
     /// `S_E`/`tau_M` state updates entirely). Returns `None` if no real frame has run yet.
     pub fn synthesize_repeated_frame(&mut self) -> Option<[i64; N]> {
-        let (omega0_tilde_q16, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
-        self.synthesize_core(omega0_tilde_q16, &voiced, &final_amplitudes)
+        let (omega0_tilde_q32, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
+        self.synthesize_core(omega0_tilde_q32, &voiced, &final_amplitudes)
     }
 }
 

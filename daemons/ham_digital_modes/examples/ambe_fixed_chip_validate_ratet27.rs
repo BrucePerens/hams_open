@@ -264,10 +264,10 @@ fn main() {
                             // stage `tests/ambe_fixed_tia_102_baba_enhancement.rs`'s own realistic-but-
                             // synthetic sweep can't fully stand in for (it can't reproduce the exact
                             // amplitude *shapes* a real predictive decode stream produces).
-                            let omega0_q16 = (params.omega0_tilde * 65536.0).round() as i32;
+                            let omega0_q32 = (params.omega0_tilde * 4294967296.0).round() as i64;
                             let float_enhanced =
                                 enhance_spectral_amplitudes(&params.reconstructed_amplitudes, params.omega0_tilde);
-                            let fixed_enhanced = enhance_spectral_amplitudes_q16(&fixed_amplitudes, omega0_q16);
+                            let fixed_enhanced = enhance_spectral_amplitudes_q16(&fixed_amplitudes, omega0_q32);
                             if float_enhanced.len() == fixed_enhanced.len() {
                                 enh_frames_checked += 1;
                                 for (&float_e, &fixed_e_q16) in

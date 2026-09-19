@@ -54,6 +54,17 @@ fn main() {
 
     let b0_count = L_TABLE.len();
     print_1d("W0_TABLE_Q16_16", b0_count, (0..b0_count as u32).map(f0_from_b0));
+    // Wide pitch for synthesis: `w0 = 2*pi*f0` in Q32 radians/sample (see `voiced_synthesis`).
+    println!("pub const W0_TABLE_Q32: [i64; {b0_count}] = [");
+    for b0 in 0..b0_count as u32 {
+        print!("    {},", (f0_from_b0(b0) * 2.0 * std::f64::consts::PI * 4294967296.0).round() as i64);
+        if b0 % 4 == 3 {
+            println!();
+        }
+    }
+    println!();
+    println!("];");
+    println!();
     print_1d("DG_Q16_16", DG.len(), DG.iter().copied());
     print_2d::<3>("PRBA24_Q16_16", PRBA24.len(), PRBA24.iter().copied());
     print_2d::<4>("PRBA58_Q16_16", PRBA58.len(), PRBA58.iter().copied());

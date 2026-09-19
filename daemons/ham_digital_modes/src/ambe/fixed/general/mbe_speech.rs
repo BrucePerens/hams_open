@@ -82,6 +82,9 @@ impl MbeDecoderState {
 pub struct SpeechParameters {
     pub l: u32,
     pub w0_q16: i32,
+    /// `w0` at Q32 radians/sample (`2^32` per radian), the precision synthesis needs -- see
+    /// `voiced_synthesis`. `w0_q16` stays for everything that only needs Q16.16 (amplitude scaling).
+    pub w0_q32: i64,
     pub voiced: Vec<bool>,
     pub ml_q16: Vec<i32>,
 }
@@ -102,6 +105,7 @@ fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
 pub fn dequantize_speech(
     l: u32,
     w0_q16: i32,
+    w0_q32: i64,
     vuv_w0_q16: i32,
     raw: &RawSpeechParameters,
     tables: &SpeechTables,
@@ -250,5 +254,5 @@ pub fn dequantize_speech(
     state.log2_ml_q16 = log2_ml_q16.clone();
     state.gamma_q16 = gamma_q16;
 
-    SpeechParameters { l, w0_q16, voiced, ml_q16 }
+    SpeechParameters { l, w0_q16, w0_q32, voiced, ml_q16 }
 }

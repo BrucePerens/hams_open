@@ -40,7 +40,7 @@ impl MbeSynthesizer {
     /// mismatch.
     pub fn synthesize_speech(
         &mut self,
-        w0_q16: i32,
+        w0_q32: i64,
         voiced: &[bool],
         ml_q16: &[i32],
         epsilon_c0: u32,
@@ -51,7 +51,7 @@ impl MbeSynthesizer {
         }
         let errors = estimate_errors_q16(&[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0], self.error_rate_prev_q16);
         self.error_rate_prev_q16 = errors.rate_q16;
-        let frame = self.synthesis.synthesize_frame(&ml_q16[1..], w0_q16, &voiced[1..], &errors)?;
+        let frame = self.synthesis.synthesize_frame(&ml_q16[1..], w0_q32, &voiced[1..], &errors)?;
         Some(self.lift(frame))
     }
 

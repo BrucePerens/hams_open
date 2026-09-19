@@ -49,16 +49,15 @@ fn concat_snr(pairs: &[(Vec<f64>, Vec<f64>)]) -> f64 {
 }
 
 /// Measured (release build, 40 frames of `OSR_us_000_0010_8k.wav`, whose first ~1 s is quiet
-/// lead-in): the first frame agrees at 55.0 dB and per-frame SNR then ranges from about 17 to 66 dB
-/// (the frames that hold no voiced harmonics of significant level agree at 62-66 dB), 22.8 dB over the
-/// whole 40 frames. The multi-frame decline is *not* fixed-point synthesis arithmetic: see
-/// `speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic` below, which removes the
-/// pitch difference and recovers the 40 dB bar. The cause is the same as for TIA-102.BABA
-/// (`ambe_fixed_tia_102_baba_decode.rs`): the fixed decoder's pitch comes from a Q16.16 table (relative
-/// error up to ~0.1% at the lowest pitches), and a harmonic's phase accumulator multiplies that error
-/// by the harmonic number and integrates it every sample.
-const SPEECH_FIRST_FRAME_MIN_SNR_DB: f64 = 40.0;
-const SPEECH_40_FRAME_MIN_SNR_DB: f64 = 15.0;
+/// lead-in): the first frame agrees at 60.4 dB and the whole 40 frames at 56.5 dB. Before the fixed
+/// decoder carried its pitch at Q32 radians/sample (`W0_TABLE_Q32`) these were 56.5 dB and 23.0 dB:
+/// a Q16.16 pitch has ~0.1% relative error at the lowest pitches, and a harmonic's phase accumulator
+/// multiplies that error by the harmonic number and integrates it every sample, so the decline was
+/// pitch quantization, not synthesis arithmetic (see
+/// `speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic` below). The remaining gap is
+/// the shared Q16.16 amplitude/table arithmetic and the interpolated sine table.
+const SPEECH_FIRST_FRAME_MIN_SNR_DB: f64 = 50.0;
+const SPEECH_40_FRAME_MIN_SNR_DB: f64 = 45.0;
 
 #[test]
 fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
@@ -80,7 +79,7 @@ fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
     assert!(level_db.abs() < 1.0, "level differs by {level_db} dB");
 }
 
-/// Re-runs the float side with the *fixed* decoder's own (Q16.16-quantized) pitch substituted for its
+/// Re-runs the float side with the *fixed* decoder's own (Q32-quantized) pitch substituted for its
 /// exact one, everything else float. If the fixed synthesis were losing accuracy anywhere else
 /// (amplitudes, enhancement, voiced/unvoiced arithmetic) this comparison would still be low.
 #[test]
@@ -106,7 +105,7 @@ fn speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic() {
         else {
             panic!("speech test frames expected");
         };
-        let w0 = fp.w0_q16 as f64 / 65536.0;
+        let w0 = fp.w0_q32 as f64 / 4294967296.0;
         let pcm = synth.synthesize_speech(w0, &p.voiced, &p.ml, parsed.epsilon_c0, parsed.epsilon_c1).unwrap();
         reference.extend(pcm);
         test.extend(from_q16_i64(&fixed_pcm));

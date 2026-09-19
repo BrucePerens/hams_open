@@ -147,9 +147,11 @@ fn decode_frame_matches_float_across_several_real_frames_with_varying_pitch() {
 /// bits-to-PCM pipeline shows that neither `ambe_fixed_tia_102_baba_synthesis.rs` (fed already-decoded,
 /// already-omega0-matched parameters directly) nor `ambe_fixed_tia_102_baba_reconstruct.rs` (checking only
 /// per-value amplitude relative error in isolation) individually exercises. Measured directly
-/// (aggregate SNR by frame count, same nearby-`b0` sweep as the test above): 1: 45.7 dB, 2: 41.1 dB,
-/// 3: 40.3 dB, 4: 38.4 dB, 5: 36.1 dB, 8: 32.9 dB -- a real decline, but far gentler than the
-/// `~6 dB`-per-doubling signature `trig::PI_Q48` fixed.
+/// (aggregate SNR by frame count, same nearby-`b0` sweep as the test above): with a Q16.16 pitch
+/// this was 1: 45.7 dB, 2: 41.1 dB, 3: 40.3 dB, 4: 38.4 dB, 5: 36.1 dB, 8: 32.9 dB -- a real decline,
+/// but far gentler than the `~6 dB`-per-doubling signature `trig::PI_Q48` fixed. Carrying the pitch at
+/// Q32 radians/sample through synthesis (`OMEGA0_TILDE_Q32`) removes nearly all of it: 1 frame 82.9
+/// dB, 8 frames 73.1 dB.
 ///
 /// The cause is the omega0 quantization mismatch this file's own doc comment describes (float
 /// dequantizes `b0` to an exact `f64`, fixed via a Q16.16 table), compounding in `voiced_synthesis`'s
@@ -163,7 +165,7 @@ fn decode_frame_matches_float_across_several_real_frames_with_varying_pitch() {
 /// 50-53 dB, even improving slightly, from frame 1 through frame 8) rather than merely shrink.
 #[test]
 fn decode_frame_characterizes_multi_frame_decline_from_compounding_already_accepted_tolerances() {
-    const MULTI_FRAME_MIN_SNR_DB: f64 = 30.0;
+    const MULTI_FRAME_MIN_SNR_DB: f64 = 60.0;
     let b0_values = [50u32, 51, 50, 49, 50, 51, 50, 49];
 
     let mut float_decoder = FloatDecoderState::new();
@@ -178,6 +180,8 @@ fn decode_frame_characterizes_multi_frame_decline_from_compounding_already_accep
         fixed_pcm.extend(fixed_frame.iter().map(|&s| from_q16_i64(s)));
     }
     let snr = snr_db(&float_pcm, &fixed_pcm);
+    let first_frame = snr_db(&float_pcm[..160], &fixed_pcm[..160]);
+    eprintln!("tia-102-baba decode: first-frame SNR {first_frame:.1} dB, 8-frame SNR {snr:.1} dB");
     assert!(
         snr >= MULTI_FRAME_MIN_SNR_DB,
         "multi-frame decline got worse than the characterized rate: {snr} dB"
@@ -228,7 +232,7 @@ fn decode_frame_confirms_the_multi_frame_decline_is_from_omega0_quantization_not
         let iso_frame = float_synth_iso
             .synthesize_frame(
                 &float_params.reconstructed_amplitudes,
-                from_q16(fixed_params.omega0_tilde_q16),
+                fixed_params.omega0_tilde_q32 as f64 / 4294967296.0,
                 &float_params.voiced,
                 &float_params.errors,
             )

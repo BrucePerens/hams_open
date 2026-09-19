@@ -100,7 +100,7 @@ fn run_scenario(
         let float_frame = float_state.synthesize(&float_noise, omega0, voiced, amplitudes).unwrap();
         let amplitudes_q16: Vec<i32> = amplitudes.iter().map(|&a| to_q16(a)).collect();
         let fixed_frame = fixed_state
-            .synthesize(&fixed_noise, to_q16(omega0), voiced, &amplitudes_q16)
+            .synthesize(&fixed_noise, (omega0 * 4294967296.0).round() as i64, voiced, &amplitudes_q16)
             .unwrap();
         float_pcm.extend(float_frame.iter().copied());
         fixed_pcm.extend(fixed_frame.iter().map(|&s| s as f64 / 65536.0));
@@ -110,7 +110,11 @@ fn run_scenario(
 
 #[test]
 fn synthesize_matches_float_for_a_fully_unvoiced_steady_tone() {
-    let omega0 = 2.0 * std::f64::consts::PI / 100.0;
+    // Not `2*pi/100`: that fraction puts the l=12 upper and l=13 lower band edges exactly on the
+    // integer 32, where float's rounding noise (32.00000000000001) makes `ceil` give 33 while the
+    // near-exact Q32 fixed value gives 32 -- the floor/ceil boundary case documented for
+    // `partially_voiced_mix` below. A real dequantized pitch avoids it.
+    let omega0 = ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency(100);
     let voiced = vec![false; 16];
     let amplitudes: Vec<f64> = (1..=16).map(|i| 300.0 + 40.0 * i as f64).collect();
     let voiced_frames = vec![voiced.clone(); 4];
