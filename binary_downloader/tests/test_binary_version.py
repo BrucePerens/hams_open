@@ -298,15 +298,17 @@ class TestBinaryVersion(HamsTransactionCase):
         # Tests [@ANCHOR: binary_version_unlink]
         # Mirrors test_binary_manifest.py's own
         # test_19_unlink_privilege_escalation for binary.manifest --
-        # binary.version.unlink() runs the identical dedup-by-checksum
-        # logic before deleting the on-disk file.
+        # binary.version.unlink() runs the identical dedup logic before
+        # deleting the on-disk file. A version's file is named from
+        # (its manifest's name, checksum), so the record that still
+        # references it is another version of the SAME manifest.
         chksum = "shared_version_checksum"
-        self.env["binary.manifest"].create(
+        self.env["binary.version"].create(
             {
-                "name": "sharedbin",
-                "url": "https://example.com/sharedbin",
+                "manifest_id": self.manifest.id,
+                "version_number": "1.8",
+                "url": "https://example.com/v1.8",
                 "checksum": chksum,
-                "archive_type": "binary",
             }
         )
         version = self.env["binary.version"].create(
@@ -323,3 +325,31 @@ class TestBinaryVersion(HamsTransactionCase):
         del mock_unlink_file._ondelete
         version.unlink()
         mock_unlink_file.assert_not_called()
+
+    def test_unlink_ignores_a_differently_named_manifest_sharing_the_checksum(self):
+        # Tests [@ANCHOR: binary_version_unlink]
+        # A different-named manifest with the same checksum maps to a distinct file
+        # (the filename hash mixes in the name), so it must not keep this version's file.
+        chksum = "shared_version_checksum_other_name"
+        self.env["binary.manifest"].create(
+            {
+                "name": "sharedbin",
+                "url": "https://example.com/sharedbin",
+                "checksum": chksum,
+                "archive_type": "binary",
+            }
+        )
+        version = self.env["binary.version"].create(
+            {
+                "manifest_id": self.manifest.id,
+                "version_number": "1.9",
+                "url": "https://example.com/v1.9",
+                "checksum": chksum,
+            }
+        )
+        mock_unlink_file = self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._unlink_binary_file"
+        )
+        del mock_unlink_file._ondelete
+        version.unlink()
+        mock_unlink_file.assert_called_once_with("kopia", chksum)

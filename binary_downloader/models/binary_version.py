@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
+from collections import Counter
 import os
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
@@ -213,35 +214,15 @@ class BinaryVersion(models.Model):
 
     # [@ANCHOR: binary_version_unlink]
     def unlink(self):
-        checksums = [r.checksum for r in self if r.checksum]
-        checksum_counts = {}
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("binary_downloader.user_binary_downloader_service")
-        if checksums:
-            manifest_groups = self.env["binary.manifest"].with_user(svc_uid)._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
-            for checksum, count in manifest_groups:
-                checksum_counts[checksum] = count
-            version_groups = self.env["binary.version"].with_user(svc_uid)._read_group([("checksum", "in", checksums)], groupby=["checksum"], aggregates=["__count"])
-            for checksum, count in version_groups:
-                checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
+        mixin = self.env["binary_downloader.mixin"].with_user(svc_uid)
+        # Same per-file (name, checksum) counting as binary.manifest.unlink() -- see its comment
+        # and _count_binary_file_references. A version's file is named from its manifest's name.
+        keys = [(r.manifest_id.name, r.checksum) for r in self if r.manifest_id.name and r.checksum]
+        file_counts = mixin._count_binary_file_references(keys)
+        self_counts = Counter(keys)
 
-        # Bug-hunt fix, 2026-09-09: same batch-self-reference bug as
-        # binary.manifest.unlink() -- see its own comment for the full
-        # explanation. checksum_counts is a global, pre-deletion count that
-        # still includes every row in `self`; subtract `self`'s own
-        # per-checksum contribution so "still referenced" means referenced
-        # by something OTHER than what this very call is about to remove.
-        self_checksum_counts = {}
-        for record in self:
-            if record.checksum:
-                self_checksum_counts[record.checksum] = (
-                    self_checksum_counts.get(record.checksum, 0) + 1
-                )
-
-        for record in self:
-            if record.manifest_id.name and record.checksum:
-                remaining_external_refs = checksum_counts.get(
-                    record.checksum, 0
-                ) - self_checksum_counts.get(record.checksum, 0)
-                if remaining_external_refs <= 0:
-                    self.env["binary_downloader.mixin"].with_user(svc_uid)._unlink_binary_file(record.manifest_id.name, record.checksum)
+        for key in self_counts:
+            if file_counts[key] - self_counts[key] <= 0:
+                mixin._unlink_binary_file(*key)
         return super().unlink()

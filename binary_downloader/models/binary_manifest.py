@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
+from collections import Counter
 import os
 import shutil
 from odoo import models, fields, api, tools, _
@@ -183,51 +184,22 @@ class BinaryManifest(models.Model):
 
     # [@ANCHOR: binary_manifest_unlink]
     def unlink(self):
-        checksums = [r.checksum for r in self if r.checksum]
-        checksum_counts = {}
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "binary_downloader.user_binary_downloader_service"
         )
-        if checksums:
-            manifest_groups = self.env["binary.manifest"].with_user(svc_uid)._read_group(
-                [("checksum", "in", checksums)],
-                groupby=["checksum"],
-                aggregates=["__count"]
-            )
-            for checksum, count in manifest_groups:
-                checksum_counts[checksum] = count
+        mixin = self.env["binary_downloader.mixin"].with_user(svc_uid)
+        # The on-disk file is named from (name, checksum), so "still referenced elsewhere" is
+        # counted per (name, checksum) pair, never per checksum alone -- see
+        # _count_binary_file_references. The count is a global, pre-deletion count and so still
+        # includes every record in `self`; subtract how many of `self`'s own rows map to the same
+        # file, so unlinking several records that share one file in a SINGLE call (e.g. a
+        # multi-select delete) still removes it once nothing outside this call references it
+        # (bug-hunt fix, 2026-09-09).
+        keys = [(r.name, r.checksum) for r in self if r.name and r.checksum]
+        file_counts = mixin._count_binary_file_references(keys)
+        self_counts = Counter(keys)
 
-            version_groups = self.env["binary.version"].with_user(svc_uid)._read_group(
-                [("checksum", "in", checksums)],
-                groupby=["checksum"],
-                aggregates=["__count"]
-            )
-            for checksum, count in version_groups:
-                checksum_counts[checksum] = checksum_counts.get(checksum, 0) + count
-
-        # Bug-hunt fix, 2026-09-09: checksum_counts above is a GLOBAL count
-        # taken before any of `self` is actually removed, so it still
-        # includes every record in `self` itself. Unlinking two-or-more
-        # manifests/versions that share a checksum in the SAME call (e.g.
-        # selecting both rows in the UI and deleting them together) used to
-        # see count > 1 for every one of them and skip deletion of ALL of
-        # them, permanently leaking the on-disk file even though nothing
-        # outside this very unlink() call still references it. Subtract how
-        # many of `self`'s own rows share each checksum -- self-references
-        # are about to disappear, so they don't count towards "still
-        # referenced elsewhere."
-        self_checksum_counts = {}
-        for record in self:
-            if record.checksum:
-                self_checksum_counts[record.checksum] = (
-                    self_checksum_counts.get(record.checksum, 0) + 1
-                )
-
-        for record in self:
-            if record.name and record.checksum:
-                remaining_external_refs = checksum_counts.get(
-                    record.checksum, 0
-                ) - self_checksum_counts.get(record.checksum, 0)
-                if remaining_external_refs <= 0:
-                    self.env["binary_downloader.mixin"].with_user(svc_uid)._unlink_binary_file(record.name, record.checksum)
+        for key in self_counts:
+            if file_counts[key] - self_counts[key] <= 0:
+                mixin._unlink_binary_file(*key)
         return super().unlink()

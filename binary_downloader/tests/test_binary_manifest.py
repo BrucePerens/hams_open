@@ -662,9 +662,13 @@ class TestBinaryManifest(HamsTransactionCase):
             "archive_type": "binary",
         })
 
+        # Same name as the global record: the on-disk file is named from
+        # (name, checksum), so only a same-named record actually shares the file
+        # (a differently named record with the same checksum maps to a distinct
+        # file -- see test_19b).
         company_b_manifest = self.env["binary.manifest"].with_user(user_b).create({
-            "name": "companyb_bin",
-            "url": "https://example.com/companyb_bin",
+            "name": "globalbin",
+            "url": "https://example.com/globalbin",
             "checksum": chksum,
             "archive_type": "binary",
         })
@@ -682,6 +686,29 @@ class TestBinaryManifest(HamsTransactionCase):
         company_b_manifest.with_user(user_b).unlink()
 
         mock_unlink_file.assert_not_called()
+
+    def test_19b_unlink_ignores_a_differently_named_record_sharing_the_checksum(self):
+        # Tests [@ANCHOR: binary_manifest_unlink]
+        # The on-disk filename is derived from (name, checksum), so two differently named
+        # manifests that merely share a checksum map to two DISTINCT files. Deleting one must
+        # remove its own file instead of leaking it because of the other record.
+        chksum = "same_checksum_different_names_hash"
+        self.env["binary.manifest"].create({
+            "name": "other_named_bin",
+            "url": "https://example.com/other_named_bin",
+            "checksum": chksum,
+            "archive_type": "binary",
+        })
+        doomed = self.env["binary.manifest"].create({
+            "name": "doomed_named_bin",
+            "url": "https://example.com/doomed_named_bin",
+            "checksum": chksum,
+            "archive_type": "binary",
+        })
+        mock_unlink_file = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils.BinaryDownloaderMixin._unlink_binary_file")
+        del mock_unlink_file._ondelete
+        doomed.unlink()
+        mock_unlink_file.assert_called_once_with("doomed_named_bin", chksum)
 
     def test_20_unlink_deletes_the_real_file_when_the_checksum_is_not_shared(self):
         # Tests [@ANCHOR: binary_utils_unlink_binary_file]

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import hashlib
+from collections import Counter
 import logging
 import os
 import platform
@@ -394,6 +395,27 @@ class BinaryDownloaderMixin(models.AbstractModel):
         """Generates a stable, unique filename based on the binary name and its checksum."""
         identifier = hashlib.sha256(f"{cmd_name}_{checksum}".encode()).hexdigest()[:16]
         return f"{cmd_name}_{identifier}"
+
+    @api.model
+    def _count_binary_file_references(self, keys):
+        """Counts every binary.manifest / binary.version row that maps to the same on-disk file as
+        each `(cmd_name, checksum)` in `keys`. The filename is derived from BOTH the command name
+        and the checksum (`_get_target_filename`), so the dedup key must be the pair: two
+        differently named records that merely share a checksum point at two distinct files and must
+        not keep each other's file alive. A binary.version's cmd_name is its manifest's name.
+        Returns a Counter keyed by `(cmd_name, checksum)`."""
+        keys = {(name, checksum) for name, checksum in keys if name and checksum}
+        counts = Counter()
+        if not keys:
+            return counts
+        checksums = list({checksum for _name, checksum in keys})
+        manifests = self.env["binary.manifest"].search([("checksum", "in", checksums)])
+        versions = self.env["binary.version"].search([("checksum", "in", checksums)])
+        for manifest in manifests:
+            counts[(manifest.name, manifest.checksum)] += 1
+        for version in versions:
+            counts[(version.manifest_id.name, version.checksum)] += 1
+        return counts
 
     @api.model
     # [@ANCHOR: binary_utils_unlink_binary_file]
