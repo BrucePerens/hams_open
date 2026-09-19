@@ -238,6 +238,188 @@ fn main() {
         }
         return;
     }
+    if std::env::args().nth(4).as_deref() == Some("repeatstate") {
+        // Does a chip repeat (eps_c0 == 3 on an otherwise intact louder frame B) leave the predictor state untouched?
+        // Sequence: base x10, corrupted B (forced repeat) x1..3, then base x4. If the state were updated from B, the
+        // following base frames would show a loud excursion; ours (state untouched) will not.
+        use ham_digital_modes::ambe::float::dstar::decode::parse_frame;
+        let clean = build_frame(pack_raw_parameters(&base()));
+        let mut loud = base();
+        loud.b2 = (b2_mid + 14).min(63);
+        let loud_frame = build_frame(pack_raw_parameters(&loud));
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let rms_db = |v: &[f64]| 10.0 * (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64 + 1e-9).log10();
+        let clean_data = parse_frame(loud_frame).d;
+        // Find three C0 error patterns that give eps_c0 == 3 with the data intact.
+        let mut bad_frames = Vec::new();
+        'outer: for a in 49..72u32 {
+            for b in (a + 1)..72 {
+                for c in (b + 1)..72 {
+                    let f = loud_frame ^ (1u128 << a) ^ (1u128 << b) ^ (1u128 << c);
+                    let p = parse_frame(f);
+                    if p.epsilon_c0 == 3 && p.epsilon_c1 == 0 && p.d == clean_data {
+                        bad_frames.push(f);
+                        if bad_frames.len() == 3 {
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+        }
+        for repeats in 1..=3usize {
+            let mut seq = vec![clean; 10];
+            seq.extend(bad_frames[..repeats].iter().copied());
+            seq.extend(vec![clean; 4]);
+            let c: Vec<f64> = seq.iter().map(|&f| rms_db(&one(&sock, &mut buf, f))).collect();
+            println!("{repeats} repeated frame(s): chip dB relative to settled: {}", c[10..].iter().map(|x| format!("{:+.1}", x - c[9])).collect::<Vec<_>>().join(" "));
+        }
+        let mut seq = vec![clean; 10];
+        seq.extend(bad_frames.iter().copied());
+        seq.extend(vec![loud_frame; 1]);
+        seq.extend(vec![clean; 4]);
+        let c: Vec<f64> = seq.iter().map(|&f| rms_db(&one(&sock, &mut buf, f))).collect();
+        println!("3 repeats then clean B then base: {}", c[10..].iter().map(|x| format!("{:+.1}", x - c[9])).collect::<Vec<_>>().join(" "));
+        // Reference: the same clean B frames sent as real frames (state definitely updated).
+        let mut seq = vec![clean; 10];
+        seq.extend(vec![loud_frame; 1]);
+        seq.extend(vec![clean; 4]);
+        let c: Vec<f64> = seq.iter().map(|&f| rms_db(&one(&sock, &mut buf, f))).collect();
+        println!("reference: ONE clean B frame then base: {}", c[10..].iter().map(|x| format!("{:+.1}", x - c[9])).collect::<Vec<_>>().join(" "));
+        return;
+    }
+    if std::env::args().nth(4).as_deref() == Some("errclass") {
+        // How the chip decides to repeat: corrupt a distinctly LOUDER frame B (b2 raised) with k Golay-region bit errors after
+        // settling on the base frame. Chip level at the corrupted frame: ~base => repeated the previous parameters; ~clean B =>
+        // decoded B; anything else => decoded garbage. Tabulated against our own Golay error counts (eps_c0, eps_c1).
+        use ham_digital_modes::ambe::float::dstar::decode::parse_frame;
+        let clean = build_frame(pack_raw_parameters(&base()));
+        let mut loud = base();
+        loud.b2 = (b2_mid + 14).min(63);
+        let loud_frame = build_frame(pack_raw_parameters(&loud));
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let rms_db = |v: &[f64]| 10.0 * (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64 + 1e-9).log10();
+        // Reference levels: settled base, and the frame right after switching to clean B.
+        let mut seq = vec![clean; 10];
+        seq.push(loud_frame);
+        let lv: Vec<f64> = seq.iter().map(|&f| rms_db(&one(&sock, &mut buf, f))).collect();
+        let (base_db, loud_db) = (lv[9], lv[10]);
+        println!("base {base_db:.1} dB, clean louder frame {loud_db:.1} dB");
+        let mut seed = 0x0dd_ba11_5eedu64;
+        let mut rnd = |n: u64| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) % n
+        };
+        let mut table: std::collections::BTreeMap<(u32, u32, bool, &'static str), usize> = Default::default();
+        let clean_data = parse_frame(loud_frame).d;
+        for k in 0..=9usize {
+            for _ in 0..24 {
+                let mut positions: Vec<u32> = Vec::new();
+                while positions.len() < k {
+                    let p = if rnd(2) == 0 { 49 + rnd(23) as u32 } else { 25 + rnd(23) as u32 };
+                    if !positions.contains(&p) {
+                        positions.push(p);
+                    }
+                }
+                let bad = positions.iter().fold(loud_frame, |f, &p| f ^ (1u128 << p));
+                let parsed = parse_frame(bad);
+                let mut seq = vec![clean; 10];
+                seq.push(bad);
+                seq.extend(vec![clean; 2]);
+                let c: Vec<f64> = seq.iter().map(|&f| rms_db(&one(&sock, &mut buf, f))).collect();
+                let d = c[10] - base_db;
+                let class = if d.abs() < 2.5 { "repeat" } else if (c[10] - loud_db).abs() < 2.5 { "decoded-B" } else { "garbage" };
+                *table.entry((parsed.epsilon_c0, parsed.epsilon_c1, parsed.d == clean_data, class)).or_default() += 1;
+            }
+        }
+        println!("eps_c0 eps_c1 data_intact class : count");
+        for ((e0, e1, ok, class), n) in &table {
+            println!("{e0} {e1} {ok} {class} : {n}");
+        }
+        return;
+    }
+    if std::env::args().nth(4).as_deref() == Some("errs") {
+        // Corrupted-frame handling. Settle on the base frame, inject `k` bit errors into the Golay-protected part (C0 and C1)
+        // of one frame, then send clean frames. Prints, per k and trial, the frame RMS (dB) of the corrupted frame and the
+        // next two frames relative to the settled level, for the chip and for ours. Then a burst of 6 consecutive corrupted
+        // frames (mbelib: repeat 3 times, then mute).
+        let clean = build_frame(pack_raw_parameters(&base()));
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let rms_db = |v: &[f64]| 10.0 * (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64 + 1e-9).log10();
+        let mut seed = 0x1234_5678_9abc_def0u64;
+        let mut rnd = |n: u64| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) % n
+        };
+        let corrupt = |frame: u128, k: usize, rnd: &mut dyn FnMut(u64) -> u64| -> u128 {
+            let mut positions: Vec<u32> = Vec::new();
+            while positions.len() < k {
+                // Golay(23,12) codeword bits of C0 (frame bits 49..71) and C1 (bits 25..47).
+                let p = if rnd(2) == 0 { 49 + rnd(23) as u32 } else { 25 + rnd(23) as u32 };
+                if !positions.contains(&p) {
+                    positions.push(p);
+                }
+            }
+            positions.iter().fold(frame, |f, &p| f ^ (1u128 << p))
+        };
+        let run = |seq: &[u128], sock: &UdpSocket, buf: &mut [u8; 1024]| -> (Vec<f64>, Vec<f64>) {
+            let chip: Vec<f64> = seq.iter().map(|&f| rms_db(&one(sock, buf, f))).collect();
+            // Ours with the chip-compatible error policy (repeat when eps_c0 >= 3, never mute).
+            let mut dec = DStarSynthesisDecoder::new().with_error_policy(ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::ChipCompatible);
+            let ours: Vec<f64> = seq.iter().map(|&f| rms_db(&dec.decode_frame(f).unwrap_or([0.0; 160]))).collect();
+            (chip, ours)
+        };
+        println!("single corrupted frame: dB relative to the settled level (corrupted frame, next, next+1); chip | ours");
+        for k in 0..=8usize {
+            for trial in 0..3 {
+                let bad = corrupt(clean, k, &mut rnd);
+                let mut seq = vec![clean; 10];
+                seq.push(bad);
+                seq.extend(vec![clean; 2]);
+                let (c, o) = run(&seq, &sock, &mut buf);
+                let (cb, ob) = (c[9], o[9]);
+                println!("k={k} trial {trial}: chip {:+.1} {:+.1} {:+.1} | ours {:+.1} {:+.1} {:+.1}", c[10] - cb, c[11] - cb, c[12] - cb, o[10] - ob, o[11] - ob, o[12] - ob);
+            }
+        }
+        println!("burst of 6 corrupted frames with k=8 errors, then 3 clean: dB relative to settled");
+        for trial in 0..3 {
+            let mut seq = vec![clean; 10];
+            for _ in 0..6 {
+                seq.push(corrupt(clean, 8, &mut rnd));
+            }
+            seq.extend(vec![clean; 3]);
+            let (c, o) = run(&seq, &sock, &mut buf);
+            let (cb, ob) = (c[9], o[9]);
+            println!("trial {trial}: chip {} | ours {}", c[10..].iter().map(|x| format!("{:+.0}", x - cb)).collect::<Vec<_>>().join(" "), o[10..].iter().map(|x| format!("{:+.0}", x - ob)).collect::<Vec<_>>().join(" "));
+        }
+        return;
+    }
     if std::env::args().nth(4).as_deref() == Some("ljump") {
         // Pitch (harmonic count) jump: settle on the flat base, switch b0 to a very different value for 8 frames, then
         // back. Frame RMS (dB) of chip and ours, to find how the chip's predictor handles a change of L.

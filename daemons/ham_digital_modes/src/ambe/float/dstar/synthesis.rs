@@ -3,6 +3,7 @@
 //! [`super::super::mbe_synthesis::MbeSynthesizer`]. Tone frames (DTMF / single tone) are recognized
 //! by `dequantize` and synthesized as sinusoids via [`ToneSynthesizer`].
 
+use crate::ambe::float::mbe_synthesis::{BadFrameAction, ErrorPolicy};
 use super::decode::{
     classify_b0, classify_tone_index, dequantize, dtmf_digit_from_tone_index, extract_raw_parameters, parse_frame,
     DStarDecoderState, DequantizedFrame, FrameKind, ToneKind,
@@ -17,6 +18,7 @@ pub struct DStarSynthesisDecoder {
     tone: ToneSynthesizer,
     /// Consecutive frames repeated because of channel errors (mbelib's `repeat`).
     repeats: u32,
+    error_policy: ErrorPolicy,
 }
 
 impl DStarSynthesisDecoder {
@@ -26,7 +28,14 @@ impl DStarSynthesisDecoder {
             synth: MbeSynthesizer::new(),
             tone: ToneSynthesizer::new(),
             repeats: 0,
+            error_policy: ErrorPolicy::Clean,
         }
+    }
+
+    /// Selects how channel errors are handled (see [`ErrorPolicy`]); the default is the clean policy.
+    pub fn with_error_policy(mut self, policy: ErrorPolicy) -> Self {
+        self.error_policy = policy;
+        self
     }
 
     /// Decodes one logical 72-bit frame (see `interleave::wire_bytes_to_frame`) into 20 ms of PCM.
@@ -36,16 +45,20 @@ impl DStarSynthesisDecoder {
         // reuses the previous frame's parameters without touching the predictor state, and after 3 such repeats in a
         // row the decoder mutes (silence) and reinitializes.
         let is_speech = classify_b0(extract_raw_parameters(parsed.d).b0) == FrameKind::Speech;
-        if is_speech && parsed.epsilon_c0 + parsed.epsilon_c1 > 3 {
+        if is_speech && self.error_policy.is_bad(parsed.epsilon_c0, parsed.epsilon_c1) {
             self.repeats += 1;
-            if self.repeats <= 3 {
-                return self.synth.synthesize_repeat();
+            match self.error_policy.bad_frame_action(self.repeats) {
+                BadFrameAction::Repeat => return self.synth.synthesize_repeat(),
+                BadFrameAction::Mute => {
+                    self.dequant = DStarDecoderState::initial();
+                    self.synth = MbeSynthesizer::new();
+                    return Some(self.synth.synthesize_silence());
+                }
+                BadFrameAction::Decode => {}
             }
-            self.dequant = DStarDecoderState::initial();
-            self.synth = MbeSynthesizer::new();
-            return Some(self.synth.synthesize_silence());
+        } else {
+            self.repeats = 0;
         }
-        self.repeats = 0;
         match dequantize(parsed.d, &mut self.dequant) {
             DequantizedFrame::Speech(p) => {
                 self.tone.reset();

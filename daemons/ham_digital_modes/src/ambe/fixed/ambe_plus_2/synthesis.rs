@@ -6,6 +6,7 @@
 //! [`ToneSynthesizer`], and the mbelib bad-frame policy matches the float decoder. Output is
 //! `[i64; N]` Q16.16 PCM.
 
+use crate::ambe::float::mbe_synthesis::{BadFrameAction, ErrorPolicy};
 use super::decode::{
     classify_b0, classify_tone_idx, decode_tone_idx, dequantize, extract_raw_parameters, CallProgressTone,
     DequantizedFrame, ToneIdentity,
@@ -29,6 +30,7 @@ pub struct AmbePlus2SynthesisDecoder {
     tone: ToneSynthesizer,
     /// Consecutive frames repeated because of channel errors (mbelib's `repeat`).
     repeats: u32,
+    error_policy: ErrorPolicy,
 }
 
 impl AmbePlus2SynthesisDecoder {
@@ -38,7 +40,14 @@ impl AmbePlus2SynthesisDecoder {
             synth: MbeSynthesizer::new(),
             tone: ToneSynthesizer::new(),
             repeats: 0,
+            error_policy: ErrorPolicy::Clean,
         }
+    }
+
+    /// Selects how channel errors are handled (see [`ErrorPolicy`]); the default is the clean policy.
+    pub fn with_error_policy(mut self, policy: ErrorPolicy) -> Self {
+        self.error_policy = policy;
+        self
     }
 
     /// Decodes one logical 72-bit frame (see the float `interleave::interleaved_to_frame`) into
@@ -46,16 +55,20 @@ impl AmbePlus2SynthesisDecoder {
     pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[i64; N]> {
         let parsed = parse_frame(logical_frame);
         let raw = extract_raw_parameters(parsed.d);
-        if classify_b0(raw.b0) == FrameKind::Speech && parsed.epsilon_c0 + parsed.epsilon_c1 > 3 {
+        if classify_b0(raw.b0) == FrameKind::Speech && self.error_policy.is_bad(parsed.epsilon_c0, parsed.epsilon_c1) {
             self.repeats += 1;
-            if self.repeats <= 3 {
-                return self.synth.synthesize_repeat();
+            match self.error_policy.bad_frame_action(self.repeats) {
+                BadFrameAction::Repeat => return self.synth.synthesize_repeat(),
+                BadFrameAction::Mute => {
+                    self.dequant = MbeDecoderState::initial();
+                    self.synth = MbeSynthesizer::new();
+                    return Some(self.synth.synthesize_silence());
+                }
+                BadFrameAction::Decode => {}
             }
-            self.dequant = MbeDecoderState::initial();
-            self.synth = MbeSynthesizer::new();
-            return Some(self.synth.synthesize_silence());
+        } else {
+            self.repeats = 0;
         }
-        self.repeats = 0;
         match dequantize(&raw, &mut self.dequant) {
             DequantizedFrame::Speech(p) => {
                 self.tone.reset();

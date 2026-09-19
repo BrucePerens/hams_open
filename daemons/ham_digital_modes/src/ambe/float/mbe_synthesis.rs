@@ -19,6 +19,51 @@ use super::tia_102_baba::error_estimation::{estimate_errors, FrameErrors};
 use super::tia_102_baba::synthesis::SynthesisState;
 use super::tia_102_baba::unvoiced_synthesis::N;
 
+/// How a decoder treats frames the channel decoder flags as damaged (`epsilon_c0`/`epsilon_c1` are the numbers of bit
+/// errors the two Golay blocks corrected).
+///
+/// [`ErrorPolicy::Clean`] (the default) is mbelib's: a speech frame with more than 3 corrected errors in total repeats
+/// the previous frame's parameters without touching the predictor, and after 3 repeats in a row the decoder mutes and
+/// restarts. [`ErrorPolicy::ChipCompatible`] reproduces what the real chip does, measured with
+/// `examples/{dstar,ambe_plus_2}_field_scan.rs ... errclass`: it repeats a frame whenever the first Golay block
+/// corrected 3 errors (whatever the second block did), and after 3 repeats in a row it decodes every further damaged
+/// frame as received instead of muting, which produces loud bursts and chirps. That is a defect, so it exists only to
+/// let conformance tests compare against the chip without the difference hiding others; nothing should select it in
+/// normal operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ErrorPolicy {
+    #[default]
+    Clean,
+    ChipCompatible,
+}
+
+/// What to do with one damaged frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadFrameAction {
+    Repeat,
+    Mute,
+    Decode,
+}
+
+impl ErrorPolicy {
+    /// Whether a speech frame with these corrected-error counts is treated as damaged.
+    pub fn is_bad(self, epsilon_c0: u32, epsilon_c1: u32) -> bool {
+        match self {
+            ErrorPolicy::Clean => epsilon_c0 + epsilon_c1 > 3,
+            ErrorPolicy::ChipCompatible => epsilon_c0 >= 3,
+        }
+    }
+
+    /// The action for the `consecutive_bad`-th damaged frame in a row (1 for the first).
+    pub fn bad_frame_action(self, consecutive_bad: u32) -> BadFrameAction {
+        match (self, consecutive_bad <= 3) {
+            (_, true) => BadFrameAction::Repeat,
+            (ErrorPolicy::Clean, false) => BadFrameAction::Mute,
+            (ErrorPolicy::ChipCompatible, false) => BadFrameAction::Decode,
+        }
+    }
+}
+
 /// Weight of the second difference in the output's high-frequency lift `y[n] = x[n] + g*(x[n] - 2x[n-1] + x[n-2])`.
 /// The chip's D-STAR and AMBE+2 output is flat against this synthesis below about 2.4 kHz and then rises to +3.2 dB at
 /// 3.6 kHz (measured per harmonic, at three different pitches, with `examples/dstar_field_scan.rs`; a real-speech
