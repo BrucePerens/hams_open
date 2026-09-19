@@ -28,26 +28,21 @@
 //! predominantly-voiced frames from the rest so a low unvoiced-frame number doesn't get misread as a
 //! decoder bug.
 //!
-//! **Result of the first real run, disclosed here rather than silently left for a reader to
-//! rediscover**: a moderate envelope correlation (`~0.42-0.45`, frame-level RMS, phase-insensitive)
-//! but near-zero raw-sample correlation (`~0.03` whole-buffer, `~0.02` on high-energy/voiced
-//! segments specifically) between the chip's own decoded PCM and this crate's float-synthesized PCM,
-//! on real recorded speech. A frame-level lag search up to +-800ms found *no* meaningfully better
-//! alignment than `lag=0` (`0.418` at `lag=-28` frames vs `0.446` at `lag=0`), which rules out "the
-//! two streams just aren't aligned yet" as the explanation -- if alignment were the whole story, a
-//! wider search would have found a clearly better lag. The per-frame RMS values also show a large,
-//! *inconsistent* ratio between the two streams (roughly 3x-13x across the first 15 frames, not a
-//! single constant factor), which rules out a simple missing/extra gain constant as the sole
-//! explanation too. **This is a real, disclosed, NOT-yet-root-caused finding**: RATET(27)'s float
-//! synthesis, checked against real chip PCM for the first time in this codebase's history, does not
-//! track it closely at the waveform level, despite the parameter-level pipeline feeding it
-//! (dequantize/reconstruct/enhancement) being independently live-chip-validated to within 1% at
-//! every stage. The bug -- if there is one, as opposed to some property of MBE decoding this
-//! harness's own metric doesn't yet account for -- most likely lives in `voiced_synthesis.rs`/
-//! `unvoiced_synthesis.rs`'s own harmonic amplitude scaling, phase tracking, or window
-//! normalization, none of which have ever been checked against anything but each other before this
-//! round. See `night_shift_todo/medium/ambe-fixed-point-port-f0c555a5.md` in hams_com for the full
-//! writeup and suggested next steps for whoever picks this up.
+//! **Update: root-caused and fixed.** The first real run showed a moderate envelope correlation
+//! (`~0.42-0.45`) but near-zero raw-sample correlation (`~0.03`), with a wide lag search finding no
+//! better alignment than `lag=0` and an inconsistent (not constant-factor) RMS ratio between the two
+//! streams. `examples/ratet27_diagnose_synthesis_mismatch.rs` traced this to a real bug in
+//! `DecoderState::decode_parameters`: it was demodulating `c[1..6]` via a spec-theoretical
+//! `modulate_code_vectors` step this codebase's own `AMBE_CHIP_VALIDATION_FINDINGS.md` section 23
+//! had *already* established the real DVSI chip never applies (a GF(2) rank analysis of ~2200 real
+//! captured frames showing they're plain, unwhitened FEC codewords on the wire) -- that finding had
+//! never been reconciled with `decode_parameters`'s own implementation until this round. Removing
+//! the demodulation (and the matching modulation step from `encode_code_vectors`, to keep this
+//! crate's own encode/decode round-trip self-consistent) moved the best alignment from a nonsensical
+//! `lag=-318` samples (`-39.75ms`) to `lag=-4` samples (`-0.5ms`), and frame-level envelope
+//! correlation from `~0.45` to `~0.63`. A smaller, real amplitude-scale gap remains (float PCM still
+//! runs several times louder than the chip's own) -- see `night_shift_todo/medium/
+//! ambe-fixed-point-port-f0c555a5.md` in hams_com for the current state of that follow-up.
 //!
 //! Usage: `cargo run --release --example ambe_chip_pcm_vs_float_synthesis_ratet27 -- <host:port>`
 

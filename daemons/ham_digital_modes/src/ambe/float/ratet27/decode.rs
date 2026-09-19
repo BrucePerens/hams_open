@@ -1,17 +1,29 @@
 //! Top-level bitstream decoder: the real inverse of [`super::encode_frame`], turning a received
-//! 144-bit modulated frame (the eight code vectors `c_hat_0..c_hat_7`, or the 72 interleaved dibit
-//! symbols an actual P25 channel decoder hands over -- [`super::interleave::deinterleave_from_dibit_symbols`]
+//! 144-bit frame (the eight code vectors `c_hat_0..c_hat_7`, or the 72 interleaved dibit symbols an
+//! actual P25 channel decoder hands over -- [`super::interleave::deinterleave_from_dibit_symbols`]
 //! is the bridge between the two) into a synthesized 20 ms PCM frame.
 //!
 //! # Decode order, and why it isn't just `encode_frame` run backwards field by field
 //!
 //! 1. **Golay-decode `c_hat_0`** to recover `u_hat_0` (never modulated) and its own corrected-error
 //!    count `epsilon_0`.
-//! 2. **Demodulate**: [`super::modulation::modulate_code_vectors`] is its own inverse (XOR), so
-//!    calling it again with the just-recovered `u_hat_0` un-does the encoder's own modulation step,
-//!    recovering `nu_hat_1..nu_hat_6` (still FEC codewords) and `nu_hat_7 = c_hat_7` (no FEC ever).
-//! 3. **FEC-decode** `nu_hat_1..nu_hat_3` (Golay) and `nu_hat_4..nu_hat_6` (Hamming), each with its own
-//!    corrected-error count -- together with `epsilon_0` these feed
+//! 2. **FEC-decode `c_hat_1..c_hat_3` (Golay) and `c_hat_4..c_hat_6` (Hamming) directly** -- **no
+//!    demodulation step**, despite the spec's own theoretical IMBE encoder describing one (this
+//!    module used to call [`super::modulation::modulate_code_vectors`] here to undo it, matching
+//!    [`super::encode_frame`]'s own former modulation step). `docs/references/
+//!    AMBE_CHIP_VALIDATION_FINDINGS.md` section 23 already established, from direct GF(2) rank
+//!    analysis of ~2200 real chip-captured frames, that these blocks reach full rank as *plain* FEC
+//!    codewords on the real wire -- "the wire bits genuinely are the FEC codewords themselves," that
+//!    finding's own words -- meaning the real DVSI chip never applies the spec's theoretical
+//!    whitening/modulation stage at all. Demodulating here was silently corrupting
+//!    `u_hat_1..u_hat_6` on every real frame (confirmed directly: live chip data showed the
+//!    resulting `omega0_tilde`/per-harmonic voicing diverging substantially from real recorded
+//!    speech's own expected behavior), while individual blocks still happened to FEC-decode
+//!    "successfully" -- a modulated-then-corrected codeword still looks like a valid parameter set,
+//!    just the wrong one, which is why this went undetected until PCM was compared against the
+//!    chip's own decoded output for the first time. `nu_hat_7 = c_hat_7` (no FEC ever, unaffected
+//!    either way).
+//! 3. Together with `epsilon_0`, the corrected-error counts from this step feed
 //!    [`super::error_estimation::estimate_errors`].
 //! 4. **Bootstrap `b_hat_0`** directly from `u_hat_0`/`u_hat_7` alone
 //!    ([`super::bit_prioritization::extract_fundamental_frequency_quantizer`]) -- breaking the real
@@ -44,7 +56,6 @@ use super::error_estimation::{
     estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
 };
 use super::fec::{golay_decode, hamming_decode};
-use super::modulation::modulate_code_vectors;
 use super::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
 };
@@ -138,15 +149,16 @@ impl DecoderState {
     // [@ANCHOR: ambe:decode_parameters]
     pub fn decode_parameters(&mut self, c: [u32; 8]) -> Option<FrameOutcome> {
         let (u0, epsilon_0) = golay_decode(c[0]);
-        let nu = modulate_code_vectors(c, u0 as u32);
 
-        let (u1, epsilon_1) = golay_decode(nu[1]);
-        let (u2, epsilon_2) = golay_decode(nu[2]);
-        let (u3, epsilon_3) = golay_decode(nu[3]);
-        let (u4, epsilon_4) = hamming_decode(nu[4] as u16);
-        let (u5, epsilon_5) = hamming_decode(nu[5] as u16);
-        let (u6, epsilon_6) = hamming_decode(nu[6] as u16);
-        let u7 = nu[7]; // No FEC (fec.rs's own doc comment): no decode, no error count.
+        // No demodulation -- see this module's own doc comment for why `c[1..6]` are FEC-decoded
+        // directly rather than XORed against `modulate_code_vectors(c, u0)` first.
+        let (u1, epsilon_1) = golay_decode(c[1]);
+        let (u2, epsilon_2) = golay_decode(c[2]);
+        let (u3, epsilon_3) = golay_decode(c[3]);
+        let (u4, epsilon_4) = hamming_decode(c[4] as u16);
+        let (u5, epsilon_5) = hamming_decode(c[5] as u16);
+        let (u6, epsilon_6) = hamming_decode(c[6] as u16);
+        let u7 = c[7]; // No FEC (fec.rs's own doc comment): no decode, no error count.
 
         let u_vectors: [u32; 8] = [
             u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, u7,

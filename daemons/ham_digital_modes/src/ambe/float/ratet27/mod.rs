@@ -189,19 +189,34 @@ pub fn gain_vector_dct(r_hat: &[f64; 6]) -> [f64; 6] {
     g_hat
 }
 
-/// Wires bit prioritization ([`bit_prioritization::prioritize_bits`]), forward error correction
-/// ([`fec`]), and bit modulation ([`modulation::modulate_code_vectors`]) together: takes the eight
-/// prioritized bit vectors `u_hat_0..u_hat_7` and produces the final modulated code vectors
-/// `c_hat_0..c_hat_7` -- this codec's own real final output (see this module's own doc comment on
-/// why bit-interleaving into an actual channel frame is a separate protocol layer's concern, not
-/// unfinished work here).
+/// Wires bit prioritization ([`bit_prioritization::prioritize_bits`]) and forward error correction
+/// ([`fec`]) together: takes the eight prioritized bit vectors `u_hat_0..u_hat_7` and produces the
+/// final code vectors `c_hat_0..c_hat_7` -- this codec's own real final output (see this module's
+/// own doc comment on why bit-interleaving into an actual channel frame is a separate protocol
+/// layer's concern, not unfinished work here).
+///
+/// **No longer applies [`modulation::modulate_code_vectors`]'s own textbook whitening step.**
+/// `docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` section 23 already established, from direct
+/// GF(2) rank analysis of ~2200 real chip-captured frames, that 7 of 8 real wire sub-blocks
+/// (`g0`/`g1`/`g2`/`u4`/`u5`/`u6`, everything but the still-unresolved `g3`) reach *full rank* as
+/// plain FEC codewords -- "the wire bits genuinely are the FEC codewords themselves," that finding's
+/// own words, meaning the real DVSI chip does not mix in any data-dependent whitening/PRN the way
+/// this module's own `modulation.rs` (transcribed from the spec's theoretical IMBE encoder
+/// description) does. [`decode::DecoderState::decode_parameters`]'s own demodulation step -- and
+/// this function's own modulation step, until this round -- silently ignored that already-recorded
+/// finding, XORing a real chip-valid codeword with a nontrivial pseudo-random pattern before FEC
+/// decode/after FEC encode. Confirmed as the root cause of a real bug (not a hypothesis): live-chip
+/// data showed the resulting `omega0_tilde`/per-harmonic voicing decisions diverging substantially
+/// from what the same real frames should produce, corrupting synthesis input while individual
+/// blocks still happened to FEC-decode "successfully" (a modulated-then-corrected codeword still
+/// looks like a valid parameter set, just the wrong one).
 ///
 /// `u` must already be [`bit_prioritization::prioritize_bits`]'s own output: `u[0..=3]` fit in 12
 /// bits, `u[4..=6]` in 11 bits, `u[7]` in 7 bits (this function doesn't re-check that, matching
 /// [`fec::golay_encode`]/[`fec::hamming_encode`]'s own "trust the caller's own bit width" contract).
 // [@ANCHOR: ambe_mod:encode_code_vectors]
 pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
-    let nu = [
+    [
         fec::golay_encode(u[0] as u16),
         fec::golay_encode(u[1] as u16),
         fec::golay_encode(u[2] as u16),
@@ -210,8 +225,7 @@ pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
         fec::hamming_encode(u[5] as u16) as u32,
         fec::hamming_encode(u[6] as u16) as u32,
         u[7],
-    ];
-    modulation::modulate_code_vectors(nu, u[0])
+    ]
 }
 
 /// The per-frame state that carries forward into the *next* call to [`encode_frame`] -- Eq. 41's
