@@ -55,7 +55,13 @@ pub fn extract_raw_parameters(d: u64) -> RawParameters {
 pub enum FrameKind {
     /// `b0` 0-119: a real, voiced/unvoiced speech frame -- the common case.
     Speech,
-    /// `b0` 120-123: a lost/erased frame; no real parameters to decode.
+    /// `b0` 120-123: a lost/erased frame per spec; no real parameters to decode. **Caveat, not just
+    /// spec text**: the real chip also emits `b0=120` for a genuinely *detected* tone/DTMF digit
+    /// under `TD_ENABLE` (confirmed via the independent `ECMODE_OUT`/`TONE_FRAME` ground-truth bit,
+    /// `AMBE_CHIP_VALIDATION_FINDINGS.md` section 40) instead of its own spec-defined `Tone` range
+    /// (126-127) -- a caller that treats every `Erasure` frame as "nothing real happened" will
+    /// silently drop real detected tones on this rate. There is currently no known field that
+    /// recovers the tone's identity from these frames (section 40's own open item).
     Erasure,
     /// `b0` 124-125: silence, with mbelib's own fixed `L=14`, `w0 = 2*pi/32`, fully unvoiced.
     Silence,

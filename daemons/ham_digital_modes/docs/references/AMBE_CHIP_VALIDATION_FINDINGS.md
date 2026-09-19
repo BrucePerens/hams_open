@@ -2928,7 +2928,7 @@ Deliberately scoped narrow, per direct advice: no `PKT_CHANFMT`/`ECMODE_OUT` par
 layer, not frame-layer), and no `VOICE_ACTIVE`-from-wire-bits classifier (section 35 already
 established that isn't reliably possible from `g0` alone). (Update, section 40: `ECMODE_OUT`'s own
 bits are since confirmed as a genuine, global, three-rate-validated ground-truth mechanism in their
-own right, independent of any per-rate frame decoder -- bit 14/`VOICE_ACTIVE` in section 27/28, and
+own right, independent of any per-rate frame decoder -- bit 1/`VOICE_ACTIVE` in section 27/28, and
 bit 15/`TONE_FRAME` in section 40's `examples/p25_ambe_plus_2_and_dstar_tone_frame_ground_truth.rs`
 and `examples/ambe_chip_validate_dstar_tone.rs` -- so a future session extending packet-layer
 handling should start from those two probes rather than rediscovering that `ECMODE_OUT` exists.)
