@@ -9,10 +9,7 @@ import json
 from lxml import etree
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
-from odoo.addons.distributed_redis_cache.redis_cache import (
-    distributed_cache,
-    notify_model_invalidation,
-)
+from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
 _logger = logging.getLogger(__name__)
 
@@ -822,13 +819,11 @@ class WebsitePage(models.Model):
             if "url" in vals and vals["url"] not in urls_to_notify:
                 urls_to_notify.append(vals["url"])
             if urls_to_notify:
+                # _notify_cache_invalidation() itself delegates to
+                # distributed_redis_cache's notify_model_invalidation() (local
+                # + Redis eviction at postcommit, plus the cross-worker
+                # pg_notify), so nothing further is needed here.
                 utils._notify_cache_invalidation("website.page", urls_to_notify)
-                notify_model_invalidation(self.env, self._name)
-                payload = json.dumps({"model": self._name})
-                self.env.cr.execute(
-                    "SELECT pg_notify(%s, %s)",
-                    ("distributed_cache_invalidation", payload),
-                )
 
         self._invalidate_cloudflare_cache()
         return res
@@ -864,12 +859,8 @@ class WebsitePage(models.Model):
 
         utils = self.env["zero_sudo.security.utils"]
         if pages_to_invalidate:
+            # See write(): this one call is the whole invalidation.
             utils._notify_cache_invalidation("website.page", pages_to_invalidate)
-            notify_model_invalidation(self.env, self._name)
-            payload = json.dumps({"model": self._name})
-            self.env.cr.execute(
-                "SELECT pg_notify(%s, %s)", ("distributed_cache_invalidation", payload)
-            )
 
         return res
 

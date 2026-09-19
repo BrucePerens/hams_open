@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import json
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import ValidationError
@@ -285,4 +287,57 @@ class TestPageLimits(RealTransactionCase):
                 "/direct-suspend-write-group-test", False
             ),
             "A directly-suspended group's page must stop resolving.",
+        )
+
+    def _count_cache_signals(self, model_name, action):
+        """Runs `action` and returns how many `distributed_cache_invalidation`
+        pg_notify calls naming `model_name` it issued on this cursor."""
+        cr = self.env.cr
+        original_execute = cr.execute
+        signals = []
+
+        def spy_execute(query, params=None, log_exceptions=True):
+            if query == "SELECT pg_notify(%s, %s)":
+                channel, payload = params
+                if channel == "distributed_cache_invalidation":
+                    signals.append(json.loads(payload).get("model"))
+            return original_execute(query, params, log_exceptions)
+
+        cr.execute = spy_execute
+        try:
+            action()
+        finally:
+            cr.execute = original_execute
+        return signals.count(model_name)
+
+    def test_07_page_write_and_unlink_signal_cache_invalidation_once(self):
+        # Tests [@ANCHOR: user_websites:COMM_website_page_unlink]
+        """write() and unlink() used to signal the same invalidation three
+        times (the zero_sudo helper, which already delegates to
+        notify_model_invalidation(), then a second direct
+        notify_model_invalidation(), then a hand-inlined pg_notify).
+        Exactly one is enough and exactly one is required."""
+        page = self.env["website.page"].create(
+            {
+                "url": "/single-signal-test",
+                "name": "Single Signal Test",
+                "type": "qweb",
+                "owner_user_id": self.user_limited.id,
+                "website_published": False,
+            }
+        )
+        self.env.flush_all()
+
+        self.assertEqual(
+            self._count_cache_signals(
+                "website.page",
+                lambda: page.write({"url": "/single-signal-test-renamed"}),
+            ),
+            1,
+            "write() must signal website.page cache invalidation exactly once.",
+        )
+        self.assertEqual(
+            self._count_cache_signals("website.page", page.unlink),
+            1,
+            "unlink() must signal website.page cache invalidation exactly once.",
         )
