@@ -55,35 +55,43 @@ pub fn extract_raw_parameters(d: u64) -> RawParameters {
 pub enum FrameKind {
     /// `b0` 0-119: a real, voiced/unvoiced speech frame -- the common case.
     Speech,
-    /// `b0` 120-123: a lost/erased frame per spec; no real parameters to decode. **Caveat, not just
-    /// spec text**: the real chip also emits `b0=120` specifically for a genuinely *detected*
-    /// tone/DTMF digit under `TD_ENABLE` (confirmed via the independent `ECMODE_OUT`/`TONE_FRAME`
-    /// ground-truth bit, `AMBE_CHIP_VALIDATION_FINDINGS.md` section 40) instead of its own
-    /// spec-defined `Tone` range (126-127) -- a caller that treats every `Erasure` frame as "nothing
-    /// real happened" will silently drop a real detected tone on this rate. **A DTMF digit's own
-    /// identity is fully recoverable from this sub-code**, via [`decode_tone_idx`] -- see that
-    /// function's own doc comment (section 40's own follow-up finding, resolving what was
-    /// originally an open item). **`b0=122` is a distinct, separate Erasure sub-code, confirmed live
-    /// via forced generation of DVSI's own `Call Progress` tones** (dial/ring/busy) -- so `b0`'s
-    /// 120-123 range is not one undifferentiated "erasure," it is at least two real, distinct
-    /// chip-defined sub-kinds. `b0=121` and `123` remain unproduced by any stimulus tried so far.
+    /// `b0` 120: the spec calls this range "erasure," but the real chip uses this exact value for a
+    /// genuinely *detected or forced* tone/DTMF digit (confirmed via the independent
+    /// `ECMODE_OUT`/`TONE_FRAME` ground-truth bit, `AMBE_CHIP_VALIDATION_FINDINGS.md` section 40) --
+    /// never a real erasure in any capture taken so far. **A caller that treats this the same as
+    /// [`FrameKind::Erasure`] will silently drop a real tone/DTMF digit.** The digit or frequency is
+    /// fully recoverable via [`decode_tone_idx`] and [`classify_tone_idx`].
+    DetectedTone,
+    /// `b0` 121 or 123: a genuinely lost/erased frame per spec, with no real parameters to decode --
+    /// unlike `120`/`122`, no stimulus tried so far (detected or forced) has ever produced either of
+    /// these two values, so they remain believed-genuine erasure codes rather than a third
+    /// undiscovered tone sub-kind.
     Erasure,
+    /// `b0` 122: a second, distinct tone-bearing sub-code from `120`, confirmed live via forced
+    /// generation of DVSI's own `Call Progress` tones (dial/ring/busy). Same caveat as
+    /// [`FrameKind::DetectedTone`]: recoverable via [`decode_tone_idx`]/[`classify_tone_idx`], not a
+    /// real erasure.
+    CallProgress,
     /// `b0` 124-125: silence, with mbelib's own fixed `L=14`, `w0 = 2*pi/32`, fully unvoiced.
     Silence,
     /// `b0` 126-127: the spec's own documented `Tone` code -- **never observed from this chip**, for
     /// either a `TD_ENABLE`-detected tone or a directly *forced* one (`AMBE-3000R` manual's own
-    /// `TONE` field, Table 98/103): both land in `b0=120`/`122` instead (see `FrameKind::Erasure`'s
-    /// own doc comment), confirmed live by feeding the encoder an explicit `TONE_IDX` and reading
-    /// back its own channel bits. This variant is therefore believed unreachable on this chip/rate,
-    /// not merely undecoded -- kept for spec completeness and in case some other stimulus (a
-    /// different rate index, a different chip revision) does reach it.
+    /// `TONE` field, Table 98/103): both land in `b0=120`/`122` instead (see
+    /// [`FrameKind::DetectedTone`]/[`FrameKind::CallProgress`]), confirmed live by feeding the
+    /// encoder an explicit `TONE_IDX` and reading back its own channel bits. This variant is
+    /// therefore believed unreachable on this chip/rate, not merely undecoded -- kept for spec
+    /// completeness and in case some other stimulus (a different rate index, a different chip
+    /// revision) does reach it.
     Tone,
 }
 
 pub fn classify_b0(b0: u32) -> FrameKind {
     match b0 {
         0..=119 => FrameKind::Speech,
-        120..=123 => FrameKind::Erasure,
+        120 => FrameKind::DetectedTone,
+        121 => FrameKind::Erasure,
+        122 => FrameKind::CallProgress,
+        123 => FrameKind::Erasure,
         124..=125 => FrameKind::Silence,
         _ => FrameKind::Tone,
     }
@@ -109,19 +117,27 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 /// whichever tone identifier ends up in a frame -- not a second, independent, still-mysterious
 /// encoding.
 ///
-/// **A real, disclosed discrepancy between a *detected* tone and a *forced* one, confirmed live, not
-/// yet reconciled further**: forcing the encoder to emit a specific `TONE_IDX` (via the `AMBE-3000R`
-/// manual's own `TONE` field appended to a `SPEECH` packet, `examples/p25_ambe_plus_2_forced_tone_
-/// probe.rs`) and reading the result back through this same function does **not** return the
-/// `TONE_IDX` that was sent, for DTMF and call-progress values -- it returns a different, larger
-/// number in Annex J's own native `ID` range instead (e.g. forcing `TONE_IDX=0x87` reads back `128`,
-/// not `0x87`; forcing a call-progress tone reads back `160`/`161`/`162`, with `b0=122`, not `120`).
-/// Single tones are unaffected (forcing `TONE_IDX=0x08` reads back `8`, exactly) because `TONE_IDX`
-/// and Annex J's own `ID` numerically coincide for that range (both computed as `round(f0/31.25Hz)`)
-/// -- they only diverge where `TONE_IDX`'s own compact, rate-dependent packet-interface numbering
-/// (`0x80..=0x8F`, `0xA0..=0xA2`) differs from Annex J's own larger, unified `ID` space
-/// (`128..=163`). This function's own guarantee -- confirmed 128/128 live -- is specifically for a
-/// *detected* DTMF digit, which reads back in `TONE_IDX`'s own numbering, not Annex J's.
+/// **A real, now fully-resolved discrepancy between a *forced* DTMF digit and its readback, found
+/// live via `examples/p25_ambe_plus_2_forced_tone_probe.rs`**: forcing the encoder to emit a specific
+/// DTMF `TONE_IDX` and reading the result back through this same function does **not** return the
+/// same byte that was sent (e.g. forcing `TONE_IDX=0x87` reads back `128`=`0x80`, not `0x87`). This is
+/// not a second numbering space -- Table 104 documents *two* DTMF columns, "Rate Index 0-32" and
+/// "Rate Index 33-61" (a different, non-monotonic nibble mapping in each), and the forced-generation
+/// `TONE` field is read by the encoder using the **0-32 column regardless of the rate actually
+/// configured** (`RATET(33)`, which is in the 33-61 group), while the encoder's own *output* -- both a
+/// genuinely detected digit and a forced one's readback -- is reported using the 33-61 column, which
+/// is what this function documents and what [`dtmf_digit_from_tone_idx`] decodes. Checked exactly
+/// against all 16 forced DTMF digits: `readback = column_33_61[column_0_32[sent]]` matches every one
+/// of the 16 captured values with zero exceptions. So sending `TONE_IDX=0x87` (33-61's own code for
+/// '7') is read by the encoder via the 0-32 column as the code for '0', and the chip reports back '0'
+/// using its own 33-61 code, `0x80`=`128` -- a real quirk of the forced-generation path specifically
+/// (feed it a 0-32-column code to get a chosen digit), not a defect in this function or in the
+/// detected-tone case, which was never affected. **Call Progress and single tones have no
+/// discrepancy at all** -- forcing `TONE_IDX=0xA0/0xA1/0xA2` (Call Progress dial/ring/busy) reads back
+/// `160`/`161`/`162`, which are the exact same bytes (`0xA0=160`, `0xA1=161`, `0xA2=162`), and forcing
+/// a single tone round-trips exactly as sent. An earlier draft of this document misread the decimal
+/// readback value against the hex-written input and wrongly reported a Call Progress discrepancy that
+/// was never real; corrected here after re-deriving the comparison in both bases directly.
 ///
 /// Every field of the 49-bit `d` besides `TONE_IDX` itself is either a hard constant (`b0`'s own
 /// marker, `d[20..24)`/`d[28..32)` at DTMF's own fixed high nibble, `d[36..40)` always `0`) or a
@@ -134,12 +150,15 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 /// nibble reliably appears only twice (`d[20..24)`, `d[28..32)`) -- a third copy would fall at
 /// `d[36..40)`, but that range's low 3 bits are pinned to `0` by `b0=120`'s own marker requirement
 /// (`extract_raw_parameters`'s `b0 = (bits(d,0,4)<<3) | bits(d,37,3)`), so it can only carry a high
-/// nibble whose own low 3 bits are already `0` (true of every value tested here -- DTMF's `0x8` and
-/// every single-tone value tried, all `< 0x10` -- but not yet confirmed for a high-nibble value like
-/// a call-progress tone's `0xA0`/`0xA1`/`0xA2`, which would conflict). [`decode_tone_idx`] therefore
-/// only trusts the two unconstrained high-nibble copies, majority-votes the four low-nibble copies,
-/// and returns `None` rather than a guess if either check fails -- never a false positive on a
-/// corrupted or unrelated frame.
+/// nibble whose own low 3 bits are already `0` (true of every DTMF and single-tone value tested,
+/// all `< 0x10`). [`decode_tone_idx`] itself never reads `d[36..40)` at all -- only the four
+/// low-nibble copies and the two high-nibble copies feed its result -- so a Call Progress frame's
+/// `0xA` high nibble (whose low 3 bits are *not* `0`) cannot conflict with this function's own
+/// decode regardless of what `d[36..40)` carries for that case; confirmed live, `decode_tone_idx`
+/// recovers Call Progress's `0xA0`/`0xA1`/`0xA2` exactly (see below). [`decode_tone_idx`] trusts the
+/// two unconstrained high-nibble copies, majority-votes the four low-nibble copies, and returns
+/// `None` rather than a guess if either check fails -- never a false positive on a corrupted or
+/// unrelated frame.
 ///
 /// **Confirmed decoding both of `TONE_IDX`'s own documented ranges** (both specific to AMBE+2
 /// half-rate's own `RATET(33)`, in DVSI's own "Rate Index Values 33 to 61" column of Table 104 --
@@ -156,11 +175,12 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 ///   instead, `TONE_FRAME=0`) -- the chip's tone detector does not treat every possible frequency as
 ///   detectable.
 ///
-/// `Call Progress` (`0xA0` dial, `0xA1` ring, `0xA2` busy) was tested via forced generation and reads
-/// back as `b0=122` (a distinct `Erasure` sub-code from `120`) with Annex J's own `160`/`161`/`162`,
-/// not `TONE_IDX`'s own `0xA0`/`0xA1`/`0xA2` -- consistent with the DTMF forced-vs-detected
-/// discrepancy above, and not directly returned by this function since it's keyed to `b0=120`.
-/// `0xFF` (inactive/invalid) was not tested.
+/// - **Call Progress** (`0xA0` dial, `0xA1` ring, `0xA2` busy), under `b0=122` (`FrameKind::
+///   CallProgress`) rather than `120`: tested via forced generation and reads back **exactly** as
+///   sent -- `0xA0`/`0xA1`/`0xA2`, i.e. `160`/`161`/`162` in the same base (no discrepancy here at
+///   all; see the note above about the DTMF-only rate-column mismatch). This function itself does not
+///   inspect `b0`, so it decodes a Call Progress frame's `TONE_IDX` the same way as any other. `0xFF`
+///   (inactive/invalid) was not tested.
 pub fn decode_tone_idx(d: u64) -> Option<u8> {
     let low_copies = [bits(d, 16, 4), bits(d, 24, 4), bits(d, 32, 4), bits(d, 40, 4)];
     let mut low = 0u8;
@@ -210,6 +230,49 @@ pub fn dtmf_digit_from_tone_idx(tone_idx: u8) -> Option<(u8, u8)> {
     }
 }
 
+/// DVSI's own `Call Progress` sub-range of `TONE_IDX` (`0xA0`/`0xA1`/`0xA2`/`0xFF`, Table 104).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallProgressTone {
+    Dial,
+    Ring,
+    Busy,
+    /// `0xFF`: inactive/invalid -- documented by the manual but not tested live.
+    Inactive,
+}
+
+/// The real-world meaning of a [`decode_tone_idx`] result, covering every one of `TONE_IDX`'s
+/// documented sub-ranges (Table 104) in one place, rather than leaving each caller to re-derive the
+/// range boundaries [`dtmf_digit_from_tone_idx`] alone doesn't cover. A `b0` of [`FrameKind::
+/// DetectedTone`] or [`FrameKind::CallProgress`] pairs with this; see `decode_tone_idx`'s own doc
+/// comment for which sub-range is chip-validated live and which is documented-but-untested.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ToneIdentity {
+    /// A DTMF digit, as `(row, column)` per [`dtmf_digit_from_tone_idx`]'s own layout.
+    Dtmf { row: u8, col: u8 },
+    /// A single tone's frequency in Hz, `tone_idx as f64 * 31.25`.
+    SingleTone { hz: f64 },
+    CallProgress(CallProgressTone),
+    /// A `TONE_IDX` value outside every documented sub-range -- not necessarily invalid, just not
+    /// one this crate has identified a meaning for yet.
+    Reserved(u8),
+}
+
+/// Classifies a [`decode_tone_idx`] result into its real-world meaning. See [`ToneIdentity`]'s own
+/// doc comment for which branches are chip-validated live.
+pub fn classify_tone_idx(tone_idx: u8) -> ToneIdentity {
+    if let Some((row, col)) = dtmf_digit_from_tone_idx(tone_idx) {
+        return ToneIdentity::Dtmf { row, col };
+    }
+    match tone_idx {
+        0x05..=0x7A => ToneIdentity::SingleTone { hz: tone_idx as f64 * 31.25 },
+        0xA0 => ToneIdentity::CallProgress(CallProgressTone::Dial),
+        0xA1 => ToneIdentity::CallProgress(CallProgressTone::Ring),
+        0xA2 => ToneIdentity::CallProgress(CallProgressTone::Busy),
+        0xFF => ToneIdentity::CallProgress(CallProgressTone::Inactive),
+        other => ToneIdentity::Reserved(other),
+    }
+}
+
 /// Persistent decoder state across frames -- the previous frame's own `L`, its (post-inverse-DCT)
 /// `log2` spectral-amplitude history, and `gamma`, mirroring mbelib's own `prev_mp` argument (and
 /// `ambe_dstar::decode::DStarDecoderState`'s identical role for the sibling generation).
@@ -247,10 +310,17 @@ pub struct Parameters {
 /// possible `b0` values.
 pub enum DequantizedFrame {
     Speech(Parameters),
+    /// `b0=121` or `123` only -- a genuine erasure with no real parameters. **Not** `b0=120`/`122`;
+    /// those carry real tone/DTMF/Call-Progress content and are reported as [`DequantizedFrame::
+    /// Tone`] instead, via [`decode_tone_idx`]/[`classify_tone_idx`] on the frame's own `d`.
     Erasure,
     /// mbelib's own fixed silence-frame parameters (`L=14`, `w0 = 2*pi/32`, fully unvoiced) --
     /// carried here rather than discarded, since a real caller synthesizing audio still needs them.
     Silence { l: u32, w0: f64 },
+    /// `b0` in `{120, 122, 126, 127}` -- any tone-bearing frame kind (see [`FrameKind::DetectedTone`],
+    /// [`FrameKind::CallProgress`], [`FrameKind::Tone`]). The caller decodes the actual tone/digit via
+    /// `decode_tone_idx(d)` on the same frame's `d` (not carried in `raw` itself, since `TONE_IDX`
+    /// lives outside the `b0..b8` scatter).
     Tone { raw: RawParameters },
 }
 
@@ -261,7 +331,9 @@ pub enum DequantizedFrame {
 pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedFrame {
     match classify_b0(raw.b0) {
         FrameKind::Erasure => return DequantizedFrame::Erasure,
-        FrameKind::Tone => return DequantizedFrame::Tone { raw: *raw },
+        FrameKind::DetectedTone | FrameKind::CallProgress | FrameKind::Tone => {
+            return DequantizedFrame::Tone { raw: *raw }
+        }
         FrameKind::Silence => {
             // mbelib's own fixed silence-frame parameters: L=14, w0 = 2*pi/32, fully unvoiced.
             let l = 14u32;
@@ -522,14 +594,14 @@ mod tests {
                         assert!(m.is_finite() && m >= 0.0, "b0={b0}, harmonic {h}: Ml={m}");
                     }
                 }
-                DequantizedFrame::Erasure => assert!((120..=123).contains(&b0)),
+                DequantizedFrame::Erasure => assert!(b0 == 121 || b0 == 123, "b0={b0}"),
                 DequantizedFrame::Silence { l, w0 } => {
                     assert!((124..=125).contains(&b0));
                     assert_eq!(l, 14);
                     assert!(w0.is_finite() && w0 > 0.0);
                 }
                 DequantizedFrame::Tone { raw: r } => {
-                    assert!((126..=127).contains(&b0));
+                    assert!(b0 == 120 || b0 == 122 || (126..=127).contains(&b0), "b0={b0}");
                     assert_eq!(r.b0, b0);
                 }
             }
@@ -588,7 +660,7 @@ mod tests {
             let logical = super::super::interleave::interleaved_to_frame(hex_to_wire(hex));
             let parsed = super::super::parse_frame(logical);
             let raw = extract_raw_parameters(parsed.d);
-            assert_eq!(classify_b0(raw.b0), FrameKind::Erasure, "digit {label}: b0={}", raw.b0);
+            assert_eq!(classify_b0(raw.b0), FrameKind::DetectedTone, "digit {label}: b0={}", raw.b0);
             let tone_idx = decode_tone_idx(parsed.d).unwrap_or_else(|| panic!("digit {label}: decode_tone_idx returned None"));
             assert_eq!(tone_idx & 0xF0, 0x80, "digit {label}: tone_idx=0x{tone_idx:x} not in DTMF range");
             assert_eq!(
@@ -608,7 +680,7 @@ mod tests {
     fn real_chip_capture_single_tones_decode_correctly_via_tone_idx() {
         for (f0_hz, d, expected) in REAL_SINGLE_TONE_CAPTURES {
             let raw = extract_raw_parameters(d);
-            assert_eq!(classify_b0(raw.b0), FrameKind::Erasure, "f0={f0_hz}: b0={}", raw.b0);
+            assert_eq!(classify_b0(raw.b0), FrameKind::DetectedTone, "f0={f0_hz}: b0={}", raw.b0);
             let tone_idx = decode_tone_idx(d).unwrap_or_else(|| panic!("f0={f0_hz}: decode_tone_idx returned None"));
             assert_eq!(tone_idx, expected, "f0={f0_hz}: tone_idx=0x{tone_idx:x}");
             assert_eq!(dtmf_digit_from_tone_idx(tone_idx), None, "f0={f0_hz}: not a DTMF value");
@@ -666,6 +738,60 @@ mod tests {
         // Anything outside the DTMF sub-range must not be misread as a digit.
         for outside in [0x05u8, 0x7A, 0xA0, 0xA1, 0xA2, 0xFF, 0x00, 0x90] {
             assert_eq!(dtmf_digit_from_tone_idx(outside), None, "tone_idx=0x{outside:x}");
+        }
+    }
+
+    /// `classify_b0` must separate the real tone-bearing sub-codes (`120`, `122`) from the genuine
+    /// erasure ones (`121`, `123`) -- the correctness fix this test module was missing before: a
+    /// caller matching only on `FrameKind::Erasure` would previously drop real detected tones and
+    /// Call Progress frames as if nothing had happened.
+    #[test]
+    fn classify_b0_separates_tone_bearing_subcodes_from_genuine_erasure() {
+        assert_eq!(classify_b0(120), FrameKind::DetectedTone);
+        assert_eq!(classify_b0(121), FrameKind::Erasure);
+        assert_eq!(classify_b0(122), FrameKind::CallProgress);
+        assert_eq!(classify_b0(123), FrameKind::Erasure);
+    }
+
+    #[test]
+    fn classify_tone_idx_covers_every_documented_subrange() {
+        assert_eq!(classify_tone_idx(0x81), ToneIdentity::Dtmf { row: 0, col: 0 });
+        assert_eq!(classify_tone_idx(0x08), ToneIdentity::SingleTone { hz: 8.0 * 31.25 });
+        assert_eq!(classify_tone_idx(0xA0), ToneIdentity::CallProgress(CallProgressTone::Dial));
+        assert_eq!(classify_tone_idx(0xA1), ToneIdentity::CallProgress(CallProgressTone::Ring));
+        assert_eq!(classify_tone_idx(0xA2), ToneIdentity::CallProgress(CallProgressTone::Busy));
+        assert_eq!(classify_tone_idx(0xFF), ToneIdentity::CallProgress(CallProgressTone::Inactive));
+        assert_eq!(classify_tone_idx(0x00), ToneIdentity::Reserved(0x00));
+    }
+
+    /// The rate-column-mismatch finding, pinned as a regression test: every forced DTMF `TONE_IDX`
+    /// (rate-33-61 column) reads back as the byte a *different* digit would use in the same column --
+    /// specifically, the digit that the 0-32 column assigns to the byte that was actually sent. See
+    /// `decode_tone_idx`'s own doc comment for the full explanation; this is the arithmetic that
+    /// explanation rests on, captured as code so a future change can't silently break it.
+    #[test]
+    fn forced_dtmf_readback_matches_the_rate_column_mismatch_explanation() {
+        // (sent TONE_IDX, real chip readback) -- examples/p25_ambe_plus_2_forced_tone_probe.rs.
+        const FORCED_SWEEP: [(u8, u8); 16] = [
+            (0x80, 0x81), (0x81, 0x84), (0x82, 0x87), (0x83, 0x8e), (0x84, 0x82), (0x85, 0x85),
+            (0x86, 0x88), (0x87, 0x80), (0x88, 0x83), (0x89, 0x86), (0x8a, 0x89), (0x8b, 0x8f),
+            (0x8c, 0x8a), (0x8d, 0x8b), (0x8e, 0x8c), (0x8f, 0x8d),
+        ];
+        // Table 104's "Rate Index 0-32" column: TONE_IDX -> digit nibble.
+        let col_0_32 = |idx: u8| -> u8 {
+            match idx {
+                0x80 => 0x1, 0x81 => 0x4, 0x82 => 0x7, 0x83 => 0xE, 0x84 => 0x2, 0x85 => 0x5,
+                0x86 => 0x8, 0x87 => 0x0, 0x88 => 0x3, 0x89 => 0x6, 0x8a => 0x9, 0x8b => 0xF,
+                0x8c => 0xA, 0x8d => 0xB, 0x8e => 0xC, 0x8f => 0xD,
+                _ => unreachable!(),
+            }
+        };
+        for (sent, expected_readback) in FORCED_SWEEP {
+            let digit = col_0_32(sent);
+            // dtmf_digit_from_tone_idx already implements the rate-33-61 column (this crate's own
+            // established mapping); recover the byte that column assigns to `digit`.
+            let predicted = (0x80..=0x8Fu8).find(|&b| b & 0x0F == digit).unwrap();
+            assert_eq!(predicted, expected_readback, "digit nibble=0x{digit:x}");
         }
     }
 }

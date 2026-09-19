@@ -137,7 +137,9 @@ fn main() {
             }
             ap2_decode::FrameKind::Erasure => erasure += 1,
             ap2_decode::FrameKind::Silence => silence += 1,
-            ap2_decode::FrameKind::Tone => tone += 1,
+            ap2_decode::FrameKind::DetectedTone
+            | ap2_decode::FrameKind::CallProgress
+            | ap2_decode::FrameKind::Tone => tone += 1,
         }
 
         // Send the encoded bits straight back for decode (matching DVSI's own real
