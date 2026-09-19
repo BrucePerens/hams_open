@@ -33,7 +33,8 @@
 //!   generator matrix.
 //! - **`c7`**: rank exactly 7 (its full width) -- confirms these 7 bits are genuinely unprotected
 //!   raw data, not run through any code at all, matching the DVSI manual's own description.
-//! - **`g3`**: **its real (non-Golay) codeword space is now implemented, though its semantic
+//! - **`g3`**: **its real codeword space (an 8-dimensional subcode of Golay(23,12): every one of its 256 codewords
+//!   also decodes through `golay_decode` at distance 0) is now implemented, though its semantic
 //!   content remains open.** Across ~3500 distinct captured frames spanning pure tones, 8 noise
 //!   amplitudes, real recorded speech, DTMF, dual-tones, and chirps, `g3`'s observed wire bits
 //!   plateau at GF(2) rank 8 (not the expected 12), with 4 of its 23 natural-order bits (offsets

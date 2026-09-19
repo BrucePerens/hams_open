@@ -70,9 +70,17 @@ pub enum Block {
 
 /// The natural-order `(start, len)` range for a given block.
 const fn natural_range(block: Block) -> (usize, usize) {
+    // An out-of-range `index` would address past the 144-bit frame; it is a programming error, reported here
+    // instead of surfacing later as an out-of-bounds array access.
     match block {
-        Block::Golay { index } => (23 * index as usize, 23),
-        Block::Hamming { index } => (92 + 15 * index as usize, 15),
+        Block::Golay { index } => {
+            assert!(index < 4, "Golay block index must be 0..4");
+            (23 * index as usize, 23)
+        }
+        Block::Hamming { index } => {
+            assert!(index < 3, "Hamming block index must be 0..3");
+            (92 + 15 * index as usize, 15)
+        }
         Block::Raw => (137, 7),
     }
 }

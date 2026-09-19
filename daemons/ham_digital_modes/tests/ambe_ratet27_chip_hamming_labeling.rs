@@ -32,3 +32,31 @@ fn clean_chip_frames_report_zero_corrected_errors_in_float_and_fixed_decoders() 
     assert!(matches!(FloatDecoder::new().decode_parameters(REAL_CHIP_FRAMES[0]), Some(FloatOutcome::Decoded(_))));
     assert!(matches!(FixedDecoder::new().decode_parameters(REAL_CHIP_FRAMES[0]), Some(FixedOutcome::Decoded(_))));
 }
+
+/// The chip pitch map spans b0 0..=255, whose Eq. 47 harmonic count leaves Annex F/G's 9..=56 range at both ends; the
+/// decoder must clamp instead of panicking (bug-hunt finding F1).
+#[test]
+fn chip_pitch_map_decoder_never_panics_on_any_b0() {
+    let mut state = 0x1234_5678_9abc_def0u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let mut d = FloatDecoder::new_chip();
+    let _ = d.decode_frame([0; 8]);
+    for _ in 0..3000 {
+        let c: [u32; 8] = std::array::from_fn(|i| {
+            let bits = [23, 23, 23, 23, 15, 15, 15, 7][i];
+            (next() as u32) & ((1u32 << bits) - 1)
+        });
+        let _ = d.decode_frame(c);
+    }
+    // Every b0 explicitly: u0 top 6 bits and u7 bits 2:1.
+    for b0 in 0u32..=255 {
+        let u0 = ham_digital_modes::ambe::general::fec::golay_encode(((b0 >> 2) << 6) as u16);
+        let c = [u0, 0, 0, 0, 0, 0, 0, (b0 & 3) << 1];
+        let _ = FloatDecoder::new_chip().decode_frame(c);
+    }
+}
