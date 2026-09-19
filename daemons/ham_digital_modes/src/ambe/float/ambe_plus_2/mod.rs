@@ -94,4 +94,5 @@ pub const DECODED_BITS: usize = 49;
 // set reusing ambe::fec.
 pub use crate::ambe::float::dstar::decode::{parse_frame, ParsedFrame};
 pub use crate::ambe::float::dstar::encode::build_frame;
+pub use crate::ambe::float::dstar::encode::build_frame as build_frame_from_d;
 pub use crate::ambe::float::dstar::whiten_c1;

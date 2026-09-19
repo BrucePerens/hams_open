@@ -3,16 +3,33 @@
 //! tone, a DTMF digit, or a call-progress tone) into 20 ms of PCM sinusoids, with phase carried
 //! across frames so a held tone is continuous.
 //!
-//! **Levels are provisional**: the frame formats carry an 8-bit `volume` (D-STAR) or none at all
-//! (AMBE+2), and this crate has no chip-measured mapping from that field to PCM amplitude yet, so
-//! [`ToneSynthesizer::synthesize`] takes an explicit peak amplitude and the per-mode wrappers pick a
-//! default (`DEFAULT_TONE_PEAK`) until a live-chip level calibration replaces it.
+//! **Levels, measured against the live chip's decoder** (`examples/ambe_tone_level_probe.rs`): D-STAR tone
+//! frames carry an 8-bit `volume` that sets each tone's amplitude exponentially ([`dstar_tone_amplitude`]),
+//! identically for a single tone and for each tone of a dual tone. AMBE+2 half-rate tone frames carry a level
+//! field the chip ignores when decoding: with `DCMODE_IN`'s `TS_ENABLE` set (required for it to synthesize tone
+//! frames at all) its output is always ~24000 rms in total ([`AMBE_PLUS_2_TONE_RMS`]), i.e. a single tone of peak
+//! `24000*sqrt(2)` (clipped by the chip at full scale) or two tones of peak 24000 each.
 
 use super::ratet27::unvoiced_synthesis::N;
 use std::f64::consts::PI;
 
-/// Peak amplitude (16-bit PCM units) used for each sinusoid of a tone frame until calibrated.
+/// Peak amplitude (16-bit PCM units) used when a tone frame carries no usable level.
 pub const DEFAULT_TONE_PEAK: f64 = 4000.0;
+
+/// D-STAR: each tone's amplitude (16-bit PCM units) for a tone frame's 8-bit `volume`, from the chip's decoder:
+/// exponential, `3268 * exp(0.04084 * (volume - 180))` (a factor of 1.8435 per 15 steps, measured at volumes 105-210
+/// with the same per-tone value for single tones and each tone of a DTMF pair; the chip saturates near 238).
+pub fn dstar_tone_amplitude(volume: u32) -> f64 {
+    3268.0 * (0.04084 * (volume as f64 - 180.0)).exp()
+}
+
+/// The inverse of [`dstar_tone_amplitude`]: the `volume` field for a desired per-tone amplitude.
+pub fn dstar_tone_volume_for_amplitude(amplitude: f64) -> u32 {
+    (180.0 + (amplitude.max(1.0) / 3268.0).ln() / 0.04084).round().clamp(0.0, 255.0) as u32
+}
+
+/// AMBE+2 half-rate: the chip's total output level for any tone frame (single, DTMF, call progress), rms in PCM units.
+pub const AMBE_PLUS_2_TONE_RMS: f64 = 24000.0;
 
 const SAMPLE_RATE_HZ: f64 = 8000.0;
 /// DTMF row frequencies (Hz), row 0-3.
@@ -125,5 +142,17 @@ mod tests {
         };
         assert!(power_at(770.0) > 20.0 * power_at(1000.0));
         assert!(power_at(1336.0) > 20.0 * power_at(1000.0));
+    }
+
+    #[test]
+    fn dstar_tone_level_curve_matches_the_chip_measurements_and_inverts() {
+        // Chip peaks measured at volumes 120/150/180/210: 283, 961, 3268, 11105.
+        for (v, peak) in [(120u32, 283.0f64), (150, 961.0), (180, 3268.0), (210, 11105.0)] {
+            let a = dstar_tone_amplitude(v);
+            assert!((a / peak - 1.0).abs() < 0.04, "volume {v}: model {a} vs chip {peak}");
+        }
+        for v in 60u32..=230 {
+            assert_eq!(dstar_tone_volume_for_amplitude(dstar_tone_amplitude(v)), v);
+        }
     }
 }

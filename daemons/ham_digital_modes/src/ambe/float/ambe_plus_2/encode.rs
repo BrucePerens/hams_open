@@ -49,6 +49,37 @@ pub fn build_frame(raw: &RawParameters) -> u128 {
     super::build_frame(pack_raw_parameters(raw))
 }
 
+/// Packs a tone frame's 49-bit `d[]`, the exact inverse of [`super::decode::decode_tone_idx`]: `b0` is 120 (a detected
+/// or DTMF/single tone) or, with `call_progress`, 122; `tone_idx` (DVSI `TONE_IDX`, Table 104's 33-61 column: DTMF
+/// `0x80 | nibble`, single tones `round(f/31.25)`, call progress `0xA0/0xA1/0xA2`) is serialized as its low nibble
+/// four times (`d[16..20)`, `d[24..28)`, `d[32..36)`, `d[40..44)`) and its high nibble twice (`d[20..24)`,
+/// `d[28..32)`); `amplitude` is the 12-bit level field `d[4..16)`. `d[36..40)`'s low three bits carry `b0`'s marker.
+// [@ANCHOR: pack_tone_parameters]
+pub fn pack_tone_parameters(tone_idx: u8, call_progress: bool, amplitude: u16) -> u64 {
+    let mut d: u64 = 0;
+    let mut set = |msb_index: usize, width: usize, value: u32| {
+        let shift = 49 - msb_index - width;
+        let mask = ((1u64 << width) - 1) << shift;
+        d = (d & !mask) | (((value as u64) << shift) & mask);
+    };
+    set(0, 4, 0b1111);
+    set(37, 3, if call_progress { 0b010 } else { 0b000 });
+    set(4, 12, amplitude as u32 & 0xFFF);
+    let (low, high) = ((tone_idx & 0xF) as u32, (tone_idx >> 4) as u32);
+    for msb in [16, 24, 32, 40] {
+        set(msb, 4, low);
+    }
+    for msb in [20, 28] {
+        set(msb, 4, high);
+    }
+    d
+}
+
+/// The transmittable 72-bit logical frame for a tone (see [`pack_tone_parameters`]).
+pub fn build_tone_frame(tone_idx: u8, call_progress: bool, amplitude: u16) -> u128 {
+    super::build_frame_from_d(pack_tone_parameters(tone_idx, call_progress, amplitude))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,6 +133,22 @@ mod tests {
             let d = pack_raw_parameters(&raw);
             let recovered = extract_raw_parameters(d);
             assert_eq!(recovered.b0, b0, "b0={b0} did not round trip");
+        }
+    }
+
+    #[test]
+    fn built_tone_frames_decode_back_to_their_tone_idx_and_kind() {
+        use crate::ambe::float::ambe_plus_2::decode::{classify_b0, decode_tone_idx, FrameKind};
+        for tone_idx in [0x05u8, 0x20, 0x7A, 0x80, 0x87, 0x8F, 0xA0, 0xA1, 0xA2] {
+            for call_progress in [false, true] {
+                let frame = build_tone_frame(tone_idx, call_progress, 0x555);
+                let parsed = parse_frame(frame);
+                assert_eq!(parsed.epsilon_c0 + parsed.epsilon_c1, 0);
+                assert_eq!(decode_tone_idx(parsed.d), Some(tone_idx), "tone_idx {tone_idx:#x}");
+                let raw = extract_raw_parameters(parsed.d);
+                let expected = if call_progress { FrameKind::CallProgress } else { FrameKind::DetectedTone };
+                assert_eq!(classify_b0(raw.b0), expected);
+            }
         }
     }
 }

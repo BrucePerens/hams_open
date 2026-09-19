@@ -13,7 +13,7 @@ use super::parse_frame;
 use crate::ambe::float::mbe_synthesis::MbeSynthesizer;
 use crate::ambe::float::ratet27::unvoiced_synthesis::N;
 use crate::ambe::float::tone_synthesis::{
-    ToneSynthesizer, CALL_BUSY_HZ, CALL_DIAL_HZ, CALL_RING_HZ, DEFAULT_TONE_PEAK,
+    ToneSynthesizer, AMBE_PLUS_2_TONE_RMS, CALL_BUSY_HZ, CALL_DIAL_HZ, CALL_RING_HZ,
 };
 
 pub struct AmbePlus2SynthesisDecoder {
@@ -44,12 +44,12 @@ impl AmbePlus2SynthesisDecoder {
             DequantizedFrame::Erasure => self.synth.synthesize_repeat(),
             DequantizedFrame::Silence { .. } => Some(self.synth.synthesize_silence()),
             DequantizedFrame::Tone { .. } => Some(match decode_tone_idx(parsed.d).map(classify_tone_idx) {
-                Some(ToneIdentity::SingleTone { hz }) => self.tone.synthesize(&[hz], DEFAULT_TONE_PEAK),
-                Some(ToneIdentity::Dtmf { row, col }) => self.tone.dtmf(row, col, DEFAULT_TONE_PEAK),
+                Some(ToneIdentity::SingleTone { hz }) => self.tone.synthesize(&[hz], AMBE_PLUS_2_TONE_RMS * std::f64::consts::SQRT_2),
+                Some(ToneIdentity::Dtmf { row, col }) => self.tone.dtmf(row, col, AMBE_PLUS_2_TONE_RMS),
                 Some(ToneIdentity::CallProgress(kind)) => match kind {
-                    CallProgressTone::Dial => self.tone.synthesize(&CALL_DIAL_HZ, DEFAULT_TONE_PEAK),
-                    CallProgressTone::Ring => self.tone.synthesize(&CALL_RING_HZ, DEFAULT_TONE_PEAK),
-                    CallProgressTone::Busy => self.tone.synthesize(&CALL_BUSY_HZ, DEFAULT_TONE_PEAK),
+                    CallProgressTone::Dial => self.tone.synthesize(&CALL_DIAL_HZ, AMBE_PLUS_2_TONE_RMS),
+                    CallProgressTone::Ring => self.tone.synthesize(&CALL_RING_HZ, AMBE_PLUS_2_TONE_RMS),
+                    CallProgressTone::Busy => self.tone.synthesize(&CALL_BUSY_HZ, AMBE_PLUS_2_TONE_RMS),
                     CallProgressTone::Inactive => [0.0; N],
                 },
                 Some(ToneIdentity::Reserved(_)) | None => [0.0; N],

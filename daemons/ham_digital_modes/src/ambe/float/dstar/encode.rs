@@ -39,6 +39,46 @@ pub fn pack_raw_parameters(raw: &RawParameters) -> u64 {
     d
 }
 
+/// Packs a tone frame's 49-bit `d[]`: the exact inverse of [`super::decode::decode_tone`] (with `b0 = 126`, which
+/// `classify_b0` reads as a tone). `index` and `volume` are the 8-bit payload fields that function returns; the
+/// three per-value lookup tables it uses (`T7TAB`/`T6TAB`/`T5TAB`, keyed on `d[6..9)`) are all distinct across the
+/// eight selector values, so `index`'s top three bits pick the selector uniquely.
+// [@ANCHOR: pack_tone_parameters]
+pub fn pack_tone_parameters(index: u32, volume: u32) -> u64 {
+    const T7TAB: [u32; 8] = [1, 0, 0, 0, 0, 1, 1, 1];
+    const T6TAB: [u32; 8] = [0, 0, 0, 1, 1, 1, 1, 0];
+    const T5TAB: [u32; 8] = [0, 0, 1, 0, 1, 1, 0, 1];
+    let (i7, i6, i5) = ((index >> 7) & 1, (index >> 6) & 1, (index >> 5) & 1);
+    let sel = (0..8usize)
+        .find(|&s| T7TAB[s] == i7 && T6TAB[s] == i6 && T5TAB[s] == i5)
+        .expect("the three tone lookup tables have eight distinct rows");
+    let mut d: u64 = 0;
+    let mut set = |msb_index: usize, width: usize, value: u32| {
+        let shift = 49 - msb_index - width;
+        let mask = ((1u64 << width) - 1) << shift;
+        d = (d & !mask) | (((value as u64) << shift) & mask);
+    };
+    set(0, 6, 126 >> 1); // b0 = 126: top six bits 63, low bit (d[48]) 0
+    set(6, 3, sel as u32);
+    set(9, 1, (index >> 4) & 1);
+    set(42, 1, (index >> 3) & 1);
+    set(43, 1, (index >> 2) & 1);
+    set(10, 1, (index >> 1) & 1);
+    set(11, 1, index & 1);
+    set(12, 5, (volume >> 3) & 0b1_1111);
+    set(44, 1, (volume >> 2) & 1);
+    set(45, 1, (volume >> 1) & 1);
+    set(17, 1, volume & 1);
+    d
+}
+
+/// The transmittable 72-bit logical frame for a tone: `index` is the tone code
+/// ([`super::decode::classify_tone_index`]: a single tone at `index * 31.25` Hz for `5..=122`, a DTMF digit at
+/// `128 + row + 4*col`), `volume` its 8-bit level.
+pub fn build_tone_frame(index: u32, volume: u32) -> u128 {
+    build_frame(pack_tone_parameters(index, volume))
+}
+
 /// Builds the full transmittable 72-bit logical frame (packed MSB-first into the low 72 bits of the
 /// return value, matching `decode::parse_frame`'s own input convention -- see `interleave.rs` for
 /// converting this into real 9-byte chip/wire data) from the 49-bit `d[]` layout: Golay-encodes
@@ -144,5 +184,40 @@ mod tests {
         assert_eq!(parsed.epsilon_c1, 0);
         let recovered = extract_raw_parameters(parsed.d);
         assert_eq!(recovered.b0, original.b0, "b0");
+    }
+}
+
+#[cfg(test)]
+mod tone_tests {
+    use super::*;
+    use crate::ambe::float::dstar::decode::{classify_b0, classify_tone_index, decode_tone, dtmf_digit_from_tone_index, parse_frame, FrameKind, ToneKind};
+
+    #[test]
+    fn every_tone_index_and_volume_round_trips() {
+        for index in 0u32..256 {
+            for &volume in &[0u32, 1, 37, 128, 255] {
+                let d = pack_tone_parameters(index, volume);
+                let payload = decode_tone(d);
+                assert_eq!((payload.index, payload.volume), (index, volume), "index {index} volume {volume}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_built_tone_frame_is_error_free_classified_as_a_tone_and_decodes() {
+        for (index, expect_single_hz) in [(6u32, Some(187.5)), (32, Some(1000.0)), (144 - 16, None)] {
+            let frame = build_tone_frame(index, 200);
+            let parsed = parse_frame(frame);
+            assert_eq!(parsed.epsilon_c0 + parsed.epsilon_c1, 0);
+            let raw = crate::ambe::float::dstar::decode::extract_raw_parameters(parsed.d);
+            assert_eq!(classify_b0(raw.b0), FrameKind::Tone);
+            let payload = decode_tone(parsed.d);
+            assert_eq!(payload.index, index);
+            match (classify_tone_index(payload.index), expect_single_hz) {
+                (ToneKind::Single { hz }, Some(want)) => assert!((hz - want).abs() < 1e-9),
+                (ToneKind::Dual, None) => assert!(dtmf_digit_from_tone_index(payload.index).is_some()),
+                other => panic!("unexpected classification {other:?}"),
+            }
+        }
     }
 }
