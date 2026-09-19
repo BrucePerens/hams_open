@@ -110,7 +110,7 @@ mod tests {
             let parsed = parse_frame(frame);
             assert_eq!(parsed.epsilon_c0 + parsed.epsilon_c1, 0, "a freshly built frame must be error free");
             if let DequantizedFrame::Speech(p) = dequantize(parsed.d, &mut state) {
-                if i >= 6 && i < 24 {
+                if (6..24).contains(&i) {
                     let p_est = 2.0 * std::f64::consts::PI / p.w0;
                     assert!((p_est / period - 1.0).abs() < 0.05, "frame {i}: decoded period {p_est}");
                     // The strongest harmonics (1-8) should carry real energy.

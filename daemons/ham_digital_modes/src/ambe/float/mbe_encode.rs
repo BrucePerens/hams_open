@@ -104,6 +104,7 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     let prev_l = prev.l.max(1) as f64;
     let mut pred = vec![0.0f64; l + 1];
     let mut sum43 = 0.0;
+    #[allow(clippy::needless_range_loop)] // `h` is both the harmonic number and the `pred` index
     for h in 1..=l {
         let f = (prev_l / l as f64) * h as f64;
         let ik = f.floor() as usize;
