@@ -6,4 +6,5 @@
 //! `dequantize` bodies are almost line-for-line identical, mbelib's shared heritage).
 
 pub mod decode;
+pub mod encode;
 mod tables_q16;
