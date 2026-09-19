@@ -10,4 +10,5 @@
 
 pub mod decode;
 pub mod synthesis;
+pub mod encode;
 mod tables_q16;
