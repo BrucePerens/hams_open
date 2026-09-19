@@ -97,6 +97,19 @@ pub fn gain_bit_allocation(l: u32, m: u32) -> Option<(u8, f64)> {
     Some(GAIN_BIT_ALLOCATION[(l - 9) as usize][(m - 2) as usize])
 }
 
+/// The `bits` half of [`gain_bit_allocation`] alone, as a pure-integer accessor -- needed by
+/// `ambe::fixed::ratet27::reconstruct`, which must never call any function that constructs an `f64`
+/// value even transiently (Bruce's own "no floating point support whatsoever" requirement means no
+/// FPU instruction should be reachable, not merely "the f64 result goes unused" -- a compiler is not
+/// guaranteed to elide the construction just because a caller discards it). Same underlying table,
+/// same validity range, just narrowed to the field the fixed-point port can actually touch.
+pub fn gain_vector_bits(l: u32, m: u32) -> Option<u8> {
+    if !(9..=56).contains(&l) || !(2..=6).contains(&m) {
+        return None;
+    }
+    Some(GAIN_BIT_ALLOCATION[(l - 9) as usize][(m - 2) as usize].0)
+}
+
 const GAIN_BIT_ALLOCATION: [[(u8, f64); 5]; 48] = [
     [
         (10, 0.0031),

@@ -15,7 +15,7 @@
 
 use super::explog::exp2_q16;
 use super::fixed_ops::{div_q16, mul_q16, TWO_PI_Q16_16};
-use super::trig::{cos_q16, phase_from_pi_multiple_q16};
+use super::trig::cos_pi_frac;
 
 /// `round(0.65 * 65536)` -- the `Sum43`/`log2_Ml` recursion's own fixed blend-weight constant
 /// (mbelib's real `.65` literal, `AMBE_CHIP_VALIDATION_FINDINGS.md`'s own transcription history).
@@ -87,17 +87,6 @@ pub struct SpeechParameters {
 /// because the previous frame's own `L` can differ from this frame's `L`).
 fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
     log2_ml_q16.get(idx).copied().unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0))
-}
-
-/// `cos(pi * a * b / c)` in Q16.16, for small non-negative integers `a`, `c` and a half-integer `b`
-/// (`b_times_2` is `2*b`, always odd, e.g. `i - 0.5` passed as `2*i - 1`) -- the exact shape every
-/// cosine argument in this function takes (`PI*(m-1)*(i-0.5)/8` and `PI*(k-1)*(j-0.5)/block_len`).
-fn cos_pi_frac(a: i64, b_times_2: i64, c: i64) -> i32 {
-    // (a * b) / c = (a * b_times_2 / 2) / c = a * b_times_2 / (2*c), kept as one exact integer
-    // ratio until the final Q16.16 conversion so no intermediate rounding compounds.
-    let numerator_q16 = (a * b_times_2) << 16; // Q16.16 numerator of `a * b_times_2`
-    let x_q16 = (numerator_q16 / (2 * c)) as i32; // Q16.16 of `a * b / c`
-    cos_q16(phase_from_pi_multiple_q16(x_q16))
 }
 
 /// The fixed-point equivalent of `ambe_plus_2::decode::dequantize`/`dstar::decode::dequantize`'s own

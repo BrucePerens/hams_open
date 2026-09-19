@@ -51,6 +51,18 @@ pub fn cos_q16(phase: u32) -> i32 {
     sin_q16(phase.wrapping_add(QUARTER_TURN))
 }
 
+/// `cos(pi * a * b / c)` in Q16.16, for small non-negative integers `a`, `c` and a half-integer `b`
+/// (`b_times_2` is `2*b`, always odd, e.g. `i - 0.5` passed as `2*i - 1`) -- a shape that recurs
+/// across every DCT-style reconstruction in this crate's fixed-point port (`general::mbe_speech`'s
+/// own 8-point cosine sum and inverse DCT, `ratet27::reconstruct`'s gain-vector and block DCTs).
+pub fn cos_pi_frac(a: i64, b_times_2: i64, c: i64) -> i32 {
+    // (a * b) / c = (a * b_times_2 / 2) / c = a * b_times_2 / (2*c), kept as one exact integer
+    // ratio until the final Q16.16 conversion so no intermediate rounding compounds.
+    let numerator_q16 = (a * b_times_2) << 16; // Q16.16 numerator of `a * b_times_2`
+    let x_q16 = (numerator_q16 / (2 * c)) as i32; // Q16.16 of `a * b / c`
+    cos_q16(phase_from_pi_multiple_q16(x_q16))
+}
+
 /// Converts `x * pi` (for a Q16.16 `x`, which may be negative or span many turns) into this module's
 /// own `u32` phase convention, for callers whose own formula is naturally expressed as `cos(pi * x)`
 /// or `sin(pi * x)` (e.g. the MBE dequantize chain's own DCT sums) rather than as a phase directly.

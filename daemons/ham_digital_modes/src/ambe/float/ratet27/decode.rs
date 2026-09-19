@@ -115,6 +115,20 @@ impl DecoderState {
         }
     }
 
+    /// Advances this decoder's own real history (`l_hat_prev`, `spectral_amplitudes_prev`) to match
+    /// a just-decoded frame's own parameters -- the same update [`Self::decode_frame`]'s own
+    /// `FrameOutcome::Decoded` branch performs (unconditionally there on a successful synthesis;
+    /// this method doesn't require a synthesis step at all), exposed separately so a caller that
+    /// only needs decoded *parameters* (e.g. `examples/ambe_fixed_chip_validate_ratet27.rs`,
+    /// cross-checking `reconstruct_spectral_amplitudes` against its fixed-point port) can still
+    /// drive this decoder's own real, stateful history forward correctly across many frames, rather
+    /// than silently reconstructing every frame against the same stale initial history because
+    /// [`Self::decode_parameters`] alone never advances it (only [`Self::decode_frame`] does).
+    pub fn advance_history(&mut self, params: &DecodedParameters) {
+        self.l_hat_prev = params.l_hat;
+        self.spectral_amplitudes_prev = params.reconstructed_amplitudes.clone();
+    }
+
     /// Steps 1-6 of this module's own doc comment, stopping short of synthesis: recovers either a
     /// repeat decision or the frame's full decoded parameter set. Split out from
     /// [`Self::decode_frame`] so a caller can assert on the actual recovered parameters (`b0`, `b1`,

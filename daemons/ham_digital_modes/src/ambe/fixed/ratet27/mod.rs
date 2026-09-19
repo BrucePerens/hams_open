@@ -12,3 +12,6 @@
 //! needs a fixed-point port.
 
 pub mod parameter_encoding;
+pub mod prediction;
+pub mod reconstruct;
+mod reconstruct_tables;
