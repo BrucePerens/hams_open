@@ -114,7 +114,23 @@ class CloudflareRoutingDomain(models.Model):
                 continue
             token, zone_id = website._get_cloudflare_credentials()
             if token and zone_id:
-                cf_utils.delete_custom_hostname(record.cloudflare_hostname_id, token, zone_id)
+                success, message = cf_utils.delete_custom_hostname(
+                    record.cloudflare_hostname_id, token, zone_id
+                )
+                if not success:
+                    # The local record is still deleted by unlink() (whether a failed
+                    # Cloudflare delete should block that is an open product question,
+                    # night_shift_questions/open/cloudflare-hostname-delete-failure-block-or-proceed).
+                    # Until then the failure must at least be visible to the operator, since
+                    # the orphaned hostname on Cloudflare has no local record left to retry from.
+                    _logger.warning(
+                        "Cloudflare custom hostname delete FAILED for %s (hostname id %s): %s. "
+                        "The hostname may still be active on the Cloudflare zone and must be "
+                        "removed manually.",
+                        record.name,
+                        record.cloudflare_hostname_id,
+                        message,
+                    )
 
     # [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]
     def action_sync_ssl_status(self):

@@ -98,8 +98,34 @@ class TestDomainCustomHostname(RealTransactionCase):
         mock_delete = self.safe_patch(
             "odoo.addons.cloudflare.models.domain.cf_utils.delete_custom_hostname"
         )
+        mock_delete.return_value = (True, "Custom hostname deleted successfully.")
         domain.unlink()
         mock_delete.assert_called_once_with("hostname_456", "tok", "zone")
+
+    def test_unlink_logs_a_warning_when_the_cloudflare_delete_fails(self):
+        # Regression for todo 05a5144b: the (bool, str) result of delete_custom_hostname
+        # used to be discarded, so a failed delete left an orphaned hostname on Cloudflare
+        # with no trace anywhere.
+        mock_create = self.safe_patch(
+            "odoo.addons.cloudflare.models.domain.cf_utils.create_custom_hostname"
+        )
+        mock_create.return_value = (True, {"id": "hostname_fail", "ssl": {"status": "active"}})
+        domain = self.env["edge.routing.domain"].create(
+            {
+                "name": "https://domain-sync-test.example",
+                "target_slug": "domain-sync-test-fail",
+            }
+        )
+        mock_delete = self.safe_patch(
+            "odoo.addons.cloudflare.models.domain.cf_utils.delete_custom_hostname"
+        )
+        mock_delete.return_value = (False, "API Error")
+        with self.assertLogs("odoo.addons.cloudflare.models.domain", level="WARNING") as cm:
+            domain.unlink()
+        self.assertTrue(
+            any("hostname_fail" in line and "API Error" in line for line in cm.output),
+            cm.output,
+        )
 
     def test_action_sync_ssl_status_updates_a_changed_status(self):
         # Tests [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]
