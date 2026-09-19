@@ -14,7 +14,7 @@ stand. Every claim below is sourced to its own section; treat this summary as an
 board, not a replacement for the underlying evidence.
 
 **Chip modes with real, tested, chip-validated software** (all pass live against the real chip,
-including real recorded speech, as of the latest re-run -- §16-17, §23, §25, §31):
+including real recorded speech, as of the latest re-run -- §23, §25, §29, §31):
 - **D-STAR** -- `ambe_dstar`, validated via `examples/ambe_chip_validate_dstar.rs`.
 - **AMBE+2 half-rate** (both FEC and No-FEC rates) -- `ambe_plus_2`, validated via
   `examples/ambe_chip_validate_ambe_plus_2.rs`.
