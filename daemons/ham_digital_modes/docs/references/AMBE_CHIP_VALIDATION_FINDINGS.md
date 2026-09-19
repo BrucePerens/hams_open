@@ -2406,3 +2406,25 @@ represents is genuinely unresolved, and this specific investigative thread is cl
 left as an open "probably right" lead. Full 300-frame dataset committed
 (`u6_converged_range_sweep.tsv`) so a future session sees this exact result rather than re-deriving
 it.
+
+## 31. `ratet27_dtx`: DTX-silence classification implemented in software, one real overclaim caught and fixed by its own validation harness
+
+Following the same "implement the confirmed behavior in software" approach that produced
+`ratet27_dtmf` (section 25), implemented DTX-silence classification as `ambe::ratet27_dtx`, based on
+section 26/28's finding that `g0`, `g2`, and `c7` all read clean constants for confirmed DTX-silence.
+The first version required all three fields to match.
+
+**Its own new live validation harness (`examples/ambe_chip_validate_ratet27_dtx.rs`) immediately
+caught a real overclaim in that first version.** A careful 10-fresh-frame check found `g2` took 7
+different values and `c7` took 3 different values across just 10 confirmed-silence frames -- neither
+is actually a reliable constant, despite section 26's own single-frame check suggesting otherwise.
+**Only `g0` held up**: exactly `3841` in 10/10 fresh silence frames and exactly `1597` in 10/10
+fresh loud-tone frames, zero overlap. The module was corrected immediately to classify on `g0`
+alone, and re-validated live: **PASS, 20/20 frames (10 silence, 10 loud tone) classified correctly.**
+
+This is a clean, concrete example of why this investigation insists on validating every "confirmed
+constant" claim with enough fresh samples before trusting it, and of the value of writing the live
+validation harness immediately alongside the software rather than treating documentation as
+sufficient -- the harness itself is what surfaced the problem, on its very first run. `ambe::ratet27_
+dtx::is_dtx_silence_frame` is now a real, tested, chip-validated software duplicate of this specific
+confirmed chip behavior.
