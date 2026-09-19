@@ -15,6 +15,8 @@ pub mod decode;
 pub mod enhancement;
 pub mod error_estimation;
 pub mod parameter_encoding;
+pub mod pitch;
+mod pitch_tables;
 pub mod prediction;
 pub mod reconstruct;
 mod reconstruct_tables;
