@@ -42,7 +42,17 @@ impl ErrorTable {
     }
 }
 
-pub struct Encoder {
+/// One frame's pitch analysis result: the refined fundamental, the initial estimate's error `E(P_hat_I)`, and the
+/// frame's own windowed spectrum ready for voicing/amplitude analysis.
+pub struct FrameAnalysis {
+    pub omega0_hat: f64,
+    pub initial_pitch_error: f64,
+    pub refinement: RefinementFrame,
+}
+
+/// Streaming pitch analysis shared by every mode's encoder: buffers input, runs the spec's two-frame lookahead
+/// pitch tracking and half/quarter-sample refinement, and yields one [`FrameAnalysis`] per 20 ms frame.
+pub struct FrameAnalyzer {
     /// `LEAD` zeros followed by every input sample received (older samples are trimmed, see `trimmed`).
     raw: Vec<f64>,
     /// Number of samples already dropped from the front of `raw`.
@@ -51,16 +61,13 @@ pub struct Encoder {
     real_samples: usize,
     next_frame: usize,
     center_offset: i32,
-    state: FrameState,
     prev1: (f64, f64),
     prev2: (f64, f64),
     tables: VecDeque<(usize, ErrorTable)>,
-    last_frame: Option<[u32; 8]>,
-    /// Frames for which analysis failed (degenerate pitch/`L_hat`) and the previous frame was repeated.
-    pub failed_frames: usize,
+    finished: bool,
 }
 
-impl Encoder {
+impl FrameAnalyzer {
     pub fn new() -> Self {
         Self {
             raw: vec![0.0; LEAD],
@@ -68,12 +75,10 @@ impl Encoder {
             real_samples: 0,
             next_frame: 0,
             center_offset: 0,
-            state: FrameState::initial(),
             prev1: (100.0, 0.0),
             prev2: (100.0, 0.0),
             tables: VecDeque::new(),
-            last_frame: None,
-            failed_frames: 0,
+            finished: false,
         }
     }
 
@@ -91,23 +96,35 @@ impl Encoder {
         self.real_samples += samples.len();
     }
 
+    /// Pads with silence so every pushed sample's frame can be analysed; call once, then drain `next_analysis`.
+    pub fn finish_input(&mut self) {
+        if !self.finished {
+            self.raw.extend(std::iter::repeat_n(0.0, 3 * FRAME_SAMPLES + 2 * MARGIN));
+            self.finished = true;
+        }
+    }
+
     fn available(&self, k: usize) -> bool {
         self.center(k + 2) + MARGIN < self.trimmed + self.raw.len()
     }
 
-    fn table(&mut self, k: usize) -> &ErrorTable {
+    fn has_real_frame(&self) -> bool {
+        !self.finished || self.center(self.next_frame) < LEAD + self.real_samples
+    }
+
+    fn table(&mut self, k: usize) {
         if !self.tables.iter().any(|(i, _)| *i == k) {
             let center = self.center(k);
             let table = ErrorTable::compute(&self.raw, center - self.trimmed);
             self.tables.push_back((k, table));
         }
-        &self.tables.iter().find(|(i, _)| *i == k).unwrap().1
     }
 
-    /// Encodes the next frame if enough lookahead has been pushed, else `None`.
-    pub fn next_frame(&mut self) -> Option<[u32; 8]> {
+    /// The next frame's analysis if enough lookahead has been pushed (and, after [`Self::finish_input`], while
+    /// frames still cover real input), else `None`.
+    pub fn next_analysis(&mut self) -> Option<FrameAnalysis> {
         let k = self.next_frame;
-        if !self.available(k) {
+        if !self.has_real_frame() || !self.available(k) {
             return None;
         }
         self.table(k);
@@ -127,14 +144,11 @@ impl Encoder {
         let center = self.center(k) - self.trimmed;
         let refinement = RefinementFrame::new(&self.raw, center);
         let omega0_hat = refine_pitch(&refinement, p_initial);
-        let encoded = encode_frame(&refinement, omega0_hat, e_initial, &self.state, false);
 
         self.prev2 = self.prev1;
         self.prev1 = (p_initial, e_initial);
         self.next_frame += 1;
 
-        // Drop bookkeeping that can no longer be needed: tables older than this frame, and raw samples
-        // older than the next frame's analysis margin.
         while self.tables.front().is_some_and(|(i, _)| *i < k + 1) {
             self.tables.pop_front();
         }
@@ -144,8 +158,42 @@ impl Encoder {
             self.raw.drain(..drop);
             self.trimmed += drop;
         }
+        Some(FrameAnalysis { omega0_hat, initial_pitch_error: e_initial, refinement })
+    }
+}
 
-        match encoded {
+impl Default for FrameAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct Encoder {
+    analyzer: FrameAnalyzer,
+    state: FrameState,
+    last_frame: Option<[u32; 8]>,
+    /// Frames for which analysis failed (degenerate pitch/`L_hat`) and the previous frame was repeated.
+    pub failed_frames: usize,
+}
+
+impl Encoder {
+    pub fn new() -> Self {
+        Self { analyzer: FrameAnalyzer::new(), state: FrameState::initial(), last_frame: None, failed_frames: 0 }
+    }
+
+    /// Shifts every frame's analysis centre by `samples` (may be negative) relative to `k*160`.
+    pub fn set_center_offset(&mut self, samples: i32) {
+        self.analyzer.set_center_offset(samples);
+    }
+
+    pub fn push_samples(&mut self, samples: &[f64]) {
+        self.analyzer.push_samples(samples);
+    }
+
+    /// Encodes the next frame if enough lookahead has been pushed, else `None`.
+    pub fn next_frame(&mut self) -> Option<[u32; 8]> {
+        let a = self.analyzer.next_analysis()?;
+        match encode_frame(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false) {
             Some((c, next_state)) => {
                 self.state = next_state;
                 self.last_frame = Some(c);
@@ -160,13 +208,10 @@ impl Encoder {
 
     /// Pads with silence so every pushed sample's frame can be emitted, and returns those remaining frames.
     pub fn finish(&mut self) -> Vec<[u32; 8]> {
-        self.raw.extend(std::iter::repeat_n(0.0, 3 * FRAME_SAMPLES + 2 * MARGIN));
+        self.analyzer.finish_input();
         let mut out = Vec::new();
-        while self.center(self.next_frame) < LEAD + self.real_samples {
-            match self.next_frame() {
-                Some(f) => out.push(f),
-                None => break,
-            }
+        while let Some(f) = self.next_frame() {
+            out.push(f);
         }
         out
     }

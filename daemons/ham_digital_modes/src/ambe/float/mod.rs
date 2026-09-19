@@ -10,6 +10,7 @@
 #[cfg(feature = "ambe_plus_2")]
 pub mod ambe_plus_2;
 pub mod dstar;
+pub mod mbe_encode;
 pub mod mbe_synthesis;
 pub mod ratet27;
 pub mod tone_synthesis;
