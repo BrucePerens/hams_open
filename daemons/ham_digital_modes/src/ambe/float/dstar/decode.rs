@@ -301,8 +301,13 @@ pub enum DequantizedFrame {
 /// fixed-point table by calling this real function directly, the same reasoning
 /// `ratet27::parameter_encoding::dequantize_fundamental_frequency` already established for RATET(27).
 pub fn f0_from_b0(b0: u32) -> f64 {
-    2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
+    F0_CHIP_SCALE * 2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
 }
+
+/// The real chip's D-STAR fundamental frequency is measured at `1.030x` mbelib's guessed formula
+/// (`examples/dstar_fit_pitch_table.rs`: median 1.030 over 33 loud stable-pitch frames, b0 31-55, with a
+/// control on this crate's own PCM reading 1.000).
+pub const F0_CHIP_SCALE: f64 = 1.030;
 
 // [@ANCHOR: dequantize]
 pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {

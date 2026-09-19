@@ -32,7 +32,7 @@ fn nearest_row<const N: usize>(table: &[[f64; N]], target: &[f64; N]) -> u32 {
 pub fn quantize_pitch(w0: f64) -> u32 {
     let f0 = w0 / (2.0 * std::f64::consts::PI);
     // Inverse of decode::dequantize's f0 formula: f0 = 2^(-4.311767578125 - 2.1336e-2*(b0+0.5)).
-    let b0_estimate = ((-f0.log2() - 4.311767578125) / 2.1336e-2) - 0.5;
+    let b0_estimate = ((-(f0 / super::decode::F0_CHIP_SCALE).log2() - 4.311767578125) / 2.1336e-2) - 0.5;
     b0_estimate.round().clamp(0.0, 125.0) as u32
 }
 
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn quantize_pitch_round_trips_within_one_index_of_every_real_b0() {
         for b0 in 0u32..126 {
-            let f0 = 2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5));
+            let f0 = crate::ambe::float::dstar::decode::f0_from_b0(b0 as u32);
             let w0 = f0 * 2.0 * std::f64::consts::PI;
             let recovered = quantize_pitch(w0);
             assert!(
