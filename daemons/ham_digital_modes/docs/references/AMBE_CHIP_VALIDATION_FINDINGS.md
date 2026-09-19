@@ -2609,20 +2609,37 @@ remains as unstable and weakly-correlated as `g1`/`g2`/`u6` -- no clean semantic
 yet by any test in this document. Both are recorded as open, real, current-state findings rather
 than being left completely uninvestigated.
 
-**A precise structural detail found while looking closer at `u4`'s own "exactly 2 values" pattern**:
-at every one of the 16 tested amplitudes, `u4`'s two alternating values differ by **exactly `53`**,
-with zero exceptions (`454/507`, `1862/1915`, `1734/1787`, `1606/1659`, `1990/2043` -- all
-differences checked directly, all exactly `53`). This is a real, precise, frequency/amplitude-
-independent constant, not a coincidence of these specific 16 test points. The most likely
-explanation, consistent with standard vocoder design practice: `u4` (or whatever underlying quantity
-it encodes) is subject to **error-feedback/dithered quantization** -- alternating between two
-adjacent quantizer levels frame-to-frame to preserve the *average* value's fidelity despite coarse
-per-frame resolution, a well-known technique (related to noise-shaping/dither in ADPCM and similar
-codecs) for reducing perceptible quantization distortion in a slowly-varying parameter. If so, `53`
-is very likely `u4`'s own quantizer step size (or a simple multiple of it) at whatever operating
-point this test's fixed 200Hz/varying-amplitude stimulus lands on -- a concrete, quantitative clue
-for whoever next attempts `u4`'s full semantic identification, not available from any single-frame
-reading alone.
+**A precise structural detail found while looking closer at `u4`'s own "exactly 2 values" pattern
+at fixed 200Hz**: at every one of the 16 tested amplitudes (fixed frequency, varying amplitude),
+`u4`'s two alternating values differ by **exactly `53`**, with zero exceptions (`454/507`,
+`1862/1915`, `1734/1787`, `1606/1659`, `1990/2043`). The most likely explanation, consistent with
+standard vocoder design practice: `u4` (or whatever underlying quantity it encodes) is subject to
+**error-feedback/dithered quantization** -- alternating between two adjacent quantizer levels
+frame-to-frame to preserve the *average* value's fidelity despite coarse per-frame resolution, a
+well-known technique (related to noise-shaping/dither in ADPCM and similar codecs).
+
+**Corrected immediately on checking a second, independent dataset (zero extra chip time): the
+dither step is not a single universal constant -- it varies with frequency, clustering into (at
+least) two distinct values.** Re-running the same check against the RMS-normalized dense pitch
+sweep (fixed amplitude, varying frequency, section 23) finds `u4`'s dominant dither gap is
+`~53` at several frequencies (`180, 200, 220, 240, 260, 300, 340, 360, 380, 440`Hz -- observed as
+`53, 53, 53(within a 4-value spread), 53, 53, 53, 50, 54, 52, 53`) but **`~42-45` at others**
+(`80, 100, 120, 280, 320, 440`Hz -- `40, 45, 45, 45, 41, 42`), with occasional perfect stability
+(`160`Hz: a single value, no dither at all) and noisier multi-value spreads at the lowest
+frequencies (`60`Hz) consistent with this document's own well-established low-frequency
+non-convergence pattern. **This is a real, better characterization, not a contradiction of the
+amplitude-sweep result** (both datasets are internally consistent; frequency simply wasn't held
+fixed in the second one) -- and it is a *more* interesting finding than a single universal
+constant: two (or more) distinct step sizes appearing at different frequencies is exactly the
+qualitative signature of an **`L_hat`-dependent quantizer step size**, which this crate's own
+textbook `tables::gain_bit_allocation` (Annex F) documents explicitly for higher-order gain-vector
+coefficients ("`step_size` is non-decreasing as `L` grows for fixed `m`" -- see that function's own
+doc comment). This is a genuine, concrete, quantitative clue supporting `u4` as a real gain-vector
+element (distinct from `g0`'s own role) with an `L_hat`-dependent step size, not proof, but a much
+more specific and checkable lead than "probably gain-related" -- a natural next step is computing
+`L_hat` for each tested frequency (via this crate's own `vuv::harmonics_count`, already used in
+section 24) and checking whether the `~53` vs `~42-45` clustering lines up with `L_hat` crossing a
+specific Annex F bit-allocation boundary.
 
 **A quick cross-check of the same dataset against the other blocks**: `g1`/`g2`/`u5`/`u6` show no
 comparably clean pattern (their distinct-value gaps are irregular, no single repeated difference).
