@@ -137,10 +137,12 @@ including real recorded speech, as of the latest re-run -- §23, §25, §29, §3
    hex-written input without converting -- re-checked directly in one base and there is no Call
    Progress discrepancy. The real DTMF quirk itself has a clean explanation: DVSI's Table 104
    documents *two* independent DTMF-to-`TONE_IDX` columns ("Rate Index 0-32" and "Rate Index 33-61",
-   different non-monotonic nibble mappings), and the forced-generation `TONE` field is read by the
-   encoder via the **0-32 column regardless of the rate actually configured**, while the encoder's own
-   output (both a genuinely detected digit and a forced one's readback) is always reported via the
-   33-61 column. Checked exactly against all 16 forced DTMF digits: `readback = column_33_61[
+   different non-monotonic nibble mappings), and at `RATET(33)` -- **the only rate tested; not yet
+   confirmed for `RATET(34)` (AMBE+2 half-rate's own No-FEC rate) or any 0-32-group rate such as
+   `RATET(27)`** -- the forced-generation `TONE` field is read by the encoder via the **0-32 column**,
+   even though `33` is itself in the 33-61 group, while the encoder's own output (both a genuinely
+   detected digit and a forced one's readback) is always reported via the 33-61 column at this rate.
+   Checked exactly against all 16 forced DTMF digits: `readback = column_33_61[
    column_0_32[sent]]` matches every one of the 16 captures with zero exceptions -- not a guess, a
    confirmed formula. This does not affect the *detected*-DTMF finding's own live-validated
    correctness (128/128, in `TONE_IDX`'s own 33-61 numbering, confirmed directly) -- it only concerns
@@ -3485,10 +3487,12 @@ returns against the hex value that was sent without converting either into the o
 called that a discrepancy; re-checked directly in one base, it is not. **DTMF genuinely does have a
 readback quirk, fully explained**: forcing `TONE_IDX=0x87` reads back `128`=`0x80`, not `0x87`. The
 explanation is DVSI's own Table 104 documenting *two* independent DTMF columns ("Rate Index 0-32" and
-"Rate Index 33-61", different non-monotonic nibble-to-digit mappings) -- the forced-generation `TONE`
-field is read by the encoder via the **0-32 column regardless of the rate actually configured**
-(`RATET(33)` is in the 33-61 group), while the encoder's own output (a genuinely detected digit or a
-forced one's readback, alike) is always reported via the 33-61 column. Checked exactly against all 16
+"Rate Index 33-61", different non-monotonic nibble-to-digit mappings) -- at `RATET(33)`, **the only
+rate this was tested against** (not yet confirmed for `RATET(34)`, AMBE+2 half-rate's own No-FEC rate,
+or any 0-32-group rate such as `RATET(27)`), the forced-generation `TONE` field is read by the encoder
+via the **0-32 column** even though `33` is itself in the 33-61 group, while the encoder's own output
+(a genuinely detected digit or a forced one's readback, alike) is always reported via the 33-61 column
+at this rate. Checked exactly against all 16
 forced DTMF digits: `readback = column_33_61[column_0_32[sent]]` holds for every one of the 16
 captures, zero exceptions -- a confirmed formula, not an inference. **This does not affect the
 detected-DTMF finding's own correctness or its live validation**: a genuinely *detected* DTMF digit

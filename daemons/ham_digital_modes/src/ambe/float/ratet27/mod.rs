@@ -131,7 +131,7 @@ pub mod error_estimation;
 // Golay/Hamming FEC now lives in `super::general` (shared with `super::dstar`/`super::ambe_plus_2`);
 // re-exported under the same `fec` name so this module's own internal `fec::`/`super::fec::`
 // references keep working unchanged.
-pub use crate::ambe::float::general::fec;
+pub use crate::ambe::general::fec;
 pub mod interleave;
 pub mod modulation;
 pub mod parameter_encoding;

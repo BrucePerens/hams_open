@@ -8,7 +8,7 @@
 //! relative to the noise peaks already tested, and whether `g3` correlates with it.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_probe_dtx_voice_active -- <host:port>`
-use ham_digital_modes::ambe::float::general::fec::golay_decode;
+use ham_digital_modes::ambe::general::fec::golay_decode;
 use ham_digital_modes::ambe::float::ratet27::ratet27_fec::decode_block;
 use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;

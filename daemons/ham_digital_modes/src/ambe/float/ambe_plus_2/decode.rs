@@ -122,9 +122,11 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 /// DTMF `TONE_IDX` and reading the result back through this same function does **not** return the
 /// same byte that was sent (e.g. forcing `TONE_IDX=0x87` reads back `128`=`0x80`, not `0x87`). This is
 /// not a second numbering space -- Table 104 documents *two* DTMF columns, "Rate Index 0-32" and
-/// "Rate Index 33-61" (a different, non-monotonic nibble mapping in each), and the forced-generation
-/// `TONE` field is read by the encoder using the **0-32 column regardless of the rate actually
-/// configured** (`RATET(33)`, which is in the 33-61 group), while the encoder's own *output* -- both a
+/// "Rate Index 33-61" (a different, non-monotonic nibble mapping in each), and at `RATET(33)` (**the
+/// only rate this was tested against** -- not yet confirmed for `RATET(34)`, AMBE+2 half-rate's own
+/// No-FEC rate, or any 0-32-group rate such as `RATET(27)`) the forced-generation `TONE` field is read
+/// by the encoder using the **0-32 column**, even though `33` itself is in the 33-61 group, while the
+/// encoder's own *output* -- both a
 /// genuinely detected digit and a forced one's readback -- is reported using the 33-61 column, which
 /// is what this function documents and what [`dtmf_digit_from_tone_idx`] decodes. Checked exactly
 /// against all 16 forced DTMF digits: `readback = column_33_61[column_0_32[sent]]` matches every one
@@ -481,7 +483,7 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::float::general::fec::golay_encode;
+    use crate::ambe::general::fec::golay_encode;
     use crate::ambe::float::dstar::whiten_c1;
 
     /// The `b0..b8` scatter must be a genuine bijection over all 49 bits of `d[]` -- every index

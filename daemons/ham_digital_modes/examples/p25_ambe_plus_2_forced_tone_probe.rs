@@ -7,7 +7,9 @@
 //! encoder to transmit a tone frame" for the specified `TONE_IDX` (`AMBE-3000R` manual Table 98/103,
 //! page 72-74). This bypasses the tone *detector* entirely, so it answers a narrower, cleaner
 //! question than any detection-based probe could: when the encoder is *told* to emit `TONE_IDX=0x81`
-//! ('1' in DTMF terms) directly, does the resulting channel frame's `b0` read `120` (matching every
+//! (this rate's own 33-61-column code for DTMF '4' -- see `ambe_plus_2::decode::decode_tone_idx`'s
+//! doc comment for why this probe's readback doesn't match the digit `0x81` names in that column)
+//! directly, does the resulting channel frame's `b0` read `120` (matching every
 //! detection-triggered capture in this document) or `126/127` (the spec's own documented `Tone`
 //! range, never yet observed)?
 //!

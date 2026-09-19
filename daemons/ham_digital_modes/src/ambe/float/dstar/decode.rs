@@ -10,7 +10,7 @@
 //! disclosed next step, not silently skipped.
 
 use super::tables;
-use crate::ambe::float::general::fec::golay_decode;
+use crate::ambe::general::fec::golay_decode;
 
 /// The real FEC/whitening outcome of parsing one raw 72-bit frame: the 49 decoded data bits plus
 /// both Golay blocks' own corrected-error counts. **The same caveat the P25 chip-validation
@@ -451,13 +451,13 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::float::general::fec::golay_encode;
+    use crate::ambe::general::fec::golay_encode;
     use crate::ambe::float::dstar::whiten_c1;
 
     /// A real, self-consistent round trip: build a frame from known C0/C1/C2/C3 values (Golay-encode
     /// C0's own data, whiten and Golay-encode C1's), pack it, and confirm `parse_frame` recovers the
     /// exact original 49 data bits with zero corrected errors -- the same load-bearing check
-    /// `super::super::general::fec`'s own tests use for its Golay/Hamming implementations, applied here
+    /// `ambe::general::fec`'s own tests use for its Golay/Hamming implementations, applied here
     /// to this module's own frame assembly and whitening order.
     #[test]
     fn parse_frame_recovers_a_cleanly_encoded_frame_with_zero_errors() {
