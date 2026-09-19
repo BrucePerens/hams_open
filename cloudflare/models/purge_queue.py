@@ -41,14 +41,11 @@ class CloudflarePurgeQueue(models.Model):
             .rstrip("/")
         )
 
-        existing = self.env["cloudflare.purge.queue"].search([
-            ("website_id", "in", [w for w in website_ids if w]),
-            ("state", "=", "pending"),
-            ("purge_type", "=", "url")
-        ], limit=1000)
-        existing_set = set((r.website_id.id if r.website_id else False, r.target_item) for r in existing)
-
-        create_vals = []
+        # Resolve every candidate (website, full_url) pair first, then look up ONLY those
+        # targets among the pending rows. The previous "search the first 1000 pending rows"
+        # window made any URL beyond it invisible to the dedup check on a backlogged website
+        # (todo 5b71945e), so the lookup is now keyed by the candidates and needs no cap.
+        candidates = {}
         for wid, urls in purge_map.items():
             website = website_dict.get(wid)
             base_url = (
@@ -60,13 +57,31 @@ class CloudflarePurgeQueue(models.Model):
                 if not u:
                     continue
                 full_url = f"{base_url}{u}" if str(u).startswith("/") else u
-                
-                if (wid if wid else False, full_url) not in existing_set:
+                candidates.setdefault(wid if wid else False, set()).add(full_url)
+
+        all_urls = sorted({u for urls in candidates.values() for u in urls})
+        existing = self.env["cloudflare.purge.queue"].search(
+            [
+                ("website_id", "in", list(candidates)),
+                ("state", "=", "pending"),
+                ("purge_type", "=", "url"),
+                ("target_item", "in", all_urls),
+            ]
+        )
+        already = {
+            (r.website_id.id if r.website_id else False, r.target_item)
+            for r in existing
+        }
+
+        create_vals = []
+        for wid, full_urls in candidates.items():
+            for full_url in sorted(full_urls):
+                if (wid, full_url) not in already:
                     create_vals.append(
                         {
                             "target_item": full_url,
                             "purge_type": "url",
-                            "website_id": wid if wid else False,
+                            "website_id": wid,
                         }
                     )
 

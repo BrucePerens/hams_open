@@ -83,3 +83,28 @@ class TestEnqueueUrlsBatch(RealTransactionCase):
         self.PurgeQueue.enqueue_urls_batch({self.website.id: ["/real", "", None]})
         after = self._pending_urls()
         self.assertEqual(after - before, {"https://enqueue-test.example/real"})
+
+    def test_dedup_holds_even_when_the_pending_backlog_exceeds_one_thousand_rows(self):
+        # Regression for todo 5b71945e: the dedup pre-check used to search only the first 1000
+        # pending rows, so a URL sitting beyond that window was re-enqueued as a duplicate.
+        base = "https://enqueue-test.example"
+        self.PurgeQueue.create(
+            [
+                {"target_item": f"{base}/backlog/{i}", "purge_type": "url",
+                 "website_id": self.website.id}
+                for i in range(1100)
+            ]
+        )
+        self.PurgeQueue.enqueue_urls_batch({self.website.id: ["/backlog/1099", "/backlog/0"]})
+        rows = self.PurgeQueue.search(
+            [
+                ("website_id", "=", self.website.id),
+                ("state", "=", "pending"),
+                ("target_item", "in", [f"{base}/backlog/0", f"{base}/backlog/1099"]),
+            ]
+        )
+        self.assertEqual(
+            sorted(rows.mapped("target_item")),
+            sorted([f"{base}/backlog/0", f"{base}/backlog/1099"]),
+            "a URL inside the backlog was duplicated",
+        )
