@@ -743,6 +743,81 @@ mod tests {
         assert_eq!(quantize_gain_index(100.0), 63);
     }
 
+    /// Spot-checks `GAIN_BIT_ALLOCATION` (Annex F) and `HIGHER_ORDER_BIT_ALLOCATION` (Annex G) against
+    /// fresh 600 DPI renders of `TIA-102.BABA_2003.pdf` pages 87-90 (Annex F) and 91-101 (Annex G),
+    /// for every `L` that actually recurred in a real 200-frame chip-vs-float speech comparison
+    /// (`ratet27_diagnose_gain_scale_mismatch.rs`'s own live-chip run). Written after that
+    /// investigation's live bit-flip probe (`ratet27_bit_flip_semantic_probe.rs`) found real evidence
+    /// that this crate's own TIA Fig. 22 bit-prioritization layout for `b2` is very likely correct --
+    /// this test rules out the other candidate explanation for the residual chip/float PCM gap (a
+    /// single-digit Annex F/G transcription error silently compressing one `L` value's spectrum,
+    /// which would survive fixed-vs-float validation since both sides share this same table) for the
+    /// specific `L` values real speech actually exercises. Not exhaustive across all 48 rows -- a
+    /// future session extending this coverage should add more `L` values here, not re-render pages
+    /// already covered.
+    #[test]
+    fn gain_and_higher_order_bit_allocation_match_annex_f_g_for_recurring_l_values() {
+        // (L, [(bits, step_size); 5]) for GAIN_BIT_ALLOCATION, read directly off the Annex F render.
+        let annex_f: [(u32, [(u8, f64); 5]); 9] = [
+            (24, [(5, 0.0868), (4, 0.0804), (4, 0.0672), (4, 0.058), (4, 0.0528)]),
+            (30, [(4, 0.124), (4, 0.0804), (4, 0.0672), (3, 0.09425), (3, 0.0858)]),
+            (32, [(4, 0.124), (4, 0.0804), (3, 0.1092), (3, 0.09425), (3, 0.0858)]),
+            (33, [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)]),
+            (34, [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)]),
+            (36, [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (3, 0.0858)]),
+            (40, [(4, 0.124), (3, 0.13065), (3, 0.1092), (3, 0.09425), (2, 0.1122)]),
+            (42, [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)]),
+            (44, [(4, 0.124), (3, 0.13065), (3, 0.1092), (2, 0.12325), (2, 0.1122)]),
+        ];
+        for (l, expected) in annex_f {
+            for (idx, &(bits, step)) in expected.iter().enumerate() {
+                let (actual_bits, actual_step) = gain_bit_allocation(l, idx as u32 + 2).unwrap();
+                assert_eq!(actual_bits, bits, "L={l} m={}: bits mismatch vs Annex F render", idx + 2);
+                assert!(
+                    (actual_step - step).abs() < 1e-9,
+                    "L={l} m={}: step {actual_step} vs Annex F render {step}",
+                    idx + 2
+                );
+            }
+        }
+
+        // (L, [bits; ...]) for HIGHER_ORDER_BIT_ALLOCATION (b8..b_{L+1}), read directly off the
+        // Annex G render.
+        let annex_g: [(u32, &[u8]); 9] = [
+            (24, &[4, 3, 3, 4, 3, 3, 3, 3, 2, 3, 2, 1, 2, 2, 1, 2, 2, 1]),
+            (30, &[3, 3, 2, 2, 3, 3, 2, 2, 3, 2, 2, 1, 3, 2, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1]),
+            (32, &[
+                3, 3, 2, 2, 3, 3, 2, 2, 3, 2, 2, 1, 2, 2, 1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 0,
+            ]),
+            (33, &[
+                3, 3, 2, 2, 3, 3, 2, 2, 3, 2, 1, 1, 2, 2, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1,
+            ]),
+            (34, &[
+                3, 2, 2, 2, 3, 2, 2, 2, 3, 2, 2, 1, 1, 2, 2, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 0,
+            ]),
+            (36, &[
+                3, 2, 2, 2, 1, 3, 2, 2, 2, 1, 3, 2, 1, 1, 1, 2, 2, 1, 1, 1, 2, 1, 1, 1, 0, 2, 1, 1,
+                1, 0,
+            ]),
+            (40, &[
+                3, 2, 2, 2, 1, 3, 2, 2, 1, 1, 3, 2, 1, 1, 1, 1, 2, 2, 1, 1, 1, 0, 2, 1, 1, 1, 1, 0,
+                2, 1, 1, 1, 0, 0,
+            ]),
+            (42, &[
+                3, 2, 2, 2, 1, 1, 3, 2, 2, 2, 1, 1, 2, 2, 1, 1, 1, 1, 2, 2, 1, 1, 1, 0, 2, 1, 1, 1,
+                0, 0, 2, 1, 1, 1, 0, 0,
+            ]),
+            (44, &[
+                3, 2, 2, 1, 1, 1, 3, 2, 2, 2, 1, 1, 2, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 0, 2, 1, 1, 1,
+                1, 0, 0, 2, 1, 1, 1, 1, 0, 0,
+            ]),
+        ];
+        for (l, expected) in annex_g {
+            let actual = higher_order_bit_allocation(l).unwrap();
+            assert_eq!(actual, expected, "L={l}: HIGHER_ORDER_BIT_ALLOCATION mismatch vs Annex G render");
+        }
+    }
+
     #[test]
     // Tests [@ANCHOR: block_lengths_for_l]
     fn block_lengths_always_sum_to_l() {

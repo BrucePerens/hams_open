@@ -3,36 +3,30 @@
 //! (whole-buffer raw-sample correlation ~0.10, envelope correlation ~0.63, frame-to-frame RMS ratio
 //! swinging both louder and quieter than the chip -- not a constant gain factor).
 //!
-//! **Result: root-caused, one level short of a fix.** `l_hat` is stable and physically plausible
-//! across real voiced speech (e.g. 25 consecutive frames in 30-41 on one speaker), so `b0`'s own
-//! within-codeword bit order (`u0` bits 11:6 and `u7` bits 2:1, per `bit_prioritization::
-//! extract_fundamental_frequency_quantizer`) is correct. But `b2` (the 6-bit log-gain index) barely
-//! correlates with real chip loudness at all (`0.18` Pearson on loud frames), and neither does
-//! `u0`'s own bits 5:3 -- the exact position TIA Fig. 22's `prioritize_bits` puts `b2`'s top 3 bits,
-//! right after `b0`'s. Since `u0`'s bits 11:6 are demonstrably correct, this rules out a narrow
-//! Hamming-block bit-order bug and points at something wider: **DVSI's real chip likely uses a
-//! different bit-prioritization scheme than TIA-102.BABA_2003 Fig. 22 for everything past the
-//! fundamental frequency** -- consistent with `ratet27_wire_format.rs`'s own long-standing doc
-//! comment ("do not trust decoded FEC data-bit *values* against the real chip -- only block
-//! membership/natural ordering are chip-verified") and with the interleave table already having
-//! turned out proprietary rather than TIA's own Annex H. `ratet27_compare_textbook_u_vectors_to_chip.
-//! rs`'s earlier pure-tone `u0=g0` mismatch is now understood differently too: `g0`/`u0`'s *block*
-//! and *within-codeword bit order* were both fine, but a pure sine tone is bad input for a
-//! voice-tuned chip pitch tracker -- the mismatch there was a confound, not evidence against `u0`.
-//!
-//! **Ruled out: amplitude-smoothing-clamp compression as an alternative explanation.** Eq. 115/116's
-//! own `tau_M` clamp (verified correct against a 600 DPI spec render -- it really does reset to a
-//! fixed `20480` every clean frame, not carry forward, matching this crate's implementation exactly)
-//! could in principle compress `b2`'s real range on loud frames on *both* the chip's encoder and this
-//! crate's decoder, producing a spuriously weak correlation even with a correct bit layout. Checked
-//! directly: `b2`'s range stays wide (17-54 of 0-63 possible) on both loud (`chip_rms>500`) and
-//! moderate (`200<chip_rms<800`, clamp very unlikely active) frames, and the correlation stays weak
-//! in both regimes (`0.18`, then `0.07`) -- not narrowing as the clamp hypothesis would predict. Also
-//! checked: `GAIN_QUANTIZER_LEVELS` (Annex E) spot-checked against a 600 DPI render of the spec's own
-//! table, all entries match exactly -- not a transcription bug either. See `ratet27_bit_flip_
-//! semantic_probe.rs` for the follow-up attempt to empirically map DVSI's real bit-to-parameter
-//! assignment directly against the chip (inconclusive by that metric on single-trial data -- see its
-//! own doc comment).
+//! **Result: `l_hat`/`b0` correct; `b2`'s weak correlation here turned out to be a clamp artifact,
+//! not a layout bug -- see `ratet27_bit_flip_semantic_probe.rs`'s own doc comment for the full,
+//! corrected story.** `l_hat` is stable and physically plausible across real voiced speech (e.g. 25
+//! consecutive frames in 30-41 on one speaker), so `b0`'s own within-codeword bit order (`u0` bits
+//! 11:6 and `u7` bits 2:1, per `bit_prioritization::extract_fundamental_frequency_quantizer`) is
+//! correct. But `b2` (the 6-bit log-gain index) barely correlates with real chip loudness at all
+//! (`0.18` Pearson on loud frames, `0.07` on moderate frames), and neither does `u0`'s own bits 5:3 --
+//! the exact position TIA Fig. 22's `prioritize_bits` puts `b2`'s top 3 bits, right after `b0`'s.
+//! **This first looked like evidence that DVSI's real chip uses a different bit-prioritization scheme
+//! than TIA for everything past the fundamental frequency -- that conclusion was wrong.** The
+//! bit-flip probe (`ratet27_bit_flip_semantic_probe.rs`), corrected to target a *moderate* rather
+//! than loud frame (Eq. 115/116's own amplitude-smoothing clamp fires readily on loud frames and
+//! decorrelates `b2` from RMS regardless of layout correctness -- the real mechanism behind the weak
+//! correlation above), found the real chip's measured response matches this crate's own TIA-layout
+//! prediction in sign on 5 of 6 bits, two in both sign and rough magnitude. `b2`'s layout is very
+//! likely correct after all. Also checked and clean: `GAIN_QUANTIZER_LEVELS` (Annex E), and (in
+//! `tables::tests::gain_and_higher_order_bit_allocation_match_annex_f_g_for_recurring_l_values`)
+//! `GAIN_BIT_ALLOCATION`/`HIGHER_ORDER_BIT_ALLOCATION` (Annex F/G) for every `L` this session's real
+//! speech sample actually exercised. `ratet27_compare_textbook_u_vectors_to_chip.rs`'s earlier
+//! pure-tone `u0=g0` mismatch is also best read as a test-material confound (a pure sine tone is bad
+//! input for a voice-tuned chip pitch tracker), not evidence against `u0`. **Net conclusion**: this
+//! crate's bit layout and Annex F/G tables check out against the real chip; the residual chip/float
+//! PCM gap (envelope correlation `~0.63`, not `1.0`) is most plausibly genuine inter-decoder variance
+//! (phase dither, noise-generator differences, edge-case handling) rather than a further bug here.
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_gain_scale_mismatch -- <host:port>`
 

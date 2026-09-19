@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Empirically maps DVSI's real RATET(27) bit-to-parameter assignment, using the chip itself as the
-//! oracle -- the decisive follow-up `ratet27_diagnose_gain_scale_mismatch.rs` flagged: `b0`'s own
-//! within-codeword bit order is demonstrably correct (stable, plausible `l_hat` on real voiced
-//! speech), but `b2` (and the same bit position under this crate's own TIA Fig. 22 layout) barely
-//! correlates with real chip loudness at all (`~0.18`). That rules out a narrow Hamming-block
-//! bit-order bug and points at DVSI using a different bit-prioritization scheme than TIA-102.
-//! BABA_2003 Fig. 22 for everything past the fundamental frequency.
+//! Empirically checks DVSI's real RATET(27) bit-to-parameter assignment against this crate's own
+//! TIA Fig. 22 layout, using the chip itself as the oracle -- the follow-up
+//! `ratet27_diagnose_gain_scale_mismatch.rs` flagged: `b0`'s own within-codeword bit order is
+//! demonstrably correct (stable, plausible `l_hat` on real voiced speech), but `b2` barely correlates
+//! with real chip loudness at all (`~0.18` on loud frames). A first hypothesis -- that this means
+//! DVSI uses a different bit-prioritization scheme than TIA for everything past the fundamental
+//! frequency -- turned out to be wrong once this probe was fixed to control for a real confound (see
+//! **Result** below). Kept, corrected, as a permanent tool: this is the decisive way to check any
+//! future bit-layout question directly against the real chip, not just for this one round.
 //!
 //! **Method**: since `ambe_fixed_chip_validate_ratet27.rs` already confirmed this crate's own
 //! block-membership/FEC-decode assumptions succeed on 3291/3320 real frames with low corrected-error
@@ -13,35 +15,48 @@
 //! automorphism -- so a re-encoded, single-data-bit-flipped codeword is still a *valid* codeword the
 //! chip will decode cleanly (not a corrupted frame the chip would reject or repeat). For each of the
 //! 88 data bits (in this crate's own `u_hat_0..u_hat_7` numbering): prime the chip decoder with the
-//! same real, loud, voiced frames every time (so its own predictive state, e.g. `previous_m`, is
-//! identical across every flip), decode the target frame's wire block to its data value, flip one
-//! bit, re-encode (`golay_encode`/`hamming_encode`, or direct for the unprotected raw block), write
-//! the new codeword back to its own wire positions (`block_wire_members`), and send. The resulting
-//! chip PCM's RMS delta and raw-sample correlation against an unflipped baseline reveal what that bit
-//! actually controls on the real chip: a `b2`/gain bit should move RMS a lot with high correlation
-//! preserved (same waveform, different level); a pitch bit should collapse correlation without
-//! necessarily moving RMS much (same energy, different harmonic structure); a low-order/noise-like
-//! bit should barely move either.
+//! same real frames every time (so its own predictive state, e.g. `previous_m`, is identical across
+//! every flip), decode the target frame's wire block to its data value, flip one bit, re-encode
+//! (`golay_encode`/`hamming_encode`, or direct for the unprotected raw block), write the new codeword
+//! back to its own wire positions (`block_wire_members`), and send -- followed by `N_FOLLOWUP` real
+//! *unmodified* frames, to integrate the predictive decoder's own tail. The signed
+//! `sum(log2(rms_flipped/rms_baseline))` across the target frame and its follow-ups reveals what that
+//! bit actually controls on the real chip.
 //!
-//! **Result: inconclusive by this metric, on real, single-trial data.** Two runs (single-frame, then
-//! a multi-frame version integrating the predictive decoder's own tail and the amplitude-smoothing
-//! clamp's frame-to-frame state, per the advisor's own refinement) both produced correlation values
-//! clustered near zero (`-0.5..0.5`) across *every* bit, with no clean separation between bits this
-//! crate's own layout calls "pitch" (expected: collapse correlation) versus "gain" (expected: high
-//! correlation, large RMS move) versus low-order/noise bits (expected: little of either). The most
-//! likely explanation: `voiced_synthesis`'s own phase dither (applied above `L/4`) and
-//! `unvoiced_synthesis`'s own noise generator are real, legitimate sources of frame-to-frame
-//! variability on the chip's own decoder that a *single* flip/single-trial correlation can't average
-//! out -- this experimental design would need many repeated trials per bit (or a way to disable/
-//! control the chip's own dither) to be decisive, which is real, substantial further work, not a
-//! quick fix. Left here as working, reusable infrastructure for that future effort, not as a
-//! completed bit-map. The decisive finding this session instead came from `ratet27_diagnose_gain_
-//! scale_mismatch.rs`'s own moderate-frame check: `b2`'s range stays wide (17-54 of 0-63) even
-//! restricted to loud or moderate frames (ruling out amplitude-smoothing-clamp compression as the
-//! explanation), yet its correlation with real chip loudness stays weak (`0.07-0.18`) throughout --
-//! independent, converging evidence (alongside `u0`'s own top bits behaving exactly as a correct
-//! pitch field should) that DVSI's real bit-prioritization differs from TIA Fig. 22 for the gain/
-//! amplitude fields specifically, not that this crate's block-membership or FEC assumptions are wrong.
+//! **First run: confounded by the amplitude-smoothing clamp, not informative.** The first version
+//! targeted a *loud* frame and used raw-sample correlation as the metric. Both were mistakes: Eq.
+//! 115/116's own `tau_M` clamp resets to a fixed `20480` every clean frame and fires readily on loud
+//! frames (`gamma_M` as low as `0.3`), which both compresses a gain bit's RMS effect and makes
+//! flipping it *down* release the clamp nonlinearly (a `+243%` RMS outlier that had nothing to do
+//! with bit significance); and raw-sample correlation against the dithered baseline turned out to be
+//! dominated by `voiced_synthesis`'s phase dither and `unvoiced_synthesis`'s noise generator
+//! regardless of which bit was flipped, clustering near zero for every bit and not discriminating
+//! anything.
+//!
+//! **Corrected run: `b2`'s TIA layout is very likely right after all.** Retargeted to frame 111
+//! (chip_rms ~395, inside the same stable `l_hat=30-41` voiced stretch, but *moderate* -- the clamp
+//! is inactive), and switched to signed `sum(log2ratio)` rather than correlation. With this frame's
+//! real `b2=39`, `GAIN_QUANTIZER_LEVELS` predicts each bit's own effect directly; the real chip's
+//! measured response matched sign on 5 of 6 predicted bits, with two (`u0` bit 4 and bit 3) matching
+//! in *both* sign and rough magnitude -- not plausibly noise:
+//!
+//! | bit (TIA position)    | predicted | observed |
+//! |------------------------|----------:|---------:|
+//! | bit5 (`u0` bit 5, MSB) |    -5.62  |   -1.59  |
+//! | bit4 (`u0` bit 4)      |    +2.68  |   +3.16  |
+//! | bit3 (`u0` bit 3)      |    +1.30  |   +1.03  |
+//! | bit2 (`u5` bit 9)      |    -0.71  |   -0.09  |
+//! | bit1 (`u5` bit 8)      |    -0.38  |   -0.02  |
+//! | bit0 (`u7` bit 3, LSB) |    -0.20  |   +0.04  |
+//!
+//! (`u5`, not `u4`, because this frame's `l_hat=35` gives `k_hat=12` per `vuv::frequency_bands_count`
+//! -- large enough that `b1`'s own `k_hat` voicing bits spill one bit past `u4`'s own 11 bits into
+//! `u5`, pushing `b2`'s middle two bits out to `u5` bits 9 and 8 rather than `u4`. Recompute this
+//! per-frame; it is not a fixed position.) The earlier weak `0.18`/`0.07` correlation was the clamp
+//! decorrelating `b2` from RMS on the sample of loud/moderate frames tested, exactly as suspected --
+//! not a real layout mismatch. See `tables::tests::gain_and_higher_order_bit_allocation_match_annex_
+//! f_g_for_recurring_l_values` for the follow-up Annex F/G table spot-check this result motivated
+//! (also clean). The residual chip/float PCM gap is most plausibly genuine inter-decoder variance.
 //!
 //! Usage: `cargo run --release --example ratet27_bit_flip_semantic_probe -- <host:port>`
 
@@ -61,7 +76,14 @@ const N_PRIME: usize = 20; // real priming frames before the flipped test frame.
 const N_FOLLOWUP: usize = 3; // real unmodified frames sent after the flip, to integrate the
                               // predictive decoder's tail (rho ~0.7) and average over the
                               // amplitude-smoothing clamp's own frame-to-frame state.
-const START_FRAME: usize = 100; // a known loud, voiced, stable-l_hat region.
+// Frame 111 (chip_rms ~395, inside the l_hat=30-41 stable voiced stretch spanning frames 104-127)
+// -- deliberately a *moderate*, not loud, frame: Eq. 115/116's own amplitude-smoothing clamp resets
+// tau_M to a fixed 20480 every clean frame and easily fires on loud frames (gamma_M ~0.3-0.6),
+// which both compresses a gain bit's RMS effect and makes flipping it *down* release the clamp
+// nonlinearly -- exactly the kind of confound that made the first (loud-frame) run of this probe
+// unreadable. A moderate frame keeps the clamp inactive so a real gain bit's effect on RMS isn't
+// swamped by that nonlinearity.
+const START_FRAME: usize = 91; // START_FRAME + N_PRIME (20) = 111, the moderate target frame.
 const LENGTHS: [u8; 8] = [12, 12, 12, 12, 11, 11, 11, 7];
 
 fn build_control_ratep(rcw: [u16; 6]) -> Vec<u8> {
@@ -204,25 +226,6 @@ fn flip_data_bit(baseline_wire_bits: &[bool; 144], index: usize, bit_in_block: u
 fn rms(pcm: &[f64]) -> f64 {
     (pcm.iter().map(|&s| s * s).sum::<f64>() / pcm.len() as f64).sqrt()
 }
-fn correlation(a: &[f64], b: &[f64]) -> f64 {
-    let n = a.len() as f64;
-    let mean_a = a.iter().sum::<f64>() / n;
-    let mean_b = b.iter().sum::<f64>() / n;
-    let mut cov = 0.0;
-    let mut var_a = 0.0;
-    let mut var_b = 0.0;
-    for (&x, &y) in a.iter().zip(b.iter()) {
-        let dx = x - mean_a;
-        let dy = y - mean_b;
-        cov += dx * dy;
-        var_a += dx * dx;
-        var_b += dy * dy;
-    }
-    if var_a <= 1e-9 || var_b <= 1e-9 {
-        return 0.0;
-    }
-    cov / (var_a.sqrt() * var_b.sqrt())
-}
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
@@ -290,32 +293,29 @@ fn main() {
     );
     let baseline_frames = run_experiment(&baseline_wire_bits);
     let baseline_rms: Vec<f64> = baseline_frames.iter().map(|f| rms(f)).collect();
-    let baseline_all: Vec<f64> = baseline_frames.concat();
     println!("Baseline per-frame RMS (target, then {N_FOLLOWUP} follow-ups): {baseline_rms:?}\n");
 
-    println!(
-        "{:>5} {:>4} {:>4} {:>10} {:>6}",
-        "block", "bit", "MSB#", "sum|log2ratio|", "corr"
-    );
+    // Signed, not absolute, log2(ratio) per frame -- a real gain-field bit should move RMS by
+    // roughly a constant step *with a consistent sign* across positions (MSB flips it further than
+    // an LSB), and the sign itself tells you which direction that bit's weight runs. Correlation
+    // against the dithered baseline waveform was dropped entirely: `voiced_synthesis`'s phase dither
+    // and `unvoiced_synthesis`'s noise generator dominate it regardless of which bit is flipped,
+    // making it a poor discriminator (see this file's own doc comment on the first, inconclusive
+    // run). RMS, summed signed across the target frame and its real follow-ups, is not immune to
+    // dither either, but is a far more direct readout of a gain-field bit's actual effect.
+    println!("{:>5} {:>4} {:>4} {:>12}", "block", "bit", "MSB#", "sum(log2ratio)");
     for (block_idx, &width) in LENGTHS.iter().enumerate() {
         for bit in (0..width).rev() {
             let msb_pos = width - 1 - bit; // 0 = MSB, matching this crate's own u-vector convention.
             let flipped_bits = flip_data_bit(&baseline_wire_bits, block_idx, bit);
             let flipped_frames = run_experiment(&flipped_bits);
             let flipped_rms: Vec<f64> = flipped_frames.iter().map(|f| rms(f)).collect();
-            let flipped_all: Vec<f64> = flipped_frames.concat();
-            // log2(ratio) per frame, summed in absolute value across target+follow-ups -- integrates
-            // both the immediate change and its predictive-decoder tail, and turns the clamp's own
-            // nonlinear compression into an additive (not multiplicative) distortion across frames.
-            let sum_abs_log2_ratio: f64 = baseline_rms
+            let sum_log2_ratio: f64 = baseline_rms
                 .iter()
                 .zip(flipped_rms.iter())
-                .map(|(&b, &f)| (f.max(1.0) / b.max(1.0)).log2().abs())
+                .map(|(&b, &f)| (f.max(1.0) / b.max(1.0)).log2())
                 .sum();
-            let corr = correlation(&baseline_all, &flipped_all);
-            println!(
-                "u{block_idx:<4} {bit:>4} {msb_pos:>4} {sum_abs_log2_ratio:>10.3} {corr:>6.2}"
-            );
+            println!("u{block_idx:<4} {bit:>4} {msb_pos:>4} {sum_log2_ratio:>12.3}");
         }
     }
 }
