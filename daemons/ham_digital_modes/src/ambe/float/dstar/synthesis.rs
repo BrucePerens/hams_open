@@ -4,8 +4,8 @@
 //! by `dequantize` and synthesized as sinusoids via [`ToneSynthesizer`].
 
 use super::decode::{
-    classify_tone_index, dequantize, dtmf_digit_from_tone_index, parse_frame, DStarDecoderState,
-    DequantizedFrame, ToneKind,
+    classify_b0, classify_tone_index, dequantize, dtmf_digit_from_tone_index, extract_raw_parameters, parse_frame,
+    DStarDecoderState, DequantizedFrame, FrameKind, ToneKind,
 };
 use crate::ambe::float::mbe_synthesis::MbeSynthesizer;
 use crate::ambe::float::ratet27::unvoiced_synthesis::N;
@@ -15,6 +15,8 @@ pub struct DStarSynthesisDecoder {
     dequant: DStarDecoderState,
     synth: MbeSynthesizer,
     tone: ToneSynthesizer,
+    /// Consecutive frames repeated because of channel errors (mbelib's `repeat`).
+    repeats: u32,
 }
 
 impl DStarSynthesisDecoder {
@@ -23,12 +25,27 @@ impl DStarSynthesisDecoder {
             dequant: DStarDecoderState::initial(),
             synth: MbeSynthesizer::new(),
             tone: ToneSynthesizer::new(),
+            repeats: 0,
         }
     }
 
     /// Decodes one logical 72-bit frame (see `interleave::wire_bytes_to_frame`) into 20 ms of PCM.
     pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[f64; N]> {
         let parsed = parse_frame(logical_frame);
+        // mbelib's bad-frame policy (`mbe_processAmbe2400Dataf`): a speech frame with more than 3 corrected errors
+        // reuses the previous frame's parameters without touching the predictor state, and after 3 such repeats in a
+        // row the decoder mutes (silence) and reinitializes.
+        let is_speech = classify_b0(extract_raw_parameters(parsed.d).b0) == FrameKind::Speech;
+        if is_speech && parsed.epsilon_c0 + parsed.epsilon_c1 > 3 {
+            self.repeats += 1;
+            if self.repeats <= 3 {
+                return self.synth.synthesize_repeat();
+            }
+            self.dequant = DStarDecoderState::initial();
+            self.synth = MbeSynthesizer::new();
+            return Some(self.synth.synthesize_silence());
+        }
+        self.repeats = 0;
         match dequantize(parsed.d, &mut self.dequant) {
             DequantizedFrame::Speech(p) => {
                 self.tone.reset();
@@ -51,5 +68,34 @@ impl DStarSynthesisDecoder {
 impl Default for DStarSynthesisDecoder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ambe::float::dstar::decode::RawParameters;
+    use crate::ambe::float::dstar::encode::{build_frame, pack_raw_parameters};
+
+    #[test]
+    fn mbelib_bad_frame_policy_repeats_three_times_then_mutes() {
+        let raw = RawParameters { b0: 40, b1: 15, b2: 12, b3: 100, b4: 50, b5: 3, b6: 4, b7: 5, b8: 2 };
+        let clean = build_frame(pack_raw_parameters(&raw));
+        // Two flipped bits in each of C0 (bits 71..49) and C1 (bits 48..26): four corrected errors in total.
+        let bad = clean ^ (1u128 << 70) ^ (1u128 << 60) ^ (1u128 << 45) ^ (1u128 << 35);
+        let parsed = parse_frame(bad);
+        assert!(parsed.epsilon_c0 + parsed.epsilon_c1 > 3, "test frame must exceed the error threshold");
+
+        let mut dec = DStarSynthesisDecoder::new();
+        let first = dec.decode_frame(clean).unwrap();
+        assert!(first.iter().any(|&s| s != 0.0));
+        for i in 0..3 {
+            let repeated = dec.decode_frame(bad).unwrap();
+            assert!(repeated.iter().any(|&s| s != 0.0), "repeat {i} should still synthesize");
+        }
+        let muted = dec.decode_frame(bad).unwrap();
+        assert!(muted.iter().all(|&s| s == 0.0), "the fourth consecutive bad frame mutes");
+        // A clean frame afterwards decodes normally again.
+        assert!(dec.decode_frame(clean).unwrap().iter().any(|&s| s != 0.0));
     }
 }
